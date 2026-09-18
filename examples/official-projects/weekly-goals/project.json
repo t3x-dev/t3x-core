@@ -3,12 +3,7 @@
   "title": "Weekly goals",
   "description": "Keep a short, reviewable list of goals for the week.",
   "license": "Apache-2.0",
-  "tags": [
-    "planning",
-    "work",
-    "care",
-    "ecosystem:t3x"
-  ],
+  "tags": ["planning", "work", "care", "ecosystem:t3x"],
   "companionSchema": {
     "canonicalName": "t3x/weekly-goals",
     "version": "1.0.0"

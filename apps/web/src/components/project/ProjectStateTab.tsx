@@ -514,7 +514,15 @@ export function ProjectStateTab({
       });
       pushRoute(`${workspaceBasePath}?branch=${encodeURIComponent(name)}`);
     },
-    [branchFocus, createBranch, mainSchemaBindings, projectId, pushRoute, saveDraft, workspaceBasePath]
+    [
+      branchFocus,
+      createBranch,
+      mainSchemaBindings,
+      projectId,
+      pushRoute,
+      saveDraft,
+      workspaceBasePath,
+    ]
   );
   const checkCurrentBranchForUpdates = useCallback(async () => {
     setFreshnessChecking(true);

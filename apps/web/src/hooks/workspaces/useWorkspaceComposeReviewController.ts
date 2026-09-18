@@ -10,12 +10,12 @@ import {
   composeConversationTranscript,
   yopsDraftFromProposalGeneration,
 } from '@/domain/workspaces/proposalGenerationDraft';
-import { generateWorkspaceProposal } from '@/infrastructure/proposalGeneration';
 import { useMaterialUpload } from '@/hooks/materials/useMaterialUpload';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
 import { useSourceThreadGeneration } from '@/hooks/sourceThreads/useSourceThreadGeneration';
 import { validateWorkspaceCandidateYOps } from '@/hooks/workspaces/useWorkspaceYOps';
+import { generateWorkspaceProposal } from '@/infrastructure/proposalGeneration';
 import type {
   WorkspaceTransitionContent,
   WorkspaceTransitionOutcome,

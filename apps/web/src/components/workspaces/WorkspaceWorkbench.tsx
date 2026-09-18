@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
-import { selectWorkspaceCandidate } from '@/domain/workspaces/selectors';
 import { mergeWorkspaceOverride } from '@/domain/workspaces/mergeWorkspaceOverride';
+import { selectWorkspaceCandidate } from '@/domain/workspaces/selectors';
 import type {
   WorkspaceDraftCommandName,
   WorkspacePreparationOptions,

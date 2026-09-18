@@ -3,11 +3,7 @@
   "title": "Literature notes",
   "description": "Keep paper notes and claims reviewable in one place.",
   "license": "Apache-2.0",
-  "tags": [
-    "science",
-    "research",
-    "ecosystem:t3x"
-  ],
+  "tags": ["science", "research", "ecosystem:t3x"],
   "companionSchema": {
     "canonicalName": "t3x/literature-notes",
     "version": "1.0.0"

@@ -3,11 +3,7 @@
   "title": "Incident log",
   "description": "Capture an incident timeline and the reviewed response.",
   "license": "Apache-2.0",
-  "tags": [
-    "security",
-    "detection",
-    "ecosystem:t3x"
-  ],
+  "tags": ["security", "detection", "ecosystem:t3x"],
   "companionSchema": {
     "canonicalName": "t3x/incident-log",
     "version": "1.0.0"

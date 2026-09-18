@@ -3,11 +3,7 @@
   "title": "Sensor log",
   "description": "Record a sensor reading with units and a reviewed note.",
   "license": "Apache-2.0",
-  "tags": [
-    "devices",
-    "iot",
-    "ecosystem:t3x"
-  ],
+  "tags": ["devices", "iot", "ecosystem:t3x"],
   "companionSchema": {
     "canonicalName": "t3x/sensor-log",
     "version": "1.0.0"

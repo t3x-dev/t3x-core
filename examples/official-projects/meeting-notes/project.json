@@ -3,12 +3,7 @@
   "title": "Meeting notes",
   "description": "Capture decisions and follow-ups from a working session.",
   "license": "Apache-2.0",
-  "tags": [
-    "planning",
-    "work",
-    "care",
-    "ecosystem:t3x"
-  ],
+  "tags": ["planning", "work", "care", "ecosystem:t3x"],
   "companionSchema": {
     "canonicalName": "t3x/meeting-notes",
     "version": "1.0.0"

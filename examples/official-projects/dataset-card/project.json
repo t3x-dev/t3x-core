@@ -3,11 +3,7 @@
   "title": "Dataset card",
   "description": "Describe a dataset’s source, license and intended use.",
   "license": "Apache-2.0",
-  "tags": [
-    "science",
-    "research",
-    "ecosystem:t3x"
-  ],
+  "tags": ["science", "research", "ecosystem:t3x"],
   "companionSchema": {
     "canonicalName": "t3x/dataset-card",
     "version": "1.0.0"

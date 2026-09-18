@@ -3,11 +3,7 @@
   "title": "Firmware note",
   "description": "Record a firmware target and the reviewed rollout window.",
   "license": "Apache-2.0",
-  "tags": [
-    "devices",
-    "iot",
-    "ecosystem:t3x"
-  ],
+  "tags": ["devices", "iot", "ecosystem:t3x"],
   "companionSchema": {
     "canonicalName": "t3x/firmware-note",
     "version": "1.0.0"

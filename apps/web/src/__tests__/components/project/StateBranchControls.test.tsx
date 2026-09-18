@@ -5,9 +5,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
 
-function renderControls(
-  overrides: Partial<Parameters<typeof StateBranchControls>[0]> = {}
-) {
+function renderControls(overrides: Partial<Parameters<typeof StateBranchControls>[0]> = {}) {
   const onCreateBranch = vi.fn().mockResolvedValue(undefined);
   render(
     <StateBranchControls

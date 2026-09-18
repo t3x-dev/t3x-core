@@ -3,11 +3,7 @@
   "title": "Protocol steps",
   "description": "Write a repeatable protocol as named, ordered steps.",
   "license": "Apache-2.0",
-  "tags": [
-    "science",
-    "research",
-    "ecosystem:t3x"
-  ],
+  "tags": ["science", "research", "ecosystem:t3x"],
   "companionSchema": {
     "canonicalName": "t3x/protocol-steps",
     "version": "1.0.0"

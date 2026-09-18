@@ -3,11 +3,7 @@
   "title": "Data contract",
   "description": "Name a dataset field contract before producers change it.",
   "license": "Apache-2.0",
-  "tags": [
-    "data",
-    "visualization",
-    "ecosystem:t3x"
-  ],
+  "tags": ["data", "visualization", "ecosystem:t3x"],
   "companionSchema": {
     "canonicalName": "t3x/data-contract",
     "version": "1.0.0"

@@ -3,11 +3,7 @@
   "title": "Device inventory",
   "description": "Keep a named inventory of devices and where they live.",
   "license": "Apache-2.0",
-  "tags": [
-    "devices",
-    "iot",
-    "ecosystem:t3x"
-  ],
+  "tags": ["devices", "iot", "ecosystem:t3x"],
   "companionSchema": {
     "canonicalName": "t3x/device-inventory",
     "version": "1.0.0"

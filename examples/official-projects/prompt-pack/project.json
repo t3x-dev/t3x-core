@@ -3,11 +3,7 @@
   "title": "Prompt pack",
   "description": "Keep named prompts reviewable before they are reused.",
   "license": "Apache-2.0",
-  "tags": [
-    "ai",
-    "agents",
-    "ecosystem:t3x"
-  ],
+  "tags": ["ai", "agents", "ecosystem:t3x"],
   "companionSchema": {
     "canonicalName": "t3x/prompt-pack",
     "version": "1.0.0"

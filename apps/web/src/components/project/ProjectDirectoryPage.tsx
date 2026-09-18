@@ -82,7 +82,12 @@ function ProjectCard({
   ownerSlug: string;
 }) {
   return (
-    <article className={cn('group', compact ? cn(styles.card, styles.cardInteractive, 'p-4') : 'px-5 py-4')}>
+    <article
+      className={cn(
+        'group',
+        compact ? cn(styles.card, styles.cardInteractive, 'p-4') : 'px-5 py-4'
+      )}
+    >
       <div className="flex min-w-0 items-start justify-between gap-4">
         <Link
           href={getProjectRepoPath(project, ownerSlug)}
@@ -491,7 +496,9 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
           )}
 
           {loading && projectSummaries.length === 0 ? (
-            <div className={cn(styles.card, 'p-8 text-sm font-semibold text-[var(--text-secondary)]')}>
+            <div
+              className={cn(styles.card, 'p-8 text-sm font-semibold text-[var(--text-secondary)]')}
+            >
               Loading repositories...
             </div>
           ) : error && projectSummaries.length === 0 ? (

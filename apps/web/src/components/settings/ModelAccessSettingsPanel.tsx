@@ -4,9 +4,9 @@ import { Building2, Cloud, Columns3, Download, Hand, Loader2, ZoomIn, ZoomOut } 
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { runProviderConnectionTest } from '@/commands/providers';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { useModelAccessSettings } from '@/hooks/providers/useModelAccessSettings';
+import { useProviderCommands } from '@/hooks/providers/useProviderCommands';
 import type { ModelAccessConfig, ProviderInfo, TestConnectionResult } from '@/types/providers';
 import styles from './ModelAccessSettingsPanel.module.css';
 
@@ -73,13 +73,15 @@ function connectionStatus(result: TestConnectionResult | 'loading' | undefined) 
   if (result.ok) {
     return {
       kind: 'ok' as const,
-      text:
-        result.latency_ms != null ? `Connected · ${result.latency_ms}ms` : 'Connected',
+      text: result.latency_ms != null ? `Connected · ${result.latency_ms}ms` : 'Connected',
     };
   }
   return {
     kind: 'error' as const,
-    text: formatUserFacingError(result.error ?? 'Connection test failed.', 'Connection test failed.'),
+    text: formatUserFacingError(
+      result.error ?? 'Connection test failed.',
+      'Connection test failed.'
+    ),
   };
 }
 
@@ -127,6 +129,7 @@ function ModelSelect({
 
 export function ModelAccessSettingsPanel() {
   const { providers, config, loading, saving, error, retry, save } = useModelAccessSettings();
+  const { runProviderConnectionTest } = useProviderCommands();
   const [tests, setTests] = useState<Record<string, TestConnectionResult | 'loading'>>({});
   const models = modelOptions(providers);
   const enabledModels = models.filter((model) => config?.enabled_models.includes(model.id));

@@ -281,7 +281,10 @@ export function StateBranchControls({
                   </div>
                 ) : null}
                 {submitError && canCreateFromQuery ? (
-                  <p className="px-3 pb-2 text-xs font-semibold text-[var(--status-warning)]" role="alert">
+                  <p
+                    className="px-3 pb-2 text-xs font-semibold text-[var(--status-warning)]"
+                    role="alert"
+                  >
                     {submitError}
                   </p>
                 ) : null}

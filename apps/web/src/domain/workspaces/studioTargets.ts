@@ -1,8 +1,6 @@
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
-export function listStudioDraftWorkspaces(
-  workspaces: WorkspaceCandidate[]
-): WorkspaceCandidate[] {
+export function listStudioDraftWorkspaces(workspaces: WorkspaceCandidate[]): WorkspaceCandidate[] {
   return workspaces.filter((workspace) => workspace.status !== 'committed');
 }
 

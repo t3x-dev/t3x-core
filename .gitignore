@@ -110,6 +110,8 @@ packages/yops/src/specData.ts
 demo/
 
 # Internal working material stays outside the repository.
+.codex-ppt*/
+/outputs/
 /docs/plans/
 /docs/verification/
 /docs/history/

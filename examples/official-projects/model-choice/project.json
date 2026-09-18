@@ -3,11 +3,7 @@
   "title": "Model choice",
   "description": "Record which model a task should use and why.",
   "license": "Apache-2.0",
-  "tags": [
-    "ai",
-    "agents",
-    "ecosystem:t3x"
-  ],
+  "tags": ["ai", "agents", "ecosystem:t3x"],
   "companionSchema": {
     "canonicalName": "t3x/model-choice",
     "version": "1.0.0"

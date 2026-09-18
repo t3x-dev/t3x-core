@@ -1,7 +1,7 @@
 import type { MergeDecision } from '@t3x-dev/core';
 import {
-  type PullRequestConflictSide,
   buildPullRequestConflictDecision,
+  type PullRequestConflictSide,
 } from '@/domain/project/pullRequestConflictDecision';
 import { getMergeDraft, saveMergeDraft } from '@/infrastructure/mergeApi';
 import {

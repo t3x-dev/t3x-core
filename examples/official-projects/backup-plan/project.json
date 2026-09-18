@@ -3,12 +3,7 @@
   "title": "Backup plan",
   "description": "Record backup targets, cadence and restore owners.",
   "license": "Apache-2.0",
-  "tags": [
-    "infrastructure",
-    "homelab",
-    "devops",
-    "ecosystem:t3x"
-  ],
+  "tags": ["infrastructure", "homelab", "devops", "ecosystem:t3x"],
   "companionSchema": {
     "canonicalName": "t3x/backup-plan",
     "version": "1.0.0"

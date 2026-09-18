@@ -18,6 +18,7 @@ import {
   Play as PhPlay,
   Tilde as PhTilde,
 } from '@phosphor-icons/react';
+import type { MergeDecision } from '@t3x-dev/core';
 import {
   ArrowLeft,
   ArrowRight,
@@ -37,7 +38,6 @@ import {
   UserRound,
   XCircle,
 } from 'lucide-react';
-import type { MergeDecision } from '@t3x-dev/core';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -2343,25 +2343,17 @@ function StructuredDiffPanel({
           <div className={detailStyles.inspectorBody}>
             <code className={detailStyles.selectedPath}>{selected.path}</code>
             <span
-              className={
-                showingChoices ? detailStyles.decisionBadge : detailStyles.changeBadge
-              }
+              className={showingChoices ? detailStyles.decisionBadge : detailStyles.changeBadge}
             >
               <PhTilde aria-hidden="true" />
-              {showingChoices
-                ? choice
-                  ? 'Edit merged value'
-                  : 'Needs decision'
-                : 'Modified'}
+              {showingChoices ? (choice ? 'Edit merged value' : 'Needs decision') : 'Modified'}
             </span>
             {showingChoices ? (
               <>
                 <span className={detailStyles.fieldLabel}>Ancestor (base)</span>
                 <div className={detailStyles.ancestorValue}>{pullRequest.targetBranch}</div>
                 <div className={detailStyles.choiceGrid}>
-                  <label
-                    className={choice === 'main' ? detailStyles.choiceActive : undefined}
-                  >
+                  <label className={choice === 'main' ? detailStyles.choiceActive : undefined}>
                     <input
                       aria-label="Keep main"
                       checked={choice === 'main'}
@@ -2378,9 +2370,7 @@ function StructuredDiffPanel({
                     <strong>{selected.main}</strong>
                     <small>Use the current target value.</small>
                   </label>
-                  <label
-                    className={choice === 'feature' ? detailStyles.choiceActive : undefined}
-                  >
+                  <label className={choice === 'feature' ? detailStyles.choiceActive : undefined}>
                     <input
                       aria-label="Use feature"
                       checked={choice === 'feature'}

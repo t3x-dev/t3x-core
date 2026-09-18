@@ -90,44 +90,45 @@ describe('useWorkspaceDefinitionApply', () => {
     expect(onApplied).toHaveBeenCalledWith(undefined);
   });
 
-  it.each(['product-brief', 'care-checklist', 'compose-services'] as const)(
-    'applies official starter %s through the same persist → preview → apply path',
-    async (starterId) => {
-      mocks.items = [{ available: true, id: starterId, kind: 'module' }];
-      const starter = getProjectWorkspaceStarterCandidate('proj_1');
-      const persisted = { ...starter, revision: 2 };
-      mocks.persist.mockResolvedValue(persisted);
-      mocks.preview.mockResolvedValue({
-        adoption: { allowed: true },
-        report: { issues: [], valid: true },
-        reviewHash: `${starterId}-review`,
-        workspace: { id: persisted.id, revision: 2 },
-      });
-      mocks.apply.mockResolvedValue({});
+  it.each([
+    'product-brief',
+    'care-checklist',
+    'compose-services',
+  ] as const)('applies official starter %s through the same persist → preview → apply path', async (starterId) => {
+    mocks.items = [{ available: true, id: starterId, kind: 'module' }];
+    const starter = getProjectWorkspaceStarterCandidate('proj_1');
+    const persisted = { ...starter, revision: 2 };
+    mocks.persist.mockResolvedValue(persisted);
+    mocks.preview.mockResolvedValue({
+      adoption: { allowed: true },
+      report: { issues: [], valid: true },
+      reviewHash: `${starterId}-review`,
+      workspace: { id: persisted.id, revision: 2 },
+    });
+    mocks.apply.mockResolvedValue({});
 
-      const { result } = renderHook(() =>
-        useWorkspaceDefinitionApply({
-          candidate: starter,
-          persistCandidate: mocks.persist,
-        })
-      );
+    const { result } = renderHook(() =>
+      useWorkspaceDefinitionApply({
+        candidate: starter,
+        persistCandidate: mocks.persist,
+      })
+    );
 
-      await act(async () => {
-        await expect(result.current.apply()).resolves.toBe(true);
-      });
+    await act(async () => {
+      await expect(result.current.apply()).resolves.toBe(true);
+    });
 
-      expect(mocks.preview).toHaveBeenCalledWith('proj_1', {
-        candidateIds: [starterId],
-        workspaceId: persisted.id,
-      });
-      expect(mocks.apply).toHaveBeenCalledWith('proj_1', {
-        candidateIds: [starterId],
-        ifRevision: 2,
-        reviewHash: `${starterId}-review`,
-        workspaceId: persisted.id,
-      });
-    }
-  );
+    expect(mocks.preview).toHaveBeenCalledWith('proj_1', {
+      candidateIds: [starterId],
+      workspaceId: persisted.id,
+    });
+    expect(mocks.apply).toHaveBeenCalledWith('proj_1', {
+      candidateIds: [starterId],
+      ifRevision: 2,
+      reviewHash: `${starterId}-review`,
+      workspaceId: persisted.id,
+    });
+  });
 
   it('does not apply when Schemas has no available template', async () => {
     mocks.items = [];
@@ -161,7 +162,9 @@ describe('useWorkspaceDefinitionApply', () => {
     const bound = {
       ...persisted,
       revision: 2,
-      schemaBindings: [{ mode: 'pinned' as const, schemaName: 't3x/product-brief', version: '1.0.0' }],
+      schemaBindings: [
+        { mode: 'pinned' as const, schemaName: 't3x/product-brief', version: '1.0.0' },
+      ],
       yopsDraft: { ...persisted.yopsDraft, operations: [] },
     };
     const rebuilt = {

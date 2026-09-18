@@ -3,12 +3,7 @@
   "title": "Evaluation cases",
   "description": "Define reviewable cases before connecting an evaluation runner.",
   "license": "Apache-2.0",
-  "tags": [
-    "ai",
-    "evaluation",
-    "agents",
-    "ecosystem:t3x"
-  ],
+  "tags": ["ai", "evaluation", "agents", "ecosystem:t3x"],
   "companionSchema": {
     "canonicalName": "t3x/evaluation-cases",
     "version": "1.0.0"

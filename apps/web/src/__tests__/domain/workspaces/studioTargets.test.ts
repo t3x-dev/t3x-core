@@ -41,9 +41,7 @@ describe('studio workspace targets', () => {
       'workspace_branch:main',
     ]);
     expect(resolveStudioWorkspaceId(drafts, '')).toBe('workspace_branch:main');
-    expect(resolveStudioWorkspaceId(drafts, 'workspace_branch:main')).toBe(
-      'workspace_branch:main'
-    );
+    expect(resolveStudioWorkspaceId(drafts, 'workspace_branch:main')).toBe('workspace_branch:main');
   });
 
   it('applies a schema candidate when present, otherwise every available module', () => {
@@ -63,15 +61,16 @@ describe('studio workspace targets', () => {
     expect(workspaceHasSchemaBinding({ schemaBindings: [{ schemaName: 'Any' }] })).toBe(true);
   });
 
-  it.each(['product-brief', 'care-checklist', 'compose-services'] as const)(
-    'uses the same apply-id rule for official starter %s',
-    (id) => {
-      expect(studioApplyCandidateIds([{ available: true, id, kind: 'module' }])).toEqual([id]);
-      expect(
-        workspaceHasSchemaBinding({
-          schemaBindings: [{ schemaName: id, version: '1.0.0' }],
-        })
-      ).toBe(true);
-    }
-  );
+  it.each([
+    'product-brief',
+    'care-checklist',
+    'compose-services',
+  ] as const)('uses the same apply-id rule for official starter %s', (id) => {
+    expect(studioApplyCandidateIds([{ available: true, id, kind: 'module' }])).toEqual([id]);
+    expect(
+      workspaceHasSchemaBinding({
+        schemaBindings: [{ schemaName: id, version: '1.0.0' }],
+      })
+    ).toBe(true);
+  });
 });

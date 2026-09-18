@@ -3,11 +3,7 @@
   "title": "Access review",
   "description": "Review who can reach a system and why that access remains.",
   "license": "Apache-2.0",
-  "tags": [
-    "security",
-    "detection",
-    "ecosystem:t3x"
-  ],
+  "tags": ["security", "detection", "ecosystem:t3x"],
   "companionSchema": {
     "canonicalName": "t3x/access-review",
     "version": "1.0.0"

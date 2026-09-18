@@ -3,11 +3,7 @@
   "title": "Experiment log",
   "description": "Capture a hypothesis, setup and observed result.",
   "license": "Apache-2.0",
-  "tags": [
-    "science",
-    "research",
-    "ecosystem:t3x"
-  ],
+  "tags": ["science", "research", "ecosystem:t3x"],
   "companionSchema": {
     "canonicalName": "t3x/experiment-log",
     "version": "1.0.0"

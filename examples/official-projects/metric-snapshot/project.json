@@ -3,11 +3,7 @@
   "title": "Metric snapshot",
   "description": "Pin a named metric, value and comparison window.",
   "license": "Apache-2.0",
-  "tags": [
-    "data",
-    "visualization",
-    "ecosystem:t3x"
-  ],
+  "tags": ["data", "visualization", "ecosystem:t3x"],
   "companionSchema": {
     "canonicalName": "t3x/metric-snapshot",
     "version": "1.0.0"

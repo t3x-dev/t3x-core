@@ -3,12 +3,7 @@
   "title": "Scheduled jobs",
   "description": "Declare cron-like jobs and their expected cadence.",
   "license": "Apache-2.0",
-  "tags": [
-    "infrastructure",
-    "devops",
-    "homelab",
-    "ecosystem:t3x"
-  ],
+  "tags": ["infrastructure", "devops", "homelab", "ecosystem:t3x"],
   "companionSchema": {
     "canonicalName": "t3x/scheduled-jobs",
     "version": "1.0.0"

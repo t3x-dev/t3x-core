@@ -3,11 +3,7 @@
   "title": "Chart spec",
   "description": "Describe a chart before someone builds it from reviewed data.",
   "license": "Apache-2.0",
-  "tags": [
-    "data",
-    "visualization",
-    "ecosystem:t3x"
-  ],
+  "tags": ["data", "visualization", "ecosystem:t3x"],
   "companionSchema": {
     "canonicalName": "t3x/chart-spec",
     "version": "1.0.0"

@@ -3,11 +3,7 @@
   "title": "Vuln triage",
   "description": "Triage a vulnerability with severity and next action.",
   "license": "Apache-2.0",
-  "tags": [
-    "security",
-    "detection",
-    "ecosystem:t3x"
-  ],
+  "tags": ["security", "detection", "ecosystem:t3x"],
   "companionSchema": {
     "canonicalName": "t3x/vuln-triage",
     "version": "1.0.0"

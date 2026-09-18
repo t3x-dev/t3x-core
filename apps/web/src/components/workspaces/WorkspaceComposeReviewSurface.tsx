@@ -805,7 +805,10 @@ function ProposedChangesBoard({
                       <span>Current (base)</span>
                       <strong>{proposalActionValue(operation.beforeValue, 'Current value')}</strong>
                     </div>
-                    <ArrowRight aria-hidden="true" className={cn(composeStyles.valueArrow, 'size-3.5')} />
+                    <ArrowRight
+                      aria-hidden="true"
+                      className={cn(composeStyles.valueArrow, 'size-3.5')}
+                    />
                     <div className={cn(composeStyles.changeValue, composeStyles.after)}>
                       <span>Proposed (draft)</span>
                       <strong>
@@ -2293,11 +2296,7 @@ interface ReviewCheckView {
   status: ReviewCheckStatus;
 }
 
-function WorkspaceDraftCommitBar({
-  controller,
-}: {
-  controller: WorkspaceComposeReviewController;
-}) {
+function WorkspaceDraftCommitBar({ controller }: { controller: WorkspaceComposeReviewController }) {
   const ready = Boolean(
     controller.review.transitionId && controller.review.content && controller.review.precondition
   );
@@ -2415,7 +2414,9 @@ function RenderedDraftTree({ depth, node }: { depth: number; node: WorkspaceRevi
           {title}
         </h1>
       ) : (
-        <h3 className="mb-1 text-[14px] font-bold text-slate-900">{humanizeWorkspaceKey(node.key)}</h3>
+        <h3 className="mb-1 text-[14px] font-bold text-slate-900">
+          {humanizeWorkspaceKey(node.key)}
+        </h3>
       )}
       {slots.length > 0 ? (
         <div className="mb-2 flex flex-col overflow-hidden rounded-md border border-gray-200">

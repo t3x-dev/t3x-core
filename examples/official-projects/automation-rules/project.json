@@ -3,12 +3,7 @@
   "title": "Automation rules",
   "description": "Review trigger and action text before enabling a rule.",
   "license": "Apache-2.0",
-  "tags": [
-    "devices",
-    "automation",
-    "iot",
-    "ecosystem:t3x"
-  ],
+  "tags": ["devices", "automation", "iot", "ecosystem:t3x"],
   "companionSchema": {
     "canonicalName": "t3x/automation-rules",
     "version": "1.0.0"

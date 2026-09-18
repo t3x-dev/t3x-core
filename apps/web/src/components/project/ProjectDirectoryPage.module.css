@@ -1,8 +1,11 @@
 .page {
   min-height: 100vh;
   background:
-    radial-gradient(1200px 420px at 12% -8%, color-mix(in oklab, var(--accent-commit) 8%, transparent), transparent 58%),
-    var(--surface-app);
+    radial-gradient(
+      1200px 420px at 12% -8%,
+      color-mix(in oklab, var(--accent-commit) 8%, transparent),
+      transparent 58%
+    ), var(--surface-app);
   color: var(--text-primary);
 }
 
@@ -71,7 +74,8 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
-  transition: color var(--motion-base) var(--ease-out-soft),
+  transition:
+    color var(--motion-base) var(--ease-out-soft),
     background-color var(--motion-base) var(--ease-out-soft);
 }
 
@@ -93,7 +97,8 @@
   font-size: 12px;
   font-weight: 600;
   color: var(--text-primary);
-  transition: border-color var(--motion-base) var(--ease-out-soft),
+  transition:
+    border-color var(--motion-base) var(--ease-out-soft),
     background-color var(--motion-base) var(--ease-out-soft);
 }
 
@@ -319,7 +324,9 @@
 
 .searchInput:focus {
   border-color: var(--stroke-strong);
-  box-shadow: var(--fx-shadow-sm), 0 0 0 3px color-mix(in oklab, var(--ring) 22%, transparent);
+  box-shadow:
+    var(--fx-shadow-sm),
+    0 0 0 3px color-mix(in oklab, var(--ring) 22%, transparent);
 }
 
 .rail {

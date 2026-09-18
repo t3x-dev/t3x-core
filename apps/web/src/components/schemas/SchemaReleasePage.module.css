@@ -6,8 +6,7 @@
   flex-direction: column;
   overflow: hidden;
   background:
-    radial-gradient(1200px 420px at 12% -10%, rgba(37, 99, 235, 0.06), transparent 55%),
-    #fff;
+    radial-gradient(1200px 420px at 12% -10%, rgba(37, 99, 235, 0.06), transparent 55%), #fff;
   color: #0f172a;
 }
 
@@ -33,7 +32,9 @@
   background: transparent;
   padding: 0 4px;
   color: #475569;
-  font: 600 13px/1 "Inter", sans-serif;
+  font:
+    600 13px / 1 "Inter",
+    sans-serif;
   cursor: pointer;
 }
 
@@ -91,7 +92,9 @@
   background: #f1f5f9;
   padding: 0 10px;
   color: #475569;
-  font: 600 11px/1 "Inter", sans-serif;
+  font:
+    600 11px / 1 "Inter",
+    sans-serif;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -104,21 +107,27 @@
 .title {
   margin: 0;
   color: #0f172a;
-  font: 750 36px/1.1 "Inter", sans-serif;
+  font:
+    750 36px / 1.1 "Inter",
+    sans-serif;
   letter-spacing: -0.035em;
 }
 
 .subtitle {
   margin: 8px 0 0;
   color: #64748b;
-  font: 500 14px/1.5 "Inter", sans-serif;
+  font:
+    500 14px / 1.5 "Inter",
+    sans-serif;
 }
 
 .description {
   margin: 14px 0 0;
   max-width: 42rem;
   color: #334155;
-  font: 400 16px/1.65 "Inter", sans-serif;
+  font:
+    400 16px / 1.65 "Inter",
+    sans-serif;
 }
 
 .tags {
@@ -134,7 +143,9 @@
   border: 1px solid #e2e8f0;
   padding: 5px 10px;
   color: #334155;
-  font: 500 12px/1 "Inter", sans-serif;
+  font:
+    500 12px / 1 "Inter",
+    sans-serif;
 }
 
 .section {
@@ -145,14 +156,18 @@
 .section h2 {
   margin: 0;
   color: #0f172a;
-  font: 700 18px/1.3 "Inter", sans-serif;
+  font:
+    700 18px / 1.3 "Inter",
+    sans-serif;
   letter-spacing: -0.02em;
 }
 
 .lede {
   margin: 0;
   color: #64748b;
-  font: 400 13px/1.6 "Inter", sans-serif;
+  font:
+    400 13px / 1.6 "Inter",
+    sans-serif;
 }
 
 .nodeGrid {
@@ -181,12 +196,16 @@
 .nodeHead strong {
   display: block;
   color: #0f172a;
-  font: 700 15px/1.3 "Inter", sans-serif;
+  font:
+    700 15px / 1.3 "Inter",
+    sans-serif;
 }
 
 .nodeHead span {
   color: #64748b;
-  font: 500 12px/1.4 "Inter", sans-serif;
+  font:
+    500 12px / 1.4 "Inter",
+    sans-serif;
 }
 
 .badges {
@@ -199,7 +218,9 @@
 .badge {
   border-radius: 999px;
   padding: 4px 8px;
-  font: 650 10px/1 "Inter", sans-serif;
+  font:
+    650 10px / 1 "Inter",
+    sans-serif;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -229,7 +250,9 @@
 
 .fields th {
   color: #94a3b8;
-  font: 700 10px/1 "Inter", sans-serif;
+  font:
+    700 10px / 1 "Inter",
+    sans-serif;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   background: #f8fafc;
@@ -237,7 +260,9 @@
 
 .fields td {
   color: #334155;
-  font: 500 13px/1.45 "Inter", sans-serif;
+  font:
+    500 13px / 1.45 "Inter",
+    sans-serif;
 }
 
 .fields td:first-child {
@@ -264,7 +289,11 @@
   background: #f1f5f9;
   padding: 2px 6px;
   color: #475569;
-  font: 500 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font:
+    500 11px / 1.3 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
   font-style: normal;
 }
 
@@ -296,12 +325,16 @@
 
 .exampleCard strong {
   color: #0f172a;
-  font: 700 14px/1.3 "Inter", sans-serif;
+  font:
+    700 14px / 1.3 "Inter",
+    sans-serif;
 }
 
 .exampleCard em {
   color: #64748b;
-  font: 500 11px/1 "Inter", sans-serif;
+  font:
+    500 11px / 1 "Inter",
+    sans-serif;
   font-style: normal;
 }
 
@@ -313,7 +346,9 @@
 
 .exampleCard dt {
   color: #94a3b8;
-  font: 650 10px/1 "Inter", sans-serif;
+  font:
+    650 10px / 1 "Inter",
+    sans-serif;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -321,7 +356,9 @@
 .exampleCard dd {
   margin: 4px 0 0;
   color: #1e293b;
-  font: 500 13px/1.5 "Inter", sans-serif;
+  font:
+    500 13px / 1.5 "Inter",
+    sans-serif;
   overflow-wrap: anywhere;
 }
 
@@ -338,7 +375,9 @@
   min-height: 48px;
   padding: 0 16px;
   color: #334155;
-  font: 650 13px/1 "Inter", sans-serif;
+  font:
+    650 13px / 1 "Inter",
+    sans-serif;
   cursor: pointer;
   list-style: none;
 }
@@ -355,7 +394,11 @@
   background: #0b1220;
   padding: 16px;
   color: #e2e8f0;
-  font: 400 12px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font:
+    400 12px / 1.65 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
 }
 
 .aside {
@@ -376,13 +419,17 @@
 .panel h2 {
   margin: 0 0 4px;
   color: #0f172a;
-  font: 700 15px/1.3 "Inter", sans-serif;
+  font:
+    700 15px / 1.3 "Inter",
+    sans-serif;
 }
 
 .panel p {
   margin: 0 0 16px;
   color: #64748b;
-  font: 400 12px/1.55 "Inter", sans-serif;
+  font:
+    400 12px / 1.55 "Inter",
+    sans-serif;
 }
 
 .meta {
@@ -397,7 +444,9 @@
 
 .meta dt {
   color: #94a3b8;
-  font: 650 10px/1 "Inter", sans-serif;
+  font:
+    650 10px / 1 "Inter",
+    sans-serif;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -405,14 +454,18 @@
 .meta dd {
   margin: 0;
   color: #0f172a;
-  font: 600 13px/1.45 "Inter", sans-serif;
+  font:
+    600 13px / 1.45 "Inter",
+    sans-serif;
   overflow-wrap: anywhere;
 }
 
 .feedback {
   padding: 48px 24px;
   color: #64748b;
-  font: 500 14px/1.5 "Inter", sans-serif;
+  font:
+    500 14px / 1.5 "Inter",
+    sans-serif;
 }
 
 .introLink {
@@ -425,7 +478,9 @@
   border-radius: 8px;
   background: #fff;
   color: #2563eb;
-  font: 650 13px/1 "Inter", sans-serif;
+  font:
+    650 13px / 1 "Inter",
+    sans-serif;
   text-decoration: none;
 }
 

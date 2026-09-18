@@ -15,7 +15,9 @@ describe('proposalGenerationDraft', () => {
         ],
         'Also assign Maya.'
       )
-    ).toBe('You: Raise allocation to 25%.\n\nAssistant: That is on page 3.\n\nYou: Also assign Maya.');
+    ).toBe(
+      'You: Raise allocation to 25%.\n\nAssistant: That is on page 3.\n\nYou: Also assign Maya.'
+    );
   });
 
   it('turns generation groups into workspace draft cards', () => {

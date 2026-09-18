@@ -3,12 +3,7 @@
   "title": "Env config",
   "description": "Review named environment values before a service starts.",
   "license": "Apache-2.0",
-  "tags": [
-    "infrastructure",
-    "devops",
-    "configuration",
-    "ecosystem:t3x"
-  ],
+  "tags": ["infrastructure", "devops", "configuration", "ecosystem:t3x"],
   "companionSchema": {
     "canonicalName": "t3x/env-config",
     "version": "1.0.0"

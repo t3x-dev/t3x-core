@@ -344,7 +344,11 @@ describe('OpenAIProvider.generateStructured', () => {
                       schema: 't3x.dev/proposal-generation-draft/v1',
                       version: 1,
                       posture: 'guided',
-                      intent: { mode: 'authored', value: 'Prepare the launch PRD', evidencePointers: [] },
+                      intent: {
+                        mode: 'authored',
+                        value: 'Prepare the launch PRD',
+                        evidencePointers: [],
+                      },
                       rationale: { mode: 'unspecified' },
                       changes: [
                         {
@@ -382,8 +386,7 @@ describe('OpenAIProvider.generateStructured', () => {
     const attributedIntent = schema.properties.intent.anyOf[1];
     const locatorValue =
       attributedIntent.properties.evidencePointers.items.properties.locator.properties.value;
-    const operation =
-      schema.properties.changes.items.properties.operations.items;
+    const operation = schema.properties.changes.items.properties.operations.items;
 
     expect(locatorValue).toMatchObject({
       type: 'object',
