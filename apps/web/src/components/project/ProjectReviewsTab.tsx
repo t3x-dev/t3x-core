@@ -37,6 +37,7 @@ import {
   UserRound,
   XCircle,
 } from 'lucide-react';
+import type { MergeDecision } from '@t3x-dev/core';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -48,6 +49,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { shortHash } from '@/domain/format/formatters';
+import type { PullRequestConflictSide } from '@/domain/project/pullRequestConflictDecision';
 import type {
   ApiProjectPullRequest,
   ApiProjectPullRequestActivity,
@@ -481,6 +483,7 @@ function toCompareCandidate(
 
 export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
   const {
+    applyConflictDecision: applyProjectConflictDecision,
     closePullRequest: closeProjectPullRequest,
     createPullRequest: createProjectPullRequest,
     fetchCompareCandidates,
@@ -522,6 +525,9 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
     targetBranch: 'main',
   }));
   const [apiError, setApiError] = useState<string | null>(null);
+  const [conflictDecision, setConflictDecision] = useState<MergeDecision | null>(null);
+  const [applyingResolution, setApplyingResolution] = useState(false);
+  const [resolutionError, setResolutionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!projectId) return;
@@ -708,6 +714,8 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
     setMergeError(null);
     setReadinessError(null);
     setDetailError(null);
+    setConflictDecision(null);
+    setResolutionError(null);
     setDetailTab('structured-diff');
     setView('detail');
 
@@ -837,8 +845,47 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
     setView('list');
   };
 
+  const canMergePullRequest = (pullRequest: ProjectPullRequest) =>
+    pullRequest.status === 'ready' ||
+    (pullRequest.status === 'blocked' && conflictDecision !== null);
+
+  const applyResolution = (side: PullRequestConflictSide | null) => {
+    const pullRequest = selectedPullRequest;
+    if (!pullRequest || applyingResolution) return;
+
+    setResolutionError(null);
+    if (side === null) {
+      setConflictDecision(null);
+      return;
+    }
+    if (!projectId || !pullRequest.mergeDraftId) {
+      setConflictDecision({
+        conflictResolutions: {},
+        keepFromSource: [],
+        keepFromTarget: [],
+        keepRelationsFromSource: true,
+        keepRelationsFromTarget: true,
+      });
+      return;
+    }
+
+    setApplyingResolution(true);
+    applyProjectConflictDecision(pullRequest.mergeDraftId, side)
+      .then((decision) => {
+        setConflictDecision(decision);
+      })
+      .catch((err) => {
+        setResolutionError(
+          err instanceof Error ? err.message : 'Could not save the conflict resolution.'
+        );
+      })
+      .finally(() => {
+        setApplyingResolution(false);
+      });
+  };
+
   const mergePullRequest = (pullRequest: ProjectPullRequest) => {
-    if (pullRequest.status !== 'ready' || mergingId) return;
+    if (!canMergePullRequest(pullRequest) || mergingId) return;
 
     setMergingId(pullRequest.id);
     setMergeError(null);
@@ -859,6 +906,7 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
       expected_source_commit_id: pullRequest.sourceCommitId,
       expected_target_commit_id: pullRequest.targetBaseCommitId,
       number: pullRequest.number,
+      ...(conflictDecision ? { decisions: conflictDecision } : {}),
     })
       .then((merged) => {
         showFinishedPullRequest(toProjectPullRequestDetail(merged));
@@ -983,14 +1031,17 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
   if (view === 'detail' && selectedPullRequest) {
     return (
       <PullRequestDetailView
+        applyingResolution={applyingResolution}
         closeConfirmationActive={closeConfirmId === selectedPullRequest.id}
         closeError={closeError}
         closing={closingId === selectedPullRequest.id}
+        conflictResolved={conflictDecision !== null}
         detailError={detailError}
         detailLoading={detailLoadingId === selectedPullRequest.id}
         detailTab={detailTab}
         mergeError={mergeError}
         merging={mergingId === selectedPullRequest.id}
+        onApplyResolution={applyResolution}
         onBack={() => setView('list')}
         onClose={() => closePullRequest(selectedPullRequest)}
         onChangeTab={setDetailTab}
@@ -998,6 +1049,7 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
         onRerun={() => rerunReadiness(selectedPullRequest)}
         pullRequest={selectedPullRequest}
         readinessError={readinessError}
+        resolutionError={resolutionError}
         rerunning={rerunningId === selectedPullRequest.id}
       />
     );
@@ -1638,14 +1690,17 @@ function ChangeKindBadge({ kind }: { kind: string }) {
 }
 
 function PullRequestDetailView({
+  applyingResolution,
   closeConfirmationActive,
   closeError,
   closing,
+  conflictResolved,
   detailError,
   detailLoading,
   detailTab,
   mergeError,
   merging,
+  onApplyResolution,
   onBack,
   onClose,
   onChangeTab,
@@ -1653,16 +1708,20 @@ function PullRequestDetailView({
   onRerun,
   pullRequest,
   readinessError,
+  resolutionError,
   rerunning,
 }: {
+  applyingResolution: boolean;
   closeConfirmationActive: boolean;
   closeError: string | null;
   closing: boolean;
+  conflictResolved: boolean;
   detailError: string | null;
   detailLoading: boolean;
   detailTab: PullRequestDetailTab;
   mergeError: string | null;
   merging: boolean;
+  onApplyResolution: (side: PullRequestConflictSide | null) => void;
   onBack: () => void;
   onClose: () => void;
   onChangeTab: (tab: PullRequestDetailTab) => void;
@@ -1670,6 +1729,7 @@ function PullRequestDetailView({
   onRerun: () => void;
   pullRequest: ProjectPullRequest;
   readinessError: string | null;
+  resolutionError: string | null;
   rerunning: boolean;
 }) {
   const [copied, setCopied] = useState(false);
@@ -1681,11 +1741,11 @@ function PullRequestDetailView({
       ? 'Confirm close'
       : 'Close PR';
 
-  const conflictCount = pullRequest.status === 'blocked' ? 1 : 0;
+  const conflictCount = pullRequest.status === 'blocked' && !conflictResolved ? 1 : 0;
   const passedChecks = (pullRequest.checks ?? []).filter(
     (check) => check.status === 'passed'
   ).length;
-  const ready = pullRequest.status === 'ready';
+  const ready = pullRequest.status === 'ready' || conflictResolved;
 
   return (
     <section className={detailStyles.page}>
@@ -1721,12 +1781,18 @@ function PullRequestDetailView({
         </div>
       </header>
 
-      {closeConfirmationActive || closeError || readinessError || detailError || mergeError ? (
+      {closeConfirmationActive ||
+      closeError ||
+      readinessError ||
+      detailError ||
+      mergeError ||
+      resolutionError ? (
         <div className={detailStyles.notice}>
           {closeError ??
             readinessError ??
             detailError ??
             mergeError ??
+            resolutionError ??
             'Close without merging? This moves the PR to Closed and leaves the target branch unchanged.'}
         </div>
       ) : null}
@@ -1754,7 +1820,10 @@ function PullRequestDetailView({
           <ChecksPanel checks={pullRequest.checks ?? []} />
         ) : (
           <StructuredDiffPanel
+            applyingResolution={applyingResolution}
+            conflictResolved={conflictResolved}
             copied={copied}
+            onApplyResolution={onApplyResolution}
             onCopy={() => {
               void navigator.clipboard?.writeText('release_plan.rollout.branch');
               setCopied(true);
@@ -1767,9 +1836,11 @@ function PullRequestDetailView({
 
       <footer className={detailStyles.footer}>
         <div>
-          {conflictCount > 0
-            ? `Choose ${conflictCount} conflict to continue.`
-            : `${passedChecks} checks passed.`}
+          {conflictResolved
+            ? 'Resolution saved. Merge is ready.'
+            : conflictCount > 0
+              ? `Choose ${conflictCount} conflict to continue.`
+              : `${passedChecks} checks passed.`}
         </div>
         <div className={detailStyles.footerActions}>
           {closeable ? (
@@ -2014,15 +2085,21 @@ interface PullRequestTreeRow {
 }
 
 function StructuredDiffPanel({
+  applyingResolution,
+  conflictResolved,
   copied,
+  onApplyResolution,
   onCopy,
   pullRequest,
 }: {
+  applyingResolution: boolean;
+  conflictResolved: boolean;
   copied: boolean;
+  onApplyResolution: (side: PullRequestConflictSide | null) => void;
   onCopy: () => void;
   pullRequest: ProjectPullRequest;
 }) {
-  const conflict = pullRequest.status === 'blocked';
+  const conflict = pullRequest.status === 'blocked' && !conflictResolved;
   const rows = useMemo<PullRequestTreeRow[]>(() => {
     const summary = pullRequest.diffSummary;
     return [
@@ -2139,7 +2216,7 @@ function StructuredDiffPanel({
     ];
   }, [conflict, pullRequest]);
   const [selectedId, setSelectedId] = useState(conflict ? 'branch' : 'commit');
-  const [choice, setChoice] = useState<'main' | 'feature'>('feature');
+  const [choice, setChoice] = useState<PullRequestConflictSide | null>(null);
   const selected = rows.find((row) => row.id === selectedId) ?? rows[0];
   const mergedCount = rows.filter((row) => row.status === 'merged').length;
   const conflictCount = rows.filter((row) => row.status === 'conflict').length;
@@ -2272,26 +2349,42 @@ function StructuredDiffPanel({
                 <span className={detailStyles.fieldLabel}>Ancestor (base)</span>
                 <div className={detailStyles.ancestorValue}>{pullRequest.targetBranch}</div>
                 <div className={detailStyles.choiceGrid}>
-                  <button
+                  <label
                     className={choice === 'main' ? detailStyles.choiceActive : undefined}
-                    onClick={() => setChoice('main')}
-                    type="button"
                   >
-                    <i />
+                    <input
+                      aria-label="Keep main"
+                      checked={choice === 'main'}
+                      disabled={applyingResolution}
+                      onChange={() => {
+                        const next = choice === 'main' ? null : 'main';
+                        setChoice(next);
+                        onApplyResolution(next);
+                      }}
+                      type="checkbox"
+                    />
                     Keep main <code>{shortHash(pullRequest.targetBaseCommitId)}</code>
                     <strong>{selected.main}</strong>
                     <small>Use the current target value.</small>
-                  </button>
-                  <button
+                  </label>
+                  <label
                     className={choice === 'feature' ? detailStyles.choiceActive : undefined}
-                    onClick={() => setChoice('feature')}
-                    type="button"
                   >
-                    <i />
+                    <input
+                      aria-label="Use feature"
+                      checked={choice === 'feature'}
+                      disabled={applyingResolution}
+                      onChange={() => {
+                        const next = choice === 'feature' ? null : 'feature';
+                        setChoice(next);
+                        onApplyResolution(next);
+                      }}
+                      type="checkbox"
+                    />
                     Use feature <code>{shortHash(pullRequest.sourceCommitId)}</code>
                     <strong>{selected.feature}</strong>
                     <small>Apply the proposed branch value.</small>
-                  </button>
+                  </label>
                 </div>
               </>
             ) : (

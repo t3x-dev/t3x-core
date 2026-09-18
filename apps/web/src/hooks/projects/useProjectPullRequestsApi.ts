@@ -1,6 +1,8 @@
 import type { MergeDecision } from '@t3x-dev/core';
 import { useCallback } from 'react';
+import type { PullRequestConflictSide } from '@/domain/project/pullRequestConflictDecision';
 import {
+  applyPullRequestConflictDecision,
   completeProjectPullRequest,
   dismissProjectPullRequest,
   fetchProjectPullRequest,
@@ -76,7 +78,12 @@ export function useProjectPullRequestsApi() {
     return rerunPullRequestReadiness(projectId, input.number);
   }, []);
 
+  const applyConflictDecision = useCallback((draftId: string, side: PullRequestConflictSide) => {
+    return applyPullRequestConflictDecision(draftId, side);
+  }, []);
+
   return {
+    applyConflictDecision,
     closePullRequest,
     createPullRequest,
     fetchCompareCandidates,

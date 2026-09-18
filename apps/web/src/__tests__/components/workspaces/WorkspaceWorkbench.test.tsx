@@ -269,6 +269,11 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     );
 
     expect(mocks.sourceThreadGenerationOptions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        onConversationReady: expect.any(Function),
+      })
+    );
+    expect(mocks.sourceThreadGenerationOptions).toHaveBeenCalledWith(
       expect.not.objectContaining({ sourceDraftReply: expect.anything() })
     );
     expect(mocks.saveDraft).not.toHaveBeenCalled();

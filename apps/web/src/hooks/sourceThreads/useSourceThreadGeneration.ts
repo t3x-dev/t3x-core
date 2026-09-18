@@ -50,6 +50,7 @@ export interface UseSourceThreadGenerationOptions {
   parentCommitHash?: string;
   sourceDraftReply?: SourceDraftReplyContext;
   onConversationCreated?: (conversationId: string) => void;
+  onConversationReady?: (conversationId: string) => void | Promise<void>;
   onTurnsSaved?: () => void;
 }
 
@@ -209,6 +210,7 @@ export function useSourceThreadGeneration({
   parentCommitHash,
   sourceDraftReply,
   onConversationCreated,
+  onConversationReady,
   onTurnsSaved,
 }: UseSourceThreadGenerationOptions): UseSourceThreadGenerationReturn {
   const history = useChatHistory(projectId, conversationId);
@@ -415,6 +417,14 @@ export function useSourceThreadGeneration({
         }
         setTurnsSavedCounter((c) => c + 1);
         onTurnsSaved?.();
+
+        if (!isTemporaryMode && onConversationReady) {
+          try {
+            await onConversationReady(currentConversationId);
+          } catch {
+            // Context prep is best-effort; memory may be empty if it fails.
+          }
+        }
 
         let memoryContext = '';
         if (!isTemporaryMode && !options?.skipMemoryFetch) {
@@ -660,6 +670,7 @@ export function useSourceThreadGeneration({
       parentCommitHash,
       sourceDraftReply,
       onConversationCreated,
+      onConversationReady,
       onTurnsSaved,
       webSearchEnabled,
       thinkingEnabled,

@@ -2,8 +2,10 @@ import type { ChangeProjectionV1, ReviewSnapshotV1 } from '@t3x-dev/api-client';
 import type { TransitionViewV1 } from '@t3x-dev/core';
 import * as yaml from 'js-yaml';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { updateConversationContextPins } from '@/commands/conversations';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { providerSupports } from '@/domain/providerCapabilities';
+import { includedImportPinIds } from '@/domain/workspaces/includedImportPinIds';
 import { useMaterialUpload } from '@/hooks/materials/useMaterialUpload';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
@@ -116,6 +118,7 @@ export function useWorkspaceComposeReviewController({
   const [hasCollaborationConflict, setHasCollaborationConflict] = useState(false);
   const reviewGenerationRef = useRef(0);
   const activeCandidateIdRef = useRef(candidate.id);
+  const sourceConversationIdRef = useRef(sourceConversationId);
 
   const modelSelection = useChatModelSelection({});
   const thinkingEnabled = useChatSessionStore((state) => state.thinkingEnabled);
@@ -156,8 +159,29 @@ export function useWorkspaceComposeReviewController({
   }, [sourceConversationIdProp]);
 
   useEffect(() => {
+    sourceConversationIdRef.current = sourceConversationId;
+  }, [sourceConversationId]);
+
+  useEffect(() => {
     void refreshPins(candidate.projectId);
   }, [candidate.projectId, refreshPins]);
+
+  const syncImportPinsToConversation = useCallback(async (conversationId: string) => {
+    await updateConversationContextPins(
+      conversationId,
+      includedImportPinIds(usePinsStore.getState().pins)
+    );
+  }, []);
+
+  const syncImportPinsIfConversationReady = useCallback(async () => {
+    const conversationId = sourceConversationIdRef.current;
+    if (!conversationId) return;
+    try {
+      await syncImportPinsToConversation(conversationId);
+    } catch {
+      // Next send retries via onConversationReady.
+    }
+  }, [syncImportPinsToConversation]);
 
   const chat = useSourceThreadGeneration({
     projectId: candidate.projectId,
@@ -167,6 +191,7 @@ export function useWorkspaceComposeReviewController({
     model: modelSelection.selectedModel ?? undefined,
     parentCommitHash: sourceParentCommitHash,
     onConversationCreated: setSourceConversationId,
+    onConversationReady: syncImportPinsToConversation,
   });
 
   const rawMessages = useMemo(() => {
@@ -332,9 +357,17 @@ export function useWorkspaceComposeReviewController({
       });
       await persistCandidate(nextCandidate, 'source.add');
       await onSourceMaterialUploaded?.();
+      await syncImportPinsIfConversationReady();
       setNotice(`${material.title} added as source evidence.`);
     },
-    [candidate.projectId, onSourceMaterialUploaded, persistCandidate, pinsCrud, workingCandidate]
+    [
+      candidate.projectId,
+      onSourceMaterialUploaded,
+      persistCandidate,
+      pinsCrud,
+      syncImportPinsIfConversationReady,
+      workingCandidate,
+    ]
   );
 
   const toggleMaterialSource = useCallback(
@@ -357,6 +390,7 @@ export function useWorkspaceComposeReviewController({
           );
         }
         await persistCandidate(invalidateWorkspaceProposal(workingCandidate), 'source.include');
+        await syncImportPinsIfConversationReady();
         setNotice(included ? 'Material included as source evidence.' : 'Material excluded.');
       } catch (error) {
         setLocalError(formatUserFacingError(error, 'Material source update failed.'));
@@ -364,7 +398,14 @@ export function useWorkspaceComposeReviewController({
         setBusyAction(null);
       }
     },
-    [busyAction, candidate.projectId, persistCandidate, pinsCrud, workingCandidate]
+    [
+      busyAction,
+      candidate.projectId,
+      persistCandidate,
+      pinsCrud,
+      syncImportPinsIfConversationReady,
+      workingCandidate,
+    ]
   );
 
   const uploadFile = useCallback(
