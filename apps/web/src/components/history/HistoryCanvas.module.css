@@ -231,6 +231,17 @@
   text-align: center;
 }
 
+.canvasPan {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.canvasPanning {
+  cursor: grabbing;
+}
+.canvasPan .node {
+  pointer-events: none;
+}
 .viewport {
   position: relative;
   width: 100%;
@@ -238,6 +249,9 @@
   min-width: 0;
   transform-origin: center;
   transition: transform 180ms ease;
+}
+.viewportPanning {
+  transition: none;
 }
 .edges {
   position: absolute;
