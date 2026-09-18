@@ -20,7 +20,10 @@ export async function generateWorkspaceProposal(input: {
   posture: WorkspaceProposalPosture;
   instruction: string;
   sourceMaterialIds: string[];
+  conversationTranscript?: string;
   ifRevision?: number;
+  provider?: string;
+  model?: string;
 }): Promise<ProposalGenerationEnvelope> {
   const res = await fetchWithTimeout(
     `${API_V1}/projects/${encodeURIComponent(input.projectId)}/proposal-generations`,
@@ -31,7 +34,12 @@ export async function generateWorkspaceProposal(input: {
         posture: input.posture,
         instruction: input.instruction,
         source_material_ids: input.sourceMaterialIds,
+        ...(input.conversationTranscript?.trim()
+          ? { conversation_transcript: input.conversationTranscript.trim() }
+          : {}),
         ...(input.ifRevision === undefined ? {} : { if_revision: input.ifRevision }),
+        ...(input.provider ? { provider: input.provider } : {}),
+        ...(input.model ? { model: input.model } : {}),
       }),
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',

@@ -19,13 +19,15 @@ type WorkspaceComposeCitation = NonNullable<WorkspaceComposeChatState['citations
 
 interface WorkspaceComposeChatProps {
   chat: WorkspaceComposeChatState;
+  variant?: 'full' | 'discuss';
 }
 
-export function WorkspaceComposeChat({ chat }: WorkspaceComposeChatProps) {
+export function WorkspaceComposeChat({ chat, variant = 'full' }: WorkspaceComposeChatProps) {
   const [copyError, setCopyError] = useState<string | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const messages = chat.messages ?? [];
   const citations = chat.citations ?? [];
+  const discuss = variant === 'discuss';
   const latestAssistantId = [...messages]
     .reverse()
     .find((message) => message.role === 'assistant')?.id;
@@ -47,55 +49,87 @@ export function WorkspaceComposeChat({ chat }: WorkspaceComposeChatProps) {
 
   return (
     <Conversation className="min-h-0 bg-[var(--surface-panel)] text-[var(--text-primary)]">
-      <ConversationContent scrollClassName="chat-scrollbar" className={styles.content}>
+      <ConversationContent
+        scrollClassName="chat-scrollbar"
+        className={cn(styles.content, discuss && styles.discussContent)}
+      >
         {messages.length === 0 && !chat.isLoading ? (
-          <ConversationEmptyState className="my-auto min-h-[260px] items-start gap-5 px-0 py-10 text-left">
-            <span className="flex size-10 items-center justify-center rounded-xl border border-[var(--stroke-divider)] bg-[var(--surface-app)]">
-              <Terminal className="size-5" aria-hidden="true" />
-            </span>
-            <div>
-              <h2 className="text-2xl font-semibold tracking-tight">
-                What would you like to change?
-              </h2>
-            </div>
-            <div className="grid w-full gap-2 sm:grid-cols-3">
-              {[
-                [
-                  'Explore',
-                  'Understand this workspace',
-                  'Explain the current workspace and the changes it contains.',
-                ],
-                [
-                  'Refine',
-                  'Make a focused change',
-                  'Help me refine this workspace. Ask me what I want to change first.',
-                ],
-                [
-                  'Review',
-                  'Find gaps and next steps',
-                  'Review the current proposal for missing requirements and open questions.',
-                ],
-              ].map(([label, title, prompt]) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => {
-                    chat.setInput(prompt!);
-                    document
-                      .querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')
-                      ?.focus();
-                  }}
-                  className="group rounded-xl border border-[var(--stroke-divider)] p-3 text-left transition-colors hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-                >
-                  <span className="flex items-center justify-between text-xs text-[var(--text-tertiary)]">
-                    {label}
-                    <ArrowUpRight className="size-3.5" aria-hidden="true" />
-                  </span>
-                  <span className="mt-2 block text-[13px] font-medium leading-5">{title}</span>
-                </button>
-              ))}
-            </div>
-          </ConversationEmptyState>
+          discuss ? (
+            <ConversationEmptyState className="my-auto min-h-[160px] items-start gap-3 px-0 py-6 text-left">
+              <p className="text-sm leading-6 text-[var(--text-secondary)]">
+                Ask why a proposed value changed, where it came from, or what to inspect next.
+              </p>
+              <div className="grid w-full gap-2">
+                {[
+                  ['Why this value?', 'Why did this proposed value change?'],
+                  ['Show the source', 'Show the source evidence for the selected change.'],
+                  ['Inspect this change', 'Inspect the selected change and summarize the risk.'],
+                ].map(([title, prompt]) => (
+                  <button
+                    key={title}
+                    type="button"
+                    onClick={() => {
+                      chat.setInput(prompt);
+                      document
+                        .querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')
+                        ?.focus();
+                    }}
+                    className="rounded-xl border border-[var(--stroke-divider)] px-3 py-2 text-left text-[13px] font-medium hover:bg-[var(--surface-hover)]"
+                  >
+                    {title}
+                  </button>
+                ))}
+              </div>
+            </ConversationEmptyState>
+          ) : (
+            <ConversationEmptyState className="my-auto min-h-[260px] items-start gap-5 px-0 py-10 text-left">
+              <span className="flex size-10 items-center justify-center rounded-xl border border-[var(--stroke-divider)] bg-[var(--surface-app)]">
+                <Terminal className="size-5" aria-hidden="true" />
+              </span>
+              <div>
+                <h2 className="text-2xl font-semibold tracking-tight">
+                  What would you like to change?
+                </h2>
+              </div>
+              <div className="grid w-full gap-2 sm:grid-cols-3">
+                {[
+                  [
+                    'Explore',
+                    'Understand this workspace',
+                    'Explain the current workspace and the changes it contains.',
+                  ],
+                  [
+                    'Refine',
+                    'Make a focused change',
+                    'Help me refine this workspace. Ask me what I want to change first.',
+                  ],
+                  [
+                    'Review',
+                    'Find gaps and next steps',
+                    'Review the current proposal for missing requirements and open questions.',
+                  ],
+                ].map(([label, title, prompt]) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => {
+                      chat.setInput(prompt!);
+                      document
+                        .querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')
+                        ?.focus();
+                    }}
+                    className="group rounded-xl border border-[var(--stroke-divider)] p-3 text-left transition-colors hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                  >
+                    <span className="flex items-center justify-between text-xs text-[var(--text-tertiary)]">
+                      {label}
+                      <ArrowUpRight className="size-3.5" aria-hidden="true" />
+                    </span>
+                    <span className="mt-2 block text-[13px] font-medium leading-5">{title}</span>
+                  </button>
+                ))}
+              </div>
+            </ConversationEmptyState>
+          )
         ) : null}
         {copyError ? (
           <p role="alert" className="text-xs text-[var(--status-error)]">

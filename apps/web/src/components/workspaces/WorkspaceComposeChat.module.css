@@ -5,6 +5,10 @@
   padding: 31px 38px 28px;
   gap: 25px;
 }
+.discussContent {
+  padding: 16px 18px 12px;
+  gap: 16px;
+}
 .message {
   display: grid;
   width: 100%;

@@ -137,9 +137,63 @@ describe('WorkspaceComposeReviewSurface composer', () => {
 
     expect(screen.getByRole('button', { name: 'Apply schema' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Review full draft' })).toBeDisabled();
+    expect(screen.getByRole('heading', { name: 'Proposed changes' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Discuss change' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Compose' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('navigation', { name: 'Workspace navigation' })).not.toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Hide proposed draft sidebar' }));
-    expect(screen.getByRole('button', { name: 'Show proposed draft sidebar' })).toBeInTheDocument();
+  it('starts AI summary instead of rule extraction', async () => {
+    const starter = getProjectWorkspaceStarterCandidate('proj_1');
+    const candidate = {
+      ...starter,
+      schemaBindings: getWorkspacePreviewCandidates('proj_1')[0]!.schemaBindings,
+    };
+    const summarizeWithAi = vi.fn().mockResolvedValue(true);
+    const controller = {
+      busyAction: null,
+      candidate,
+      chat: {
+        error: null,
+        input: 'Raise allocation to 25%.',
+        isLoading: false,
+        isStreaming: false,
+        messages: [{ author: 'You', content: 'Raise allocation to 25%.', id: 'u1', role: 'user' }],
+        send: vi.fn(),
+        setInput: vi.fn(),
+        stop: vi.fn(),
+        warning: null,
+      },
+      error: null,
+      hasCollaborationConflict: false,
+      isBusy: false,
+      materialSources: [],
+      model: {
+        availabilityError: null,
+        change: vi.fn(),
+        loading: false,
+        ready: true,
+        selectedModel: 'gpt-5.4-mini',
+        selectedProvider: 'openai',
+      },
+      notice: null,
+      scenarios: { options: [], selectedId: candidate.id },
+      sourceBusy: false,
+      summarizeWithAi,
+    } as unknown as WorkspaceComposeReviewController;
+    render(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="compose"
+        onModeChange={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'AI总结' }));
+    expect(summarizeWithAi).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('button', { name: 'Generate changes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Apply schema' })).not.toBeInTheDocument();
   });
 
   it('routes composer send, pasted text, and file input to the controller', async () => {
@@ -314,7 +368,8 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
 
-    expect(screen.getByRole('navigation', { name: 'Workspace navigation' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Compose' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('navigation', { name: 'Workspace navigation' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Review change prd/summary/outcome' }));
     await waitFor(() => expect(prepareReview).toHaveBeenCalledOnce());
     expect(onModeChange).toHaveBeenCalledWith('review');

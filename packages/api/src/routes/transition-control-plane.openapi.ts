@@ -1,5 +1,9 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { type ApiKey, LLMProviderError, ProposalGenerationDraftSchema } from '@t3x-dev/core';
+import {
+  type ApiKey,
+  LLMProviderError,
+  ProposalGenerationDraftStructuredSchema,
+} from '@t3x-dev/core';
 import {
   ConflictError,
   DecisionNotAuthorizedError,
@@ -201,6 +205,7 @@ const ProposalGenerationRequestSchema = z
     posture: z.enum(['source_only', 'guided', 'recommend']).default('guided'),
     instruction: z.string().trim().min(1).max(20_000),
     source_material_ids: z.array(z.string().trim().min(1).max(200)).max(256).default([]),
+    conversation_transcript: z.string().trim().min(1).max(80_000).optional(),
     if_revision: z.number().int().min(1).optional(),
     provider: z.string().trim().min(1).max(100).optional(),
     model: z.string().trim().min(1).max(500).optional(),
@@ -596,11 +601,14 @@ async function defaultProposalGenerationModel(input: {
                   content: source.content,
                 })),
                 instruction: generation.instruction,
+                ...(generation.conversationTranscript
+                  ? { conversation: generation.conversationTranscript }
+                  : {}),
               }),
             },
           ],
         },
-        ProposalGenerationDraftSchema,
+        ProposalGenerationDraftStructuredSchema,
         { model: resolved.model, temperature: 0, maxTokens: 16_000 }
       );
       return { draft: result.data, usage: result.usage };
@@ -867,6 +875,9 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
         posture: body.posture,
         instruction: body.instruction,
         sourceMaterialIds: body.source_material_ids,
+        ...(body.conversation_transcript === undefined
+          ? {}
+          : { conversationTranscript: body.conversation_transcript }),
         ...(body.if_revision === undefined ? {} : { expectedRevision: body.if_revision }),
         ...(body.provider === undefined ? {} : { requestedProvider: body.provider }),
         ...(body.model === undefined ? {} : { requestedModel: body.model }),

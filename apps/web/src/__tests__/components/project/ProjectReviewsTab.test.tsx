@@ -407,6 +407,15 @@ describe('ProjectReviewsTab', () => {
 
     expect(screen.getByText('Resolution saved. Merge is ready.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Merge PR' })).toBeEnabled();
+    expect(screen.queryByRole('checkbox', { name: 'Use feature' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit merged value' }));
+    expect(screen.getByRole('checkbox', { name: 'Use feature' })).toBeChecked();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Keep main' }));
+    expect(screen.getByRole('button', { name: 'Merge PR' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Edit merged value' })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Keep main' })).not.toBeInTheDocument();
   });
 
   it('writes the selected side onto the merge draft before merging a project PR', async () => {

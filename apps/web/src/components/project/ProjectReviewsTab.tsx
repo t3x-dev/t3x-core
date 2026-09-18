@@ -860,7 +860,7 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
     }
     if (!projectId || !pullRequest.mergeDraftId) {
       setConflictDecision({
-        conflictResolutions: {},
+        conflictResolutions: { fixture: side === 'feature' ? 'source' : 'target' },
         keepFromSource: [],
         keepFromTarget: [],
         keepRelationsFromSource: true,
@@ -2100,6 +2100,10 @@ function StructuredDiffPanel({
   pullRequest: ProjectPullRequest;
 }) {
   const conflict = pullRequest.status === 'blocked' && !conflictResolved;
+  const canEditMergedValue = pullRequest.status === 'blocked';
+  const [selectedId, setSelectedId] = useState(conflict ? 'branch' : 'commit');
+  const [choice, setChoice] = useState<PullRequestConflictSide | null>(null);
+  const [editingMergedValue, setEditingMergedValue] = useState(false);
   const rows = useMemo<PullRequestTreeRow[]>(() => {
     const summary = pullRequest.diffSummary;
     return [
@@ -2164,7 +2168,12 @@ function StructuredDiffPanel({
         id: 'branch',
         key: 'branch',
         main: pullRequest.targetBranch,
-        merged: conflict ? 'Choose value' : pullRequest.sourceBranch,
+        merged:
+          choice === 'main'
+            ? pullRequest.targetBranch
+            : conflict
+              ? 'Choose value'
+              : pullRequest.sourceBranch,
         path: 'release_plan.rollout.branch',
         status: conflict ? 'conflict' : 'merged',
         type: 'string',
@@ -2214,10 +2223,9 @@ function StructuredDiffPanel({
         type: 'boolean',
       },
     ];
-  }, [conflict, pullRequest]);
-  const [selectedId, setSelectedId] = useState(conflict ? 'branch' : 'commit');
-  const [choice, setChoice] = useState<PullRequestConflictSide | null>(null);
+  }, [choice, conflict, pullRequest]);
   const selected = rows.find((row) => row.id === selectedId) ?? rows[0];
+  const showingChoices = selected.id === 'branch' && (conflict || editingMergedValue);
   const mergedCount = rows.filter((row) => row.status === 'merged').length;
   const conflictCount = rows.filter((row) => row.status === 'conflict').length;
   const passedChecks = (pullRequest.checks ?? []).filter(
@@ -2326,7 +2334,7 @@ function StructuredDiffPanel({
       <aside className={detailStyles.inspector}>
         <section className={detailStyles.inspectorCard}>
           <div className={detailStyles.inspectorHeader}>
-            <h2>{selected.status === 'conflict' ? 'Selected conflict' : 'Selected change'}</h2>
+            <h2>{showingChoices ? 'Selected conflict' : 'Selected change'}</h2>
             <button onClick={onCopy} type="button">
               <Copy aria-hidden="true" />
               {copied ? 'Copied' : 'Copy path'}
@@ -2336,15 +2344,17 @@ function StructuredDiffPanel({
             <code className={detailStyles.selectedPath}>{selected.path}</code>
             <span
               className={
-                selected.status === 'conflict'
-                  ? detailStyles.decisionBadge
-                  : detailStyles.changeBadge
+                showingChoices ? detailStyles.decisionBadge : detailStyles.changeBadge
               }
             >
               <PhTilde aria-hidden="true" />
-              {selected.status === 'conflict' ? 'Needs decision' : 'Modified'}
+              {showingChoices
+                ? choice
+                  ? 'Edit merged value'
+                  : 'Needs decision'
+                : 'Modified'}
             </span>
-            {selected.status === 'conflict' ? (
+            {showingChoices ? (
               <>
                 <span className={detailStyles.fieldLabel}>Ancestor (base)</span>
                 <div className={detailStyles.ancestorValue}>{pullRequest.targetBranch}</div>
@@ -2359,6 +2369,7 @@ function StructuredDiffPanel({
                       onChange={() => {
                         const next = choice === 'main' ? null : 'main';
                         setChoice(next);
+                        setEditingMergedValue(false);
                         onApplyResolution(next);
                       }}
                       type="checkbox"
@@ -2377,6 +2388,7 @@ function StructuredDiffPanel({
                       onChange={() => {
                         const next = choice === 'feature' ? null : 'feature';
                         setChoice(next);
+                        setEditingMergedValue(false);
                         onApplyResolution(next);
                       }}
                       type="checkbox"
@@ -2393,7 +2405,7 @@ function StructuredDiffPanel({
                   Before<span>{selected.main}</span>
                 </div>
                 <div>
-                  After<span>{selected.feature}</span>
+                  After<span>{choice === 'main' ? selected.main : selected.feature}</span>
                 </div>
               </div>
             )}
@@ -2410,10 +2422,19 @@ function StructuredDiffPanel({
               <code>{shortHash(pullRequest.sourceCommitId)}</code>
               <span>{pullRequest.description}</span>
             </div>
-            <button className={detailStyles.editButton} type="button">
-              <PencilLine aria-hidden="true" />
-              Edit merged value
-            </button>
+            {canEditMergedValue && !showingChoices ? (
+              <button
+                className={detailStyles.editButton}
+                onClick={() => {
+                  setSelectedId('branch');
+                  setEditingMergedValue(true);
+                }}
+                type="button"
+              >
+                <PencilLine aria-hidden="true" />
+                Edit merged value
+              </button>
+            ) : null}
           </div>
         </section>
         <section className={detailStyles.checkCard}>

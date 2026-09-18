@@ -257,6 +257,39 @@ describe('governed Proposal generation', () => {
     expect(generate).toHaveBeenCalledTimes(1);
   });
 
+  it('passes the Compose conversation transcript into the generation model', async () => {
+    const data = await fixture('Conversation memory');
+    const generate = vi.fn(async () => ({
+      draft: draft(),
+      usage: { inputTokens: 11, outputTokens: 7 },
+    }));
+
+    await generateTransitionProposal({
+      db,
+      projectId: data.projectId,
+      requestId: 'generation:conversation',
+      requester: { kind: 'human', id: 'user:conversation' },
+      request: {
+        workspaceId: data.workspaceId,
+        posture: 'guided',
+        instruction: 'Summarize the conversation into schema-aligned changes.',
+        sourceMaterialIds: [data.material.id],
+        conversationTranscript: 'You: Raise allocation to 25%.\n\nAssistant: That is on page 3.',
+      },
+      resolveModel: async () => model(generate),
+      inference: inference(data.projectId),
+    });
+
+    expect(generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationTranscript: 'You: Raise allocation to 25%.\n\nAssistant: That is on page 3.',
+        context: expect.objectContaining({
+          memories: [expect.objectContaining({ mediaType: 'text/plain;charset=utf-8' })],
+        }),
+      })
+    );
+  });
+
   it('rejects forged quote pointers without persisting a Proposal', async () => {
     const data = await fixture('Forged evidence');
     const generate = vi.fn(async () => ({

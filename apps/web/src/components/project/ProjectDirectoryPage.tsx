@@ -3,6 +3,8 @@
 import { LayoutTemplate, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { type FormEvent, useCallback, useMemo, useState } from 'react';
+import { LogoIcon } from '@/components/chat/sidebar/LogoIcon';
+import styles from '@/components/project/ProjectDirectoryPage.module.css';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -80,32 +82,23 @@ function ProjectCard({
   ownerSlug: string;
 }) {
   return (
-    <article
-      className={cn(
-        'group rounded-[var(--radius-card)] border border-[var(--stroke-default)] bg-[var(--surface-card)]',
-        'transition-colors duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
-        'hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)]',
-        compact ? 'p-4' : 'p-5'
-      )}
-    >
+    <article className={cn('group', compact ? cn(styles.card, styles.cardInteractive, 'p-4') : 'px-5 py-4')}>
       <div className="flex min-w-0 items-start justify-between gap-4">
         <Link
           href={getProjectRepoPath(project, ownerSlug)}
           onClick={() => recordRecentProjectOpen(project.id)}
           className="min-w-0 flex-1 rounded-[var(--radius-control)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
         >
-          <h3 className="truncate text-base font-semibold leading-tight text-[var(--text-primary)] transition-colors group-hover:text-[var(--accent-commit)]">
+          <h3 className="truncate text-[15px] font-semibold leading-tight text-[var(--text-primary)] transition-colors group-hover:text-[var(--accent-commit)]">
             {project.name}
           </h3>
-          <p className="mt-1.5 line-clamp-2 text-xs font-normal leading-relaxed text-[var(--text-secondary)]">
+          <p className="mt-1.5 line-clamp-2 text-[13px] font-normal leading-relaxed text-[var(--text-secondary)]">
             {project.description || 'Structured state repository.'}
           </p>
-          <p className="mt-2 truncate text-xs font-mono text-[var(--text-tertiary)]">
-            {getProjectRepoPath(project, ownerSlug)}
-          </p>
+          <span className={styles.pathChip}>{getProjectRepoPath(project, ownerSlug)}</span>
         </Link>
         {!compact && (
-          <span className="mt-1 shrink-0 text-xs font-normal text-[var(--text-tertiary)]">
+          <span className="mt-1 shrink-0 text-xs font-medium text-[var(--text-tertiary)]">
             Updated {project.updatedAt}
           </span>
         )}
@@ -132,7 +125,7 @@ function ProjectCard({
           </Button>
         </div>
       </div>
-      <div className="mt-4">
+      <div className="mt-3">
         <ProjectMetrics project={project} />
       </div>
     </article>
@@ -154,28 +147,25 @@ function DirectoryTopBar({
   const newRepositoryPath = `/${ownerSlug}/new`;
 
   return (
-    <header className="sticky top-0 z-30 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)]">
-      <div className="flex h-16 items-center gap-3 px-6">
-        <div className="flex items-center gap-3 pr-4">
-          <div className="flex size-9 items-center justify-center rounded-[var(--radius-control)] bg-[var(--text-primary)] text-sm font-bold text-[var(--surface-card)]">
-            T3
-          </div>
-          <span className="text-base font-bold text-[var(--text-primary)]">{ownerSlug}</span>
+    <header className={styles.topBar}>
+      <div className={styles.topBarInner}>
+        <div className={styles.brand}>
+          <span className={styles.wordmark}>T3X</span>
+          <span className={styles.brandMark}>
+            <LogoIcon />
+          </span>
+          <span className={styles.ownerPath}>{ownerSlug}</span>
         </div>
         <nav aria-label="Namespace navigation" className="hidden items-center gap-1 md:flex">
-          <Link
-            className="rounded-[var(--radius-control)] px-3 py-2 text-sm font-semibold text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
-            href={settingsPath}
-          >
+          <Link className={styles.navLink} href={settingsPath}>
             Settings
           </Link>
         </nav>
         <div className="ml-auto" />
-        <Button asChild className="size-9" size="icon" variant="canvas-outline">
-          <Link aria-label="New repository" href={newRepositoryPath}>
-            <Plus className="size-4" />
-          </Link>
-        </Button>
+        <Link aria-label="New repository" className={styles.createLink} href={newRepositoryPath}>
+          <Plus aria-hidden="true" className="size-3.5" />
+          New repository
+        </Link>
         <Button
           aria-label="Refresh repositories"
           className="size-9"
@@ -187,6 +177,9 @@ function DirectoryTopBar({
         >
           <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
         </Button>
+        <span aria-hidden="true" className={styles.userMark}>
+          {ownerSlug.charAt(0).toUpperCase()}
+        </span>
       </div>
     </header>
   );
@@ -211,25 +204,24 @@ function NamespaceHeader({
       .toUpperCase() || 'T3';
 
   return (
-    <section className="border-b border-[var(--stroke-divider)] pb-7">
-      <div className="flex flex-col gap-5 md:flex-row md:items-center">
-        <div className="flex size-28 shrink-0 items-center justify-center rounded-[var(--radius-panel)] bg-[var(--text-primary)] text-3xl font-bold text-[var(--surface-card)]">
-          {avatarLabel}
-        </div>
-        <div className="min-w-0">
-          <h1 className="text-3xl font-bold leading-tight text-[var(--text-primary)]">
-            {ownerSlug}
-          </h1>
-          <p className="mt-2 text-base font-semibold text-[var(--text-secondary)]">
-            {isPersonalNamespace
-              ? 'Personal namespace for structured state repositories.'
-              : 'Organization namespace for structured state repositories.'}
-          </p>
-          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold text-[var(--text-secondary)]">
-            <span>{isPersonalNamespace ? 'Personal namespace' : 'Organization namespace'}</span>
-            <span>{dataAvailable ? projects.length : '—'} repos</span>
-            <span>{dataAvailable ? commits : '—'} commits</span>
-          </div>
+    <section className={styles.hero}>
+      <div aria-hidden="true" className={styles.heroMark}>
+        {avatarLabel}
+      </div>
+      <div className="min-w-0">
+        <p className={styles.eyebrow}>Owner namespace</p>
+        <h1 className={styles.heroTitle}>{ownerSlug}</h1>
+        <p className={styles.heroCopy}>
+          {isPersonalNamespace
+            ? 'Personal namespace for structured state repositories.'
+            : 'Organization namespace for structured state repositories.'}
+        </p>
+        <div className={styles.heroStats}>
+          <span className={styles.statChip}>
+            {isPersonalNamespace ? 'Personal namespace' : 'Organization namespace'}
+          </span>
+          <span className={styles.statChip}>{dataAvailable ? projects.length : '—'} repos</span>
+          <span className={styles.statChip}>{dataAvailable ? commits : '—'} commits</span>
         </div>
       </div>
     </section>
@@ -248,39 +240,53 @@ function DirectorySideRail({
 
   if (!dataAvailable) {
     return (
-      <aside className="space-y-7">
-        <section>
-          <h2 className="text-base font-bold text-[var(--text-primary)]">
-            Repositories at a glance
-          </h2>
-          <p className="mt-3 text-sm font-semibold leading-snug text-[var(--text-secondary)]">
-            Repository data is unavailable.
-          </p>
+      <aside className={styles.rail}>
+        <section className={cn(styles.card, styles.railCard)}>
+          <div className={styles.railHead}>
+            <h2 className={styles.railTitle}>Repositories at a glance</h2>
+          </div>
+          <div className={styles.railBody}>
+            <p className={styles.railCopy}>Repository data is unavailable.</p>
+          </div>
         </section>
-        <section className="border-t border-[var(--stroke-divider)] pt-6">
-          <h2 className="text-base font-bold text-[var(--text-primary)]">Recently created</h2>
-          <p className="mt-3 text-sm font-semibold leading-snug text-[var(--text-secondary)]">
-            Retry loading repositories to see recent creations.
-          </p>
+        <section className={cn(styles.card, styles.railCard)}>
+          <div className={styles.railHead}>
+            <h2 className={styles.railTitle}>Recently created</h2>
+          </div>
+          <div className={styles.railBody}>
+            <p className={styles.railCopy}>Retry loading repositories to see recent creations.</p>
+          </div>
         </section>
       </aside>
     );
   }
 
   return (
-    <aside className="space-y-7">
-      <section>
-        <h2 className="text-base font-bold text-[var(--text-primary)]">Repositories at a glance</h2>
-        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-2 text-sm font-semibold text-[var(--text-secondary)]">
-          <ProjectMetric label="Repositories" value={projects.length} tone="state" />
-          <ProjectMetric label="Without commits" value={drafts} tone="schema" />
+    <aside className={styles.rail}>
+      <section className={cn(styles.card, styles.railCard)}>
+        <div className={styles.railHead}>
+          <h2 className={styles.railTitle}>Repositories at a glance</h2>
+        </div>
+        <div className={styles.railBody}>
+          <div className={styles.tile}>
+            <div className={styles.tileLabel}>Repositories</div>
+            <div className={styles.tileValue}>{projects.length}</div>
+          </div>
+          <div className={styles.tile}>
+            <div className={styles.tileLabel}>Without commits</div>
+            <div className={styles.tileValue}>{drafts}</div>
+          </div>
         </div>
       </section>
-      <section className="border-t border-[var(--stroke-divider)] pt-6">
-        <h2 className="text-base font-bold text-[var(--text-primary)]">Recently created</h2>
-        <p className="mt-3 text-sm font-semibold leading-snug text-[var(--text-secondary)]">
-          {recent ? `${recent.name} created ${recent.updatedAt}.` : 'No repositories yet.'}
-        </p>
+      <section className={cn(styles.card, styles.railCard)}>
+        <div className={styles.railHead}>
+          <h2 className={styles.railTitle}>Recently created</h2>
+        </div>
+        <div className={styles.railBody}>
+          <p className={styles.railCopy}>
+            {recent ? `${recent.name} created ${recent.updatedAt}.` : 'No repositories yet.'}
+          </p>
+        </div>
       </section>
     </aside>
   );
@@ -296,10 +302,7 @@ function DirectoryLoadFailure({
   retrying: boolean;
 }) {
   return (
-    <div
-      className="flex min-h-[280px] flex-col items-center justify-center rounded-[var(--radius-card)] border border-[var(--status-error)]/25 bg-[var(--surface-card)] p-8 text-center"
-      role="alert"
-    >
+    <div className={cn(styles.card, styles.blank)} role="alert">
       <h2 className="text-lg font-bold text-[var(--text-primary)]">
         Couldn&apos;t load repositories
       </h2>
@@ -322,7 +325,7 @@ function DirectoryLoadFailure({
 
 function EmptyDirectory({ newRepositoryPath }: { newRepositoryPath: string }) {
   return (
-    <div className="flex min-h-[360px] flex-col items-center justify-center rounded-[var(--radius-card)] border border-[var(--stroke-default)] bg-[var(--surface-card)] p-8 text-center">
+    <div className={cn(styles.card, styles.blank)}>
       <div className="flex size-10 items-center justify-center rounded-[var(--radius-control)] border border-[var(--accent-commit)]/20 bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]">
         <LayoutTemplate className="size-5" />
       </div>
@@ -452,14 +455,14 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
   const dataAvailable = hasLoadedProjects || (!loading && !error);
 
   return (
-    <div className="min-h-screen bg-[var(--surface-app)] text-[var(--text-primary)]">
+    <div className={styles.page}>
       <DirectoryTopBar
         isPersonalNamespace={isPersonalNamespace}
         onRefresh={handleRefreshProjects}
         ownerSlug={ownerSlug}
         refreshing={loading}
       />
-      <main className="mx-auto grid max-w-[1560px] grid-cols-1 gap-8 px-6 py-10 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <main className={styles.main}>
         <div className="min-w-0 space-y-8">
           <NamespaceHeader
             dataAvailable={dataAvailable}
@@ -488,7 +491,7 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
           )}
 
           {loading && projectSummaries.length === 0 ? (
-            <div className="rounded-[var(--radius-card)] border border-[var(--stroke-default)] bg-[var(--surface-card)] p-8 text-sm font-semibold text-[var(--text-secondary)]">
+            <div className={cn(styles.card, 'p-8 text-sm font-semibold text-[var(--text-secondary)]')}>
               Loading repositories...
             </div>
           ) : error && projectSummaries.length === 0 ? (
@@ -502,16 +505,14 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
           ) : (
             <>
               <section>
-                <div className="mb-4 flex items-end justify-between gap-4">
-                  <h2 className="text-xl font-bold text-[var(--text-primary)]">
-                    Pinned repositories
-                  </h2>
-                  <span className="hidden text-xs font-bold text-[var(--text-tertiary)] md:block">
+                <div className={styles.sectionHead}>
+                  <h2 className={styles.sectionTitle}>Pinned repositories</h2>
+                  <span className={cn(styles.sectionMeta, 'hidden md:block')}>
                     {isPersonalNamespace ? 'Personal' : 'Organization'} repositories with shareable
                     paths
                   </span>
                 </div>
-                <div className="grid gap-3 lg:grid-cols-2">
+                <div className={styles.pinnedGrid}>
                   {pinnedProjects.map((project) => (
                     <ProjectCard
                       compact
@@ -526,18 +527,16 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
               </section>
 
               <section>
-                <div className="mb-4 flex items-end justify-between gap-4">
-                  <h2 className="text-xl font-bold text-[var(--text-primary)]">Repositories</h2>
-                  <span className="text-xs font-bold text-[var(--text-tertiary)]">
-                    {filteredProjects.length} repos
-                  </span>
+                <div className={styles.sectionHead}>
+                  <h2 className={styles.sectionTitle}>Repositories</h2>
+                  <span className={styles.sectionMeta}>{filteredProjects.length} repos</span>
                 </div>
-                <div className="mb-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
-                  <label className="relative min-w-0">
+                <div className={styles.toolbar}>
+                  <label className={styles.search}>
                     <span className="sr-only">Find a repository</span>
-                    <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--text-tertiary)]" />
+                    <Search className={styles.searchIcon} />
                     <input
-                      className="h-10 w-full rounded-[var(--radius-control)] border border-[var(--stroke-default)] bg-[var(--surface-card)] pl-9 pr-3 text-sm font-semibold text-[var(--text-primary)] outline-none transition-colors placeholder:text-[var(--text-tertiary)] focus:border-[var(--stroke-strong)] focus:ring-2 focus:ring-[var(--ring)]/30"
+                      className={styles.searchInput}
                       onChange={(event) => setQuery(event.target.value)}
                       placeholder="Find a repository..."
                       value={query}
@@ -549,13 +548,10 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
                     </Link>
                   </Button>
                 </div>
-                <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--stroke-default)] bg-[var(--surface-card)]">
+                <div className={cn(styles.card, styles.repoPanel)}>
                   {filteredProjects.length > 0 ? (
                     filteredProjects.map((project) => (
-                      <div
-                        className="border-b border-[var(--stroke-divider)] last:border-b-0"
-                        key={project.id}
-                      >
+                      <div className={styles.repoRow} key={project.id}>
                         <ProjectCard
                           onDelete={setDeleteTarget}
                           onRename={openRenameDialog}

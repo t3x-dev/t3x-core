@@ -24,9 +24,7 @@ import {
   MessageSquare,
   Minus,
   MinusCircle,
-  PanelRightClose,
   PanelRightOpen,
-  Play,
   Plus,
   RefreshCw,
   Settings,
@@ -126,7 +124,6 @@ export function WorkspaceComposeReviewSurface({
   const [reviewPane, setReviewPaneState] = useState<ReviewPane>(() =>
     parseReviewPane(new URLSearchParams(routeQuery).get('reviewPane'))
   );
-  const changeCount = controller.candidate.yopsDraft.operations.length;
 
   const writeWorkspaceSurfaceUrl = useCallback(
     (nextMode: WorkspaceSurfaceMode, nextPane?: ReviewPane) => {
@@ -195,15 +192,17 @@ export function WorkspaceComposeReviewSurface({
       )}
     >
       <div className={composeStyles.workspaceBody}>
-        <WorkspaceNavigation
-          branchOptions={branchOptions}
-          controller={controller}
-          mode={mode}
-          onBranchChange={onBranchChange}
-          onModeChange={setSurfaceMode}
-          onPaneChange={setReviewPane}
-          pane={reviewPane}
-        />
+        {mode === 'review' ? (
+          <WorkspaceNavigation
+            branchOptions={branchOptions}
+            controller={controller}
+            mode={mode}
+            onBranchChange={onBranchChange}
+            onModeChange={setSurfaceMode}
+            onPaneChange={setReviewPane}
+            pane={reviewPane}
+          />
+        ) : null}
         <div className={composeStyles.workspaceContent}>
           {mode === 'review' ? (
             <ReviewSurface
@@ -215,9 +214,10 @@ export function WorkspaceComposeReviewSurface({
             />
           ) : (
             <ComposeSurface
+              branchOptions={branchOptions}
               candidate={controller.candidate ?? candidate}
-              changeCount={changeCount}
               controller={controller}
+              onBranchChange={onBranchChange}
               onModeChange={setSurfaceMode}
               onWorkspacesRefresh={onWorkspacesRefresh}
             />
@@ -315,48 +315,153 @@ function WorkspaceNavigation({
 }
 
 function ComposeSurface({
+  branchOptions,
   candidate,
-  changeCount,
   controller,
+  onBranchChange,
   onModeChange,
   onWorkspacesRefresh,
 }: {
+  branchOptions: string[];
   candidate: WorkspaceCandidate;
-  changeCount: number;
   controller: WorkspaceComposeReviewController;
+  onBranchChange?: (branch: string) => Promise<void> | void;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
   onWorkspacesRefresh?: (workspace?: WorkspaceCandidate) => Promise<void> | void;
 }) {
-  const [draftSidebarOpen, setDraftSidebarOpen] = useState(true);
+  const operations = candidate.yopsDraft.operations;
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const selectedOperation = operations[Math.min(selectedIndex, Math.max(operations.length - 1, 0))];
+
+  useEffect(() => {
+    if (selectedIndex >= operations.length) setSelectedIndex(0);
+  }, [operations.length, selectedIndex]);
 
   return (
-    <div className={composeStyles.surface}>
-      <section className={composeStyles.chatColumn}>
-        <WorkspaceComposeChat chat={controller.chat} />
-        <ComposerBar controller={controller} />
-      </section>
-
-      <aside
-        aria-label="Proposed draft sidebar"
-        className={cn(composeStyles.sidebar, !draftSidebarOpen && 'lg:!w-12 lg:!basis-12')}
-        style={draftSidebarOpen ? undefined : { flexBasis: 48, width: 48 }}
-      >
-        {draftSidebarOpen ? (
-          <ProposedDraftPanel
-            candidate={candidate}
-            controller={controller}
-            onModeChange={onModeChange}
-            onSidebarToggle={() => setDraftSidebarOpen(false)}
-            onWorkspacesRefresh={onWorkspacesRefresh}
-          />
-        ) : (
-          <CollapsedDraftSidebar
-            changeCount={changeCount}
-            onSidebarToggle={() => setDraftSidebarOpen(true)}
-          />
-        )}
-      </aside>
+    <div className={composeStyles.composePage}>
+      <ComposeWorkspaceHeader
+        branchOptions={branchOptions}
+        candidate={candidate}
+        controller={controller}
+        onBranchChange={onBranchChange}
+        onModeChange={onModeChange}
+      />
+      <div className={composeStyles.composeBody}>
+        <ProposedChangesBoard
+          candidate={candidate}
+          controller={controller}
+          onModeChange={onModeChange}
+          onSelect={setSelectedIndex}
+          onWorkspacesRefresh={onWorkspacesRefresh}
+          selectedIndex={selectedIndex}
+        />
+        <aside aria-label="Discuss change" className={composeStyles.discussRail}>
+          <header className={composeStyles.discussHeader}>
+            <h3>Discuss change</h3>
+            <p className={composeStyles.discussContext}>
+              {selectedOperation
+                ? `Selected ${selectedOperation.path}`
+                : 'Context: current draft and selected sources'}
+            </p>
+          </header>
+          <div className={composeStyles.discussChat}>
+            <WorkspaceComposeChat chat={controller.chat} variant="discuss" />
+          </div>
+          <ComposerBar controller={controller} />
+        </aside>
+      </div>
     </div>
+  );
+}
+
+function ComposeWorkspaceHeader({
+  branchOptions,
+  candidate,
+  controller,
+  onBranchChange,
+  onModeChange,
+}: {
+  branchOptions: string[];
+  candidate: WorkspaceCandidate;
+  controller: WorkspaceComposeReviewController;
+  onBranchChange?: (branch: string) => Promise<void> | void;
+  onModeChange: (mode: WorkspaceSurfaceMode) => void;
+}) {
+  const selectedBranch = controller.candidate.targetBranch || 'main';
+  const availableBranches = Array.from(
+    new Set([selectedBranch, ...branchOptions.map((branch) => branch.trim()).filter(Boolean)])
+  );
+  const schema = getPrimarySchemaBinding(candidate.schemaBindings);
+  const schemaLabel = schema
+    ? `${schema.schemaName}${schema.version ? ` ${schema.version}` : ''}`
+    : 'No schema';
+
+  return (
+    <header className={composeStyles.composeHeader}>
+      <div className={composeStyles.composeTitle}>
+        <h2>{candidate.title}</h2>
+        <div className={composeStyles.composeMeta}>
+          {controller.scenarios.options.length > 1 ? (
+            <label className="inline-flex min-w-0 items-center gap-2">
+              <span className="sr-only">Workspace scenario</span>
+              <select
+                aria-label="Workspace scenario"
+                className="h-8 max-w-56 truncate rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 text-xs text-[var(--text-primary)]"
+                onChange={(event) => controller.scenarios.select(event.target.value)}
+                value={controller.scenarios.selectedId}
+              >
+                {controller.scenarios.options.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <StateBranchControls
+            branch={selectedBranch}
+            branchOptions={availableBranches}
+            canCreateFromSearch={false}
+            disabled={!onBranchChange || availableBranches.length <= 1}
+            headCommitHash={null}
+            onBranchChange={(branch) => void onBranchChange?.(branch)}
+            onCreateBranch={async () => {}}
+            showCreate={false}
+          />
+          <span>
+            Schema <strong>{schemaLabel}</strong>
+          </span>
+          {candidate.baseCommitHash ? <code>{candidate.baseCommitHash}</code> : null}
+        </div>
+      </div>
+      <div className={composeStyles.composeStepper} role="tablist" aria-label="Workspace mode">
+        <button
+          aria-selected="true"
+          onClick={() => onModeChange('compose')}
+          role="tab"
+          type="button"
+        >
+          <span aria-hidden="true" className={composeStyles.stepIndex}>
+            1
+          </span>
+          Compose
+        </button>
+        <button
+          aria-selected="false"
+          onClick={() => onModeChange('review')}
+          role="tab"
+          type="button"
+        >
+          <span aria-hidden="true" className={composeStyles.stepIndex}>
+            2
+          </span>
+          Review
+        </button>
+      </div>
+      <span className={composeStyles.draftBadge}>
+        Draft{candidate.revision === undefined ? '' : ` r${candidate.revision}`}
+      </span>
+    </header>
   );
 }
 
@@ -367,6 +472,7 @@ function ComposerBar({ controller }: { controller: WorkspaceComposeReviewControl
   const [sourceValue, setSourceValue] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const includedSource = controller.materialSources.find((source) => source.included);
   const sendDisabled =
     controller.chat.isLoading ||
     controller.model.loading ||
@@ -404,205 +510,186 @@ function ComposerBar({ controller }: { controller: WorkspaceComposeReviewControl
 
   return (
     <div className={composeStyles.composerWrap}>
-      <div>
-        {controller.error || controller.chat.warning || controller.notice ? (
-          <div
-            className={cn(
-              'mb-2 flex flex-wrap items-center gap-2 px-1 py-1 text-xs',
-              controller.error
-                ? 'border-[var(--status-error)]/30 bg-[var(--status-error-muted)] text-[var(--status-error)]'
-                : 'text-[var(--text-tertiary)]'
-            )}
-            role={controller.error ? 'alert' : 'status'}
-          >
-            {controller.error ??
-              controller.chat.warning ??
-              (controller.notice === 'Immutable review prepared from the current draft.' ? (
-                <>
-                  <CheckCircle2 aria-hidden="true" className="size-3.5" />
-                  Review ready
-                </>
-              ) : (
-                controller.notice
-              ))}
-            {controller.hasCollaborationConflict ? (
-              <button
-                className="ml-3 rounded-md border border-current px-2 py-1 font-semibold"
-                disabled={controller.isBusy}
-                onClick={() => void controller.resolveCollaborationConflict()}
-                type="button"
-              >
-                Refresh and apply mine
-              </button>
+      {controller.error || controller.chat.warning || controller.notice ? (
+        <div
+          className={cn(
+            'mb-2 flex flex-wrap items-center gap-2 px-1 py-1 text-xs',
+            controller.error
+              ? 'border-[var(--status-error)]/30 bg-[var(--status-error-muted)] text-[var(--status-error)]'
+              : 'text-[var(--text-tertiary)]'
+          )}
+          role={controller.error ? 'alert' : 'status'}
+        >
+          {controller.error ??
+            controller.chat.warning ??
+            (controller.notice === 'Immutable review prepared from the current draft.' ? (
+              <>
+                <CheckCircle2 aria-hidden="true" className="size-3.5" />
+                Review ready
+              </>
+            ) : (
+              controller.notice
+            ))}
+          {controller.hasCollaborationConflict ? (
+            <button
+              className="ml-3 rounded-md border border-current px-2 py-1 font-semibold"
+              disabled={controller.isBusy}
+              onClick={() => void controller.resolveCollaborationConflict()}
+              type="button"
+            >
+              Refresh and apply mine
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      <div className={composeStyles.composer}>
+        <input
+          accept={DOCUMENT_SOURCE_ACCEPTED_TYPES}
+          aria-label="Upload source material"
+          className="hidden"
+          onChange={handleFileChange}
+          ref={fileInputRef}
+          type="file"
+        />
+        <textarea
+          aria-label="Workspace instruction"
+          disabled={controller.chat.isLoading}
+          onChange={(event) => controller.chat.setInput(event.target.value)}
+          onKeyDown={handleComposerKeyDown}
+          placeholder="Ask about this change…"
+          ref={textareaRef}
+          rows={1}
+          value={controller.chat.input}
+        />
+        <div className={composeStyles.composerTools}>
+          <div className="relative flex min-w-0 items-center gap-2">
+            <button
+              aria-expanded={sourceMenuOpen}
+              aria-haspopup="menu"
+              aria-label="Add source"
+              className={composeStyles.addButton}
+              onClick={() => setSourceMenuOpen((open) => !open)}
+              title="Add source"
+              type="button"
+            >
+              <Plus aria-hidden="true" className="size-4" />
+              <span className="sr-only">Add source</span>
+            </button>
+            {includedSource ? (
+              <span className={composeStyles.composerSourceChip}>
+                <FileText aria-hidden="true" className="size-3.5" />
+                <span>{includedSource.title}</span>
+              </span>
+            ) : null}
+            {sourceMenuOpen ? (
+              <div className={composeStyles.sourceMenu} role="menu">
+                {sourceForm ? (
+                  <div className="grid gap-2">
+                    <input
+                      aria-label="Source title"
+                      className="h-8 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
+                      onChange={(event) => setSourceTitle(event.target.value)}
+                      placeholder="Optional title"
+                      value={sourceTitle}
+                    />
+                    {sourceForm === 'url' ? (
+                      <input
+                        aria-label="Source URL"
+                        className="h-8 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
+                        onChange={(event) => setSourceValue(event.target.value)}
+                        placeholder="https://example.com/source"
+                        type="url"
+                        value={sourceValue}
+                      />
+                    ) : (
+                      <textarea
+                        aria-label="Pasted source text"
+                        className="min-h-24 resize-y rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
+                        onChange={(event) => setSourceValue(event.target.value)}
+                        placeholder="Paste exact source text"
+                        value={sourceValue}
+                      />
+                    )}
+                    <div className="flex justify-end gap-2">
+                      <button
+                        className="h-8 rounded-md border border-[var(--stroke-default)] px-3 text-xs text-[var(--text-secondary)]"
+                        onClick={() => setSourceForm(null)}
+                        type="button"
+                      >
+                        Back
+                      </button>
+                      <button
+                        className="h-8 rounded-md bg-[var(--accent-commit)] px-3 text-xs font-semibold text-[var(--on-accent)]"
+                        disabled={!sourceValue.trim() || controller.sourceBusy}
+                        onClick={() => void submitSourceForm()}
+                        type="button"
+                      >
+                        {controller.sourceBusy ? 'Adding…' : 'Add source'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid gap-1">
+                    <SourceMenuButton
+                      icon={FileUp}
+                      label="Upload file"
+                      onClick={() => fileInputRef.current?.click()}
+                    />
+                    <SourceMenuButton
+                      icon={ClipboardPaste}
+                      label="Paste text"
+                      onClick={() => setSourceForm('paste')}
+                    />
+                    {controller.materialSources.length > 0 ? (
+                      <div className="mt-1 border-t border-[var(--stroke-divider)] pt-2">
+                        <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+                          Project materials
+                        </p>
+                        {controller.materialSources.map((source) => (
+                          <button
+                            aria-pressed={source.included}
+                            className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-app)]"
+                            key={source.id}
+                            onClick={() => void controller.toggleMaterialSource(source.materialId)}
+                            type="button"
+                          >
+                            <FileCode2 aria-hidden="true" className="size-4 shrink-0" />
+                            <span className="min-w-0 flex-1 truncate">{source.title}</span>
+                            <span className="text-[10px] font-semibold text-[var(--accent-commit)]">
+                              {source.included ? 'Included' : 'Include'}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
             ) : null}
           </div>
-        ) : null}
-        <div className={cn(composeStyles.composer, 'relative')}>
-          <input
-            accept={DOCUMENT_SOURCE_ACCEPTED_TYPES}
-            aria-label="Upload source material"
-            className="hidden"
-            onChange={handleFileChange}
-            ref={fileInputRef}
-            type="file"
-          />
-          <textarea
-            aria-label="Workspace instruction"
-            className=""
-            disabled={controller.chat.isLoading}
-            onChange={(event) => controller.chat.setInput(event.target.value)}
-            onKeyDown={handleComposerKeyDown}
-            placeholder="Ask T3X anything about your workspace…"
-            ref={textareaRef}
-            rows={1}
-            value={controller.chat.input}
-          />
-          <div className={composeStyles.composerTools}>
-            <div className="relative flex shrink-0 items-center gap-2 text-[var(--text-tertiary)]">
-              <button
-                aria-expanded={sourceMenuOpen}
-                aria-haspopup="menu"
-                aria-label="Add source"
-                title="Add source"
-                className={composeStyles.addButton}
-                onClick={() => setSourceMenuOpen((open) => !open)}
-                type="button"
-              >
-                <Plus aria-hidden="true" className="size-4" />
-                <span className="sr-only">Add source</span>
-              </button>
-              {controller.materialSources.find((source) => source.included) ? (
-                <span className={composeStyles.sourceChip}>
-                  <FileText aria-hidden="true" className="size-4" />
-                  <span>{controller.materialSources.find((source) => source.included)?.title}</span>
-                </span>
-              ) : null}
-              {sourceMenuOpen ? (
-                <div
-                  className="absolute bottom-[calc(100%+8px)] left-0 z-30 min-w-64 rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-elevated)] p-2 shadow-[var(--fx-shadow-lg)]"
-                  role="menu"
-                >
-                  {sourceForm ? (
-                    <div className="grid gap-2">
-                      <input
-                        aria-label="Source title"
-                        className="h-8 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
-                        onChange={(event) => setSourceTitle(event.target.value)}
-                        placeholder="Optional title"
-                        value={sourceTitle}
-                      />
-                      {sourceForm === 'url' ? (
-                        <input
-                          aria-label="Source URL"
-                          className="h-8 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
-                          onChange={(event) => setSourceValue(event.target.value)}
-                          placeholder="https://example.com/source"
-                          type="url"
-                          value={sourceValue}
-                        />
-                      ) : (
-                        <textarea
-                          aria-label="Pasted source text"
-                          className="min-h-24 resize-y rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
-                          onChange={(event) => setSourceValue(event.target.value)}
-                          placeholder="Paste exact source text"
-                          value={sourceValue}
-                        />
-                      )}
-                      <div className="flex justify-end gap-2">
-                        <button
-                          className="h-8 rounded-md border border-[var(--stroke-default)] px-3 text-xs text-[var(--text-secondary)]"
-                          onClick={() => setSourceForm(null)}
-                          type="button"
-                        >
-                          Back
-                        </button>
-                        <button
-                          className="h-8 rounded-md bg-[var(--accent-commit)] px-3 text-xs font-semibold text-[var(--on-accent)]"
-                          disabled={!sourceValue.trim() || controller.sourceBusy}
-                          onClick={() => void submitSourceForm()}
-                          type="button"
-                        >
-                          {controller.sourceBusy ? 'Adding…' : 'Add source'}
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid gap-1">
-                      <SourceMenuButton
-                        icon={FileUp}
-                        label="Upload file"
-                        onClick={() => fileInputRef.current?.click()}
-                      />
-                      <SourceMenuButton
-                        icon={ClipboardPaste}
-                        label="Paste text"
-                        onClick={() => setSourceForm('paste')}
-                      />
-
-                      {controller.materialSources.length > 0 ? (
-                        <div className="mt-1 border-t border-[var(--stroke-divider)] pt-2">
-                          <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
-                            Project materials
-                          </p>
-                          {controller.materialSources.map((source) => (
-                            <button
-                              aria-pressed={source.included}
-                              className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-app)]"
-                              key={source.id}
-                              onClick={() =>
-                                void controller.toggleMaterialSource(source.materialId)
-                              }
-                              type="button"
-                            >
-                              <FileCode2 aria-hidden="true" className="size-4 shrink-0" />
-                              <span className="min-w-0 flex-1 truncate">{source.title}</span>
-                              <span className="text-[10px] font-semibold text-[var(--accent-commit)]">
-                                {source.included ? 'Included' : 'Include'}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  )}
-                </div>
-              ) : null}
-            </div>
-            <div className={composeStyles.modelSend}>
-              <GenerationModelSelector
-                onModelChange={controller.model.change}
-                onThinkingChange={controller.model.setThinking}
-                selectedModel={controller.model.selectedModel}
-                selectedProvider={controller.model.selectedProvider}
-                supportsThinking={controller.model.supportsThinking}
-                thinkingEnabled={controller.model.thinkingEnabled}
-              />
-              <button
-                aria-label={controller.chat.isStreaming ? 'Stop generating' : 'Send message'}
-                className={composeStyles.send}
-                disabled={!controller.chat.isStreaming && sendDisabled}
-                onClick={controller.chat.isStreaming ? controller.chat.stop : controller.chat.send}
-                type="button"
-              >
-                {controller.chat.isStreaming ? (
-                  <Square aria-hidden="true" className="size-4 fill-current text-current" />
-                ) : (
-                  <ArrowUp aria-hidden="true" className="size-4" />
-                )}
-              </button>
-            </div>
+          <div className={composeStyles.modelSend}>
+            <GenerationModelSelector
+              onModelChange={controller.model.change}
+              onThinkingChange={controller.model.setThinking}
+              selectedModel={controller.model.selectedModel}
+              selectedProvider={controller.model.selectedProvider}
+              supportsThinking={controller.model.supportsThinking}
+              thinkingEnabled={controller.model.thinkingEnabled}
+            />
+            <button
+              aria-label={controller.chat.isStreaming ? 'Stop generating' : 'Send message'}
+              className={composeStyles.send}
+              disabled={!controller.chat.isStreaming && sendDisabled}
+              onClick={controller.chat.isStreaming ? controller.chat.stop : controller.chat.send}
+              type="button"
+            >
+              {controller.chat.isStreaming ? (
+                <Square aria-hidden="true" className="size-4 fill-current text-current" />
+              ) : (
+                <ArrowUp aria-hidden="true" className="size-4" />
+              )}
+            </button>
           </div>
-        </div>
-        <div className={composeStyles.composerHints}>
-          <span className="inline-flex min-w-0 items-center gap-1.5">
-            <GitBranch className="size-3" aria-hidden="true" />
-            <span className="truncate">{controller.candidate.targetBranch}</span>
-          </span>
-          <span>
-            <kbd className="font-sans">Enter</kbd> to send ·{' '}
-            <kbd className="font-sans">Shift Enter</kbd> for a new line
-          </span>
         </div>
       </div>
     </div>
@@ -631,21 +718,22 @@ function SourceMenuButton({
   );
 }
 
-function ProposedDraftPanel({
+function ProposedChangesBoard({
   candidate,
   controller,
   onModeChange,
-  onSidebarToggle,
+  onSelect,
   onWorkspacesRefresh,
+  selectedIndex,
 }: {
   candidate: WorkspaceCandidate;
   controller: WorkspaceComposeReviewController;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
-  onSidebarToggle: () => void;
+  onSelect: (index: number) => void;
   onWorkspacesRefresh?: (workspace?: WorkspaceCandidate) => Promise<void> | void;
+  selectedIndex: number;
 }) {
   const operations = candidate.yopsDraft.operations;
-  const [currentStep, setCurrentStep] = useState(0);
   const source = candidate.sourceBundle[0];
   const schemaBound = workspaceHasSchemaBinding(candidate);
   const definitionApply = useWorkspaceDefinitionApply({
@@ -656,101 +744,23 @@ function ProposedDraftPanel({
       : undefined,
   });
   const canReviewDraft = schemaBound && !controller.isBusy && !definitionApply.applying;
-
-  const askAiToRevise = () => {
-    controller.chat.setInput('Revise the proposed actions while preserving their source evidence.');
-    document.querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')?.focus();
-  };
+  const gaps = (candidate.schemaCandidate.fields ?? []).filter(
+    (field) => field.status !== 'covered' && field.required
+  );
 
   return (
-    <div className={composeStyles.panel}>
-      <header className={composeStyles.panelHeader}>
-        <div className={composeStyles.panelTitleRow}>
-          <h3>Proposed actions</h3>
-          <button className={composeStyles.revise} onClick={askAiToRevise} type="button">
-            Ask AI to revise <ArrowLeft aria-hidden="true" className="size-3" />
-          </button>
-          <DraftSidebarToggle onToggle={onSidebarToggle} open />
-        </div>
-      </header>
-
-      <div className={cn(composeStyles.actionList, 'chat-scrollbar')}>
-        {operations.length ? (
-          operations.map((operation, index) => {
-            const selected = currentStep === index;
-            const reviewPath = normalizeWorkspaceReviewStructurePath(operation.path);
-            return (
-              <section
-                className={cn(composeStyles.actionCard, selected && composeStyles.current)}
-                key={operation.id}
-              >
-                <button
-                  aria-expanded={selected}
-                  className={composeStyles.actionTop}
-                  onClick={() => setCurrentStep(index)}
-                  type="button"
-                >
-                  <span className={composeStyles.actionNumber}>{index + 1}</span>
-                  <code className={composeStyles.actionTitle}>/{operation.path}</code>
-                  <ChevronDown
-                    aria-hidden="true"
-                    className={cn(composeStyles.chevron, 'size-3.5', selected && 'rotate-180')}
-                  />
-                </button>
-                <div className={composeStyles.collapsedDetail}>
-                  <div className={composeStyles.values}>
-                    <div>
-                      <span className={composeStyles.valueLabel}>Before</span>
-                      <span className={composeStyles.value}>
-                        {proposalActionValue(operation.beforeValue, 'Current value')}
-                      </span>
-                    </div>
-                    <ArrowRight aria-hidden="true" className={composeStyles.valueArrow} />
-                    <div>
-                      <span className={composeStyles.valueLabel}>After</span>
-                      <span className={cn(composeStyles.value, composeStyles.after)}>
-                        {proposalActionValue(operation.afterValue ?? operation.summary, 'Updated')}
-                      </span>
-                    </div>
-                  </div>
-                  {source ? (
-                    <div className={composeStyles.sourceRow}>
-                      <FileText aria-hidden="true" className="size-4" />
-                      <span className="truncate">{source.title}</span>
-                    </div>
-                  ) : null}
-                  <button
-                    aria-label={
-                      reviewPath ? `Review change ${reviewPath}` : `Preview step ${index + 1}`
-                    }
-                    className={composeStyles.play}
-                    disabled={!canReviewDraft}
-                    onClick={() => void prepareAndOpenReview(controller, onModeChange)}
-                    type="button"
-                  >
-                    <Play aria-hidden="true" className="size-4 fill-current" />
-                    {controller.busyAction === 'review.prepare'
-                      ? 'Preparing…'
-                      : `Play step ${index + 1}`}
-                  </button>
-                </div>
-              </section>
-            );
-          })
-        ) : (
-          <section className={composeStyles.actionCard}>
-            <p className="text-xs leading-5 text-[var(--text-secondary)]">
-              Add source evidence, then generate structured actions.
-            </p>
-          </section>
-        )}
-      </div>
-
-      <footer className={composeStyles.panelFooter}>
-        {!schemaBound ? (
-          <>
+    <section aria-label="Proposed changes" className={composeStyles.changesColumn}>
+      <div className={composeStyles.changeBoard}>
+        <div className={composeStyles.changeBoardHeader}>
+          <h3>
+            Proposed changes
+            <span aria-hidden="true" className={composeStyles.changeCount}>
+              {operations.length}
+            </span>
+          </h3>
+          {!schemaBound ? (
             <button
-              className={composeStyles.applyButton}
+              className={composeStyles.generateButton}
               disabled={controller.isBusy || definitionApply.applying || definitionApply.loading}
               onClick={() => void definitionApply.apply()}
               type="button"
@@ -758,24 +768,122 @@ function ProposedDraftPanel({
               <BoxIcon aria-hidden="true" className="size-4" />
               {definitionApply.applying ? 'Applying schema…' : 'Apply schema'}
             </button>
+          ) : (
+            <button
+              className={composeStyles.generateButton}
+              disabled={controller.isBusy || definitionApply.applying}
+              onClick={() => void controller.summarizeWithAi()}
+              type="button"
+            >
+              {controller.busyAction === 'proposal.summarize' ? 'Summarizing…' : 'AI总结'}
+            </button>
+          )}
+        </div>
+        <div className={cn(composeStyles.changeGrid, 'chat-scrollbar')}>
+          {operations.length ? (
+            operations.map((operation, index) => {
+              const selected = selectedIndex === index;
+              const reviewPath = normalizeWorkspaceReviewStructurePath(operation.path);
+              const origin = operation.sourceRefs?.length ? 'Source-backed' : 'Recommended';
+              return (
+                <article
+                  className={cn(composeStyles.changeCard, selected && composeStyles.current)}
+                  key={operation.id}
+                >
+                  <button
+                    className={composeStyles.changeTop}
+                    onClick={() => onSelect(index)}
+                    type="button"
+                  >
+                    <code className={composeStyles.changePath}>/{operation.path}</code>
+                    <span className={composeStyles.changeType}>
+                      {proposalValueType(operation.afterValue ?? operation.beforeValue)}
+                    </span>
+                  </button>
+                  <div className={composeStyles.changeValues}>
+                    <div className={cn(composeStyles.changeValue, composeStyles.before)}>
+                      <span>Current (base)</span>
+                      <strong>{proposalActionValue(operation.beforeValue, 'Current value')}</strong>
+                    </div>
+                    <ArrowRight aria-hidden="true" className={cn(composeStyles.valueArrow, 'size-3.5')} />
+                    <div className={cn(composeStyles.changeValue, composeStyles.after)}>
+                      <span>Proposed (draft)</span>
+                      <strong>
+                        {proposalActionValue(operation.afterValue ?? operation.summary, 'Updated')}
+                      </strong>
+                    </div>
+                  </div>
+                  <div className={composeStyles.changeFoot}>
+                    <span>
+                      {source?.title ??
+                        (operation.sourceRefs?.[0] ? String(operation.sourceRefs[0]) : 'No source')}
+                    </span>
+                    <span className={composeStyles.origin}>{origin}</span>
+                  </div>
+                  {selected ? (
+                    <div className={composeStyles.evidence}>
+                      <p>{operation.reason ?? operation.summary}</p>
+                      <button
+                        aria-label={
+                          reviewPath ? `Review change ${reviewPath}` : `Preview step ${index + 1}`
+                        }
+                        className={composeStyles.sourceAction}
+                        disabled={!canReviewDraft}
+                        onClick={() => void prepareAndOpenReview(controller, onModeChange)}
+                        type="button"
+                      >
+                        {controller.busyAction === 'review.prepare'
+                          ? 'Preparing…'
+                          : 'Inspect this change'}
+                      </button>
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })
+          ) : (
+            <div className={composeStyles.emptyBoard}>
+              <p>Add source evidence, then generate structured changes from the bound schema.</p>
+            </div>
+          )}
+          {gaps.slice(0, 2).map((field) => (
+            <article className={cn(composeStyles.changeCard, composeStyles.gapCard)} key={field.id}>
+              <code className={composeStyles.changePath}>/{field.path}</code>
+              <p className="text-xs leading-5 text-[var(--text-secondary)]">
+                {field.label} is still open
+                {field.required ? ' · Required' : ''}. Keep it as a gap until a source covers it.
+              </p>
+            </article>
+          ))}
+        </div>
+      </div>
+      <footer className={composeStyles.changesFooter}>
+        <p className={composeStyles.footerMeta}>
+          Draft{candidate.revision === undefined ? '' : ` r${candidate.revision}`} ·{' '}
+          {operations.length} {operations.length === 1 ? 'change' : 'changes'}
+          {gaps.length ? ` · ${gaps.length} open ${gaps.length === 1 ? 'gap' : 'gaps'}` : ''}
+        </p>
+        <div className="flex flex-col items-end gap-2">
+          {!schemaBound ? (
             <output className={composeStyles.applyHint}>
               {definitionApply.error ??
-                'Apply the schema selected in Schemas to build the workspace tree. Review stays closed until that bind exists.'}
+                'Apply the schema selected in Schemas to build the workspace tree.'}
             </output>
-          </>
-        ) : null}
-        <button
-          className={composeStyles.reviewButton}
-          disabled={!canReviewDraft}
-          onClick={() => void prepareAndOpenReview(controller, onModeChange)}
-          title={schemaBound ? undefined : 'Apply a schema before reviewing the draft.'}
-          type="button"
-        >
-          <ClipboardPaste aria-hidden="true" className="size-4" />
-          Review full draft
-        </button>
+          ) : null}
+          <button
+            aria-label="Review full draft"
+            className={composeStyles.reviewButton}
+            disabled={!canReviewDraft}
+            onClick={() => void prepareAndOpenReview(controller, onModeChange)}
+            title={schemaBound ? undefined : 'Apply a schema before reviewing the draft.'}
+            type="button"
+          >
+            {operations.length > 0 ? `Review ${operations.length} changes` : 'Review full draft'}
+            <ArrowRight aria-hidden="true" className="size-4" />
+          </button>
+        </div>
       </footer>
-    </div>
+    </section>
   );
 }
 
@@ -785,40 +893,12 @@ function proposalActionValue(value: unknown, fallback: string): string {
   return formatted.length > 26 ? `${formatted.slice(0, 23)}…` : formatted;
 }
 
-function CollapsedDraftSidebar({
-  changeCount,
-  onSidebarToggle,
-}: {
-  changeCount: number;
-  onSidebarToggle: () => void;
-}) {
-  return (
-    <div className="flex h-full flex-col items-center bg-[var(--surface-panel)] px-2 py-4">
-      <DraftSidebarToggle onToggle={onSidebarToggle} open={false} />
-      <div aria-hidden="true" className="mt-4 h-8 w-px rounded-full bg-[var(--stroke-divider)]" />
-      <span className="mt-3 rounded-full border border-[var(--stroke-default)] bg-[var(--surface-card)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--accent-commit)] shadow-[var(--shadow-xs)]">
-        {changeCount}
-      </span>
-    </div>
-  );
-}
-
-function DraftSidebarToggle({ onToggle, open }: { onToggle: () => void; open: boolean }) {
-  const Icon = open ? PanelRightClose : PanelRightOpen;
-  return (
-    <button
-      aria-label={open ? 'Hide proposed draft sidebar' : 'Show proposed draft sidebar'}
-      className="group relative inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-card)] text-[var(--text-secondary)] shadow-[var(--shadow-xs)] transition-colors hover:border-[var(--stroke-strong)] hover:text-[var(--text-primary)] focus:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-commit)]"
-      onClick={onToggle}
-      title="显示/隐藏侧边栏"
-      type="button"
-    >
-      <Icon aria-hidden="true" className="size-3.5" />
-      <span className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden whitespace-nowrap rounded-md bg-[var(--text-primary)] px-2 py-1 text-[11px] font-medium text-[var(--surface-panel)] shadow-[var(--shadow-sm)] group-hover:block group-focus-visible:block">
-        显示/隐藏侧边栏
-      </span>
-    </button>
-  );
+function proposalValueType(value: unknown): string {
+  if (Array.isArray(value)) return 'Array';
+  if (typeof value === 'boolean') return 'Boolean';
+  if (typeof value === 'number') return 'Number';
+  if (value && typeof value === 'object') return 'Object';
+  return 'String';
 }
 
 function getProposalSourceRefs(candidate: WorkspaceCandidate): string[] {

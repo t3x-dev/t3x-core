@@ -6,6 +6,11 @@ import { updateConversationContextPins } from '@/commands/conversations';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { providerSupports } from '@/domain/providerCapabilities';
 import { includedImportPinIds } from '@/domain/workspaces/includedImportPinIds';
+import {
+  composeConversationTranscript,
+  yopsDraftFromProposalGeneration,
+} from '@/domain/workspaces/proposalGenerationDraft';
+import { generateWorkspaceProposal } from '@/infrastructure/proposalGeneration';
 import { useMaterialUpload } from '@/hooks/materials/useMaterialUpload';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
@@ -446,6 +451,68 @@ export function useWorkspaceComposeReviewController({
     [uploadFile]
   );
 
+  const summarizeWithAi = useCallback(async () => {
+    if (busyAction) return false;
+    setBusyAction('proposal.summarize');
+    setLocalError(null);
+    setNotice('Summarizing the conversation into proposed changes…');
+    try {
+      const transcript = composeConversationTranscript(messages, chat.input);
+      const sourceMaterialIds = [
+        ...new Set(
+          workingCandidate.sourceBundle.flatMap((source) =>
+            source.materialId ? [source.materialId] : []
+          )
+        ),
+      ];
+      if (!transcript && sourceMaterialIds.length === 0) {
+        throw new Error('Chat or add a source first, then summarize with AI.');
+      }
+      const generated = await generateWorkspaceProposal({
+        projectId: workingCandidate.projectId,
+        workspaceId: workingCandidate.id,
+        posture: 'guided',
+        instruction: transcript
+          ? 'Summarize this Compose conversation and selected sources into schema-aligned proposed changes.'
+          : 'Summarize the selected workspace sources into schema-aligned proposed changes.',
+        sourceMaterialIds,
+        ...(transcript ? { conversationTranscript: transcript } : {}),
+        ifRevision: workingCandidate.revision,
+        provider: modelSelection.selectedProvider ?? undefined,
+        model: modelSelection.selectedModel ?? undefined,
+      });
+      const operations = yopsDraftFromProposalGeneration(generated.view);
+      if (operations.length === 0) {
+        throw new Error('AI did not produce any proposed changes from this conversation.');
+      }
+      const next = {
+        ...workingCandidate,
+        yopsDraft: {
+          id: `draft:${workingCandidate.id}`,
+          proposalMode: 'llm' as const,
+          operations,
+        },
+      };
+      const saved = await persistCandidate(next, 'proposal.summarize');
+      setNotice(`AI summarized ${operations.length} proposed changes.`);
+      return Boolean(saved);
+    } catch (error) {
+      setLocalError(formatUserFacingError(error, 'AI could not summarize proposed changes.'));
+      setNotice(null);
+      return false;
+    } finally {
+      setBusyAction(null);
+    }
+  }, [
+    busyAction,
+    chat.input,
+    messages,
+    modelSelection.selectedModel,
+    modelSelection.selectedProvider,
+    persistCandidate,
+    workingCandidate,
+  ]);
+
   const prepareReview = useCallback(async () => {
     if (!onPrepareDraft || busyAction) return false;
     const generation = reviewGenerationRef.current + 1;
@@ -651,6 +718,7 @@ export function useWorkspaceComposeReviewController({
     notice,
     persistCandidate,
     prepareReview,
+    summarizeWithAi,
     renderedYaml,
     review,
     resolveCollaborationConflict,
