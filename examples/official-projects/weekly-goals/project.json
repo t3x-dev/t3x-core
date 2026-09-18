@@ -1,0 +1,45 @@
+{
+  "slug": "weekly-goals",
+  "title": "Weekly goals",
+  "description": "Keep a short, reviewable list of goals for the week.",
+  "license": "Apache-2.0",
+  "tags": [
+    "planning",
+    "work",
+    "care",
+    "ecosystem:t3x"
+  ],
+  "companionSchema": {
+    "canonicalName": "t3x/weekly-goals",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "list": {
+      "title": "Week 38"
+    },
+    "items": {
+      "catalog": {
+        "goal": "Categorize official starters",
+        "done": false
+      }
+    }
+  },
+  "demonstration": {
+    "message": "Check the first goal",
+    "value": {
+      "list": {
+        "title": "Week 38"
+      },
+      "items": {
+        "catalog": {
+          "goal": "Categorize official starters",
+          "done": true
+        },
+        "review": {
+          "goal": "Review the backup plan starter",
+          "done": false
+        }
+      }
+    }
+  }
+}

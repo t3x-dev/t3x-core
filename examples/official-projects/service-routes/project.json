@@ -1,0 +1,48 @@
+{
+  "slug": "service-routes",
+  "title": "Service routes",
+  "description": "Review host and path routing before publishing an ingress.",
+  "license": "Apache-2.0",
+  "tags": [
+    "infrastructure",
+    "devops",
+    "configuration",
+    "ecosystem:t3x"
+  ],
+  "companionSchema": {
+    "canonicalName": "t3x/service-routes",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "list": {
+      "title": "Public ingress"
+    },
+    "items": {
+      "web": {
+        "host": "app.example.test",
+        "path": "/",
+        "target": "web:3000"
+      }
+    }
+  },
+  "demonstration": {
+    "message": "Record the health path",
+    "value": {
+      "list": {
+        "title": "Public ingress"
+      },
+      "items": {
+        "web": {
+          "host": "app.example.test",
+          "path": "/",
+          "target": "web:3000"
+        },
+        "health": {
+          "host": "app.example.test",
+          "path": "/healthz",
+          "target": "web:3000"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "slug": "device-inventory",
+  "title": "Device inventory",
+  "description": "Keep a named inventory of devices and where they live.",
+  "license": "Apache-2.0",
+  "tags": [
+    "devices",
+    "iot",
+    "ecosystem:t3x"
+  ],
+  "companionSchema": {
+    "canonicalName": "t3x/device-inventory",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "list": {
+      "title": "Apartment nodes"
+    },
+    "items": {
+      "kitchen": {
+        "name": "Kitchen sensor",
+        "room": "kitchen",
+        "firmware": "2026.8.1"
+      }
+    }
+  },
+  "demonstration": {
+    "message": "Add the hallway sensor",
+    "value": {
+      "list": {
+        "title": "Apartment nodes"
+      },
+      "items": {
+        "kitchen": {
+          "name": "Kitchen sensor",
+          "room": "kitchen",
+          "firmware": "2026.8.1"
+        },
+        "hall": {
+          "name": "Hallway sensor",
+          "room": "hallway",
+          "firmware": "2026.8.1"
+        }
+      }
+    }
+  }
+}

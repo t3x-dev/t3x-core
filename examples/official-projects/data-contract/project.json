@@ -1,0 +1,47 @@
+{
+  "slug": "data-contract",
+  "title": "Data contract",
+  "description": "Name a dataset field contract before producers change it.",
+  "license": "Apache-2.0",
+  "tags": [
+    "data",
+    "visualization",
+    "ecosystem:t3x"
+  ],
+  "companionSchema": {
+    "canonicalName": "t3x/data-contract",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "list": {
+      "title": "Commit export"
+    },
+    "items": {
+      "hash": {
+        "field": "commit_hash",
+        "type": "string",
+        "required": true
+      }
+    }
+  },
+  "demonstration": {
+    "message": "Require the commit digest",
+    "value": {
+      "list": {
+        "title": "Commit export"
+      },
+      "items": {
+        "hash": {
+          "field": "commit_hash",
+          "type": "string",
+          "required": true
+        },
+        "digest": {
+          "field": "content_digest",
+          "type": "string",
+          "required": true
+        }
+      }
+    }
+  }
+}

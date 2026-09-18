@@ -1,4 +1,5 @@
 import type { NodeSchema, YSchemaModuleArtifactV2 } from '@t3x-dev/yschema';
+import { extraSchemaEcosystemStarters } from './schema-ecosystem-extra-starters';
 
 /** Repository-authored starters. Tags are discovery hints, never execution capabilities. */
 type Starter = YSchemaModuleArtifactV2 & {
@@ -176,4 +177,5 @@ export const schemaEcosystemStarters: Starter[] = [
     },
     '# Decision record\n\nName the decision, write the context, and record the choice. Attach named consequences so later reviews can see what was accepted. T3X checks the declared fields; it does not prove the decision was implemented or remains current. T3X-authored; Apache-2.0.'
   ),
+  ...extraSchemaEcosystemStarters,
 ];

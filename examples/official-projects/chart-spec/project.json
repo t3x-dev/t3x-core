@@ -1,0 +1,34 @@
+{
+  "slug": "chart-spec",
+  "title": "Chart spec",
+  "description": "Describe a chart before someone builds it from reviewed data.",
+  "license": "Apache-2.0",
+  "tags": [
+    "data",
+    "visualization",
+    "ecosystem:t3x"
+  ],
+  "companionSchema": {
+    "canonicalName": "t3x/chart-spec",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "record": {
+      "title": "Review latency",
+      "kind": "line",
+      "series": "median hours to decide",
+      "note": ""
+    }
+  },
+  "demonstration": {
+    "message": "Choose the comparison series",
+    "value": {
+      "record": {
+        "title": "Review latency",
+        "kind": "line",
+        "series": "median hours to decide vs p90",
+        "note": "Show both series."
+      }
+    }
+  }
+}

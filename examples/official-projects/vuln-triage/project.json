@@ -1,0 +1,32 @@
+{
+  "slug": "vuln-triage",
+  "title": "Vuln triage",
+  "description": "Triage a vulnerability with severity and next action.",
+  "license": "Apache-2.0",
+  "tags": [
+    "security",
+    "detection",
+    "ecosystem:t3x"
+  ],
+  "companionSchema": {
+    "canonicalName": "t3x/vuln-triage",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "record": {
+      "identifier": "CVE-2026-1000",
+      "severity": "high",
+      "next_action": "Confirm affected images"
+    }
+  },
+  "demonstration": {
+    "message": "Schedule the patch window",
+    "value": {
+      "record": {
+        "identifier": "CVE-2026-1000",
+        "severity": "high",
+        "next_action": "Patch staging on Friday"
+      }
+    }
+  }
+}

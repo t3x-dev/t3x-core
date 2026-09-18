@@ -1,0 +1,34 @@
+{
+  "slug": "experiment-log",
+  "title": "Experiment log",
+  "description": "Capture a hypothesis, setup and observed result.",
+  "license": "Apache-2.0",
+  "tags": [
+    "science",
+    "research",
+    "ecosystem:t3x"
+  ],
+  "companionSchema": {
+    "canonicalName": "t3x/experiment-log",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "record": {
+      "title": "Prompt temperature",
+      "hypothesis": "Lower temperature reduces invented citations.",
+      "setup": "20 shared cases, temperature 0.2",
+      "result": ""
+    }
+  },
+  "demonstration": {
+    "message": "Record the observed result",
+    "value": {
+      "record": {
+        "title": "Prompt temperature",
+        "hypothesis": "Lower temperature reduces invented citations.",
+        "setup": "20 shared cases, temperature 0.2",
+        "result": "Invented citations dropped from 4 to 1."
+      }
+    }
+  }
+}

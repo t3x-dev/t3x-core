@@ -60,7 +60,7 @@ export function SchemaCatalogExperience({
     const canonicalName = params.get('catalogName');
     if (canonicalName) filters.set('canonical_name', canonicalName);
   }
-  filters.set('limit', '24');
+  filters.set('limit', '48');
   const catalog = useSchemaCatalog(
     projectId,
     filters.toString(),
@@ -280,7 +280,7 @@ function SchemaBrowse({
             />
           </BrowseFilterSection>
           <BrowseFilterSection title="Category">
-            {collections.slice(0, 5).map((collection) => (
+            {collections.map((collection) => (
               <BrowseCheck
                 checked={activeCollection === collection.id}
                 count={categoryCounts.get(collection.id) ?? 0}

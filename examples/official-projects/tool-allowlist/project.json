@@ -1,0 +1,47 @@
+{
+  "slug": "tool-allowlist",
+  "title": "Tool allowlist",
+  "description": "Declare which tools an agent may mention before a run.",
+  "license": "Apache-2.0",
+  "tags": [
+    "ai",
+    "agents",
+    "ecosystem:t3x"
+  ],
+  "companionSchema": {
+    "canonicalName": "t3x/tool-allowlist",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "list": {
+      "title": "Research agent"
+    },
+    "items": {
+      "files": {
+        "tool": "read_file",
+        "allowed": true,
+        "reason": "Inspect local notes"
+      }
+    }
+  },
+  "demonstration": {
+    "message": "Allow the search tool",
+    "value": {
+      "list": {
+        "title": "Research agent"
+      },
+      "items": {
+        "files": {
+          "tool": "read_file",
+          "allowed": true,
+          "reason": "Inspect local notes"
+        },
+        "search": {
+          "tool": "web_search",
+          "allowed": true,
+          "reason": "Cite public pages only"
+        }
+      }
+    }
+  }
+}

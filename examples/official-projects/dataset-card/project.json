@@ -1,0 +1,34 @@
+{
+  "slug": "dataset-card",
+  "title": "Dataset card",
+  "description": "Describe a dataset’s source, license and intended use.",
+  "license": "Apache-2.0",
+  "tags": [
+    "science",
+    "research",
+    "ecosystem:t3x"
+  ],
+  "companionSchema": {
+    "canonicalName": "t3x/dataset-card",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "record": {
+      "name": "Replay fixtures",
+      "source": "internal golden set",
+      "license": "Apache-2.0",
+      "intended_use": ""
+    }
+  },
+  "demonstration": {
+    "message": "Record the intended use",
+    "value": {
+      "record": {
+        "name": "Replay fixtures",
+        "source": "internal golden set",
+        "license": "Apache-2.0",
+        "intended_use": "Deterministic replay checks only."
+      }
+    }
+  }
+}

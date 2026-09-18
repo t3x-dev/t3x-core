@@ -32,6 +32,12 @@ vi.mock('@/hooks/schemas/useSchemaCatalog', () => ({
   useSchemaCatalog: mocks.catalog,
   useSchemaCollections: () => [
     { id: 'infrastructure', title: 'Infrastructure', tags: ['infrastructure'] },
+    { id: 'ai-agents', title: 'AI & Agents', tags: ['ai', 'agents'] },
+    { id: 'science', title: 'Science & Research', tags: ['science'] },
+    { id: 'security', title: 'Security', tags: ['security'] },
+    { id: 'devices', title: 'Devices & Automation', tags: ['devices'] },
+    { id: 'data', title: 'Data & Visualization', tags: ['data'] },
+    { id: 'work-life', title: 'Work & Life', tags: ['planning', 'work', 'care'] },
   ],
   useSchemaIntroduction: mocks.introduction,
   useSchemaReleaseReading: () => ({
@@ -117,7 +123,7 @@ describe('Schema catalog journey', () => {
   it('renders the shared Explore surface in Discover and sends search to Browse', () => {
     mocks.query = 'workspace=main';
     mount();
-    expect(mocks.catalog).toHaveBeenLastCalledWith('p', 'limit=24', false);
+    expect(mocks.catalog).toHaveBeenLastCalledWith('p', 'limit=48', false);
     expect(screen.getByRole('heading', { name: 'Curated schemas' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Discover schemas' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Schema picks' })).toBeVisible();
@@ -164,8 +170,10 @@ describe('Schema catalog journey', () => {
   it('restores Browse filters and keeps the advanced workbench behind an explicit action', () => {
     mocks.query = 'schemaView=browse&tags=infra&format=yaml';
     const { unmount } = mount();
-    expect(mocks.catalog).toHaveBeenLastCalledWith('p', 'tags=infra&format=yaml&limit=24', true);
+    expect(mocks.catalog).toHaveBeenLastCalledWith('p', 'tags=infra&format=yaml&limit=48', true);
     expect(screen.getByRole('complementary', { name: 'Catalog filters' })).toBeInTheDocument();
+    expect(screen.getByText('Work & Life')).toBeVisible();
+    expect(screen.getByText('Data & Visualization')).toBeVisible();
     unmount();
     mocks.query = 'schemaView=studio';
     mount();
@@ -185,7 +193,7 @@ describe('Schema catalog journey', () => {
     expect(screen.queryByText('Detailed Studio')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Advanced definition workbench' }));
     expect(screen.getByText('Detailed Studio')).toBeVisible();
-    expect(mocks.catalog).toHaveBeenLastCalledWith('p', 'limit=24', false);
+    expect(mocks.catalog).toHaveBeenLastCalledWith('p', 'limit=48', false);
   });
 });
 

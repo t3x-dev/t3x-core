@@ -1,0 +1,48 @@
+{
+  "slug": "env-config",
+  "title": "Env config",
+  "description": "Review named environment values before a service starts.",
+  "license": "Apache-2.0",
+  "tags": [
+    "infrastructure",
+    "devops",
+    "configuration",
+    "ecosystem:t3x"
+  ],
+  "companionSchema": {
+    "canonicalName": "t3x/env-config",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "list": {
+      "title": "API process"
+    },
+    "items": {
+      "database": {
+        "key": "DATABASE_URL",
+        "value": "postgres://localhost/app",
+        "secret": true
+      }
+    }
+  },
+  "demonstration": {
+    "message": "Pin the reviewed database URL",
+    "value": {
+      "list": {
+        "title": "API process"
+      },
+      "items": {
+        "database": {
+          "key": "DATABASE_URL",
+          "value": "postgres://localhost/app",
+          "secret": true
+        },
+        "region": {
+          "key": "T3X_REGION",
+          "value": "local",
+          "secret": false
+        }
+      }
+    }
+  }
+}

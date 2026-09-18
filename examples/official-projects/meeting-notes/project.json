@@ -1,0 +1,48 @@
+{
+  "slug": "meeting-notes",
+  "title": "Meeting notes",
+  "description": "Capture decisions and follow-ups from a working session.",
+  "license": "Apache-2.0",
+  "tags": [
+    "planning",
+    "work",
+    "care",
+    "ecosystem:t3x"
+  ],
+  "companionSchema": {
+    "canonicalName": "t3x/meeting-notes",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "list": {
+      "title": "Schema catalog review"
+    },
+    "items": {
+      "tags": {
+        "item": "Agree category tags",
+        "owner": "maya",
+        "done": false
+      }
+    }
+  },
+  "demonstration": {
+    "message": "Add the follow-up owner",
+    "value": {
+      "list": {
+        "title": "Schema catalog review"
+      },
+      "items": {
+        "tags": {
+          "item": "Agree category tags",
+          "owner": "maya",
+          "done": true
+        },
+        "readme": {
+          "item": "Publish starter READMEs",
+          "owner": "lee",
+          "done": false
+        }
+      }
+    }
+  }
+}

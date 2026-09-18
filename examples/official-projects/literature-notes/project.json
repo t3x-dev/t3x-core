@@ -1,0 +1,44 @@
+{
+  "slug": "literature-notes",
+  "title": "Literature notes",
+  "description": "Keep paper notes and claims reviewable in one place.",
+  "license": "Apache-2.0",
+  "tags": [
+    "science",
+    "research",
+    "ecosystem:t3x"
+  ],
+  "companionSchema": {
+    "canonicalName": "t3x/literature-notes",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "list": {
+      "title": "Replay verification notes"
+    },
+    "items": {
+      "first": {
+        "claim": "Replay must ignore wall-clock time",
+        "evidence": "Section 3.2"
+      }
+    }
+  },
+  "demonstration": {
+    "message": "Add the second claim",
+    "value": {
+      "list": {
+        "title": "Replay verification notes"
+      },
+      "items": {
+        "first": {
+          "claim": "Replay must ignore wall-clock time",
+          "evidence": "Section 3.2"
+        },
+        "second": {
+          "claim": "Rejected decisions stay auditable",
+          "evidence": "Section 4.1"
+        }
+      }
+    }
+  }
+}

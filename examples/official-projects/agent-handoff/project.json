@@ -1,0 +1,34 @@
+{
+  "slug": "agent-handoff",
+  "title": "Agent handoff",
+  "description": "Record what an agent finished and what the next owner should do.",
+  "license": "Apache-2.0",
+  "tags": [
+    "ai",
+    "agents",
+    "ecosystem:t3x"
+  ],
+  "companionSchema": {
+    "canonicalName": "t3x/agent-handoff",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "record": {
+      "summary": "Drafted the weekly brief",
+      "leftover": "Need cited sources",
+      "next_owner": "editor",
+      "status": "open"
+    }
+  },
+  "demonstration": {
+    "message": "Name the next owner",
+    "value": {
+      "record": {
+        "summary": "Drafted the weekly brief",
+        "leftover": "Need cited sources",
+        "next_owner": "editor",
+        "status": "accepted"
+      }
+    }
+  }
+}
