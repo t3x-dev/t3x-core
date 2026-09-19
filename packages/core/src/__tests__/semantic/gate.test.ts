@@ -59,7 +59,7 @@ describe('buildSemanticGatePrompt', () => {
     const { systemPrompt, userPrompt } = buildSemanticGatePrompt(sampleTurns, sampleContent);
 
     // System prompt should contain the reviewer instruction
-    expect(systemPrompt).toContain('语义提取审查员');
+    expect(systemPrompt).toContain('semantic extraction reviewer');
     expect(systemPrompt).toContain('Completeness');
     expect(systemPrompt).toContain('Accuracy');
     expect(systemPrompt).toContain('Relations');
@@ -234,7 +234,7 @@ describe('SemanticGate', () => {
 
     expect(mockProvider.generate).toHaveBeenCalledOnce();
     const callArgs = vi.mocked(mockProvider.generate).mock.calls[0];
-    expect(callArgs[0]).toContain('语义提取审查员');
+    expect(callArgs[0]).toContain('semantic extraction reviewer');
     expect(callArgs[0]).toContain('project_goal');
     expect(callArgs[1]).toEqual({ temperature: 0.1, maxTokens: 2000 });
 
@@ -272,7 +272,7 @@ describe('buildCoveragePrompt', () => {
   it('returns system and user prompt with turns and trees', () => {
     const { systemPrompt, userPrompt } = buildCoveragePrompt(sampleTurns, sampleContent);
 
-    expect(systemPrompt).toContain('覆盖度');
+    expect(systemPrompt).toContain('coverage reviewer');
     expect(userPrompt).toContain('[user]: I want to build a mobile app');
     expect(userPrompt).toContain('project_goal');
   });
@@ -328,7 +328,7 @@ describe('SemanticGate.checkCoverage', () => {
 
     expect(mockProvider.generate).toHaveBeenCalledOnce();
     const callArgs = vi.mocked(mockProvider.generate).mock.calls[0];
-    expect(callArgs[0]).toContain('覆盖度');
+    expect(callArgs[0]).toContain('coverage reviewer');
     expect(callArgs[0]).toContain('project_goal');
     expect(callArgs[1]).toEqual({ temperature: 0.1, maxTokens: 1500 });
 

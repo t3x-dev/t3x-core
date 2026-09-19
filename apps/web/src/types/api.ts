@@ -79,7 +79,7 @@ export type {
   WebhookData,
 } from '@/infrastructure/misc';
 // Value-level re-exports (v2 §2.3 — consumers pattern-match via
-// instanceof / numeric comparison; hook-化 applies to functions only).
+// instanceof / numeric comparison; hook conversion applies to functions only).
 export { STREAMING_IMPORT_THRESHOLD } from '@/infrastructure/misc';
 export type { ConversationContext } from '@/infrastructure/pins';
 export type {

@@ -2,7 +2,7 @@
  * Custom Playwright test fixture for shared browser setup.
  *
  * Enables developer mode before page JS runs so UI terms match English selectors
- * (e.g., "Conflicts" instead of "冲突").
+ * (for example "Conflicts").
  *
  * Usage: import { test, expect } from './fixtures/test' instead of '@playwright/test'
  */

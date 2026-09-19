@@ -52,7 +52,7 @@ const PLATFORM_LABELS: Record<string, string> = {
   gemini: 'Gemini',
   slack: 'Slack',
   discord: 'Discord',
-  feishu: '飞书',
+  feishu: 'Feishu',
 };
 
 function prefixPlatformTitle(platform: string, title: string): string {

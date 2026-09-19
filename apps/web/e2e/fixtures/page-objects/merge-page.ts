@@ -52,7 +52,7 @@ export class MergePage {
   async hasConflictsSection(): Promise<boolean> {
     // Frame mode: h3 "Conflicts (N)" (CSS uppercase → "CONFLICTS (N)")
     // Node mode: sidebar "Conflicts" label
-    // Default mode: "冲突"
+    // Default mode used to label this section "Conflicts".
     // Use getByText for case-insensitive, element-agnostic matching
     const loc = this.page.getByText(/conflicts/i).first();
     return loc.isVisible({ timeout: 5000 }).catch(() => false);
@@ -61,7 +61,7 @@ export class MergePage {
   async hasIdenticalSection(): Promise<boolean> {
     // Frame mode: h3 "Auto-kept (N)" (CSS uppercase → "AUTO-KEPT (N)")
     // Node mode: "Identical"
-    // Default mode: "未变化"
+    // Default mode used to label this section "Unchanged".
     const loc = this.page
       .getByText(/auto-kept|identical/i)
       .first();

@@ -47,7 +47,7 @@ export async function runAgent(input: AgentInput): Promise<AgentOutput> {
   const traceEvents: TraceEvent[] = [];
   const _startTime = Date.now();
 
-  // 兼容不同输入格式：确保 context 存在
+  // Accept either input shape: always provide a context object.
   const context = input.context || {};
 
   // Step 1: Summarize

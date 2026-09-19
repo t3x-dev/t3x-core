@@ -1,7 +1,7 @@
 /**
- * Feishu (飞书) Export Parser
+ * Feishu export parser
  *
- * Parses Feishu message export JSON.
+ * Parses Feishu (Lark) message export JSON.
  * Format: { messages: [{ msg_type, content, sender: { sender_type } }] }
  */
 

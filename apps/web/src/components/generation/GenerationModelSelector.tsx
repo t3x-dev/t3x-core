@@ -63,8 +63,8 @@ export function GenerationModelSelector({
     currentLabel = selectedModel.split('-').slice(0, -1).join(' ') || selectedModel;
   }
   const modelValueLabel = compactModelLabel(currentLabel, 'control');
-  const currentProviderLabel = currentProvider?.label ?? selectedProvider ?? '厂商';
-  const reasoningValueLabel = thinkingEnabled ? '极高' : '标准';
+  const currentProviderLabel = currentProvider?.label ?? selectedProvider ?? 'Provider';
+  const reasoningValueLabel = thinkingEnabled ? 'High' : 'Standard';
   const triggerLabel = hasModels ? `${modelValueLabel} ${reasoningValueLabel}` : currentLabel;
   const canSelectReasoning = Boolean(onThinkingChange && supportsThinking);
   const canReset =
@@ -183,8 +183,8 @@ export function GenerationModelSelector({
                       ))
                     : activePane === 'reasoning'
                       ? [
-                          { enabled: false, label: '标准' },
-                          { enabled: true, label: '极高' },
+                          { enabled: false, label: 'Standard' },
+                          { enabled: true, label: 'High' },
                         ].map((option) => (
                           <button
                             key={option.label}
@@ -236,19 +236,19 @@ export function GenerationModelSelector({
                 <div className="mt-[22px] w-[132px] -translate-x-px rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-elevated)] p-1">
                   <ModelSelectorPanelRow
                     active={activePane === 'model'}
-                    label="模型"
+                    label="Model"
                     onClick={() => setActivePane('model')}
                     value={modelValueLabel}
                   />
                   <ModelSelectorPanelRow
                     active={activePane === 'reasoning'}
-                    label="推理强度"
+                    label="Reasoning"
                     onClick={canSelectReasoning ? () => setActivePane('reasoning') : undefined}
                     value={reasoningValueLabel}
                   />
                   <ModelSelectorPanelRow
                     active={activePane === 'provider'}
-                    label="厂商"
+                    label="Provider"
                     onClick={() => setActivePane('provider')}
                     value={currentProviderLabel}
                   />
@@ -263,7 +263,7 @@ export function GenerationModelSelector({
                     }}
                     className="flex h-7 w-full items-center justify-between rounded-lg px-2 text-left text-[11px] text-[var(--text-tertiary)] transition-colors enabled:hover:bg-[var(--hover-bg)] enabled:hover:text-[var(--text-secondary)] disabled:cursor-not-allowed disabled:opacity-45"
                   >
-                    <span>重置为默认设置</span>
+                    <span>Reset to defaults</span>
                     <RotateCcw aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
                   </button>
                 </div>
