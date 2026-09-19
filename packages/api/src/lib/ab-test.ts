@@ -1,10 +1,10 @@
 /**
  * A/B Test Statistical Functions
  *
- * 用于比较两组配置（Control vs Treatment）的统计显著性
+ * Compare statistical significance between Control and Treatment configs.
  *
- * - twoProportionZTest: 比较通过率 (Pass Rate)
- * - twoSampleTTest: 比较平均分数 (Avg Score)
+ * - twoProportionZTest: compare pass rates
+ * - twoSampleTTest: compare average scores
  */
 
 // ============================================================
@@ -12,14 +12,14 @@
 // ============================================================
 
 export interface ABTestResult {
-  controlMean: number; // 控制组均值
-  treatmentMean: number; // 实验组均值
-  delta: number; // 差值 (B - A)
-  deltaPercent: number; // 差值百分比
-  pValue: number; // p 值
-  confidenceInterval: [number, number]; // 95% 置信区间
+  controlMean: number;
+  treatmentMean: number;
+  delta: number;
+  deltaPercent: number;
+  pValue: number;
+  confidenceInterval: [number, number];
   isSignificant: boolean; // p < 0.05
-  sampleSizeAdequate: boolean; // 样本量是否足够 (>= 30)
+  sampleSizeAdequate: boolean; // sample size >= 30
 }
 
 // ============================================================
@@ -27,8 +27,8 @@ export interface ABTestResult {
 // ============================================================
 
 /**
- * 标准正态分布的累积分布函数 (CDF)
- * 使用 Abramowitz and Stegun 近似公式
+ * Cumulative distribution function (CDF) for the standard normal distribution.
+ * Uses the Abramowitz and Stegun approximation.
  */
 function normalCDF(z: number): number {
   const a1 = 0.254829592;
@@ -48,21 +48,20 @@ function normalCDF(z: number): number {
 }
 
 /**
- * t 分布的累积分布函数 (CDF)
- * 使用近似公式，对于 df > 30 接近标准正态分布
+ * Cumulative distribution function (CDF) for the t distribution.
+ * Uses an approximation that approaches the standard normal for df > 30.
  */
 function tCDF(t: number, df: number): number {
-  // 对于大自由度，t 分布接近正态分布
+  // For large degrees of freedom, the t distribution is close to normal.
   if (df > 100) {
     return normalCDF(t);
   }
 
-  // 使用 Beta 函数的不完全积分近似
+  // Approximate via the incomplete beta integral.
   const x = df / (df + t * t);
   const a = df / 2;
   const b = 0.5;
 
-  // 近似计算
   if (t >= 0) {
     return 1 - 0.5 * incompleteBeta(x, a, b);
   } else {
@@ -71,14 +70,13 @@ function tCDF(t: number, df: number): number {
 }
 
 /**
- * 不完全 Beta 函数的近似计算
+ * Incomplete beta function approximation.
  */
 function incompleteBeta(x: number, a: number, b: number): number {
-  // 使用连分数展开的近似
   if (x === 0) return 0;
   if (x === 1) return 1;
 
-  // 简化近似：对于 t 分布的常见情况
+  // Continued-fraction approximation for common t-distribution cases.
   const bt = Math.exp(
     logGamma(a + b) - logGamma(a) - logGamma(b) + a * Math.log(x) + b * Math.log(1 - x)
   );
@@ -91,7 +89,7 @@ function incompleteBeta(x: number, a: number, b: number): number {
 }
 
 /**
- * Beta 函数的连分数展开
+ * Continued-fraction expansion of the beta function.
  */
 function betaCF(x: number, a: number, b: number): number {
   const maxIterations = 100;
@@ -135,7 +133,7 @@ function betaCF(x: number, a: number, b: number): number {
 }
 
 /**
- * Log Gamma 函数（Lanczos 近似）
+ * Log-gamma function (Lanczos approximation).
  */
 function logGamma(z: number): number {
   const g = 7;
@@ -160,7 +158,7 @@ function logGamma(z: number): number {
 }
 
 /**
- * 计算数组的均值
+ * Mean of an array.
  */
 function mean(arr: number[]): number {
   if (arr.length === 0) return 0;
@@ -168,7 +166,7 @@ function mean(arr: number[]): number {
 }
 
 /**
- * 计算数组的方差
+ * Variance of an array.
  */
 function variance(arr: number[]): number {
   if (arr.length < 2) return 0;
@@ -181,15 +179,15 @@ function variance(arr: number[]): number {
 // ============================================================
 
 /**
- * 双比例 z 检验
+ * Two-proportion z-test.
  *
- * 用于比较两组的通过率是否有显著差异
+ * Compares whether two pass rates differ significantly.
  *
- * @param successA - 控制组成功数
- * @param totalA - 控制组总数
- * @param successB - 实验组成功数
- * @param totalB - 实验组总数
- * @returns A/B 测试结果
+ * @param successA - control successes
+ * @param totalA - control total
+ * @param successB - treatment successes
+ * @param totalB - treatment total
+ * @returns A/B test result
  */
 export function twoProportionZTest(
   successA: number,
@@ -197,29 +195,22 @@ export function twoProportionZTest(
   successB: number,
   totalB: number
 ): ABTestResult {
-  // 计算比例
   const pA = totalA > 0 ? successA / totalA : 0;
   const pB = totalB > 0 ? successB / totalB : 0;
 
-  // 合并比例（用于计算标准误差）
   const pPooled = (successA + successB) / (totalA + totalB);
 
-  // 计算标准误差
   const se = Math.sqrt(pPooled * (1 - pPooled) * (1 / totalA + 1 / totalB));
 
-  // 计算 z 统计量
   const z = se > 0 ? (pB - pA) / se : 0;
 
-  // 计算 p 值（双尾检验）
   const pValue = 2 * (1 - normalCDF(Math.abs(z)));
 
-  // 计算 95% 置信区间
   const seDiff = Math.sqrt((pA * (1 - pA)) / totalA + (pB * (1 - pB)) / totalB);
-  const zCritical = 1.96; // 95% 置信度
+  const zCritical = 1.96; // 95% confidence
   const ciLower = pB - pA - zCritical * seDiff;
   const ciUpper = pB - pA + zCritical * seDiff;
 
-  // 差值
   const delta = pB - pA;
   const deltaPercent = pA > 0 ? ((pB - pA) / pA) * 100 : pB > 0 ? 100 : 0;
 
@@ -228,7 +219,7 @@ export function twoProportionZTest(
     treatmentMean: pB,
     delta,
     deltaPercent,
-    pValue: Math.max(0, Math.min(1, pValue)), // 限制在 0-1 范围
+    pValue: Math.max(0, Math.min(1, pValue)),
     confidenceInterval: [ciLower, ciUpper],
     isSignificant: pValue < 0.05,
     sampleSizeAdequate: totalA >= 30 && totalB >= 30,
@@ -236,20 +227,19 @@ export function twoProportionZTest(
 }
 
 /**
- * 双样本 t 检验 (Welch's t-test)
+ * Two-sample t-test (Welch's t-test).
  *
- * 用于比较两组的平均值是否有显著差异
- * Welch's t-test 不假设两组方差相等
+ * Compares whether two means differ significantly.
+ * Welch's t-test does not assume equal variances.
  *
- * @param samplesA - 控制组样本数组
- * @param samplesB - 实验组样本数组
- * @returns A/B 测试结果
+ * @param samplesA - control samples
+ * @param samplesB - treatment samples
+ * @returns A/B test result
  */
 export function twoSampleTTest(samplesA: number[], samplesB: number[]): ABTestResult {
   const nA = samplesA.length;
   const nB = samplesB.length;
 
-  // 处理空数组或单元素数组
   if (nA < 2 || nB < 2) {
     const meanA = mean(samplesA);
     const meanB = mean(samplesB);
@@ -258,38 +248,31 @@ export function twoSampleTTest(samplesA: number[], samplesB: number[]): ABTestRe
       treatmentMean: meanB,
       delta: meanB - meanA,
       deltaPercent: meanA > 0 ? ((meanB - meanA) / meanA) * 100 : 0,
-      pValue: 1, // 无法计算，假设不显著
+      pValue: 1,
       confidenceInterval: [0, 0],
       isSignificant: false,
       sampleSizeAdequate: false,
     };
   }
 
-  // 计算均值和方差
   const meanA = mean(samplesA);
   const meanB = mean(samplesB);
   const varA = variance(samplesA);
   const varB = variance(samplesB);
 
-  // 计算 Welch's t 统计量
   const se = Math.sqrt(varA / nA + varB / nB);
   const t = se > 0 ? (meanB - meanA) / se : 0;
 
-  // 计算 Welch-Satterthwaite 自由度
   const numerator = (varA / nA + varB / nB) ** 2;
   const denominator = (varA / nA) ** 2 / (nA - 1) + (varB / nB) ** 2 / (nB - 1);
   const df = denominator > 0 ? numerator / denominator : 1;
 
-  // 计算 p 值（双尾检验）
   const pValue = 2 * (1 - tCDF(Math.abs(t), df));
 
-  // 计算 95% 置信区间
-  // 对于大自由度，使用 z = 1.96；否则需要查 t 表
-  const tCritical = df > 30 ? 1.96 : 2.042; // 近似值
+  const tCritical = df > 30 ? 1.96 : 2.042;
   const ciLower = meanB - meanA - tCritical * se;
   const ciUpper = meanB - meanA + tCritical * se;
 
-  // 差值
   const delta = meanB - meanA;
   const deltaPercent = meanA > 0 ? ((meanB - meanA) / meanA) * 100 : 0;
 

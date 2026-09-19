@@ -20,7 +20,8 @@ export interface ReadinessResult {
 
 /**
  * Greeting patterns — only match when the ENTIRE content is a greeting.
- * "你好，我想去杭州旅游" will NOT match (anchored with $).
+ * A greeting plus a real request does not match (patterns are anchored with $).
+ * Chinese greeting and filler forms are included so short Chinese turns are still rejected.
  */
 const GREETING_PATTERNS = [
   /^(hi|hello|hey|yo|sup|howdy|greetings)\s*[!.?]*$/i,

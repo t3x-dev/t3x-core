@@ -365,12 +365,12 @@ export const ValidateLeafOutputResponse = SuccessResponse(
 // GET /v1/leaves/:id/history
 export const LeafHistoryResponse = z.object({
   id: z.string(), // lhist_xxx
-  leaf_id: z.string(), // 关联的 Leaf ID
-  output: z.string(), // 生成的输出内容
-  config: LeafConfigSchema, // 生成时使用的配置
-  model: z.string(), // 使用的 LLM 模型
-  generated_at: z.string(), // 生成时间 ISO8601
-  created_by: z.string().nullable(), // 触发生成的用户/系统
+  leaf_id: z.string(),
+  output: z.string(),
+  config: LeafConfigSchema,
+  model: z.string(),
+  generated_at: z.string(),
+  created_by: z.string().nullable(),
 });
 
 export const GetLeafHistoryResponse = SuccessResponse(LeafHistoryResponse);
@@ -378,7 +378,7 @@ export const ListLeafHistoryResponse = SuccessResponse(z.array(LeafHistoryRespon
 
 // POST /v1/leaves/:id/restore
 export const RestoreLeafOutputRequest = z.object({
-  history_id: z.string(), // 要恢复的历史记录 ID
+  history_id: z.string(),
 });
 
 export const RestoreLeafOutputResponse = SuccessResponse(LeafResponse);
@@ -396,43 +396,39 @@ export const DeleteLeafHistoryResponse = SuccessResponse(
 // ═══════════════════════════════════════════════════════════════════════════
 
 // POST /v1/commits/{hash}/leaves/batch
-// 单个 leaf 的配置（批量创建时使用）
 export const BatchLeafConfig = z.object({
   type: LeafTypeEnum, // leaf type (tweet, linkedin, email, etc.)
-  title: z.string().optional(), // 可选标题
-  constraints: z.array(ConstraintSchema).default([]), // 约束条件
-  config: LeafConfigSchema.default({}), // 生成配置
+  title: z.string().optional(),
+  constraints: z.array(ConstraintSchema).default([]),
+  config: LeafConfigSchema.default({}),
 });
 
-// 批量生成请求
 export const BatchGenerateRequest = z.object({
-  project_id: z.string().min(1), // 项目 ID
+  project_id: z.string().min(1),
   leaves: z
     .array(BatchLeafConfig)
     .min(1, 'At least one leaf config is required')
-    .max(10, 'Maximum 10 leaves per batch'), // leaf 配置数组 (1-10 个)
-  skip_generation: z.boolean().default(false), // 是否跳过生成，仅创建 leaves
+    .max(10, 'Maximum 10 leaves per batch'),
+  skip_generation: z.boolean().default(false),
 });
 
-// 单个 leaf 的结果
 export const BatchLeafResult = z.object({
-  leaf: LeafResponse.nullable(), // 成功时返回 leaf 数据
+  leaf: LeafResponse.nullable(),
   error: z
     .object({
-      code: z.string(), // 错误码
-      message: z.string(), // 错误信息
+      code: z.string(),
+      message: z.string(),
     })
-    .nullable(), // 失败时返回错误信息
+    .nullable(),
 });
 
-// 批量生成响应
 export const BatchGenerateResponse = SuccessResponse(
   z.object({
-    results: z.array(BatchLeafResult), // 每个 leaf 的结果
+    results: z.array(BatchLeafResult),
     summary: z.object({
-      total: z.number(), // 总数
-      succeeded: z.number(), // 成功数
-      failed: z.number(), // 失败数
+      total: z.number(),
+      succeeded: z.number(),
+      failed: z.number(),
     }),
   })
 );

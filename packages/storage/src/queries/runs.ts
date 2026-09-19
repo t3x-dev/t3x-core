@@ -62,16 +62,16 @@ export interface ListRunsOptions {
 
 // v2.2: Configuration stats for A/B test comparison
 export interface ConfigurationStats {
-  model: string; // 模型名称
-  prompt_version: string; // prompt 版本
-  run_count: number; // 运行次数（样本量）
-  pass_count: number; // 通过次数
-  pass_rate: number; // 通过率 (0-1)
-  avg_score: number; // 平均得分
-  avg_latency_ms: number; // 平均延迟
-  avg_tokens: number; // 平均 token 数
-  scores: number[]; // 原始得分数组（用于 t-test）
-  latencies: number[]; // 原始延迟数组
+  model: string;
+  prompt_version: string;
+  run_count: number;
+  pass_count: number;
+  pass_rate: number;
+  avg_score: number;
+  avg_latency_ms: number;
+  avg_tokens: number;
+  scores: number[];
+  latencies: number[];
 }
 
 // ============================================================

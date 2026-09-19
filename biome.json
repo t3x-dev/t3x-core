@@ -304,11 +304,11 @@
                 "patterns": [
                   {
                     "group": "@/commands/**",
-                    "message": "Stores must not import from the commands layer (doc §2 L3: store 不得调用 commands)."
+                    "message": "Stores must not import from the commands layer (doc §2 L3)."
                   },
                   {
                     "group": "@/infrastructure/**",
-                    "message": "Stores must not import from the infrastructure layer (doc §2 L3: store 不得调用 infrastructure). Move the call to a hook in @/hooks/."
+                    "message": "Stores must not import from the infrastructure layer (doc §2 L3). Move the call to a hook in @/hooks/."
                   },
                   {
                     "group": "@/queries/**",

@@ -661,7 +661,7 @@ function ProposedDraftPanel({
             aria-label="Hide proposed draft sidebar"
             className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-[var(--stroke-default)] bg-[var(--surface-card)] text-[var(--text-secondary)] shadow-sm transition-colors hover:bg-[var(--surface-panel)] hover:text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
             onClick={onSidebarToggle}
-            title="显示/隐藏侧边栏"
+            title="Show or hide sidebar"
             type="button"
           >
             <PanelRightClose aria-hidden="true" className="size-4" />
@@ -830,12 +830,12 @@ function DraftSidebarToggle({ onToggle, open }: { onToggle: () => void; open: bo
       aria-label={open ? 'Hide proposed draft sidebar' : 'Show proposed draft sidebar'}
       className="group relative inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-card)] text-[var(--text-secondary)] shadow-[var(--shadow-xs)] transition-colors hover:border-[var(--stroke-strong)] hover:text-[var(--text-primary)] focus:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-commit)]"
       onClick={onToggle}
-      title="显示/隐藏侧边栏"
+      title={open ? 'Hide proposed draft sidebar' : 'Show proposed draft sidebar'}
       type="button"
     >
       <Icon aria-hidden="true" className="size-3.5" />
       <span className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden whitespace-nowrap rounded-md bg-[var(--text-primary)] px-2 py-1 text-[11px] font-medium text-[var(--surface-panel)] shadow-[var(--shadow-sm)] group-hover:block group-focus-visible:block">
-        显示/隐藏侧边栏
+        {open ? 'Hide sidebar' : 'Show sidebar'}
       </span>
     </button>
   );
