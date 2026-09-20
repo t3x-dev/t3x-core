@@ -80,6 +80,25 @@ describe('Workspace extraction proposal service', () => {
     storageMock.recordEvent.mockResolvedValue(1n);
   });
 
+  it('rejects the retired ledger writer before inference or persistence', async () => {
+    transitionMock.resolveWorkspaceExtractionContext.mockResolvedValueOnce({
+      workspace: { authoringLedger: { schema: 't3x.application/draft-action-ledger/v1' } },
+    });
+    await expect(
+      createWorkspaceExtractionProposal(dbMock as never, {
+        projectId: 'proj_1',
+        workspaceId: 'workspace_1',
+        source: { type: 'conversation', id: 'conv_1', turnHashes: ['turn_a'] },
+        expectedRevision: 3,
+        actor: { kind: 'human', id: 'human:test' },
+        inference,
+      })
+    ).rejects.toThrow('Use proposal-generations');
+    expect(extractionMock.runApiExtractionV2).not.toHaveBeenCalled();
+    expect(storageMock.upsertWorkspaceDraft).not.toHaveBeenCalled();
+    expect(storageMock.recordEvent).not.toHaveBeenCalled();
+  });
+
   it('re-resolves immutable turns and persists full SourcedYOps against the ref baseline', async () => {
     const result = await createWorkspaceExtractionProposal(dbMock as never, {
       projectId: 'proj_1',
