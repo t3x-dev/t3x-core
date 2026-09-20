@@ -1,0 +1,132 @@
+import type { YOp, YValue } from '@t3x-dev/yops';
+
+export const DRAFT_ACTION_LEDGER_SCHEMA = 't3x.application/draft-action-ledger/v1' as const;
+export const DRAFT_ACTION_SCHEMA = 't3x.application/draft-action/v1' as const;
+
+export type DraftActionChannel = 'manual' | 'mcp' | 'assistant' | 'import';
+
+export interface DraftActionActor {
+  readonly kind: 'human' | 'agent' | 'service';
+  readonly id: string;
+  readonly delegator?: {
+    readonly kind: string;
+    readonly id: string;
+  };
+}
+
+export interface DraftNodeLineage {
+  readonly nodeId: string;
+  readonly path: string;
+  readonly fromRevision: number;
+  readonly toRevision: number | null;
+}
+
+export interface DraftActionRecord {
+  readonly schema: typeof DRAFT_ACTION_SCHEMA;
+  readonly actionId: string;
+  readonly sequence: number;
+  readonly channel: DraftActionChannel;
+  readonly actor: DraftActionActor;
+  readonly publishedAt: string;
+  readonly beforeRevision: number;
+  readonly afterRevision: number;
+  readonly operations: readonly YOp[];
+  readonly operationsDigest: string;
+  readonly reason?: string;
+}
+
+export interface DraftActionLedger {
+  readonly schema: typeof DRAFT_ACTION_LEDGER_SCHEMA;
+  readonly version: 1;
+  readonly base: YValue;
+  readonly compositionRevision: number;
+  readonly actions: readonly DraftActionRecord[];
+  readonly lineage: readonly DraftNodeLineage[];
+}
+
+export interface PublishDraftActionInput {
+  readonly actionId: string;
+  readonly channel: DraftActionChannel;
+  readonly actor: DraftActionActor;
+  readonly operations: readonly YOp[];
+  readonly expectedRevision: number;
+  readonly publishedAt: string;
+  readonly reason?: string;
+  readonly targetRevision?: number;
+}
+
+export interface DraftActionReceipt {
+  readonly actionId: string;
+  readonly outcome: 'no_change' | 'apply_failed';
+  readonly expectedRevision: number;
+  readonly compositionRevision: number;
+  readonly message: string;
+}
+
+export type PublishDraftActionResult =
+  | {
+      readonly kind: 'published';
+      readonly ledger: DraftActionLedger;
+      readonly action: DraftActionRecord;
+    }
+  | {
+      readonly kind: 'reused';
+      readonly ledger: DraftActionLedger;
+      readonly action: DraftActionRecord;
+    }
+  | {
+      readonly kind: 'conflict';
+      readonly ledger: DraftActionLedger;
+      readonly reason: 'idempotency_mismatch' | 'stale_revision';
+      readonly message: string;
+    }
+  | {
+      readonly kind: 'rejected';
+      readonly ledger: DraftActionLedger;
+      readonly reason: 'historical_write' | 'apply_failed';
+      readonly message: string;
+    }
+  | {
+      readonly kind: 'no_change';
+      readonly ledger: DraftActionLedger;
+      readonly receipt: DraftActionReceipt;
+    };
+
+export interface DraftNodeCard {
+  readonly nodeId: string;
+  readonly path: string;
+  readonly before: YValue | undefined;
+  readonly after: YValue | undefined;
+}
+
+export interface DraftActionView {
+  readonly action: DraftActionRecord;
+  readonly cards: readonly DraftNodeCard[];
+}
+
+export interface DraftNodeHistoryEntry {
+  readonly actionId: string;
+  readonly sequence: number;
+  readonly channel: DraftActionChannel;
+  readonly revision: number;
+  readonly before: YValue | undefined;
+  readonly after: YValue | undefined;
+  readonly isSelected: boolean;
+}
+
+export interface DraftNodeHistoryView {
+  readonly nodeId: string;
+  readonly path: string | null;
+  readonly current: YValue | undefined;
+  readonly entries: readonly DraftNodeHistoryEntry[];
+}
+
+export interface CompensatePreview {
+  readonly actionId: string;
+  readonly operations: readonly YOp[];
+  readonly conflicts: readonly {
+    readonly path: string;
+    readonly expected: YValue | undefined;
+    readonly current: YValue | undefined;
+  }[];
+}
