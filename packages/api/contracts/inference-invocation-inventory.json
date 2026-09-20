@@ -14,7 +14,7 @@
     "packages/core/src/providers/embedding",
     "packages/core/src/providers/llm"
   ],
-  "totalObservedCalls": 29,
+  "totalObservedCalls": 31,
   "sources": [
     {
       "file": "packages/api/src/lib/proposal-generation.ts",
@@ -123,6 +123,14 @@
       "coveredCount": 2,
       "observedCount": 2,
       "note": "Hosted semantic review uses a dedicated application binding; the dormant coverage method inherits the same bound provider when invoked."
+    },
+    {
+      "file": "packages/api/src/lib/workspace-assistant/adapters/provider-tools.ts",
+      "feature": "workspace-assistant",
+      "status": "migrated",
+      "coveredCount": 2,
+      "observedCount": 2,
+      "note": "Every bounded tool-loop continuation and plain-chat fallback executes inside executeMeteredInference; proposal tools reuse governed generation."
     }
   ]
 }
