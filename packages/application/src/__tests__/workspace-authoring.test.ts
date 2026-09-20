@@ -172,6 +172,7 @@ describe('publishDraftAction guards', () => {
     expect(first.kind).toBe('published');
     if (first.kind !== 'published') return;
     const reused = publish(first.ledger, {
+      expectedRevision: 0,
       actionId: 'retry-1',
       channel: 'manual',
       actor: HUMAN,
@@ -271,7 +272,7 @@ describe('publishDraftAction guards', () => {
       operations: [{ set: { path: 'budget', value: 10 } }],
     });
     const recreated = selectedActionView(ledger)?.cards[0];
-    expect(recreated?.nodeId).toBe(nodeIdForPath('budget'));
+    expect(recreated?.nodeId).toBe(`${nodeIdForPath('budget')}@3:0`);
     expect(recreated?.nodeId).not.toBe(nodeIdForPath('allocation'));
   });
 

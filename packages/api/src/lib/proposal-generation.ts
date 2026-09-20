@@ -12,8 +12,10 @@ import {
 } from '@t3x-dev/core';
 import {
   type AnyDB,
+  findConversationById,
   findMaterialsByIds,
   findTransitionProposalByRequest,
+  findTurnByHash,
   TransitionRequestConflictError,
 } from '@t3x-dev/storage';
 import {
@@ -37,6 +39,7 @@ import {
   canonicalTransitionRequest,
   materializeTransitionProposal,
 } from './transition-control-plane/materialize';
+import { authoringModelContext, buildWorkspaceGeneration } from './workspace-authoring-generation';
 import {
   buildWorkspaceYOpsProposalFromContext,
   resolveWorkspaceTransitionContext,
@@ -88,19 +91,22 @@ export interface ProposalGenerationRequest {
   posture: ProposalGenerationPosture;
   instruction: string;
   sourceMaterialIds: string[];
+  sourceTurnHashes?: string[];
   expectedRevision?: number;
   requestedProvider?: string;
   requestedModel?: string;
 }
 
 export interface ProposalGenerationSourceInput {
-  materialId: string;
+  materialId?: string;
+  turnHash?: string;
   resource: ResourceDescriptor;
   content: string;
   title?: string;
 }
 
 export interface ProposalGenerationModelInput {
+  authoring?: ReturnType<typeof authoringModelContext>;
   profile: ProposalGenerationProfileV1;
   context: ProposalContextBundleV1;
   base: State;
@@ -170,6 +176,9 @@ function generationRequestFacts(request: ProposalGenerationRequest): ProtocolVal
     posture: request.posture,
     instruction: request.instruction,
     source_material_ids: [...new Set(request.sourceMaterialIds)].sort(),
+    ...(request.sourceTurnHashes?.length
+      ? { source_turn_hashes: [...new Set(request.sourceTurnHashes)].sort() }
+      : {}),
     ...(request.expectedRevision === undefined ? {} : { if_revision: request.expectedRevision }),
     ...(request.requestedProvider === undefined ? {} : { provider: request.requestedProvider }),
     ...(request.requestedModel === undefined ? {} : { model: request.requestedModel }),
@@ -275,10 +284,11 @@ function verifiedEvidenceBindings(
   });
 }
 
-async function resolveSources(
+export async function resolveProposalGenerationSources(
   db: AnyDB,
   projectId: string,
-  sourceMaterialIds: readonly string[]
+  sourceMaterialIds: readonly string[],
+  sourceTurnHashes: readonly string[] = []
 ): Promise<ProposalGenerationSourceInput[]> {
   const ids = [...new Set(sourceMaterialIds.map((id) => id.trim()))].sort();
   if (ids.some((id) => id.length === 0)) {
@@ -286,7 +296,7 @@ async function resolveSources(
   }
   const materials = await findMaterialsByIds(db, ids);
   const byId = new Map(materials.map((material) => [material.id, material]));
-  return ids.map((id) => {
+  const documents: ProposalGenerationSourceInput[] = ids.map((id) => {
     const material = byId.get(id);
     if (material === undefined || material.project_id !== projectId || material.archived_at) {
       throw new ProposalGenerationContextError(
@@ -304,20 +314,55 @@ async function resolveSources(
       ...(material.title === undefined ? {} : { title: material.title }),
     };
   });
+  const hashes = [...new Set(sourceTurnHashes)].sort();
+  const turns = await Promise.all(hashes.map((hash) => findTurnByHash(db, hash)));
+  for (const hash of hashes) {
+    const turn = turns.find((turn) => turn?.turnHash === hash);
+    const conversation = turn ? await findConversationById(db, turn.conversationId) : null;
+    if (
+      !turn ||
+      turn.projectId !== projectId ||
+      turn.role !== 'user' ||
+      conversation?.projectId !== projectId
+    )
+      throw new ProposalGenerationContextError(
+        'Only original user turns in authorized project conversations can be Sources'
+      );
+    documents.push({
+      turnHash: hash,
+      resource: {
+        uri: `t3x://projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(turn.conversationId)}/turns/${encodeURIComponent(hash)}`,
+        mediaType: 'text/plain;charset=utf-8',
+        digest: sha256(turn.content),
+      },
+      content: turn.content,
+      title: 'Original source user turn',
+    });
+  }
+  return documents;
 }
 
 const inFlightByDatabase = new WeakMap<
   object,
-  Map<string, Promise<{ view: TransitionControlPlaneView; reused: boolean }>>
+  Map<
+    string,
+    { digest: string; promise: Promise<{ view: TransitionControlPlaneView; reused: boolean }> }
+  >
 >();
 
 function generationFlights(
   db: AnyDB
-): Map<string, Promise<{ view: TransitionControlPlaneView; reused: boolean }>> {
+): Map<
+  string,
+  { digest: string; promise: Promise<{ view: TransitionControlPlaneView; reused: boolean }> }
+> {
   const key = db as unknown as object;
   const existing = inFlightByDatabase.get(key);
   if (existing !== undefined) return existing;
-  const created = new Map<string, Promise<{ view: TransitionControlPlaneView; reused: boolean }>>();
+  const created = new Map<
+    string,
+    { digest: string; promise: Promise<{ view: TransitionControlPlaneView; reused: boolean }> }
+  >();
   inFlightByDatabase.set(key, created);
   return created;
 }
@@ -385,7 +430,11 @@ export async function generateTransitionProposal(input: {
   const inFlight = generationFlights(input.db);
   const flightKey = `${input.projectId}\u0000${membershipRequestId}`;
   const active = inFlight.get(flightKey);
-  if (active !== undefined) return active;
+  if (active !== undefined) {
+    if (active.digest !== request.digest)
+      throw new TransitionRequestConflictError(membershipRequestId);
+    return active.promise;
+  }
 
   const work = (async () => {
     const retry = await existingGeneration({
@@ -414,10 +463,11 @@ export async function generateTransitionProposal(input: {
       );
     }
     const yschema = resolvedSchema.schema;
-    const sources = await resolveSources(
+    const sources = await resolveProposalGenerationSources(
       input.db,
       input.projectId,
-      input.request.sourceMaterialIds
+      input.request.sourceMaterialIds,
+      input.request.sourceTurnHashes
     );
     const profile = proposalGenerationProfileResource(input.request.posture);
     const schemaResource = createYSchemaResourceDescriptor(
@@ -436,18 +486,34 @@ export async function generateTransitionProposal(input: {
       `t3x://proposal-generation/prompts/v${GENERATION_PROMPT_VERSION}`,
       GENERATION_PROMPT
     );
+    const authoring = workspace.workspace.authoringLedger
+      ? authoringModelContext(workspace.workspace)
+      : undefined;
     const context: ProposalContextBundleV1 = {
       schema: 't3x.dev/proposal-context-bundle/v1',
       version: 1,
       base: describeProtocolObject(workspace.base),
       yschema: schemaResource,
       sources: sources.map((source) => source.resource),
-      memories: [],
+      memories: authoring ? [authoring.manifest] : [],
       searchResults: [],
       userInstruction: instructionResource,
       prompt: promptResource,
     };
 
+    // Fixed generation cannot retrieve missing state during a tool loop. Fail visibly rather than silently truncate.
+    if (
+      JSON.stringify({
+        base: workspace.base,
+        authoring,
+        yschema,
+        sources,
+        instruction: input.request.instruction,
+      }).length > 256_000
+    )
+      throw new ProposalGenerationContextError(
+        'Proposal context exceeds the generation budget; select smaller source excerpts or a smaller Workspace'
+      );
     const model = await input.resolveModel();
     const execution = await executeMeteredInference({
       runtime: input.inference.runtime,
@@ -465,6 +531,7 @@ export async function generateTransitionProposal(input: {
           profile: profile.profile,
           context,
           base: workspace.base,
+          ...(authoring ? { authoring } : {}),
           yschema: { resource: schemaResource, value: yschema },
           sources,
           instruction: input.request.instruction,
@@ -510,11 +577,29 @@ export async function generateTransitionProposal(input: {
         compiled.issues
       );
     }
-    const built = buildWorkspaceYOpsProposalFromContext(workspace, {
-      operations: compiled.operations,
-      actor: PROPOSAL_GENERATOR_ACTOR,
-      proposalDraft: compiled.proposalDraft,
-    });
+    const composed = authoring
+      ? buildWorkspaceGeneration({
+          workspace: workspace.workspace,
+          workspaceRevision: workspace.workspaceRevision,
+          actionId: membershipRequestId,
+          operations: compiled.operations,
+          generation: compiled.preparation,
+          proposalDraft: compiled.proposalDraft,
+        })
+      : null;
+    const built = composed
+      ? {
+          ...workspace,
+          refName: workspace.targetBranch,
+          refHead: workspace.head.head,
+          actor: PROPOSAL_GENERATOR_ACTOR,
+          ...composed,
+        }
+      : buildWorkspaceYOpsProposalFromContext(workspace, {
+          operations: compiled.operations,
+          actor: PROPOSAL_GENERATOR_ACTOR,
+          proposalDraft: compiled.proposalDraft,
+        });
     let created: Awaited<ReturnType<typeof materializeTransitionProposal>>;
     try {
       created = await materializeTransitionProposal({
@@ -526,7 +611,8 @@ export async function generateTransitionProposal(input: {
         refHead: built.refHead,
         requestKind: 'structured_yops',
         requestFacts,
-        preparationFacts: compiled.preparation as unknown as ProtocolValue,
+        preparationFacts: (composed?.preparation ??
+          compiled.preparation) as unknown as ProtocolValue,
         requestId: membershipRequestId,
         actor: PROPOSAL_GENERATOR_ACTOR,
         base: built.base,
@@ -557,10 +643,11 @@ export async function generateTransitionProposal(input: {
       reused: created.reused,
     };
   })();
-  inFlight.set(flightKey, work);
+  const flight = { digest: request.digest, promise: work };
+  inFlight.set(flightKey, flight);
   try {
     return await work;
   } finally {
-    if (inFlight.get(flightKey) === work) inFlight.delete(flightKey);
+    if (inFlight.get(flightKey) === flight) inFlight.delete(flightKey);
   }
 }

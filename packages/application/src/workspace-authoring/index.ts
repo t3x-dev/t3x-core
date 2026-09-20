@@ -1,10 +1,13 @@
+export { type NativeYOp as DraftYOp, NativeYOpSchema as DraftYOpSchema } from '@t3x-dev/core';
 export { importLegacyDocument, publishDraftAction, restoreNodeToAction } from './commands';
+export { compileDraftComposition } from './compilation';
 export type { WorkspaceDraftSavePath } from './inventory';
 export {
   legacyWorkspaceDraftSavePaths,
   WORKSPACE_DRAFT_LEDGER_KEY,
   WORKSPACE_DRAFT_SAVE_PATHS,
 } from './inventory';
+export { draftLedgerAtRevision, parseDraftActionLedger } from './persistence';
 export {
   listDraftActions,
   netDiffCards,
@@ -23,11 +26,13 @@ export type {
   CompensatePreview,
   DraftActionActor,
   DraftActionChannel,
+  DraftActionGeneration,
   DraftActionLedger,
   DraftActionRecord,
   DraftActionView,
   DraftDocument,
   DraftNodeCard,
+  DraftNodeHistoryEntry,
   DraftNodeHistoryView,
   PublishDraftActionInput,
   PublishDraftActionResult,

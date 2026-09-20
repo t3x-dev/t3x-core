@@ -47,6 +47,7 @@ import {
   recordRepositoryDecisionAuthorization,
   recordTransitionCommandReceipt,
   resolveTransitionProposalGraph,
+  sealWorkspaceAuthoring,
   TransitionCommandConflictError,
   TransitionHeadConflictError,
   type TransitionPolicyBinding,
@@ -59,6 +60,7 @@ import {
   type ProtocolValue,
   type StringClaim,
 } from '@t3x-dev/transition';
+import { assertWorkspaceAuthoringReview } from '../workspace-authoring';
 import {
   assertGenerationDecisionActor,
   resolveApplicableTransitionPolicy,
@@ -164,6 +166,7 @@ async function resolveReviewFacts(
       : Promise.resolve(null),
   ]);
   if (workspace === null) throw new TransitionReviewStaleError();
+  assertWorkspaceAuthoringReview(workspace.workspace_state ?? {}, graph);
   return {
     graph,
     workspace,
@@ -685,6 +688,7 @@ export async function commitTransition(input: {
   if (workspace === null || workspace.revision !== graph.membership.workspaceRevision) {
     throw new TransitionReviewStaleError();
   }
+  assertWorkspaceAuthoringReview(workspace.workspace_state ?? {}, graph);
   const parentObjects = head.format === 'transition_v2' ? [head.commit] : [];
   const parents = head.format === 'transition_v2' ? [describeCommitV2(head.commit)] : [];
   const objects: ProtocolObject[] = [
@@ -729,6 +733,7 @@ export async function commitTransition(input: {
       ) {
         throw new TransitionReviewStaleError();
       }
+      assertWorkspaceAuthoringReview(currentWorkspace.workspace_state ?? {}, graph);
       const baseWorkspace = {
         ...(currentWorkspace.workspace_state ?? {}),
         id: graph.membership.workspaceId,
@@ -745,18 +750,24 @@ export async function commitTransition(input: {
               commitDigest,
               committedAt,
             });
-      const draft = await upsertWorkspaceDraft(
-        tx,
-        {
-          project_id: input.projectId,
-          workspace_id: graph.membership.workspaceId,
-          title: currentWorkspace.title || graph.membership.workspaceId,
-          parent_commit_hash: input.expectedHead,
-          target_branch: graph.membership.refName,
-          workspace_state: nextWorkspace,
-        },
-        currentWorkspace.revision
-      );
+      const draft = currentWorkspace.workspace_state?.authoringLedger
+        ? await sealWorkspaceAuthoring(tx, {
+            draft: currentWorkspace,
+            commitDigest,
+            workspace: nextWorkspace,
+          })
+        : await upsertWorkspaceDraft(
+            tx,
+            {
+              project_id: input.projectId,
+              workspace_id: graph.membership.workspaceId,
+              title: currentWorkspace.title || graph.membership.workspaceId,
+              parent_commit_hash: input.expectedHead,
+              target_branch: graph.membership.refName,
+              workspace_state: nextWorkspace,
+            },
+            currentWorkspace.revision
+          );
       committedWorkspace = { ...(draft.workspace_state ?? {}), revision: draft.revision };
       await recordTransitionCommandReceipt(tx, {
         transitionId: input.transitionId,

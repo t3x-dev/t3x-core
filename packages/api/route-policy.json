@@ -2030,6 +2030,41 @@
       "path": "/v1/projects/{projectId}/schema-studio/source",
       "policy": "project",
       "rationale": "Reads an exact release only after target and source read authority and manifest integrity checks; no candidate mutation."
+    },
+    {
+      "source": "workspace-authoring.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/authoring",
+      "policy": "project",
+      "rationale": "Project authorization and explicit Transition inspect/propose scope; server-owned actor and guarded immutable Draft publication."
+    },
+    {
+      "source": "workspace-authoring.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/authoring",
+      "policy": "project",
+      "rationale": "Project authorization and explicit Transition inspect/propose scope; server-owned actor and guarded immutable Draft publication."
+    },
+    {
+      "source": "workspace-authoring.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/actions",
+      "policy": "project",
+      "rationale": "Project authorization and explicit Transition inspect/propose scope; server-owned actor and guarded immutable Draft publication."
+    },
+    {
+      "source": "workspace-authoring.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/candidates/{transitionId}/publication",
+      "policy": "project",
+      "rationale": "Project authorization and explicit Transition inspect/propose scope; server-owned actor and guarded immutable Draft publication."
+    },
+    {
+      "source": "workspace-authoring.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/reviews",
+      "policy": "project",
+      "rationale": "Requires project edit and Transition propose/verify authority; freezes complete server-owned authoring history, never a selected UI subset."
     }
   ]
 }

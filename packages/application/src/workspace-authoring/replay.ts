@@ -1,4 +1,5 @@
-import type { YOp } from '@t3x-dev/core';
+import type { NativeYOp as YOp } from '@t3x-dev/core';
+import { resolveNativeYOpsPath as resolvePath, type NativeYValue as YValue } from '@t3x-dev/core';
 import {
   applyDraftYOps,
   canonicalJson,
@@ -40,8 +41,8 @@ export function mappingGet(
   value: DraftDocument | undefined,
   path: string
 ): DraftDocument | undefined {
-  if (!isMapping(value) || !Object.hasOwn(value, path)) return undefined;
-  return value[path];
+  if (value === undefined) return undefined;
+  return resolvePath(value as YValue, path) as DraftDocument | undefined;
 }
 
 export function operationsDigest(operations: readonly YOp[]): string {
@@ -56,7 +57,7 @@ export function createDraftActionLedger(base: DraftDocument): DraftActionLedger 
     base: cloned,
     compositionRevision: 0,
     actions: [],
-    lineage: mappingKeys(cloned).map((path) => ({
+    lineage: documentPaths(cloned).map((path) => ({
       nodeId: nodeIdForPath(path),
       path,
       fromRevision: 0,
@@ -65,12 +66,33 @@ export function createDraftActionLedger(base: DraftDocument): DraftActionLedger 
   };
 }
 
+/** Mapping nodes have identity; sequences are structural owners until an adapter proves item identity. */
+export function documentPaths(value: DraftDocument, prefix = ''): string[] {
+  if (!isMapping(value)) return prefix ? [prefix] : [''];
+  return Object.keys(value)
+    .sort()
+    .flatMap((key) => {
+      const segment = /[/[\]="\\]/.test(key) || key === '' ? JSON.stringify(key) : key;
+      const path = prefix ? `${prefix}/${segment}` : segment;
+      return [path, ...(isMapping(value[key]) ? documentPaths(value[key], path) : [])];
+    });
+}
+
+export function lineageAt(ledger: DraftActionLedger, path: string, revision: number) {
+  return ledger.lineage.find(
+    (entry) =>
+      entry.path === path &&
+      entry.fromRevision <= revision &&
+      (entry.toRevision === null || revision < entry.toRevision)
+  );
+}
+
 export function nodeIdForPath(path: string): string {
   return `node:${path}`;
 }
 
 export function replayToRevision(ledger: DraftActionLedger, revision: number): DraftDocument {
-  if (revision < 0 || revision > ledger.compositionRevision) {
+  if (!Number.isInteger(revision) || revision < 0 || revision > ledger.compositionRevision) {
     throw new RangeError(`Revision ${revision} is outside 0..${ledger.compositionRevision}`);
   }
   let doc = cloneYValue(ledger.base);
