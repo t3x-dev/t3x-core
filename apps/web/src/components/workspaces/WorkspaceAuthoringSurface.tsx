@@ -178,7 +178,7 @@ export function WorkspaceAuthoringSurface({ candidate }: { candidate: WorkspaceC
     const facts = JSON.stringify({ operations, workspaceRevision: view.workspaceRevision });
     if (saveIdentity.current?.facts !== facts)
       saveIdentity.current = { facts, id: crypto.randomUUID() };
-    await authoring.publish({
+    const outcome = await authoring.publish({
       request_id: saveIdentity.current.id,
       expected_revision: view.compositionRevision,
       expected_workspace_revision: view.workspaceRevision,
@@ -190,6 +190,12 @@ export function WorkspaceAuthoringSurface({ candidate }: { candidate: WorkspaceC
     setEdit(null);
     setCreating(false);
     setNode(null);
+    setPanel((current) => (current === 'history' ? null : current));
+    setNotice(
+      outcome.kind === 'no_change'
+        ? 'Already matches the current Draft; no action added.'
+        : 'Saved as a new Draft action. Earlier history is unchanged.'
+    );
     setReview(null);
     setScope('events');
   }
