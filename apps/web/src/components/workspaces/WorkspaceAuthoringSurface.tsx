@@ -22,6 +22,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useMaterialUpload } from '@/hooks/materials/useMaterialUpload';
 import { useWorkspaceAuthoring } from '@/hooks/workspaces/useWorkspaceAuthoring';
 import type { WorkspaceCandidate, WorkspaceProposalPosture } from '@/types/workspaces';
+import { DraftNodeChangeDetail } from './DraftNodeChangeDetail';
 import { TransitionDecisionControls } from './TransitionDecisionControls';
 import { TransitionReviewPanel } from './TransitionReviewPanel';
 import { WorkspaceAssistantPanel } from './WorkspaceAssistantPanel';
@@ -98,6 +99,8 @@ export function WorkspaceAuthoringSurface({ candidate }: { candidate: WorkspaceC
   const [posture, setPosture] = useState<WorkspaceProposalPosture>('source_only');
   const [pending, setPending] = useState<string[]>([]);
   const [review, setReview] = useState<TransitionControlPlaneView | null>(null);
+  const [reviewCards, setReviewCards] = useState<WorkspaceAuthoringCard[]>([]);
+  const [inspectedCard, setInspectedCard] = useState<WorkspaceAuthoringCard>();
   const [decision, setDecision] = useState<string>();
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -143,6 +146,7 @@ export function WorkspaceAuthoringSurface({ candidate }: { candidate: WorkspaceC
     }
     const result = await authoring.read({ node_id: card.nodeId, action_id: actionId });
     setNode(result.node);
+    setInspectedCard(card);
     setNodeRevision(result.workspaceRevision);
     setNodeOlderCursor(
       result.node?.entries.length === 20 ? result.node.entries.at(-1)!.sequence : null
@@ -292,6 +296,7 @@ export function WorkspaceAuthoringSurface({ candidate }: { candidate: WorkspaceC
                 });
                 setReview(result.view);
                 setDecision(undefined);
+                setReviewCards(structuredClone(view.netDiff));
                 setScope('review');
               })
             }
@@ -352,6 +357,20 @@ export function WorkspaceAuthoringSurface({ candidate }: { candidate: WorkspaceC
                 {review.precondition.workspace_revision}. Its immutable authoring history remains
                 available in Compose.
               </p>
+              <section aria-label="Reviewed Draft changes">
+                <h3 className="mb-2 text-xs font-medium">
+                  Frozen Base → Draft changes · {reviewCards.length} nodes
+                </h3>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {reviewCards.map((card) => (
+                    <DraftChangeCard
+                      key={card.nodeId}
+                      card={card}
+                      onInspect={() => void run(() => inspect(card))}
+                    />
+                  ))}
+                </div>
+              </section>
               <TransitionReviewPanel view={review.transition} error={null} loading={busy} />
               <TransitionDecisionControls
                 busy={busy}
@@ -562,6 +581,7 @@ export function WorkspaceAuthoringSurface({ candidate }: { candidate: WorkspaceC
             {panel === 'history' && node ? (
               <div className="space-y-4 overflow-auto p-4">
                 <p className="break-all font-mono text-xs">{node.path ?? node.nodeId}</p>
+                {inspectedCard ? <DraftNodeChangeDetail card={inspectedCard} /> : null}
                 <div className="rounded-lg border border-[var(--stroke-divider)] p-3">
                   <p className="mb-2 text-[10px] font-semibold uppercase text-[var(--text-secondary)]">
                     Current value · workspace r{nodeRevision} · {node.state}
