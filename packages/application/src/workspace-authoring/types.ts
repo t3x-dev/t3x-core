@@ -1,4 +1,12 @@
-import type { YOp, YValue } from '@t3x-dev/yops';
+import type { YOp } from '@t3x-dev/core';
+
+export type DraftDocument =
+  | string
+  | number
+  | boolean
+  | null
+  | DraftDocument[]
+  | { readonly [key: string]: DraftDocument };
 
 export const DRAFT_ACTION_LEDGER_SCHEMA = 't3x.application/draft-action-ledger/v1' as const;
 export const DRAFT_ACTION_SCHEMA = 't3x.application/draft-action/v1' as const;
@@ -38,7 +46,7 @@ export interface DraftActionRecord {
 export interface DraftActionLedger {
   readonly schema: typeof DRAFT_ACTION_LEDGER_SCHEMA;
   readonly version: 1;
-  readonly base: YValue;
+  readonly base: DraftDocument;
   readonly compositionRevision: number;
   readonly actions: readonly DraftActionRecord[];
   readonly lineage: readonly DraftNodeLineage[];
@@ -95,8 +103,8 @@ export type PublishDraftActionResult =
 export interface DraftNodeCard {
   readonly nodeId: string;
   readonly path: string;
-  readonly before: YValue | undefined;
-  readonly after: YValue | undefined;
+  readonly before: DraftDocument | undefined;
+  readonly after: DraftDocument | undefined;
 }
 
 export interface DraftActionView {
@@ -109,15 +117,15 @@ export interface DraftNodeHistoryEntry {
   readonly sequence: number;
   readonly channel: DraftActionChannel;
   readonly revision: number;
-  readonly before: YValue | undefined;
-  readonly after: YValue | undefined;
+  readonly before: DraftDocument | undefined;
+  readonly after: DraftDocument | undefined;
   readonly isSelected: boolean;
 }
 
 export interface DraftNodeHistoryView {
   readonly nodeId: string;
   readonly path: string | null;
-  readonly current: YValue | undefined;
+  readonly current: DraftDocument | undefined;
   readonly entries: readonly DraftNodeHistoryEntry[];
 }
 
@@ -126,7 +134,7 @@ export interface CompensatePreview {
   readonly operations: readonly YOp[];
   readonly conflicts: readonly {
     readonly path: string;
-    readonly expected: YValue | undefined;
-    readonly current: YValue | undefined;
+    readonly expected: DraftDocument | undefined;
+    readonly current: DraftDocument | undefined;
   }[];
 }

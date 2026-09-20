@@ -1,6 +1,10 @@
-import type { YOp, YValue } from '@t3x-dev/yops';
+import type { YOp } from '@t3x-dev/core';
 import { describe, expect, it } from 'vitest';
-import type { DraftActionLedger, PublishDraftActionInput } from '../workspace-authoring';
+import type {
+  DraftActionLedger,
+  DraftDocument,
+  PublishDraftActionInput,
+} from '../workspace-authoring';
 import {
   createDraftActionLedger,
   currentComposition,
@@ -18,7 +22,7 @@ import {
   WORKSPACE_DRAFT_SAVE_PATHS,
 } from '../workspace-authoring';
 
-const BASE: YValue = {
+const BASE: DraftDocument = {
   allocation: 10,
   approval: false,
   channel: '#ops',

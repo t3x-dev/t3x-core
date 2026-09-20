@@ -1,6 +1,6 @@
-import type { YOp, YValue } from '@t3x-dev/yops';
+import type { YOp } from '@t3x-dev/core';
 import { mappingGet, mappingKeys, nodeIdForPath, yValuesEqual } from './replay';
-import type { DraftActionLedger, DraftNodeCard, DraftNodeLineage } from './types';
+import type { DraftActionLedger, DraftDocument, DraftNodeCard, DraftNodeLineage } from './types';
 
 function opPath(op: YOp): string | undefined {
   if ('set' in op) return op.set.path;
@@ -26,8 +26,8 @@ function nodeIdAtPath(ledger: DraftActionLedger, path: string, preferCurrent: bo
 }
 
 export function affectedNodeCards(
-  before: YValue,
-  after: YValue,
+  before: DraftDocument,
+  after: DraftDocument,
   ledger: DraftActionLedger
 ): DraftNodeCard[] {
   const order = [...mappingKeys(after)];
@@ -67,8 +67,8 @@ export function affectedNodeCards(
 export function nextLineage(
   ledger: DraftActionLedger,
   operations: readonly YOp[],
-  before: YValue,
-  after: YValue,
+  before: DraftDocument,
+  after: DraftDocument,
   afterRevision: number
 ): DraftNodeLineage[] {
   const lineage = ledger.lineage.map((entry) => ({ ...entry }));

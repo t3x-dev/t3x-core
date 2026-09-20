@@ -1,4 +1,4 @@
-import type { YOp, YValue } from '@t3x-dev/yops';
+import type { YOp } from '@t3x-dev/core';
 import { affectedNodeCards } from './lineage';
 import {
   actionById,
@@ -13,6 +13,7 @@ import type {
   CompensatePreview,
   DraftActionLedger,
   DraftActionView,
+  DraftDocument,
   DraftNodeCard,
   DraftNodeHistoryView,
 } from './types';
@@ -93,7 +94,7 @@ export function previewCompensate(ledger: DraftActionLedger, actionId: string): 
     operations.push(
       card.before === undefined
         ? { unset: { path: card.path } }
-        : { set: { path: card.path, value: card.before as YValue } }
+        : { set: { path: card.path, value: card.before as DraftDocument } }
     );
   }
   return { actionId, operations, conflicts };

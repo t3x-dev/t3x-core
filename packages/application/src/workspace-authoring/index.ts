@@ -26,6 +26,7 @@ export type {
   DraftActionLedger,
   DraftActionRecord,
   DraftActionView,
+  DraftDocument,
   DraftNodeCard,
   DraftNodeHistoryView,
   PublishDraftActionInput,

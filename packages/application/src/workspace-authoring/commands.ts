@@ -1,8 +1,8 @@
-import { applyYOps, type YOp, type YValue } from '@t3x-dev/yops';
+import type { YOp } from '@t3x-dev/core';
+import { applyDraftYOps } from './document';
 import { nextLineage } from './lineage';
 import {
   actionById,
-  cloneYValue,
   createDraftActionLedger,
   currentComposition,
   mappingGet,
@@ -15,6 +15,7 @@ import {
   DRAFT_ACTION_SCHEMA,
   type DraftActionLedger,
   type DraftActionRecord,
+  type DraftDocument,
   type PublishDraftActionInput,
   type PublishDraftActionResult,
 } from './types';
@@ -56,13 +57,13 @@ export function publishDraftAction(
   }
 
   const before = currentComposition(ledger);
-  const applied = applyYOps(cloneYValue(before), [...input.operations]);
+  const applied = applyDraftYOps(before, input.operations);
   if (!applied.ok) {
     return {
       kind: 'rejected',
       ledger,
       reason: 'apply_failed',
-      message: applied.error?.message ?? 'YOps apply failed',
+      message: applied.message,
     };
   }
   const after = applied.doc;
@@ -104,8 +105,8 @@ export function publishDraftAction(
 }
 
 export function importLegacyDocument(input: {
-  base: YValue;
-  current: YValue;
+  base: DraftDocument;
+  current: DraftDocument;
   actionId: string;
   publishedAt: string;
   actor: PublishDraftActionInput['actor'];
@@ -122,7 +123,7 @@ export function importLegacyDocument(input: {
   });
 }
 
-function diffSetOps(base: YValue, current: YValue): YOp[] {
+function diffSetOps(base: DraftDocument, current: DraftDocument): YOp[] {
   const keys = [...mappingKeys(current)];
   for (const key of mappingKeys(base)) {
     if (!keys.includes(key)) keys.push(key);
@@ -141,7 +142,7 @@ export function restoreNodeToAction(
   ledger: DraftActionLedger,
   nodeId: string,
   actionId: string
-): { operations: YOp[]; path: string; value: YValue | undefined } {
+): { operations: YOp[]; path: string; value: DraftDocument | undefined } {
   const action = actionById(ledger, actionId);
   if (!action) throw new Error(`Unknown action ${actionId}`);
   const before = replayToRevision(ledger, action.beforeRevision);
