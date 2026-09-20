@@ -41,6 +41,7 @@ import { GenerationModelSelector } from '@/components/generation/GenerationModel
 import { DOCUMENT_SOURCE_ACCEPTED_TYPES } from '@/components/import/documentAcceptTypes';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import treeStyles from '@/components/project/StructureTree.module.css';
+import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { WorkspaceComposeChat } from '@/components/workspaces/WorkspaceComposeChat';
 import { buildStateYamlReview } from '@/domain/diff/stateYamlReview';
@@ -57,6 +58,7 @@ import {
   workspaceDraftOperationsToStateOperations,
 } from '@/domain/project/stateViewModel';
 import { repositoryConversationSourceHref } from '@/domain/sourceEvidenceNavigation';
+import { useWorkspaceAuthoringBootstrap } from '@/hooks/workspaces/useWorkspaceAuthoringBootstrap';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import { validateWorkspaceCandidateYOps } from '@/hooks/workspaces/useWorkspaceYOps';
 import type {
@@ -67,6 +69,7 @@ import type {
 } from '@/types/workspaces';
 import type { WorkspaceYOpsValue } from '@/types/workspaceYops';
 import { cn } from '@/utils/cn';
+import { WorkspaceAuthoringSurface } from './WorkspaceAuthoringSurface';
 import { WorkspaceReviewCodeView } from './WorkspaceReviewCodeView';
 
 type WorkspaceSurfaceMode = 'compose' | 'review';
@@ -103,6 +106,7 @@ export function WorkspaceComposeReviewSurface({
   onBranchChange,
   onModeChange,
 }: WorkspaceComposeReviewSurfaceProps) {
+  const activity = useWorkspaceAuthoringBootstrap(candidate);
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -165,8 +169,41 @@ export function WorkspaceComposeReviewSurface({
     if (routeMode && routeMode !== mode) onModeChange(routeMode);
   }, [mode, onModeChange, routeQuery]);
 
+  if (activity.active)
+    return <WorkspaceAuthoringSurface key={candidate.id} candidate={candidate} />;
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-panel)] text-[var(--text-primary)]">
+      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--stroke-divider)] px-4 py-2 text-xs">
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={activity.busy}
+          onClick={() => void activity.start()}
+        >
+          {activity.importSnapshot === undefined
+            ? 'Enable Draft activity'
+            : 'Import shown snapshot and enable activity'}
+        </Button>
+        <span className="text-[var(--text-secondary)]">
+          Immutable edit history, incremental proposals and optional Workspace Assistant.
+        </span>
+        {activity.error ? (
+          <span role="alert" className="text-[var(--diff-removed-text)]">
+            {activity.error}
+          </span>
+        ) : null}
+        {activity.importSnapshot !== undefined ? (
+          <details className="w-full" open>
+            <summary>Existing Draft snapshot · earlier authorship remains unknown</summary>
+            <pre className="max-h-40 overflow-auto whitespace-pre-wrap text-[10px]">
+              {JSON.stringify(activity.importSnapshot, null, 2)}
+            </pre>
+            <Button size="sm" variant="ghost" onClick={activity.cancel}>
+              Cancel import
+            </Button>
+          </details>
+        ) : null}
+      </div>
       <WorkspaceSurfaceHeader
         branchOptions={branchOptions}
         controller={controller}
