@@ -9,7 +9,7 @@
   "transitionControlPlane": [
     {
       "path": "packages/api/src/lib/transition-control-plane/applicable-policy.ts",
-      "lines": 193
+      "lines": 210
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/index.ts",
@@ -17,18 +17,22 @@
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/lifecycle.ts",
-      "lines": 796
+      "lines": 807
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/materialize.ts",
       "lines": 110
+    },
+    {
+      "path": "packages/api/src/lib/transition-control-plane/wire.ts",
+      "lines": 48
     }
   ],
   "apiRouteAuthorization": {
-    "routeFiles": 73,
-    "filesUsingGetDB": 63,
-    "filesUsingAssertProjectAccess": 49,
-    "filesUsingRequireTransitionAuthority": 2,
+    "routeFiles": 75,
+    "filesUsingGetDB": 65,
+    "filesUsingAssertProjectAccess": 51,
+    "filesUsingRequireTransitionAuthority": 4,
     "getDBWithoutProjectAccess": [
       "packages/api/src/routes/auth-local.openapi.ts",
       "packages/api/src/routes/auth-me.openapi.ts",
