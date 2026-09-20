@@ -62,6 +62,7 @@ export { transitionPolicyBindingRoutes } from './transition-policy-bindings.open
 export { turnRoutes } from './turns.openapi';
 export { usageRoutes } from './usage.openapi';
 export { webhooksRoutes } from './webhooks.openapi';
+export { workspaceAssistantRoutes } from './workspace-assistant.openapi';
 export { workspaceAuthoringRoutes } from './workspace-authoring.openapi';
 export { workspaceExtractionProposalRoutes } from './workspace-extraction-proposals.openapi';
 export {

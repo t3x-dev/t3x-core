@@ -2065,6 +2065,20 @@
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/reviews",
       "policy": "project",
       "rationale": "Requires project edit and Transition propose/verify authority; freezes complete server-owned authoring history, never a selected UI subset."
+    },
+    {
+      "source": "workspace-assistant.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/:projectId/workspaces/:workspaceId/source-chat/assistant/stream",
+      "policy": "project",
+      "rationale": "Project-scoped Workspace Assistant; rechecks current project/Transition authority, uses only saved source user turns and server-bound operation identities."
+    },
+    {
+      "source": "workspace-assistant.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/source-chat/assistant/operations/{operationId}",
+      "policy": "project",
+      "rationale": "Project-scoped Workspace Assistant; rechecks current project/Transition authority, uses only saved source user turns and server-bound operation identities."
     }
   ]
 }

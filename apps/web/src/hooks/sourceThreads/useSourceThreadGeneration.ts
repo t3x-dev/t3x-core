@@ -19,6 +19,11 @@ import {
 import type { SourceChatDraftReplyResponse } from '@/infrastructure/sourceChatDraftReplies';
 import { sourceThreadApi } from '@/infrastructure/sourceThreads';
 import type { Turn } from '@/infrastructure/types';
+import {
+  recoverWorkspaceAssistantOperation,
+  streamWorkspaceAssistant,
+  type WorkspaceAssistantContext,
+} from '@/infrastructure/workspaceAssistant';
 import { useChatSessionStore } from '@/store/chatSessionStore';
 import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
@@ -49,6 +54,7 @@ export interface UseSourceThreadGenerationOptions {
   model?: string;
   parentCommitHash?: string;
   sourceDraftReply?: SourceDraftReplyContext;
+  workspaceAssistant?: WorkspaceAssistantContext;
   onConversationCreated?: (conversationId: string) => void;
   onTurnsSaved?: () => void;
 }
@@ -208,6 +214,7 @@ export function useSourceThreadGeneration({
   model,
   parentCommitHash,
   sourceDraftReply,
+  workspaceAssistant,
   onConversationCreated,
   onTurnsSaved,
 }: UseSourceThreadGenerationOptions): UseSourceThreadGenerationReturn {
@@ -417,7 +424,7 @@ export function useSourceThreadGeneration({
         onTurnsSaved?.();
 
         let memoryContext = '';
-        if (!isTemporaryMode && !options?.skipMemoryFetch) {
+        if (!isTemporaryMode && !workspaceAssistant && !options?.skipMemoryFetch) {
           try {
             const ctx = await sourceThreadApi.memory(currentConversationId);
             if (ctx.text) memoryContext = ctx.text;
@@ -460,6 +467,78 @@ export function useSourceThreadGeneration({
             });
           }
           if (!isTemporaryMode) await saveAssistantResponse(fullResponse, localAssistantMessageId);
+          return;
+        }
+
+        if (!isTemporaryMode && workspaceAssistant && savedUserTurnHash && !images?.length) {
+          const controller = new AbortController();
+          stream.abortControllerRef.current = controller;
+          const unfinished = new Set<string>();
+          let completed = false;
+          try {
+            for await (const event of streamWorkspaceAssistant(
+              projectId,
+              workspaceAssistant,
+              { conversationId: currentConversationId, userTurnHash: savedUserTurnHash },
+              { signal: controller.signal, provider, model }
+            )) {
+              if (event.type === 'context' && event.disclosure?.partial)
+                warnings.setWarning(
+                  'Context is partial; the Assistant can retrieve exact details.'
+                );
+              if (event.type === 'text') {
+                fullResponse += event.content ?? '';
+                stream.tokenBufferRef.current = fullResponse;
+                stream.setStreamingContent(fullResponse);
+              }
+              if (event.type === 'operation' && event.operationId) {
+                if (event.status === 'started') unfinished.add(event.operationId);
+                if (event.status === 'completed') {
+                  unfinished.delete(event.operationId);
+                  if (event.result?.transitionId)
+                    workspaceAssistant.onCandidate?.(event.result.transitionId);
+                }
+              }
+              if (event.type === 'error') throw new Error(event.message ?? 'Assistant failed');
+              if (event.type === 'done') {
+                completed = true;
+                fullResponse = event.content ?? fullResponse;
+                if (fullResponse.trim())
+                  history.setMessages((prev) => [
+                    ...prev,
+                    {
+                      id: event.turnHash ?? `reply-${savedUserTurnHash}`,
+                      role: 'assistant',
+                      content: fullResponse,
+                    },
+                  ]);
+                if (event.reason === 'step_limit')
+                  warnings.setWarning(
+                    'Assistant reached its step limit. Saved proposals remain available.'
+                  );
+              }
+            }
+          } finally {
+            // Reconcile persisted business results; never replay tool calls after EOF or disconnect.
+            for (const operationId of unfinished) {
+              try {
+                const result = await recoverWorkspaceAssistantOperation(
+                  projectId,
+                  workspaceAssistant.workspaceId,
+                  operationId
+                );
+                if (result.status === 'candidate' && result.transitionId)
+                  workspaceAssistant.onCandidate?.(result.transitionId);
+              } catch {
+                warnings.setWarning('Connection ended. Recheck saved proposals before retrying.');
+              }
+            }
+          }
+          if (!completed)
+            warnings.setWarning(
+              'Assistant stream ended before completion. Saved business results were checked.'
+            );
+          stream.setStreamingContent('');
           return;
         }
 
@@ -614,7 +693,7 @@ export function useSourceThreadGeneration({
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
           const partial = stream.tokenBufferRef.current;
-          if (partial) {
+          if (partial && !workspaceAssistant) {
             const localAssistantMessageId = `msg-${Date.now()}-assistant`;
             history.setMessages((prev) => [
               ...prev,
@@ -659,6 +738,7 @@ export function useSourceThreadGeneration({
       model,
       parentCommitHash,
       sourceDraftReply,
+      workspaceAssistant,
       onConversationCreated,
       onTurnsSaved,
       webSearchEnabled,
