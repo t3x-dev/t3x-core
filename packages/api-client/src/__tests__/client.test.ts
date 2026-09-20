@@ -1810,3 +1810,43 @@ it('reads a pinned generic Overview and rejects incompatible status claims', asy
   );
   await expect(bad.getStateOverview('p', digest('a'))).rejects.toThrow();
 });
+
+describe('Workspace authoring client', () => {
+  it('encodes resource identity, selection and cursor without turning reads into writes', async () => {
+    const fetchFn = mockFetch(successResponse({ compositionRevision: 20 }));
+    const client = createTestClient(fetchFn);
+    await client.workspaces.authoring.read('project/a', 'ws b', {
+      action_id: 'mcp:2',
+      node_id: 'node:x',
+      before_sequence: 8,
+      limit: 5,
+    });
+    const [url, options] = vi.mocked(fetchFn).mock.calls[0];
+    expect(String(url)).toContain('/v1/projects/project%2Fa/workspaces/ws%20b/authoring?');
+    expect(new URL(String(url)).searchParams.get('action_id')).toBe('mcp:2');
+    expect(new URL(String(url)).searchParams.get('before_sequence')).toBe('8');
+    expect(options?.method).toBe('GET');
+  });
+  it('keeps publication identity stable and handles stale saves as API conflicts', async () => {
+    const fetchFn = mockFetch(errorResponse('DRAFT_CONFLICT', 'Draft changed'), 409, false);
+    const client = createTestClient(fetchFn);
+    const request = {
+      request_id: 'op-1',
+      expected_workspace_revision: 4,
+      expected_revision: 2,
+      expected_ref_head: null,
+      operations: [{ set: { path: 'x', value: 3 } }],
+    };
+    await expect(client.workspaces.authoring.publish('p', 'w', request)).rejects.toThrow(
+      'Draft changed'
+    );
+    expect(JSON.parse(String(vi.mocked(fetchFn).mock.calls[0][1]?.body))).toEqual(request);
+    const saved = mockFetch(successResponse({ kind: 'published' }));
+    await createTestClient(saved).workspaces.authoring.publishCandidate('p', 'w', 'trn_1', {
+      request_id: 'publication-1',
+    });
+    expect(String(vi.mocked(saved).mock.calls[0][0])).toContain(
+      '/authoring/candidates/trn_1/publication'
+    );
+  });
+});

@@ -1,4 +1,4 @@
-import type { YOp } from '@t3x-dev/core';
+import type { NativeYOp as YOp } from '@t3x-dev/core';
 import { affectedNodeCards } from './lineage';
 import {
   actionById,
@@ -34,7 +34,14 @@ export function selectedActionView(
   const after = replayToRevision(ledger, action.afterRevision);
   return {
     action,
-    cards: affectedNodeCards(before, after, ledger),
+    cards: affectedNodeCards(
+      before,
+      after,
+      ledger,
+      action.beforeRevision,
+      action.afterRevision,
+      action.operations
+    ),
   };
 }
 
@@ -53,25 +60,60 @@ export function nodeHistory(
   const entries = [...ledger.actions].reverse().flatMap((action) => {
     const before = replayToRevision(ledger, action.beforeRevision);
     const after = replayToRevision(ledger, action.afterRevision);
-    const cards = affectedNodeCards(before, after, ledger);
-    const card = cards.find((item) => item.nodeId === nodeId);
-    if (!card) return [];
+    const cards = affectedNodeCards(
+      before,
+      after,
+      ledger,
+      action.beforeRevision,
+      action.afterRevision,
+      action.operations
+    );
+    const at = (revision: number) =>
+      ledger.lineage.find(
+        (entry) =>
+          entry.nodeId === nodeId &&
+          entry.fromRevision <= revision &&
+          (entry.toRevision === null || entry.toRevision > revision)
+      );
+    const beforeLocation = at(action.beforeRevision);
+    const afterLocation = at(action.afterRevision);
+    const beforeValue = beforeLocation ? mappingGet(before, beforeLocation.path) : undefined;
+    const afterValue = afterLocation ? mappingGet(after, afterLocation.path) : undefined;
+    if (yValuesEqual(beforeValue, afterValue) && beforeLocation?.path === afterLocation?.path)
+      return [];
+    const card =
+      cards.find((item) => item.nodeId === nodeId) ??
+      cards.find(
+        (item) =>
+          (beforeLocation &&
+            (item.beforePath === beforeLocation.path ||
+              beforeLocation.path.startsWith(`${item.beforePath}/`))) ||
+          (afterLocation &&
+            (item.afterPath === afterLocation.path ||
+              afterLocation.path.startsWith(`${item.afterPath}/`)))
+      );
     return [
       {
         actionId: action.actionId,
         sequence: action.sequence,
         channel: action.channel,
         revision: action.afterRevision,
-        before: card.before,
-        after: card.after,
+        before: beforeValue,
+        after: afterValue,
+        beforePath: beforeLocation?.path,
+        afterPath: afterLocation?.path,
+        ownerNodeId: card?.nodeId ?? nodeId,
+        publishedAt: action.publishedAt,
+        actor: action.actor,
         isSelected: selectedActionId === action.actionId,
       },
     ];
   });
   return {
+    state: current ? 'present' : latest ? 'deleted' : 'unknown',
     nodeId,
     path,
-    current: path ? mappingGet(currentComposition(ledger), path) : undefined,
+    current: current ? mappingGet(currentComposition(ledger), current.path) : undefined,
     entries,
   };
 }
@@ -82,12 +124,27 @@ export function previewCompensate(ledger: DraftActionLedger, actionId: string): 
   const actionBefore = replayToRevision(ledger, action.beforeRevision);
   const actionAfter = replayToRevision(ledger, action.afterRevision);
   const current = currentComposition(ledger);
-  const cards = affectedNodeCards(actionBefore, actionAfter, ledger);
+  const cards = affectedNodeCards(
+    actionBefore,
+    actionAfter,
+    ledger,
+    action.beforeRevision,
+    action.afterRevision,
+    action.operations
+  );
   const conflicts: Array<CompensatePreview['conflicts'][number]> = [];
   const operations: YOp[] = [];
   for (const card of cards) {
+    const identity = currentLineage(ledger).find((entry) => entry.path === card.path);
     const live = mappingGet(current, card.path);
-    if (!yValuesEqual(live, card.after)) {
+    if (
+      (card.after !== undefined && identity?.nodeId !== card.nodeId) ||
+      (card.after === undefined && identity !== undefined) ||
+      (card.beforePath !== undefined &&
+        card.afterPath !== undefined &&
+        card.beforePath !== card.afterPath) ||
+      !yValuesEqual(live, card.after)
+    ) {
       conflicts.push({ path: card.path, expected: card.after, current: live });
       continue;
     }

@@ -515,6 +515,16 @@ export { getYOpsJsonSchema } from './t3x-yops/jsonSchema';
 // Transition adapters — one-way integration; native engines stay autonomous
 // ═══════════════════════════════════════════════════════════════════════════
 export * from './transition-adapters';
+export {
+  applyNativeYOps,
+  canonicalNativeYValue,
+  compileNativeYOpsToPrimitives,
+  type NativeYOp,
+  NativeYOpSchema,
+  type NativeYValue,
+  parseNativeYOpsPath,
+  resolveNativeYOpsPath,
+} from './transition-adapters/yopsAuthoring';
 export * from './transition-commits';
 export * from './transition-decisions';
 export * from './transition-projection';

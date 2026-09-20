@@ -1,10 +1,11 @@
-import type { YOp } from '@t3x-dev/core';
-import { applyDraftYOps } from './document';
+import type { NativeYOp as YOp } from '@t3x-dev/core';
+import { applyDraftYOps, canonicalJson, cloneDocument } from './document';
 import { nextLineage } from './lineage';
 import {
   actionById,
   createDraftActionLedger,
   currentComposition,
+  isMapping,
   mappingGet,
   mappingKeys,
   operationsDigest,
@@ -24,10 +25,23 @@ export function publishDraftAction(
   ledger: DraftActionLedger,
   input: PublishDraftActionInput
 ): PublishDraftActionResult {
+  input = cloneDocument(input);
+  const requestDigest = canonicalJson({
+    actionId: input.actionId,
+    actor: input.actor,
+    channel: input.channel,
+    operations: input.operations,
+    expectedRevision: input.expectedRevision,
+    targetRevision: input.targetRevision ?? null,
+    precondition: input.precondition ?? null,
+    generation: input.generation ?? null,
+    reason: input.reason ?? null,
+  });
+  const priorReceipt = ledger.receipts?.find((r) => r.actionId === input.actionId);
   const existing = actionById(ledger, input.actionId);
   const digest = operationsDigest(input.operations);
   if (existing) {
-    if (existing.operationsDigest === digest) {
+    if (existing.requestDigest === requestDigest) {
       return { kind: 'reused', ledger, action: existing };
     }
     return {
@@ -36,6 +50,17 @@ export function publishDraftAction(
       reason: 'idempotency_mismatch',
       message: `Action ${input.actionId} was published with different operations`,
     };
+  }
+
+  if (priorReceipt) {
+    return priorReceipt.requestDigest === requestDigest
+      ? { kind: 'no_change', ledger, receipt: priorReceipt }
+      : {
+          kind: 'conflict',
+          ledger,
+          reason: 'idempotency_mismatch',
+          message: 'Request identity reused with different facts',
+        };
   }
 
   if (input.targetRevision !== undefined && input.targetRevision !== ledger.compositionRevision) {
@@ -56,6 +81,14 @@ export function publishDraftAction(
     };
   }
 
+  if (input.operations.some((operation) => Object.hasOwn(operation, 'source')))
+    return {
+      kind: 'rejected',
+      ledger,
+      reason: 'apply_failed',
+      message:
+        'Operation source metadata is not trusted evidence; provenance must be bound by the server',
+    };
   const before = currentComposition(ledger);
   const applied = applyDraftYOps(before, input.operations);
   if (!applied.ok) {
@@ -67,21 +100,29 @@ export function publishDraftAction(
     };
   }
   const after = applied.doc;
-  if (yValuesEqual(before, after)) {
+  const afterRevision = ledger.compositionRevision + 1;
+  const lineage = nextLineage(ledger, input.operations, before, after, afterRevision);
+  const identities = (entries: typeof lineage) =>
+    entries.filter((e) => e.toRevision === null).map(({ nodeId, path }) => ({ nodeId, path }));
+  if (
+    yValuesEqual(before, after) &&
+    canonicalJson(identities([...ledger.lineage])) === canonicalJson(identities(lineage))
+  ) {
+    const receipt = {
+      actionId: input.actionId,
+      outcome: 'no_change' as const,
+      expectedRevision: input.expectedRevision,
+      compositionRevision: ledger.compositionRevision,
+      message: 'Document unchanged',
+      requestDigest,
+    };
     return {
       kind: 'no_change',
-      ledger,
-      receipt: {
-        actionId: input.actionId,
-        outcome: 'no_change',
-        expectedRevision: input.expectedRevision,
-        compositionRevision: ledger.compositionRevision,
-        message: 'No successful action: document is unchanged',
-      },
+      ledger: { ...ledger, receipts: [...(ledger.receipts ?? []), receipt] },
+      receipt,
     };
   }
 
-  const afterRevision = ledger.compositionRevision + 1;
   const action: DraftActionRecord = {
     schema: DRAFT_ACTION_SCHEMA,
     actionId: input.actionId,
@@ -89,17 +130,21 @@ export function publishDraftAction(
     channel: input.channel,
     actor: input.actor,
     publishedAt: input.publishedAt,
+    ...(input.precondition ? { precondition: input.precondition } : {}),
+    ...(input.targetRevision === undefined ? {} : { targetRevision: input.targetRevision }),
     beforeRevision: ledger.compositionRevision,
     afterRevision,
     operations: Object.freeze([...input.operations]),
     operationsDigest: digest,
+    requestDigest,
     ...(input.reason ? { reason: input.reason } : {}),
+    ...(input.generation ? { generation: input.generation } : {}),
   };
   const next: DraftActionLedger = {
     ...ledger,
     compositionRevision: afterRevision,
     actions: Object.freeze([...ledger.actions, action]),
-    lineage: nextLineage(ledger, input.operations, before, after, afterRevision),
+    lineage,
   };
   return { kind: 'published', ledger: next, action };
 }
@@ -124,12 +169,15 @@ export function importLegacyDocument(input: {
 }
 
 function diffSetOps(base: DraftDocument, current: DraftDocument): YOp[] {
+  if (!isMapping(base) || !isMapping(current))
+    throw new TypeError('Legacy import requires mapping documents');
   const keys = [...mappingKeys(current)];
   for (const key of mappingKeys(base)) {
     if (!keys.includes(key)) keys.push(key);
   }
   const operations: YOp[] = [];
-  for (const path of keys) {
+  for (const key of keys) {
+    const path = JSON.stringify(key);
     const from = mappingGet(base, path);
     const to = mappingGet(current, path);
     if (yValuesEqual(from, to)) continue;
@@ -145,18 +193,21 @@ export function restoreNodeToAction(
 ): { operations: YOp[]; path: string; value: DraftDocument | undefined } {
   const action = actionById(ledger, actionId);
   if (!action) throw new Error(`Unknown action ${actionId}`);
-  const before = replayToRevision(ledger, action.beforeRevision);
   const after = replayToRevision(ledger, action.afterRevision);
   const lineage = ledger.lineage.find(
     (entry) =>
       entry.nodeId === nodeId &&
       entry.fromRevision <= action.afterRevision &&
-      (entry.toRevision === null || entry.toRevision >= action.afterRevision)
+      (entry.toRevision === null || entry.toRevision > action.afterRevision)
   );
-  const path = lineage?.path;
+  const current = ledger.lineage.find(
+    (entry) => entry.nodeId === nodeId && entry.toRevision === null
+  );
+  if (!current)
+    throw new Error('Cannot restore a deleted node without an explicit recreate command');
+  const path = current.path;
   if (!path) throw new Error(`Node ${nodeId} has no path at action ${actionId}`);
-  const value = mappingGet(after, path);
-  void before;
+  const value = lineage ? mappingGet(after, lineage.path) : undefined;
   return {
     path,
     value,

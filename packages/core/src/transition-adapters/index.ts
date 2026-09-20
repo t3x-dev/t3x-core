@@ -87,6 +87,7 @@ export {
   type RepositorySemanticYSchemaStatementProviderInput,
   repositorySemanticYSchemaTree,
   runRepositorySemanticYSchemaStatementProvider,
+  runYSchemaRootStatementProvider,
   runYSchemaStatementProvider,
   YSCHEMA_CONTEXT_MEDIA_TYPE,
   YSCHEMA_NATIVE_PROFILE,

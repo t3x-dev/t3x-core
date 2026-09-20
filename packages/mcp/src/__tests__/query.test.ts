@@ -12,6 +12,7 @@ const mockApiClient = {
     evidence: vi.fn(),
   },
   workspaces: {
+    authoring: { read: vi.fn() },
     get: vi.fn(),
     list: vi.fn(),
   },
@@ -413,5 +414,37 @@ describe('t3x_query handler', () => {
     });
 
     expect(mock).toHaveBeenCalledWith(mockDB, 'proj_test1', { limit: 5, offset: 10 });
+  });
+});
+
+describe('authoring query', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    if (originalBackend === undefined) delete process.env.T3X_MCP_BACKEND;
+    else process.env.T3X_MCP_BACKEND = originalBackend;
+  });
+  it('preserves inspected historical action and pagination independently from the current revision', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+    mockApiClient.workspaces.authoring.read.mockResolvedValue({
+      compositionRevision: 20,
+      selected: { actionId: 'old' },
+      history: { nextBeforeSequence: 8 },
+    });
+    const result = await queryHandler({
+      target: 'workspace_activity',
+      project_id: 'proj_1',
+      id: 'ws',
+      action_id: 'old',
+      node_id: 'node:x',
+      before_sequence: 15,
+      limit: 7,
+    });
+    expect(result.isError).toBeUndefined();
+    expect(mockApiClient.workspaces.authoring.read).toHaveBeenCalledWith('proj_1', 'ws', {
+      action_id: 'old',
+      node_id: 'node:x',
+      before_sequence: 15,
+      limit: 7,
+    });
   });
 });
