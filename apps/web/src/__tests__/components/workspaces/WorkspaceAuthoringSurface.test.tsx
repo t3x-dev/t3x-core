@@ -37,6 +37,7 @@ const a2 = [
 ];
 const a3 = [card('allocation', 30, 25), card('approval', false, true)];
 beforeEach(() => {
+  Element.prototype.scrollIntoView = vi.fn();
   const view = {
     workspaceRevision: 4,
     compositionRevision: 3,
