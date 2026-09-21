@@ -1,6 +1,7 @@
 'use client';
 
 import type { SlotDiff, SlotValue, TreeNode } from '@t3x-dev/core';
+import { type ReviewSlotDiff, withReviewHighlight } from '@/domain/diff/reviewHighlight';
 import { formatSlotValue, YAML_COLORS } from './DiffYAMLFormatters';
 import { YAMLLine, type YAMLLineStatus } from './YAMLLine';
 
@@ -56,17 +57,18 @@ export function WordDiffSpan({
 }) {
   let segmentOffset = 0;
   return (
-    <>
+    <span data-review-value="">
       {wordDiff.map((seg) => {
+        const text = seg.text;
         const segmentKey = `word-${segmentOffset}-${seg.type}`;
         segmentOffset += seg.text.length;
         if (seg.type === 'added') {
           return (
             <span
               key={segmentKey}
-              className="bg-[var(--dy-added-word)] text-[var(--diff-added-text)] rounded-sm px-[2px] font-medium"
+              className="bg-[var(--dy-added-word)] text-[var(--diff-added-text)] rounded-sm font-medium"
             >
-              {seg.text}
+              {text}
             </span>
           );
         }
@@ -74,20 +76,20 @@ export function WordDiffSpan({
           return (
             <span
               key={segmentKey}
-              className="bg-[var(--dy-removed-word)] text-[var(--diff-removed-text)] rounded-sm px-[2px] line-through"
+              className="bg-[var(--dy-removed-word)] text-[var(--diff-removed-text)] rounded-sm line-through"
               style={{ textDecorationColor: 'var(--text-tertiary)' }}
             >
-              {seg.text}
+              {text}
             </span>
           );
         }
         return (
           <span key={segmentKey} style={{ color: YAML_COLORS.string }}>
-            {seg.text}
+            {text}
           </span>
         );
       })}
-    </>
+    </span>
   );
 }
 
@@ -97,9 +99,9 @@ export function YAMLNodeRenderer({
   slotDiffs,
   startLine,
 }: YAMLNodeRendererProps) {
-  const slotDiffMap = new Map<string, SlotDiff>();
+  const slotDiffMap = new Map<string, ReviewSlotDiff>();
   if (slotDiffs) {
-    for (const sd of slotDiffs) slotDiffMap.set(sd.key, sd);
+    for (const sd of slotDiffs) slotDiffMap.set(sd.key, withReviewHighlight(sd));
   }
 
   let lineNum = startLine;
@@ -136,8 +138,8 @@ export function YAMLNodeRenderer({
             {'    '}
             <span style={{ color: YAML_COLORS.key }}>{key}</span>
             <span style={{ color: YAML_COLORS.bracket }}>: </span>
-            {sd?.wordDiff ? (
-              <WordDiffSpan wordDiff={sd.wordDiff} />
+            {sd?.highlight?.length ? (
+              <WordDiffSpan wordDiff={sd.highlight} />
             ) : (
               <SlotValueSpan value={value} />
             )}
