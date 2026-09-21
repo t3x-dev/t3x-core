@@ -103,7 +103,7 @@ export function WorkspaceAssistantPanel({
           checked={allowProposal}
           onChange={(event) => setAllowProposal(event.target.checked)}
         />
-        Allow proposal requests in this message
+        Generate a proposal from this message
       </label>
       <Textarea
         className={styles.composer}

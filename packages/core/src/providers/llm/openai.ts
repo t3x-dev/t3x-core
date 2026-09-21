@@ -231,7 +231,9 @@ export class OpenAIProvider implements LLMProvider {
       if (
         error instanceof LLMProviderError &&
         (error.message.endsWith('Failed to parse structured response as JSON') ||
-          error.message.endsWith('No content in response'))
+          error.message.endsWith('No content in response') ||
+          (error.statusCode === 400 &&
+            error.message.includes('Invalid schema for response_format')))
       ) {
         return this.generateStructuredViaText(prompt, schema, options);
       }

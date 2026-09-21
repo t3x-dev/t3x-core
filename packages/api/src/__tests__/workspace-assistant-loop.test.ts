@@ -89,6 +89,43 @@ describe('metered Assistant loop', () => {
     expect(metered).toHaveBeenCalledTimes(1);
     expect(events[0]).toEqual({ type: 'capabilities', tools: false, proposal: false });
   });
+  it('executes an explicitly requested proposal before the assistant response', async () => {
+    const { input, events } = fixture();
+    const execute = vi.fn(async () => ({ status: 'candidate', transitionId: 'transition:1' }));
+    const generateWithTools = vi.fn(async () => ({
+      tool_calls: [],
+      stop_reason: 'end_turn' as const,
+      usage,
+      _rawAssistantContent: [{ type: 'text' as const, text: 'Candidate generated.' }],
+    }));
+    await runAssistantProvider({
+      ...input,
+      provider: { id: 'test', generateWithTools } as unknown as LLMProvider,
+      capabilities: {
+        requestProposal: {
+          definition: { name: 'requestProposal', description: 'proposal', input_schema: {} },
+          execute,
+        },
+      },
+      initialToolCall: {
+        name: 'requestProposal',
+        input: { instruction: 'change replicas from 4 to 10' },
+      },
+    });
+    expect(execute).toHaveBeenCalledWith(
+      { instruction: 'change replicas from 4 to 10' },
+      expect.stringMatching(/^assistant:[a-f0-9]{64}$/)
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'operation',
+        name: 'requestProposal',
+        status: 'completed',
+        result: { status: 'candidate', transitionId: 'transition:1' },
+      })
+    );
+    expect(generateWithTools).toHaveBeenCalledOnce();
+  });
   it('rejects arbitrary code tools and stops before a stale continuation', async () => {
     const { input } = fixture();
     const provider = {

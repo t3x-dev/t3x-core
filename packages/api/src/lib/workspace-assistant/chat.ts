@@ -16,7 +16,11 @@ export async function chatWithWorkspace(input: {
   operationNamespace: string;
   authorize: (capability: 'read' | 'propose') => Promise<void>;
   exactEdit?: { operations: DraftYOp[]; reason?: string };
-  proposal?: { posture: 'source_only' | 'guided' | 'recommend' };
+  proposal?: {
+    posture: 'source_only' | 'guided' | 'recommend';
+    requestedProvider?: string;
+    requestedModel?: string;
+  };
   signal?: AbortSignal;
   emit: (
     event:
@@ -39,10 +43,15 @@ export async function chatWithWorkspace(input: {
     disclosure: prepared.disclosure,
   });
   const capabilities = createAssistantCapabilities({ ...input, prepared });
+  const latestUserTurn = prepared.turns.at(-1);
   await runAssistantProvider({
     ...input,
     prompt: prepared.prompt,
     capabilities,
+    initialToolCall:
+      input.proposal && !input.exactEdit && latestUserTurn?.role === 'user'
+        ? { name: 'requestProposal', input: { instruction: latestUserTurn.content } }
+        : undefined,
     assertCurrent: () =>
       assertAssistantContextCurrent(input.db, prepared, () => input.authorize('read')),
   });

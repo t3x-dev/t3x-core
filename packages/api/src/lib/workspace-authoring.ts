@@ -101,7 +101,7 @@ export async function initializeWorkspaceAuthoring(
       operations?.length || draft.nodes?.length || draft.semantic_points?.length
     );
     const oldBase = workspace.baseCommitHash ?? draft.parent_commit_hash;
-    if (oldBase != null && oldBase !== head.head)
+    if (oldBase != null && oldBase !== head.head && input.legacyDocument === undefined)
       throw new DraftAuthoringConflictError(
         'Legacy Draft basis changed; reconcile it before importing'
       );

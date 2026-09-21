@@ -37,16 +37,21 @@ export function useWorkspaceAuthoringBootstrap(candidate: WorkspaceCandidate) {
         return;
       }
       requestId.current ??= crypto.randomUUID();
-      await getSharedApiClient().workspaces.authoring.initialize(
-        candidate.projectId,
-        candidate.id,
-        {
-          request_id: requestId.current,
-          expected_workspace_revision: candidate.revision,
-          expected_ref_head: candidate.baseCommitHash,
-          ...(importSnapshot === undefined ? {} : { legacy_document: importSnapshot }),
-        }
-      );
+      const api = getSharedApiClient();
+      const expectedRefHead =
+        candidate.baseCommitHash ??
+        (
+          await api.listBranches(candidate.projectId, {
+            limit: 100,
+          })
+        ).branches.find((branch) => branch.name === candidate.targetBranch)?.head_commit_hash ??
+        null;
+      await api.workspaces.authoring.initialize(candidate.projectId, candidate.id, {
+        request_id: requestId.current,
+        expected_workspace_revision: candidate.revision,
+        expected_ref_head: expectedRefHead,
+        ...(importSnapshot === undefined ? {} : { legacy_document: importSnapshot }),
+      });
       setActive(true);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Cannot initialize Draft activity');

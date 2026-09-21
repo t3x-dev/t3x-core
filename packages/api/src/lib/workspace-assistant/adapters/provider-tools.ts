@@ -29,6 +29,7 @@ export async function runAssistantProvider(input: {
   emit: (event: AssistantEvent) => Promise<void>;
   signal?: AbortSignal;
   maxSteps?: number;
+  initialToolCall?: { name: string; input: unknown };
 }) {
   const hasTools = assistantProviderCapabilities(input.provider).tools;
   await input.emit({
@@ -40,6 +41,44 @@ export async function runAssistantProvider(input: {
   const maxSteps = Math.min(8, Math.max(1, input.maxSteps ?? 5));
   let callIndex = 0;
   const seen = new Set<string>();
+  if (input.initialToolCall) {
+    const capability = Object.hasOwn(input.capabilities, input.initialToolCall.name)
+      ? input.capabilities[input.initialToolCall.name]
+      : undefined;
+    if (!capability)
+      throw new TypeError(`Capability ${input.initialToolCall.name} is not available`);
+    const toolUseId = 'server-required-0';
+    const operationId = `assistant:${createHash('sha256').update(`${input.operationNamespace}:${callIndex++}`).digest('hex')}`;
+    await input.emit({
+      type: 'operation',
+      name: input.initialToolCall.name,
+      operationId,
+      status: 'started',
+    });
+    const result = await capability.execute(input.initialToolCall.input, operationId);
+    await input.emit({
+      type: 'operation',
+      name: input.initialToolCall.name,
+      operationId,
+      status: 'completed',
+      result,
+    });
+    prompt.messages.push({
+      role: 'assistant',
+      content: [
+        {
+          type: 'tool_use',
+          id: toolUseId,
+          name: input.initialToolCall.name,
+          input: input.initialToolCall.input,
+        },
+      ],
+    });
+    prompt.messages.push({
+      role: 'user',
+      content: [{ type: 'tool_result', tool_use_id: toolUseId, content: JSON.stringify(result) }],
+    });
+  }
   for (let step = 0; step < maxSteps; step++) {
     if (input.signal?.aborted) {
       await input.emit({ type: 'done', reason: 'cancelled' });

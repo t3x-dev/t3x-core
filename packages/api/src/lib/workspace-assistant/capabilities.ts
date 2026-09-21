@@ -47,6 +47,8 @@ export function createAssistantCapabilities(input: {
   exactEdit?: { operations: DraftYOp[]; reason?: string };
   proposal?: {
     posture: 'source_only' | 'guided' | 'recommend';
+    requestedProvider?: string;
+    requestedModel?: string;
     resolveModel?: () => Promise<ProposalGenerationModel>;
   };
 }): AssistantCapabilities {
@@ -218,6 +220,8 @@ export function createAssistantCapabilities(input: {
           expectedRevision: prepared.workspaceRevision,
           posture: proposal.posture,
           instruction,
+          requestedProvider: proposal.requestedProvider,
+          requestedModel: proposal.requestedModel,
           sourceTurnHashes: prepared.turns
             .filter((turn) => turn.role === 'user')
             .map((turn) => turn.hash),
