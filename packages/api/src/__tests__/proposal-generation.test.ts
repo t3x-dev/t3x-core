@@ -244,6 +244,9 @@ describe('governed Proposal generation', () => {
 
     expect(left.view.transitionId).toBe(right.view.transitionId);
     expect(generate).toHaveBeenCalledTimes(1);
+    expect(generate.mock.calls[0]?.[0].prompt).toContain(
+      'create one change group\nper independently stated requirement'
+    );
     expect(left.view.precondition.policyDigest).not.toBeNull();
     const graph = await resolveTransitionProposalGraph(db, data.projectId, left.view.transitionId);
     expect(graph.membership.actor).toEqual(PROPOSAL_GENERATOR_ACTOR);

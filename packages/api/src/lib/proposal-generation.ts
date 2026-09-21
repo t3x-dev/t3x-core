@@ -82,6 +82,9 @@ For the "guided" posture, use "inferred", "authored", or "unspecified" for inten
 and return an empty challenges array for every change. Guided inference may explain assumptions and
 risks, but it must not challenge or replace an explicit source claim. Reserve challenges for the
 "recommend" posture.
+Preserve the user's explicit numbered or bulleted requirement granularity: create one change group
+per independently stated requirement and do not merge distinct items merely because they are related.
+Use multiple operations in one group only when one requirement needs an atomic multi-field change.
 Use only canonical YOps operation objects in changes[].operations. Do not return yops, slotProvenance, gaps, or any legacy extraction shape.`;
 
 type ActorRef = { kind: 'human' | 'agent' | 'service'; id: string };
