@@ -13,6 +13,11 @@ import {
   PROPOSAL_POSTURE_VERIFIER_TOOL,
   PROPOSAL_POSTURE_VERIFIER_WORKFLOW,
 } from './transition-control-plane/applicable-policy';
+import {
+  authoringPreparationResource,
+  WORKSPACE_GENERATION_PREPARATION_SCHEMA,
+  type WorkspaceGenerationPreparation,
+} from './workspace-authoring-generation';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -38,7 +43,8 @@ type TrustedStatementObservation = {
 
 function exactPostureRunner(
   observation: TrustedStatementObservation,
-  preparation: ReturnType<typeof parseProposalGenerationPreparation>
+  preparation: ReturnType<typeof parseProposalGenerationPreparation>,
+  expectedManifest?: { mediaType: string; digest: string }
 ) {
   if (
     observation.source !== PROPOSAL_GENERATION_POSTURE_PROVIDER_SOURCE ||
@@ -53,8 +59,10 @@ function exactPostureRunner(
     return samePortable(parsed.predicate.tool, PROPOSAL_POSTURE_VERIFIER_TOOL) &&
       samePortable(parsed.predicate.workflow, PROPOSAL_POSTURE_VERIFIER_WORKFLOW) &&
       samePortable(parsed.predicate.environment, PROPOSAL_POSTURE_VERIFIER_ENVIRONMENT) &&
-      parsed.predicate.inputManifest.mediaType === PROPOSAL_GENERATION_PREPARATION_MEDIA_TYPE &&
-      parsed.predicate.inputManifest.digest === proposalGenerationPreparationDigest(preparation)
+      parsed.predicate.inputManifest.mediaType ===
+        (expectedManifest?.mediaType ?? PROPOSAL_GENERATION_PREPARATION_MEDIA_TYPE) &&
+      parsed.predicate.inputManifest.digest ===
+        (expectedManifest?.digest ?? proposalGenerationPreparationDigest(preparation))
       ? parsed.predicate
       : null;
   } catch {
@@ -115,7 +123,21 @@ export function projectProposalGenerationReview(input: {
   base: ProtocolValue;
   result: ProtocolValue;
   observations: readonly TrustedStatementObservation[];
+  expectedManifest?: { mediaType: string; digest: string };
 }): ProposalGenerationReviewProjection | null {
+  if (
+    isRecord(input.preparationFacts) &&
+    input.preparationFacts.schema === WORKSPACE_GENERATION_PREPARATION_SCHEMA
+  ) {
+    const candidate = input.preparationFacts as unknown as WorkspaceGenerationPreparation;
+    return projectProposalGenerationReview({
+      ...input,
+      preparationFacts: JSON.parse(JSON.stringify(candidate.generation)),
+      operations: JSON.parse(JSON.stringify(candidate.operations)),
+      base: candidate.workingState.value,
+      expectedManifest: authoringPreparationResource(input.preparationFacts, '', ''),
+    });
+  }
   if (
     !isRecord(input.preparationFacts) ||
     input.preparationFacts.schema !== 't3x.dev/proposal-generation-preparation/v1'
@@ -124,7 +146,7 @@ export function projectProposalGenerationReview(input: {
   }
   const preparation = parseProposalGenerationPreparation(input.preparationFacts);
   const runners = input.observations.flatMap((observation) => {
-    const runner = exactPostureRunner(observation, preparation);
+    const runner = exactPostureRunner(observation, preparation, input.expectedManifest);
     return runner === null ? [] : [runner];
   });
   const runnerOutcomes = new Set(runners.map((runner) => runner.outcome));

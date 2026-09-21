@@ -9,7 +9,7 @@
   "transitionControlPlane": [
     {
       "path": "packages/api/src/lib/transition-control-plane/applicable-policy.ts",
-      "lines": 193
+      "lines": 210
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/index.ts",
@@ -17,18 +17,22 @@
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/lifecycle.ts",
-      "lines": 796
+      "lines": 807
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/materialize.ts",
       "lines": 110
+    },
+    {
+      "path": "packages/api/src/lib/transition-control-plane/wire.ts",
+      "lines": 48
     }
   ],
   "apiRouteAuthorization": {
-    "routeFiles": 73,
-    "filesUsingGetDB": 63,
-    "filesUsingAssertProjectAccess": 49,
-    "filesUsingRequireTransitionAuthority": 2,
+    "routeFiles": 75,
+    "filesUsingGetDB": 65,
+    "filesUsingAssertProjectAccess": 51,
+    "filesUsingRequireTransitionAuthority": 4,
     "getDBWithoutProjectAccess": [
       "packages/api/src/routes/auth-local.openapi.ts",
       "packages/api/src/routes/auth-me.openapi.ts",
@@ -202,8 +206,10 @@
     "apps/web/src/components/workspaces/SourceTransitionTab.tsx",
     "apps/web/src/components/workspaces/TransitionReviewPanel.tsx",
     "apps/web/src/components/workspaces/WorkspaceChangeReviewPage.tsx",
+    "apps/web/src/components/workspaces/WorkspaceComposeReviewSurface.tsx",
     "apps/web/src/components/workspaces/WorkspaceContentEditor.tsx",
     "apps/web/src/components/workspaces/YOpsDraftTab.tsx",
+    "apps/web/src/hooks/workspaces/useWorkspaceComposeReviewController.ts",
     "apps/web/src/hooks/workspaces/useWorkspaceReviewSnapshot.ts",
     "apps/web/src/hooks/workspaces/useWorkspaceSourceTransition.ts",
     "apps/web/src/hooks/workspaces/useWorkspaceTransition.ts",

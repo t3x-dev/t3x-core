@@ -105,8 +105,25 @@ function preparationSchema(value: ProtocolValue | null): unknown {
 function generationPreparation(input: {
   requestKind: TransitionRequestKind;
   preparationFacts: ProtocolValue | null;
-}) {
+}): ReturnType<typeof parseProposalGenerationPreparation> | null {
   const schema = preparationSchema(input.preparationFacts);
+  if (schema === 't3x.application/workspace-generation-preparation/v1') {
+    const wrapped = input.preparationFacts as { generation: ProtocolValue };
+    return generationPreparation({ ...input, preparationFacts: wrapped.generation });
+  }
+  if (schema === 't3x.application/workspace-authoring-preparation/v1') {
+    const wrapped = input.preparationFacts as {
+      ledger: { actions: Array<{ generation?: { preparation: ProtocolValue } }> };
+    };
+    if (!Array.isArray(wrapped.ledger?.actions))
+      throw new GenerationPolicyIntegrityError('Invalid authoring manifest');
+    const preparations = wrapped.ledger.actions.flatMap((action) =>
+      action.generation
+        ? [generationPreparation({ ...input, preparationFacts: action.generation.preparation })]
+        : []
+    );
+    return preparations[0] ?? null;
+  }
   if (schema !== PROPOSAL_GENERATION_PREPARATION_SCHEMA) return null;
   if (input.requestKind !== 'structured_yops') {
     throw new GenerationPolicyIntegrityError(

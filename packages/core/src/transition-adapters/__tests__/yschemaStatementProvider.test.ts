@@ -8,6 +8,7 @@ import {
   createYSchemaContextDescriptor,
   createYSchemaResourceDescriptor,
   runRepositorySemanticYSchemaStatementProvider,
+  runYSchemaRootStatementProvider,
   runYSchemaStatementProvider,
   YSCHEMA_NATIVE_PROFILE,
 } from '../yschemaStatementProvider';
@@ -85,6 +86,32 @@ describe('YSchema Statement provider', () => {
       ready: true,
       context,
     });
+  });
+
+  it('binds a native document root to the complete State and rejects a forged root', () => {
+    const state = createYOpsState({
+      document: { device: { name: 'Sensor', enabled: true } },
+      other: 1,
+    });
+    const context = {
+      mode: 'bound' as const,
+      resource: createYSchemaContextDescriptor('urn:test:root', { rootKey: 'document' }),
+    };
+    const statement = runYSchemaRootStatementProvider({
+      state,
+      schema,
+      ...metadata,
+      context,
+      rootKey: 'document',
+    });
+    expect(statement.subjects).toEqual([describeProtocolObject(state)]);
+    expect(statement.predicate).toMatchObject({ outcome: 'passed' });
+    expect(() =>
+      runYSchemaRootStatementProvider({ state, schema, ...metadata, context, rootKey: 'other' })
+    ).toThrow();
+    expect(() =>
+      runYSchemaRootStatementProvider({ state, schema, ...metadata, rootKey: 'document' })
+    ).toThrow();
   });
 
   it('rejects tampered or missing repository semantic root selection', () => {

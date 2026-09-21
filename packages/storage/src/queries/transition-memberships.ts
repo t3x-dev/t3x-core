@@ -451,6 +451,28 @@ export async function listTransitionProposalsForWorkspaceRevision(
   return rows.map(proposalMembership);
 }
 
+/** Recent workspace proposals, including stale candidates, for recovery after a lost response. */
+export async function listTransitionProposalsForWorkspace(
+  db: AnyDB,
+  input: { projectId: string; workspaceId: string; limit?: number }
+): Promise<TransitionProposalMembership[]> {
+  const rows = await db
+    .select()
+    .from(transitionProposalMemberships)
+    .where(
+      and(
+        eq(transitionProposalMemberships.projectId, input.projectId),
+        eq(transitionProposalMemberships.workspaceId, input.workspaceId)
+      )
+    )
+    .orderBy(
+      desc(transitionProposalMemberships.createdAt),
+      desc(transitionProposalMemberships.transitionId)
+    )
+    .limit(Math.max(1, Math.min(input.limit ?? 100, 100)));
+  return rows.map(proposalMembership);
+}
+
 async function loadObject(
   db: AnyDB,
   descriptor: { kind: string; schema: string; digest: string }

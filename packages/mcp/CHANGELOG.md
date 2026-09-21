@@ -1,5 +1,19 @@
 # @t3x-dev/mcp-lib
 
+## 2.0.0
+
+### Major Changes
+
+- [#1577](https://github.com/t3x-dev/t3x-core/pull/1577) [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267) Thanks [@jjy0230](https://github.com/jjy0230)! - Require server-owned Workspace extraction and route the `t3x_edit` and `t3x_commit` compatibility tools through canonical Transition proposal and CommitV2 authority.
+
+### Patch Changes
+
+- Updated dependencies [[`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267), [`00e817a`](https://github.com/t3x-dev/t3x-core/commit/00e817af6e4df1f5fd1b6a11b05d012b40560267)]:
+  - @t3x-dev/storage@1.4.0
+  - @t3x-dev/api@1.4.0
+  - @t3x-dev/api-client@1.4.0
+  - @t3x-dev/core@1.3.1
+
 ## 1.2.1
 
 ### Patch Changes

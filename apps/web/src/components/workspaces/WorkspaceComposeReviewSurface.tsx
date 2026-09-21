@@ -66,6 +66,7 @@ import {
   workspaceDraftOperationsToStateOperations,
 } from '@/domain/project/stateViewModel';
 import { repositoryConversationSourceHref } from '@/domain/sourceEvidenceNavigation';
+import { useWorkspaceAuthoringBootstrap } from '@/hooks/workspaces/useWorkspaceAuthoringBootstrap';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import { validateWorkspaceCandidateYOps } from '@/hooks/workspaces/useWorkspaceYOps';
 import type {
@@ -76,6 +77,7 @@ import type {
 } from '@/types/workspaces';
 import type { WorkspaceYOpsValue } from '@/types/workspaceYops';
 import { cn } from '@/utils/cn';
+import { WorkspaceAuthoringSurface } from './WorkspaceAuthoringSurface';
 import composeStyles from './WorkspaceComposeSurface.module.css';
 import checksStyles from './WorkspaceReviewChecks.module.css';
 import { WorkspaceReviewCodeView } from './WorkspaceReviewCodeView';
@@ -121,6 +123,7 @@ export function WorkspaceComposeReviewSurface({
   onBranchChange,
   onModeChange,
 }: WorkspaceComposeReviewSurfaceProps) {
+  const activity = useWorkspaceAuthoringBootstrap(candidate);
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -191,6 +194,14 @@ export function WorkspaceComposeReviewSurface({
     if (routeMode && routeMode !== mode) onModeChange(routeMode);
   }, [mode, onModeChange, routeQuery]);
 
+  if (activity.active) {
+    return (
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-white text-[var(--text-primary)]">
+        <WorkspaceAuthoringSurface key={candidate.id} candidate={candidate} />
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(
@@ -221,6 +232,7 @@ export function WorkspaceComposeReviewSurface({
             />
           ) : (
             <ComposeSurface
+              activity={activity}
               candidate={controller.candidate ?? candidate}
               changeCount={changeCount}
               controller={controller}
@@ -319,11 +331,13 @@ function WorkspaceNavigation({
 }
 
 function ComposeSurface({
+  activity,
   candidate,
   changeCount,
   controller,
   onModeChange,
 }: {
+  activity: ReturnType<typeof useWorkspaceAuthoringBootstrap>;
   candidate: WorkspaceCandidate;
   changeCount: number;
   controller: WorkspaceComposeReviewController;
@@ -370,6 +384,27 @@ function ComposeSurface({
         </div>
       </header>
       <main className={composeStyles.composeMain}>
+        <section className={composeStyles.activityUpgrade} aria-label="Draft activity">
+          <div>
+            <Sparkles aria-hidden="true" />
+            <span>
+              <strong>Draft activity</strong>
+              <small>Keep every edit, AI proposal and MCP update in one immutable history.</small>
+            </span>
+          </div>
+          <button disabled={activity.busy} onClick={() => void activity.start()} type="button">
+            {activity.importSnapshot === undefined ? 'Enable' : 'Import current draft'}
+          </button>
+          {activity.error ? <p role="alert">{activity.error}</p> : null}
+          {activity.importSnapshot !== undefined ? (
+            <div className={composeStyles.activityImport}>
+              <span>The current draft will become the first imported action.</span>
+              <button onClick={activity.cancel} type="button">
+                Cancel
+              </button>
+            </div>
+          ) : null}
+        </section>
         <SourceToolbar
           candidate={candidate}
           changeScope={changeScope}

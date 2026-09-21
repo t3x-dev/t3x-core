@@ -546,6 +546,74 @@
 .composeMain::-webkit-scrollbar {
   display: none;
 }
+.activityUpgrade {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 16px 16px 0;
+  border: 1px solid #dfe5f2;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #f8faff;
+}
+.activityUpgrade > div:first-child {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+.activityUpgrade svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--accent-commit);
+}
+.activityUpgrade span {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+.activityUpgrade strong {
+  font-size: 13px;
+  line-height: 18px;
+}
+.activityUpgrade small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--text-secondary);
+}
+.activityUpgrade > button,
+.activityImport button {
+  min-height: 30px;
+  border: 1px solid #cdd7ea;
+  border-radius: 6px;
+  padding: 0 12px;
+  background: #fff;
+  color: var(--accent-commit);
+  font-size: 12px;
+  font-weight: 650;
+}
+.activityUpgrade > p {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 11px;
+  color: var(--status-error);
+}
+.activityImport {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid #e4e9f3;
+  padding-top: 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
 .composeHeader {
   grid-column: 1;
   grid-row: 1;

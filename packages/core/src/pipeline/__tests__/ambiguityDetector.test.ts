@@ -18,8 +18,8 @@ describe('parseAmbiguityResponse', () => {
             type: 'vagueness',
             frame_id: 'f_001',
             slot_key: 'budget',
-            question: 'Budget is "5000左右". Do you have an exact number?',
-            current_value: '5000左右',
+            question: 'Budget is "about 5000". Do you have an exact number?',
+            current_value: 'about 5000',
           },
         ],
       }),
@@ -30,7 +30,7 @@ describe('parseAmbiguityResponse', () => {
     expect(result.questions[0].type).toBe('vagueness');
     expect(result.questions[0].nodeId).toBe('f_001');
     expect(result.questions[0].slotKey).toBe('budget');
-    expect(result.questions[0].currentValue).toBe('5000左右');
+    expect(result.questions[0].currentValue).toBe('about 5000');
     expect(result.questions[0].id).toMatch(/^aq_/);
   });
 

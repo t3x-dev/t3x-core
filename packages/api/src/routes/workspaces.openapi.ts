@@ -19,6 +19,7 @@ import {
 import {
   type AnyDB,
   ConflictError,
+  DraftAuthoringConflictError,
   findBranchByName,
   findMaterialsByProject,
   findWorkspaceDraft,
@@ -693,7 +694,11 @@ export const workspaceRoutes = new OpenAPIHono({
 workspaceRoutes.route('/', workspaceDeliveryRoutes);
 
 workspaceRoutes.onError((error, c) => {
-  if (error instanceof ConflictError || isWorkspaceIdConflict(error)) {
+  if (
+    error instanceof ConflictError ||
+    error instanceof DraftAuthoringConflictError ||
+    isWorkspaceIdConflict(error)
+  ) {
     return errorResponse(
       c,
       'CONFLICT',
@@ -1445,6 +1450,7 @@ function workspaceTransitionErrorResponse(c: Parameters<typeof errorResponse>[0]
   }
   if (
     error instanceof ConflictError ||
+    error instanceof DraftAuthoringConflictError ||
     error instanceof WorkspaceTransitionReviewStaleError ||
     error instanceof TransitionHeadConflictError
   ) {

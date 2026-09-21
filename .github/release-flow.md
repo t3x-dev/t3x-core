@@ -79,14 +79,42 @@ Release branch naming:
 
 Product release versioning:
 
-- Every normal merge to `main` must have a T3X product release version.
-- User-visible product changes should usually bump the minor version during
-  `0.x`.
-- Fixes, CI/release guard changes, docs corrections, and small internal
-  adjustments can use a patch bump.
-- The product release version is recorded in the release PR body and should be
-  tagged after merge as `t3x-vx.y.z`.
-- Package versions remain independent and are determined by Changesets.
+- Every normal merge to `main` must have a new T3X product release version.
+- Select the bump from the highest-impact change since the latest published
+  `t3x-vx.y.z` tag, not from PR count, diff size, or an older workspace version.
+- **Patch (`x.y.z + 1`)**: backward-compatible bug/security fixes, docs
+  corrections, or maintenance without new user-facing functionality. For
+  example, `1.4.0 -> 1.4.1` is a fix-only release.
+- **Minor (`x.y + 1.0`)**: new backward-compatible functionality or substantial
+  user-facing workflow improvements. For example, new State/History or
+  Workspace Compose/Review capabilities require `1.4.0 -> 1.5.0`, even when
+  the release also contains bug fixes. Do not classify a feature release as
+  patch merely because automated preparation defaults to patch.
+- **Major (`x + 1.0.0`)**: incompatible changes to supported public contracts
+  or supported behavior that require consumer migration. A large internal
+  rewrite or UI diff alone does not establish a breaking change. Record the
+  compatibility assessment and migration guidance in the release notes.
+- For `0.x` alpha packages, new features still require at least a minor bump;
+  breaking changes require an explicit compatibility review under the
+  stability policy. A numeric version does not promote an alpha surface to GA.
+- Product versions and npm package versions are independent. Classify each
+  changed public package against its own latest published version; do not
+  republish unchanged packages or align all packages to the product number.
+  Additive public API/type fields are minor changes, not bug fixes.
+- Release PRs must state the previous version, target version, bump category,
+  and evidence for that category. Never reuse an already published version.
+- The current Release Train `--version auto` chooses the next **patch**; it
+  does not classify feature or breaking changes. For minor/major releases,
+  maintainers must supply an explicit product `--version` (for example,
+  `1.5.0`) and review the draft before merge. Scheduled patch drafts are
+  proposals, not approval of the bump category.
+- In package mode, review each changeset's bump and explicitly select the
+  affected active packages. `--package-bump` defaults to patch for generated
+  changesets; use minor/major when the package impact requires it.
+- Record the product version in the release PR body and tag it after merge as
+  `t3x-vx.y.z`. Reconcile `release/product-version.json` and generated display
+  versions during release preparation; stale source metadata must not cause
+  a downgrade or reuse of a published tag.
 
 Target release PR guards:
 
@@ -102,6 +130,7 @@ Target release PR guards:
 Some target release guards are not fully automated yet. They are part of the
 alpha release-readiness workstreams and should become required checks before
 the first public alpha publish.
+
 
 ## Release Train Automation
 

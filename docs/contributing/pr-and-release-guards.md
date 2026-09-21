@@ -43,7 +43,16 @@ use the full release guard described in
 Normal releases into `main` use `release/x.y.z` branches, where `x.y.z` is the
 T3X product release version.
 
+Choose the version by release impact, following
+[Product release versioning](../../.github/release-flow.md#product-release-prs-into-main):
+fix-only changes use patch; new compatible functionality uses minor; incompatible
+public contract changes use major. Diff size alone does not determine the bump.
+Apply the same assessment separately to each affected npm package. Automatic
+patch defaults must be overridden for feature releases.
+
 Release PRs must include:
+
+- Previous version, target version, bump category, and the reason for that bump.
 
 - `T3X product release version: \`x.y.z\`` in the PR body.
 - Included changes or a comparison range.

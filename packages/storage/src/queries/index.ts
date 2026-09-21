@@ -141,6 +141,7 @@ export {
   abandonDraft,
   ConflictError,
   commitDraft,
+  DraftAuthoringConflictError,
   deleteDraft,
   findAutoDraftsByConversation,
   findDraftById,
@@ -153,6 +154,8 @@ export {
   listWorkspaceDrafts,
   NotFoundError,
   promoteDraft,
+  sealWorkspaceAuthoring,
+  transactWorkspaceAuthoring,
   type UpdateDraftInput,
   updateDraft,
   updateDraftPreview,
@@ -243,6 +246,7 @@ export {
   findMaterialsByIds,
   findMaterialsByProject,
   type ListMaterialsOptions,
+  lockMaterialsForAuthoring,
   restoreArchivedMaterial,
 } from './materials';
 // Merge Drafts (Pending merge operations)
@@ -594,6 +598,7 @@ export {
   insertTurn,
   type ListTurnsByProjectOptions,
   type ListTurnsOptions,
+  lockTurnsForAuthoring,
   TurnWindowError,
 } from './turns';
 // Users & Accounts (multi-provider authentication)

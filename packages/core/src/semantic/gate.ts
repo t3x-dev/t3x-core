@@ -38,37 +38,37 @@ export function buildSemanticGatePrompt(
   turns: { role: string; content: string }[],
   content: SemanticContent
 ): { systemPrompt: string; userPrompt: string } {
-  const systemPrompt = `你是一个语义提取审查员。给你一段原始对话和从中提取的 Tree 结构。
+  const systemPrompt = `You are a semantic extraction reviewer. You are given an original conversation and the Tree structure extracted from it.
 
-请从以下 5 个维度评分（0-1）并列出问题：
+Score the extraction on these 5 dimensions (0-1) and list any issues:
 
-## 1. 完整性 (Completeness)
-对话中的重要意图、决定、事实、约束是否都被提取了？
-- 检查：对话中每一个实质性陈述是否有对应的 tree node 或 slot
-- 不需要提取：寒暄、重复、过程性讨论
+## 1. Completeness
+Were important intents, decisions, facts, and constraints from the conversation extracted?
+- Check: does every substantial statement have a matching tree node or slot?
+- Do not extract: greetings, repetition, or process chatter
 
-## 2. 准确性 (Accuracy)
-提取的 slot 值是否和原文一致？
-- 检查：数字、名称、日期等是否准确
-- 检查：推断性内容是否有明确的 source 引用
+## 2. Accuracy
+Do extracted slot values match the source text?
+- Check: numbers, names, dates, and similar facts
+- Check: inferred content has an explicit source citation
 
-## 3. 关系正确性 (Relations)
-tree 之间的关系类型是否正确？
-- causes：A 真的导致了 B 吗？
-- conditions：A 真的是 B 的前提吗？
-- contrasts：A 和 B 真的矛盾/对立吗？
-- follows：A 真的在 B 之前发生吗？
-- depends：A 真的依赖 B 吗？
+## 3. Relations
+Are relation types between trees correct?
+- causes: does A actually cause B?
+- conditions: is A actually a precondition of B?
+- contrasts: do A and B actually contradict or oppose each other?
+- follows: did A actually happen before B?
+- depends: does A actually depend on B?
 
-## 4. 粒度合理性 (Granularity)
-- 过度拆分：一个意图被拆成多个不必要的 tree node？
-- 过度合并：多个不同意图被塞进一个 tree node？
+## 4. Granularity
+- Over-split: one intent broken into unnecessary tree nodes?
+- Over-merged: distinct intents packed into one tree node?
 
-## 5. 幻觉检测 (Hallucination)
-- tree 中有没有原文完全没提到的内容？
-- 推断是否合理？过度推断？
+## 5. Hallucination
+- Does the tree contain content never mentioned in the source?
+- Are inferences reasonable, or over-inferred?
 
-请严格按照以下 JSON 格式输出（不要包含其他内容）：
+Output strictly in the following JSON format (no other content):
 
 \`\`\`json
 {
@@ -96,16 +96,16 @@ tree 之间的关系类型是否正确？
       ? content.relations.map((r) => `  - ${r.from} --[${r.type}]--> ${r.to}`).join('\n')
       : '  (none)';
 
-  const userPrompt = `原始对话：
+  const userPrompt = `Original conversation:
 ${turnsText}
 
-提取的 Trees：
+Extracted trees:
 ${treesText}
 
-提取的 Relations：
+Extracted relations:
 ${relationsText}
 
-请输出：每个维度的评分（0-1）+ 具体问题列表。`;
+Output: a 0-1 score for each dimension plus a concrete issue list.`;
 
   return { systemPrompt, userPrompt };
 }
@@ -237,39 +237,39 @@ export function buildCoveragePrompt(
   turns: { role: string; content: string }[],
   content: SemanticContent
 ): { systemPrompt: string; userPrompt: string } {
-  const systemPrompt = `你是一个语义提取覆盖度审查员。给你一段原始对话和从中提取的 Tree 结构。
+  const systemPrompt = `You are a semantic extraction coverage reviewer. You are given an original conversation and the Tree structure extracted from it.
 
-你的任务：检查原始对话中是否有重要信息被遗漏，没有被任何 Tree node 覆盖。
+Your task: check whether important information in the original conversation was omitted and is not covered by any tree node.
 
-## 判断标准
-- 重要信息：意图、决定、事实、约束、数字、时间、人名、具体需求
-- 不重要（可忽略）：寒暄、重复、语气词、过程性讨论（如"嗯"、"好的"、"让我想想"）
+## Criteria
+- Important: intents, decisions, facts, constraints, numbers, times, names, concrete needs
+- Unimportant (ignore): greetings, repetition, filler, process chatter (for example "um", "okay", "let me think")
 
-## 输出格式
-严格按照以下 JSON 格式输出（不要包含其他内容）：
+## Output format
+Output strictly in the following JSON format (no other content):
 
 \`\`\`json
 {
   "coverage_ratio": 0.85,
-  "uncovered_segments": ["原文中未被覆盖的重要文本片段1", "原文中未被覆盖的重要文本片段2"]
+  "uncovered_segments": ["important uncovered source fragment 1", "important uncovered source fragment 2"]
 }
 \`\`\`
 
-- coverage_ratio: 0-1，重要信息被覆盖的比例
-- uncovered_segments: 未被覆盖的重要原文片段（直接引用原文）
-- 如果全部覆盖，返回 coverage_ratio: 1.0, uncovered_segments: []`;
+- coverage_ratio: 0-1, the share of important information that is covered
+- uncovered_segments: important source fragments that were not covered (quote the source directly)
+- If everything is covered, return coverage_ratio: 1.0, uncovered_segments: []`;
 
   const turnsText = turns.map((t) => `[${t.role}]: ${t.content}`).join('\n');
 
   const treesText = serializeForPrompt(content);
 
-  const userPrompt = `原始对话：
+  const userPrompt = `Original conversation:
 ${turnsText}
 
-提取的 Trees：
+Extracted trees:
 ${treesText}
 
-请判断覆盖度并输出 JSON。`;
+Judge coverage and output JSON.`;
 
   return { systemPrompt, userPrompt };
 }

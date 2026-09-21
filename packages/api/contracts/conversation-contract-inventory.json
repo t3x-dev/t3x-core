@@ -365,6 +365,12 @@
       "owner": "source_thread",
       "compatibility": "retained",
       "reason": "Realtime subscriptions can be scoped to a source thread."
+    },
+    {
+      "file": "packages/api/src/routes/workspace-assistant.openapi.ts",
+      "owner": "workspace_assistant",
+      "compatibility": "retained",
+      "reason": "Workspace-scoped source-thread SSE and durable proposal recovery; original user turns remain sources while assistant/tool transcript has no evidence authority."
     }
   ],
   "known_contract_gaps": [],
