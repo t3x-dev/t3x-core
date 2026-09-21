@@ -57,7 +57,8 @@ export function WordDiffSpan({
   let segmentOffset = 0;
   return (
     <>
-      {wordDiff.map((seg) => {
+      {wordDiff.map((seg, index) => {
+        const text = index === 0 ? seg.text : ` ${seg.text}`;
         const segmentKey = `word-${segmentOffset}-${seg.type}`;
         segmentOffset += seg.text.length;
         if (seg.type === 'added') {
@@ -66,7 +67,7 @@ export function WordDiffSpan({
               key={segmentKey}
               className="bg-[var(--dy-added-word)] text-[var(--diff-added-text)] rounded-sm px-[2px] font-medium"
             >
-              {seg.text}
+              {text}
             </span>
           );
         }
@@ -77,13 +78,13 @@ export function WordDiffSpan({
               className="bg-[var(--dy-removed-word)] text-[var(--diff-removed-text)] rounded-sm px-[2px] line-through"
               style={{ textDecorationColor: 'var(--text-tertiary)' }}
             >
-              {seg.text}
+              {text}
             </span>
           );
         }
         return (
           <span key={segmentKey} style={{ color: YAML_COLORS.string }}>
-            {seg.text}
+            {text}
           </span>
         );
       })}

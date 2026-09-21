@@ -1,6 +1,7 @@
 'use client';
 
 import type { SemanticContent, SlotDiff, TreeDiff } from '@t3x-dev/core';
+import { useMemo } from 'react';
 import { cn } from '@/utils/cn';
 import { formatSlotValue, YAML_COLORS } from './DiffYAMLFormatters';
 import {
@@ -328,7 +329,10 @@ export function DiffYAMLUnifiedView({
   showIdentical,
 }: DiffYAMLUnifiedViewProps) {
   const dyTheme = useDYTheme();
-  const aligned = buildAlignedNodes(diff, sourceContent, targetContent);
+  const aligned = useMemo(
+    () => buildAlignedNodes(diff, sourceContent, targetContent),
+    [diff, sourceContent, targetContent]
+  );
   const nonIdentical = aligned.filter((a) => a.type !== 'identical');
   const identicalNodes = aligned.filter((a) => a.type === 'identical');
 

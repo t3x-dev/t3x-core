@@ -1,7 +1,7 @@
 'use client';
 
 import type { SemanticContent, TreeDiff } from '@t3x-dev/core';
-import { useCallback, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { YAML_COLORS } from './DiffYAMLFormatters';
 import {
   getTreeRelations,
@@ -203,7 +203,13 @@ function PaneContent({
         // Value rendering: highlight the changed VALUE, not the line
         let valueNode: React.ReactNode;
         if (sd?.wordDiff) {
-          valueNode = <WordDiffSpan wordDiff={sd.wordDiff} />;
+          valueNode = (
+            <WordDiffSpan
+              wordDiff={sd.wordDiff.filter((segment) =>
+                side === 'left' ? segment.type !== 'added' : segment.type !== 'removed'
+              )}
+            />
+          );
         } else if (sd?.type === 'changed') {
           // Left side = old value (red highlight), Right side = new value (green highlight)
           const hlClass =
@@ -319,7 +325,10 @@ export function DiffYAMLSplitView({
     });
   }, []);
 
-  const aligned = buildAlignedNodes(diff, sourceContent, targetContent);
+  const aligned = useMemo(
+    () => buildAlignedNodes(diff, sourceContent, targetContent),
+    [diff, sourceContent, targetContent]
+  );
   const heightsMap = computeNodeHeightsMap(aligned, diff);
 
   return (
