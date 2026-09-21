@@ -44,9 +44,17 @@ export async function chatWithWorkspace(input: {
   });
   const capabilities = createAssistantCapabilities({ ...input, prepared });
   const latestUserTurn = prepared.turns.at(-1);
+  const prompt = structuredClone(prepared.prompt);
+  if (!input.proposal && !input.exactEdit) {
+    prompt.messages.unshift({
+      role: 'system',
+      content:
+        'No Workspace write or proposal capability is enabled for this message. Do not claim that anything was changed, saved, added, updated, or proposed. If the user asks for a change, state clearly that no change was made and ask them to enable proposal generation.',
+    });
+  }
   await runAssistantProvider({
     ...input,
-    prompt: prepared.prompt,
+    prompt,
     capabilities,
     initialToolCall:
       input.proposal && !input.exactEdit && latestUserTurn?.role === 'user'

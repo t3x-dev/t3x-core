@@ -8,7 +8,42 @@ import {
   getProjectWorkspaceStarterCandidate,
   getWorkspacePreviewCandidates,
 } from '@/data/workspaceCandidates';
+import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
+
+const activityMocks = vi.hoisted(() => ({
+  value: undefined as ReturnType<typeof useComposeActivity> | undefined,
+}));
+vi.mock('@/hooks/workspaces/useComposeActivity', () => ({
+  useComposeActivity: () =>
+    activityMocks.value ?? {
+      enabled: false,
+      loading: false,
+      error: null,
+      view: null,
+      actions: [],
+      cards: {},
+      cursor: null,
+      node: null,
+      nodeLoading: false,
+      nodeError: null,
+      nodeCursor: null,
+      notice: null,
+      newActivity: null,
+      compositionRevision: undefined,
+      workspaceRevision: undefined,
+      basis: undefined,
+      refresh: vi.fn(),
+      loadOlder: vi.fn(),
+      loadLatest: vi.fn(),
+      inspectNode: vi.fn(),
+      selectActionNode: vi.fn(),
+      loadOlderNode: vi.fn(),
+      publish: vi.fn(),
+      publishCandidate: vi.fn(),
+      createAssistantConversation: vi.fn(),
+    },
+}));
 
 const comparisonMocks = vi.hoisted(() => ({ validate: vi.fn() }));
 vi.mock('@/hooks/workspaces/useWorkspaceYOps', () => ({
@@ -17,6 +52,33 @@ vi.mock('@/hooks/workspaces/useWorkspaceYOps', () => ({
 
 const modelSelectionMocks = vi.hoisted(() => ({
   handleModelChange: vi.fn(),
+}));
+vi.mock('@/hooks/shared/useChatModelSelection', () => ({
+  useChatModelSelection: () => ({
+    selectedProvider: 'openai',
+    selectedModel: 'gpt-5.4',
+    loading: false,
+    isSelectionReady: true,
+    handleModelChange: modelSelectionMocks.handleModelChange,
+  }),
+}));
+vi.mock('@/hooks/sourceThreads/useSourceThreadGeneration', () => ({
+  useSourceThreadGeneration: () => ({
+    messages: [],
+    streamingContent: '',
+    error: null,
+    warning: null,
+    input: '',
+    isLoading: false,
+    isStreaming: false,
+    citations: [],
+    isThinking: false,
+    searchQuery: null,
+    thinkingContent: '',
+    setInput: vi.fn(),
+    sendMessage: vi.fn(),
+    stopGenerating: vi.fn(),
+  }),
 }));
 
 const navigationMocks = vi.hoisted(() => ({
@@ -51,13 +113,69 @@ vi.mock('next/navigation', () => ({
 
 describe('WorkspaceComposeReviewSurface composer', () => {
   beforeEach(() => {
+    activityMocks.value = undefined;
     modelSelectionMocks.handleModelChange.mockReset();
     navigationMocks.replace.mockReset();
     navigationMocks.searchParams = new URLSearchParams();
   });
 
-  it('groups the real model entry with send and keeps the compact source toolbar', () => {
+  it('keeps the original Compose surface and composer even when an authoring ledger exists', () => {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    // Ledger presence must not silently replace the established Compose interface.
+    Object.assign(candidate, { authoringLedger: { actions: [] } });
+    const action = {
+      actionId: 'a1',
+      sequence: 1,
+      channel: 'manual' as const,
+      actor: { id: 'Maya', kind: 'human' as const },
+      publishedAt: '2026-09-21T11:53:00Z',
+      beforeRevision: 0,
+      afterRevision: 1,
+      operations: [],
+      reason: 'Refine release controls',
+    };
+    const cards = [
+      { nodeId: 'allocation', path: 'rollout/allocation', before: 20, after: 25 },
+      { nodeId: 'approval', path: 'rollout/approval', before: false, after: true },
+    ];
+    activityMocks.value = {
+      enabled: true,
+      loading: false,
+      error: null,
+      actions: [action],
+      cards: { a1: cards },
+      cursor: null,
+      node: null,
+      nodeLoading: false,
+      nodeError: null,
+      nodeCursor: null,
+      notice: null,
+      newActivity: null,
+      compositionRevision: 1,
+      workspaceRevision: 1,
+      basis: { refName: 'main', refHead: null, baseDigest: 'base' },
+      refresh: vi.fn(),
+      loadOlder: vi.fn(),
+      loadLatest: vi.fn(),
+      inspectNode: vi.fn(),
+      selectActionNode: vi.fn(),
+      loadOlderNode: vi.fn(),
+      publish: vi.fn(),
+      publishCandidate: vi.fn(),
+      createAssistantConversation: vi.fn(),
+      view: {
+        schema: 't3x.application/workspace-authoring-view/v1',
+        projectionVersion: 1,
+        workspaceRevision: 1,
+        compositionRevision: 1,
+        basis: { refName: 'main', refHead: null, baseDigest: 'base' },
+        actions: [action],
+        selected: { action, cards },
+        netDiff: cards,
+        node: null,
+        nextBeforeSequence: null,
+      },
+    };
     const controller = {
       busyAction: null,
       candidate,
@@ -101,6 +219,14 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
 
     const addSource = screen.getByRole('button', { name: 'Add source' });
+    expect(screen.getByRole('tab', { name: '1 · Compose' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Sources for this workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Node history' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    expect(screen.queryByRole('button', { name: 'Review complete draft' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
     const modelSelector = screen.getByRole('button', { name: 'Select model: gpt-5.4' });
     const send = screen.getByRole('button', { name: 'Send message' });
     const composer = screen.getByRole('group', { name: 'Message composer' });
@@ -112,7 +238,9 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     const workspaceFooter = screen.getByRole('button', { name: 'View base' }).closest('footer');
     expect(workspaceFooter).toContainElement(screen.getByText(/^Draft r/));
     expect(workspaceFooter).toContainElement(screen.getByText(/^Schema /));
-    expect(workspaceFooter).toContainElement(screen.getByRole('button', { name: /^Review \d/ }));
+    expect(workspaceFooter).toContainElement(
+      screen.getByRole('button', { name: /^Review complete draft/ })
+    );
 
     const allChanges = screen.getByRole('tab', { name: 'All draft changes' });
     const latestAction = screen.getByRole('tab', { name: 'Latest action' });
@@ -121,8 +249,18 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       screen.getByRole('heading', { name: 'Sources for this workspace' }).parentElement
     ).toContainElement(screen.getByRole('tablist', { name: 'Change scope' }));
     expect(screen.getByRole('heading', { name: 'Proposed changes' })).toBeVisible();
+    expect(screen.getAllByText('Before event')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Discuss /rollout/approval' }));
+    expect(
+      within(screen.getByRole('complementary', { name: 'Discuss change' })).getByText(
+        'rollout/approval'
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Event evidence' })).not.toBeInTheDocument();
     fireEvent.click(allChanges);
     expect(allChanges).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByText('Before event')).not.toBeInTheDocument();
+    expect(screen.getByText('Base → current Draft')).toBeInTheDocument();
     fireEvent.click(latestAction);
     expect(latestAction).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByText('Action history is not available for this draft.')).toBeNull();
@@ -321,7 +459,13 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(
       screen.queryByRole('navigation', { name: 'Workspace navigation' })
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Inspect /prd/summary/outcome' }));
+    const inspectWithoutHistory = screen.getByRole('button', {
+      name: 'Inspect /prd/summary/outcome',
+    });
+    expect(inspectWithoutHistory).toBeDisabled();
+    fireEvent.click(inspectWithoutHistory);
+    expect(prepareReview).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /^Review complete draft/ }));
     await waitFor(() => expect(prepareReview).toHaveBeenCalledOnce());
     expect(onModeChange).toHaveBeenCalledWith('review');
 

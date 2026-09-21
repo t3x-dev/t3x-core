@@ -543,6 +543,83 @@
   border-right: 1px solid var(--stroke-default);
   background: var(--compose-canvas);
 }
+.newActivity {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--diff-modified-border);
+  background: var(--diff-modified-bg);
+  padding: 8px 22px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.activitySetup {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  border-bottom: 1px solid var(--stroke-divider);
+  background: var(--surface-app);
+  padding: 10px 22px;
+}
+.activitySetup > div {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 9px;
+}
+.activitySetup > div > svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  color: var(--accent-commit);
+}
+.activitySetup span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.activitySetup strong {
+  font-size: 11px;
+}
+.activitySetup small,
+.activitySetup p,
+.activitySetup output {
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--text-secondary);
+}
+.activitySetup > button {
+  min-height: 30px;
+  border: 1px solid var(--stroke-default);
+  border-radius: 4px;
+  background: var(--surface-card);
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--accent-commit);
+}
+.activitySetup p,
+.activitySetup output {
+  flex-basis: 100%;
+  padding-left: 24px;
+}
+.activitySetup p button {
+  margin-left: 8px;
+  color: var(--accent-commit);
+}
+.activitySetup output {
+  color: var(--status-error);
+}
+.newActivity button {
+  flex: none;
+  color: var(--accent-commit);
+  font-weight: 650;
+}
 .composeMain::-webkit-scrollbar {
   display: none;
 }
@@ -1007,9 +1084,12 @@
   border-radius: 4px;
   background: var(--surface-card);
   padding: 12px;
-  cursor: pointer;
+  cursor: default;
   box-shadow: none;
   transition: border-color 120ms;
+}
+.actionCard[data-history-available="true"] {
+  cursor: pointer;
 }
 .actionCard:hover {
   border-color: #c9c1f3;
@@ -1216,83 +1296,6 @@
   height: 13px;
   stroke-width: 3;
 }
-.evidencePanel {
-  flex: none;
-  min-height: 0;
-  border: 1px solid var(--stroke-default);
-  border-radius: 4px;
-  background: var(--surface-card);
-  padding: 12px;
-}
-.evidencePanel > div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  justify-content: space-between;
-}
-.evidencePanel h3 {
-  font-size: 14px;
-  font-weight: 700;
-}
-.evidencePanel button {
-  display: inline-flex;
-  min-height: 30px;
-  align-items: center;
-  gap: 6px;
-  border: 0;
-  border-radius: 4px;
-  background: var(--accent-commit-soft);
-  padding: 0 8px;
-  font-size: 12px;
-  color: var(--accent-commit);
-}
-.evidencePanel button svg {
-  width: 12px;
-  height: 12px;
-}
-.evidencePanel small {
-  display: block;
-  margin-top: 8px;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--text-secondary);
-}
-.evidencePanel p {
-  margin-top: 8px;
-  border-left: 2px solid var(--compose-selected);
-  background: var(--accent-commit-soft);
-  padding: 6px 10px;
-  font-size: 12px;
-  line-height: 18px;
-  overflow-wrap: anywhere;
-  color: #453a87;
-}
-.warningPanel {
-  display: flex;
-  flex: none;
-  min-height: 50px;
-  align-items: center;
-  gap: 12px;
-  margin-top: 12px;
-  border: 1px solid var(--compose-warning-edge);
-  border-radius: 4px;
-  background: var(--compose-warning-bg);
-  padding: 10px 12px;
-  color: var(--compose-warning-text);
-}
-.warningPanel > svg {
-  width: 15px;
-  height: 15px;
-  flex: none;
-}
-.warningPanel strong,
-.warningPanel span {
-  display: block;
-  font-size: 9px;
-  line-height: 14px;
-  overflow-wrap: anywhere;
-}
 .composeFooter {
   position: sticky;
   bottom: 0;
@@ -1463,6 +1466,36 @@
   width: 14px;
   height: 14px;
 }
+.discussionTabs {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+.discussionTabs button {
+  display: inline-flex;
+  width: auto;
+  height: 30px;
+  margin: 0;
+  align-items: center;
+  gap: 6px;
+  border-radius: 4px;
+  padding: 0 9px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.discussionTabs button[aria-selected="true"] {
+  background: var(--accent-commit-soft);
+  font-weight: 650;
+  color: var(--accent-commit);
+}
+.discussionTabs button svg {
+  width: 13px;
+  height: 13px;
+}
+.discussionClose {
+  margin-left: auto;
+}
 .discussionContext {
   display: grid;
   min-height: 120px;
@@ -1504,6 +1537,84 @@
   min-width: 0;
   padding: 0;
   background: var(--surface-panel);
+}
+.authoringAssistant {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+.proposalPermission {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  border-top: 1px solid var(--stroke-divider);
+  padding: 9px 20px;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+.proposalPermission input {
+  accent-color: var(--accent-commit);
+}
+.candidateNotice {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-top: 1px solid var(--stroke-divider);
+  background: var(--accent-conversation-soft);
+  padding: 10px 20px;
+}
+.candidateNotice > div {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.candidateNotice svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--accent-conversation);
+}
+.candidateNotice span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.candidateNotice strong {
+  font-size: 11px;
+}
+.candidateNotice small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+.candidateNotice button,
+.startConversation {
+  flex: none;
+  min-height: 30px;
+  border-radius: 4px;
+  background: var(--accent-commit);
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--on-accent);
+}
+.startConversation {
+  margin: 0 20px 10px;
+}
+.authoringAssistantNotice {
+  flex: none;
+  padding: 8px 20px;
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--status-error);
 }
 .discussionComposer {
   display: flex;
@@ -1564,6 +1675,232 @@
 .inspectDiscussion svg {
   width: 13px;
   height: 13px;
+}
+.nodeHistory {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 20px 24px;
+}
+.nodeHistoryIdentity {
+  display: grid;
+  gap: 5px;
+  padding: 10px 0 16px;
+}
+.nodeHistoryIdentity > span,
+.currentNodeValue > span {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  color: var(--text-tertiary);
+}
+.nodeHistoryIdentity strong {
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+.nodeHistoryIdentity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+.currentNodeValue {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: 6px;
+  background: var(--surface-app);
+  padding: 14px;
+}
+.currentNodeValue pre {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  font: 600 13px / 20px var(--font-mono);
+  color: var(--text-primary);
+}
+.currentNodeValue small {
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--text-secondary);
+}
+.currentNodeValue button,
+.nodeHistoryTimeline button {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent-commit);
+  font-size: 11px;
+}
+.currentNodeValue button svg {
+  width: 12px;
+  height: 12px;
+}
+.nodeEditor {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  border: 1px solid var(--stroke-default);
+  border-radius: 6px;
+  padding: 12px;
+}
+.nodeEditor label {
+  display: grid;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 650;
+}
+.nodeEditor textarea,
+.nodeEditor input {
+  width: 100%;
+  border: 1px solid var(--stroke-default);
+  border-radius: 4px;
+  background: var(--surface-card);
+  padding: 8px 9px;
+  font: 12px / 18px var(--font-mono);
+  outline: none;
+}
+.nodeEditor textarea:focus,
+.nodeEditor input:focus {
+  border-color: var(--accent-commit);
+}
+.nodeEditor > p,
+.nodeEditor > output {
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--text-secondary);
+}
+.nodeEditor > output {
+  color: var(--status-error);
+}
+.nodeEditor > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.nodeEditor > div button {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--stroke-default);
+  border-radius: 4px;
+  padding: 0 9px;
+  font-size: 11px;
+}
+.nodeEditor > div button:nth-child(2) {
+  border-color: var(--accent-commit);
+  background: var(--accent-commit);
+  color: var(--on-accent);
+}
+.nodeEditor > div button:last-child {
+  color: var(--status-error);
+}
+.nodeEditor > div button svg {
+  width: 12px;
+  height: 12px;
+}
+.nodeHistoryNotice,
+.nodeHistoryFootnote {
+  margin-top: 12px;
+  border-radius: 4px;
+  background: var(--surface-app);
+  padding: 9px 10px;
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--text-secondary);
+}
+.loadNodeHistory {
+  margin-top: 2px;
+  min-height: 30px;
+  color: var(--accent-commit);
+  font-size: 11px;
+}
+.nodeHistoryHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 20px 0 10px;
+}
+.nodeHistoryHeading strong {
+  font-size: 12px;
+}
+.nodeHistoryHeading span {
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+.nodeHistoryTimeline {
+  margin-left: 5px;
+  border-left: 1px solid var(--stroke-divider);
+  padding-left: 16px;
+}
+.nodeHistoryTimeline article {
+  position: relative;
+  display: grid;
+  gap: 7px;
+  padding: 0 0 20px;
+}
+.nodeHistoryTimeline article::before {
+  position: absolute;
+  top: 4px;
+  left: -20px;
+  width: 7px;
+  height: 7px;
+  border: 2px solid var(--surface-panel);
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  content: "";
+}
+.nodeHistoryTimeline article[data-selected="true"]::before {
+  background: var(--accent-commit);
+}
+.nodeHistoryTimeline small {
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+.nodeHistoryTimeline article > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 14px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+.nodeHistoryTimeline code {
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--surface-app);
+  padding: 4px 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.nodeHistoryTimeline svg {
+  width: 12px;
+  color: var(--text-tertiary);
+}
+.nodeHistoryTimeline p {
+  font-size: 11px;
+  line-height: 17px;
+  color: var(--text-secondary);
+}
+.nodeHistoryEmpty,
+.nodeHistoryMessage {
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  min-height: 220px;
+  padding: 24px;
+  text-align: center;
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--text-secondary);
+}
+.nodeHistoryEmpty svg {
+  width: 20px;
+  height: 20px;
 }
 .composeBoard button:focus-visible {
   outline: 2px solid var(--compose-selected);
@@ -1706,11 +2043,6 @@
 }
 .collapsedDetail > p {
   padding-bottom: 8px;
-}
-.warningPanel strong,
-.warningPanel span {
-  font-size: 12px;
-  line-height: 18px;
 }
 @media (max-width: 1050px) {
   .baseContext {

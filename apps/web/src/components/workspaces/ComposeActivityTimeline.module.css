@@ -1,0 +1,198 @@
+.timeline {
+  min-width: 0;
+  padding: 0 0 12px;
+}
+.date {
+  margin: 0 0 12px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.event {
+  position: relative;
+  padding: 0 0 22px 44px;
+  min-width: 0;
+}
+.event::before,
+.gap::before {
+  content: "";
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  bottom: 0;
+  border-left: 1px solid var(--stroke-divider);
+}
+.icon {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent-commit-soft);
+  color: var(--accent-commit);
+}
+.icon[data-kind="added"] {
+  background: var(--diff-added-bg);
+  color: var(--diff-added-text);
+}
+.icon[data-kind="removed"] {
+  background: var(--diff-removed-bg);
+  color: var(--diff-removed-text);
+}
+.icon[data-kind="modified"] {
+  background: var(--diff-modified-bg);
+  color: var(--diff-modified-text);
+}
+.icon[data-kind="recorded"] {
+  background: var(--surface-app);
+  color: var(--text-secondary);
+}
+.eventToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  margin-bottom: 8px;
+}
+.eventToggle:focus-visible,
+.preview button:focus-visible {
+  outline: 2px solid var(--accent-commit);
+  outline-offset: 2px;
+}
+.heading {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.eventToggle .heading {
+  margin-bottom: 0;
+}
+.heading > strong {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: center;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--text-secondary);
+}
+.meta > span:first-child {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.channel {
+  border-radius: 3px;
+  padding: 1px 6px;
+  color: var(--accent-commit);
+  background: var(--accent-commit-soft);
+}
+.channel[data-channel="mcp"],
+.channel[data-channel="assistant"] {
+  color: var(--accent-conversation);
+  background: var(--accent-conversation-soft);
+}
+.openChevron {
+  transform: rotate(180deg);
+}
+.preview {
+  overflow: hidden;
+  border: 1px solid var(--stroke-divider);
+  border-radius: 4px;
+  background: var(--surface-card);
+}
+.preview button {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) minmax(40px, 0.5fr) 16px minmax(40px, 0.5fr) 16px;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 5px 12px;
+  text-align: left;
+  font-size: 11px;
+}
+.preview button + button {
+  border-top: 1px solid var(--stroke-divider);
+}
+.preview span,
+.preview strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.preview strong {
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 3px;
+  padding: 2px 8px;
+}
+.preview svg {
+  color: var(--text-secondary);
+}
+.gap {
+  position: relative;
+  padding: 0 0 22px 44px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.gap .icon {
+  background: var(--surface-app);
+  color: var(--text-secondary);
+  border: 1px solid var(--stroke-divider);
+}
+.gap small {
+  display: block;
+  margin-top: 3px;
+}
+.message {
+  font-size: 12px;
+  padding: 12px 0;
+  color: var(--text-secondary);
+}
+.message button,
+.loadOlder {
+  color: var(--accent-commit);
+  font-size: 12px;
+  padding: 4px 8px;
+}
+.loadOlder {
+  margin-left: 44px;
+}
+@media (max-width: 720px) {
+  .event,
+  .gap {
+    padding-left: 36px;
+  }
+  .icon {
+    left: 0;
+    width: 26px;
+    height: 26px;
+  }
+  .event::before,
+  .gap::before {
+    left: 13px;
+  }
+  .preview button {
+    grid-template-columns: minmax(60px, 1fr) minmax(30px, 0.6fr) 12px minmax(30px, 0.6fr) 12px;
+    gap: 5px;
+    padding-inline: 8px;
+  }
+}

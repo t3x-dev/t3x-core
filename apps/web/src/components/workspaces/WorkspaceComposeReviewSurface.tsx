@@ -1,3 +1,4 @@
+import type { WorkspaceAuthoringView } from '@t3x-dev/api-client';
 import type { SemanticContent } from '@t3x-dev/core';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -53,6 +54,14 @@ import { DOCUMENT_SOURCE_ACCEPTED_TYPES } from '@/components/import/documentAcce
 import { StateBranchControls } from '@/components/project/StateBranchControls';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { WorkspaceComposeChat } from '@/components/workspaces/WorkspaceComposeChat';
+import {
+  activityChannelLabel,
+  activityOperation,
+  type ComposeActivityMeta,
+  type ComposeActivitySelection,
+  composeEventCards,
+  groupComposeActivity,
+} from '@/domain/composeActivity';
 import { buildStateYamlReview } from '@/domain/diff/stateYamlReview';
 import {
   buildStructuredStateDiff,
@@ -63,9 +72,11 @@ import {
   buildCanonicalStateYaml,
   buildStatePointRows,
   type StatePointRow,
+  selectPrdRenderModel,
   workspaceDraftOperationsToStateOperations,
 } from '@/domain/project/stateViewModel';
 import { repositoryConversationSourceHref } from '@/domain/sourceEvidenceNavigation';
+import { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import { useWorkspaceAuthoringBootstrap } from '@/hooks/workspaces/useWorkspaceAuthoringBootstrap';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import { validateWorkspaceCandidateYOps } from '@/hooks/workspaces/useWorkspaceYOps';
@@ -77,7 +88,9 @@ import type {
 } from '@/types/workspaces';
 import type { WorkspaceYOpsValue } from '@/types/workspaceYops';
 import { cn } from '@/utils/cn';
-import { WorkspaceAuthoringSurface } from './WorkspaceAuthoringSurface';
+import { ComposeActivityTimeline } from './ComposeActivityTimeline';
+import { ComposeAuthoringAssistant } from './ComposeAuthoringAssistant';
+import { ComposeNodeHistoryPanel } from './ComposeNodeHistoryPanel';
 import composeStyles from './WorkspaceComposeSurface.module.css';
 import checksStyles from './WorkspaceReviewChecks.module.css';
 import { WorkspaceReviewCodeView } from './WorkspaceReviewCodeView';
@@ -123,7 +136,6 @@ export function WorkspaceComposeReviewSurface({
   onBranchChange,
   onModeChange,
 }: WorkspaceComposeReviewSurfaceProps) {
-  const activity = useWorkspaceAuthoringBootstrap(candidate);
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -132,6 +144,10 @@ export function WorkspaceComposeReviewSurface({
   const lastSyncedRouteQueryRef = useRef<string | null>(null);
   const [reviewPane, setReviewPaneState] = useState<ReviewPane>(() =>
     parseReviewPane(new URLSearchParams(routeQuery).get('reviewPane'))
+  );
+  const activity = useComposeActivity(
+    controller.candidate,
+    Boolean(controller.candidate.authoringLedger)
   );
   const changeCount = controller.candidate.yopsDraft.operations.length;
 
@@ -194,14 +210,6 @@ export function WorkspaceComposeReviewSurface({
     if (routeMode && routeMode !== mode) onModeChange(routeMode);
   }, [mode, onModeChange, routeQuery]);
 
-  if (activity.active) {
-    return (
-      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-white text-[var(--text-primary)]">
-        <WorkspaceAuthoringSurface key={candidate.id} candidate={candidate} />
-      </div>
-    );
-  }
-
   return (
     <div
       className={cn(
@@ -224,6 +232,7 @@ export function WorkspaceComposeReviewSurface({
         <div className={composeStyles.workspaceContent}>
           {mode === 'review' ? (
             <ReviewSurface
+              activity={activity}
               compareScenarioId=""
               controller={controller}
               pane={reviewPane}
@@ -232,7 +241,6 @@ export function WorkspaceComposeReviewSurface({
             />
           ) : (
             <ComposeSurface
-              activity={activity}
               candidate={controller.candidate ?? candidate}
               changeCount={changeCount}
               controller={controller}
@@ -331,28 +339,66 @@ function WorkspaceNavigation({
 }
 
 function ComposeSurface({
-  activity,
   candidate,
   changeCount,
   controller,
   onModeChange,
 }: {
-  activity: ReturnType<typeof useWorkspaceAuthoringBootstrap>;
   candidate: WorkspaceCandidate;
   changeCount: number;
   controller: WorkspaceComposeReviewController;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
 }) {
+  const authoringBootstrap = useWorkspaceAuthoringBootstrap(candidate);
+  const activity = useComposeActivity(candidate, authoringBootstrap.active);
   const [currentStep, setCurrentStep] = useState(0);
   const [discussionOpen, setDiscussionOpen] = useState(true);
+  const [sidePanel, setSidePanel] = useState<'history' | 'chat'>(
+    candidate.authoringLedger ? 'history' : 'chat'
+  );
   const [changeScope, setChangeScope] = useState<'latest' | 'all'>('latest');
-  const operation = candidate.yopsDraft.operations[currentStep] ?? null;
+  const [activitySelection, setActivitySelection] = useState<ComposeActivitySelection | null>(null);
+  useEffect(() => {
+    if (activity.enabled) setSidePanel('history');
+  }, [activity.enabled, candidate.id]);
+  useEffect(() => {
+    setActivitySelection(null);
+    setCurrentStep(0);
+  }, [candidate.id]);
+  const operation =
+    activitySelection?.operation ?? candidate.yopsDraft.operations[currentStep] ?? null;
   const currentField = composeFieldPresentation(candidate, operation);
   const FieldIcon = currentField.icon;
   const selectStep = (step: number) => {
+    setActivitySelection(null);
     setCurrentStep(step);
+    setSidePanel('chat');
     setDiscussionOpen(true);
   };
+  const selectActivity = useCallback(
+    (selection: ComposeActivitySelection, panel: 'history' | 'chat' = 'history') => {
+      setActivitySelection(selection);
+      setSidePanel(panel);
+      setDiscussionOpen(true);
+    },
+    []
+  );
+  const openHistoryAction = useCallback(
+    (actionId: string, nodeId: string) => {
+      void activity.selectActionNode(actionId, nodeId).then((selection) => {
+        if (!selection) return;
+        setChangeScope('latest');
+        selectActivity(selection, 'history');
+      });
+    },
+    [activity.selectActionNode, selectActivity]
+  );
+  const sourceConversationId = candidate.sourceBundle.find(
+    (source) => source.type === 'chat' && source.conversationId
+  )?.conversationId;
+  const sourceMaterialIds = candidate.sourceBundle.flatMap((source) =>
+    source.materialId ? [source.materialId] : []
+  );
 
   return (
     <div
@@ -384,43 +430,79 @@ function ComposeSurface({
         </div>
       </header>
       <main className={composeStyles.composeMain}>
-        <section className={composeStyles.activityUpgrade} aria-label="Draft activity">
-          <div>
-            <Sparkles aria-hidden="true" />
-            <span>
-              <strong>Draft activity</strong>
-              <small>Keep every edit, AI proposal and MCP update in one immutable history.</small>
-            </span>
-          </div>
-          <button disabled={activity.busy} onClick={() => void activity.start()} type="button">
-            {activity.importSnapshot === undefined ? 'Enable' : 'Import current draft'}
-          </button>
-          {activity.error ? <p role="alert">{activity.error}</p> : null}
-          {activity.importSnapshot !== undefined ? (
-            <div className={composeStyles.activityImport}>
-              <span>The current draft will become the first imported action.</span>
-              <button onClick={activity.cancel} type="button">
-                Cancel
-              </button>
+        {!authoringBootstrap.active ? (
+          <section className={composeStyles.activitySetup} aria-label="Draft activity setup">
+            <div>
+              <Clock3 aria-hidden="true" />
+              <span>
+                <strong>Keep Draft action history</strong>
+                <small>
+                  Track manual, AI and MCP changes as immutable Actions without changing this
+                  Compose layout.
+                </small>
+              </span>
             </div>
-          ) : null}
-        </section>
+            <button
+              disabled={authoringBootstrap.busy}
+              onClick={() => void authoringBootstrap.start()}
+              type="button"
+            >
+              {authoringBootstrap.busy
+                ? 'Preparing…'
+                : authoringBootstrap.importSnapshot === undefined
+                  ? 'Enable activity'
+                  : 'Import current Draft'}
+            </button>
+            {authoringBootstrap.importSnapshot !== undefined ? (
+              <p>
+                The validated current Draft becomes the first imported Action. Earlier untracked
+                edits cannot be reconstructed.
+                <button onClick={authoringBootstrap.cancel} type="button">
+                  Cancel
+                </button>
+              </p>
+            ) : null}
+            {authoringBootstrap.error ? (
+              <output role="alert">{authoringBootstrap.error}</output>
+            ) : null}
+          </section>
+        ) : null}
+        {activity.newActivity ? (
+          <output className={composeStyles.newActivity}>
+            <span>
+              New activity · Draft r{activity.newActivity.compositionRevision}. Your inspected node
+              remains open.
+            </span>
+            <button onClick={() => void activity.loadLatest()} type="button">
+              Load latest
+            </button>
+          </output>
+        ) : null}
         <SourceToolbar
+          authoringEnabled={activity.enabled}
           candidate={candidate}
           changeScope={changeScope}
           controller={controller}
           onChangeScope={setChangeScope}
-          onDiscuss={() => setDiscussionOpen(true)}
+          onDiscuss={() => {
+            setSidePanel('chat');
+            setDiscussionOpen(true);
+          }}
         />
 
         <ProposedDraftPanel
+          activity={activity}
+          activitySelection={activitySelection}
+          onActivitySelect={selectActivity}
           candidate={candidate}
           changeScope={changeScope}
           controller={controller}
           currentStep={currentStep}
-          onModeChange={onModeChange}
           onStepChange={selectStep}
-          onDiscuss={() => setDiscussionOpen(true)}
+          onDiscuss={() => {
+            setSidePanel('chat');
+            setDiscussionOpen(true);
+          }}
         />
 
         <footer className={composeStyles.composeFooter}>
@@ -430,7 +512,9 @@ function ComposeSurface({
                 <GitBranch aria-hidden="true" />
                 Base {candidate.baseCommitHash?.slice(0, 7) ?? 'uncommitted'}
               </span>
-              <span className={composeStyles.footerDraft}>Draft r{candidate.revision ?? 1}</span>
+              <span className={composeStyles.footerDraft}>
+                Draft r{activity.compositionRevision ?? candidate.revision ?? 1}
+              </span>
               <span
                 className={composeStyles.footerSchema}
                 title={`Schema ${_formatProposalSchemaLabel(candidate)}`}
@@ -466,7 +550,7 @@ function ComposeSurface({
           >
             {controller.busyAction === 'review.prepare'
               ? 'Preparing…'
-              : `Review ${changeCount} change${changeCount === 1 ? '' : 's'}`}
+              : `Review complete draft · ${activity.view?.netDiff.length ?? changeCount} change${(activity.view?.netDiff.length ?? changeCount) === 1 ? '' : 's'}`}
             <ArrowRight aria-hidden="true" />
           </button>
         </footer>
@@ -475,42 +559,105 @@ function ComposeSurface({
       {discussionOpen ? (
         <aside aria-label="Discuss change" className={composeStyles.discussionSidebar}>
           <header className={composeStyles.discussionHeader}>
-            <MessageSquare aria-hidden="true" />
-            <h2>Discuss change</h2>
+            {activity.enabled ? (
+              <div
+                className={composeStyles.discussionTabs}
+                role="tablist"
+                aria-label="Change context"
+              >
+                <button
+                  aria-selected={sidePanel === 'history'}
+                  onClick={() => setSidePanel('history')}
+                  role="tab"
+                  type="button"
+                >
+                  <Clock3 aria-hidden="true" /> Node history
+                </button>
+                <button
+                  aria-selected={sidePanel === 'chat'}
+                  onClick={() => setSidePanel('chat')}
+                  role="tab"
+                  type="button"
+                >
+                  <MessageSquare aria-hidden="true" /> Chat
+                </button>
+              </div>
+            ) : (
+              <>
+                <MessageSquare aria-hidden="true" />
+                <h2>Discuss change</h2>
+              </>
+            )}
             <button
               aria-label="Close discussion"
+              className={composeStyles.discussionClose}
               onClick={() => setDiscussionOpen(false)}
               type="button"
             >
               <X aria-hidden="true" />
             </button>
           </header>
-          <div className={composeStyles.discussionContext}>
-            <span className={composeStyles.changeIcon}>
-              <FieldIcon aria-hidden="true" />
-            </span>
-            <strong title={operation?.path}>
-              {operation ? operation.path.replace(/^\//, '') : 'Current proposal'}
-            </strong>
-            <small>Context: base + draft + selected sources</small>
-          </div>
-          <WorkspaceComposeChat
-            chat={controller.chat}
-            variant="discussion"
-            discussionAction={
-              operation ? (
-                <button
-                  className={composeStyles.inspectDiscussion}
-                  disabled={controller.isBusy}
-                  onClick={() => void prepareAndOpenReview(controller, onModeChange)}
-                  type="button"
-                >
-                  <ListTree aria-hidden="true" /> Inspect this change
-                </button>
-              ) : undefined
-            }
-          />
-          <ComposerBar controller={controller} variant="discussion" />
+          {activity.enabled && sidePanel === 'history' ? (
+            <ComposeNodeHistoryPanel
+              activity={activity}
+              selection={activitySelection}
+              onOpenAction={openHistoryAction}
+            />
+          ) : (
+            <>
+              <div className={composeStyles.discussionContext}>
+                <span className={composeStyles.changeIcon}>
+                  <FieldIcon aria-hidden="true" />
+                </span>
+                <strong title={operation?.path}>
+                  {operation ? operation.path.replace(/^\//, '') : 'Current proposal'}
+                </strong>
+                <small>
+                  Context: base + current Draft + selected sources
+                  {activitySelection?.meta.actionId ? ' + selected action and node history' : ''}
+                </small>
+              </div>
+              {activity.enabled && activity.view ? (
+                <ComposeAuthoringAssistant
+                  context={{
+                    workspaceId: candidate.id,
+                    workspaceRevision: activity.view.workspaceRevision,
+                    sourceMaterialIds,
+                    selectedActionId: activitySelection?.meta.actionId,
+                    selectedNodeId: activitySelection?.operation.id,
+                  }}
+                  conversationId={sourceConversationId}
+                  initialPendingCandidate={
+                    activity.view?.pendingCandidates?.find((item) => item.status === 'candidate')
+                      ?.transitionId
+                  }
+                  onCreateConversation={activity.createAssistantConversation}
+                  onPublishCandidate={activity.publishCandidate}
+                  projectId={candidate.projectId}
+                />
+              ) : (
+                <>
+                  <WorkspaceComposeChat
+                    chat={controller.chat}
+                    variant="discussion"
+                    discussionAction={
+                      operation ? (
+                        <button
+                          className={composeStyles.inspectDiscussion}
+                          disabled={controller.isBusy}
+                          onClick={() => void prepareAndOpenReview(controller, onModeChange)}
+                          type="button"
+                        >
+                          <ListTree aria-hidden="true" /> Inspect this change
+                        </button>
+                      ) : undefined
+                    }
+                  />
+                  <ComposerBar controller={controller} variant="discussion" />
+                </>
+              )}
+            </>
+          )}
         </aside>
       ) : null}
     </div>
@@ -854,12 +1001,14 @@ function SourceMenuButton({
 }
 
 function SourceToolbar({
+  authoringEnabled,
   candidate,
   changeScope,
   controller,
   onChangeScope,
   onDiscuss,
 }: {
+  authoringEnabled: boolean;
   candidate: WorkspaceCandidate;
   changeScope: 'latest' | 'all';
   controller: WorkspaceComposeReviewController;
@@ -887,7 +1036,8 @@ function SourceToolbar({
 
   const generateChanges = () => {
     onDiscuss();
-    controller.chat.setInput('Generate structured changes from the selected source evidence.');
+    if (!authoringEnabled)
+      controller.chat.setInput('Generate structured changes from the selected source evidence.');
     requestAnimationFrame(() =>
       document.querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')?.focus()
     );
@@ -993,37 +1143,244 @@ function SourceToolbar({
 }
 
 function ProposedDraftPanel({
+  activity,
+  activitySelection,
+  onActivitySelect,
   candidate,
   changeScope,
   controller,
   currentStep,
-  onModeChange,
   onStepChange,
   onDiscuss,
 }: {
+  activity: ReturnType<typeof useComposeActivity>;
+  activitySelection: ComposeActivitySelection | null;
+  onActivitySelect: (selection: ComposeActivitySelection, panel?: 'history' | 'chat') => void;
   candidate: WorkspaceCandidate;
   changeScope: 'latest' | 'all';
   controller: WorkspaceComposeReviewController;
   currentStep: number;
-  onModeChange: (mode: WorkspaceSurfaceMode) => void;
   onStepChange: (step: number) => void;
   onDiscuss: () => void;
 }) {
   const operations = candidate.yopsDraft.operations;
-  // Both scopes retain the current candidate until an action-level projection is available.
-  const currentOperation = operations[currentStep] ?? null;
-  const source = currentOperation
-    ? findWorkspaceReviewSource(candidate.sourceBundle, currentOperation.sourceRefs?.[0])
-    : candidate.sourceBundle[0];
-  const warning =
-    candidate.schemaReview.verdict === 'needs_review' ? candidate.schemaReview.gaps[0] : undefined;
-
+  useEffect(() => {
+    if (!activity.view) return;
+    if (changeScope === 'all') {
+      if (activitySelection?.meta.comparison === 'draft') return;
+      const card =
+        activity.view.netDiff.find(
+          (item) =>
+            item.nodeId === activitySelection?.operation.id &&
+            item.path === activitySelection.operation.path
+        ) ?? activity.view.netDiff[0];
+      if (card)
+        onActivitySelect({
+          operation: activityOperation(card),
+          meta: { eventId: 'all', comparison: 'draft' },
+        });
+      return;
+    }
+    if (activitySelection?.meta.comparison === 'event') return;
+    const event = groupComposeActivity(activity.actions)[0];
+    if (!event) return;
+    const card = composeEventCards(event, activity.cards)[0];
+    if (!card) return;
+    const action = event.actions.findLast((entry) =>
+      activity.cards[entry.actionId]?.some((item) => item.nodeId === card.nodeId)
+    )!;
+    onActivitySelect({
+      operation: activityOperation(card, action.reason),
+      meta: {
+        eventId: event.id,
+        actionId: action.actionId,
+        actor: action.actor.id === 'human:local-user' ? 'You' : action.actor.id,
+        channel: action.channel,
+        timestamp: action.publishedAt,
+        comparison: 'event',
+      },
+    });
+  }, [
+    activity.view,
+    activity.actions,
+    activity.cards,
+    activitySelection,
+    onActivitySelect,
+    changeScope,
+  ]);
   const askAiToRevise = () => {
     onDiscuss();
-    controller.chat.setInput(
-      'Add a structured change while preserving the selected source evidence.'
-    );
+    if (!activity.enabled)
+      controller.chat.setInput(
+        'Add a structured change while preserving the selected source evidence.'
+      );
     document.querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')?.focus();
+  };
+
+  const renderChangeCard = (
+    operation: WorkspaceYOpsDraftOperation,
+    index: number,
+    meta?: ComposeActivityMeta
+  ) => {
+    const selected = meta
+      ? activitySelection?.meta.eventId === meta.eventId &&
+        activitySelection.operation.id === operation.id &&
+        activitySelection.operation.path === operation.path
+      : !activitySelection && currentStep === index;
+    const selectChange = (panel: 'history' | 'chat' = 'history') =>
+      meta ? onActivitySelect({ operation, meta }, panel) : onStepChange(index);
+    const stamp = meta?.timestamp ?? candidate.updatedAt;
+    const field = composeFieldPresentation(candidate, operation);
+    const FieldIcon = field.icon;
+    const operationSource =
+      meta && !operation.sourceRefs?.length
+        ? undefined
+        : findWorkspaceReviewSource(candidate.sourceBundle, operation.sourceRefs?.[0]);
+    return (
+      <section
+        className={cn(composeStyles.actionCard, selected && composeStyles.current)}
+        data-history-available={Boolean(meta)}
+        key={`${meta?.eventId ?? 'proposal'}:${operation.id}:${operation.path}`}
+        onClick={meta ? () => selectChange() : undefined}
+      >
+        <div className={composeStyles.actionTop}>
+          <span className={composeStyles.actionNumber}>
+            <FieldIcon aria-hidden="true" />
+          </span>
+          <button
+            className={composeStyles.actionHeading}
+            disabled={!meta}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (meta) selectChange();
+            }}
+            title={operation.path}
+            type="button"
+          >
+            <span className={composeStyles.actionTitle}>{operation.path.replace(/^\//, '')}</span>
+            <span className={composeStyles.fieldType}>{field.label}</span>
+          </button>
+          <button
+            aria-label={`Discuss /${operation.path}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              selectChange('chat');
+              document
+                .querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')
+                ?.focus();
+            }}
+            type="button"
+          >
+            <MessageSquare aria-hidden="true" />
+          </button>
+          <button
+            aria-label={`Revise /${operation.path}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              selectChange('chat');
+              if (!activity.enabled)
+                controller.chat.setInput(
+                  `Revise the change at /${operation.path.replace(/^\//, '')} while preserving its source evidence.`
+                );
+              document
+                .querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')
+                ?.focus();
+            }}
+            type="button"
+          >
+            <Pencil aria-hidden="true" />
+          </button>
+        </div>
+        <div className={composeStyles.collapsedDetail}>
+          <div className={composeStyles.values}>
+            <div>
+              <span
+                className={`${composeStyles.value} ${composeStyles.before}`}
+                title={proposalActionValue(
+                  operation.beforeValue,
+                  meta ? 'Absent' : 'Current value'
+                )}
+              >
+                {proposalActionValue(operation.beforeValue, meta ? 'Absent' : 'Current value')}
+              </span>
+              <span className={composeStyles.valueLabel}>
+                {meta?.comparison === 'event' ? 'Before event' : 'Current (base)'}
+              </span>
+            </div>
+            <ArrowRight aria-hidden="true" className={composeStyles.valueArrow} />
+            <div>
+              <span
+                className={`${composeStyles.value} ${composeStyles.after}`}
+                title={proposalActionValue(
+                  meta ? operation.afterValue : (operation.afterValue ?? operation.summary),
+                  meta ? 'Absent' : 'Updated'
+                )}
+              >
+                {proposalActionValue(
+                  meta ? operation.afterValue : (operation.afterValue ?? operation.summary),
+                  meta ? 'Absent' : 'Updated'
+                )}
+              </span>
+              <span className={composeStyles.valueLabel}>
+                {meta?.comparison === 'event' ? 'After event' : 'Proposed (draft)'}
+              </span>
+            </div>
+          </div>
+          {operationSource ? (
+            <div className={composeStyles.sourceRow}>
+              <FileText aria-hidden="true" className="size-4" />
+              <span className="truncate">{operationSource.title}</span>
+            </div>
+          ) : null}
+          <p title={operation.reason ?? operation.summary}>
+            {operation.reason ?? operation.summary}
+          </p>
+          <div className={composeStyles.actionMeta}>
+            <span className={composeStyles.actionAttribution}>
+              {(
+                meta
+                  ? meta.channel === 'assistant'
+                  : candidate.yopsDraft.proposalMode === 'llm'
+              ) ? (
+                <Bot aria-hidden="true" />
+              ) : (
+                <UserRound aria-hidden="true" />
+              )}
+              {meta?.actor ? (
+                <span title={meta.actor} className="max-w-28 truncate">
+                  {meta.actor}
+                </span>
+              ) : null}
+              <time className={composeStyles.updatedBadge} dateTime={stamp} title={stamp}>
+                {formatRelativeTime(stamp)}
+              </time>
+            </span>
+            <span
+              className={composeStyles.sourceBadge}
+              data-tone={operationSource ? 'source' : 'draft'}
+            >
+              {operationSource
+                ? 'Source-backed'
+                : meta
+                  ? activityChannelLabel(meta.channel)
+                  : 'Draft'}
+            </span>
+            <button
+              aria-label={`Inspect /${operation.path}`}
+              disabled={controller.isBusy || !meta}
+              onClick={(event) => {
+                event.stopPropagation();
+                selectChange();
+              }}
+              title={meta ? 'View this node history' : 'Enable Draft activity to view node history'}
+              type="button"
+            >
+              <ListTree aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      </section>
+    );
   };
 
   return (
@@ -1031,179 +1388,33 @@ function ProposedDraftPanel({
       <header className={composeStyles.panelHeader}>
         <div className={composeStyles.panelTitleRow}>
           <h2>Proposed changes</h2>
-          <span>{operations.length}</span>
+          <span>{activity.view ? activity.view.netDiff.length : operations.length}</span>
           <button className={composeStyles.addManually} onClick={askAiToRevise} type="button">
             <Plus aria-hidden="true" /> Add manually
           </button>
         </div>
       </header>
 
-      <div className={composeStyles.actionList}>
-        {operations.length ? (
-          operations.map((operation, index) => {
-            const selected = currentStep === index;
-            const field = composeFieldPresentation(candidate, operation);
-            const FieldIcon = field.icon;
-            const operationSource = findWorkspaceReviewSource(
-              candidate.sourceBundle,
-              operation.sourceRefs?.[0]
-            );
-            return (
-              <section
-                className={cn(composeStyles.actionCard, selected && composeStyles.current)}
-                key={operation.id}
-                onClick={() => onStepChange(index)}
-              >
-                <div className={composeStyles.actionTop}>
-                  <span className={composeStyles.actionNumber}>
-                    <FieldIcon aria-hidden="true" />
-                  </span>
-                  <button
-                    className={composeStyles.actionHeading}
-                    onClick={() => onStepChange(index)}
-                    title={operation.path}
-                    type="button"
-                  >
-                    <span className={composeStyles.actionTitle}>
-                      {operation.path.replace(/^\//, '')}
-                    </span>
-                    <span className={composeStyles.fieldType}>{field.label}</span>
-                  </button>
-                  <button
-                    aria-label={`Discuss /${operation.path}`}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onStepChange(index);
-                      document
-                        .querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')
-                        ?.focus();
-                    }}
-                    type="button"
-                  >
-                    <MessageSquare aria-hidden="true" />
-                  </button>
-                  <button
-                    aria-label={`Revise /${operation.path}`}
-                    onClick={() => {
-                      onStepChange(index);
-                      controller.chat.setInput(
-                        `Revise the change at /${operation.path.replace(/^\//, '')} while preserving its source evidence.`
-                      );
-                      document
-                        .querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')
-                        ?.focus();
-                    }}
-                    type="button"
-                  >
-                    <Pencil aria-hidden="true" />
-                  </button>
-                </div>
-                <div className={composeStyles.collapsedDetail}>
-                  <div className={composeStyles.values}>
-                    <div>
-                      <span
-                        className={`${composeStyles.value} ${composeStyles.before}`}
-                        title={proposalActionValue(operation.beforeValue, 'Current value')}
-                      >
-                        {proposalActionValue(operation.beforeValue, 'Current value')}
-                      </span>
-                      <span className={composeStyles.valueLabel}>Current (base)</span>
-                    </div>
-                    <ArrowRight aria-hidden="true" className={composeStyles.valueArrow} />
-                    <div>
-                      <span
-                        className={`${composeStyles.value} ${composeStyles.after}`}
-                        title={proposalActionValue(
-                          operation.afterValue ?? operation.summary,
-                          'Updated'
-                        )}
-                      >
-                        {proposalActionValue(operation.afterValue ?? operation.summary, 'Updated')}
-                      </span>
-                      <span className={composeStyles.valueLabel}>Proposed (draft)</span>
-                    </div>
-                  </div>
-                  {operationSource ? (
-                    <div className={composeStyles.sourceRow}>
-                      <FileText aria-hidden="true" className="size-4" />
-                      <span className="truncate">{operationSource.title}</span>
-                    </div>
-                  ) : null}
-                  <p title={operation.reason ?? operation.summary}>
-                    {operation.reason ?? operation.summary}
-                  </p>
-                  <div className={composeStyles.actionMeta}>
-                    <span className={composeStyles.actionAttribution}>
-                      {candidate.yopsDraft.proposalMode === 'llm' ? (
-                        <Bot aria-hidden="true" />
-                      ) : (
-                        <UserRound aria-hidden="true" />
-                      )}
-                      <time
-                        className={composeStyles.updatedBadge}
-                        dateTime={candidate.updatedAt}
-                        title={candidate.updatedAt}
-                      >
-                        {formatRelativeTime(candidate.updatedAt)}
-                      </time>
-                    </span>
-                    <span
-                      className={composeStyles.sourceBadge}
-                      data-tone={operationSource ? 'source' : 'draft'}
-                    >
-                      {operationSource ? 'Source-backed' : 'Draft'}
-                    </span>
-                    <button
-                      aria-label={`Inspect /${operation.path}`}
-                      disabled={controller.isBusy}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void prepareAndOpenReview(controller, onModeChange);
-                      }}
-                      type="button"
-                    >
-                      <ListTree aria-hidden="true" />
-                    </button>
-                  </div>
-                </div>
+      <ComposeActivityTimeline
+        key={candidate.id}
+        activity={activity}
+        scope={changeScope}
+        updatedAt={candidate.updatedAt}
+        renderCard={(operation, meta) => renderChangeCard(operation, -1, meta)}
+        fallback={
+          <div className={composeStyles.actionList}>
+            {operations.length ? (
+              operations.map((operation, index) => renderChangeCard(operation, index))
+            ) : (
+              <section className={composeStyles.actionCard}>
+                <p className="text-xs leading-5 text-[var(--text-secondary)]">
+                  Add source evidence, then generate structured actions.
+                </p>
               </section>
-            );
-          })
-        ) : (
-          <section className={composeStyles.actionCard}>
-            <p className="text-xs leading-5 text-[var(--text-secondary)]">
-              Add source evidence, then generate structured actions.
-            </p>
-          </section>
-        )}
-      </div>
-
-      {currentOperation ? (
-        <section className={composeStyles.evidencePanel}>
-          <div>
-            <h3>Source evidence</h3>
-            <button
-              disabled={controller.isBusy}
-              onClick={() => void prepareAndOpenReview(controller, onModeChange)}
-              type="button"
-            >
-              View in structure <ListTree aria-hidden="true" />
-            </button>
+            )}
           </div>
-          <small>{source?.title ?? 'No linked source'}</small>
-          <p>{currentOperation.reason ?? currentOperation.summary}</p>
-        </section>
-      ) : null}
-
-      {warning ? (
-        <section className={composeStyles.warningPanel}>
-          <AlertTriangle aria-hidden="true" />
-          <div>
-            <strong>{warning}</strong>
-            <span>{candidate.schemaReview.summary}</span>
-          </div>
-        </section>
-      ) : null}
+        }
+      />
     </div>
   );
 }
@@ -1284,26 +1495,33 @@ function formatRelativeTime(value: string | undefined): string {
 }
 
 function ReviewSurface({
+  activity,
   compareScenarioId,
   controller,
   onModeChange,
   pane,
   setPane,
 }: {
+  activity: ReturnType<typeof useComposeActivity>;
   compareScenarioId: string;
   controller: WorkspaceComposeReviewController;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
   pane: ReviewPane;
   setPane: (pane: ReviewPane) => void;
 }) {
-  const operations = controller.candidate.yopsDraft.operations;
+  const authoringReview = useMemo(
+    () => buildAuthoringReviewProjection(controller.candidate, activity.view, controller.review),
+    [activity.view, controller.candidate, controller.review]
+  );
+  const candidate = authoringReview?.candidate ?? controller.candidate;
+  const operations = candidate.yopsDraft.operations;
   const [comparison, setComparison] = useState<{
     candidate: WorkspaceCandidate;
     result?: Awaited<ReturnType<typeof validateWorkspaceCandidateYOps>>;
     error?: string;
   } | null>(null);
-  const candidate = controller.candidate;
-  const exactValidation = controller.review.deterministicValidation;
+  const exactValidation =
+    authoringReview?.review.deterministicValidation ?? controller.review.deterministicValidation;
   useEffect(() => {
     if (exactValidation || operations.length === 0) return;
     let cancelled = false;
@@ -1324,13 +1542,15 @@ function ReviewSurface({
   const comparisonError = comparison?.candidate === candidate ? comparison.error : undefined;
   const comparisonReview = useMemo(
     () =>
-      exactValidation
-        ? controller.review
-        : {
-            ...controller.review,
-            deterministicValidation: comparisonResult ?? null,
-          },
-    [controller.review, exactValidation, comparisonResult]
+      authoringReview
+        ? authoringReview.review
+        : exactValidation
+          ? controller.review
+          : {
+              ...controller.review,
+              deterministicValidation: comparisonResult ?? null,
+            },
+    [authoringReview, controller.review, exactValidation, comparisonResult]
   );
   const structureModel = useMemo(
     () => buildWorkspaceReviewStructureModel(candidate, comparisonReview),
@@ -1373,6 +1593,8 @@ function ReviewSurface({
   if (pane === 'rendered') {
     return (
       <WorkspaceRenderedReview
+        candidate={candidate}
+        review={comparisonReview}
         controller={controller}
         onModeChange={onModeChange}
         onOpenChecks={() => setPane('checks')}
@@ -1437,7 +1659,7 @@ function ReviewSurface({
               ) : structureModel.rows.length > 0 && operations.length > 0 ? (
                 <WorkspaceReviewStructureView
                   activeRowId={activeStructureRow?.id ?? null}
-                  candidate={controller.candidate}
+                  candidate={candidate}
                   checks={checks}
                   controller={controller}
                   modifiedLabel={formatRelativeTime(controller.candidate.updatedAt)}
@@ -1562,23 +1784,37 @@ interface WorkspaceReviewDiffMeta {
 type WorkspaceReviewDiffChange = StructuredDiffChange & { path: string };
 
 function WorkspaceRenderedReview({
+  candidate,
+  review,
   controller,
   onModeChange,
   onOpenChecks,
   onStructureDiff,
 }: {
+  candidate: WorkspaceCandidate;
+  review: WorkspaceComposeReviewController['review'];
   controller: WorkspaceComposeReviewController;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
   onOpenChecks: () => void;
   onStructureDiff: () => void;
 }) {
+  const structure = useMemo(
+    () => buildWorkspaceReviewStructureModel(candidate, review),
+    [candidate, review]
+  );
+  const rendered = useMemo(() => selectPrdRenderModel(structure.head), [structure.head]);
+  const changedRows = useMemo(
+    () => structure.rows.filter((row) => row.diff?.exact),
+    [structure.rows]
+  );
+  const selectedRow = changedRows[0] ?? structure.rows[0] ?? null;
   const copyPath = () => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      void navigator.clipboard.writeText('release_plan.summary.outcome');
+      void navigator.clipboard.writeText(selectedRow?.path ?? 'prd');
     }
   };
   const revise = () => {
-    controller.chat.setInput('Revise release_plan.summary.outcome: ');
+    controller.chat.setInput(`Revise ${selectedRow?.path ?? 'prd'}: `);
     onModeChange('compose');
   };
 
@@ -1600,9 +1836,11 @@ function WorkspaceRenderedReview({
           <div className="flex shrink-0 items-center justify-between border-b border-gray-100 bg-white px-6 py-3">
             <div>
               <h2 className="text-[14px] font-semibold leading-tight text-slate-900">
-                Rendered result · Release plan v3
+                Rendered result · {_formatProposalSchemaLabel(candidate)}
               </h2>
-              <p className="mt-0.5 text-[12px] text-slate-500">Preview generated from draft v3</p>
+              <p className="mt-0.5 text-[12px] text-slate-500">
+                Preview generated from draft r{candidate.revision ?? 1}
+              </p>
             </div>
             <button
               className="flex items-center gap-1.5 text-[13px] font-medium text-blue-600 transition-colors hover:text-blue-700"
@@ -1615,9 +1853,11 @@ function WorkspaceRenderedReview({
 
           <div className="flex-1 overflow-y-auto bg-white px-6 py-3">
             <h1 className="text-[28px] font-bold leading-tight tracking-tight text-slate-900">
-              Release plan
+              {rendered.title || candidate.title}
             </h1>
-            <p className="mb-2 mt-0.5 text-[16px] text-slate-500">Internal canary rollout</p>
+            <p className="mb-2 mt-0.5 text-[16px] text-slate-500">
+              {rendered.audience || rendered.problem || candidate.summary}
+            </p>
 
             <section className="relative mb-2 pl-4">
               <div className="absolute bottom-0 left-0 top-0 w-[3px] rounded-full bg-violet-600" />
@@ -1628,13 +1868,15 @@ function WorkspaceRenderedReview({
                 </span>
               </div>
               <div className="rounded-md bg-indigo-50/60 px-3 py-1.5 text-[13px] leading-5 text-indigo-900">
-                Canary to internal team at 10% with rollback readiness.
+                {rendered.outcome || 'No outcome has been recorded.'}
               </div>
             </section>
 
             <section className="mb-2 pl-4">
               <h3 className="mb-1 text-[14px] font-bold text-slate-900">Purpose</h3>
-              <p className="text-[13px] leading-5 text-slate-600">Review every rollout decision.</p>
+              <p className="text-[13px] leading-5 text-slate-600">
+                {rendered.problem || candidate.summary}
+              </p>
             </section>
 
             <section className="mb-2 pl-4">
@@ -1677,19 +1919,21 @@ function WorkspaceRenderedReview({
               </p>
             </section>
 
-            <section className="mb-2 pl-4">
-              <h3 className="mb-1 text-[14px] font-bold text-slate-900">Requirements</h3>
-              <div className="flex items-center gap-8">
-                {['Monitoring enabled', 'On-call coverage confirmed'].map((requirement) => (
-                  <div className="flex items-center gap-2" key={requirement}>
-                    <span className="inline-flex size-4 items-center justify-center rounded-full bg-emerald-600 text-white">
-                      <Check aria-hidden="true" className="size-3" />
-                    </span>
-                    <span className="text-[12px] text-slate-600">{requirement}</span>
-                  </div>
-                ))}
-              </div>
-            </section>
+            {rendered.requirements.length > 0 ? (
+              <section className="mb-2 pl-4">
+                <h3 className="mb-1 text-[14px] font-bold text-slate-900">Requirements</h3>
+                <div className="grid gap-1.5 sm:grid-cols-2">
+                  {rendered.requirements.map((requirement) => (
+                    <div className="flex items-start gap-2" key={requirement.key}>
+                      <span className="inline-flex size-4 items-center justify-center rounded-full bg-emerald-600 text-white">
+                        <Check aria-hidden="true" className="size-3" />
+                      </span>
+                      <span className="text-[12px] text-slate-600">{requirement.title}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
             <section className="pl-4">
               <h3 className="mb-1 text-[14px] font-bold text-slate-900">Notes</h3>
@@ -1721,7 +1965,9 @@ function WorkspaceRenderedReview({
           <section aria-label="Selected section" className="shrink-0 p-3">
             <h2 className="mb-2 text-[15px] font-bold text-slate-900">Selected section</h2>
             <div className="mb-1 flex items-center justify-between">
-              <h3 className="text-[14px] font-bold text-slate-900">Summary · outcome</h3>
+              <h3 className="text-[14px] font-bold text-slate-900">
+                {selectedRow?.path ?? 'Current draft'}
+              </h3>
               <button
                 className="flex items-center gap-1.5 text-[12px] font-medium text-blue-600 transition-colors hover:text-blue-700"
                 onClick={copyPath}
@@ -1732,7 +1978,7 @@ function WorkspaceRenderedReview({
             </div>
             <div className="mb-2 flex items-center gap-2">
               <code className="inline-block rounded-md border border-gray-100 bg-gray-50 px-2.5 py-1 text-[11px] leading-4 text-gray-600">
-                release_plan.summary.outcome
+                {selectedRow?.path ?? 'prd'}
               </code>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-100 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-600">
                 <MinusCircle aria-hidden="true" className="size-3" /> Modified
@@ -1750,11 +1996,10 @@ function WorkspaceRenderedReview({
             </div>
             <div className="mt-2">
               <h4 className="mb-1 text-[13px] font-bold text-slate-900">
-                Updated for a limited internal rollout
+                {selectedRow?.diff?.summary ?? 'Current draft value'}
               </h4>
               <p className="mb-2 text-[12px] leading-4 text-slate-600">
-                Refine rollout strategy to start with a limited internal release and ensure rollback
-                readiness.
+                {selectedRow?.diff?.reason ?? candidate.summary}
               </p>
               <button
                 className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-blue-600 transition-colors hover:text-blue-700"
@@ -2683,6 +2928,80 @@ interface ReviewCheckView {
   label: string;
   requirement: 'required' | 'system';
   status: ReviewCheckStatus;
+}
+
+function buildAuthoringReviewProjection(
+  candidate: WorkspaceCandidate,
+  view: WorkspaceAuthoringView | null,
+  review: WorkspaceComposeReviewController['review']
+): {
+  candidate: WorkspaceCandidate;
+  review: WorkspaceComposeReviewController['review'];
+} | null {
+  const baseline = authoringSemanticContent(view?.base);
+  const current = authoringSemanticContent(view?.current);
+  if (!view || !baseline || !current) return null;
+
+  const operations = view.netDiff.flatMap((card, index): WorkspaceYOpsDraftOperation[] => {
+    const path = authoringSemanticPath(card.path);
+    if (!path) return [];
+    return [
+      {
+        id: card.nodeId || `authoring-change-${String(index + 1)}`,
+        op: card.after === undefined ? 'unset' : 'set',
+        path,
+        beforeValue: card.before as WorkspaceYOpsValue | undefined,
+        afterValue: card.after as WorkspaceYOpsValue | undefined,
+        summary: `Change ${path}`,
+      },
+    ];
+  });
+  const projectedCandidate: WorkspaceCandidate = {
+    ...candidate,
+    revision: view.workspaceRevision,
+    yopsDraft: {
+      ...candidate.yopsDraft,
+      id: `${candidate.yopsDraft.id}:authoring:${String(view.compositionRevision)}`,
+      operations,
+    },
+  };
+  return {
+    candidate: projectedCandidate,
+    review: {
+      ...review,
+      content: current,
+      deterministicValidation: {
+        ok: true,
+        applied: operations.length,
+        yops: [],
+        baselineTrees: baseline.trees,
+        baselineRelations: baseline.relations,
+        previewTrees: current.trees,
+        previewRelations: current.relations,
+      },
+    },
+  };
+}
+
+function authoringSemanticContent(value: unknown): SemanticContent | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const document = value as Record<string, unknown>;
+  if (document.domain !== 't3x.dev/semantic-content') return null;
+  const content = document.content;
+  if (!content || typeof content !== 'object' || Array.isArray(content)) return null;
+  const semantic = content as Record<string, unknown>;
+  if (!Array.isArray(semantic.trees) || !Array.isArray(semantic.relations)) return null;
+  return { trees: semantic.trees, relations: semantic.relations } as SemanticContent;
+}
+
+function authoringSemanticPath(path: string): string | null {
+  if (!path.startsWith('content/trees/')) return null;
+  const keys = [...path.matchAll(/\[key=(?:"([^"]+)"|([^\]]+))\]/g)].map(
+    (match) => match[1] ?? match[2]
+  );
+  const slot = path.match(/\/slots\/(.+)$/)?.[1];
+  if (slot) keys.push(slot.replace(/^"|"$/g, ''));
+  return keys.length ? keys.join('/') : null;
 }
 
 function buildWorkspaceReviewStructureModel(

@@ -232,6 +232,7 @@ export class OpenAIProvider implements LLMProvider {
         error instanceof LLMProviderError &&
         (error.message.endsWith('Failed to parse structured response as JSON') ||
           error.message.endsWith('No content in response') ||
+          error.code === 'SCHEMA_MISMATCH' ||
           (error.statusCode === 400 &&
             error.message.includes('Invalid schema for response_format')))
       ) {
@@ -379,7 +380,17 @@ export class OpenAIProvider implements LLMProvider {
     schema: ZodType<T>,
     options: LLMGenerateOptions
   ): Promise<StructuredResult<T>> {
-    const result = await this.generateFromPrompt(prompt, options);
+    const fallbackPrompt: LLMPrompt = {
+      ...prompt,
+      system: [
+        prompt.system,
+        'Return JSON only. The response must match this JSON Schema exactly:',
+        JSON.stringify(toOpenAIStructuredSchema(schema)),
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+    };
+    const result = await this.generateFromPrompt(fallbackPrompt, options);
     const jsonText = extractJsonBlock(result.text);
     if (!jsonText) {
       throw new LLMProviderError(

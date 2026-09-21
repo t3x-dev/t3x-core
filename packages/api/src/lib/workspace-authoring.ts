@@ -274,6 +274,8 @@ export async function readWorkspaceAuthoring(
     }),
     nextBeforeSequence: actions.length === limit ? actions.at(-1)!.sequence : null,
     selected,
+    base: ledger.base,
+    current: currentComposition(ledger),
     netDiff: netDiffCards(ledger),
     node: history
       ? {

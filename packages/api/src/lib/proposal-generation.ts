@@ -65,7 +65,7 @@ Return JSON only with this exact top-level shape:
   "rationale": { "mode": "unspecified" } or { "mode": "stated | inferred | authored", "value": "...", "evidencePointers": [] },
   "changes": [{
     "id": "stable-group-id",
-    "operations": [{ "set": { "path": "node/slot", "value": "..." } }],
+    "operations": [{ "set": { "path": "node/slot", "value": "..." } }] or [{ "append": { "path": "items", "value": "..." } }],
     "claimedOrigin": "source_backed | inferred | recommended",
     "evidencePointers": [{ "sourceIndex": 0, "locator": { "scheme": "t3x.text-quote/v1", "value": { "quote": "exact source bytes", "occurrence": 0 } } }],
     "basisPointers": [{ "kind": "source", "index": 0 }],
@@ -85,6 +85,32 @@ risks, but it must not challenge or replace an explicit source claim. Reserve ch
 Preserve the user's explicit numbered or bulleted requirement granularity: create one change group
 per independently stated requirement and do not merge distinct items merely because they are related.
 Use multiple operations in one group only when one requirement needs an atomic multi-field change.
+Judge granularity from the materialized result, not only from changes[]. A standalone requirement item
+must become its own schema-valid collection member or tree node in the resulting state. Distinct
+requirement items must not converge into one summary field, one existing requirement, one acceptance
+array, or another shared aggregate merely because each operation is placed in a separate change group.
+Only edit a summary or an existing requirement when the user explicitly asks to edit that field or
+record. When the source lists new requirements, create one sibling requirement record per source item
+and keep the complete fields for that record in the same atomic change group.
+Every change group MUST change authoring.current. When an instruction says to change an existing value
+from X to Y, update only a field whose current value actually contains X. Never substitute a different
+field, repeat its current value, or emit a no-op merely to satisfy the requested group count.
+Every operation path must address the exact field in the supplied current state and YSchema. For tree
+state, a root node's slots are on that root node; never place a root field on its first child. Do not
+invent fields on a node when the supplied YSchema does not define them.
+When authoring.current is a t3x.dev/semantic-content document, operate on that complete envelope:
+- paths into the semantic tree MUST start with "content/trees/"; never create a shadow top-level
+  "trees" or "relations" field beside "content";
+- address sequence items with bracket segments such as "[0]" and stable matches such as
+  "[key=requirements]"; a bare numeric segment such as "/0/" is a mapping key, not an array index;
+- edit an existing requirement with a stable key-match path;
+- add each new requirement with one append operation targeting the requirements node's "children"
+  array, and append a complete node containing a unique key, slots, and children: [];
+- the exact new-node operation shape is
+  { "append": { "path": "content/trees/[key=prd]/children/[key=requirements]/children",
+    "value": { "key": "unique_key", "slots": { "title": "..." }, "children": [] } } };
+  "append" is the operation name beside "set", never a wrapper inside set.value;
+- never set a slot through a nonexistent numeric child path.
 Use only canonical YOps operation objects in changes[].operations. Do not return yops, slotProvenance, gaps, or any legacy extraction shape.`;
 
 type ActorRef = { kind: 'human' | 'agent' | 'service'; id: string };

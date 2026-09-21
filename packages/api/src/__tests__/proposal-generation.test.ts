@@ -247,6 +247,21 @@ describe('governed Proposal generation', () => {
     expect(generate.mock.calls[0]?.[0].prompt).toContain(
       'create one change group\nper independently stated requirement'
     );
+    expect(generate.mock.calls[0]?.[0].prompt).toContain(
+      'must become its own schema-valid collection member or tree node'
+    );
+    expect(generate.mock.calls[0]?.[0].prompt).toContain(
+      "a root node's slots are on that root node"
+    );
+    expect(generate.mock.calls[0]?.[0].prompt).toContain(
+      'paths into the semantic tree MUST start with "content/trees/"'
+    );
+    expect(generate.mock.calls[0]?.[0].prompt).toContain(
+      'add each new requirement with one append operation'
+    );
+    expect(generate.mock.calls[0]?.[0].prompt).toContain(
+      '"append" is the operation name beside "set"'
+    );
     expect(left.view.precondition.policyDigest).not.toBeNull();
     const graph = await resolveTransitionProposalGraph(db, data.projectId, left.view.transitionId);
     expect(graph.membership.actor).toEqual(PROPOSAL_GENERATOR_ACTOR);

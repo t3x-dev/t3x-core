@@ -49,6 +49,8 @@ export interface WorkspaceAuthoringView {
   actions: WorkspaceAuthoringAction[];
   nextBeforeSequence: number | null;
   selected: { action: WorkspaceAuthoringAction; cards: WorkspaceAuthoringCard[] } | null;
+  base?: TransitionProtocolValue;
+  current?: TransitionProtocolValue;
   netDiff: WorkspaceAuthoringCard[];
   node: {
     nodeId: string;

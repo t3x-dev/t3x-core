@@ -48,6 +48,17 @@ async function fetchWithProxy(url: string, options: RequestInit): Promise<Respon
   return fetch(url, options);
 }
 
+async function fetchWithTransientRetry(url: string, options: RequestInit): Promise<Response> {
+  const retryable = new Set([429, 500, 502, 503, 504]);
+  const delays = [350, 900];
+  for (let attempt = 0; ; attempt += 1) {
+    const response = await fetchWithProxy(url, options);
+    if (!retryable.has(response.status) || attempt >= delays.length) return response;
+    await response.body?.cancel();
+    await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+  }
+}
+
 export interface GeminiProviderConfig {
   apiKey: string;
   model?: string;
@@ -160,7 +171,7 @@ export class GeminiProvider implements LLMProvider {
     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
-      const response = await fetchWithProxy(url, {
+      const response = await fetchWithTransientRetry(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -258,7 +269,7 @@ export class GeminiProvider implements LLMProvider {
     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
-      const response = await fetchWithProxy(url, {
+      const response = await fetchWithTransientRetry(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey },
         body: JSON.stringify(requestBody),
@@ -352,7 +363,7 @@ export class GeminiProvider implements LLMProvider {
     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
-      const response = await fetchWithProxy(url, {
+      const response = await fetchWithTransientRetry(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey },
         body: JSON.stringify(requestBody),

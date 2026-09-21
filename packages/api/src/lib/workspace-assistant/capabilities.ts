@@ -222,9 +222,9 @@ export function createAssistantCapabilities(input: {
           instruction,
           requestedProvider: proposal.requestedProvider,
           requestedModel: proposal.requestedModel,
-          sourceTurnHashes: prepared.turns
-            .filter((turn) => turn.role === 'user')
-            .map((turn) => turn.hash),
+          // "Generate a proposal from this message" authorizes the current user turn.
+          // Earlier chat remains readable context, but must not silently become mutation evidence.
+          sourceTurnHashes: [prepared.input.userTurnHash],
           sourceMaterialIds: prepared.sources.flatMap((source) =>
             source.materialId ? [source.materialId] : []
           ),
