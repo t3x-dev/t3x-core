@@ -1,7 +1,8 @@
 'use client';
 
-import type { SemanticContent, SlotDiff, TreeDiff } from '@t3x-dev/core';
+import type { SemanticContent, TreeDiff } from '@t3x-dev/core';
 import { useMemo } from 'react';
+import type { ReviewSlotDiff } from '@/domain/diff/reviewHighlight';
 import { cn } from '@/utils/cn';
 import { formatSlotValue, YAML_COLORS } from './DiffYAMLFormatters';
 import {
@@ -93,7 +94,7 @@ function UnifiedLine({
       {/* Content */}
       <div
         className={cn(
-          'flex-1 px-[10px] whitespace-pre overflow-hidden text-ellipsis',
+          'min-w-0 flex-1 px-[10px] whitespace-pre-wrap [overflow-wrap:anywhere]',
           status === 'added' && 'bg-[var(--dy-added-bg)] text-[var(--diff-added-text)]',
           status === 'removed' && 'bg-[var(--dy-removed-bg)] text-[var(--diff-removed-text)]',
           status === 'modified' && 'bg-[var(--dy-modified-bg)] text-[var(--diff-modified-text)]'
@@ -114,7 +115,7 @@ function UnifiedLine({
 
 // ── Unified tree renderer ──
 
-function UnifiedNodeContent({
+function renderUnifiedNodeContent({
   aligned,
   diff,
   leftLineRef,
@@ -205,7 +206,7 @@ function UnifiedNodeContent({
   } else {
     // Modified tree: show per-slot diffs
     const targetNode = aligned.rightNode!;
-    const slotDiffMap = new Map<string, SlotDiff>();
+    const slotDiffMap = new Map<string, ReviewSlotDiff>();
     if (aligned.slotDiffs) {
       for (const sd of aligned.slotDiffs) slotDiffMap.set(sd.key, sd);
     }
@@ -259,8 +260,8 @@ function UnifiedNodeContent({
             {'    '}
             <span style={{ color: YAML_COLORS.key }}>{key}</span>
             <span style={{ color: YAML_COLORS.bracket }}>: </span>
-            {sd.wordDiff ? (
-              <WordDiffSpan wordDiff={sd.wordDiff.filter((w) => w.type !== 'added')} />
+            {sd.highlight?.length ? (
+              <WordDiffSpan wordDiff={sd.highlight.filter((w) => w.type !== 'added')} />
             ) : (
               <span className="line-through opacity-60">
                 {sd.oldValue !== undefined ? formatSlotValue(sd.oldValue) : '(none)'}
@@ -273,8 +274,8 @@ function UnifiedNodeContent({
             {'    '}
             <span style={{ color: YAML_COLORS.key }}>{key}</span>
             <span style={{ color: YAML_COLORS.bracket }}>: </span>
-            {sd.wordDiff ? (
-              <WordDiffSpan wordDiff={sd.wordDiff.filter((w) => w.type !== 'removed')} />
+            {sd.highlight?.length ? (
+              <WordDiffSpan wordDiff={sd.highlight.filter((w) => w.type !== 'removed')} />
             ) : (
               <SlotValueSpan value={value} />
             )}
@@ -336,7 +337,8 @@ export function DiffYAMLUnifiedView({
   const nonIdentical = aligned.filter((a) => a.type !== 'identical');
   const identicalNodes = aligned.filter((a) => a.type === 'identical');
 
-  // Mutable line counters passed by ref
+  // Counters are local to this render. Build rows here rather than mutating
+  // parent counters from child component renders (which StrictMode repeats).
   const leftLineRef = { current: 1 };
   const rightLineRef = { current: 1 };
 
@@ -348,12 +350,7 @@ export function DiffYAMLUnifiedView({
         isActive={activeNodeId === af.treeId}
         paddingLeft={UNIFIED_PADDING}
       />
-      <UnifiedNodeContent
-        aligned={af}
-        diff={diff}
-        leftLineRef={leftLineRef}
-        rightLineRef={rightLineRef}
-      />
+      {renderUnifiedNodeContent({ aligned: af, diff, leftLineRef, rightLineRef })}
     </div>
   );
 

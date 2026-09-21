@@ -1,44 +1,6 @@
-import type { TreeNode as CoreTreeNode, SemanticContent, SlotDiff, TreeDiff } from '@t3x-dev/core';
-import { splitWords, wordDiff } from '@/domain/diff/diffUtils';
+import type { TreeNode as CoreTreeNode, SemanticContent, TreeDiff } from '@t3x-dev/core';
+import { type ReviewSlotDiff, withReviewHighlight } from '@/domain/diff/reviewHighlight';
 import { treesToNodes } from '@/domain/tree/treeCompat';
-
-// Bound both allocation size and tokenization work before running quadratic LCS.
-const MAX_HIGHLIGHT_CHARS = 20_000;
-const MAX_HIGHLIGHT_CELLS = 250_000;
-
-/** Presentation-only enrichment; never mutate the API diff or its slots. */
-function withWordHighlight(slot: SlotDiff): SlotDiff {
-  const { oldValue, newValue } = slot;
-  if (
-    slot.wordDiff !== undefined ||
-    slot.type !== 'changed' ||
-    typeof oldValue !== 'string' ||
-    typeof newValue !== 'string' ||
-    oldValue === newValue ||
-    !oldValue ||
-    !newValue ||
-    oldValue.length > MAX_HIGHLIGHT_CHARS ||
-    newValue.length > MAX_HIGHLIGHT_CHARS
-  )
-    return slot;
-
-  const oldWords = splitWords(oldValue);
-  const newWords = splitWords(newValue);
-  // The existing helper normalizes whitespace. Keep exact values for block
-  // scalars, tabs, repeated spaces, and leading/trailing whitespace instead.
-  if (
-    oldWords.join(' ') !== oldValue ||
-    newWords.join(' ') !== newValue ||
-    (oldWords.length + 1) * (newWords.length + 1) > MAX_HIGHLIGHT_CELLS
-  )
-    return slot;
-
-  const segments = wordDiff(oldValue, newValue);
-  // Whole-value replacement is clearer when there is no shared context.
-  return segments.some((segment) => segment.type === 'unchanged')
-    ? { ...slot, wordDiff: segments }
-    : slot;
-}
 
 // ── Aligned tree list for split view ──
 
@@ -47,7 +9,7 @@ export interface AlignedNode {
   type: 'modified' | 'added' | 'removed' | 'identical';
   leftNode?: CoreTreeNode;
   rightNode?: CoreTreeNode;
-  slotDiffs?: SlotDiff[];
+  slotDiffs?: ReviewSlotDiff[];
 }
 
 /**
@@ -87,7 +49,7 @@ export function buildAlignedNodes(
       type: 'modified',
       leftNode: sourceContent ? findNodeByPath(sourceContent.trees, mod.path) : undefined,
       rightNode: targetContent ? findNodeByPath(targetContent.trees, mod.path) : undefined,
-      slotDiffs: mod.slotDiffs.map(withWordHighlight),
+      slotDiffs: mod.slotDiffs.map(withReviewHighlight),
     });
   }
 

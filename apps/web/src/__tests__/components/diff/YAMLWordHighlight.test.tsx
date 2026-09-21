@@ -2,10 +2,12 @@
 
 import type { SemanticContent, SlotDiff, TreeDiff } from '@t3x-dev/core';
 import { cleanup, render } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DiffYAMLSplitView } from '@/components/diff/DiffYAMLSplitView';
 import { DiffYAMLUnifiedView } from '@/components/diff/DiffYAMLUnifiedView';
 import { buildAlignedNodes } from '@/components/diff/DiffYAMLUtils';
+import { YAMLNodeRenderer } from '@/components/diff/YAMLNodeRenderer';
 
 function diffFor(slot: SlotDiff): TreeDiff {
   return {
@@ -32,30 +34,25 @@ afterEach(cleanup);
 describe('YAML review word highlights', () => {
   it('enriches API-shaped slots without mutating them, including short strings', () => {
     const slot = Object.freeze(changed('hello world', 'hello friend'));
-    expect(highlight(slot).wordDiff).toEqual([
-      { type: 'unchanged', text: 'hello' },
+    expect(highlight(slot).highlight).toEqual([
+      { type: 'unchanged', text: 'hello ' },
       { type: 'removed', text: 'world' },
       { type: 'added', text: 'friend' },
     ]);
     expect(slot.wordDiff).toBeUndefined();
   });
 
-  it('preserves supplied highlights', () => {
-    const slot = { ...changed('hello world', 'hello friend'), wordDiff: [] };
-    expect(highlight(slot)).toBe(slot);
+  it('enriches empty and legacy token arrays without changing the API payload', () => {
+    for (const wordDiff of [[], [{ type: 'unchanged' as const, text: 'wrong' }]]) {
+      const slot = Object.freeze({ ...changed('hello world', 'hello friend'), wordDiff });
+      expect(highlight(slot).highlight?.length).toBeGreaterThan(0);
+      expect(slot.wordDiff).toBe(wordDiff);
+    }
   });
 
   it.each([
-    ['', 'hello'],
-    ['hello', ''],
     ['same', 'same'],
-    ['cat', 'dog'],
-    ['hello\nworld', 'hello\nfriend'],
-    ['hello  world', 'hello friend'],
-    [' hello world', 'hello friend'],
-    ['hello\tworld', 'hello friend'],
     [`shared ${'a'.repeat(20_001)}`, 'shared b'],
-    [`shared ${Array(501).fill('old').join(' ')}`, `shared ${Array(501).fill('new').join(' ')}`],
   ])('falls back without altering values: case %#', (oldValue, newValue) => {
     const slot = changed(oldValue, newValue);
     expect(highlight(slot)).toBe(slot);
@@ -70,10 +67,65 @@ describe('YAML review word highlights', () => {
       expect(highlight(slot)).toBe(slot);
   });
 
+  it('keeps unified logical line numbers stable under StrictMode', () => {
+    const { container } = render(
+      <StrictMode>
+        <DiffYAMLUnifiedView
+          diff={diffFor(changed('hello old', 'hello new'))}
+          sourceContent={content('hello old')}
+          targetContent={content('hello new')}
+          activeNodeId={null}
+          onSelectNode={() => {}}
+          showIdentical={false}
+        />
+      </StrictMode>
+    );
+    const rows = [...container.querySelectorAll('.diff-yaml-line')];
+    expect(rows.map((row) => [row.children[0].textContent, row.children[1].textContent])).toEqual([
+      ['1', '1'],
+      ['2', ''],
+      ['', '2'],
+    ]);
+  });
+
+  it('keeps the inline renderer as a combined diff, including empty API arrays', () => {
+    const { container } = render(
+      <YAMLNodeRenderer
+        node={content('new\ntext').trees[0]}
+        frameStatus="modified"
+        startLine={1}
+        slotDiffs={[{ ...changed('old\ntext', 'new\ntext'), wordDiff: [] }]}
+      />
+    );
+    expect(container.querySelector('[data-review-value]')?.textContent).toBe('oldnew\ntext');
+  });
+
   for (const [name, View] of [
     ['split', DiffYAMLSplitView],
     ['unified', DiffYAMLUnifiedView],
   ] as const) {
+    it.each([
+      ['Heading\n  hello\tworld\nlast', 'Heading\n  hello\tfriend\nextra\nlast'],
+      ['Hello  world ', 'hello world\t'],
+      ['', 'hello'],
+      ['hello', ''],
+      ['  \n', '\t\n'],
+    ])(`${name} reconstructs exact displayed text: case %#`, (oldValue, newValue) => {
+      const { container } = render(
+        <View
+          diff={diffFor({ ...changed(oldValue, newValue), wordDiff: [] })}
+          sourceContent={content(oldValue)}
+          targetContent={content(newValue)}
+          activeNodeId={null}
+          onSelectNode={() => {}}
+          showIdentical={false}
+        />
+      );
+      expect(
+        [...container.querySelectorAll('[data-review-value]')].map((node) => node.textContent)
+      ).toEqual([oldValue, newValue]);
+    });
+
     it(`${name} shows only the correct words on each side, with spaces intact`, () => {
       const oldValue = 'hello old world';
       const newValue = 'hello new world';
@@ -91,10 +143,10 @@ describe('YAML review word highlights', () => {
       const added = container.querySelector('[class*="bg-[var(--dy-added-word)]"]')!;
       expect(removed.textContent?.trim()).toBe('old');
       expect(added.textContent?.trim()).toBe('new');
-      expect(removed.parentElement!.textContent).toContain(oldValue);
-      expect(removed.parentElement!.textContent).not.toContain(newValue);
-      expect(added.parentElement!.textContent).toContain(newValue);
-      expect(added.parentElement!.textContent).not.toContain(oldValue);
+      expect(removed.closest('[data-review-value]')!.textContent).toContain(oldValue);
+      expect(removed.closest('[data-review-value]')!.textContent).not.toContain(newValue);
+      expect(added.closest('[data-review-value]')!.textContent).toContain(newValue);
+      expect(added.closest('[data-review-value]')!.textContent).not.toContain(oldValue);
     });
   }
 });

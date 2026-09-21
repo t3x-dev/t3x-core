@@ -1,7 +1,7 @@
 'use client';
 
 import type { SemanticContent, TreeDiff } from '@t3x-dev/core';
-import { useCallback, useMemo, useRef } from 'react';
+import { useMemo } from 'react';
 import { YAML_COLORS } from './DiffYAMLFormatters';
 import {
   getTreeRelations,
@@ -202,10 +202,10 @@ function PaneContent({
 
         // Value rendering: highlight the changed VALUE, not the line
         let valueNode: React.ReactNode;
-        if (sd?.wordDiff) {
+        if (sd?.highlight?.length) {
           valueNode = (
             <WordDiffSpan
-              wordDiff={sd.wordDiff.filter((segment) =>
+              wordDiff={sd.highlight.filter((segment) =>
                 side === 'left' ? segment.type !== 'added' : segment.type !== 'removed'
               )}
             />
@@ -226,7 +226,12 @@ function PaneContent({
         }
 
         lines.push(
-          <YAMLLine key={`slot-${as.key}`} lineNumber={lineNum++} status={lineStatus}>
+          <YAMLLine
+            key={`slot-${as.key}`}
+            lineNumber={lineNum++}
+            status={lineStatus}
+            strikeThrough={!sd?.highlight?.length}
+          >
             {'    '}
             <span style={{ color: YAML_COLORS.key }}>{as.key}</span>
             <span style={{ color: YAML_COLORS.bracket }}>: </span>
@@ -251,7 +256,7 @@ function PaneContent({
     }
 
     return (
-      <div key={`${side}-${af.treeId}`}>
+      <div key={`${side}-${af.treeId}`} className="contents">
         <TreeSeparator
           aligned={af}
           onClick={() => onSelectNode(af.treeId)}
@@ -307,29 +312,17 @@ export function DiffYAMLSplitView({
   showIdentical,
 }: DiffYAMLSplitViewProps) {
   const dyTheme = useDYTheme();
-  const leftRef = useRef<HTMLDivElement>(null);
-  const rightRef = useRef<HTMLDivElement>(null);
-  const syncingRef = useRef(false);
-
-  const handleScroll = useCallback((source: 'left' | 'right') => {
-    if (syncingRef.current) return;
-    syncingRef.current = true;
-
-    requestAnimationFrame(() => {
-      const from = source === 'left' ? leftRef.current : rightRef.current;
-      const to = source === 'left' ? rightRef.current : leftRef.current;
-      if (from && to) {
-        to.scrollTop = from.scrollTop;
-      }
-      syncingRef.current = false;
-    });
-  }, []);
-
   const aligned = useMemo(
     () => buildAlignedNodes(diff, sourceContent, targetContent),
     [diff, sourceContent, targetContent]
   );
   const heightsMap = computeNodeHeightsMap(aligned, diff);
+  // Both panes share physical CSS grid rows, including wrapped/multiline slots.
+  // Gutters number logical slots; additional visual lines remain in the same row.
+  const visibleNodes = aligned.filter((node) => showIdentical || node.type !== 'identical');
+  const rowCount =
+    visibleNodes.reduce((count, node) => count + 1 + (heightsMap.get(node.treeId)?.max ?? 0), 0) +
+    (!showIdentical && aligned.some((node) => node.type === 'identical') ? 1 : 0);
 
   return (
     <div
@@ -341,13 +334,15 @@ export function DiffYAMLSplitView({
         <div className="flex items-center px-3">Target</div>
       </div>
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div className="grid min-h-0 flex-1 grid-cols-2 auto-rows-min content-start overflow-y-auto">
         {/* Left pane (base) */}
         <div
-          ref={leftRef}
-          className="min-w-0 flex-1 overflow-y-auto"
-          style={{ borderRight: '1px solid var(--stroke-divider)' }}
-          onScroll={() => handleScroll('left')}
+          className="grid min-w-0 grid-rows-subgrid"
+          style={{
+            borderRight: '1px solid var(--stroke-divider)',
+            gridColumn: 1,
+            gridRow: `1 / span ${Math.max(1, rowCount)}`,
+          }}
         >
           <PaneContent
             aligned={aligned}
@@ -362,9 +357,8 @@ export function DiffYAMLSplitView({
 
         {/* Right pane (target) */}
         <div
-          ref={rightRef}
-          className="min-w-0 flex-1 overflow-y-auto"
-          onScroll={() => handleScroll('right')}
+          className="grid min-w-0 grid-rows-subgrid"
+          style={{ gridColumn: 2, gridRow: `1 / span ${Math.max(1, rowCount)}` }}
         >
           <PaneContent
             aligned={aligned}
