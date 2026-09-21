@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowUpRight, Check, Copy, Loader2, Search, Terminal } from 'lucide-react';
+import { ArrowUpRight, Bot, Check, Copy, Loader2, Search, Terminal, UserRound } from 'lucide-react';
 import Image from 'next/image';
 import { type ReactNode, useCallback, useState } from 'react';
 import {
@@ -19,9 +19,15 @@ type WorkspaceComposeCitation = NonNullable<WorkspaceComposeChatState['citations
 
 interface WorkspaceComposeChatProps {
   chat: WorkspaceComposeChatState;
+  variant?: 'default' | 'discussion';
+  discussionAction?: ReactNode;
 }
 
-export function WorkspaceComposeChat({ chat }: WorkspaceComposeChatProps) {
+export function WorkspaceComposeChat({
+  chat,
+  variant = 'default',
+  discussionAction,
+}: WorkspaceComposeChatProps) {
   const [copyError, setCopyError] = useState<string | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const messages = chat.messages ?? [];
@@ -46,8 +52,16 @@ export function WorkspaceComposeChat({ chat }: WorkspaceComposeChatProps) {
   }, []);
 
   return (
-    <Conversation className="min-h-0 bg-[var(--surface-panel)] text-[var(--text-primary)]">
-      <ConversationContent scrollClassName="chat-scrollbar" className={styles.content}>
+    <Conversation
+      className={cn(
+        'min-h-0 bg-[var(--surface-panel)] text-[var(--text-primary)]',
+        variant === 'discussion' && styles.discussion
+      )}
+    >
+      <ConversationContent
+        scrollClassName="chat-scrollbar"
+        className={cn(styles.content, variant === 'discussion' && styles.discussionContent)}
+      >
         {messages.length === 0 && !chat.isLoading ? (
           <ConversationEmptyState className="my-auto min-h-[260px] items-start gap-5 px-0 py-10 text-left">
             <span className="flex size-10 items-center justify-center rounded-xl border border-[var(--stroke-divider)] bg-[var(--surface-app)]">
@@ -112,6 +126,7 @@ export function WorkspaceComposeChat({ chat }: WorkspaceComposeChatProps) {
               key={message.id}
               message={message}
               onCopy={() => void copyMessage(message.id, message.content)}
+              variant={variant}
             >
               {showCurrentStreamMeta ? (
                 <CurrentStreamMeta
@@ -128,6 +143,7 @@ export function WorkspaceComposeChat({ chat }: WorkspaceComposeChatProps) {
         {!chat.isStreaming && citations.length > 0 && latestAssistantId ? (
           <CitationList citations={citations} />
         ) : null}
+        {discussionAction}
       </ConversationContent>
       <ConversationScrollButton aria-label="Scroll to latest message" />
     </Conversation>
@@ -140,14 +156,55 @@ function ComposeChatMessage({
   copied,
   onCopy,
   children,
+  variant,
 }: {
   message: WorkspaceComposeChatState['messages'][number];
   isStreaming: boolean;
   copied: boolean;
   onCopy: () => void;
   children?: ReactNode;
+  variant: 'default' | 'discussion';
 }) {
   const isUser = message.role === 'user';
+
+  if (variant === 'discussion') {
+    const Avatar = isUser ? UserRound : Bot;
+    return (
+      <div className={styles.discussionMessage} data-author={isUser ? 'user' : 'assistant'}>
+        <div className={styles.discussionMessageHeader}>
+          <span className={styles.discussionAvatar}>
+            <Avatar aria-hidden="true" />
+          </span>
+          <strong>{isUser ? 'You' : 'Assistant'}</strong>
+          {isStreaming ? <span>Working…</span> : null}
+          {!isUser && !isStreaming ? (
+            <button
+              aria-label={copied ? 'Message copied' : 'Copy message'}
+              onClick={onCopy}
+              type="button"
+            >
+              {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+            </button>
+          ) : null}
+        </div>
+        <div className={styles.discussionBubble}>
+          {children}
+          {isUser ? (
+            <p>{message.content}</p>
+          ) : (
+            <MessageResponse
+              isAnimating={isStreaming}
+              mode={isStreaming ? 'streaming' : 'static'}
+              parseIncompleteMarkdown={isStreaming}
+              skipHtml
+            >
+              {message.content}
+            </MessageResponse>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (isUser) {
     return (

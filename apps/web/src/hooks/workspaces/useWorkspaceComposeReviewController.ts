@@ -550,6 +550,12 @@ export function useWorkspaceComposeReviewController({
     if (commitId) onViewCommitInState?.(commitId, workingCandidate.targetBranch);
   }, [onViewCommitInState, review.view, workingCandidate]);
 
+  const viewBaseCommit = useCallback(() => {
+    if (workingCandidate.baseCommitHash) {
+      onViewCommitInState?.(workingCandidate.baseCommitHash, workingCandidate.targetBranch);
+    }
+  }, [onViewCommitInState, workingCandidate.baseCommitHash, workingCandidate.targetBranch]);
+
   const renderedYaml = useMemo(() => {
     if (!review.content) return '';
     return yaml.dump(
@@ -641,6 +647,7 @@ export function useWorkspaceComposeReviewController({
     sourceBusy: materialUpload.uploading || busyAction?.startsWith('source:') === true,
     toggleMaterialSource,
     uploadFile,
+    viewBaseCommit,
     viewCommit,
   };
 }

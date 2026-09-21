@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUp,
+  Bot,
   Box as BoxIcon,
   Check,
   CheckCircle2,
@@ -13,6 +14,7 @@ import {
   CircleDot,
   CircleHelp,
   ClipboardPaste,
+  Clock3,
   Code2,
   Copy,
   Download,
@@ -21,11 +23,16 @@ import {
   FileText,
   FileUp,
   GitBranch,
+  Globe2,
+  Hash,
+  Layers,
+  ListTree,
   MessageSquare,
   Minus,
   MinusCircle,
-  PanelRightClose,
   PanelRightOpen,
+  Pencil,
+  Percent,
   Play,
   Plus,
   RefreshCw,
@@ -33,6 +40,8 @@ import {
   Share2,
   Sparkles,
   Square,
+  Type,
+  UserRound,
   X,
 } from 'lucide-react';
 import NextLink from 'next/link';
@@ -190,15 +199,17 @@ export function WorkspaceComposeReviewSurface({
       )}
     >
       <div className={composeStyles.workspaceBody}>
-        <WorkspaceNavigation
-          branchOptions={branchOptions}
-          controller={controller}
-          mode={mode}
-          onBranchChange={onBranchChange}
-          onModeChange={setSurfaceMode}
-          onPaneChange={setReviewPane}
-          pane={reviewPane}
-        />
+        {mode === 'review' ? (
+          <WorkspaceNavigation
+            branchOptions={branchOptions}
+            controller={controller}
+            mode={mode}
+            onBranchChange={onBranchChange}
+            onModeChange={setSurfaceMode}
+            onPaneChange={setReviewPane}
+            pane={reviewPane}
+          />
+        ) : null}
         <div className={composeStyles.workspaceContent}>
           {mode === 'review' ? (
             <ReviewSurface
@@ -318,39 +329,166 @@ function ComposeSurface({
   controller: WorkspaceComposeReviewController;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
 }) {
-  const [draftSidebarOpen, setDraftSidebarOpen] = useState(true);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [discussionOpen, setDiscussionOpen] = useState(true);
+  const [changeScope, setChangeScope] = useState<'latest' | 'all'>('latest');
+  const operation = candidate.yopsDraft.operations[currentStep] ?? null;
+  const currentField = composeFieldPresentation(candidate, operation);
+  const FieldIcon = currentField.icon;
+  const selectStep = (step: number) => {
+    setCurrentStep(step);
+    setDiscussionOpen(true);
+  };
 
   return (
-    <div className={composeStyles.surface}>
-      <section className={composeStyles.chatColumn}>
-        <WorkspaceComposeChat chat={controller.chat} />
-        <ComposerBar controller={controller} />
-      </section>
+    <div
+      className={cn(composeStyles.composeBoard, !discussionOpen && composeStyles.discussionClosed)}
+    >
+      <header className={composeStyles.composeHeader}>
+        <h1>{candidate.title}</h1>
+        <div aria-label="Workspace stage" className={composeStyles.stageSwitch} role="tablist">
+          <button aria-selected="true" role="tab" type="button">
+            1 · Compose
+          </button>
+          <button
+            aria-selected="false"
+            onClick={() => onModeChange('review')}
+            role="tab"
+            type="button"
+          >
+            2 · Review
+          </button>
+        </div>
+        <div className={composeStyles.composeHeaderMeta}>
+          <button
+            aria-label={discussionOpen ? 'Hide discussion' : 'Show discussion'}
+            onClick={() => setDiscussionOpen((open) => !open)}
+            type="button"
+          >
+            <PanelRightOpen aria-hidden="true" />
+          </button>
+        </div>
+      </header>
+      <main className={composeStyles.composeMain}>
+        <SourceToolbar
+          candidate={candidate}
+          changeScope={changeScope}
+          controller={controller}
+          onChangeScope={setChangeScope}
+          onDiscuss={() => setDiscussionOpen(true)}
+        />
 
-      <aside
-        aria-label="Proposed draft sidebar"
-        className={cn(composeStyles.sidebar, !draftSidebarOpen && 'lg:!w-12 lg:!basis-12')}
-        style={draftSidebarOpen ? undefined : { flexBasis: 48, width: 48 }}
-      >
-        {draftSidebarOpen ? (
-          <ProposedDraftPanel
-            candidate={candidate}
-            controller={controller}
-            onModeChange={onModeChange}
-            onSidebarToggle={() => setDraftSidebarOpen(false)}
+        <ProposedDraftPanel
+          candidate={candidate}
+          changeScope={changeScope}
+          controller={controller}
+          currentStep={currentStep}
+          onModeChange={onModeChange}
+          onStepChange={selectStep}
+          onDiscuss={() => setDiscussionOpen(true)}
+        />
+
+        <footer className={composeStyles.composeFooter}>
+          <div className={composeStyles.footerContext}>
+            <div className={composeStyles.footerContextRow}>
+              <span className={composeStyles.footerBase}>
+                <GitBranch aria-hidden="true" />
+                Base {candidate.baseCommitHash?.slice(0, 7) ?? 'uncommitted'}
+              </span>
+              <span className={composeStyles.footerDraft}>Draft r{candidate.revision ?? 1}</span>
+              <span
+                className={composeStyles.footerSchema}
+                title={`Schema ${_formatProposalSchemaLabel(candidate)}`}
+              >
+                <BoxIcon aria-hidden="true" />
+                <span>Schema {_formatProposalSchemaLabel(candidate)}</span>
+              </span>
+              <time
+                className={composeStyles.updatedBadge}
+                dateTime={candidate.updatedAt}
+                title={candidate.updatedAt}
+              >
+                <Clock3 aria-hidden="true" />
+                {formatRelativeTime(candidate.updatedAt)}
+              </time>
+              <button
+                className={composeStyles.footerBaseButton}
+                disabled={!candidate.baseCommitHash}
+                onClick={() => controller.viewBaseCommit()}
+                type="button"
+              >
+                View base
+              </button>
+            </div>
+            <div className={composeStyles.footerSummary}>
+              <span title={candidate.summary}>{candidate.summary}</span>
+            </div>
+          </div>
+          <button
+            disabled={controller.isBusy}
+            onClick={() => void prepareAndOpenReview(controller, onModeChange)}
+            type="button"
+          >
+            {controller.busyAction === 'review.prepare'
+              ? 'Preparing…'
+              : `Review ${changeCount} change${changeCount === 1 ? '' : 's'}`}
+            <ArrowRight aria-hidden="true" />
+          </button>
+        </footer>
+      </main>
+
+      {discussionOpen ? (
+        <aside aria-label="Discuss change" className={composeStyles.discussionSidebar}>
+          <header className={composeStyles.discussionHeader}>
+            <MessageSquare aria-hidden="true" />
+            <h2>Discuss change</h2>
+            <button
+              aria-label="Close discussion"
+              onClick={() => setDiscussionOpen(false)}
+              type="button"
+            >
+              <X aria-hidden="true" />
+            </button>
+          </header>
+          <div className={composeStyles.discussionContext}>
+            <span className={composeStyles.changeIcon}>
+              <FieldIcon aria-hidden="true" />
+            </span>
+            <strong title={operation?.path}>
+              {operation ? operation.path.replace(/^\//, '') : 'Current proposal'}
+            </strong>
+            <small>Context: base + draft + selected sources</small>
+          </div>
+          <WorkspaceComposeChat
+            chat={controller.chat}
+            variant="discussion"
+            discussionAction={
+              operation ? (
+                <button
+                  className={composeStyles.inspectDiscussion}
+                  disabled={controller.isBusy}
+                  onClick={() => void prepareAndOpenReview(controller, onModeChange)}
+                  type="button"
+                >
+                  <ListTree aria-hidden="true" /> Inspect this change
+                </button>
+              ) : undefined
+            }
           />
-        ) : (
-          <CollapsedDraftSidebar
-            changeCount={changeCount}
-            onSidebarToggle={() => setDraftSidebarOpen(true)}
-          />
-        )}
-      </aside>
+          <ComposerBar controller={controller} variant="discussion" />
+        </aside>
+      ) : null}
     </div>
   );
 }
 
-function ComposerBar({ controller }: { controller: WorkspaceComposeReviewController }) {
+function ComposerBar({
+  controller,
+  variant = 'default',
+}: {
+  controller: WorkspaceComposeReviewController;
+  variant?: 'default' | 'discussion';
+}) {
   const [sourceMenuOpen, setSourceMenuOpen] = useState(false);
   const [sourceForm, setSourceForm] = useState<'paste' | 'url' | null>(null);
   const [sourceTitle, setSourceTitle] = useState('');
@@ -391,6 +529,65 @@ function ComposerBar({ controller }: { controller: WorkspaceComposeReviewControl
     event.preventDefault();
     if (!sendDisabled) controller.chat.send();
   };
+
+  if (variant === 'discussion') {
+    return (
+      <div className={composeStyles.discussionComposerWrap}>
+        {controller.error || controller.chat.warning || controller.notice ? (
+          <div
+            className={composeStyles.composerNotice}
+            role={controller.error ? 'alert' : 'status'}
+          >
+            {controller.error ?? controller.chat.warning ?? controller.notice}
+            {controller.hasCollaborationConflict ? (
+              <button
+                disabled={controller.isBusy}
+                onClick={() => void controller.resolveCollaborationConflict()}
+                type="button"
+              >
+                Refresh and apply mine
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        <fieldset className={composeStyles.discussionComposer} aria-label="Message composer">
+          <textarea
+            aria-label="Workspace instruction"
+            disabled={controller.chat.isLoading}
+            onChange={(event) => controller.chat.setInput(event.target.value)}
+            onKeyDown={handleComposerKeyDown}
+            placeholder="Ask about this change…"
+            ref={textareaRef}
+            rows={3}
+            value={controller.chat.input}
+          />
+          <div className={composeStyles.discussionComposerFooter}>
+            <GenerationModelSelector
+              onModelChange={controller.model.change}
+              onThinkingChange={controller.model.setThinking}
+              selectedModel={controller.model.selectedModel}
+              selectedProvider={controller.model.selectedProvider}
+              supportsThinking={controller.model.supportsThinking}
+              thinkingEnabled={controller.model.thinkingEnabled}
+            />
+            <button
+              aria-label={controller.chat.isStreaming ? 'Stop generating' : 'Send message'}
+              className={composeStyles.send}
+              disabled={!controller.chat.isStreaming && sendDisabled}
+              onClick={controller.chat.isStreaming ? controller.chat.stop : controller.chat.send}
+              type="button"
+            >
+              {controller.chat.isStreaming ? (
+                <Square aria-hidden="true" className="size-4 fill-current text-current" />
+              ) : (
+                <ArrowUp aria-hidden="true" className="size-4" />
+              )}
+            </button>
+          </div>
+        </fieldset>
+      </div>
+    );
+  }
 
   return (
     <div className={composeStyles.composerWrap}>
@@ -621,97 +818,318 @@ function SourceMenuButton({
   );
 }
 
-function ProposedDraftPanel({
+function SourceToolbar({
   candidate,
+  changeScope,
   controller,
-  onModeChange,
-  onSidebarToggle,
+  onChangeScope,
+  onDiscuss,
 }: {
   candidate: WorkspaceCandidate;
+  changeScope: 'latest' | 'all';
   controller: WorkspaceComposeReviewController;
+  onChangeScope: (scope: 'latest' | 'all') => void;
+  onDiscuss: () => void;
+}) {
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [sourceTitle, setSourceTitle] = useState('');
+  const [sourceValue, setSourceValue] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (file) void controller.uploadFile(file);
+  };
+
+  const addPastedSource = async () => {
+    const imported = await controller.addPaste(sourceTitle, sourceValue);
+    if (!imported) return;
+    setPasteOpen(false);
+    setSourceTitle('');
+    setSourceValue('');
+  };
+
+  const generateChanges = () => {
+    onDiscuss();
+    controller.chat.setInput('Generate structured changes from the selected source evidence.');
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')?.focus()
+    );
+  };
+
+  return (
+    <section className={composeStyles.sourcesSection}>
+      <div className={composeStyles.sourcesHeading}>
+        <h2>Sources for this workspace</h2>
+        <div className={composeStyles.changeScope} role="tablist" aria-label="Change scope">
+          <button
+            aria-selected={changeScope === 'latest'}
+            onClick={() => onChangeScope('latest')}
+            role="tab"
+            type="button"
+          >
+            Latest action
+          </button>
+          <button
+            aria-selected={changeScope === 'all'}
+            onClick={() => onChangeScope('all')}
+            role="tab"
+            type="button"
+          >
+            All draft changes
+          </button>
+        </div>
+      </div>
+      <div className={composeStyles.sourcesToolbar}>
+        <div className={composeStyles.sourceChips}>
+          {controller.materialSources.map((material) => {
+            const source = candidate.sourceBundle.find(
+              (item) => item.id === material.id || item.materialId === material.materialId
+            );
+            return (
+              <button
+                aria-pressed={material.included}
+                className={composeStyles.materialChip}
+                key={material.id}
+                disabled={controller.sourceBusy}
+                onClick={() => void controller.toggleMaterialSource(material.materialId)}
+                title={material.title}
+                type="button"
+              >
+                <FileText aria-hidden="true" />
+                <span>{material.title}</span>
+                {source?.tokenEstimate ? <small>{source.tokenEstimate} tokens</small> : null}
+              </button>
+            );
+          })}
+          <input
+            accept={DOCUMENT_SOURCE_ACCEPTED_TYPES}
+            aria-label="Upload source material"
+            className="hidden"
+            onChange={handleFileChange}
+            ref={fileInputRef}
+            type="file"
+          />
+          <button onClick={() => fileInputRef.current?.click()} type="button">
+            <FileUp aria-hidden="true" /> Add source
+          </button>
+          <button onClick={() => setPasteOpen((open) => !open)} type="button">
+            Paste text
+          </button>
+        </div>
+        <div className={composeStyles.generateControls}>
+          <span>
+            From sources <ChevronDown aria-hidden="true" />
+          </span>
+          <button onClick={generateChanges} type="button">
+            <Layers aria-hidden="true" /> Generate changes
+          </button>
+        </div>
+      </div>
+      {pasteOpen ? (
+        <div className={composeStyles.inlineSourceForm}>
+          <input
+            aria-label="Source title"
+            onChange={(event) => setSourceTitle(event.target.value)}
+            placeholder="Optional title"
+            value={sourceTitle}
+          />
+          <textarea
+            aria-label="Pasted source text"
+            onChange={(event) => setSourceValue(event.target.value)}
+            placeholder="Paste exact source text"
+            value={sourceValue}
+          />
+          <button onClick={() => setPasteOpen(false)} type="button">
+            Cancel
+          </button>
+          <button
+            disabled={!sourceValue.trim() || controller.sourceBusy}
+            onClick={() => void addPastedSource()}
+            type="button"
+          >
+            {controller.sourceBusy ? 'Adding…' : 'Add source'}
+          </button>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function ProposedDraftPanel({
+  candidate,
+  changeScope,
+  controller,
+  currentStep,
+  onModeChange,
+  onStepChange,
+  onDiscuss,
+}: {
+  candidate: WorkspaceCandidate;
+  changeScope: 'latest' | 'all';
+  controller: WorkspaceComposeReviewController;
+  currentStep: number;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
-  onSidebarToggle: () => void;
+  onStepChange: (step: number) => void;
+  onDiscuss: () => void;
 }) {
   const operations = candidate.yopsDraft.operations;
-  const [currentStep, setCurrentStep] = useState(0);
-  const source = candidate.sourceBundle[0];
+  // Both scopes retain the current candidate until an action-level projection is available.
+  const currentOperation = operations[currentStep] ?? null;
+  const source = currentOperation
+    ? findWorkspaceReviewSource(candidate.sourceBundle, currentOperation.sourceRefs?.[0])
+    : candidate.sourceBundle[0];
+  const warning =
+    candidate.schemaReview.verdict === 'needs_review' ? candidate.schemaReview.gaps[0] : undefined;
 
   const askAiToRevise = () => {
-    controller.chat.setInput('Revise the proposed actions while preserving their source evidence.');
+    onDiscuss();
+    controller.chat.setInput(
+      'Add a structured change while preserving the selected source evidence.'
+    );
     document.querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')?.focus();
   };
 
   return (
-    <div className={composeStyles.panel}>
+    <div className={composeStyles.panel} data-change-scope={changeScope}>
       <header className={composeStyles.panelHeader}>
         <div className={composeStyles.panelTitleRow}>
-          <h3>Proposed actions</h3>
-          <button className={composeStyles.revise} onClick={askAiToRevise} type="button">
-            Ask AI to revise <ArrowLeft aria-hidden="true" className="size-3" />
+          <h2>Proposed changes</h2>
+          <span>{operations.length}</span>
+          <button className={composeStyles.addManually} onClick={askAiToRevise} type="button">
+            <Plus aria-hidden="true" /> Add manually
           </button>
-          <DraftSidebarToggle onToggle={onSidebarToggle} open />
         </div>
       </header>
 
-      <div className={cn(composeStyles.actionList, 'chat-scrollbar')}>
+      <div className={composeStyles.actionList}>
         {operations.length ? (
           operations.map((operation, index) => {
             const selected = currentStep === index;
-            const reviewPath = normalizeWorkspaceReviewStructurePath(operation.path);
+            const field = composeFieldPresentation(candidate, operation);
+            const FieldIcon = field.icon;
+            const operationSource = findWorkspaceReviewSource(
+              candidate.sourceBundle,
+              operation.sourceRefs?.[0]
+            );
             return (
               <section
                 className={cn(composeStyles.actionCard, selected && composeStyles.current)}
                 key={operation.id}
+                onClick={() => onStepChange(index)}
               >
-                <button
-                  aria-expanded={selected}
-                  className={composeStyles.actionTop}
-                  onClick={() => setCurrentStep(index)}
-                  type="button"
-                >
-                  <span className={composeStyles.actionNumber}>{index + 1}</span>
-                  <code className={composeStyles.actionTitle}>/{operation.path}</code>
-                  <ChevronDown
-                    aria-hidden="true"
-                    className={cn(composeStyles.chevron, 'size-3.5', selected && 'rotate-180')}
-                  />
-                </button>
+                <div className={composeStyles.actionTop}>
+                  <span className={composeStyles.actionNumber}>
+                    <FieldIcon aria-hidden="true" />
+                  </span>
+                  <button
+                    className={composeStyles.actionHeading}
+                    onClick={() => onStepChange(index)}
+                    title={operation.path}
+                    type="button"
+                  >
+                    <span className={composeStyles.actionTitle}>
+                      {operation.path.replace(/^\//, '')}
+                    </span>
+                    <span className={composeStyles.fieldType}>{field.label}</span>
+                  </button>
+                  <button
+                    aria-label={`Discuss /${operation.path}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onStepChange(index);
+                      document
+                        .querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')
+                        ?.focus();
+                    }}
+                    type="button"
+                  >
+                    <MessageSquare aria-hidden="true" />
+                  </button>
+                  <button
+                    aria-label={`Revise /${operation.path}`}
+                    onClick={() => {
+                      onStepChange(index);
+                      controller.chat.setInput(
+                        `Revise the change at /${operation.path.replace(/^\//, '')} while preserving its source evidence.`
+                      );
+                      document
+                        .querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')
+                        ?.focus();
+                    }}
+                    type="button"
+                  >
+                    <Pencil aria-hidden="true" />
+                  </button>
+                </div>
                 <div className={composeStyles.collapsedDetail}>
                   <div className={composeStyles.values}>
                     <div>
-                      <span className={composeStyles.valueLabel}>Before</span>
-                      <span className={composeStyles.value}>
+                      <span
+                        className={`${composeStyles.value} ${composeStyles.before}`}
+                        title={proposalActionValue(operation.beforeValue, 'Current value')}
+                      >
                         {proposalActionValue(operation.beforeValue, 'Current value')}
                       </span>
+                      <span className={composeStyles.valueLabel}>Current (base)</span>
                     </div>
                     <ArrowRight aria-hidden="true" className={composeStyles.valueArrow} />
                     <div>
-                      <span className={composeStyles.valueLabel}>After</span>
-                      <span className={cn(composeStyles.value, composeStyles.after)}>
+                      <span
+                        className={`${composeStyles.value} ${composeStyles.after}`}
+                        title={proposalActionValue(
+                          operation.afterValue ?? operation.summary,
+                          'Updated'
+                        )}
+                      >
                         {proposalActionValue(operation.afterValue ?? operation.summary, 'Updated')}
                       </span>
+                      <span className={composeStyles.valueLabel}>Proposed (draft)</span>
                     </div>
                   </div>
-                  {source ? (
+                  {operationSource ? (
                     <div className={composeStyles.sourceRow}>
                       <FileText aria-hidden="true" className="size-4" />
-                      <span className="truncate">{source.title}</span>
+                      <span className="truncate">{operationSource.title}</span>
                     </div>
                   ) : null}
-                  <button
-                    aria-label={
-                      reviewPath ? `Review change ${reviewPath}` : `Preview step ${index + 1}`
-                    }
-                    className={composeStyles.play}
-                    disabled={controller.isBusy}
-                    onClick={() => void prepareAndOpenReview(controller, onModeChange)}
-                    type="button"
-                  >
-                    <Play aria-hidden="true" className="size-4 fill-current" />
-                    {controller.busyAction === 'review.prepare'
-                      ? 'Preparing…'
-                      : `Play step ${index + 1}`}
-                  </button>
+                  <p title={operation.reason ?? operation.summary}>
+                    {operation.reason ?? operation.summary}
+                  </p>
+                  <div className={composeStyles.actionMeta}>
+                    <span className={composeStyles.actionAttribution}>
+                      {candidate.yopsDraft.proposalMode === 'llm' ? (
+                        <Bot aria-hidden="true" />
+                      ) : (
+                        <UserRound aria-hidden="true" />
+                      )}
+                      <time
+                        className={composeStyles.updatedBadge}
+                        dateTime={candidate.updatedAt}
+                        title={candidate.updatedAt}
+                      >
+                        {formatRelativeTime(candidate.updatedAt)}
+                      </time>
+                    </span>
+                    <span
+                      className={composeStyles.sourceBadge}
+                      data-tone={operationSource ? 'source' : 'draft'}
+                    >
+                      {operationSource ? 'Source-backed' : 'Draft'}
+                    </span>
+                    <button
+                      aria-label={`Inspect /${operation.path}`}
+                      disabled={controller.isBusy}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void prepareAndOpenReview(controller, onModeChange);
+                      }}
+                      type="button"
+                    >
+                      <ListTree aria-hidden="true" />
+                    </button>
+                  </div>
                 </div>
               </section>
             );
@@ -725,61 +1143,68 @@ function ProposedDraftPanel({
         )}
       </div>
 
-      <footer className={composeStyles.panelFooter}>
-        <button
-          className={composeStyles.reviewButton}
-          disabled={controller.isBusy}
-          onClick={() => void prepareAndOpenReview(controller, onModeChange)}
-          type="button"
-        >
-          <ClipboardPaste aria-hidden="true" className="size-4" />
-          Review full draft
-        </button>
-      </footer>
+      {currentOperation ? (
+        <section className={composeStyles.evidencePanel}>
+          <div>
+            <h3>Source evidence</h3>
+            <button
+              disabled={controller.isBusy}
+              onClick={() => void prepareAndOpenReview(controller, onModeChange)}
+              type="button"
+            >
+              View in structure <ListTree aria-hidden="true" />
+            </button>
+          </div>
+          <small>{source?.title ?? 'No linked source'}</small>
+          <p>{currentOperation.reason ?? currentOperation.summary}</p>
+        </section>
+      ) : null}
+
+      {warning ? (
+        <section className={composeStyles.warningPanel}>
+          <AlertTriangle aria-hidden="true" />
+          <div>
+            <strong>{warning}</strong>
+            <span>{candidate.schemaReview.summary}</span>
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
 
 function proposalActionValue(value: unknown, fallback: string): string {
-  if (value === undefined || value === null || value === '') return fallback;
-  const formatted = formatOperationValue(value).replace(/\s+/g, ' ').trim();
-  return formatted.length > 26 ? `${formatted.slice(0, 23)}…` : formatted;
+  if (value === undefined) return fallback;
+  if (value === null) return 'null';
+  if (value === '') return '""';
+  return formatOperationValue(value).replace(/\s+/g, ' ').trim();
 }
 
-function CollapsedDraftSidebar({
-  changeCount,
-  onSidebarToggle,
-}: {
-  changeCount: number;
-  onSidebarToggle: () => void;
-}) {
-  return (
-    <div className="flex h-full flex-col items-center bg-[var(--surface-panel)] px-2 py-4">
-      <DraftSidebarToggle onToggle={onSidebarToggle} open={false} />
-      <div aria-hidden="true" className="mt-4 h-8 w-px rounded-full bg-[var(--stroke-divider)]" />
-      <span className="mt-3 rounded-full border border-[var(--stroke-default)] bg-[var(--surface-card)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--accent-commit)] shadow-[var(--shadow-xs)]">
-        {changeCount}
-      </span>
-    </div>
-  );
-}
-
-function DraftSidebarToggle({ onToggle, open }: { onToggle: () => void; open: boolean }) {
-  const Icon = open ? PanelRightClose : PanelRightOpen;
-  return (
-    <button
-      aria-label={open ? 'Hide proposed draft sidebar' : 'Show proposed draft sidebar'}
-      className="group relative inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-card)] text-[var(--text-secondary)] shadow-[var(--shadow-xs)] transition-colors hover:border-[var(--stroke-strong)] hover:text-[var(--text-primary)] focus:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-commit)]"
-      onClick={onToggle}
-      title="显示/隐藏侧边栏"
-      type="button"
-    >
-      <Icon aria-hidden="true" className="size-3.5" />
-      <span className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden whitespace-nowrap rounded-md bg-[var(--text-primary)] px-2 py-1 text-[11px] font-medium text-[var(--surface-panel)] shadow-[var(--shadow-sm)] group-hover:block group-focus-visible:block">
-        显示/隐藏侧边栏
-      </span>
-    </button>
-  );
+function composeFieldPresentation(
+  candidate: WorkspaceCandidate,
+  operation: WorkspaceYOpsDraftOperation | null
+): { label: string; icon: LucideIcon } {
+  if (!operation) return { label: 'Change', icon: ListTree };
+  const normalize = (path: string) => path.replace(/^\//, '').replace(/\./g, '/');
+  const findField = (
+    fields: WorkspaceSchemaCandidateField[]
+  ): WorkspaceSchemaCandidateField | undefined => {
+    for (const field of fields) {
+      if (normalize(field.path) === normalize(operation.path)) return field;
+      const match = field.children ? findField(field.children) : undefined;
+      if (match) return match;
+    }
+    return undefined;
+  };
+  const field = findField(candidate.schemaCandidate.fields);
+  const value = operation.afterValue ?? operation.beforeValue;
+  const type = field?.type.toLowerCase() ?? (Array.isArray(value) ? 'array' : typeof value);
+  if (type === 'percentage' || type === 'percent') return { label: 'Percentage', icon: Percent };
+  if (type === 'boolean') return { label: 'Boolean', icon: Settings };
+  if (type === 'array') return { label: 'Array', icon: Globe2 };
+  if (type === 'number' || type === 'integer') return { label: 'Number', icon: Hash };
+  if (type === 'object') return { label: 'Object', icon: BoxIcon };
+  return { label: type === 'string' ? 'String' : (field?.type ?? 'Value'), icon: Type };
 }
 
 function getProposalSourceRefs(candidate: WorkspaceCandidate): string[] {

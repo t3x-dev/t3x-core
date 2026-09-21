@@ -718,14 +718,14 @@ export function SchemaStudioExperience({
       </div>
 
       <Dialog open={advanced} onOpenChange={setAdvanced}>
-        <DialogContent className="max-h-[90vh] max-w-[1100px] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[90dvh] flex-col overflow-hidden sm:max-w-[min(1100px,calc(100%-2rem))]">
+          <DialogHeader className="shrink-0 pr-6">
             <DialogTitle>Add modules</DialogTitle>
             <DialogDescription>
               Browse and manage the existing Studio definition sources.
             </DialogDescription>
           </DialogHeader>
-          {children}
+          <div className="min-h-0 min-w-0 overflow-auto">{children}</div>
         </DialogContent>
       </Dialog>
 

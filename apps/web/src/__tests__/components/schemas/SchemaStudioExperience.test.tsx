@@ -101,3 +101,27 @@ it('does not offer the selected candidate as its own comparison', () => {
   expect(screen.queryByRole('option', { name: 'Shared foundation · 1.0' })).not.toBeInTheDocument();
   expect(screen.getByText('Create a Workspace to review and apply this definition.')).toBeVisible();
 });
+
+it('opens the module workbench in a wide viewport-bounded dialog with a scrollable body', () => {
+  render(
+    <SchemaStudioExperience projectId="p">
+      <div>Module workbench content</div>
+    </SchemaStudioExperience>
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Advanced definition workbench' }));
+  const dialog = screen.getByRole('dialog', { name: 'Add modules' });
+  expect(dialog).toHaveClass(
+    'sm:max-w-[min(1100px,calc(100%-2rem))]',
+    'max-h-[90dvh]',
+    'overflow-hidden'
+  );
+  expect(dialog).not.toHaveClass('sm:max-w-lg');
+  expect(within(dialog).getByText('Module workbench content').parentElement).toHaveClass(
+    'min-h-0',
+    'min-w-0',
+    'overflow-auto'
+  );
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(mocks.apply).not.toHaveBeenCalled();
+});

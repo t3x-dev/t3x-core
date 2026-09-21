@@ -56,7 +56,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     navigationMocks.searchParams = new URLSearchParams();
   });
 
-  it('groups the real model entry with send and uses plus as the only source icon', () => {
+  it('groups the real model entry with send and keeps the compact source toolbar', () => {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     const controller = {
       busyAction: null,
@@ -103,19 +103,37 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     const addSource = screen.getByRole('button', { name: 'Add source' });
     const modelSelector = screen.getByRole('button', { name: 'Select model: gpt-5.4' });
     const send = screen.getByRole('button', { name: 'Send message' });
-    const branchSelector = screen.getByRole('button', {
-      name: 'Switch branches/tags, current branch main',
-    });
+    const composer = screen.getByRole('group', { name: 'Message composer' });
+    expect(composer).toContainElement(
+      screen.getByRole('textbox', { name: 'Workspace instruction' })
+    );
+    expect(composer).toContainElement(modelSelector);
+    expect(composer).toContainElement(send);
+    const workspaceFooter = screen.getByRole('button', { name: 'View base' }).closest('footer');
+    expect(workspaceFooter).toContainElement(screen.getByText(/^Draft r/));
+    expect(workspaceFooter).toContainElement(screen.getByText(/^Schema /));
+    expect(workspaceFooter).toContainElement(screen.getByRole('button', { name: /^Review \d/ }));
+
+    const allChanges = screen.getByRole('tab', { name: 'All draft changes' });
+    const latestAction = screen.getByRole('tab', { name: 'Latest action' });
+    expect(latestAction).toHaveAttribute('aria-selected', 'true');
+    expect(
+      screen.getByRole('heading', { name: 'Sources for this workspace' }).parentElement
+    ).toContainElement(screen.getByRole('tablist', { name: 'Change scope' }));
+    expect(screen.getByRole('heading', { name: 'Proposed changes' })).toBeVisible();
+    fireEvent.click(allChanges);
+    expect(allChanges).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(latestAction);
+    expect(latestAction).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByText('Action history is not available for this draft.')).toBeNull();
 
     expect(screen.queryByRole('button', { name: 'Add attachment' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Workspace workflow tabs')).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: 'Workspace scenario' })).not.toBeInTheDocument();
-    expect(addSource.querySelector('.lucide-plus')).toBeInTheDocument();
+    expect(addSource.querySelector('.lucide-file-up')).toBeInTheDocument();
     expect(addSource.querySelector('.lucide-database')).not.toBeInTheDocument();
-    expect(branchSelector).toHaveTextContent('main');
-    fireEvent.click(branchSelector);
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'release' }));
-    expect(branchChange).toHaveBeenCalledWith('release');
+    expect(screen.queryByRole('button', { name: /Switch branches\/tags/ })).not.toBeInTheDocument();
+    expect(branchChange).not.toHaveBeenCalled();
     expect(modelSelector.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );
@@ -123,8 +141,10 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     fireEvent.click(modelSelector);
     expect(modelSelectionMocks.handleModelChange).toHaveBeenCalledWith('openai', 'gpt-5.4-mini');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Hide proposed draft sidebar' }));
-    expect(screen.getByRole('button', { name: 'Show proposed draft sidebar' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close discussion' }));
+    expect(screen.queryByRole('complementary', { name: 'Discuss change' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show discussion' }));
+    expect(screen.getByRole('complementary', { name: 'Discuss change' })).toBeInTheDocument();
   });
 
   it('routes composer send, pasted text, and file input to the controller', async () => {
@@ -181,8 +201,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     });
     expect(uploadFile).toHaveBeenCalledWith(expect.objectContaining({ name: 'source.txt' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Paste text' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Paste text' }));
     fireEvent.change(screen.getByRole('textbox', { name: 'Source title' }), {
       target: { value: 'Exact requirement' },
     });
@@ -299,8 +318,10 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
 
-    expect(screen.getByRole('navigation', { name: 'Workspace navigation' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Review change prd/summary/outcome' }));
+    expect(
+      screen.queryByRole('navigation', { name: 'Workspace navigation' })
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect /prd/summary/outcome' }));
     await waitFor(() => expect(prepareReview).toHaveBeenCalledOnce());
     expect(onModeChange).toHaveBeenCalledWith('review');
 
