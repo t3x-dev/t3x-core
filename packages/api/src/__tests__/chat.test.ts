@@ -421,11 +421,13 @@ describe('Chat Routes', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue(
-          new Response('{"error":{"code":429,"message":"Quota exceeded"}}', {
-            status: 429,
-            headers: { 'Content-Type': 'application/json' },
-          })
+        vi.fn().mockImplementation(() =>
+          Promise.resolve(
+            new Response('{"error":{"code":429,"message":"Quota exceeded"}}', {
+              status: 429,
+              headers: { 'Content-Type': 'application/json' },
+            })
+          )
         )
       );
 

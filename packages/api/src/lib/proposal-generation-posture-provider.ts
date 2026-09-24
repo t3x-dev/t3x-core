@@ -56,7 +56,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function normalizeText(value: string): string {
-  return value.normalize('NFKC').toLocaleLowerCase('en-US').replaceAll(/\s+/g, ' ').trim();
+  return value
+    .normalize('NFKC')
+    .toLocaleLowerCase('en-US')
+    .replaceAll(/[^\p{L}\p{N}%]+/gu, ' ')
+    .replaceAll(/\s+/g, ' ')
+    .trim();
 }
 
 function evidenceQuotes(binding: {
@@ -76,6 +81,11 @@ function operationName(operation: ProtocolValue): string | null {
 }
 
 const DETERMINISTIC_STRUCTURAL_OPERATIONS = new Set(['move', 'nest', 'sort', 'unique']);
+const NON_REPLACEMENT_OPERATIONS = new Set([
+  ...DETERMINISTIC_STRUCTURAL_OPERATIONS,
+  'append',
+  'define',
+]);
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -91,16 +101,36 @@ function quoteContainsValue(quote: string, value: string): boolean {
   ).test(normalizedQuote);
 }
 
+function quotesSupportClaim(quotes: readonly string[], value: string): boolean {
+  if (quotes.some((quote) => quoteContainsValue(quote, value))) return true;
+  const clauses = value
+    .split(/[.;\n]+/)
+    .map((clause) => clause.trim())
+    .filter(Boolean);
+  return (
+    clauses.length > 1 &&
+    clauses.every((clause) => quotes.some((quote) => quoteContainsValue(quote, clause)))
+  );
+}
+
 function deterministicSupport(operations: readonly ProtocolValue[], quotes: readonly string[]) {
   const names = operations.map(operationName);
   if (names.every((name) => name !== null && DETERMINISTIC_STRUCTURAL_OPERATIONS.has(name))) {
     return true;
   }
-  const values = operations.flatMap((operation) =>
-    generationOperationIntroducedScalars(
-      operation as unknown as Parameters<typeof generationOperationIntroducedScalars>[0]
-    )
-  );
+  const values = operations.flatMap((operation) => {
+    let supportOperation = operation;
+    if (operationName(operation) === 'append' && isRecord(operation)) {
+      const payload = operation.append;
+      if (isRecord(payload) && isRecord(payload.value)) {
+        const { key: _generatedIdentity, ...sourceBackedValue } = payload.value;
+        supportOperation = { append: { ...payload, value: sourceBackedValue } };
+      }
+    }
+    return generationOperationIntroducedScalars(
+      supportOperation as unknown as Parameters<typeof generationOperationIntroducedScalars>[0]
+    );
+  });
   return (
     values.length > 0 &&
     values.every((value) => quotes.some((quote) => quoteContainsValue(quote, value)))
@@ -218,8 +248,9 @@ async function assessGeneration(
     }
     if (claim.mode !== 'stated') continue;
     const quotes = evidenceQuotes(claim);
-    let outcome: 'supported' | 'unsupported' | 'indeterminate' = quotes.some((quote) =>
-      quoteContainsValue(quote, claim.value)
+    let outcome: 'supported' | 'unsupported' | 'indeterminate' = quotesSupportClaim(
+      quotes,
+      claim.value
     )
       ? 'supported'
       : 'indeterminate';
@@ -252,7 +283,7 @@ async function assessGeneration(
   const baseChanges = preparation.bindings.flatMap((binding) => {
     const operations = binding.operationIndexes.map((index) => context.operations[index]!);
     const structural = operations.every((operation) =>
-      DETERMINISTIC_STRUCTURAL_OPERATIONS.has(operationName(operation) ?? '')
+      NON_REPLACEMENT_OPERATIONS.has(operationName(operation) ?? '')
     );
     return binding.paths.flatMap((path) => {
       const before = generationValueAtPath(context.base.value, path);
@@ -277,7 +308,11 @@ async function assessGeneration(
       .map((conflict) => ({
         groupId: conflict.groupId,
         path: conflict.path,
-        kind: conflict.kind,
+        kind:
+          support.find((assessment) => assessment.groupId === conflict.groupId)?.outcome ===
+          'supported'
+            ? ('source_disagreement' as const)
+            : conflict.kind,
       })),
   });
   const riskFindings = preparation.bindings.flatMap((binding) => {
@@ -314,6 +349,25 @@ async function assessGeneration(
     message: `Change Group ${conflict.groupId} differs from the immutable Base value.`,
     path: conflict.path,
   }));
+  const noEffectFindings = preparation.bindings.flatMap((binding) => {
+    const changed = binding.paths.some(
+      (path) =>
+        !sameValue(
+          generationValueAtPath(context.base.value, path),
+          generationValueAtPath(context.result.value, path)
+        )
+    );
+    return changed
+      ? []
+      : [
+          {
+            severity: 'error' as const,
+            code: 'NO_EFFECT_CHANGE_GROUP',
+            message: `Change Group ${binding.groupId} does not change the current Draft.`,
+            path: binding.paths[0] ?? '$',
+          },
+        ];
+  });
   const findings = [
     ...report.issues.map((issue) => ({
       severity: issue.severity,
@@ -322,6 +376,7 @@ async function assessGeneration(
       path: issue.path,
     })),
     ...claimFindings,
+    ...noEffectFindings,
     ...conflictFindings,
     ...riskFindings,
   ];
@@ -355,13 +410,17 @@ async function assessGeneration(
         inputArtifacts,
         logs: [],
         outputs: [],
-        outcome: report.outcome === 'failed' || claimFindings.length > 0 ? 'failed' : 'passed',
+        outcome:
+          report.outcome === 'failed' || claimFindings.length > 0 || noEffectFindings.length > 0
+            ? 'failed'
+            : 'passed',
         summary:
-          report.outcome === 'passed' && claimFindings.length === 0
+          report.outcome === 'passed' && claimFindings.length === 0 && noEffectFindings.length === 0
             ? `${report.posture} posture verification passed.`
             : `${report.posture} posture verification failed with ${
                 report.issues.filter((issue) => issue.severity === 'error').length +
-                claimFindings.length
+                claimFindings.length +
+                noEffectFindings.length
               } error(s).`,
         findings,
       },

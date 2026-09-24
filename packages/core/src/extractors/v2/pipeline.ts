@@ -497,13 +497,14 @@ function buildUnverifiableQuoteFailure(
   });
 }
 
-function buildTargetedReaskPrompt(
+export function buildTargetedReaskPrompt(
   prompt: LLMPrompt,
   failure: ExtractionFailure,
-  turnHashByTag: Record<string, string>
+  turnHashByTag: Record<string, string>,
+  draftName = 'ProviderExtractionDraft'
 ): LLMPrompt {
   const lines: string[] = [
-    'Your previous ProviderExtractionDraft failed validation. Fix only these issues and return a full corrected draft.',
+    `Your previous ${draftName} failed validation. Fix only these issues and return a full corrected draft.`,
   ];
 
   if (failure.code === 'draft_schema' && Array.isArray(failure.details?.issues)) {
@@ -518,6 +519,17 @@ function buildTargetedReaskPrompt(
     lines.push(...bullets);
   } else if (failure.code === 'draft_parse') {
     lines.push(`- Return valid JSON only.`);
+    const raw = failure.details?.jsonText ?? failure.details?.rawText;
+    if (typeof raw === 'string') {
+      try {
+        JSON.parse(raw);
+      } catch (error) {
+        if (error instanceof Error) lines.push(`- JSON syntax error: ${error.message}`);
+      }
+    }
+    lines.push(
+      '- Check every nested object and array closes with the matching bracket. Format the corrected JSON on multiple lines to make nesting explicit.'
+    );
   } else if (failure.code === 'provenance') {
     const allowedTags = Object.keys(turnHashByTag).join(', ');
     lines.push(`- Use only these turn tags: ${allowedTags}`);
@@ -632,7 +644,9 @@ function buildTargetedReaskPrompt(
       ? failure.details.priorDraftText
       : typeof failure.details?.rawText === 'string'
         ? failure.details.rawText
-        : undefined;
+        : typeof failure.details?.jsonText === 'string'
+          ? failure.details.jsonText
+          : undefined;
 
   const messages: LLMPrompt['messages'] = [...prompt.messages];
   if (priorDraftText) {

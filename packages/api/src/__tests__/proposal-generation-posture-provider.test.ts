@@ -186,20 +186,33 @@ describe('Proposal generation posture provider', () => {
     expect(parseRunnerValidationStatement(result.statement).predicate.outcome).toBe('passed');
   });
 
-  it('reports immutable Base replacements independently of posture support', async () => {
+  it('blocks unsupported replacement of an existing Base claim', async () => {
+    const result = await verify(
+      graph({ base: { prd: { audience: 'existing users' } }, value: 'invented audience' })
+    );
+    expect(result.outcome).toBe('statement');
+    if (result.outcome !== 'statement') return;
+    const predicate = parseRunnerValidationStatement(result.statement).predicate;
+    expect(predicate.outcome).toBe('failed');
+    expect(predicate.findings.map((finding) => finding.code)).toContain(
+      'SOURCE_REPLACEMENT_NOT_ALLOWED'
+    );
+  });
+
+  it('reports a supported Base change without blocking an evidenced update', async () => {
     const result = await verify(
       graph({ base: { prd: { audience: 'existing users' } }, value: 'enterprise operators' })
     );
     expect(result.outcome).toBe('statement');
     if (result.outcome !== 'statement') return;
     const predicate = parseRunnerValidationStatement(result.statement).predicate;
-    expect(predicate.outcome).toBe('failed');
+    expect(predicate.outcome).toBe('passed');
     expect(predicate.findings.map((finding) => finding.code)).toEqual(
-      expect.arrayContaining(['SOURCE_REPLACEMENT_NOT_ALLOWED', 'BASE_VALUE_CONFLICT'])
+      expect.arrayContaining(['SOURCE_CONFLICT', 'BASE_VALUE_CONFLICT'])
     );
   });
 
-  it('uses canonical YOps match paths when detecting an explicit Base replacement', async () => {
+  it('uses canonical YOps match paths when reporting a supported Base update', async () => {
     const built = graph({
       base: { users: [{ name: 'alice', role: 'viewer' }] },
       path: 'users/[name=alice]/role',
@@ -209,9 +222,9 @@ describe('Proposal generation posture provider', () => {
     expect(result.outcome).toBe('statement');
     if (result.outcome !== 'statement') return;
     const predicate = parseRunnerValidationStatement(result.statement).predicate;
-    expect(predicate.outcome).toBe('failed');
+    expect(predicate.outcome).toBe('passed');
     expect(predicate.findings.map((finding) => finding.code)).toEqual(
-      expect.arrayContaining(['SOURCE_REPLACEMENT_NOT_ALLOWED', 'BASE_VALUE_CONFLICT'])
+      expect.arrayContaining(['SOURCE_CONFLICT', 'BASE_VALUE_CONFLICT'])
     );
     const projection = projectProposalGenerationReview({
       preparationFacts: built.preparation as unknown as ProtocolValue,

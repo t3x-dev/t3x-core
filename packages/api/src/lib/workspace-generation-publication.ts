@@ -8,16 +8,14 @@ import {
   lockTurnsForAuthoring,
   resolveTransitionProposalGraph,
 } from '@t3x-dev/storage';
-import {
-  createProposalGenerationPostureProvider,
-  type ProposalGenerationSupportVerifier,
-} from './proposal-generation-posture-provider';
-import { verifyTransition } from './transition-control-plane';
 import { publishWorkspaceAuthoringAction, workspaceAuthoringState } from './workspace-authoring';
 import { resolveWorkspaceGenerationBasis } from './workspace-authoring-generation';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
 
-/** Materialization is not publication. This command verifies a retained candidate, then appends exactly one action. */
+/** Append a candidate to the editable Draft after structural/replay and freshness checks.
+ * Semantic posture verification belongs to Review, not the authoring boundary.
+ * Retain generation provenance so Review can still assess the exact generated changes.
+ */
 export async function publishWorkspaceGeneration(input: {
   db: AnyDB;
   projectId: string;
@@ -25,7 +23,6 @@ export async function publishWorkspaceGeneration(input: {
   transitionId: string;
   requestId: string;
   actor: DraftActionActor;
-  supportVerifier?: ProposalGenerationSupportVerifier;
 }) {
   const graph = await resolveTransitionProposalGraph(input.db, input.projectId, input.transitionId);
   if (graph.membership.workspaceId !== input.workspaceId || !graph.preparation)
@@ -56,7 +53,7 @@ export async function publishWorkspaceGeneration(input: {
     expectedWorkspaceRevision: candidate.workspaceRevision,
     expectedRefHead: candidate.basis.refHead,
     generation,
-    reason: 'Publish verified generated candidate',
+    reason: 'Apply generated changes to Draft',
   };
   // A lost response recovers the original result even after newer actions arrive.
   if (
@@ -65,22 +62,6 @@ export async function publishWorkspaceGeneration(input: {
     )
   )
     return publishWorkspaceAuthoringAction(input.db, command);
-  const verified = await verifyTransition({
-    db: input.db,
-    projectId: input.projectId,
-    transitionId: input.transitionId,
-    requestId: `authoring-publication:${input.requestId}`,
-    actor: input.actor,
-    options: {
-      nativeProviders: [
-        createProposalGenerationPostureProvider({ supportVerifier: input.supportVerifier }),
-      ],
-    },
-  });
-  if (verified.view.generation?.verification.status !== 'passed')
-    throw new DraftAuthoringConflictError(
-      'Candidate posture verification has not passed; it remains unpublished'
-    );
   return publishWorkspaceAuthoringAction(input.db, {
     ...command,
     validate: async (tx) => {
