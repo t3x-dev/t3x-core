@@ -11,6 +11,7 @@ import {
   compileProposalDraft,
   createYOpsState,
   describeTransitionObject,
+  generationValueAtPath,
   type ProposalDraft,
   type ProposalGenerationPreparationV1,
   parseProposalGenerationPreparation,
@@ -106,8 +107,22 @@ export function buildWorkspaceGeneration(input: {
     throw new DraftAuthoringConflictError(
       appended.kind === 'no_change'
         ? 'The requested changes are already present'
-        : 'Generated operations cannot be composed against current Draft'
+        : `Generated operations cannot be composed against current Draft: ${'message' in appended ? appended.message : appended.kind}`
     );
+  const before = currentComposition(ledger);
+  const after = currentComposition(appended.ledger);
+  for (const binding of input.generation.bindings) {
+    if (
+      binding.paths.every(
+        (path) =>
+          canonicalizeProtocolValue(generationValueAtPath(before, path) ?? null) ===
+          canonicalizeProtocolValue(generationValueAtPath(after, path) ?? null)
+      )
+    )
+      throw new DraftAuthoringConflictError(
+        `Generated change group ${binding.groupId} does not change the current Draft`
+      );
+  }
   const built = buildAuthoringEffect(appended.ledger);
   const sourceMap = built.bindings.filter((binding) => binding.actionId === input.actionId);
   const proposalDraft = structuredClone(input.proposalDraft);

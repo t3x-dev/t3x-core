@@ -153,20 +153,15 @@ workspaceAuthoringRoutes.openapi(read, async (c) => {
     projectId,
     scope: 'transition:inspect',
   });
-  return c.json(
-    {
-      success: true as const,
-      data: await readWorkspaceAuthoring(db, {
-        projectId,
-        workspaceId,
-        actionId: query.action_id,
-        nodeId: query.node_id,
-        beforeSequence: query.before_sequence,
-        limit: query.limit,
-      }),
-    },
-    200
-  );
+  const data: unknown = await readWorkspaceAuthoring(db, {
+    projectId,
+    workspaceId,
+    actionId: query.action_id,
+    nodeId: query.node_id,
+    beforeSequence: query.before_sequence,
+    limit: query.limit,
+  });
+  return c.json({ success: true as const, data }, 200);
 });
 workspaceAuthoringRoutes.openapi(initialize, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');

@@ -57,6 +57,45 @@ async function requireWorkspace(db: AnyDB, projectId: string, workspaceId: strin
   return draft;
 }
 
+/** Repair an unbound authoring Workspace without changing its immutable history. */
+export async function ensureWorkspaceAuthoringSchema(
+  db: AnyDB,
+  input: { projectId: string; workspaceId: string; expectedRevision?: number }
+): Promise<number | undefined> {
+  const initial = await requireWorkspace(db, input.projectId, input.workspaceId);
+  const workspace = initial.workspace_state!;
+  if (
+    !workspace.authoringLedger ||
+    (Array.isArray(workspace.schemaBindings) && workspace.schemaBindings.length > 0)
+  )
+    return input.expectedRevision;
+  const { basis } = workspaceAuthoringState(workspace);
+  const result = await transactWorkspaceAuthoring(
+    db,
+    { ...input, refName: basis.refName },
+    async (_tx, draft) => {
+      if (input.expectedRevision !== undefined && draft.revision !== input.expectedRevision)
+        throw new ConflictError(draft.id, input.expectedRevision);
+      const current = draft.workspace_state!;
+      workspaceAuthoringState(current);
+      if (draft.target_branch !== basis.refName)
+        throw new DraftAuthoringConflictError('Target ref changed');
+      if (Array.isArray(current.schemaBindings) && current.schemaBindings.length > 0)
+        return { workspace: null, value: null };
+      return {
+        workspace: {
+          ...current,
+          schemaBindings: [
+            { canonicalName: 't3x/prd', schemaName: 'PRD Schema', version: 'v2', mode: 'pinned' },
+          ],
+        },
+        value: null,
+      };
+    }
+  );
+  return result.draft.revision;
+}
+
 /** Explicit migration starts truthful history; legacy client blobs never become fake past actions. */
 export async function initializeWorkspaceAuthoring(
   db: AnyDB,
@@ -113,7 +152,7 @@ export async function initializeWorkspaceAuthoring(
         draft.semantic_points?.length
     );
     const oldBase = workspace.baseCommitHash ?? draft.parent_commit_hash;
-    if (oldBase != null && oldBase !== head.head)
+    if (oldBase != null && oldBase !== head.head && input.legacyDocument === undefined)
       throw new DraftAuthoringConflictError(
         'Legacy Draft basis changed; reconcile it before importing'
       );
@@ -149,7 +188,7 @@ export async function initializeWorkspaceAuthoring(
   });
 }
 
-/** Common manual/MCP publication boundary. Assistant candidates enter only after governed validation. */
+/** Shared Draft boundary: provenance, freshness and deterministic replay; detailed checks run in Review. */
 export async function publishWorkspaceAuthoringAction(
   db: AnyDB,
   input: {
@@ -286,6 +325,8 @@ export async function readWorkspaceAuthoring(
     }),
     nextBeforeSequence: actions.length === limit ? actions.at(-1)!.sequence : null,
     selected,
+    base: ledger.base,
+    current: currentComposition(ledger),
     netDiff: netDiffCards(ledger),
     node: history
       ? {

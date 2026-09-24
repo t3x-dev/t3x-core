@@ -47,6 +47,8 @@ export function createAssistantCapabilities(input: {
   exactEdit?: { operations: DraftYOp[]; reason?: string };
   proposal?: {
     posture: 'source_only' | 'guided' | 'recommend';
+    requestedProvider?: string;
+    requestedModel?: string;
     resolveModel?: () => Promise<ProposalGenerationModel>;
   };
 }): AssistantCapabilities {
@@ -218,9 +220,11 @@ export function createAssistantCapabilities(input: {
           expectedRevision: prepared.workspaceRevision,
           posture: proposal.posture,
           instruction,
-          sourceTurnHashes: prepared.turns
-            .filter((turn) => turn.role === 'user')
-            .map((turn) => turn.hash),
+          requestedProvider: proposal.requestedProvider,
+          requestedModel: proposal.requestedModel,
+          // "Generate a proposal from this message" authorizes the current user turn.
+          // Earlier chat remains readable context, but must not silently become mutation evidence.
+          sourceTurnHashes: prepared.input.userTurnHash ? [prepared.input.userTurnHash] : [],
           sourceMaterialIds: prepared.sources.flatMap((source) =>
             source.materialId ? [source.materialId] : []
           ),

@@ -183,7 +183,13 @@ workspaceAssistantRoutes.post(
           exactEdit: body.exact_edit
             ? { ...body.exact_edit, operations: body.exact_edit.operations as DraftYOp[] }
             : undefined,
-          proposal: body.allow_proposal ? { posture: body.posture } : undefined,
+          proposal: body.allow_proposal
+            ? {
+                posture: body.posture,
+                requestedProvider: resolved.providerId,
+                requestedModel: resolved.model,
+              }
+            : undefined,
           signal: controller.signal,
           emit: async (event) => {
             if (event.type === 'text') content += event.content;

@@ -244,6 +244,24 @@ describe('governed Proposal generation', () => {
 
     expect(left.view.transitionId).toBe(right.view.transitionId);
     expect(generate).toHaveBeenCalledTimes(1);
+    expect(generate.mock.calls[0]?.[0].prompt).toContain(
+      'create one change group\nper independently stated requirement'
+    );
+    expect(generate.mock.calls[0]?.[0].prompt).toContain(
+      'must become its own schema-valid collection member or tree node'
+    );
+    expect(generate.mock.calls[0]?.[0].prompt).toContain(
+      "a root node's slots are on that root node"
+    );
+    expect(generate.mock.calls[0]?.[0].prompt).toContain(
+      'paths into the semantic tree MUST start with "content/trees/"'
+    );
+    expect(generate.mock.calls[0]?.[0].prompt).toContain(
+      'add each new requirement with one append operation'
+    );
+    expect(generate.mock.calls[0]?.[0].prompt).toContain(
+      '"append" is the operation name beside "set"'
+    );
     expect(left.view.precondition.policyDigest).not.toBeNull();
     const graph = await resolveTransitionProposalGraph(db, data.projectId, left.view.transitionId);
     expect(graph.membership.actor).toEqual(PROPOSAL_GENERATOR_ACTOR);
@@ -579,6 +597,69 @@ it('generates incrementally over saved manual edits, then publishes one verified
   });
   expect(committed.commitDigest).toMatch(/^sha256:/);
   expect((await publishWorkspaceGeneration(input)).value.kind).toBe('reused');
+});
+
+it('allows structurally valid Draft edits despite semantic findings and retains them for Review', async () => {
+  const data = await fixture('Draft before semantic review');
+  const actor = { kind: 'human' as const, id: 'user:editor' };
+  const initialized = await initializeWorkspaceAuthoring(db, {
+    projectId: data.projectId,
+    workspaceId: data.workspaceId,
+    actionId: 'initialize',
+    actor,
+    expectedWorkspaceRevision: data.workspace.revision,
+    expectedRefHead: null,
+  });
+  const proposed = await generateTransitionProposal({
+    db,
+    projectId: data.projectId,
+    requestId: 'natural-language-edit',
+    requester: actor,
+    request: {
+      workspaceId: data.workspaceId,
+      expectedRevision: initialized.draft.revision,
+      posture: 'source_only',
+      instruction: 'Change the audience to small business owners',
+      sourceMaterialIds: [data.material.id],
+    },
+    resolveModel: async () => ({
+      provider: 'test',
+      model: 'test-model',
+      generate: async () => ({
+        draft: draft(
+          'launch audience is enterprise operators',
+          'source_only',
+          'small business owners'
+        ),
+        usage: { inputTokens: 11, outputTokens: 7 },
+      }),
+    }),
+    inference: inference(data.projectId),
+  });
+  const verification = {
+    db,
+    projectId: data.projectId,
+    transitionId: proposed.view.transitionId,
+    actor,
+    options: { nativeProviders: [createProposalGenerationPostureProvider()] },
+  };
+  const checked = await verifyTransition({ ...verification, requestId: 'semantic-check' });
+  expect(checked.view.generation?.verification.status).toBe('failed');
+  const input = {
+    db,
+    projectId: data.projectId,
+    workspaceId: data.workspaceId,
+    transitionId: proposed.view.transitionId,
+    requestId: 'apply-to-draft',
+    actor,
+  };
+  const saved = await publishWorkspaceGeneration(input);
+  expect(saved.value.kind).toBe('published');
+  expect(saved.value.ledger.actions).toHaveLength(1);
+  expect(saved.value.ledger.actions[0].generation?.transitionId).toBe(proposed.view.transitionId);
+  expect((await publishWorkspaceGeneration(input)).value.kind).toBe('reused');
+  const reviewed = await verifyTransition({ ...verification, requestId: 'review-still-checks' });
+  expect(reviewed.view.generation?.verification.status).toBe('failed');
 });
 
 it('accepts original project user turns as evidence and rejects assistant self-claims or foreign turns', async () => {
