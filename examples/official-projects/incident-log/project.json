@@ -1,0 +1,30 @@
+{
+  "slug": "incident-log",
+  "title": "Incident log",
+  "description": "Capture an incident timeline and the reviewed response.",
+  "license": "Apache-2.0",
+  "tags": ["security", "detection", "ecosystem:t3x"],
+  "companionSchema": {
+    "canonicalName": "t3x/incident-log",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "record": {
+      "title": "Expired TLS certificate",
+      "severity": "medium",
+      "summary": "Public API rejected browsers",
+      "response": ""
+    }
+  },
+  "demonstration": {
+    "message": "Record the reviewed response",
+    "value": {
+      "record": {
+        "title": "Expired TLS certificate",
+        "severity": "medium",
+        "summary": "Public API rejected browsers",
+        "response": "Renewed the certificate and added a 14-day reminder."
+      }
+    }
+  }
+}
