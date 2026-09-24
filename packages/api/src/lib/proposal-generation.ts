@@ -158,6 +158,66 @@ export class ProposalGenerationProviderError extends Error {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function rewriteGeneratedOperation(operation: unknown): unknown {
+  if (!isRecord(operation) || !('add' in operation) || 'set' in operation) return operation;
+  const { add, ...rest } = operation;
+  return { ...rest, set: add };
+}
+
+function dropUnresolvedBasisPointers(
+  pointers: unknown,
+  context: ProposalContextBundleV1
+): unknown {
+  if (!Array.isArray(pointers)) return pointers;
+  return pointers.filter((pointer) => {
+    if (!isRecord(pointer)) return false;
+    if (pointer.kind === 'source') return context.sources[Number(pointer.index)] !== undefined;
+    if (pointer.kind === 'memory') return context.memories[Number(pointer.index)] !== undefined;
+    if (pointer.kind === 'search_result') {
+      return context.searchResults[Number(pointer.index)] !== undefined;
+    }
+    return false;
+  });
+}
+
+/** Provider drafts may drift from the server-owned posture and emit non-YOps `add`. */
+export function alignGeneratedProposalDraft(
+  raw: unknown,
+  input: { posture: ProposalGenerationPosture; context: ProposalContextBundleV1 }
+): unknown {
+  if (!isRecord(raw)) return raw;
+  const draft: Record<string, unknown> = { ...raw, posture: input.posture };
+  if (!Array.isArray(draft.changes)) return draft;
+  return {
+    ...draft,
+    changes: draft.changes.map((change) => {
+      if (!isRecord(change)) return change;
+      return {
+        ...change,
+        operations: Array.isArray(change.operations)
+          ? change.operations.map(rewriteGeneratedOperation)
+          : change.operations,
+        basisPointers: dropUnresolvedBasisPointers(change.basisPointers, input.context),
+      };
+    }),
+  };
+}
+
+function formatGenerationCompileFailure(
+  issues: readonly { code: string; path: string; message: string }[]
+): string {
+  const details = issues
+    .map((issue) => issue.message.trim())
+    .filter((message) => message.length > 0)
+    .slice(0, 3);
+  if (details.length === 0) return 'Generated Proposal Draft could not be compiled';
+  return `Generated Proposal Draft could not be compiled: ${details.join('; ')}`;
+}
+
 function sha256(value: string): `sha256:${string}` {
   return `sha256:${createHash('sha256').update(value, 'utf8').digest('hex')}`;
 }
@@ -499,7 +559,10 @@ export async function generateTransitionProposal(input: {
         };
       },
     });
-    const rawDraft = execution.value;
+    const rawDraft = alignGeneratedProposalDraft(execution.value, {
+      posture: input.request.posture,
+      context,
+    });
     let draft: ProposalGenerationDraftV1;
     try {
       draft = parseProposalGenerationDraft(rawDraft);
@@ -524,7 +587,7 @@ export async function generateTransitionProposal(input: {
     });
     if (!compiled.ok) {
       throw new ProposalGenerationDraftError(
-        'Generated Proposal Draft could not be compiled',
+        formatGenerationCompileFailure(compiled.issues),
         compiled.issues
       );
     }

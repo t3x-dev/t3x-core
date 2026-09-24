@@ -102,4 +102,22 @@ describe('formatUserFacingError', () => {
       'Committed conversations cannot be deleted.'
     );
   });
+
+  it('appends compile issues from API error details', () => {
+    expect(
+      formatUserFacingError({
+        message: 'Generated Proposal Draft could not be compiled',
+        details: {
+          issues: [
+            {
+              code: 'POSTURE_MISMATCH',
+              message: 'Draft posture source_only does not match profile guided',
+            },
+          ],
+        },
+      })
+    ).toBe(
+      'Generated Proposal Draft could not be compiled: Draft posture source_only does not match profile guided'
+    );
+  });
 });

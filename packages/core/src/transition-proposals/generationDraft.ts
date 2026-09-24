@@ -221,11 +221,6 @@ const structuredOperationSchema = z.union([
     .strict(),
   z
     .object({
-      add: z.object({ path: nonEmptyString, value: structuredJsonScalarSchema }).strict(),
-    })
-    .strict(),
-  z
-    .object({
       define: z.object({ path: nonEmptyString }).strict(),
     })
     .strict(),
