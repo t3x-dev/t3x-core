@@ -19,8 +19,8 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { ArrowLeft, CheckCircle2, Circle, GripVertical, Loader2, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { AutopilotSettings } from '@/components/autopilot/AutopilotSettings';
 import { ProjectCollaborationPanel } from '@/components/project/ProjectCollaborationPanel';
 import { ProjectVisibilitySettings } from '@/components/project/ProjectVisibilitySettings';
@@ -208,7 +208,23 @@ function SortableRoleGroup({
 // ────────────────────────────────────────────────────────────
 
 export default function ProjectSettingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ProjectSettingsPageContent />
+    </Suspense>
+  );
+}
+
+function ProjectSettingsPageContent() {
   const { projectId } = useParams<{ projectId: string }>();
+  const searchParams = useSearchParams();
+  const requestedReturnTo = searchParams.get('returnTo');
+  const returnTo =
+    requestedReturnTo?.startsWith('/') &&
+    !requestedReturnTo.startsWith('//') &&
+    !requestedReturnTo.includes('\\')
+      ? requestedReturnTo
+      : `/project/${encodeURIComponent(projectId)}`;
   const { saveProjectProviderConfig } = useProviderCommands();
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [globalRoles, setGlobalRoles] = useState<RoleAssignment[]>([]);
@@ -354,11 +370,11 @@ export default function ProjectSettingsPage() {
     <div className="max-w-3xl mx-auto py-8 px-6">
       <div className="mb-2">
         <Link
-          href={`/project/${projectId}`}
+          href={returnTo}
           className="inline-flex items-center gap-1 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
         >
           <ArrowLeft className="h-3 w-3" />
-          Back to Canvas
+          Back to project
         </Link>
       </div>
 
