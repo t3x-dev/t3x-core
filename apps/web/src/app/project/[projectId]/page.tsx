@@ -9,7 +9,6 @@ import { ProjectCommunityTab } from '@/components/project/ProjectCommunityTab';
 import { ProjectOutputsTab } from '@/components/project/ProjectOutputsTab';
 import { ProjectReviewsTab } from '@/components/project/ProjectReviewsTab';
 import { ProjectSchemasTab } from '@/components/project/ProjectSchemasTab';
-import { ProjectSettingsTab } from '@/components/project/ProjectSettingsTab';
 import { ProjectShell } from '@/components/project/ProjectShell';
 import { ProjectStateTab } from '@/components/project/ProjectStateTab';
 import { ProjectWorkspacesTab } from '@/components/project/ProjectWorkspacesTab';
@@ -50,6 +49,7 @@ export default function ProjectDetailPage() {
 interface ProjectDetailPageContentProps {
   initialTabOverride?: ProjectTabId;
   projectIdOverride?: string;
+  ownerSlugOverride?: string;
   surface?: 'canvas' | 'repository';
 }
 
@@ -69,17 +69,22 @@ function withCurrentQuery(path: string, searchParams: { toString: () => string }
   return query ? `${path}?${query}` : path;
 }
 
-function getProjectTabPath(project: { id?: string; name: string }, tab: ProjectTabId) {
-  const basePath = getProjectRepoPath(project);
+function getProjectTabPath(
+  project: { id?: string; name: string },
+  tab: ProjectTabId,
+  ownerSlug?: string
+) {
+  const basePath = getProjectRepoPath(project, ownerSlug);
   return tab === 'state' ? basePath : `${basePath}/${getProjectTabSegment(tab)}`;
 }
 
 function getProjectCanonicalPath(
   project: { id?: string; name: string },
-  searchParams: URLSearchParams
+  searchParams: URLSearchParams,
+  ownerSlug?: string
 ) {
   return withCurrentQuery(
-    getProjectTabPath(project, parseProjectTab(searchParams.get('tab'))),
+    getProjectTabPath(project, parseProjectTab(searchParams.get('tab')), ownerSlug),
     searchParams
   );
 }
@@ -96,6 +101,7 @@ function hasProjectUiQuery(searchParams: { has: (key: string) => boolean }) {
 export function ProjectDetailPageContent({
   initialTabOverride,
   projectIdOverride,
+  ownerSlugOverride,
   surface = 'repository',
 }: ProjectDetailPageContentProps = {}) {
   const params = useParams<{ projectId?: string }>();
@@ -107,6 +113,9 @@ export function ProjectDetailPageContent({
   const searchParams = useSearchParams();
   const isCanvasSurface = surface === 'canvas';
   const activeTab = initialTabOverride ?? parseProjectTab(searchParams.get('tab'));
+  const isSettingsRedirect = activeTab === 'settings';
+  const isSchemaStudio = activeTab === 'schemas' && searchParams.get('schemaView') === 'studio';
+  const isSchemaRelease = activeTab === 'schemas' && searchParams.get('schemaView') === 'release';
   const isEmbeddedCanvasSurface =
     !isCanvasSurface && activeTab === 'state' && searchParams.get('view') === 'canvas';
   const isCanvasActive = isCanvasSurface || isEmbeddedCanvasSurface;
@@ -122,11 +131,20 @@ export function ProjectDetailPageContent({
     if (showIntroDemo) setProjectTourOpen(true);
   }, [showIntroDemo]);
 
+  useEffect(() => {
+    if (!isSettingsRedirect) return;
+    const returnTo = pathname || getProjectIdRepoPath(projectId);
+    router.replace(
+      `/project/${encodeURIComponent(projectId)}/settings?returnTo=${encodeURIComponent(returnTo)}`
+    );
+  }, [isSettingsRedirect, pathname, projectId, router]);
+
   const projectFromStore = useProjectStore((state) =>
     state.projects.find((item) => item.id === projectId)
   );
   const projectsInitialized = useProjectStore((state) => state.initialized);
   const projectsLoading = useProjectStore((state) => state.loading);
+  const projectScope = useProjectStore((state) => state.projectScope);
   const [fetchedProject, setFetchedProject] = useState<ProjectSummary | null>(null);
   const [projectLookupLoading, setProjectLookupLoading] = useState(false);
   const [projectLookupError, setProjectLookupError] = useState<Error | null>(null);
@@ -184,10 +202,14 @@ export function ProjectDetailPageContent({
 
     const nextPath =
       project && searchParams.has('tab')
-        ? getProjectCanonicalPath(project, new URLSearchParams(searchParams.toString()))
+        ? getProjectCanonicalPath(
+            project,
+            new URLSearchParams(searchParams.toString()),
+            ownerSlugOverride
+          )
         : withCurrentQuery(pathname, searchParams);
     router.replace(nextPath, { scroll: false });
-  }, [isCanvasSurface, pathname, project, routeProjectId, router, searchParams]);
+  }, [isCanvasSurface, ownerSlugOverride, pathname, project, routeProjectId, router, searchParams]);
 
   const handleViewportChange = useCallback((_viewport: { x: number; y: number; zoom: number }) => {
     // Viewport state is intentionally local to keep owner/repo URLs clean.
@@ -357,6 +379,10 @@ export function ProjectDetailPageContent({
     !fetchedProject &&
     !projectLookupError;
 
+  if (isSettingsRedirect) {
+    return null;
+  }
+
   if (!projectsInitialized || projectsLoading || projectLookupLoading || projectLookupPending) {
     return (
       <div className="flex h-full flex-col">
@@ -476,8 +502,6 @@ export function ProjectDetailPageContent({
         return <ProjectOutputsTab key={projectId} projectId={projectId} />;
       case 'community':
         return <ProjectCommunityTab />;
-      case 'settings':
-        return <ProjectSettingsTab project={project} />;
       default:
         return renderStateTab();
     }
@@ -485,7 +509,18 @@ export function ProjectDetailPageContent({
 
   return (
     <>
-      <ProjectShell activeTab={activeTab} project={project} projectIdNavigation={!!routeProjectId}>
+      <ProjectShell
+        activeTab={activeTab}
+        branch={searchParams.get('branch')}
+        immersive={isSchemaStudio || isSchemaRelease}
+        ownerSlug={
+          ownerSlugOverride ?? (projectFromStore ? (projectScope ?? undefined) : undefined)
+        }
+        project={project}
+        projectIdNavigation={!!routeProjectId}
+        pullRequestNumber={Number(searchParams.get('pr')) || undefined}
+        workspaceId={searchParams.get('workspace')}
+      >
         {activeContent}
       </ProjectShell>
       {isEmbeddedCanvasSurface ? (
