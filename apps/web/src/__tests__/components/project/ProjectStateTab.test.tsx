@@ -34,10 +34,15 @@ vi.mock('@/hooks/workspaces/useCommitTransitionView', () => ({
 vi.mock('@/components/project/StateOverviewView', () => ({
   StateOverviewView: ({
     reader,
+    schemaHref,
   }: {
     reader?: (expanded: boolean, expand: () => void) => import('react').ReactNode;
+    schemaHref?: string;
   }) => (
-    <section aria-label="Overview">{reader ? reader(true, () => {}) : 'Structured reader'}</section>
+    <section aria-label="Overview">
+      {schemaHref ? <a href={schemaHref}>View schemas</a> : null}
+      {reader ? reader(true, () => {}) : 'Structured reader'}
+    </section>
   ),
 }));
 
@@ -516,8 +521,9 @@ describe('ProjectStateTab', () => {
     await waitFor(() =>
       expect(screen.getByRole('tab', { name: /Overview/ })).toHaveAttribute('aria-selected', 'true')
     );
-    expect(screen.getByRole('toolbar', { name: 'State related views' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Use this state' })).toBeInTheDocument();
+    expect(screen.getByRole('tablist', { name: 'State views' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'History' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Propose change' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: /Snapshot/ })).toBeNull();
     expect(screen.queryByRole('tab', { name: /Render/ })).toBeNull();
     fireEvent.click(screen.getByRole('tab', { name: /Code/ }));
@@ -625,26 +631,24 @@ describe('ProjectStateTab', () => {
     expect(
       screen.queryByRole('complementary', { name: 'State relationships' })
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('complementary', { name: 'State change provenance' })
-    ).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Search state...')).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Field trace' })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Find a field or value...')).toBeInTheDocument();
     expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', 'main', 100);
     expect(hookMocks.loadOperations).toHaveBeenCalledWith(PRD_COMMIT.hash, 'proj_test');
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
       '/project/proj_test/history?branch=main&returnTo=%2Ft3x-dev%2Ftest-project'
     );
-    expect(screen.getByRole('link', { name: 'Open workspace' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Propose change' })).toHaveAttribute(
       'href',
-      '/t3x-dev/test-project/workspaces?branch=main'
+      '/project/proj_test?branch=main&tab=workspaces'
     );
     const tree = screen.getByRole('region', { name: 'Structured state tree' });
-    expect(within(tree).getByRole('region', { name: 'State rows' })).toHaveAttribute(
+    expect(within(tree).getByRole('region', { name: 'Workspace structure rows' })).toHaveAttribute(
       'tabindex',
       '0'
     );
-    expect(within(tree).getByRole('table')).toHaveClass('table-fixed');
+    expect(within(tree).getByRole('table').querySelectorAll('col')).toHaveLength(4);
     expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull();
   });
 
@@ -654,43 +658,28 @@ describe('ProjectStateTab', () => {
     const row = within(within(tree).getByRole('table')).getByText('problem').closest('tr')!;
     fireEvent.click(row);
     expect(row).toHaveAttribute('aria-selected', 'true');
-    expect(
-      screen.getByRole('complementary', { name: 'State change provenance' })
-    ).toHaveTextContent('problem');
+    expect(screen.getByRole('complementary', { name: 'Field trace' })).toHaveTextContent('problem');
   });
 
-  it('shows only immediate child cards for a parent and one full-value card for a leaf', async () => {
+  it('traces the selected parent and leaf with their stored values', async () => {
     renderStateTab();
     await screen.findByRole('region', { name: 'Structured state tree' });
     const table = () =>
       within(screen.getByRole('region', { name: 'Structured state tree' })).getByRole('table');
     fireEvent.click(within(table()).getByTitle('prd').closest('tr')!);
-    const rootCards = screen.getByRole('region', { name: 'Selected node data' });
-    expect(
-      within(rootCards).getByRole('article', { name: 'Data prd/summary' })
-    ).toBeInTheDocument();
-    expect(
-      within(rootCards).queryByRole('article', { name: 'Data prd/summary/audience' })
-    ).toBeNull();
+    const trace = screen.getByRole('complementary', { name: 'Field trace' });
+    expect(trace).toHaveTextContent('root / prd');
+    expect(trace).toHaveTextContent('5 fields');
     const expandRoot = within(table()).queryByRole('button', { name: 'Expand prd' });
     if (expandRoot) fireEvent.click(expandRoot);
     fireEvent.click(within(table()).getByText('summary').closest('tr')!);
-    const cards = screen.getByRole('region', { name: 'Selected node data' });
-    expect(within(cards).getAllByRole('article')).toHaveLength(3);
-    expect(
-      within(cards).getByRole('article', { name: 'Data prd/summary/problem' })
-    ).toHaveTextContent('You: i need food and drink');
-    expect(
-      within(cards).getByRole('article', { name: 'Data prd/summary/audience' })
-    ).toBeInTheDocument();
-    expect(cards).not.toHaveTextContent('object node');
+    expect(trace).toHaveTextContent('root / prd / summary');
+    expect(trace).toHaveTextContent('3 fields');
     const expand = within(table()).queryByRole('button', { name: 'Expand summary' });
     if (expand) fireEvent.click(expand);
     fireEvent.click(within(table()).getByTitle('prd/summary/audience').closest('tr')!);
-    expect(
-      within(screen.getByRole('region', { name: 'Selected node data' })).getAllByRole('article')
-    ).toHaveLength(1);
-    expect(screen.getByRole('article', { name: 'Data prd/summary/audience' })).toBeInTheDocument();
+    expect(trace).toHaveTextContent('root / prd / summary / audience');
+    expect(trace).toHaveTextContent('empty');
   });
 
   it('uses branch metadata without loading snapshot commits in Canvas mode', () => {
@@ -725,7 +714,7 @@ describe('ProjectStateTab', () => {
       expect(within(structureView).queryByText(key)).not.toBeInTheDocument();
     }
 
-    fireEvent.change(screen.getByPlaceholderText('Search state...'), {
+    fireEvent.change(screen.getByPlaceholderText('Find a field or value...'), {
       target: { value: 'degradation_path' },
     });
     expect(
@@ -737,7 +726,7 @@ describe('ProjectStateTab', () => {
       within(structureView).getByRole('button', { name: 'Collapse Must conditions' })
     ).toHaveAttribute('aria-expanded', 'true');
 
-    fireEvent.change(screen.getByPlaceholderText('Search state...'), {
+    fireEvent.change(screen.getByPlaceholderText('Find a field or value...'), {
       target: { value: '' },
     });
     const collapsedMustToggle = within(structureView).getByRole('button', {
@@ -795,14 +784,13 @@ describe('ProjectStateTab', () => {
       expect(within(structureView).queryByText(key)).not.toBeInTheDocument();
     }
 
-    fireEvent.change(screen.getByPlaceholderText('Search state...'), {
+    fireEvent.change(screen.getByPlaceholderText('Find a field or value...'), {
       target: { value: 'delivery_must_be_incremental' },
     });
     const longKey = within(within(structureView).getByRole('table')).getByText(
       'delivery_must_be_incremental'
     );
     expect(longKey).toBeInTheDocument();
-    expect(longKey).toHaveClass('min-w-0', 'flex-1', 'truncate');
     expect(longKey).not.toHaveClass('line-clamp-2', '[overflow-wrap:anywhere]');
     expect(longKey).toHaveAttribute(
       'title',
@@ -1014,6 +1002,10 @@ describe('ProjectStateTab', () => {
     await screen.findByRole('region', { name: 'Structured state tree' });
     fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
 
+    expect(screen.getByRole('link', { name: 'View schemas' })).toHaveAttribute(
+      'href',
+      '/project/proj_test?tab=schemas&branch=main'
+    );
     expect(screen.getByRole('tablist', { name: 'PRD navigation view' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'modules' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('1 Module used')).toBeInTheDocument();
@@ -1026,7 +1018,7 @@ describe('ProjectStateTab', () => {
       screen.getByRole('link', { name: 'Open Rollout & Operations in YSchema' })
     ).toHaveAttribute(
       'href',
-      '/t3x-dev/test-project/schemas?family=prd&mode=compose&module=t3x%2Fprd-rollout-operations&version=1.0.0#module-detail'
+      '/project/proj_test?tab=schemas&branch=main&family=prd&mode=compose&module=t3x%2Fprd-rollout-operations&version=1.0.0#module-detail'
     );
     expect(
       screen.getByText('Mapped by Workspace composition t3x/prd-rollout-operations@1.0.0')
@@ -1183,33 +1175,18 @@ describe('ProjectStateTab', () => {
     expect(screen.queryByRole('tab', { name: /^Render/ })).toBeNull();
   });
 
-  it('initializes a new branch from main without inventing a schema binding', async () => {
+  it('uses the Overview navigation when the selected branch has no commit', async () => {
     hookMocks.branchHeads = { main: null };
     hookMocks.loadCommits.mockResolvedValue([]);
     renderStateTab();
 
     await screen.findByText('No commit on this branch');
-    fireEvent.click(screen.getByRole('button', { name: 'New branch' }));
-    fireEvent.change(screen.getByLabelText('Branch name'), {
-      target: { value: 'feature/checkout-retry' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Create branch' }));
-
-    await waitFor(() => {
-      expect(hookMocks.createBranch).toHaveBeenCalledWith('feature/checkout-retry', 'main');
-      expect(hookMocks.saveDraft).toHaveBeenCalledWith(
-        expect.objectContaining({
-          baseCommitHash: PRD_COMMIT.hash,
-          id: 'workspace_branch:feature%2Fcheckout-retry',
-          schemaBindings: [],
-          status: 'draft',
-          targetBranch: 'feature/checkout-retry',
-        })
-      );
-    });
-    expect(navigationMocks.router.push).toHaveBeenCalledWith(
-      '/t3x-dev/test-project/workspaces?branch=feature%2Fcheckout-retry'
+    expect(screen.getByRole('tablist', { name: 'State views' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Propose change' })).toHaveAttribute(
+      'href',
+      '/project/proj_test?branch=main&tab=workspaces'
     );
+    expect(screen.queryByRole('button', { name: 'New branch' })).not.toBeInTheDocument();
   });
 
   it('switches to canonical YAML Code without exposing internal trees', async () => {
@@ -1239,15 +1216,10 @@ describe('ProjectStateTab', () => {
   });
 
   it('opens Canvas as a separate State mode without leaving the repository route', async () => {
+    navigationMocks.search = 'view=canvas';
     renderStateTab();
 
-    await screen.findByRole('heading', { name: 'PRD audience handoff committed' });
-    fireEvent.click(screen.getByRole('button', { name: 'Canvas', exact: true }));
-
-    expect(navigationMocks.router.replace).toHaveBeenCalledWith(
-      '/t3x-dev/test-project?view=canvas',
-      { scroll: false }
-    );
+    await screen.findByTestId('state-canvas-workspace');
     expect(screen.queryByRole('region', { name: 'State overview' })).not.toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Multi-commit state canvas' })).toHaveClass(
       'h-full',
@@ -1274,12 +1246,10 @@ describe('ProjectStateTab', () => {
 
   it('clarifies that an empty focused branch does not own commits shown on the all-branch canvas', async () => {
     hookMocks.loadCommits.mockResolvedValue([]);
+    navigationMocks.search = 'view=canvas';
     renderStateTab();
 
-    await screen.findByText('No commit on this branch');
-    fireEvent.click(screen.getByRole('button', { name: 'Canvas', exact: true }));
-
-    expect(screen.getByRole('status')).toHaveTextContent('main has no HEAD commit.');
+    expect(await screen.findByRole('status')).toHaveTextContent('main has no HEAD commit.');
     expect(screen.getByRole('status')).toHaveTextContent(
       'Canvas shows the evolution of all branches'
     );
@@ -1362,6 +1332,7 @@ describe('ProjectStateTab', () => {
     const onRunValidation = vi.fn();
     render(
       <ProjectStateTab
+        initialView="structure"
         onRunValidation={onRunValidation}
         projectId="proj_test"
         projectName="Test Project"
@@ -1473,7 +1444,7 @@ describe('ProjectStateTab', () => {
     renderStateTab();
 
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'History' })).toHaveTextContent('0');
+    expect(screen.getByRole('link', { name: 'History' })).toHaveTextContent('History');
     expect(screen.queryByText('stale-canvas-branch')).not.toBeInTheDocument();
     expect(screen.queryByText(/stale-canvas-commit/)).not.toBeInTheDocument();
 
@@ -1512,9 +1483,11 @@ describe('ProjectStateTab', () => {
     hookMocks.loadCommits.mockResolvedValueOnce([
       { ...PRD_COMMIT, branch: 'feature/prd-audience' },
     ]);
-    fireEvent.change(screen.getByLabelText('Branch focus'), {
-      target: { value: 'feature/prd-audience' },
-    });
+    fireEvent.click(screen.getByRole('button', { name: /Switch branches\/tags/ }));
+    const branchMenu = screen.getByRole('menu', { name: 'Switch branches/tags' });
+    fireEvent.click(
+      within(branchMenu).getByRole('menuitemradio', { name: /feature\/prd-audience/ })
+    );
 
     expect(navigationMocks.router.replace).toHaveBeenCalledWith(
       '/t3x-dev/test-project?branch=feature%2Fprd-audience',
@@ -1547,9 +1520,13 @@ describe('ProjectStateTab', () => {
 
     await screen.findByRole('heading', { name: 'PRD audience handoff committed' });
     hookMocks.loadCommits.mockReturnValueOnce(new Promise<ApiCommit[]>(() => {}));
-    fireEvent.change(screen.getByLabelText('Branch focus'), {
-      target: { value: 'feature/prd-audience' },
-    });
+    fireEvent.click(screen.getByRole('button', { name: /Switch branches\/tags/ }));
+    fireEvent.click(
+      within(screen.getByRole('menu', { name: 'Switch branches/tags' })).getByRole(
+        'menuitemradio',
+        { name: /feature\/prd-audience/ }
+      )
+    );
     view.rerender(
       <ProjectStateTab
         initialView="structure"
