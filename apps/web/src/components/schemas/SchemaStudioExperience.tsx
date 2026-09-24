@@ -378,6 +378,15 @@ export function SchemaStudioExperience({
         </p>
       ) : null}
 
+      {preview.error || (data?.adoption.allowed === false && data.adoption.reason) ? (
+        <p
+          className="mx-4 mt-3 rounded-lg border border-[var(--status-error-muted)] bg-[var(--status-error-muted)] p-2 text-sm text-[var(--status-error)]"
+          role="alert"
+        >
+          {preview.error || data?.adoption.reason}
+        </p>
+      ) : null}
+
       {error ? (
         <p
           className="mx-4 mt-3 rounded-lg border border-[var(--status-error-muted)] bg-[var(--status-error-muted)] p-2 text-sm text-[var(--status-error)]"

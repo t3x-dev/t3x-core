@@ -6,6 +6,7 @@ import { SchemaStudioExperience } from '@/components/schemas/SchemaStudioExperie
 
 const mocks = vi.hoisted(() => ({
   data: undefined as unknown,
+  previewError: null as string | null,
   apply: vi.fn(),
   query: 'candidate=provider',
 }));
@@ -31,10 +32,16 @@ vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
 }));
 vi.mock('@/hooks/schemas/useStudioPreview', () => ({
   useApplyStudioSelection: () => mocks.apply,
-  useStudioPreview: () => ({ data: mocks.data, loading: false, refresh: vi.fn() }),
+  useStudioPreview: () => ({
+    data: mocks.data,
+    error: mocks.previewError,
+    loading: false,
+    refresh: vi.fn(),
+  }),
 }));
 beforeEach(() => {
   mocks.query = 'candidate=provider';
+  mocks.previewError = null;
   mocks.apply.mockReset();
   mocks.data = {
     samples: [],
@@ -149,4 +156,19 @@ it('opens the module workbench in a wide viewport-bounded dialog with a scrollab
   fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(mocks.apply).not.toHaveBeenCalled();
+});
+
+it('explains why source authority blocks adoption', () => {
+  const reason = 'Importing private structure requires edit authority on its source project.';
+  Object.assign(mocks.data as object, { adoption: { allowed: false, reason } });
+  render(<SchemaStudioExperience projectId="p" />);
+  expect(screen.getByRole('alert')).toHaveTextContent(reason);
+  expect(screen.getByRole('button', { name: 'Review & apply' })).toBeDisabled();
+});
+it('shows preview failures when a selected source becomes unavailable', () => {
+  mocks.data = undefined;
+  mocks.previewError = 'Selected source is unavailable';
+  render(<SchemaStudioExperience projectId="p" />);
+  expect(screen.getByRole('alert')).toHaveTextContent('Selected source is unavailable');
+  expect(screen.getByRole('button', { name: 'Review & apply' })).toBeDisabled();
 });
