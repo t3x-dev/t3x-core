@@ -65,6 +65,41 @@
       "rationale": "Authenticated user surface without a cross-project resource."
     },
     {
+      "source": "auth-me.openapi.ts",
+      "method": "GET",
+      "path": "/v1/auth/me/model-preferences",
+      "policy": "authenticated",
+      "rationale": "Returns model preferences belonging to the authenticated user."
+    },
+    {
+      "source": "auth-me.openapi.ts",
+      "method": "PUT",
+      "path": "/v1/auth/me/model-preferences",
+      "policy": "authenticated",
+      "rationale": "Updates model preferences belonging to the authenticated user."
+    },
+    {
+      "source": "auth-me.openapi.ts",
+      "method": "GET",
+      "path": "/v1/auth/me/profile-settings",
+      "policy": "authenticated",
+      "rationale": "Returns profile settings and sessions belonging to the authenticated user."
+    },
+    {
+      "source": "auth-me.openapi.ts",
+      "method": "PATCH",
+      "path": "/v1/auth/me/profile-settings",
+      "policy": "authenticated",
+      "rationale": "Updates profile settings belonging to the authenticated user."
+    },
+    {
+      "source": "auth-me.openapi.ts",
+      "method": "DELETE",
+      "path": "/v1/auth/me/profile-settings/sessions/{id}",
+      "policy": "authenticated",
+      "rationale": "Revokes only a session belonging to the authenticated user."
+    },
+    {
       "source": "autopilot.openapi.ts",
       "method": "GET",
       "path": "/v1/projects/{projectId}/autopilot/adaptive",
@@ -1104,6 +1139,20 @@
       "source": "providers.openapi.ts",
       "method": "PUT",
       "path": "/v1/providers/local/{id}",
+      "policy": "operator",
+      "rationale": "Explicit server-operator administration boundary."
+    },
+    {
+      "source": "providers.openapi.ts",
+      "method": "GET",
+      "path": "/v1/providers/model-access",
+      "policy": "operator",
+      "rationale": "Explicit server-operator administration boundary."
+    },
+    {
+      "source": "providers.openapi.ts",
+      "method": "PUT",
+      "path": "/v1/providers/model-access",
       "policy": "operator",
       "rationale": "Explicit server-operator administration boundary."
     },
