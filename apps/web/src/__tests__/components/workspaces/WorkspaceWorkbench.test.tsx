@@ -278,16 +278,8 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     ]);
     render(<WorkspaceWorkbench candidates={[candidate]} projectId="proj_1" />);
 
-    expect(screen.getAllByRole('button', { name: /prd\/summary\/outcome/ }).length).toBeGreaterThan(
-      0
-    );
-    expect(
-      screen.getAllByRole('button', { name: /prd\/requirements\/canary\/title/ }).length
-    ).toBeGreaterThan(0);
+    expect(screen.getAllByText('2 changes').length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
-
-    expect(screen.getByLabelText('Rendered result')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Structure diff' }));
 
     expect(screen.getByText('Loading the exact before and after values…')).toBeInTheDocument();
     expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
@@ -297,10 +289,8 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     fireEvent.click(secondNode);
     expect(secondNode).toHaveAttribute('aria-selected', 'true');
     expect(
-      within(screen.getByRole('region', { name: 'Selected change' })).getByTitle(
-        'prd/requirements/canary/title'
-      )
-    ).toHaveTextContent('prd.requirements.canary.title');
+      screen.getByRole('article', { name: 'Change card prd/requirements/canary/title' })
+    ).toBeInTheDocument();
     expect(screen.getAllByText('material:brief').length).toBeGreaterThan(0);
   });
 
@@ -374,7 +364,6 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
 
     expect(screen.queryByRole('combobox', { name: 'Compare scenario' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Structure diff' }));
     expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
     expect(within(screen.getByRole('table')).getByTitle('prd/summary/outcome')).toBeInTheDocument();
     expect(
@@ -414,12 +403,12 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Review full draft' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Proceed to Review' }));
 
     await waitFor(() => expect(mocks.extractCandidate).toHaveBeenCalledOnce());
     await waitFor(() => expect(mocks.sendToYOps).toHaveBeenCalledOnce());
     expect(await screen.findByRole('alert')).toHaveTextContent('No YOps operations were generated');
-    expect(screen.getByRole('button', { name: 'Render' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('tab', { name: 'Review' })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('renders loading, error, and no-candidate states explicitly', () => {
