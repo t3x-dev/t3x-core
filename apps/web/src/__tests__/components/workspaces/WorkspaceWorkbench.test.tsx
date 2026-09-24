@@ -278,12 +278,8 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     ]);
     render(<WorkspaceWorkbench candidates={[candidate]} projectId="proj_1" />);
 
-    expect(screen.getAllByRole('button', { name: /prd\/summary\/outcome/ }).length).toBeGreaterThan(
-      0
-    );
-    expect(
-      screen.getAllByRole('button', { name: /prd\/requirements\/canary\/title/ }).length
-    ).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Inspect Outcome' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Inspect Title' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
 
     expect(screen.getByLabelText('Rendered result')).toBeInTheDocument();
