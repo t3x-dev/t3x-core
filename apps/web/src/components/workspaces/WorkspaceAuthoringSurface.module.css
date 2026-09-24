@@ -1,0 +1,98 @@
+.surface {
+  --surface-panel: #fff;
+  --surface-card: #fff;
+  --surface-app: #fff;
+  --stroke-divider: #e6e9f1;
+  --text-primary: #1c2339;
+  --text-secondary: #667086;
+  background: #fff;
+}
+
+.header {
+  min-height: 60px;
+  flex: none;
+  padding: 10px 16px;
+  background: #fff;
+}
+
+.header h2 {
+  font-size: 20px;
+  font-weight: 750;
+  line-height: 26px;
+  letter-spacing: -0.02em;
+}
+
+.header h2 span {
+  border-radius: 5px;
+  background: #f3f4f6;
+  color: #667086;
+  font-weight: 600;
+}
+
+.header > div:last-child {
+  align-items: center;
+  gap: 4px;
+}
+
+.header button,
+.footer button {
+  min-height: 32px;
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.main {
+  padding: 16px;
+  background: #fff;
+  scrollbar-color: #d8deea transparent;
+}
+
+.main > div > section,
+.main > section {
+  border-color: #e6e9f1;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: none;
+}
+
+.changeCard {
+  border-color: #e6e9f1;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: none;
+}
+
+.changeCard:hover {
+  border-color: #cbd3e2;
+  background: #fafbfe;
+}
+
+.sidePanel {
+  border-color: #e6e9f1;
+  background: #fff;
+}
+
+.footer {
+  padding: 12px 16px;
+  background: #fff;
+  box-shadow: none;
+}
+
+.footer input,
+.footer select {
+  min-height: 36px;
+  border-color: #dfe4ed;
+  border-radius: 6px;
+  background: #fff;
+}
+
+@media (max-width: 800px) {
+  .header {
+    align-items: flex-start;
+  }
+
+  .header > div:last-child {
+    width: 100%;
+    overflow-x: auto;
+  }
+}

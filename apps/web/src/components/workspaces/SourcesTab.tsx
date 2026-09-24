@@ -787,7 +787,7 @@ function ParsedTextPreview({
   );
 }
 
-function SourceArtifactRoleEditor({
+export function SourceArtifactRoleEditor({
   artifact,
   materialId,
   onChange,
