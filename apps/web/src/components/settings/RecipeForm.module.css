@@ -1,0 +1,227 @@
+.drawerForm {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.drawerBody {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 0;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.field,
+.enabledRow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field label,
+.enabledRow > label {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.inputWrap {
+  position: relative;
+}
+
+.inputWrap input {
+  height: 36px;
+  padding-right: 36px;
+}
+
+.clearButton {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-control);
+  transform: translateY(-50%);
+}
+
+.clearButton:hover {
+  color: var(--text-primary);
+  background: var(--hover-bg);
+}
+
+.clearButton svg {
+  width: 14px;
+  height: 14px;
+}
+
+.drawerForm .choiceTrigger {
+  width: 100%;
+  height: 52px;
+  padding: 8px 12px;
+  background: var(--surface-elevated);
+  border-color: var(--stroke-default);
+}
+
+.choiceTrigger > svg:first-child {
+  width: 20px;
+  height: 20px;
+  color: var(--accent-commit);
+}
+
+.choiceCopy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.choiceCopy strong {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.choiceCopy small {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.projectRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.projectRow input {
+  height: 36px;
+}
+
+.projectRow span {
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 15px;
+  white-space: nowrap;
+}
+
+.enabledRow > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.enabledRow span {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--stroke-divider);
+}
+
+.previewTitle {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.previewFlow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  background: var(--surface-card);
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-control);
+}
+
+.previewFlow > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 46px;
+  padding: 8px;
+  background: var(--hover-bg);
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-control);
+}
+
+.previewFlow > div svg {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  color: var(--accent-commit);
+}
+
+.previewFlow > div span {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 14px;
+  text-overflow: ellipsis;
+}
+
+.previewArrow {
+  width: 16px;
+  height: 16px;
+  color: var(--text-tertiary);
+}
+
+.drawerActions {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 8px;
+  padding: 16px 20px;
+  background: var(--surface-elevated);
+  border-top: 1px solid var(--stroke-divider);
+}
+
+.drawerActions button {
+  width: 100%;
+}
+
+@media (max-width: 720px) {
+  .drawerBody,
+  .drawerActions {
+    padding-inline: 16px;
+  }
+
+  .projectRow {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
