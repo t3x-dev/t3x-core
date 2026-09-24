@@ -177,10 +177,8 @@ export function SchemaCatalogExperience({
         </SchemaStudioExperience>
       ) : (
         <ExploreDiscoverySurface
-          projectId={projectId}
           onBrowse={() => navigate('browse')}
           onSearch={(query) => navigate('browse', { q: query || undefined })}
-          onOpenRelease={openRelease}
         />
       )}
     </section>
