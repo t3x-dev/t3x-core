@@ -19,12 +19,11 @@ export async function ensureBuiltInYSchemaArtifacts(db: AnyDB): Promise<void> {
     ...builtInYSchemaModules,
   ];
   for (const artifact of artifacts) {
-    const artifactHash = await sha256CompositionValue(artifact);
     const nodes =
       artifact.apiVersion === 't3x.dev/yschema-core/v1'
         ? artifact.schema.nodes
         : (artifact.contribution.nodes ?? {});
-    await upsertYSchemaArtifactVersion(db, {
+    await seedOfficialArtifactVersion(db, {
       artifact_id: artifactId(artifact.canonicalName),
       artifact_version_id: artifactVersionId(artifact.canonicalName, artifact.version),
       canonical_name: artifact.canonicalName,
@@ -34,7 +33,7 @@ export async function ensureBuiltInYSchemaArtifacts(db: AnyDB): Promise<void> {
       version: artifact.version,
       status: artifact.status,
       manifest_json: artifact as unknown as Record<string, unknown>,
-      artifact_hash: artifactHash,
+      artifact_hash: await sha256CompositionValue(artifact),
       path_count: countNodePaths(nodes),
       created_by: 't3x:built-in-seed',
       provides: artifact.provides,
@@ -42,7 +41,7 @@ export async function ensureBuiltInYSchemaArtifacts(db: AnyDB): Promise<void> {
     });
   }
   for (const artifact of schemaEcosystemStarters) {
-    await upsertYSchemaArtifactVersion(db, {
+    await seedOfficialArtifactVersion(db, {
       artifact_id: artifactId(artifact.canonicalName),
       artifact_version_id: artifactVersionId(artifact.canonicalName, artifact.version),
       canonical_name: artifact.canonicalName,
@@ -62,6 +61,18 @@ export async function ensureBuiltInYSchemaArtifacts(db: AnyDB): Promise<void> {
       requires: [],
     });
   }
+}
+
+async function seedOfficialArtifactVersion(
+  db: AnyDB,
+  input: Parameters<typeof upsertYSchemaArtifactVersion>[1]
+): Promise<void> {
+  const existing = await findYSchemaArtifactVersion(db, {
+    canonical_name: input.canonical_name,
+    version: input.version,
+  });
+  if (existing) return;
+  await upsertYSchemaArtifactVersion(db, input);
 }
 
 export async function resolveCompositionArtifacts(

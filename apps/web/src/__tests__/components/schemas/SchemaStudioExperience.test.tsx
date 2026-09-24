@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { SchemaStudioExperience } from '@/components/schemas/SchemaStudioExperience';
 
-const mocks = vi.hoisted(() => ({ data: undefined as unknown, apply: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  data: undefined as unknown,
+  apply: vi.fn(),
+  query: 'candidate=provider',
+}));
 vi.mock('next/navigation', () => ({
-  useSearchParams: () => new URLSearchParams('candidate=provider'),
+  useSearchParams: () => new URLSearchParams(mocks.query),
 }));
 vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
   useStudioCandidates: () => ({
@@ -30,6 +34,7 @@ vi.mock('@/hooks/schemas/useStudioPreview', () => ({
   useStudioPreview: () => ({ data: mocks.data, loading: false, refresh: vi.fn() }),
 }));
 beforeEach(() => {
+  mocks.query = 'candidate=provider';
   mocks.apply.mockReset();
   mocks.data = {
     samples: [],
@@ -49,8 +54,62 @@ beforeEach(() => {
     workspace: { id: 'target', revision: 2, changes: [] },
   };
 });
+it('keeps the selected branch when Studio links to Browse', () => {
+  mocks.query = 'candidate=provider&branch=feature%2Frelease';
+  render(<SchemaStudioExperience projectId="p" />);
+  expect(screen.getByRole('link', { name: 'Browse source releases' })).toHaveAttribute(
+    'href',
+    '/project/p?tab=schemas&schemaView=browse&branch=feature%2Frelease'
+  );
+});
+it('does not review another Workspace when the deep-linked target is missing', () => {
+  mocks.query = 'candidate=provider&workspace=missing';
+  render(<SchemaStudioExperience projectId="p" />);
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'Workspace missing was not found in this project'
+  );
+  expect(screen.getByRole('button', { name: 'Review & apply' })).toBeDisabled();
+  expect(screen.getByRole('link', { name: 'Browse source releases' })).toHaveAttribute(
+    'href',
+    '/project/p?tab=schemas&schemaView=browse&workspace=missing'
+  );
+});
 it('keeps a required provider checked and locked while blocking a failed definition review', () => {
   render(<SchemaStudioExperience projectId="p" />);
+  const controls = screen.getByRole('toolbar', { name: 'Studio controls' });
+  const composition = screen.getByRole('main', { name: 'Studio composition' });
+  const sources = screen.getByRole('complementary', { name: 'Studio sources' });
+  expect(composition).toContainElement(controls);
+  expect(sources).toHaveClass('col-start-1', 'row-span-2', 'row-start-1');
+  expect(controls).toHaveClass('col-span-2', 'col-start-2', 'row-start-1');
+  expect(screen.getByRole('region', { name: 'Composed structure' })).toHaveClass(
+    'col-start-2',
+    'row-start-2'
+  );
+  expect(screen.getByRole('complementary', { name: 'Module details' })).toHaveClass(
+    'col-start-3',
+    'row-start-2'
+  );
+  expect(
+    within(controls).getByRole('button', { name: 'Advanced definition workbench' })
+  ).toBeVisible();
+  expect(within(controls).getByRole('button', { name: 'Review changes' })).toBeVisible();
+  expect(screen.getByLabelText('Target Workspace').closest('label')).toHaveClass(
+    'h-[34px]',
+    'rounded-[5px]'
+  );
+  expect(screen.getByRole('button', { name: 'Check schema' })).toHaveClass(
+    'h-[34px]',
+    'rounded-[5px]'
+  );
+  expect(screen.getByRole('button', { name: 'Review & apply' })).toHaveClass(
+    'h-[34px]',
+    'rounded-[5px]'
+  );
+  expect(screen.getByRole('button', { name: 'Zoom out' }).parentElement).toHaveClass(
+    'h-[34px]',
+    'rounded-[5px]'
+  );
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).toBeChecked();
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Remove Shared foundation' })).toBeDisabled();
@@ -66,4 +125,28 @@ it('does not offer the selected candidate as its own comparison', () => {
   render(<SchemaStudioExperience projectId="p" />);
   expect(screen.queryByRole('option', { name: 'Shared foundation · 1.0' })).not.toBeInTheDocument();
   expect(screen.getByText('Create a Workspace to review and apply this definition.')).toBeVisible();
+});
+
+it('opens the module workbench in a wide viewport-bounded dialog with a scrollable body', () => {
+  render(
+    <SchemaStudioExperience projectId="p">
+      <div>Module workbench content</div>
+    </SchemaStudioExperience>
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Advanced definition workbench' }));
+  const dialog = screen.getByRole('dialog', { name: 'Add modules' });
+  expect(dialog).toHaveClass(
+    'sm:max-w-[min(1100px,calc(100%-2rem))]',
+    'max-h-[90dvh]',
+    'overflow-hidden'
+  );
+  expect(dialog).not.toHaveClass('sm:max-w-lg');
+  expect(within(dialog).getByText('Module workbench content').parentElement).toHaveClass(
+    'min-h-0',
+    'min-w-0',
+    'overflow-auto'
+  );
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(mocks.apply).not.toHaveBeenCalled();
 });

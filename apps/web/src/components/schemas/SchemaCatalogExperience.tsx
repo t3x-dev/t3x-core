@@ -1,48 +1,17 @@
 'use client';
 import type { SchemaCatalogItem } from '@t3x-dev/api-client';
-import {
-  ArrowRight,
-  BookOpen,
-  Box,
-  Code2,
-  Cpu,
-  Database,
-  FileText,
-  FlaskConical,
-  Layers3,
-  Network,
-  Search,
-  Shield,
-  SlidersHorizontal,
-  Sparkles,
-  Workflow,
-  Zap,
-} from 'lucide-react';
-import Image from 'next/image';
-import Link from 'next/link';
+import { ArrowRight, BookOpen, Check, ChevronDown, Code2, Search, X } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, type ReactNode, useState } from 'react';
-import { resourceUrl, StateAuthorReadme } from '@/components/project/StateAuthorReadme';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
-import {
-  useSchemaCatalog,
-  useSchemaCollections,
-  useSchemaIntroduction,
-  useSchemaReleaseReading,
-} from '@/hooks/schemas/useSchemaCatalog';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { useSchemaCatalog, useSchemaCollections } from '@/hooks/schemas/useSchemaCatalog';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { cn } from '@/utils/cn';
 import { ActiveSchemaBindings } from './ActiveSchemaBindings';
-import { AddToStudio } from './AddToStudio';
-import { builtinSchemaCover } from './builtinSchemaCover';
+import { CatalogLogo } from './CatalogLogo';
+import { ExploreDiscoverySurface } from './ExploreDiscoverySurface';
+import browseStyles from './SchemaCatalogBrowse.module.css';
+import { SchemaReleasePage } from './SchemaReleasePage';
 import { SchemaStudioExperience } from './SchemaStudioExperience';
 
 const filterKeys = [
@@ -56,16 +25,8 @@ const filterKeys = [
   'capability',
   'collection',
 ] as const;
-const icons = {
-  infrastructure: Layers3,
-  'ai-agents': Sparkles,
-  science: FlaskConical,
-  security: Shield,
-  devices: Workflow,
-  data: Box,
-  'work-life': BookOpen,
-};
-type View = 'discover' | 'browse' | 'studio' | 'active';
+type View = 'discover' | 'browse' | 'studio' | 'active' | 'release';
+const releaseKeys = ['catalogName', 'catalogVersion', 'catalogHash'] as const;
 export function SchemaCatalogExperience({
   projectId,
   children,
@@ -79,44 +40,41 @@ export function SchemaCatalogExperience({
   const params = new URLSearchParams(search?.toString() ?? '');
   const requestedView = params.get('schemaView');
   const workspaces = useProjectWorkspaces(projectId);
-  const hasBinding = workspaces.workspaces.some((item) => item.schemaBindings.length > 0);
   const view: View =
     requestedView === 'browse' ||
     requestedView === 'studio' ||
     requestedView === 'discover' ||
-    requestedView === 'active'
+    requestedView === 'active' ||
+    requestedView === 'release'
       ? requestedView
       : params.get('mode') === 'compose'
         ? 'studio'
-        : hasBinding
-          ? 'active'
-          : 'discover';
+        : 'discover';
   const filters = new URLSearchParams();
   if (view === 'browse')
     for (const key of filterKeys) {
       const value = params.get(key);
       if (value) filters.set(key, value);
     }
-  filters.set('limit', view === 'discover' ? '12' : '24');
-  if (view === 'discover') filters.set('selection', 'editor-picks');
+  if (view === 'release') {
+    const canonicalName = params.get('catalogName');
+    if (canonicalName) filters.set('canonical_name', canonicalName);
+  }
+  filters.set('limit', '48');
   const catalog = useSchemaCatalog(
     projectId,
     filters.toString(),
-    view === 'discover' || view === 'browse'
+    view === 'browse' || view === 'release'
   );
   const collections = useSchemaCollections();
-  const [selected, setSelected] = useState<SchemaCatalogItem>();
-  const [showFilters, setShowFilters] = useState(false);
   function navigate(nextView: View, updates: Record<string, string | undefined> = {}) {
     const next = new URLSearchParams(search?.toString() ?? '');
     next.set('schemaView', nextView);
-    for (const key of ['mode', 'module', 'version', 'catalogName', 'catalogVersion'])
-      next.delete(key);
+    for (const key of ['mode', 'module', 'version', ...releaseKeys]) next.delete(key);
     for (const [key, value] of Object.entries(updates)) {
       if (value) next.set(key, value);
       else next.delete(key);
     }
-    setSelected(undefined);
     router.push(`${pathname}?${next.toString()}`, { scroll: false });
   }
   function searchSubmit(event: FormEvent<HTMLFormElement>) {
@@ -124,67 +82,89 @@ export function SchemaCatalogExperience({
     navigate('browse', { q: String(new FormData(event.currentTarget).get('q') ?? '').trim() });
   }
   function openRelease(item: SchemaCatalogItem) {
-    const href = introductionHref(item, projectId, `${pathname}?${params.toString()}`);
-    if (href) router.push(href);
-    else setSelected(item);
+    navigate('release', {
+      catalogName: item.identity.canonicalName,
+      catalogVersion: item.release.version,
+      catalogHash: item.release.hash,
+    });
   }
   const items = catalog.data?.items ?? [];
-  const searchForm = (large = false) => (
-    <form
-      onSubmit={searchSubmit}
-      className={cn('flex min-w-0 gap-2', large ? 'w-full lg:max-w-lg' : 'flex-1')}
-      aria-label="Search schema catalog"
-    >
-      <Input
-        key={params.get('q') ?? ''}
-        name="q"
-        aria-label="Search definitions"
-        placeholder="Search templates, tools, or ideas"
-        defaultValue={params.get('q') ?? ''}
-        className={large ? 'h-12 bg-[var(--surface-card)]' : 'h-10 bg-[var(--surface-card)]'}
+  const selectedRelease = items.find(
+    (item) =>
+      item.identity.canonicalName === params.get('catalogName') &&
+      item.release.version === params.get('catalogVersion') &&
+      (!params.get('catalogHash') || item.release.hash === params.get('catalogHash'))
+  );
+  const visibleView = view === 'active' || view === 'release' ? 'browse' : view;
+  const viewNavigation = (
+    <nav aria-label="Schema views" className="flex h-[45px] shrink-0 items-center px-2">
+      <SegmentedControl
+        ariaLabel="Schema views"
+        className="h-[34px]"
+        itemClassName="min-w-[96px] px-4 text-[14px]"
+        items={[
+          { icon: Search, label: 'Discover', value: 'discover' },
+          { icon: BookOpen, label: 'Browse', value: 'browse' },
+          { icon: Code2, label: 'Studio', value: 'studio' },
+        ]}
+        onValueChange={(nextView) => navigate(nextView)}
+        value={visibleView}
       />
-      <Button
-        type="submit"
-        variant="default"
-        className={large ? 'h-12 w-12 shrink-0' : 'h-10 w-10 shrink-0'}
-        aria-label="Search"
-      >
-        <ArrowRight className="size-4" />
-      </Button>
-    </form>
+    </nav>
   );
   return (
-    <section className="min-w-0 text-[var(--text-primary)]" aria-label="Schema experience">
-      <nav
-        aria-label="Schema views"
-        className="flex gap-6 border-b border-[var(--stroke-divider)] px-4 sm:px-6"
-      >
-        {(
-          [
-            ...(hasBinding ? [['active', Box, 'Active'] as const] : []),
-            ['discover', Search, 'Discover'],
-            ['browse', BookOpen, 'Browse'],
-            ['studio', Code2, 'Studio'],
-          ] as const
-        ).map(([id, Icon, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => navigate(id)}
-            aria-current={view === id ? 'page' : undefined}
-            className={cn(
-              'flex items-center gap-2 border-b-2 py-4 text-sm font-medium',
-              view === id
-                ? 'border-[var(--status-info)] text-[var(--status-info)]'
-                : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            )}
-          >
-            <Icon className="size-4" />
-            {label}
-          </button>
-        ))}
-      </nav>
-      {view === 'active' ? (
+    <section
+      className={cn(
+        'min-w-0 bg-[var(--surface-panel)] text-[var(--text-primary)]',
+        (view === 'browse' || view === 'studio' || view === 'release') &&
+          'flex h-full min-h-0 flex-col overflow-hidden'
+      )}
+      aria-label="Schema experience"
+    >
+      {view === 'release' ? null : (
+        <div className="shrink-0 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)]">
+          {viewNavigation}
+        </div>
+      )}
+      {view === 'release' ? (
+        <div className="min-h-0 flex-1 overflow-hidden">
+          {!selectedRelease && !catalog.loading && !catalog.error && catalog.data?.has_more ? (
+            <button
+              disabled={catalog.morePending}
+              onClick={() => void catalog.loadMore()}
+              type="button"
+            >
+              {catalog.morePending ? 'Loading more releases…' : 'Search more releases'}
+            </button>
+          ) : null}
+          <SchemaReleasePage
+            error={catalog.error}
+            item={selectedRelease}
+            loading={catalog.loading || (!selectedRelease && !!catalog.data?.has_more)}
+            onBack={() =>
+              navigate('browse', {
+                catalogName: undefined,
+                catalogVersion: undefined,
+                catalogHash: undefined,
+              })
+            }
+            projectId={projectId}
+            returnTo={`${pathname}?${params.toString()}`}
+          />
+        </div>
+      ) : String(view) === 'browse' ? (
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <SchemaBrowse
+            catalog={catalog}
+            collections={collections}
+            items={items}
+            navigate={navigate}
+            onOpen={openRelease}
+            params={params}
+            searchSubmit={searchSubmit}
+          />
+        </div>
+      ) : view === 'active' ? (
         <ActiveSchemaBindings
           projectId={projectId}
           workspaces={workspaces.workspaces}
@@ -196,610 +176,318 @@ export function SchemaCatalogExperience({
           {children}
         </SchemaStudioExperience>
       ) : (
-        <div className="bg-[var(--surface-card)] p-4 sm:p-6 lg:px-8">
-          {view === 'discover' ? (
-            <>
-              <header className="flex flex-col justify-between gap-6 py-5 lg:flex-row lg:items-center">
-                <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                  What will you define next?
-                </h1>
-                {searchForm(true)}
-              </header>
-              <fieldset
-                className="mb-7 flex flex-wrap gap-x-6 gap-y-3 border-y border-[var(--stroke-divider)] py-4"
-                aria-label="Editorial collections"
-              >
-                {collections.map((collection) => {
-                  const Icon = icons[collection.id as keyof typeof icons] ?? Box;
-                  return (
-                    <button
-                      key={collection.id}
-                      type="button"
-                      onClick={() => navigate('browse', { collection: collection.id })}
-                      className="flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--status-info)]"
-                    >
-                      <Icon className="size-4" />
-                      {collection.title}
-                    </button>
-                  );
-                })}
-              </fieldset>
-              <p className="mb-3 text-xs text-[var(--text-secondary)]">
-                Selected by T3X for useful ideas and thoughtful definitions.
-              </p>
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-base font-semibold">Editor’s Choice</h2>
-                <button
-                  type="button"
-                  onClick={() => navigate('browse')}
-                  className="text-sm text-[var(--status-info)]"
-                >
-                  Browse all <ArrowRight className="ml-1 inline size-4" />
-                </button>
-              </div>
-            </>
-          ) : null}
-          <div
-            className={
-              view === 'browse' ? 'grid min-w-0 gap-6 md:grid-cols-[230px_minmax(0,1fr)]' : ''
-            }
-          >
-            {view === 'browse' ? (
-              <>
-                <Button
-                  variant="canvas-outline"
-                  onClick={() => setShowFilters((value) => !value)}
-                  aria-expanded={showFilters}
-                  className="md:hidden"
-                >
-                  <SlidersHorizontal className="size-4" />
-                  Filters
-                </Button>
-                <aside
-                  aria-label="Catalog filters"
-                  className={cn(
-                    'min-w-0 space-y-5 md:border-r md:border-[var(--stroke-divider)] md:pr-5',
-                    showFilters ? 'block' : 'hidden md:block'
-                  )}
-                >
-                  <h2 className="text-sm font-semibold">Collections</h2>
-                  <div className="space-y-1">
-                    {collections.map((collection) => {
-                      const Icon = icons[collection.id as keyof typeof icons] ?? Box;
-                      return (
-                        <button
-                          key={collection.id}
-                          type="button"
-                          aria-pressed={params.get('collection') === collection.id}
-                          onClick={() =>
-                            navigate('browse', {
-                              collection:
-                                params.get('collection') === collection.id
-                                  ? undefined
-                                  : collection.id,
-                            })
-                          }
-                          className={cn(
-                            'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm',
-                            params.get('collection') === collection.id
-                              ? 'bg-[var(--status-info-muted)] text-[var(--status-info)]'
-                              : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
-                          )}
-                        >
-                          <Icon className="size-4 shrink-0" />
-                          {collection.title}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <form
-                    key={filters.toString()}
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      const form = new FormData(event.currentTarget);
-                      navigate(
-                        'browse',
-                        Object.fromEntries(
-                          ['tags', 'ecosystem', 'publisher', 'capability', 'kind', 'format'].map(
-                            (key) => [key, String(form.get(key) ?? '').trim() || undefined]
-                          )
-                        )
-                      );
-                    }}
-                    className="space-y-4 border-t border-[var(--stroke-divider)] pt-4"
-                  >
-                    {items.some((item) => item.identity.tags.length) ? (
-                      <div>
-                        <p className="mb-2 text-xs font-medium">Explore tags</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {[...new Set(items.flatMap((item) => item.identity.tags))]
-                            .slice(0, 10)
-                            .map((tag) => (
-                              <button
-                                key={tag}
-                                type="button"
-                                aria-pressed={params.get('tags') === tag}
-                                onClick={() =>
-                                  navigate('browse', {
-                                    tags: params.get('tags') === tag ? undefined : tag,
-                                  })
-                                }
-                                className="rounded-md border border-[var(--stroke-divider)] px-2 py-1.5 text-xs text-[var(--text-secondary)] hover:border-[var(--status-info)] aria-pressed:bg-[var(--status-info-muted)] aria-pressed:text-[var(--status-info)]"
-                              >
-                                {tag}
-                              </button>
-                            ))}
-                        </div>
-                      </div>
-                    ) : null}
-                    {(
-                      [
-                        ['tags', 'Tags', 'research, custom-tag'],
-                        ['ecosystem', 'Ecosystem', 'Declared ecosystem'],
-                        ['publisher', 'Publisher', 'Publisher namespace'],
-                        ['capability', 'Provides', 'Declared capability'],
-                      ] as const
-                    ).map(([key, label, placeholder]) => (
-                      <label
-                        key={key}
-                        htmlFor={`catalog-filter-${key}`}
-                        className="block space-y-2 text-xs font-medium"
-                      >
-                        {label}
-                        <Input
-                          id={`catalog-filter-${key}`}
-                          name={key}
-                          aria-label={label}
-                          defaultValue={params.get(key) ?? ''}
-                          placeholder={placeholder}
-                          className="h-9 text-xs"
-                        />
-                      </label>
-                    ))}
-                    <label className="block space-y-2 text-xs font-medium">
-                      Definition
-                      <select
-                        name="kind"
-                        aria-label="Definition kind"
-                        defaultValue={params.get('kind') ?? ''}
-                        className="h-9 w-full rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2"
-                      >
-                        <option value="">All definitions</option>
-                        <option value="core">Core</option>
-                        <option value="module">Module</option>
-                        <option value="schema">Schema</option>
-                      </select>
-                    </label>
-                    <label className="block space-y-2 text-xs font-medium">
-                      Format
-                      <select
-                        name="format"
-                        aria-label="Serialization format"
-                        defaultValue={params.get('format') ?? ''}
-                        className="h-9 w-full rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2"
-                      >
-                        <option value="">YAML & JSON</option>
-                        <option value="yaml">YAML</option>
-                        <option value="json">JSON</option>
-                      </select>
-                    </label>
-                    <Button type="submit" variant="canvas-outline" className="w-full">
-                      Apply filters
-                    </Button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        navigate(
-                          'browse',
-                          Object.fromEntries(filterKeys.map((key) => [key, undefined]))
-                        )
-                      }
-                      className="w-full text-xs text-[var(--text-secondary)]"
-                    >
-                      Clear filters
-                    </button>
-                  </form>
-                </aside>
-              </>
-            ) : null}
-            <main className="min-w-0">
-              {view === 'browse' ? (
-                <>
-                  <div className="mb-6 flex items-center gap-3">
-                    {searchForm()}
-                    <span className="hidden shrink-0 text-xs text-[var(--text-tertiary)] lg:block">
-                      Latest releases
-                    </span>
-                  </div>
-                  <h1 className="mb-4 text-lg font-semibold">
-                    Explore definitions{' '}
-                    <span className="ml-2 text-xs font-normal text-[var(--text-tertiary)]">
-                      {items.length} loaded
-                    </span>
-                  </h1>
-                </>
-              ) : null}
-              {catalog.loading ? (
-                <output className="block py-10 text-sm text-[var(--text-secondary)]">
-                  Loading definitions…
-                </output>
-              ) : null}
-              {catalog.error ? (
-                <div
-                  role="alert"
-                  className="mb-4 flex flex-wrap items-center gap-3 text-sm text-[var(--status-error)]"
-                >
-                  <span>{catalog.error}</span>
-                  <Button variant="canvas-outline" onClick={catalog.retry}>
-                    Retry
-                  </Button>
-                </div>
-              ) : null}
-              {!catalog.loading && !catalog.error && items.length === 0 ? (
-                <div className="border-y border-[var(--stroke-divider)] py-12">
-                  <h2 className="font-medium">No matching definitions</h2>
-                  <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                    Try another search or clear a filter.
-                  </p>
-                </div>
-              ) : null}
-              <div
-                className={
-                  view === 'discover'
-                    ? 'grid gap-5 lg:grid-cols-2'
-                    : 'divide-y divide-[var(--stroke-divider)] overflow-hidden rounded-lg border border-[var(--stroke-divider)]'
-                }
-              >
-                {items.map((item) =>
-                  view === 'discover' ? (
-                    <DiscoveryCard
-                      key={item.release.artifactVersionId}
-                      item={item}
-                      onOpen={() => openRelease(item)}
-                    />
-                  ) : (
-                    <button
-                      key={item.release.artifactVersionId}
-                      type="button"
-                      onClick={() => openRelease(item)}
-                      className="flex w-full min-w-0 items-center gap-3 bg-[var(--surface-card)] px-3 py-3 text-left hover:bg-[var(--hover-bg)]"
-                      aria-label={`Explore ${item.identity.displayName || item.identity.canonicalName} ${item.release.version}`}
-                    >
-                      <CatalogLogo item={item} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">
-                          {item.identity.displayName || item.identity.canonicalName}
-                        </span>
-                        <span className="mt-0.5 block truncate text-xs text-[var(--text-tertiary)]">
-                          {item.identity.publisher} · {item.release.version}
-                        </span>
-                      </span>
-                      <span className="hidden min-w-0 flex-1 truncate text-xs text-[var(--text-secondary)] xl:block">
-                        {item.identity.description}
-                      </span>
-                      <span className="hidden rounded border border-[var(--stroke-divider)] px-2 py-1 text-[11px] text-[var(--text-secondary)] sm:inline">
-                        {item.release.kind}
-                      </span>
-                      <span className="hidden rounded border border-[var(--stroke-divider)] px-2 py-1 text-[11px] text-[var(--text-secondary)] lg:inline">
-                        {item.formats.join(' / ').toUpperCase()}
-                      </span>
-                      <ArrowRight className="size-4 shrink-0 text-[var(--text-tertiary)]" />
-                    </button>
-                  )
-                )}
-              </div>
-              {catalog.data?.has_more ? (
-                <div className="mt-5 text-center">
-                  <Button
-                    variant="canvas-outline"
-                    disabled={catalog.morePending}
-                    onClick={view === 'browse' ? catalog.loadMore : () => navigate('browse')}
-                  >
-                    {catalog.morePending
-                      ? 'Loading…'
-                      : view === 'browse'
-                        ? 'Load more'
-                        : 'Browse all definitions'}
-                  </Button>
-                </div>
-              ) : null}
-            </main>
-          </div>
-        </div>
+        <ExploreDiscoverySurface
+          onBrowse={() => navigate('browse')}
+          onSearch={(query) => navigate('browse', { q: query || undefined })}
+        />
       )}
-      <Sheet
-        open={!!selected}
-        onOpenChange={(open) => {
-          if (!open) setSelected(undefined);
-        }}
-      >
-        <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
-          {selected ? (
-            <ReleaseDetail
-              key={selected.release.artifactVersionId}
-              item={selected}
-              projectId={projectId}
-              returnTo={`${pathname}?${params.toString()}`}
-              onAdded={() => setSelected(undefined)}
-            />
-          ) : null}
-        </SheetContent>
-      </Sheet>
     </section>
   );
 }
-const logoTones = [
-  'bg-[var(--status-info)]',
-  'bg-[var(--accent-branch)]',
-  'bg-[var(--status-success)]',
-  'bg-[var(--accent-pending)]',
-  'bg-[var(--accent-conversation)]',
-];
-const starterLogos = new Set(['t3x/product-brief', 't3x/care-checklist', 't3x/compose-services']);
 
-function CatalogLogo({ item }: { item: SchemaCatalogItem }) {
-  const intro = useSchemaIntroduction(item.presentationRef);
-  const avatar = intro.data?.document.resources.find(
-    (resource) => resource.path === intro.data?.document.avatarPath
+function SchemaBrowse({
+  catalog,
+  collections,
+  items,
+  navigate,
+  onOpen,
+  params,
+  searchSubmit,
+}: {
+  catalog: ReturnType<typeof useSchemaCatalog>;
+  collections: ReturnType<typeof useSchemaCollections>;
+  items: SchemaCatalogItem[];
+  navigate: (view: View, updates?: Record<string, string | undefined>) => void;
+  onOpen: (item: SchemaCatalogItem) => void;
+  params: URLSearchParams;
+  searchSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const [publisherScope, setPublisherScope] = useState<string>();
+  const [compatible, setCompatible] = useState(true);
+  const [usable, setUsable] = useState(true);
+  const visibleItems = publisherScope
+    ? items.filter((item) =>
+        publisherScope === 'team'
+          ? ['team', 'private'].includes(item.identity.visibility)
+          : item.identity.visibility === publisherScope
+      )
+    : items;
+  const officialCount = items.filter((item) => item.identity.visibility === 'official').length;
+  const teamCount = items.filter((item) =>
+    ['team', 'private'].includes(item.identity.visibility)
+  ).length;
+  const communityCount = items.filter((item) => item.identity.visibility === 'community').length;
+  const categoryCounts = new Map(
+    collections.map((collection) => [
+      collection.id,
+      items.filter((item) => item.identity.tags.some((tag) => collection.tags.includes(tag)))
+        .length,
+    ])
   );
-  const name = item.identity.canonicalName;
-  if (avatar) {
-    return (
-      <Image
-        src={resourceUrl(avatar)}
-        alt=""
-        width={40}
-        height={40}
-        unoptimized
-        className="size-10 shrink-0 rounded-xl object-cover shadow-sm"
-      />
-    );
-  }
-  // Only unowned built-ins receive T3X artwork. Similar community names do not
-  // inherit an official identity. Other glyphs are decorative, not capabilities.
-  if (
-    !item.identity.ownerProjectId &&
-    item.identity.visibility === 'official' &&
-    starterLogos.has(name)
-  ) {
-    return (
-      <Image
-        src={`/schema-logos/${name.split('/')[1]}.png`}
-        unoptimized
-        alt=""
-        width={40}
-        height={40}
-        className="size-10 shrink-0 rounded-xl shadow-sm"
-      />
-    );
-  }
-  const hash = Array.from(name).reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) >>> 0, 0);
-  const Icon = /power|energy/.test(name)
-    ? Zap
-    : /network|api/.test(name)
-      ? Network
-      : /sensor|hardware|actuator|device/.test(name)
-        ? Cpu
-        : /evaluat|experiment|research/.test(name)
-          ? FlaskConical
-          : /security|safety|policy|guardrail/.test(name)
-            ? Shield
-            : /database|data/.test(name)
-              ? Database
-              : /agent|prompt|context/.test(name)
-                ? Sparkles
-                : /workflow|automation|rollout|delivery/.test(name)
-                  ? Workflow
-                  : /prd|requirement|plan|brief/.test(name)
-                    ? FileText
-                    : Layers3;
+  const activeCollection = params.get('collection');
+  const activeTags = params.get('tags');
+
   return (
-    <span
-      aria-hidden="true"
-      className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${logoTones[hash % logoTones.length]} text-[var(--on-status)] shadow-sm`}
-    >
-      <Icon className="size-5" strokeWidth={1.8} />
-    </span>
+    <div className={browseStyles.root}>
+      <header className={browseStyles.searchHeader}>
+        <form aria-label="Search schema catalog" onSubmit={searchSubmit}>
+          <Search aria-hidden="true" />
+          <input
+            key={params.get('q') ?? ''}
+            aria-label="Search definitions"
+            defaultValue={params.get('q') ?? ''}
+            name="q"
+            placeholder="Search projects and schemas..."
+          />
+        </form>
+        <div aria-label="Catalog type" className={browseStyles.typeTabs} role="tablist">
+          <button onClick={() => navigate('discover')} role="tab" type="button">
+            All
+          </button>
+          <button onClick={() => navigate('active')} role="tab" type="button">
+            Projects
+          </button>
+          <button
+            aria-selected="true"
+            className={browseStyles.typeTabActive}
+            role="tab"
+            type="button"
+          >
+            Schemas
+          </button>
+        </div>
+      </header>
+
+      <div className={browseStyles.body}>
+        <aside aria-label="Catalog filters" className={browseStyles.sidebar}>
+          <div className={browseStyles.resultCount}>
+            <strong>Search results</strong>
+            <span>{visibleItems.length}</span>
+          </div>
+          <BrowseFilterSection title="Publisher">
+            <BrowseCheck
+              checked={publisherScope === 'official'}
+              count={officialCount}
+              label="Official"
+              onChange={() =>
+                setPublisherScope((value) => (value === 'official' ? undefined : 'official'))
+              }
+            />
+            <BrowseCheck
+              checked={publisherScope === 'team'}
+              count={teamCount}
+              label="Verified teams"
+              onChange={() => setPublisherScope((value) => (value === 'team' ? undefined : 'team'))}
+            />
+            <BrowseCheck
+              checked={publisherScope === 'community'}
+              count={communityCount}
+              label="Community"
+              onChange={() =>
+                setPublisherScope((value) => (value === 'community' ? undefined : 'community'))
+              }
+            />
+          </BrowseFilterSection>
+          <BrowseFilterSection title="Category">
+            {collections.map((collection) => (
+              <BrowseCheck
+                checked={activeCollection === collection.id}
+                count={categoryCounts.get(collection.id) ?? 0}
+                key={collection.id}
+                label={collection.title}
+                onChange={() =>
+                  navigate('browse', {
+                    collection: activeCollection === collection.id ? undefined : collection.id,
+                  })
+                }
+              />
+            ))}
+          </BrowseFilterSection>
+          <BrowseFilterSection title="Compatible with">
+            <BrowseCheck
+              checked={compatible}
+              count={items.length}
+              label="YSchema"
+              onChange={() => setCompatible((value) => !value)}
+            />
+          </BrowseFilterSection>
+          <BrowseFilterSection title="Status">
+            <BrowseCheck
+              checked={usable}
+              count={items.length}
+              label="Usable"
+              onChange={() => setUsable((value) => !value)}
+            />
+            <BrowseCheck checked={false} count={0} label="Draft" onChange={() => undefined} />
+            <BrowseCheck checked={false} count={0} label="Deprecated" onChange={() => undefined} />
+          </BrowseFilterSection>
+        </aside>
+
+        <main className={browseStyles.main}>
+          <div className={browseStyles.headingRow}>
+            <h1>Browse schemas</h1>
+            <div className={browseStyles.sortControls}>
+              <span>{visibleItems.length} schemas</span>
+              <i aria-hidden="true" />
+              <button type="button">
+                Sort: Most relevant <ChevronDown aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+          <div className={browseStyles.chips}>
+            {usable ? (
+              <button onClick={() => setUsable(false)} type="button">
+                Usable schemas <X aria-hidden="true" />
+              </button>
+            ) : null}
+            {compatible ? (
+              <button onClick={() => setCompatible(false)} type="button">
+                YSchema <X aria-hidden="true" />
+              </button>
+            ) : null}
+            {activeTags ? (
+              <button onClick={() => navigate('browse', { tags: undefined })} type="button">
+                {activeTags} <X aria-hidden="true" />
+              </button>
+            ) : null}
+            {activeCollection ? (
+              <button onClick={() => navigate('browse', { collection: undefined })} type="button">
+                {collections.find((item) => item.id === activeCollection)?.title ??
+                  activeCollection}
+                <X aria-hidden="true" />
+              </button>
+            ) : null}
+          </div>
+
+          {catalog.loading ? (
+            <output className={browseStyles.feedback}>Loading schemas…</output>
+          ) : null}
+          {catalog.error ? (
+            <div className={browseStyles.feedback} role="alert">
+              <span>{catalog.error}</span>
+              <button onClick={catalog.retry} type="button">
+                Retry
+              </button>
+            </div>
+          ) : null}
+          {!catalog.loading && !catalog.error && visibleItems.length === 0 ? (
+            <div className={browseStyles.feedback}>No schemas match these filters.</div>
+          ) : null}
+          <div className={browseStyles.cardGrid}>
+            {visibleItems.map((item) => (
+              <BrowseSchemaCard
+                item={item}
+                key={item.release.artifactVersionId}
+                onOpen={() => onOpen(item)}
+              />
+            ))}
+          </div>
+          {catalog.data?.has_more ? (
+            <button
+              className={browseStyles.loadMore}
+              disabled={catalog.morePending}
+              onClick={catalog.loadMore}
+              type="button"
+            >
+              {catalog.morePending ? 'Loading…' : 'Load more'}
+            </button>
+          ) : null}
+        </main>
+      </div>
+    </div>
   );
 }
 
-function DiscoveryCard({ item, onOpen }: { item: SchemaCatalogItem; onOpen: () => void }) {
-  const intro = useSchemaIntroduction(item.presentationRef);
-  const cover = intro.data?.document.resources.find(
-    (resource) =>
-      resource.path === (item.presentationRef?.coverPath ?? intro.data?.document.avatarPath)
+function BrowseFilterSection({ children, title }: { children: ReactNode; title: string }) {
+  return (
+    <details className={browseStyles.filterSection} open>
+      <summary>
+        <strong>{title}</strong>
+        <ChevronDown aria-hidden="true" />
+      </summary>
+      <div>{children}</div>
+    </details>
   );
-  const artwork = cover
-    ? resourceUrl(cover)
-    : builtinSchemaCover(item.identity.canonicalName, item.identity.ownerProjectId);
+}
+
+function BrowseCheck({
+  checked,
+  count,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  count: number;
+  label: string;
+  onChange: () => void;
+}) {
+  return (
+    <label className={browseStyles.filterOption}>
+      <span>
+        <input checked={checked} onChange={onChange} type="checkbox" />
+        <i aria-hidden="true">{checked ? <Check /> : null}</i>
+        <b>{label}</b>
+      </span>
+      <em>{count}</em>
+    </label>
+  );
+}
+
+function BrowseSchemaCard({ item, onOpen }: { item: SchemaCatalogItem; onOpen: () => void }) {
+  const name = item.identity.displayName || item.identity.canonicalName;
+  const tags = item.identity.tags.filter((tag) => !tag.startsWith('ecosystem:')).slice(0, 3);
   return (
     <button
-      type="button"
+      aria-label={`Explore ${name} ${item.release.version}`}
+      className={browseStyles.schemaCard}
       onClick={onOpen}
-      aria-label={`Explore ${item.identity.displayName || item.identity.canonicalName} ${item.release.version}`}
-      className="group flex flex-col overflow-hidden rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] text-left transition-shadow hover:border-[var(--status-info)] hover:shadow-md focus-visible:outline-2 focus-visible:outline-[var(--status-info)]"
+      type="button"
     >
-      <div className="flex min-h-56 flex-1 flex-col sm:flex-row">
-        {artwork ? (
-          <div className="relative h-44 shrink-0 overflow-hidden sm:h-auto sm:w-[38%]">
-            <Image
-              src={artwork}
-              alt={cover?.alt ?? 'T3X editorial illustration'}
-              fill
-              unoptimized
-              sizes="(min-width: 1024px) 260px, 100vw"
-              className="object-cover"
-            />
-          </div>
-        ) : null}
-        <div className="min-w-0 flex-1 p-5">
-          <p className="mb-3 text-xs font-medium text-[var(--status-info)]">
-            {item.identity.tags[0] || item.release.kind}
-          </p>
-          <h3 className="text-xl font-semibold leading-tight tracking-tight">
-            {item.identity.displayName || item.identity.canonicalName}
-          </h3>
-          <p className="mt-2 line-clamp-2 text-sm leading-5 text-[var(--text-secondary)]">
-            {item.editorial?.reason || item.identity.description}
-          </p>
-          <div className="mt-4 divide-y divide-[var(--stroke-divider)] rounded-md border border-[var(--stroke-divider)] text-xs">
-            {(item.definition.nodes ?? []).slice(0, 2).map((node) => (
-              <div key={node.path} className="flex items-start gap-2 px-3 py-2.5">
-                <Box className="mt-0.5 size-3.5 shrink-0 text-[var(--status-info)]" />
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{node.path}</p>
-                  <p className="mt-1 truncate text-[var(--text-secondary)]">
-                    {node.slots.join(' · ') || 'Nested structure'}
-                  </p>
-                </div>
-              </div>
+      <span className={browseStyles.cardTop}>
+        <CatalogLogo item={item} size="large" />
+        <span className={browseStyles.cardIdentity}>
+          <strong>{name}</strong>
+          <small>{item.identity.description || 'Structured schema definition.'}</small>
+        </span>
+        <span className={browseStyles.cardMeta}>
+          <b>{item.release.version}</b>
+          <span className={browseStyles.publisher}>
+            <i>{item.identity.publisher.slice(0, 1).toUpperCase()}</i>
+            {item.identity.publisher}
+          </span>
+          <ArrowRight aria-hidden="true" />
+        </span>
+      </span>
+      <span className={browseStyles.cardLower}>
+        <span className={browseStyles.tagLine}>
+          <SchemaRelationIcon />
+          <span>
+            {(tags.length ? tags : [item.release.kind]).map((tag, index) => (
+              <span key={tag}>
+                {index ? <i aria-hidden="true" /> : null}
+                <b>{tag}</b>
+              </span>
             ))}
-            {!item.definition.nodes?.length ? (
-              <p className="px-3 py-2.5">{item.definition.pathCount} declared paths</p>
-            ) : null}
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center justify-between gap-3 border-t border-[var(--stroke-divider)] px-4 py-3 text-xs">
-        <span className="min-w-0 truncate text-[var(--text-secondary)]">
-          {item.identity.publisher} · {item.release.version}
+          </span>
         </span>
-        <span className="flex shrink-0 items-center gap-2 text-[var(--status-info)]">
-          Explore release <ArrowRight className="size-3.5" />
-        </span>
-      </div>
+      </span>
     </button>
   );
 }
 
-function ReleaseDetail({
-  item,
-  projectId,
-  returnTo,
-  onAdded,
-}: {
-  item: SchemaCatalogItem;
-  projectId: string;
-  returnTo: string;
-  onAdded: () => void;
-}) {
-  const intro = useSchemaIntroduction(item.presentationRef);
-  const reference = item.presentationRef;
-  const releaseReading = useSchemaReleaseReading(
-    projectId,
-    {
-      canonicalName: item.identity.canonicalName,
-      version: item.release.version,
-      hash: item.release.hash,
-      sourceProjectId: item.identity.ownerProjectId ?? undefined,
-    },
-    item.release.kind !== 'schema' && !reference
-  );
-  const readme =
-    typeof releaseReading.data?.readme === 'string' ? releaseReading.data.readme : undefined;
-  const cover = intro.data?.document.resources.find(
-    (resource) => resource.path === reference?.coverPath
-  );
+function SchemaRelationIcon() {
   return (
-    <>
-      <SheetHeader>
-        <SheetTitle>{item.identity.displayName || item.identity.canonicalName}</SheetTitle>
-        <SheetDescription>
-          {item.identity.publisher} · {item.release.version}
-        </SheetDescription>
-      </SheetHeader>
-      <div className="space-y-5 px-4 pb-6">
-        <p className="text-sm text-[var(--text-secondary)]">{item.identity.description}</p>
-        {cover ? (
-          <Image
-            src={resourceUrl(cover)}
-            alt={cover.alt}
-            width={640}
-            height={360}
-            unoptimized
-            className="max-h-64 w-full rounded-lg object-cover"
-          />
-        ) : null}
-        <div className="flex flex-wrap gap-2">
-          {item.identity.tags.map((tag) => (
-            <span
-              key={tag}
-              className="rounded bg-[var(--status-info-muted)] px-2 py-1 text-xs text-[var(--status-info)]"
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
-        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-3 border-y border-[var(--stroke-divider)] py-4 text-xs">
-          <dt className="text-[var(--text-tertiary)]">Release</dt>
-          <dd>
-            <span className="font-mono">{item.release.version}</span>
-            <details className="mt-2">
-              <summary className="cursor-pointer text-[var(--text-secondary)]">
-                Exact source
-              </summary>
-              <p className="mt-2 break-all font-mono">{item.release.hash}</p>
-            </details>
-          </dd>
-          <dt className="text-[var(--text-tertiary)]">Definition</dt>
-          <dd>
-            {item.release.kind} · {item.definition.pathCount} declared paths
-          </dd>
-          <dt className="text-[var(--text-tertiary)]">License</dt>
-          <dd>{item.license ?? 'Not declared'}</dd>
-        </dl>
-        {intro.loading ? (
-          <output className="block text-sm">Loading author introduction…</output>
-        ) : null}
-        {intro.error ? (
-          <p role="alert" className="text-sm text-[var(--status-error)]">
-            {intro.error}
-          </p>
-        ) : null}
-        {intro.data ? (
-          <StateAuthorReadme author={intro.data.document} />
-        ) : readme ? (
-          <StateAuthorReadme author={{ readme, resources: [] }} />
-        ) : null}
-        {releaseReading.loading ? (
-          <output className="block text-sm">Loading release introduction…</output>
-        ) : null}
-        {releaseReading.error ? (
-          <p role="alert" className="text-sm text-[var(--status-error)]">
-            {releaseReading.error}
-          </p>
-        ) : null}
-        <div className="flex flex-wrap gap-3">
-          <AddToStudio
-            onAdded={onAdded}
-            defaultProjectId={projectId}
-            title={item.identity.displayName ?? item.identity.canonicalName}
-            source={{
-              ...(item.identity.ownerProjectId
-                ? { sourceProjectId: item.identity.ownerProjectId }
-                : {}),
-              canonicalName: item.identity.canonicalName,
-              version: item.release.version,
-              expectedHash: item.release.hash,
-            }}
-          />
-          {reference ? (
-            <Button variant="canvas-outline" asChild>
-              <Link
-                href={`/project/${encodeURIComponent(reference.projectId)}?${new URLSearchParams({ view: 'overview', commit: reference.commitDigest, returnTo, schemaRelease: item.identity.canonicalName, schemaVersion: item.release.version, schemaHash: item.release.hash, studioTarget: projectId }).toString()}`}
-              >
-                Project introduction
-              </Link>
-            </Button>
-          ) : null}
-        </div>
-      </div>
-    </>
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path
+        d="M12 7 7 16M12 7l5 9"
+        fill="none"
+        stroke="var(--stroke-default)"
+        strokeLinecap="round"
+        strokeWidth="1.5"
+      />
+      <circle cx="12" cy="7" fill="var(--color-brand)" r="3" />
+      <circle cx="7" cy="16" fill="var(--color-brand)" r="3" />
+      <circle cx="17" cy="16" fill="var(--color-brand)" r="3" />
+    </svg>
   );
-}
-
-function introductionHref(item: SchemaCatalogItem, projectId: string, returnTo: string) {
-  const reference = item.presentationRef;
-  if (!reference) return null;
-  return `/project/${encodeURIComponent(reference.projectId)}?${new URLSearchParams({ view: 'overview', commit: reference.commitDigest, returnTo, schemaRelease: item.identity.canonicalName, schemaVersion: item.release.version, schemaHash: item.release.hash, studioTarget: projectId })}`;
 }

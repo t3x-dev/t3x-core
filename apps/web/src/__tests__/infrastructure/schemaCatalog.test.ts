@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchSchemaIntroduction, fetchSchemaReleaseReading } from '@/infrastructure/schemaCatalog';
+import {
+  fetchSchemaCatalog,
+  fetchSchemaIntroduction,
+  fetchSchemaReleaseReading,
+} from '@/infrastructure/schemaCatalog';
 
 const mocks = vi.hoisted(() => ({ fetch: vi.fn() }));
 vi.mock('@/infrastructure/core', () => ({
@@ -27,6 +31,19 @@ const result = {
   },
 };
 beforeEach(() => mocks.fetch.mockReset());
+it('keeps global and project catalog routes separate', async () => {
+  mocks.fetch.mockResolvedValue({ items: [], next_cursor: null, has_more: false });
+  await fetchSchemaCatalog(null, 'selection=editor-picks&limit=24');
+  await fetchSchemaCatalog('project/a', 'q=release&limit=24');
+  expect(mocks.fetch).toHaveBeenNthCalledWith(
+    1,
+    '/api/v1/yschema/catalog?selection=editor-picks&limit=24'
+  );
+  expect(mocks.fetch).toHaveBeenNthCalledWith(
+    2,
+    '/api/v1/projects/project%2Fa/yschema/catalog?q=release&limit=24'
+  );
+});
 describe('exact release introduction', () => {
   it('requests the authorized project and exact commit and presentation digest', async () => {
     mocks.fetch.mockResolvedValue(result);
@@ -60,7 +77,11 @@ describe('exact release introduction', () => {
 });
 
 it('reads an exact source without creating a Studio candidate and rejects a changed hash', async () => {
-  const release = { artifactHash: digest, readme: '# Author' };
+  const release = {
+    artifactHash: digest,
+    readme: '# Author',
+    manifest: { canonicalName: 'team/template', version: '1' },
+  };
   mocks.fetch.mockResolvedValue(release);
   expect(await fetchSchemaReleaseReading('p', 'team/template', '1', digest, 'source')).toEqual(
     release

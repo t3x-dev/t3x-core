@@ -42,7 +42,7 @@ export function ActiveSchemaBindings({
                   </p>
                 </div>
                 <Link
-                  href={`${getProjectIdRepoPath(projectId)}?tab=schemas&schemaView=studio&workspace=${encodeURIComponent(workspace.id)}`}
+                  href={`${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ tab: 'schemas', schemaView: 'studio', branch: workspace.targetBranch, workspace: workspace.id }).toString()}`}
                   className="text-sm text-[var(--status-info)]"
                 >
                   Review a replacement <ArrowRight className="ml-1 inline size-3.5" />
