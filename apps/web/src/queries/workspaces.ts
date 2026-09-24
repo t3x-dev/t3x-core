@@ -4,6 +4,7 @@ import {
   decideProjectWorkspaceTransition,
   getWorkspaceTransitionReviewSnapshot,
   listProjectWorkspaces,
+  listWorkspaceTransitionReviewSnapshots,
   reviewProjectWorkspaceSourceRevert,
   reviewProjectWorkspaceSourceTransition,
   reviewProjectWorkspaceTransition,
@@ -66,6 +67,10 @@ export function fetchWorkspaceTransitionReviewSnapshot(
   signal?: AbortSignal
 ): Promise<WorkspaceTransitionReviewSnapshotResponse> {
   return getWorkspaceTransitionReviewSnapshot(projectId, workspaceId, snapshotId, signal);
+}
+
+export function fetchWorkspaceTransitionReviewSnapshots(projectId: string, workspaceId: string) {
+  return listWorkspaceTransitionReviewSnapshots(projectId, workspaceId);
 }
 
 export function reviewWorkspaceSourceTransition(

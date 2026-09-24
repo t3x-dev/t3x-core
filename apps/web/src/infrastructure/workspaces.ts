@@ -1,5 +1,6 @@
 import {
   type ChangeProjectionV1,
+  type ListWorkspaceTransitionReviewSnapshotsResponse,
   type ReviewSnapshotV1,
   T3xApiError,
   type WorkspaceTransitionReviewSnapshotEnvelope,
@@ -72,6 +73,21 @@ export interface WorkspaceTransitionDecisionResponse extends WorkspaceTransition
 }
 
 export type WorkspaceTransitionReviewSnapshotResponse = WorkspaceTransitionReviewSnapshotEnvelope;
+
+export async function listWorkspaceTransitionReviewSnapshots(
+  projectId: string,
+  workspaceId: string,
+  limit = 50
+): Promise<ListWorkspaceTransitionReviewSnapshotsResponse> {
+  try {
+    return await getSharedApiClient().workspaces.listReviewSnapshots(projectId, workspaceId, {
+      limit,
+    });
+  } catch (error) {
+    if (error instanceof T3xApiError) throw new ApiError(error.code, error.message, error.details);
+    throw error;
+  }
+}
 
 export interface WorkspaceSourceReplaceScalarOperation {
   op: 'replace_scalar';
