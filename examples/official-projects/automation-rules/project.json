@@ -1,0 +1,43 @@
+{
+  "slug": "automation-rules",
+  "title": "Automation rules",
+  "description": "Review trigger and action text before enabling a rule.",
+  "license": "Apache-2.0",
+  "tags": ["devices", "automation", "iot", "ecosystem:t3x"],
+  "companionSchema": {
+    "canonicalName": "t3x/automation-rules",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "list": {
+      "title": "Climate rules"
+    },
+    "items": {
+      "heat": {
+        "trigger": "Temperature below 18 C",
+        "action": "Start the heater",
+        "enabled": true
+      }
+    }
+  },
+  "demonstration": {
+    "message": "Add the night fallback",
+    "value": {
+      "list": {
+        "title": "Climate rules"
+      },
+      "items": {
+        "heat": {
+          "trigger": "Temperature below 18 C",
+          "action": "Start the heater",
+          "enabled": true
+        },
+        "night": {
+          "trigger": "After 23:00",
+          "action": "Set heater to eco",
+          "enabled": false
+        }
+      }
+    }
+  }
+}

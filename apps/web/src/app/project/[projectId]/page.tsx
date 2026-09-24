@@ -108,6 +108,7 @@ export function ProjectDetailPageContent({
   const activeTab = initialTabOverride ?? parseProjectTab(searchParams.get('tab'));
   const isSettingsRedirect = activeTab === 'settings';
   const isSchemaStudio = activeTab === 'schemas' && searchParams.get('schemaView') === 'studio';
+  const isSchemaRelease = activeTab === 'schemas' && searchParams.get('schemaView') === 'release';
   const isEmbeddedCanvasSurface =
     !isCanvasSurface && activeTab === 'state' && searchParams.get('view') === 'canvas';
   const isCanvasActive = isCanvasSurface || isEmbeddedCanvasSurface;
@@ -497,7 +498,7 @@ export function ProjectDetailPageContent({
     <>
       <ProjectShell
         activeTab={activeTab}
-        immersive={isSchemaStudio}
+        immersive={isSchemaStudio || isSchemaRelease}
         project={project}
         projectIdNavigation={!!routeProjectId}
       >

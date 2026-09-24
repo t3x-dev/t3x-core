@@ -307,6 +307,33 @@ it('publishes original cross-domain starters with tags, license and reproducible
       (item: { identity: { canonicalName: string } }) => item.identity.canonicalName
     )
   ).toContain('t3x/compose-services');
+  const workLife = await app.request('/v1/yschema/catalog?collection=work-life');
+  expect(
+    (await workLife.json()).data.items.map(
+      (item: { identity: { canonicalName: string } }) => item.identity.canonicalName
+    )
+  ).toEqual(
+    expect.arrayContaining(['t3x/product-brief', 't3x/care-checklist', 't3x/decision-record'])
+  );
+});
+
+it('keeps Browse readable when a published official starter hash no longer matches source', async () => {
+  const [recorded] = await db
+    .select()
+    .from(yschemaArtifactVersions)
+    .where(eq(yschemaArtifactVersions.artifactVersionId, 'ysa_t3x_prompt_pack_1_0_0'));
+  expect(recorded).toBeTruthy();
+  await db
+    .update(yschemaArtifactVersions)
+    .set({ artifactHash: `sha256:${'b'.repeat(64)}` })
+    .where(eq(yschemaArtifactVersions.artifactVersionId, 'ysa_t3x_prompt_pack_1_0_0'));
+  const response = await app.request('/v1/yschema/catalog?canonical_name=t3x%2Fprompt-pack');
+  expect(response.status).toBe(200);
+  expect(SchemaCatalogPageSchema.parse((await response.json()).data).items).toHaveLength(1);
+  await db
+    .update(yschemaArtifactVersions)
+    .set({ artifactHash: recorded.artifactHash })
+    .where(eq(yschemaArtifactVersions.artifactVersionId, 'ysa_t3x_prompt_pack_1_0_0'));
 });
 
 it('projects only bounded node and field names for discovery, without field values', async () => {
