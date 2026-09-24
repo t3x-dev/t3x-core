@@ -51,6 +51,8 @@ beforeEach(() => {
     userExperience: 'general',
     defaultView: 'timeline',
     density: 'comfortable',
+    accentColor: 'blue',
+    reducedMotion: false,
     localWorkspaceName: 'Local user',
     localWorkspaceAvatarColor: 'blue',
   });
@@ -153,6 +155,19 @@ describe('settingsStore', () => {
     const persisted = JSON.parse(raw!);
     expect(persisted.state.localWorkspaceName).toBe('Meaning Studio');
     expect(persisted.state.localWorkspaceAvatarColor).toBe('teal');
+  });
+
+  it('persists appearance preferences', () => {
+    useSettingsStore.getState().setDensity('compact');
+    useSettingsStore.getState().setAccentColor('purple');
+    useSettingsStore.getState().setReducedMotion(true);
+
+    const persisted = JSON.parse(localStorage.getItem('t3x-settings')!);
+    expect(persisted.state).toMatchObject({
+      density: 'compact',
+      accentColor: 'purple',
+      reducedMotion: true,
+    });
   });
 
   it('resolves blank local workspace names to the default author', () => {

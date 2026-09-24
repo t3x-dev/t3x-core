@@ -24,6 +24,10 @@ vi.mock('@/components/settings/ProvidersSettingsPanel', () => ({
   ProvidersSettingsPanel: () => <div>Mock Providers Settings Panel</div>,
 }));
 
+vi.mock('@/components/settings/GeneralSettingsPanel', () => ({
+  GeneralSettingsPanel: () => <div>Mock General Settings Panel</div>,
+}));
+
 vi.mock('@/components/deployment/DeploymentCapabilitiesProvider', () => ({
   useDeploymentCapabilities: () => ({
     status: 'ready',
@@ -36,30 +40,10 @@ vi.mock('@/components/deployment/DeploymentCapabilitiesProvider', () => ({
 }));
 
 describe('settings pages', () => {
-  it('renders the overview as an entry map without unverified runtime claims', () => {
+  it('renders the organization General settings page', () => {
     render(<SettingsPage />);
 
-    expect(screen.getByRole('heading', { name: 'Overview' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /AI Providers Configure/i })).toHaveAttribute(
-      'href',
-      '/settings/providers'
-    );
-    expect(screen.getByRole('link', { name: /API Access Configure/i })).toHaveAttribute(
-      'href',
-      '/settings/access'
-    );
-    expect(screen.getByRole('link', { name: /Workspace Defaults Open/i })).toHaveAttribute(
-      'href',
-      '/settings/preferences'
-    );
-    expect(screen.getByText('Automation')).toBeInTheDocument();
-    expect(
-      screen.getByText(/Runtime-dependent checks are shown inside the pages that can verify them\./)
-    ).toBeInTheDocument();
-    expect(screen.getAllByText('Requires backend runtime')).toHaveLength(2);
-    expect(screen.queryByText('AI readiness')).not.toBeInTheDocument();
-    expect(screen.queryByText('Access readiness')).not.toBeInTheDocument();
-    expect(screen.queryByText('Providers configured')).not.toBeInTheDocument();
+    expect(screen.getByText('Mock General Settings Panel')).toBeInTheDocument();
   });
 
   it('renders the access page shell around the shared panel', () => {
@@ -73,13 +57,9 @@ describe('settings pages', () => {
     expect(screen.getByText('Mock Access Settings Panel')).toBeInTheDocument();
   });
 
-  it('renders the preferences page shell around the shared panel', () => {
+  it('delegates appearance content to the shared panel', () => {
     render(<PreferencesPage />);
 
-    expect(screen.getByRole('heading', { name: 'Preferences' })).toBeInTheDocument();
-    expect(
-      screen.getByText('Customize your T3X experience. Changes are saved automatically.')
-    ).toBeInTheDocument();
     expect(screen.getByText('Mock Preferences Settings Panel')).toBeInTheDocument();
   });
 
