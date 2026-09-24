@@ -26,8 +26,8 @@ import { ProjectCollaborationPanel } from '@/components/project/ProjectCollabora
 import { ProjectVisibilitySettings } from '@/components/project/ProjectVisibilitySettings';
 import { ModelSelector } from '@/components/shared/ModelSelector';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
+import { useProjectDetail } from '@/hooks/projects/useProjectDetail';
 import { useProviderCommands } from '@/hooks/providers/useProviderCommands';
-import { fetchProject } from '@/queries/project';
 import {
   fetchProjectProviderConfig,
   fetchProviderRoles,
@@ -240,6 +240,7 @@ function ProjectSettingsPageContent() {
   const [modelLoading, setModelLoading] = useState(true);
   const [modelVersion, setModelVersion] = useState(0);
   const { setModel: updateProjectModel } = useProjectCrud();
+  const { loadProject } = useProjectDetail();
 
   const handleModelChange = async (provider: string | null, model: string | null) => {
     setModelError(null);
@@ -256,7 +257,7 @@ function ProjectSettingsPageContent() {
     let cancelled = false;
     setModelLoading(true);
     setModelError(null);
-    fetchProject(projectId)
+    loadProject(projectId)
       .then((value) => {
         if (!cancelled)
           setProjectModel({
@@ -276,7 +277,7 @@ function ProjectSettingsPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [loadProject, projectId]);
 
   const loadData = useCallback(async () => {
     try {
