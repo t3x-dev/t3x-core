@@ -1,0 +1,172 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
+.shell {
+  display: flex;
+  width: 100%;
+  height: calc(100dvh - 6rem);
+  min-height: 0;
+  overflow: hidden;
+  background: #fff;
+  color: #1e293b;
+  font-family: "Inter", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex: 0 0 260px;
+  flex-direction: column;
+  gap: 32px;
+  width: 260px;
+  height: 100%;
+  padding: 24px 16px;
+  overflow-y: auto;
+  background: #f8fafc;
+  border-right: 1px solid #e2e8f0;
+}
+
+.groupTitle {
+  margin: 0 0 12px;
+  padding: 0 12px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 16px;
+  text-transform: uppercase;
+}
+
+.navList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.navLink,
+.navLinkActive,
+.signOut {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+  padding: 8px 12px;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  text-decoration: none;
+  border: 0;
+  border-radius: 8px;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease;
+}
+
+.navLink svg,
+.signOut svg {
+  flex: 0 0 auto;
+  color: #64748b;
+}
+
+.navLink:hover,
+.signOut:hover {
+  background: #f1f5f9;
+}
+
+.navLinkActive {
+  color: #1d4ed8;
+  background: #eff6ff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 2%);
+}
+
+.navLinkActive svg {
+  color: #2563eb;
+}
+
+.automationSection {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.automationTitle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+  padding: 8px 12px;
+  color: var(--accent-commit);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.automationChevron {
+  margin-left: auto;
+}
+
+.automationNav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 20px;
+}
+
+.automationNav .navLink,
+.automationNav .navLinkActive {
+  min-height: 34px;
+}
+
+.automationNav .navLink svg,
+.automationNav .navLinkActive svg {
+  width: 6px;
+  height: 6px;
+  fill: currentcolor;
+}
+
+.signOut {
+  width: 100%;
+  margin-top: auto;
+  background: transparent;
+  cursor: pointer;
+}
+
+.content {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  overflow-y: auto;
+  background: #fff;
+}
+
+.sidebar::-webkit-scrollbar,
+.content::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.sidebar::-webkit-scrollbar-track,
+.content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb,
+.content::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover,
+.content::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+@media (max-width: 720px) {
+  .sidebar {
+    flex-basis: 220px;
+    width: 220px;
+  }
+}
