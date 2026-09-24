@@ -16,6 +16,7 @@ import {
   type GenerationMessage,
   generationApi,
 } from '@/infrastructure/generation';
+import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
 import type { SourceChatDraftReplyResponse } from '@/infrastructure/sourceChatDraftReplies';
 import { sourceThreadApi } from '@/infrastructure/sourceThreads';
 import type { Turn } from '@/infrastructure/types';
@@ -56,6 +57,7 @@ export interface UseSourceThreadGenerationOptions {
   sourceDraftReply?: SourceDraftReplyContext;
   workspaceAssistant?: WorkspaceAssistantContext;
   onConversationCreated?: (conversationId: string) => void;
+  createConversation?: () => Promise<string>;
   onTurnsSaved?: () => void;
 }
 
@@ -228,6 +230,7 @@ export function useSourceThreadGeneration({
   sourceDraftReply,
   workspaceAssistant,
   onConversationCreated,
+  createConversation,
   onTurnsSaved,
 }: UseSourceThreadGenerationOptions): UseSourceThreadGenerationReturn {
   const history = useChatHistory(projectId, conversationId);
@@ -413,7 +416,9 @@ export function useSourceThreadGeneration({
           onConversationCreated?.(convId);
         } else if (!convId && projectId) {
           const newTitle = title?.trim() ? title : messageTitle;
-          const newConv = await sourceThreadApi.create(projectId, newTitle, parentCommitHash);
+          const newConv = createConversation
+            ? { conversation_id: await createConversation(), title: newTitle }
+            : await sourceThreadApi.create(projectId, newTitle, parentCommitHash);
           convId = newConv.conversation_id;
           conversationIdRef.current = convId;
           initialTitleForGeneratedTitle = newConv.title || newTitle;
@@ -490,6 +495,17 @@ export function useSourceThreadGeneration({
         }
 
         if (!isTemporaryMode && workspaceAssistant && savedUserTurnHash && !images?.length) {
+          // Creating the bound conversation saves the source bundle and advances the Draft revision.
+          let assistantContext = workspaceAssistant;
+          if (!hasExistingConversation && createConversation) {
+            const { workspace } = await getSharedApiClient().workspaces.get(
+              projectId,
+              workspaceAssistant.workspaceId
+            );
+            if (workspace.revision === undefined)
+              throw new Error('Workspace revision is unavailable.');
+            assistantContext = { ...workspaceAssistant, workspaceRevision: workspace.revision };
+          }
           const controller = new AbortController();
           stream.abortControllerRef.current = controller;
           const unfinished = new Set<string>();
@@ -505,7 +521,7 @@ export function useSourceThreadGeneration({
           try {
             for await (const event of streamWorkspaceAssistant(
               projectId,
-              workspaceAssistant,
+              assistantContext,
               { conversationId: currentConversationId, userTurnHash: savedUserTurnHash },
               { signal: controller.signal, provider, model }
             )) {
@@ -842,6 +858,7 @@ export function useSourceThreadGeneration({
       sourceDraftReply,
       workspaceAssistant,
       onConversationCreated,
+      createConversation,
       onTurnsSaved,
       webSearchEnabled,
       thinkingEnabled,

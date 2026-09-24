@@ -44,7 +44,6 @@ export function ComposeAuthoringAssistant({
   const [pendingCandidate, setPendingCandidate] = useState<string | null>(
     initialPendingCandidate ?? null
   );
-  const [starting, setStarting] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [publicationError, setPublicationError] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -112,6 +111,7 @@ export function ComposeAuthoringAssistant({
       },
     },
     onConversationCreated: setConversationId,
+    createConversation: onCreateConversation,
   });
   const messages = useMemo(() => {
     const persisted = chat.messages.map((message) => ({
@@ -189,23 +189,7 @@ export function ComposeAuthoringAssistant({
     return records;
   }, [chat.messages, activityActions, activityCards]);
   const sendDisabled =
-    !conversationId ||
-    chat.isLoading ||
-    model.loading ||
-    !model.isSelectionReady ||
-    !chat.input.trim();
-
-  const startConversation = async () => {
-    setStarting(true);
-    setLocalError(null);
-    try {
-      setConversationId(await onCreateConversation());
-    } catch (error) {
-      setLocalError(error instanceof Error ? error.message : 'Cannot create source conversation.');
-    } finally {
-      setStarting(false);
-    }
-  };
+    chat.isLoading || model.loading || !model.isSelectionReady || !chat.input.trim();
 
   const publish = async () => {
     if (!pendingCandidate) return;
@@ -245,16 +229,6 @@ export function ComposeAuthoringAssistant({
         >
           {publicationError ?? localError ?? chat.error ?? chat.warning}
         </p>
-      ) : null}
-      {!conversationId ? (
-        <button
-          className={styles.startConversation}
-          disabled={starting}
-          onClick={() => void startConversation()}
-          type="button"
-        >
-          {starting ? 'Starting…' : 'Start workspace conversation'}
-        </button>
       ) : null}
       <fieldset className={styles.discussionComposer} aria-label="Message composer">
         <textarea

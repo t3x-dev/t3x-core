@@ -80,6 +80,7 @@ import {
 } from '@/domain/composeActivity';
 import {
   composeActorLabel,
+  composeNodeTitle,
   composePathLabel,
   composeTextChangeSegments,
   composeValueChangeLabels,
@@ -1282,9 +1283,11 @@ function ProposedDraftPanel({
       beforeValue === undefined &&
       afterValue !== undefined;
     const cardTitle =
-      meta?.comparison === 'draft' && field.label === 'Requirement' && afterValue !== undefined
+      composeNodeTitle(afterValue) ??
+      composeNodeTitle(beforeValue) ??
+      (meta?.comparison === 'draft' && field.label === 'Requirement' && afterValue !== undefined
         ? valueLabels.after
-        : composePathLabel(operation.path, operation.id);
+        : composePathLabel(operation.path, operation.id));
     const cardReason = operation.reason ?? operation.summary;
     const showReason =
       cardReason !== `Change ${operation.path}` &&

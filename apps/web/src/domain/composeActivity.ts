@@ -94,9 +94,12 @@ export function expandComposeActivityCards(cards: readonly WorkspaceAuthoringCar
 
 function expandComposeActivityCard(card: WorkspaceAuthoringCard): WorkspaceAuthoringCard[] {
   if (JSON.stringify(card.before) === JSON.stringify(card.after)) return [];
-  if (Array.isArray(card.before) && Array.isArray(card.after)) {
-    const beforeByKey = keyedValues(card.before);
-    const afterByKey = keyedValues(card.after);
+  if (
+    (Array.isArray(card.before) || card.before === undefined) &&
+    (Array.isArray(card.after) || card.after === undefined)
+  ) {
+    const beforeByKey = keyedValues(card.before ?? []);
+    const afterByKey = keyedValues(card.after ?? []);
     if (beforeByKey && afterByKey) {
       const keys = [...new Set([...beforeByKey.keys(), ...afterByKey.keys()])];
       return keys.flatMap((key) =>
@@ -111,6 +114,40 @@ function expandComposeActivityCard(card: WorkspaceAuthoringCard): WorkspaceAutho
   }
   const before = recordValue(card.before);
   const after = recordValue(card.after);
+  // Bootstrap stores the whole content envelope in one operation. Present its
+  // nodes individually without changing the persisted action or lineage identity.
+  if (card.path === 'content' && (!before || !after)) {
+    const value = before ?? after;
+    if (
+      value &&
+      Array.isArray(value.trees) &&
+      Object.keys(value).every((key) => key === 'trees' || key === 'relations') &&
+      (!Array.isArray(value.relations) || value.relations.length === 0)
+    ) {
+      const nodes = expandComposeActivityCard({
+        ...card,
+        path: `${card.path}/trees`,
+        before: before?.trees as TransitionProtocolValue | undefined,
+        after: after?.trees as TransitionProtocolValue | undefined,
+      });
+      if (nodes.length) return nodes;
+    }
+  }
+  const addedOrRemoved = !before || !after ? (before ?? after) : null;
+  if (
+    addedOrRemoved &&
+    Array.isArray(addedOrRemoved.children) &&
+    addedOrRemoved.children.length > 0 &&
+    Object.keys(addedOrRemoved).every((key) => ['key', 'slots', 'children'].includes(key)) &&
+    Object.keys(recordValue(addedOrRemoved.slots) ?? {}).length === 0
+  ) {
+    return expandComposeActivityCard({
+      ...card,
+      path: `${card.path}/children`,
+      before: before?.children as TransitionProtocolValue | undefined,
+      after: after?.children as TransitionProtocolValue | undefined,
+    });
+  }
   if (before && after && Array.isArray(before.children) && Array.isArray(after.children)) {
     const beforeRest = { ...before, children: undefined };
     const afterRest = { ...after, children: undefined };

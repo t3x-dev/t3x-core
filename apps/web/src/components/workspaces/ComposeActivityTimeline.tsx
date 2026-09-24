@@ -19,6 +19,7 @@ import {
 } from '@/domain/composeActivity';
 import {
   composeActorLabel,
+  composeNodeTitle,
   composePathLabel,
   composeTextChangeSegments,
   composeValueChangeLabels,
@@ -253,7 +254,10 @@ export function ComposeActivityTimeline({
                 ) : (
                   <div className={styles.preview}>
                     {eventCards.map((card) => {
-                      const cardLabel = composePathLabel(card.path, card.nodeId);
+                      const cardLabel =
+                        composeNodeTitle(card.after) ??
+                        composeNodeTitle(card.before) ??
+                        composePathLabel(card.path, card.nodeId);
                       const { before, after } = composeValueChangeLabels(card.before, card.after);
                       const cardKind = activityChangeKind([card]);
                       return (

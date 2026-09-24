@@ -51,6 +51,14 @@ export function composeActorLabel(actor: string) {
   return humanizeComposeIdentifier(identity);
 }
 
+export function composeNodeTitle(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const slots = (value as Record<string, unknown>).slots;
+  if (!slots || typeof slots !== 'object' || Array.isArray(slots)) return undefined;
+  const title = (slots as Record<string, unknown>).title;
+  return typeof title === 'string' && title.trim() ? title : undefined;
+}
+
 export function composeValueLabel(value: unknown, fallback: string): string {
   if (value === undefined) return fallback;
   if (value === null) return 'Empty';
@@ -70,6 +78,8 @@ export function composeValueLabel(value: unknown, fallback: string): string {
     }`;
   }
   if (typeof value === 'object') {
+    const title = composeNodeTitle(value);
+    if (title) return title;
     const record = value as Record<string, unknown>;
     const preferred = ['title', 'name', 'label', 'key'].find(
       (key) => typeof record[key] === 'string' && String(record[key]).trim()
@@ -115,6 +125,8 @@ function sameValue(left: unknown, right: unknown) {
 
 function representativeLeaf(value: unknown, depth = 0): unknown {
   if (depth > 8 || isScalar(value)) return value;
+  const title = composeNodeTitle(value);
+  if (title) return title;
   if (Array.isArray(value)) return representativeLeaf(value[0], depth + 1);
   if (typeof value === 'object') {
     const record = value as Record<string, unknown>;
