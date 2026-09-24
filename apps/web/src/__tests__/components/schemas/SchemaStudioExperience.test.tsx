@@ -4,9 +4,13 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { SchemaStudioExperience } from '@/components/schemas/SchemaStudioExperience';
 
-const mocks = vi.hoisted(() => ({ data: undefined as unknown, apply: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  data: undefined as unknown,
+  apply: vi.fn(),
+  query: 'candidate=provider',
+}));
 vi.mock('next/navigation', () => ({
-  useSearchParams: () => new URLSearchParams('candidate=provider'),
+  useSearchParams: () => new URLSearchParams(mocks.query),
 }));
 vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
   useStudioCandidates: () => ({
@@ -30,6 +34,7 @@ vi.mock('@/hooks/schemas/useStudioPreview', () => ({
   useStudioPreview: () => ({ data: mocks.data, loading: false, refresh: vi.fn() }),
 }));
 beforeEach(() => {
+  mocks.query = 'candidate=provider';
   mocks.apply.mockReset();
   mocks.data = {
     samples: [],
@@ -48,6 +53,26 @@ beforeEach(() => {
     adoption: { allowed: true },
     workspace: { id: 'target', revision: 2, changes: [] },
   };
+});
+it('keeps the selected branch when Studio links to Browse', () => {
+  mocks.query = 'candidate=provider&branch=feature%2Frelease';
+  render(<SchemaStudioExperience projectId="p" />);
+  expect(screen.getByRole('link', { name: 'Browse source releases' })).toHaveAttribute(
+    'href',
+    '/project/p?tab=schemas&schemaView=browse&branch=feature%2Frelease'
+  );
+});
+it('does not review another Workspace when the deep-linked target is missing', () => {
+  mocks.query = 'candidate=provider&workspace=missing';
+  render(<SchemaStudioExperience projectId="p" />);
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'Workspace missing was not found in this project'
+  );
+  expect(screen.getByRole('button', { name: 'Review & apply' })).toBeDisabled();
+  expect(screen.getByRole('link', { name: 'Browse source releases' })).toHaveAttribute(
+    'href',
+    '/project/p?tab=schemas&schemaView=browse&workspace=missing'
+  );
 });
 it('keeps a required provider checked and locked while blocking a failed definition review', () => {
   render(<SchemaStudioExperience projectId="p" />);

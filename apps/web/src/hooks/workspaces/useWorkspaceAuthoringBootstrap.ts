@@ -3,7 +3,10 @@ import { useEffect, useRef, useState } from 'react';
 import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { validateWorkspaceCandidateYOps } from './useWorkspaceYOps';
-export function useWorkspaceAuthoringBootstrap(candidate: WorkspaceCandidate) {
+export function useWorkspaceAuthoringBootstrap(
+  candidate: WorkspaceCandidate,
+  ensureSaved?: () => Promise<WorkspaceCandidate>
+) {
   const [active, setActive] = useState(Boolean(candidate.authoringLedger));
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<string | null>(null);
@@ -20,10 +23,15 @@ export function useWorkspaceAuthoringBootstrap(candidate: WorkspaceCandidate) {
     setBusy(true);
     setError(null);
     try {
-      if (!candidate.revision)
-        throw new Error('Save this Workspace before enabling Draft activity');
-      if (candidate.yopsDraft.operations.length > 0 && importSnapshot === undefined) {
-        const result = await validateWorkspaceCandidateYOps(candidate);
+      const workspace = ensureSaved ? await ensureSaved() : candidate;
+      if (workspace.revision === undefined)
+        throw new Error('Unable to save this Workspace before enabling Draft activity');
+      if (active || workspace.authoringLedger) {
+        setActive(true);
+        return true;
+      }
+      if (workspace.yopsDraft.operations.length > 0 && importSnapshot === undefined) {
+        const result = await validateWorkspaceCandidateYOps(workspace);
         if (!result.ok || !result.previewTrees)
           throw new Error(
             'Resolve the current Draft validation error before importing its snapshot'
@@ -39,20 +47,21 @@ export function useWorkspaceAuthoringBootstrap(candidate: WorkspaceCandidate) {
       requestId.current ??= crypto.randomUUID();
       const api = getSharedApiClient();
       const expectedRefHead =
-        candidate.baseCommitHash ??
+        workspace.baseCommitHash ??
         (
-          await api.listBranches(candidate.projectId, {
+          await api.listBranches(workspace.projectId, {
             limit: 100,
           })
-        ).branches.find((branch) => branch.name === candidate.targetBranch)?.head_commit_hash ??
+        ).branches.find((branch) => branch.name === workspace.targetBranch)?.head_commit_hash ??
         null;
-      await api.workspaces.authoring.initialize(candidate.projectId, candidate.id, {
+      await api.workspaces.authoring.initialize(workspace.projectId, workspace.id, {
         request_id: requestId.current,
-        expected_workspace_revision: candidate.revision,
+        expected_workspace_revision: workspace.revision,
         expected_ref_head: expectedRefHead,
         ...(importSnapshot === undefined ? {} : { legacy_document: importSnapshot }),
       });
       setActive(true);
+      return true;
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Cannot initialize Draft activity');
     } finally {

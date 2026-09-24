@@ -1,10 +1,16 @@
+'use client';
+
 import { Box, ChevronRight, FileText, Folder, GitBranch, Link2, List, Users } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { getProjectTabSegment } from '@/components/project/projectTabModel';
+import { useNamespaceCollaboration } from '@/hooks/accounts/useNamespaceCollaboration';
+import { useProjectCollaboration } from '@/hooks/accounts/useProjectCollaboration';
+import { useProjectCommunityActivity } from '@/hooks/project/useProjectCommunityActivity';
 import styles from './ProjectCommunityTab.module.css';
 
 interface ProjectCommunityTabProps {
+  branch?: string | null;
   projectId: string;
 }
 
@@ -16,13 +22,46 @@ interface CommunityDestination {
   tone: 'conversation' | 'info' | 'commit';
 }
 
-export function ProjectCommunityTab({ projectId }: ProjectCommunityTabProps) {
+export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabProps) {
+  const { guestsQuery } = useProjectCollaboration(projectId);
+  const namespaceId = guestsQuery.data?.namespace_id ?? null;
+  const { membersQuery } = useNamespaceCollaboration({
+    namespaceId,
+    canReadMembers: !!namespaceId,
+    canManageInvitations: false,
+  });
+  const { pullRequests, workspaces, activityError, activityLoading } =
+    useProjectCommunityActivity(projectId);
+
+  const collaborators = new Map<string, { name: string; scopes: string[] }>();
+  for (const member of membersQuery.data?.members ?? []) {
+    if (member.status !== 'active') continue;
+    collaborators.set(`${member.principal.kind}:${member.principal.principal_id}`, {
+      name: member.principal.display_name ?? member.principal.principal_id,
+      scopes: [`Namespace · ${member.role}`],
+    });
+  }
+  for (const guest of guestsQuery.data?.guests ?? []) {
+    if (guest.status !== 'active') continue;
+    const key = `${guest.principal.kind}:${guest.principal.principal_id}`;
+    const existing = collaborators.get(key);
+    if (existing) existing.scopes.push(`Project guest · ${guest.role}`);
+    else
+      collaborators.set(key, {
+        name: guest.principal.display_name ?? guest.principal.principal_id,
+        scopes: [`Project guest · ${guest.role}`],
+      });
+  }
   const projectPath = `/project/${encodeURIComponent(projectId)}`;
   const pullRequestsPath = `${projectPath}?tab=${getProjectTabSegment('reviews')}`;
+  const focusedBranch = branch?.trim() || 'main';
+  const workspacePath = branch?.trim()
+    ? `${projectPath}?${new URLSearchParams({ tab: 'workspaces', branch: focusedBranch }).toString()}`
+    : `${projectPath}?tab=workspaces`;
   const destinations: CommunityDestination[] = [
     {
       description: 'Draft and discuss changes.',
-      href: `${projectPath}?tab=workspaces`,
+      href: workspacePath,
       icon: Box,
       label: 'Workspaces',
       tone: 'conversation',
@@ -36,7 +75,7 @@ export function ProjectCommunityTab({ projectId }: ProjectCommunityTabProps) {
     },
     {
       description: 'Inspect accepted changes.',
-      href: `${projectPath}/history?branch=main&view=list`,
+      href: `${projectPath}/history?${new URLSearchParams({ branch: focusedBranch, view: 'list' }).toString()}`,
       icon: List,
       label: 'Commit history',
       tone: 'commit',
@@ -57,28 +96,72 @@ export function ProjectCommunityTab({ projectId }: ProjectCommunityTabProps) {
         />
         <div>
           <h2>Project community</h2>
-          <p>Human handoffs linked to your project, without changing structured State.</p>
+          <p>People and recent project objects, linked to their original workflows.</p>
         </div>
       </header>
 
       <div className={styles.layout}>
         <section aria-labelledby="community-empty-title" className={styles.emptyState}>
           <div className={styles.emptyStateBody}>
-            <Image
-              alt="A handoff note connecting a person, a conversation, and versioned work"
-              className={styles.illustration}
-              height={270}
-              priority
-              src="/community-empty-state.png"
-              width={450}
-            />
-            <h3 id="community-empty-title">Bring the right people into the work</h3>
+            {pullRequests.length === 0 && workspaces.length === 0 ? (
+              <Image
+                alt=""
+                aria-hidden="true"
+                className={styles.illustration}
+                height={270}
+                priority
+                src="/community-empty-state.png"
+                width={450}
+              />
+            ) : null}
+            <h3 id="community-empty-title">Recent project objects</h3>
             <p>
-              Handoff notes will appear here when they are linked to real workspace or review
-              objects.
+              Workspace and pull request records are shown here. Handoff notes are not supported
+              yet.
             </p>
+            {activityLoading ? <output>Loading project objects…</output> : null}
+            {activityError ? <p role="alert">{activityError}</p> : null}
+            {!activityLoading && pullRequests.length === 0 && workspaces.length === 0 ? (
+              <p>No recent objects available.</p>
+            ) : null}
+            <ul className="my-5 w-full space-y-2">
+              {pullRequests.slice(0, 6).map((request) => (
+                <li
+                  className="rounded-lg border border-[var(--stroke-default)] p-3 text-sm"
+                  key={request.id}
+                >
+                  <strong>
+                    Pull request #{request.number}: {request.title}
+                  </strong>
+                  <span className="ml-2 text-[var(--text-tertiary)]">
+                    {new Date(request.updated_at).toLocaleString()}
+                  </span>
+                  <Link
+                    className="ml-2 text-[var(--accent-commit)]"
+                    href={`${pullRequestsPath}&pr=${request.number}`}
+                  >
+                    Open pull request
+                  </Link>
+                </li>
+              ))}
+              {workspaces.slice(0, 6).map((workspace) => (
+                <li
+                  className="rounded-lg border border-[var(--stroke-default)] p-3 text-sm"
+                  key={workspace.id}
+                >
+                  <strong>Workspace: {workspace.title}</strong>
+                  <span className="ml-2 text-[var(--text-tertiary)]">{workspace.updatedAt}</span>
+                  <Link
+                    className="ml-2 text-[var(--accent-commit)]"
+                    href={`${projectPath}?${new URLSearchParams({ tab: 'workspaces', branch: workspace.targetBranch, workspace: workspace.id }).toString()}`}
+                  >
+                    Open workspace
+                  </Link>
+                </li>
+              ))}
+            </ul>
             <div className={styles.primaryActions}>
-              <Link className={styles.primaryButton} href={`${projectPath}?tab=workspaces`}>
+              <Link className={styles.primaryButton} href={workspacePath}>
                 <Folder aria-hidden="true" />
                 Open workspaces
               </Link>
@@ -127,12 +210,34 @@ export function ProjectCommunityTab({ projectId }: ProjectCommunityTabProps) {
             </nav>
           </section>
 
-          <EmptySidebarCard
-            description="Handoff notes will appear here when linked to real people and objects."
-            icon={Users}
-            title="Collaborators"
-            value="No collaborators linked"
-          />
+          <section className={styles.sidebarCard}>
+            <div className={styles.sidebarHeading}>
+              <Users aria-hidden="true" />
+              <h3>Collaborators</h3>
+            </div>
+            {guestsQuery.error ? (
+              <p role="alert">Project collaborators unavailable or access denied.</p>
+            ) : null}
+            {membersQuery.error ? (
+              <p role="alert">Namespace members unavailable or access denied.</p>
+            ) : null}
+            {guestsQuery.isLoading || membersQuery.isLoading ? <p>Loading collaborators…</p> : null}
+            {!guestsQuery.isLoading &&
+            !membersQuery.isLoading &&
+            collaborators.size === 0 &&
+            !guestsQuery.error &&
+            !membersQuery.error ? (
+              <p>No collaborators visible.</p>
+            ) : null}
+            {[...collaborators.entries()].map(([id, person]) => (
+              <p className="mt-3 text-sm" key={id}>
+                <strong>{person.name}</strong>
+                <small className="block text-[var(--text-tertiary)]">
+                  {person.scopes.join(' · ')}
+                </small>
+              </p>
+            ))}
+          </section>
           <EmptySidebarCard
             description="Related tools and references will appear here when linked to this project."
             icon={Link2}

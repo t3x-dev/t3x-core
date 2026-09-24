@@ -1940,12 +1940,13 @@ function schemaArtifactHref(
   canonicalName: string,
   version: string
 ): string {
-  const query = new URLSearchParams();
+  const [path, existingQuery = ''] = registryHref.split('?', 2);
+  const query = new URLSearchParams(existingQuery);
   if (family) query.set('family', family);
   query.set('mode', 'compose');
   query.set('module', canonicalName);
   query.set('version', version);
-  return `${registryHref}?${query.toString()}#module-detail`;
+  return `${path}?${query.toString()}#module-detail`;
 }
 
 function selectInspectorNode(model: PrdRenderModel, nodeId: string): PrdSelectedNode {

@@ -98,6 +98,7 @@ export function WorkspaceComposeChat({
 
   return (
     <Conversation
+      initial="instant"
       className={cn(
         'min-h-0 bg-[var(--surface-panel)] text-[var(--text-primary)]',
         variant === 'discussion' && styles.discussion

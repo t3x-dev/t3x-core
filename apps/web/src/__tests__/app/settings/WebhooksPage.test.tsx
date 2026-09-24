@@ -42,7 +42,9 @@ describe('WebhooksPage', () => {
     render(<WebhooksPage />);
 
     expect(screen.getByRole('heading', { name: 'Webhooks', level: 1 })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Recent deliveries' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Test results in this session' })
+    ).toBeInTheDocument();
     expect(screen.getByText('Automations')).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByText('No webhooks configured for this project.')).toBeInTheDocument();

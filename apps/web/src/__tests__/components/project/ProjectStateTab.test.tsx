@@ -34,10 +34,15 @@ vi.mock('@/hooks/workspaces/useCommitTransitionView', () => ({
 vi.mock('@/components/project/StateOverviewView', () => ({
   StateOverviewView: ({
     reader,
+    schemaHref,
   }: {
     reader?: (expanded: boolean, expand: () => void) => import('react').ReactNode;
+    schemaHref?: string;
   }) => (
-    <section aria-label="Overview">{reader ? reader(true, () => {}) : 'Structured reader'}</section>
+    <section aria-label="Overview">
+      {schemaHref ? <a href={schemaHref}>View schemas</a> : null}
+      {reader ? reader(true, () => {}) : 'Structured reader'}
+    </section>
   ),
 }));
 
@@ -636,7 +641,7 @@ describe('ProjectStateTab', () => {
     );
     expect(screen.getByRole('link', { name: 'Propose change' })).toHaveAttribute(
       'href',
-      '/t3x-dev/test-project/workspaces?branch=main'
+      '/project/proj_test?branch=main&tab=workspaces'
     );
     const tree = screen.getByRole('region', { name: 'Structured state tree' });
     expect(within(tree).getByRole('region', { name: 'Workspace structure rows' })).toHaveAttribute(
@@ -997,6 +1002,10 @@ describe('ProjectStateTab', () => {
     await screen.findByRole('region', { name: 'Structured state tree' });
     fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
 
+    expect(screen.getByRole('link', { name: 'View schemas' })).toHaveAttribute(
+      'href',
+      '/project/proj_test?tab=schemas&branch=main'
+    );
     expect(screen.getByRole('tablist', { name: 'PRD navigation view' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'modules' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('1 Module used')).toBeInTheDocument();
@@ -1009,7 +1018,7 @@ describe('ProjectStateTab', () => {
       screen.getByRole('link', { name: 'Open Rollout & Operations in YSchema' })
     ).toHaveAttribute(
       'href',
-      '/t3x-dev/test-project/schemas?family=prd&mode=compose&module=t3x%2Fprd-rollout-operations&version=1.0.0#module-detail'
+      '/project/proj_test?tab=schemas&branch=main&family=prd&mode=compose&module=t3x%2Fprd-rollout-operations&version=1.0.0#module-detail'
     );
     expect(
       screen.getByText('Mapped by Workspace composition t3x/prd-rollout-operations@1.0.0')
@@ -1175,7 +1184,7 @@ describe('ProjectStateTab', () => {
     expect(screen.getByRole('tablist', { name: 'State views' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Propose change' })).toHaveAttribute(
       'href',
-      '/t3x-dev/test-project/workspaces?branch=main'
+      '/project/proj_test?branch=main&tab=workspaces'
     );
     expect(screen.queryByRole('button', { name: 'New branch' })).not.toBeInTheDocument();
   });

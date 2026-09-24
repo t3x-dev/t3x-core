@@ -8,6 +8,11 @@ import { useProjectWorkspaceSchemaBindingsStore } from '@/store/projectWorkspace
 import type { PublishedSchemaVersionManifest } from '@/types/schemaModules';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
+let schemaRouteQuery = '';
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => new URLSearchParams(schemaRouteQuery),
+}));
+
 vi.mock('@/components/schemas/SchemaCatalogExperience', () => ({
   SchemaCatalogExperience: ({ children }: { children: React.ReactNode }) => children,
 }));
@@ -67,6 +72,7 @@ const workspace: WorkspaceCandidate = {
 };
 
 beforeEach(() => {
+  schemaRouteQuery = '';
   workspaces = [];
   publishedVersions = [];
   refreshWorkspaces.mockReset().mockResolvedValue(undefined);
@@ -77,6 +83,43 @@ beforeEach(() => {
 });
 
 describe('ProjectSchemasTab', () => {
+  it('does not bind a different Workspace when an explicit deep link is stale', () => {
+    workspaces = [workspace];
+    schemaRouteQuery = 'workspace=missing';
+    render(<ProjectSchemasTab projectId="proj_test" />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Workspace missing was not found in this project'
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Prompt Schema/ }));
+    fireEvent.click(screen.getByRole('radio', { name: /v1 Published/i }));
+    expect(screen.queryByRole('button', { name: 'Apply to Main workspace' })).toBeNull();
+    expect(saveDraft).not.toHaveBeenCalled();
+  });
+  it('does not bind a Workspace from another branch', () => {
+    workspaces = [workspace];
+    schemaRouteQuery = 'workspace=workspace_main&branch=release';
+    render(<ProjectSchemasTab projectId="proj_test" />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Workspace workspace_main was not found on this branch'
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Prompt Schema/ }));
+    fireEvent.click(screen.getByRole('radio', { name: /v1 Published/i }));
+    expect(screen.queryByRole('button', { name: 'Apply to Main workspace' })).toBeNull();
+    expect(saveDraft).not.toHaveBeenCalled();
+  });
+  it('does not select a Workspace from another branch as the implicit target', () => {
+    workspaces = [workspace];
+    schemaRouteQuery = 'branch=release';
+    render(<ProjectSchemasTab projectId="proj_test" />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('No Workspace was found on branch release');
+    fireEvent.click(screen.getByRole('button', { name: /Prompt Schema/ }));
+    fireEvent.click(screen.getByRole('radio', { name: /v1 Published/i }));
+    expect(screen.queryByRole('button', { name: 'Apply to Main workspace' })).toBeNull();
+    expect(saveDraft).not.toHaveBeenCalled();
+  });
   it('renders the multi-family schema version browser from fixtures', () => {
     render(<ProjectSchemasTab projectId="proj_test" />);
 

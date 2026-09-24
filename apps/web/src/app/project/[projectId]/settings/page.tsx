@@ -19,20 +19,20 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { ArrowLeft, CheckCircle2, Circle, GripVertical, Loader2, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { AutopilotSettings } from '@/components/autopilot/AutopilotSettings';
 import { ProjectCollaborationPanel } from '@/components/project/ProjectCollaborationPanel';
 import { ProjectVisibilitySettings } from '@/components/project/ProjectVisibilitySettings';
 import { ModelSelector } from '@/components/shared/ModelSelector';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { useProviderCommands } from '@/hooks/providers/useProviderCommands';
+import { fetchProject } from '@/queries/project';
 import {
   fetchProjectProviderConfig,
   fetchProviderRoles,
   fetchProviders,
 } from '@/queries/providers';
-import { useProjectStore } from '@/store/projectStore';
 import type { ProviderInfo, RoleAssignment } from '@/types/api';
 import { cn } from '@/utils/cn';
 
@@ -208,27 +208,80 @@ function SortableRoleGroup({
 // ────────────────────────────────────────────────────────────
 
 export default function ProjectSettingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ProjectSettingsPageContent />
+    </Suspense>
+  );
+}
+
+function ProjectSettingsPageContent() {
   const { projectId } = useParams<{ projectId: string }>();
+  const searchParams = useSearchParams();
+  const requestedReturnTo = searchParams.get('returnTo');
+  const returnTo =
+    requestedReturnTo?.startsWith('/') &&
+    !requestedReturnTo.startsWith('//') &&
+    !requestedReturnTo.includes('\\')
+      ? requestedReturnTo
+      : `/project/${encodeURIComponent(projectId)}`;
   const { saveProjectProviderConfig } = useProviderCommands();
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [globalRoles, setGlobalRoles] = useState<RoleAssignment[]>([]);
   const [overriddenRoles, setOverriddenRoles] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const project = useProjectStore((state) => state.projects.find((p) => p.id === projectId));
+  const [providerError, setProviderError] = useState<string | null>(null);
+  const [modelError, setModelError] = useState<string | null>(null);
+  const [projectModel, setProjectModel] = useState<{
+    provider: string | null;
+    model: string | null;
+  } | null>(null);
+  const [modelLoading, setModelLoading] = useState(true);
+  const [modelVersion, setModelVersion] = useState(0);
   const { setModel: updateProjectModel } = useProjectCrud();
 
   const handleModelChange = async (provider: string | null, model: string | null) => {
+    setModelError(null);
     try {
       await updateProjectModel(projectId, provider, model);
-    } catch {
-      // Error is handled by the store (notifyCallback)
+      setProjectModel({ provider, model });
+    } catch (error) {
+      setModelError(error instanceof Error ? error.message : 'Failed to save model settings.');
+      setModelVersion((version) => version + 1);
     }
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    setModelLoading(true);
+    setModelError(null);
+    fetchProject(projectId)
+      .then((value) => {
+        if (!cancelled)
+          setProjectModel({
+            provider: value.default_provider ?? null,
+            model: value.default_model ?? null,
+          });
+      })
+      .catch((error) => {
+        if (!cancelled)
+          setModelError(
+            error instanceof Error ? error.message : 'Failed to load project model settings.'
+          );
+      })
+      .finally(() => {
+        if (!cancelled) setModelLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
+      setProviderError(null);
       const [data, roles, projectConfig] = await Promise.all([
         fetchProviders(),
         fetchProviderRoles(),
@@ -261,7 +314,7 @@ export default function ProjectSettingsPage() {
 
       setProviders(reorderByRoles(data, effectiveRoles));
     } catch (err) {
-      console.error('Failed to load project settings:', err);
+      setProviderError(err instanceof Error ? err.message : 'Failed to load provider overrides.');
     } finally {
       setLoading(false);
     }
@@ -272,6 +325,7 @@ export default function ProjectSettingsPage() {
   }, [loadData]);
 
   const handleReorder = async (role: RoleGroup, oldIndex: number, newIndex: number) => {
+    setProviderError(null);
     const configured = providers.filter((p) => p.role === role && p.configured);
     const reordered = arrayMove(configured, oldIndex, newIndex);
 
@@ -318,8 +372,9 @@ export default function ProjectSettingsPage() {
 
       await saveProjectProviderConfig(projectId, { roles: projectRoles });
     } catch (err) {
-      console.error('Failed to save project provider config:', err);
+      const message = err instanceof Error ? err.message : 'Failed to save provider overrides.';
       await loadData();
+      setProviderError(message);
     } finally {
       setSaving(false);
     }
@@ -328,13 +383,16 @@ export default function ProjectSettingsPage() {
   const handleResetToGlobal = async () => {
     try {
       setSaving(true);
+      setProviderError(null);
       await saveProjectProviderConfig(projectId, null);
       setOverriddenRoles(new Set());
       // Reload with global defaults
       const data = await fetchProviders();
       setProviders(reorderByRoles(data, globalRoles));
     } catch (err) {
-      console.error('Failed to reset to global:', err);
+      const message = err instanceof Error ? err.message : 'Failed to reset provider overrides.';
+      await loadData();
+      setProviderError(message);
     } finally {
       setSaving(false);
     }
@@ -354,11 +412,11 @@ export default function ProjectSettingsPage() {
     <div className="max-w-3xl mx-auto py-8 px-6">
       <div className="mb-2">
         <Link
-          href={`/project/${projectId}`}
+          href={returnTo}
           className="inline-flex items-center gap-1 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
         >
           <ArrowLeft className="h-3 w-3" />
-          Back to Canvas
+          Back to project
         </Link>
       </div>
 
@@ -397,6 +455,11 @@ export default function ProjectSettingsPage() {
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
           Override the global provider order for this project.
         </p>
+        {providerError ? (
+          <p className="mt-2 text-sm text-[var(--status-error)]" role="alert">
+            {providerError}
+          </p>
+        ) : null}
       </div>
 
       <div className="mt-6 space-y-8">
@@ -422,11 +485,21 @@ export default function ProjectSettingsPage() {
         <p className="text-sm text-[var(--text-secondary)] mb-6">
           Set the default provider and model used for AI operations in this project.
         </p>
-        <ModelSelector
-          initialProvider={project?.defaultProvider}
-          initialModel={project?.defaultModel}
-          onChange={handleModelChange}
-        />
+        {modelError ? (
+          <p className="mb-3 text-sm text-[var(--status-error)]" role="alert">
+            {modelError}
+          </p>
+        ) : null}
+        {modelLoading ? (
+          <output>Loading project model settings…</output>
+        ) : projectModel ? (
+          <ModelSelector
+            initialProvider={projectModel.provider}
+            initialModel={projectModel.model}
+            key={modelVersion}
+            onChange={handleModelChange}
+          />
+        ) : null}
       </div>
 
       {/* Autopilot Settings */}

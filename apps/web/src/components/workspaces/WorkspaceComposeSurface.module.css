@@ -14,79 +14,55 @@
   overflow: hidden;
   background: var(--surface-panel);
 }
-.workspaceNav {
-  display: none;
-  width: 260px;
-  flex: 0 0 260px;
-  flex-direction: column;
-  border-right: 1px solid var(--stroke-default);
-  background: var(--surface-app);
-  padding: 24px 16px;
-}
-.branchControl {
+.reviewToolbar {
   display: flex;
-  margin-bottom: 12px;
-}
-.branchControl > div {
-  width: 100%;
-}
-.branchControl button {
-  width: 100%;
-  max-width: none;
-  height: 36px;
-  border-radius: 8px;
-  padding-inline: 12px;
-  background: var(--surface-panel);
-}
-.navGroup {
-  display: grid;
-  gap: 3px;
-}
-.navLabel {
-  padding: 8px 12px 5px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  line-height: 16px;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-}
-.navDivider {
-  height: 1px;
-  margin: 8px 4px;
-  background: var(--stroke-divider);
-}
-.navItem {
-  position: relative;
-  display: flex;
-  width: 100%;
-  height: 36px;
+  min-width: 0;
+  min-height: 38px;
+  flex: none;
   align-items: center;
-  gap: 12px;
-  border-radius: 8px;
-  padding: 0 12px;
-  text-align: left;
-  font-size: 13px;
+  gap: 10px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--stroke-divider);
+  padding: 4px 12px;
+  background: var(--surface-panel);
+  scrollbar-width: none;
+}
+.reviewToolbarGroup {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+.reviewToolbarGroup + .reviewToolbarGroup {
+  border-left: 1px solid var(--stroke-divider);
+  padding-left: 10px;
+}
+.reviewTool {
+  display: inline-flex;
+  height: 28px;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--radius-control);
+  padding: 0 9px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+.reviewTool:hover {
+  background: var(--hover-bg);
   color: var(--text-primary);
 }
-.navItem:hover {
-  background: var(--hover-bg);
-}
-.navItemNoHighlight:hover {
-  background: transparent;
-}
-.navItem svg {
-  width: 16px;
-  height: 16px;
+.reviewTool svg {
+  width: 13px;
+  height: 13px;
   flex: none;
 }
-.navItemActive {
+.reviewToolActive {
   background: var(--accent-commit-soft);
-  font-weight: 600;
   color: var(--accent-commit);
-}
-.navItemActive svg {
-  color: var(--accent-commit);
+  font-weight: 650;
 }
 .surface {
   display: flex;
@@ -466,9 +442,6 @@
   color: var(--accent-commit);
 }
 @media (min-width: 1024px) {
-  .workspaceNav {
-    display: flex;
-  }
   .sidebar {
     display: block;
   }
@@ -703,7 +676,7 @@
   border-bottom: 0;
   border-right: 1px solid var(--stroke-default);
   padding: 10px 16px;
-  background: var(--compose-canvas);
+  background: var(--surface-panel);
 }
 .composeHeader h1 {
   min-width: 0;
@@ -1433,7 +1406,7 @@
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
-  background: var(--surface-panel);
+  background: var(--compose-canvas);
 }
 .discussionHeader {
   display: flex;
@@ -1509,19 +1482,6 @@
   flex: 1;
   flex-direction: column;
 }
-.proposalPermission {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 7px;
-  border-top: 1px solid var(--stroke-divider);
-  padding: 9px 20px;
-  font-size: 10px;
-  color: var(--text-secondary);
-}
-.proposalPermission input {
-  accent-color: var(--accent-commit);
-}
 .candidateNotice {
   display: flex;
   flex: none;
@@ -1529,7 +1489,7 @@
   justify-content: space-between;
   gap: 10px;
   border-top: 1px solid var(--stroke-divider);
-  background: var(--accent-conversation-soft);
+  background: var(--status-error-muted);
   padding: 10px 20px;
 }
 .candidateNotice > div {
@@ -1542,7 +1502,7 @@
   width: 14px;
   height: 14px;
   flex: none;
-  color: var(--accent-conversation);
+  color: var(--status-error);
 }
 .candidateNotice span {
   display: grid;
@@ -1618,6 +1578,31 @@
   margin: 0;
   padding: 8px 12px 12px;
 }
+.composerSubmit {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+.composerSubmit {
+  width: 100%;
+  justify-content: space-between;
+}
+.composerSubmit > button:first-child {
+  width: auto;
+  height: 28px;
+  border-radius: 8px;
+  background: transparent;
+  padding: 0 20px 0 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+.discussionComposer .send {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
 .composerNotice {
   padding: 8px 12px;
   font-size: 10px;
@@ -1643,8 +1628,60 @@
 .nodeHistory {
   min-height: 0;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.nodeHistoryScroll {
+  min-height: 0;
+  flex: 1;
   overflow-y: auto;
   padding: 0 20px 24px;
+}
+.nodeActionBar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 0 20px 10px;
+}
+.nodeActionBar > button {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--stroke-default);
+  border-radius: 8px;
+  background: var(--surface-card);
+  padding: 0 9px;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+.nodeActionBar > button svg {
+  width: 11px;
+  height: 11px;
+}
+.nodeActionBar > button:disabled {
+  opacity: 0.45;
+}
+.nodeActionBar > span {
+  display: inline-flex;
+  margin-left: auto;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  color: var(--text-tertiary);
+}
+.nodeActionBar kbd {
+  display: inline-grid;
+  min-width: 16px;
+  height: 16px;
+  place-items: center;
+  border: 1px solid var(--stroke-default);
+  border-radius: 4px;
+  background: var(--surface-app);
+  font-family: var(--font-mono);
+  font-size: 8px;
 }
 .nodeHistoryIdentity {
   display: grid;
@@ -2153,20 +2190,23 @@
   background: var(--surface-app);
   font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
 }
+.composeBoard.discussionClosed {
+  grid-template-columns: minmax(0, 1fr);
+}
 .composeHeader {
   display: grid;
-  min-height: 82px;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 18px;
+  min-height: 42px;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  gap: 12px;
   border-right: 0;
   border-bottom: 0;
-  padding: 12px 24px 8px;
+  padding: 6px 12px;
   background: var(--surface-panel);
 }
 .composeIdentity {
-  display: grid;
+  display: flex;
   min-width: 0;
-  gap: 3px;
+  align-items: center;
 }
 .composeTitleRow {
   display: flex;
@@ -2178,16 +2218,34 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 18px;
-  font-weight: 650;
+  font-size: 16px;
+  font-weight: 700;
   line-height: 24px;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 .composeTitleRow > svg {
   width: 14px;
   height: 14px;
   flex: none;
   color: var(--text-tertiary);
+}
+.workspaceBranchControl {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+.workspaceBranchControl > div {
+  min-width: 0;
+}
+.workspaceBranchControl button {
+  width: 132px;
+  min-width: 0;
+  height: 28px;
+  border-radius: 4px;
+  padding-inline: 8px;
+  background: var(--surface-card);
+  box-shadow: none;
+  font-size: 12px;
 }
 .draftBadge {
   display: inline-flex;
@@ -2244,53 +2302,125 @@
   color: var(--status-success);
 }
 .stageSwitch {
-  height: 32px;
+  height: 28px;
   align-self: center;
-  padding: 3px;
-  gap: 2px;
-  border-radius: 9px;
+  padding: 2px;
+  gap: 0;
+  border-radius: 5px;
 }
 .stageSwitch button {
-  min-width: 94px;
-  border-radius: 6px;
-  padding: 0 12px;
-  gap: 7px;
+  min-width: 78px;
+  border-radius: 3px;
+  padding: 0 9px;
+  gap: 0;
   font-size: 12px;
-  font-weight: 550;
-}
-.stageSwitch button > span {
-  display: grid;
-  width: 16px;
-  height: 16px;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--surface-app);
-  color: var(--text-tertiary);
-  font-size: 9px;
-  font-weight: 700;
-}
-.stageSwitch button[aria-selected="true"] > span {
-  background: var(--text-primary);
-  color: var(--surface-panel);
+  font-weight: 600;
 }
 .composeHeaderMeta {
-  margin-left: 0;
+  margin-left: auto;
   align-self: center;
 }
-.composeHeaderMeta:empty {
-  display: none;
+.composeHeaderMeta button {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
 }
 .composeMain {
   border-right: 0;
-  background: var(--surface-app);
+  background: var(--surface-panel);
 }
 .sourcesSection {
-  display: flex;
-  min-height: 48px;
+  display: block;
+  min-height: 0;
+  border: 0;
+  padding: 12px 24px 10px;
+  background: var(--surface-panel);
+}
+.sourcesHeading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  border: 0;
-  padding: 8px 24px 6px;
+  margin-bottom: 0;
+}
+.sourcesSection h2 {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.sourcesToolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.sourceChips,
+.generateControls {
+  gap: 7px;
+}
+.sourceChips {
+  flex-wrap: nowrap;
+  overflow: visible;
+  scrollbar-width: none;
+}
+.generateControls {
+  flex-wrap: nowrap;
+  margin-left: 0;
+}
+.materialChip,
+.sourceChips > button,
+.generateControls > span,
+.generateControls > button {
+  min-height: 30px;
+  border-radius: 4px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+.materialChip {
+  width: 128px;
+  max-width: 128px;
+}
+.materialChip > span {
+  min-width: 0;
+  flex: 1;
+}
+.materialChip small {
+  flex: none;
+  font-size: 11px;
+}
+.materialChip svg:last-child {
+  width: 11px;
+  height: 11px;
+  color: var(--text-tertiary);
+}
+.sourceMaterialMenu {
+  width: 280px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.sourceMaterialMenu small {
+  flex: none;
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+.sourceMaterialName {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.generateControls > span {
+  min-width: 108px;
+}
+.generateControls > button {
+  padding-inline: 11px;
+  font-weight: 550;
+}
+.generateControls > button svg {
+  width: 13px;
+  height: 13px;
 }
 .changeFilters {
   display: flex;
@@ -2344,14 +2474,19 @@
 .composeToolbarActions {
   display: flex;
   min-width: 0;
-  margin-left: auto;
+  margin-left: 0;
   align-items: center;
   gap: 8px;
+}
+.composeToolbarActions .addManually {
+  height: 30px;
+  margin-left: 0;
+  padding-inline: 8px;
 }
 .changeScope {
   min-height: 28px;
   margin-left: 0;
-  border-radius: 8px;
+  border-radius: 5px;
 }
 .changeScope button {
   display: inline-flex;
@@ -2359,9 +2494,9 @@
   align-items: center;
   gap: 6px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 3px;
   padding: 0 10px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
 }
 .changeScope button[aria-selected="true"] {
@@ -2412,7 +2547,27 @@
 }
 .panel {
   padding: 4px 0 16px;
-  background: var(--surface-app);
+  background: var(--surface-panel);
+}
+.panelHeader {
+  padding: 10px 24px 8px;
+}
+.panelTitleRow h2 {
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.panelTitleRow > span {
+  min-width: 22px;
+  height: 22px;
+  font-size: 12px;
+}
+.addManually {
+  font-size: 13px;
+}
+.panel[data-change-scope="all"] .panelHeader {
+  padding: 0 0 8px;
 }
 .panel[data-change-scope="all"] {
   padding: 12px 24px 24px;
@@ -2422,7 +2577,7 @@
   border: 0;
   border-radius: 0;
   background: var(--surface-panel);
-  box-shadow: -12px 0 32px rgba(15, 18, 30, 0.08);
+  box-shadow: none;
 }
 .discussionHeader {
   min-height: 52px;
@@ -2485,6 +2640,7 @@
     flex-wrap: wrap;
   }
   .composeToolbarActions {
+    justify-content: flex-end;
     margin-left: 0;
   }
 }
@@ -2492,13 +2648,18 @@
   .composeHeader {
     grid-template-columns: minmax(0, 1fr) auto;
   }
+  .workspaceBranchControl {
+    grid-column: 2;
+    grid-row: 1;
+  }
   .stageSwitch {
     grid-column: 1;
+    grid-row: 2;
     justify-self: start;
   }
   .composeHeaderMeta {
     grid-column: 2;
-    grid-row: 1;
+    grid-row: 2;
   }
   .composeMetaRow {
     flex-wrap: wrap;
@@ -2516,6 +2677,9 @@
     width: 100%;
     overflow-x: auto;
     scrollbar-width: none;
+  }
+  .sourcesHeading {
+    grid-template-columns: minmax(0, 1fr);
   }
   .discussionSidebar {
     margin: 0;

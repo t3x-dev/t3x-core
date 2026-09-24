@@ -1,4 +1,7 @@
-import type { WorkspaceAuthoringView } from '@t3x-dev/api-client';
+import type {
+  WorkspaceAuthoringView,
+  WorkspaceTransitionReviewSnapshotEnvelope,
+} from '@t3x-dev/api-client';
 import type { SemanticContent } from '@t3x-dev/core';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -30,7 +33,6 @@ import {
   ListTree,
   MessageSquare,
   Minus,
-  MinusCircle,
   PanelRightOpen,
   Pencil,
   Percent,
@@ -53,9 +55,22 @@ import { GenerationModelSelector } from '@/components/generation/GenerationModel
 import { DOCUMENT_SOURCE_ACCEPTED_TYPES } from '@/components/import/documentAcceptTypes';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
-import { WorkspaceComposeChat } from '@/components/workspaces/WorkspaceComposeChat';
 import {
-  activityChangeKind,
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { OutputTargetsTab } from '@/components/workspaces/OutputTargetsTab';
+import { SourceArtifactRoleEditor } from '@/components/workspaces/SourcesTab';
+import { SourceTransitionTab } from '@/components/workspaces/SourceTransitionTab';
+import { WorkspaceComposeChat } from '@/components/workspaces/WorkspaceComposeChat';
+import { WorkspaceContentEditor } from '@/components/workspaces/WorkspaceContentEditor';
+import type { WorkspaceYOpsFlowView } from '@/components/workspaces/YOpsDraftTab';
+import {
   activityChannelLabel,
   activityOperation,
   type ComposeActivityMeta,
@@ -86,6 +101,7 @@ import { repositoryConversationSourceHref } from '@/domain/sourceEvidenceNavigat
 import { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import { useWorkspaceAuthoringBootstrap } from '@/hooks/workspaces/useWorkspaceAuthoringBootstrap';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
+import { useWorkspaceReviewHistory } from '@/hooks/workspaces/useWorkspaceReviewHistory';
 import { validateWorkspaceCandidateYOps } from '@/hooks/workspaces/useWorkspaceYOps';
 import type {
   SourceBundleItem,
@@ -104,12 +120,19 @@ import { WorkspaceReviewCodeView } from './WorkspaceReviewCodeView';
 import diffStyles from './WorkspaceReviewDiff.module.css';
 
 type WorkspaceSurfaceMode = 'compose' | 'review';
-type ReviewPane = 'rendered' | 'changes' | 'yaml' | 'checks';
+type ReviewPane = 'rendered' | 'changes' | 'yaml' | 'checks' | 'source' | 'edit' | 'delivery';
 type ReviewCheckStatus = 'failed' | 'passed' | 'pending';
 type ComposeChangeFilter = 'all' | 'modified' | 'added' | 'attention';
 
 function parseReviewPane(value: string | null): ReviewPane {
-  return value === 'changes' || value === 'yaml' || value === 'checks' ? value : 'rendered';
+  return value === 'changes' ||
+    value === 'yaml' ||
+    value === 'checks' ||
+    value === 'source' ||
+    value === 'edit' ||
+    value === 'delivery'
+    ? value
+    : 'rendered';
 }
 
 function parseWorkspaceSurfaceMode(
@@ -121,6 +144,9 @@ function parseWorkspaceSurfaceMode(
     paneValue === 'changes' ||
     paneValue === 'yaml' ||
     paneValue === 'checks' ||
+    paneValue === 'source' ||
+    paneValue === 'edit' ||
+    paneValue === 'delivery' ||
     paneValue === 'validation'
   )
     return 'review';
@@ -148,7 +174,6 @@ export function WorkspaceComposeReviewSurface({
   const router = useRouter();
   const searchParams = useSearchParams();
   const routeQuery = searchParams.toString();
-  const initialRouteAppliedRef = useRef(false);
   const lastSyncedRouteQueryRef = useRef<string | null>(null);
   const [reviewPane, setReviewPaneState] = useState<ReviewPane>(() =>
     parseReviewPane(new URLSearchParams(routeQuery).get('reviewPane'))
@@ -201,21 +226,12 @@ export function WorkspaceComposeReviewSurface({
     const params = new URLSearchParams(routeQuery);
     const rawPane = params.get('reviewPane');
     setReviewPaneState(parseReviewPane(rawPane));
+    const routeMode = parseWorkspaceSurfaceMode(params.get('workspaceMode'), rawPane) ?? 'compose';
+    if (routeMode !== mode) onModeChange(routeMode);
     if (rawPane === 'validation') {
       writeWorkspaceSurfaceUrl('review', 'rendered');
     }
-  }, [routeQuery, writeWorkspaceSurfaceUrl]);
-
-  useEffect(() => {
-    if (initialRouteAppliedRef.current) return;
-    initialRouteAppliedRef.current = true;
-    const params = new URLSearchParams(routeQuery);
-    const routeMode = parseWorkspaceSurfaceMode(
-      params.get('workspaceMode'),
-      params.get('reviewPane')
-    );
-    if (routeMode && routeMode !== mode) onModeChange(routeMode);
-  }, [mode, onModeChange, routeQuery]);
+  }, [mode, onModeChange, routeQuery, writeWorkspaceSurfaceUrl]);
 
   return (
     <div
@@ -225,31 +241,36 @@ export function WorkspaceComposeReviewSurface({
       )}
     >
       <div className={composeStyles.workspaceBody}>
-        {mode === 'review' ? (
-          <WorkspaceNavigation
-            branchOptions={branchOptions}
-            controller={controller}
-            mode={mode}
-            onBranchChange={onBranchChange}
-            onModeChange={setSurfaceMode}
-            onPaneChange={setReviewPane}
-            pane={reviewPane}
-          />
-        ) : null}
         <div className={composeStyles.workspaceContent}>
           {mode === 'review' ? (
-            <ReviewSurface
-              activity={activity}
-              compareScenarioId=""
-              controller={controller}
-              pane={reviewPane}
-              setPane={setReviewPane}
-              onModeChange={setSurfaceMode}
-            />
+            <>
+              <WorkspaceStageHeader
+                branchOptions={branchOptions}
+                candidate={controller.candidate ?? candidate}
+                mode={mode}
+                onBranchChange={onBranchChange}
+                onModeChange={setSurfaceMode}
+              />
+              <WorkspaceReviewToolbar
+                controller={controller}
+                onPaneChange={setReviewPane}
+                pane={reviewPane}
+              />
+              <ReviewSurface
+                activity={activity}
+                compareScenarioId=""
+                controller={controller}
+                pane={reviewPane}
+                setPane={setReviewPane}
+                onModeChange={setSurfaceMode}
+              />
+            </>
           ) : (
             <ComposeSurface
+              branchOptions={branchOptions}
               candidate={controller.candidate ?? candidate}
               controller={controller}
+              onBranchChange={onBranchChange}
               onModeChange={setSurfaceMode}
             />
           )}
@@ -259,35 +280,31 @@ export function WorkspaceComposeReviewSurface({
   );
 }
 
-function WorkspaceNavigation({
+function WorkspaceStageHeader({
   branchOptions,
-  controller,
+  candidate,
+  discussionOpen,
   mode,
   onBranchChange,
+  onDiscussionToggle,
   onModeChange,
-  onPaneChange,
-  pane,
 }: {
   branchOptions: string[];
-  controller: WorkspaceComposeReviewController;
+  candidate: WorkspaceCandidate;
+  discussionOpen?: boolean;
   mode: WorkspaceSurfaceMode;
   onBranchChange?: (branch: string) => Promise<void> | void;
+  onDiscussionToggle?: () => void;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
-  onPaneChange: (pane: ReviewPane) => void;
-  pane: ReviewPane;
 }) {
-  const selectedBranch = controller.candidate.targetBranch || 'main';
+  const selectedBranch = candidate.targetBranch || 'main';
   const availableBranches = Array.from(
     new Set([selectedBranch, ...branchOptions.map((branch) => branch.trim()).filter(Boolean)])
   );
-  const navigateReview = (nextPane: ReviewPane) => {
-    if (mode !== 'review') onModeChange('review');
-    onPaneChange(nextPane);
-  };
 
   return (
-    <nav aria-label="Workspace navigation" className={composeStyles.workspaceNav}>
-      <div className={composeStyles.branchControl}>
+    <header className={composeStyles.composeHeader}>
+      <div className={composeStyles.workspaceBranchControl}>
         <StateBranchControls
           branch={selectedBranch}
           branchOptions={availableBranches}
@@ -298,46 +315,109 @@ function WorkspaceNavigation({
           showCreate={false}
         />
       </div>
-      <button
-        aria-current={mode === 'compose' ? 'page' : undefined}
-        className={cn(composeStyles.navItem, mode === 'compose' && composeStyles.navItemActive)}
-        onClick={() => onModeChange('compose')}
-        type="button"
-      >
-        <MessageSquare aria-hidden="true" /> Compose
-      </button>
-      <div className={composeStyles.navDivider} />
-      <div className={composeStyles.navGroup}>
-        <h2 className={composeStyles.navLabel}>Review</h2>
+      <div aria-label="Workspace stage" className={composeStyles.stageSwitch} role="tablist">
         <button
-          aria-current={mode === 'review' && pane === 'rendered' ? 'page' : undefined}
-          className={cn(composeStyles.navItem, composeStyles.navItemNoHighlight)}
-          onClick={() => navigateReview('rendered')}
+          aria-selected={mode === 'compose'}
+          onClick={() => onModeChange('compose')}
+          role="tab"
+          type="button"
+        >
+          Compose
+        </button>
+        <button
+          aria-selected={mode === 'review'}
+          onClick={() => onModeChange('review')}
+          role="tab"
+          type="button"
+        >
+          Review
+        </button>
+      </div>
+      <div className={composeStyles.composeHeaderMeta}>
+        {onDiscussionToggle ? (
+          <button
+            aria-label={discussionOpen ? 'Hide discussion' : 'Show discussion'}
+            onClick={onDiscussionToggle}
+            type="button"
+          >
+            <PanelRightOpen aria-hidden="true" />
+          </button>
+        ) : null}
+      </div>
+    </header>
+  );
+}
+
+function WorkspaceReviewToolbar({
+  controller,
+  onPaneChange,
+  pane,
+}: {
+  controller: WorkspaceComposeReviewController;
+  onPaneChange: (pane: ReviewPane) => void;
+  pane: ReviewPane;
+}) {
+  const toolClassName = (toolPane: ReviewPane) =>
+    cn(composeStyles.reviewTool, pane === toolPane && composeStyles.reviewToolActive);
+
+  return (
+    <nav aria-label="Review views" className={composeStyles.reviewToolbar}>
+      <div className={composeStyles.reviewToolbarGroup}>
+        <button
+          aria-current={pane === 'rendered' ? 'page' : undefined}
+          className={toolClassName('rendered')}
+          onClick={() => onPaneChange('rendered')}
           type="button"
         >
           <PanelRightOpen aria-hidden="true" /> Render
         </button>
         <button
-          aria-current={mode === 'review' && pane === 'changes' ? 'page' : undefined}
-          className={cn(
-            composeStyles.navItem,
-            mode === 'review' && pane === 'changes' && composeStyles.navItemActive
-          )}
-          onClick={() => navigateReview('changes')}
+          aria-current={pane === 'changes' ? 'page' : undefined}
+          className={toolClassName('changes')}
+          onClick={() => onPaneChange('changes')}
           type="button"
         >
           <GitBranch aria-hidden="true" /> Structure diff
         </button>
         <button
-          aria-current={mode === 'review' && pane === 'yaml' ? 'page' : undefined}
-          className={cn(
-            composeStyles.navItem,
-            mode === 'review' && pane === 'yaml' && composeStyles.navItemActive
-          )}
-          onClick={() => navigateReview('yaml')}
+          aria-current={pane === 'yaml' ? 'page' : undefined}
+          className={toolClassName('yaml')}
+          onClick={() => onPaneChange('yaml')}
           type="button"
         >
           <Code2 aria-hidden="true" /> Rendered YAML
+        </button>
+      </div>
+      <div className={composeStyles.reviewToolbarGroup}>
+        {controller.candidate.sourceBundle.some(
+          (source) =>
+            source.materialId &&
+            (source.format === 'yaml' || /\.ya?ml$/i.test(source.fileName ?? ''))
+        ) ? (
+          <button
+            aria-current={pane === 'source' ? 'page' : undefined}
+            className={toolClassName('source')}
+            onClick={() => onPaneChange('source')}
+            type="button"
+          >
+            <FileCode2 aria-hidden="true" /> Source configuration
+          </button>
+        ) : null}
+        <button
+          aria-current={pane === 'edit' ? 'page' : undefined}
+          className={toolClassName('edit')}
+          onClick={() => onPaneChange('edit')}
+          type="button"
+        >
+          <Pencil aria-hidden="true" /> Edit structured State
+        </button>
+        <button
+          aria-current={pane === 'delivery' ? 'page' : undefined}
+          className={toolClassName('delivery')}
+          onClick={() => onPaneChange('delivery')}
+          type="button"
+        >
+          <Download aria-hidden="true" /> Delivery
         </button>
       </div>
     </nav>
@@ -345,29 +425,47 @@ function WorkspaceNavigation({
 }
 
 function ComposeSurface({
+  branchOptions,
   candidate,
   controller,
+  onBranchChange,
   onModeChange,
 }: {
+  branchOptions: string[];
   candidate: WorkspaceCandidate;
   controller: WorkspaceComposeReviewController;
+  onBranchChange?: (branch: string) => Promise<void> | void;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
 }) {
-  const authoringBootstrap = useWorkspaceAuthoringBootstrap(candidate);
+  const authoringBootstrap = useWorkspaceAuthoringBootstrap(candidate, controller.ensureSaved);
   const activity = useComposeActivity(candidate, authoringBootstrap.active);
+  const [draftEditing, setDraftEditing] = useState(true);
+  const editingEnabled = activity.enabled && draftEditing;
+  const toggleEditing = async () => {
+    if (editingEnabled) {
+      setDraftEditing(false);
+      setSidePanel('chat');
+      return;
+    }
+    if (await authoringBootstrap.start()) {
+      setDraftEditing(true);
+      setSidePanel('chat');
+      setDiscussionOpen(true);
+    }
+  };
   const [currentStep, setCurrentStep] = useState(0);
   const [discussionOpen, setDiscussionOpen] = useState(true);
   const [sidePanel, setSidePanel] = useState<'history' | 'chat'>(
     candidate.authoringLedger ? 'history' : 'chat'
   );
   const [changeScope, setChangeScope] = useState<'latest' | 'all'>('latest');
-  const [changeFilter, setChangeFilter] = useState<ComposeChangeFilter>('all');
   const [activitySelection, setActivitySelection] = useState<ComposeActivitySelection | null>(null);
   useEffect(() => {
     if (activity.enabled) setSidePanel('history');
   }, [activity.enabled, candidate.id]);
   useEffect(() => {
     setActivitySelection(null);
+    setDraftEditing(true);
     setCurrentStep(0);
   }, [candidate.id]);
   const operation =
@@ -408,62 +506,15 @@ function ComposeSurface({
     <div
       className={cn(composeStyles.composeBoard, !discussionOpen && composeStyles.discussionClosed)}
     >
-      <header className={composeStyles.composeHeader}>
-        <div className={composeStyles.composeIdentity}>
-          <div className={composeStyles.composeTitleRow}>
-            <h1>{candidate.title}</h1>
-            <ChevronDown aria-hidden="true" />
-            <span className={composeStyles.draftBadge}>
-              <i aria-hidden="true" /> Draft r
-              {activity.compositionRevision ?? candidate.revision ?? 1}
-            </span>
-          </div>
-          <div className={composeStyles.composeMetaRow}>
-            <span>Base {candidate.baseCommitHash?.slice(0, 7) ?? 'uncommitted'}</span>
-            <i aria-hidden="true" />
-            <span className={composeStyles.schemaMeta}>
-              <BoxIcon aria-hidden="true" /> {_formatProposalSchemaLabel(candidate)}
-            </span>
-            <i aria-hidden="true" />
-            <span>
-              <FileText aria-hidden="true" /> {candidate.sourceBundle.length}{' '}
-              {candidate.sourceBundle.length === 1 ? 'source' : 'sources'}
-            </span>
-            <i aria-hidden="true" />
-            <span className={composeStyles.verifiedMeta}>
-              <CheckCircle2 aria-hidden="true" /> Replay verified
-            </span>
-            <i aria-hidden="true" />
-            <time dateTime={candidate.updatedAt}>
-              Updated {formatRelativeTime(candidate.updatedAt)}
-            </time>
-          </div>
-        </div>
-        <div aria-label="Workspace stage" className={composeStyles.stageSwitch} role="tablist">
-          <button aria-selected="true" role="tab" type="button">
-            <span>1</span> Compose
-          </button>
-          <button
-            aria-selected="false"
-            onClick={() => onModeChange('review')}
-            role="tab"
-            type="button"
-          >
-            <span>2</span> Review
-          </button>
-        </div>
-        <div className={composeStyles.composeHeaderMeta}>
-          {!discussionOpen ? (
-            <button
-              aria-label="Show discussion"
-              onClick={() => setDiscussionOpen(true)}
-              type="button"
-            >
-              <PanelRightOpen aria-hidden="true" />
-            </button>
-          ) : null}
-        </div>
-      </header>
+      <WorkspaceStageHeader
+        branchOptions={branchOptions}
+        candidate={candidate}
+        discussionOpen={discussionOpen}
+        mode="compose"
+        onBranchChange={onBranchChange}
+        onDiscussionToggle={() => setDiscussionOpen((open) => !open)}
+        onModeChange={onModeChange}
+      />
       <main className={composeStyles.composeMain}>
         {activity.newActivity ? (
           <output className={composeStyles.newActivity}>
@@ -477,19 +528,17 @@ function ComposeSurface({
           </output>
         ) : null}
         <SourceToolbar
-          activity={activity}
-          authoringEnabled={activity.enabled}
+          authoringBootstrap={authoringBootstrap}
+          authoringEnabled={editingEnabled}
+          onToggleEditing={toggleEditing}
           candidate={candidate}
-          changeFilter={changeFilter}
           changeScope={changeScope}
           controller={controller}
-          onChangeFilter={setChangeFilter}
           onChangeScope={setChangeScope}
           onDiscuss={() => {
             setSidePanel('chat');
             setDiscussionOpen(true);
           }}
-          onReview={() => void prepareAndOpenReview(controller, onModeChange)}
         />
 
         <ProposedDraftPanel
@@ -497,7 +546,7 @@ function ComposeSurface({
           activitySelection={activitySelection}
           onActivitySelect={selectActivity}
           candidate={candidate}
-          changeFilter={changeFilter}
+          changeFilter="all"
           changeScope={changeScope}
           controller={controller}
           currentStep={currentStep}
@@ -508,7 +557,7 @@ function ComposeSurface({
       {discussionOpen ? (
         <aside aria-label="Discuss change" className={composeStyles.discussionSidebar}>
           <header className={composeStyles.discussionHeader}>
-            {activity.enabled ? (
+            {editingEnabled ? (
               <div
                 className={composeStyles.discussionTabs}
                 role="tablist"
@@ -546,57 +595,54 @@ function ComposeSurface({
               <X aria-hidden="true" />
             </button>
           </header>
-          {activity.enabled && sidePanel === 'history' ? (
+          {editingEnabled && sidePanel === 'history' ? (
             <ComposeNodeHistoryPanel
               activity={activity}
               selection={activitySelection}
               onOpenAction={openHistoryAction}
             />
-          ) : (
+          ) : null}
+          {editingEnabled && activity.view && sidePanel === 'chat' ? (
+            <ComposeAuthoringAssistant
+              context={{
+                workspaceId: candidate.id,
+                workspaceRevision: activity.view.workspaceRevision,
+                sourceMaterialIds,
+                selectedActionId: activitySelection?.meta.actionId,
+                selectedNodeId: activitySelection?.operation.id,
+              }}
+              conversationId={sourceConversationId}
+              initialPendingCandidate={
+                activity.view?.pendingCandidates?.find((item) => item.status === 'candidate')
+                  ?.transitionId
+              }
+              onCreateConversation={activity.createAssistantConversation}
+              onPublishCandidate={activity.publishCandidate}
+              activityActions={activity.actions}
+              activityCards={activity.cards}
+              projectId={candidate.projectId}
+            />
+          ) : sidePanel === 'chat' ? (
             <>
-              {activity.enabled && activity.view ? (
-                <ComposeAuthoringAssistant
-                  context={{
-                    workspaceId: candidate.id,
-                    workspaceRevision: activity.view.workspaceRevision,
-                    sourceMaterialIds,
-                    selectedActionId: activitySelection?.meta.actionId,
-                    selectedNodeId: activitySelection?.operation.id,
-                  }}
-                  conversationId={sourceConversationId}
-                  initialPendingCandidate={
-                    activity.view?.pendingCandidates?.find((item) => item.status === 'candidate')
-                      ?.transitionId
-                  }
-                  onCreateConversation={activity.createAssistantConversation}
-                  onPublishCandidate={activity.publishCandidate}
-                  activityActions={activity.actions}
-                  activityCards={activity.cards}
-                  projectId={candidate.projectId}
-                />
-              ) : (
-                <>
-                  <WorkspaceComposeChat
-                    chat={controller.chat}
-                    variant="discussion"
-                    discussionAction={
-                      operation ? (
-                        <button
-                          className={composeStyles.inspectDiscussion}
-                          disabled={controller.isBusy}
-                          onClick={() => void prepareAndOpenReview(controller, onModeChange)}
-                          type="button"
-                        >
-                          <ListTree aria-hidden="true" /> Inspect this change
-                        </button>
-                      ) : undefined
-                    }
-                  />
-                  <ComposerBar controller={controller} variant="discussion" />
-                </>
-              )}
+              <WorkspaceComposeChat
+                chat={controller.chat}
+                variant="discussion"
+                discussionAction={
+                  operation ? (
+                    <button
+                      className={composeStyles.inspectDiscussion}
+                      disabled={controller.isBusy}
+                      onClick={() => void prepareAndOpenReview(controller, onModeChange)}
+                      type="button"
+                    >
+                      <ListTree aria-hidden="true" /> Inspect this change
+                    </button>
+                  ) : undefined
+                }
+              />
+              <ComposerBar controller={controller} variant="discussion" />
             </>
-          )}
+          ) : null}
         </aside>
       ) : null}
     </div>
@@ -940,118 +986,198 @@ function SourceMenuButton({
 }
 
 function SourceToolbar({
-  activity,
+  authoringBootstrap,
+  onToggleEditing,
   authoringEnabled,
   candidate,
-  changeFilter,
   changeScope,
   controller,
-  onChangeFilter,
   onChangeScope,
   onDiscuss,
-  onReview,
 }: {
-  activity: ReturnType<typeof useComposeActivity>;
+  authoringBootstrap: ReturnType<typeof useWorkspaceAuthoringBootstrap>;
+  onToggleEditing: () => Promise<void>;
   authoringEnabled: boolean;
   candidate: WorkspaceCandidate;
-  changeFilter: ComposeChangeFilter;
   changeScope: 'latest' | 'all';
   controller: WorkspaceComposeReviewController;
-  onChangeFilter: (filter: ComposeChangeFilter) => void;
   onChangeScope: (scope: 'latest' | 'all') => void;
   onDiscuss: () => void;
-  onReview: () => void;
 }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const primaryMaterial = controller.materialSources[0];
+  const primarySource = primaryMaterial
+    ? candidate.sourceBundle.find(
+        (item) => item.id === primaryMaterial.id || item.materialId === primaryMaterial.materialId
+      )
+    : undefined;
+
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (file) void controller.uploadFile(file);
+  };
+
   const generateChanges = () => {
+    if (!authoringEnabled) {
+      void controller.generateChanges();
+      return;
+    }
     onDiscuss();
-    if (!authoringEnabled)
-      controller.chat.setInput('Generate structured changes from the selected source evidence.');
     requestAnimationFrame(() =>
       document.querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')?.focus()
     );
   };
 
-  const cards = activity.view?.netDiff ?? [];
-  const counts = cards.reduce(
-    (current, card) => {
-      const kind = activityChangeKind([card]);
-      current.all += 1;
-      if (kind === 'added') current.added += 1;
-      if (kind === 'modified' || kind === 'mixed') current.modified += 1;
-      if (kind === 'removed') current.attention += 1;
-      return current;
-    },
-    { all: 0, modified: 0, added: 0, attention: 0 }
-  );
-  if (!cards.length) counts.all = candidate.yopsDraft.operations.length;
-  const reviewCount = activity.view?.netDiff.length ?? candidate.yopsDraft.operations.length;
+  const addManually = () => {
+    onDiscuss();
+    if (!authoringEnabled)
+      controller.chat.setInput(
+        'Add a structured change while preserving the selected source evidence.'
+      );
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')?.focus()
+    );
+  };
 
   return (
     <section className={composeStyles.sourcesSection}>
-      <div className={composeStyles.changeFilters} aria-label="Filter changes" role="toolbar">
-        <button
-          aria-pressed={changeFilter === 'all'}
-          onClick={() => onChangeFilter('all')}
-          type="button"
-        >
-          All <b>{counts.all}</b>
-        </button>
-        <button
-          aria-pressed={changeFilter === 'modified'}
-          onClick={() => onChangeFilter('modified')}
-          type="button"
-        >
-          <span data-kind="modified">~</span> Modified <b>{counts.modified}</b>
-        </button>
-        <button
-          aria-pressed={changeFilter === 'added'}
-          onClick={() => onChangeFilter('added')}
-          type="button"
-        >
-          <span data-kind="added">+</span> Added <b>{counts.added}</b>
-        </button>
-        <button
-          aria-pressed={changeFilter === 'attention'}
-          onClick={() => onChangeFilter('attention')}
-          type="button"
-        >
-          <AlertTriangle aria-hidden="true" /> Needs attention <b>{counts.attention}</b>
-        </button>
-      </div>
-      <div className={composeStyles.composeToolbarActions}>
-        <div className={composeStyles.changeScope} role="tablist" aria-label="Change view">
+      <div className={composeStyles.sourcesHeading}>
+        <h2>Sources</h2>
+        <div className={composeStyles.sourceChips}>
+          {primaryMaterial ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  aria-label={`Open ${controller.materialSources.length} workspace source${controller.materialSources.length === 1 ? '' : 's'}`}
+                  className={composeStyles.materialChip}
+                  disabled={controller.sourceBusy}
+                  title={controller.materialSources.map((material) => material.title).join(', ')}
+                  type="button"
+                >
+                  <FileText aria-hidden="true" />
+                  <span>{primaryMaterial.title}</span>
+                  {controller.materialSources.length > 1 ? (
+                    <small>+{controller.materialSources.length - 1}</small>
+                  ) : primarySource?.tokenEstimate ? (
+                    <small>{primarySource.tokenEstimate} tokens</small>
+                  ) : null}
+                  <ChevronDown aria-hidden="true" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className={composeStyles.sourceMaterialMenu}>
+                <DropdownMenuLabel>Workspace sources</DropdownMenuLabel>
+                {controller.materialSources.map((material) => {
+                  const source = candidate.sourceBundle.find(
+                    (item) => item.id === material.id || item.materialId === material.materialId
+                  );
+                  return (
+                    <DropdownMenuCheckboxItem
+                      checked={material.included}
+                      disabled={controller.sourceBusy}
+                      key={material.id}
+                      onCheckedChange={() =>
+                        void controller.toggleMaterialSource(material.materialId)
+                      }
+                    >
+                      <span className={composeStyles.sourceMaterialName}>{material.title}</span>
+                      {source?.tokenEstimate ? <small>{source.tokenEstimate} tokens</small> : null}
+                    </DropdownMenuCheckboxItem>
+                  );
+                })}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => fileInputRef.current?.click()}>
+                  <FileUp aria-hidden="true" /> Add source
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+          <input
+            accept={DOCUMENT_SOURCE_ACCEPTED_TYPES}
+            aria-label="Upload source material"
+            className="hidden"
+            onChange={handleFileChange}
+            ref={fileInputRef}
+            type="file"
+          />
+          {!primaryMaterial ? (
+            <button onClick={() => fileInputRef.current?.click()} type="button">
+              <FileUp aria-hidden="true" /> Add source
+            </button>
+          ) : null}
+        </div>
+        <div className={composeStyles.composeToolbarActions}>
           <button
-            aria-selected={changeScope === 'latest'}
-            onClick={() => onChangeScope('latest')}
-            role="tab"
+            className={composeStyles.addManually}
+            disabled={authoringBootstrap.busy || controller.isBusy || controller.chat.isLoading}
+            onClick={() => void onToggleEditing()}
+            title="Switch between discussion only and Draft editing; existing history is preserved"
             type="button"
           >
-            <Clock3 aria-hidden="true" /> Latest
+            <Play aria-hidden="true" />
+            {authoringEnabled
+              ? 'Draft editing · Switch to discuss'
+              : authoringBootstrap.busy
+                ? 'Enabling Draft activity…'
+                : authoringBootstrap.importSnapshot !== undefined
+                  ? 'Confirm import and enable'
+                  : 'Enable Draft activity'}
           </button>
+          <button className={composeStyles.addManually} onClick={addManually} type="button">
+            <Plus aria-hidden="true" /> Add manually
+          </button>
+          <div className={composeStyles.generateControls}>
+            <span>
+              From sources <ChevronDown aria-hidden="true" />
+            </span>
+            <button
+              disabled={!authoringEnabled && controller.isBusy}
+              onClick={generateChanges}
+              type="button"
+            >
+              <Layers aria-hidden="true" /> Generate changes
+            </button>
+          </div>
+          <div className={composeStyles.changeScope} role="tablist" aria-label="Change scope">
+            <button
+              aria-selected={changeScope === 'latest'}
+              onClick={() => onChangeScope('latest')}
+              role="tab"
+              type="button"
+            >
+              Latest
+            </button>
+            <button
+              aria-selected={changeScope === 'all'}
+              onClick={() => onChangeScope('all')}
+              role="tab"
+              type="button"
+            >
+              All changes
+            </button>
+          </div>
+        </div>
+      </div>
+      {authoringBootstrap.importSnapshot !== undefined && !authoringEnabled ? (
+        <div
+          className="flex items-center gap-2 text-xs text-[var(--text-secondary)]"
+          aria-live="polite"
+        >
+          Import the current Draft snapshot to enable activity. Existing changes will be preserved.
           <button
-            aria-selected={changeScope === 'all'}
-            onClick={() => onChangeScope('all')}
-            role="tab"
+            className={composeStyles.addManually}
+            onClick={authoringBootstrap.cancel}
             type="button"
           >
-            <ListTree aria-hidden="true" /> All changes
+            Cancel import
           </button>
         </div>
-        <button className={composeStyles.generateButton} onClick={generateChanges} type="button">
-          <Sparkles aria-hidden="true" /> Generate
-        </button>
-        <button
-          className={composeStyles.reviewTopButton}
-          disabled={controller.isBusy}
-          onClick={onReview}
-          type="button"
-        >
-          {controller.busyAction === 'review.prepare'
-            ? 'Preparing…'
-            : `Review ${reviewCount} changes`}
-          <span>⌘↵</span>
-        </button>
-      </div>
+      ) : null}
+      {authoringBootstrap.error ? (
+        <p className="text-xs text-[var(--status-error)]" role="alert">
+          {authoringBootstrap.error}
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -1078,6 +1204,7 @@ function ProposedDraftPanel({
   onStepChange: (step: number) => void;
 }) {
   const operations = candidate.yopsDraft.operations;
+  const proposedChangeCount = activity.view?.netDiff.length ?? operations.length;
   useEffect(() => {
     if (!activity.view) return;
     if (changeScope === 'all') {
@@ -1137,12 +1264,6 @@ function ProposedDraftPanel({
     const stamp = meta?.timestamp ?? candidate.updatedAt;
     const field = composeFieldPresentation(candidate, operation);
     const FieldIcon = field.icon;
-    const cardTitle = composePathLabel(operation.path, operation.id);
-    const cardReason = operation.reason ?? operation.summary;
-    const readableReason =
-      cardReason.startsWith('Change ') && cardReason.includes('/')
-        ? `Updated ${cardTitle}`
-        : cardReason;
     const operationSource =
       meta && !operation.sourceRefs?.length
         ? undefined
@@ -1155,6 +1276,21 @@ function ProposedDraftPanel({
       meta ? 'Absent' : 'Current value',
       meta ? 'Absent' : 'Updated'
     );
+    const addedRequirement =
+      meta?.comparison === 'draft' &&
+      field.label === 'Requirement' &&
+      beforeValue === undefined &&
+      afterValue !== undefined;
+    const cardTitle =
+      meta?.comparison === 'draft' && field.label === 'Requirement' && afterValue !== undefined
+        ? valueLabels.after
+        : composePathLabel(operation.path, operation.id);
+    const cardReason = operation.reason ?? operation.summary;
+    const showReason =
+      cardReason !== `Change ${operation.path}` &&
+      cardReason.trim() !== '' &&
+      cardReason !== cardTitle &&
+      cardReason !== valueLabels.after;
     const valueChange = composeTextChangeSegments(valueLabels.before, valueLabels.after);
     return (
       <section
@@ -1178,7 +1314,10 @@ function ProposedDraftPanel({
             type="button"
           >
             <span className={composeStyles.actionTitle}>{cardTitle}</span>
-            <span className={composeStyles.fieldType}>{field.label}</span>
+            <span className={composeStyles.fieldType}>
+              {field.label}
+              {addedRequirement ? ' · Added' : ''}
+            </span>
           </button>
           <button
             aria-label={`Discuss ${cardTitle}`}
@@ -1212,42 +1351,44 @@ function ProposedDraftPanel({
           </button>
         </div>
         <div className={composeStyles.collapsedDetail}>
-          <div className={composeStyles.values}>
-            <div>
-              <span
-                className={`${composeStyles.value} ${composeStyles.before}`}
-                title={valueLabels.before}
-              >
-                {valueChange.prefix}
-                {valueChange.before ? <del>{valueChange.before}</del> : null}
-                {valueChange.suffix}
-              </span>
-              <span className={composeStyles.valueLabel}>
-                {meta?.comparison === 'event' ? 'Before event' : 'Current (base)'}
-              </span>
+          {!addedRequirement ? (
+            <div className={composeStyles.values}>
+              <div>
+                <span
+                  className={`${composeStyles.value} ${composeStyles.before}`}
+                  title={valueLabels.before}
+                >
+                  {valueChange.prefix}
+                  {valueChange.before ? <del>{valueChange.before}</del> : null}
+                  {valueChange.suffix}
+                </span>
+                <span className={composeStyles.valueLabel}>
+                  {meta?.comparison === 'event' ? 'Before event' : 'Current (base)'}
+                </span>
+              </div>
+              <ArrowRight aria-hidden="true" className={composeStyles.valueArrow} />
+              <div>
+                <span
+                  className={`${composeStyles.value} ${composeStyles.after}`}
+                  title={valueLabels.after}
+                >
+                  {valueChange.prefix}
+                  {valueChange.after ? <ins>{valueChange.after}</ins> : null}
+                  {valueChange.suffix}
+                </span>
+                <span className={composeStyles.valueLabel}>
+                  {meta?.comparison === 'event' ? 'After event' : 'Proposed (draft)'}
+                </span>
+              </div>
             </div>
-            <ArrowRight aria-hidden="true" className={composeStyles.valueArrow} />
-            <div>
-              <span
-                className={`${composeStyles.value} ${composeStyles.after}`}
-                title={valueLabels.after}
-              >
-                {valueChange.prefix}
-                {valueChange.after ? <ins>{valueChange.after}</ins> : null}
-                {valueChange.suffix}
-              </span>
-              <span className={composeStyles.valueLabel}>
-                {meta?.comparison === 'event' ? 'After event' : 'Proposed (draft)'}
-              </span>
-            </div>
-          </div>
+          ) : null}
           {operationSource ? (
             <div className={composeStyles.sourceRow}>
               <FileText aria-hidden="true" className="size-4" />
               <span className="truncate">{operationSource.title}</span>
             </div>
           ) : null}
-          <p title={readableReason}>{readableReason}</p>
+          {showReason ? <p title={cardReason}>{cardReason}</p> : null}
           <div className={composeStyles.actionMeta}>
             <span className={composeStyles.actionAttribution}>
               {(
@@ -1298,6 +1439,12 @@ function ProposedDraftPanel({
 
   return (
     <div className={composeStyles.panel} data-change-scope={changeScope}>
+      <header className={composeStyles.panelHeader}>
+        <div className={composeStyles.panelTitleRow}>
+          <h2>Proposed changes</h2>
+          <span>{proposedChangeCount}</span>
+        </div>
+      </header>
       <ComposeActivityTimeline
         key={candidate.id}
         activity={activity}
@@ -1489,6 +1636,24 @@ function ReviewSurface({
     structureModel.rows[0] ??
     null;
 
+  if (pane === 'source') {
+    return <WorkspaceSourceTools key={controller.candidate.id} controller={controller} />;
+  }
+
+  if (pane === 'edit') {
+    return (
+      <WorkspaceContentEditor key={controller.candidate.id} candidate={controller.candidate} />
+    );
+  }
+
+  if (pane === 'delivery') {
+    return (
+      <div className="min-h-0 flex-1 overflow-y-auto bg-[var(--surface-app)] p-4 md:p-6">
+        <OutputTargetsTab candidate={controller.candidate} />
+      </div>
+    );
+  }
+
   if (pane === 'rendered') {
     return (
       <WorkspaceRenderedReview
@@ -1602,6 +1767,69 @@ function ReviewSurface({
   );
 }
 
+function WorkspaceSourceTools({ controller }: { controller: WorkspaceComposeReviewController }) {
+  const candidate = controller.candidate;
+  const [view, setView] = useState<WorkspaceYOpsFlowView>('ops');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const yamlSources = candidate.sourceBundle.filter(
+    (source) =>
+      source.materialId && (source.format === 'yaml' || /\.ya?ml$/i.test(source.fileName ?? ''))
+  );
+  const updateArtifact = async (artifact: WorkspaceCandidate['sourceArtifact']) => {
+    setSaving(true);
+    setError(null);
+    try {
+      await controller.updateSourceArtifact(artifact);
+      setView('ops');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to save source selection.');
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-[var(--surface-app)]">
+      {yamlSources.map((source) => (
+        <SourceArtifactRoleEditor
+          artifact={candidate.sourceArtifact}
+          key={`${source.materialId}:${candidate.sourceArtifact?.rootPath ?? ''}:${
+            candidate.sourceArtifact?.resources.find(
+              (resource) => resource.materialId === source.materialId
+            )?.path ?? ''
+          }`}
+          materialId={source.materialId!}
+          onChange={saving ? undefined : (artifact) => void updateArtifact(artifact)}
+          source={source}
+        />
+      ))}
+      {saving ? (
+        <output className="px-4 py-2 text-xs text-[var(--text-secondary)]">
+          Saving source selection…
+        </output>
+      ) : null}
+      {error ? (
+        <p className="px-4 py-2 text-xs text-[var(--status-error)]" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {candidate.sourceArtifact?.root ? (
+        <SourceTransitionTab
+          active
+          candidate={candidate}
+          key={`${candidate.id}:${candidate.revision ?? 0}`}
+          onViewChange={setView}
+          view={view}
+        />
+      ) : (
+        <output className="px-4 py-3 text-xs text-[var(--text-secondary)]">
+          Choose a YAML material as the root configuration to review exact source changes.
+        </output>
+      )}
+    </div>
+  );
+}
+
 function ResultYamlPane({
   model,
   branch,
@@ -1609,6 +1837,7 @@ function ResultYamlPane({
   onSelectRow,
   preparing,
   snapshotCurrent,
+  validationReady,
 }: {
   model: WorkspaceReviewStructureModel;
   branch: string;
@@ -1616,6 +1845,7 @@ function ResultYamlPane({
   onSelectRow: (id: string) => void;
   preparing: boolean;
   snapshotCurrent: boolean;
+  validationReady: boolean;
 }) {
   const lines = useMemo(() => buildStateYamlReview(model.baseline, model.head), [model]);
   const yamlText = useMemo(() => buildCanonicalStateYaml(model.head), [model.head]);
@@ -1644,7 +1874,7 @@ function ResultYamlPane({
     <WorkspaceReviewCodeView
       branch={branch}
       rootKey={model.rootKey}
-      validationReady={false}
+      validationReady={validationReady}
       yamlText={yamlText}
       review={{ lines, selectedPath: selectedRow?.path, onSelectPath: selectPath, statusLabel }}
     />
@@ -1697,16 +1927,31 @@ function WorkspaceRenderedReview({
   onOpenChecks: () => void;
   onStructureDiff: () => void;
 }) {
+  const router = useRouter();
+  const reviewSnapshot = controller.review.reviewSnapshot;
   const structure = useMemo(
     () => buildWorkspaceReviewStructureModel(candidate, review),
     [candidate, review]
   );
   const rendered = useMemo(() => selectPrdRenderModel(structure.head), [structure.head]);
+  const rolloutSection = rendered.sections.find(
+    (section) => section.key === 'rollout_plan' || section.key === 'rollout'
+  );
+  const rolloutRows = reviewSectionRows(rolloutSection?.value);
+  const rollback = rolloutRows.find(([label]) => /rollback/i.test(label))?.[1];
+  const notes = rendered.sections.find(
+    (section) => section.key === 'notes' || section.key === 'handoff_notes'
+  );
   const changedRows = useMemo(
     () => structure.rows.filter((row) => row.diff?.exact),
     [structure.rows]
   );
   const selectedRow = changedRows[0] ?? structure.rows[0] ?? null;
+  const selectedKind = selectedRow?.diff?.kind;
+  const selectedSource = selectedRow
+    ? workspaceReviewSourceDisplay(candidate, selectedRow, selectedRow.path)
+    : null;
+  const reviewChecks = getReviewChecks(controller);
   const copyPath = () => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       void navigator.clipboard.writeText(selectedRow?.path ?? 'prd');
@@ -1762,9 +2007,11 @@ function WorkspaceRenderedReview({
               <div className="absolute bottom-0 left-0 top-0 w-[3px] rounded-full bg-violet-600" />
               <div className="mb-1 flex items-center gap-2">
                 <h3 className="text-[14px] font-bold text-slate-900">Summary</h3>
-                <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
-                  Updated
-                </span>
+                {changedRows.some((row) => /\/summary\/outcome$/.test(row.path)) ? (
+                  <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
+                    Updated
+                  </span>
+                ) : null}
               </div>
               <div className="rounded-md bg-indigo-50/60 px-3 py-1.5 text-[13px] leading-5 text-indigo-900">
                 {rendered.outcome || 'No outcome has been recorded.'}
@@ -1781,20 +2028,21 @@ function WorkspaceRenderedReview({
             <section className="mb-2 pl-4">
               <h3 className="mb-1 text-[14px] font-bold text-slate-900">Rollout plan</h3>
               <div className="flex flex-col overflow-hidden rounded-md border border-gray-200">
-                {[
-                  ['Stage', 'internal-preview'],
-                  ['Audience', 'internal-team'],
-                  ['Allocation', '10%'],
-                ].map(([label, value], index) => (
-                  <div className={cn('flex', index < 2 && 'border-b border-gray-200')} key={label}>
-                    <div className="w-1/3 border-r border-gray-200 bg-gray-50/50 px-3 py-0.5 text-[12px] font-medium leading-5 text-slate-500">
-                      {label}
+                {(rolloutRows.length ? rolloutRows : [['Status', 'No rollout plan recorded.']]).map(
+                  ([label, value], index, rows) => (
+                    <div
+                      className={cn('flex', index < rows.length - 1 && 'border-b border-gray-200')}
+                      key={`${label}:${index}`}
+                    >
+                      <div className="w-1/3 border-r border-gray-200 bg-gray-50/50 px-3 py-0.5 text-[12px] font-medium leading-5 text-slate-500">
+                        {label}
+                      </div>
+                      <div className="w-2/3 bg-white px-3 py-0.5 text-[12px] leading-5 text-slate-700">
+                        {value}
+                      </div>
                     </div>
-                    <div className="w-2/3 bg-white px-3 py-0.5 text-[12px] leading-5 text-slate-700">
-                      {value}
-                    </div>
-                  </div>
-                ))}
+                  )
+                )}
               </div>
             </section>
 
@@ -1802,19 +2050,20 @@ function WorkspaceRenderedReview({
               <div className="absolute bottom-0 left-0 top-0 w-[3px] rounded-full bg-violet-600" />
               <div className="mb-1 flex items-center gap-2">
                 <h3 className="text-[14px] font-bold text-slate-900">Rollback readiness</h3>
-                <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
-                  Updated
-                </span>
+                {changedRows.some((row) => /rollback/i.test(row.path)) ? (
+                  <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
+                    Updated
+                  </span>
+                ) : null}
               </div>
               <div className="mb-0.5 flex items-center gap-2">
-                <span className="inline-flex size-4 items-center justify-center rounded-full bg-emerald-600 text-white">
-                  <Check aria-hidden="true" className="size-3" />
+                <CircleDot aria-hidden="true" className="size-4 text-slate-500" />
+                <span className="text-[13px] font-bold text-slate-700">
+                  {rollback ? 'Recorded' : 'Not recorded'}
                 </span>
-                <span className="text-[13px] font-bold text-emerald-700">Ready</span>
               </div>
               <p className="max-w-[95%] text-[12px] leading-[1.4] text-slate-600">
-                We canary to the internal team at 10% with rollback readiness in place. We will
-                monitor key metrics and can quickly roll back if issues are detected.
+                {rollback ?? 'No rollback detail is present in the current draft.'}
               </p>
             </section>
 
@@ -1837,22 +2086,32 @@ function WorkspaceRenderedReview({
             <section className="pl-4">
               <h3 className="mb-1 text-[14px] font-bold text-slate-900">Notes</h3>
               <p className="text-[13px] leading-5 text-slate-600">
-                Expand access only after the internal review is complete ...
+                {notes ? formatOperationValue(notes.value) : 'No notes recorded.'}
               </p>
             </section>
           </div>
 
           <footer className="flex shrink-0 items-center gap-4 border-t border-gray-100 bg-white px-4 py-3">
             <button
-              className="flex cursor-not-allowed items-center gap-2 rounded-md bg-slate-100 px-3 py-1.5 text-[12px] font-semibold text-slate-400"
-              disabled
+              className="flex items-center gap-2 rounded-md bg-slate-100 px-3 py-1.5 text-[12px] font-semibold text-slate-400 disabled:cursor-not-allowed"
+              disabled={!reviewSnapshot}
+              onClick={() => {
+                if (!reviewSnapshot) return;
+                router.push(
+                  `/project/${encodeURIComponent(reviewSnapshot.projectId)}/changes/${encodeURIComponent(reviewSnapshot.workspaceId)}/${encodeURIComponent(reviewSnapshot.snapshotId)}`
+                );
+              }}
               type="button"
             >
               <Share2 aria-hidden="true" className="size-4" /> Commit changes
             </button>
             <div className="flex items-center gap-3">
               <div className="h-5 w-px bg-gray-200" />
-              <span className="text-[12px] text-slate-400">Required action has not run.</span>
+              <span className="text-[12px] text-slate-400">
+                {reviewSnapshot
+                  ? 'Review snapshot ready for decision.'
+                  : 'Review snapshot not prepared.'}
+              </span>
             </div>
           </footer>
         </section>
@@ -1879,18 +2138,29 @@ function WorkspaceRenderedReview({
               <code className="inline-block rounded-md border border-gray-100 bg-gray-50 px-2.5 py-1 text-[11px] leading-4 text-gray-600">
                 {selectedRow?.path ?? 'prd'}
               </code>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-100 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-600">
-                <MinusCircle aria-hidden="true" className="size-3" /> Modified
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold',
+                  selectedKind === 'added'
+                    ? 'border-[var(--diff-added-border)] bg-[var(--diff-added-bg)] text-[var(--diff-added-text)]'
+                    : selectedKind === 'removed'
+                      ? 'border-[var(--diff-removed-border)] bg-[var(--diff-removed-bg)] text-[var(--diff-removed-text)]'
+                      : selectedKind === 'modified'
+                        ? 'border-[var(--diff-modified-border)] bg-[var(--diff-modified-bg)] text-[var(--diff-modified-text)]'
+                        : 'border-[var(--stroke-divider)] bg-[var(--surface-app)] text-[var(--text-secondary)]'
+                )}
+              >
+                <CircleDot aria-hidden="true" className="size-3" />{' '}
+                {selectedRow ? workspaceReviewKindLabel(selectedRow) : 'Unchanged'}
               </span>
             </div>
             <div className="mt-2">
               <div className="mb-1 text-[11px] text-slate-500">Source</div>
               <div className="flex items-center justify-between rounded-md border border-indigo-100/50 bg-indigo-50/40 px-3 py-1.5">
                 <div className="flex items-center gap-2 text-[12px] text-slate-700">
-                  <FileText aria-hidden="true" className="size-4 text-indigo-500" /> Release plan
-                  v1.2
+                  <FileText aria-hidden="true" className="size-4 text-indigo-500" />{' '}
+                  {selectedSource?.label ?? 'No source material linked'}
                 </div>
-                <div className="text-[11px] text-slate-500">p. 3</div>
               </div>
             </div>
             <div className="mt-2">
@@ -1916,34 +2186,34 @@ function WorkspaceRenderedReview({
               </button>
             </div>
           </section>
-          <section aria-label="Checks for draft v3" className="border-t border-gray-200 p-3">
+          <section
+            aria-label={`Checks for draft r${candidate.revision ?? 1}`}
+            className="border-t border-gray-200 p-3"
+          >
             <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-[15px] font-bold text-slate-900">Checks for draft v3</h2>
+              <h2 className="text-[15px] font-bold text-slate-900">
+                Checks for draft r{candidate.revision ?? 1}
+              </h2>
               <span className="text-[11px] font-medium text-slate-500">Review evidence</span>
             </div>
             <div className="flex flex-col">
-              {[
-                ['Deterministic replay', 'All changes can be replayed successfully.'],
-                ['Schema validation', 'Draft conforms to Release plan v1.2 schema.'],
-              ].map(([label, detail], index) => (
+              {reviewChecks.map((check, index) => (
                 <div
                   className={cn(
                     'flex items-start gap-3 border-b border-gray-100',
                     index === 0 ? 'pb-2' : 'py-2'
                   )}
-                  key={label}
+                  key={check.label}
                 >
-                  <span className="mt-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
-                    <Check aria-hidden="true" className="size-3" />
-                  </span>
+                  <CheckStatusMark status={check.status} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <h4 className="truncate text-[12px] font-bold text-slate-900">{label}</h4>
-                      <span className="shrink-0 rounded border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-                        Passed
-                      </span>
+                      <h4 className="truncate text-[12px] font-bold text-slate-900">
+                        {check.label}
+                      </h4>
+                      <CheckStatusBadge status={check.status} />
                     </div>
-                    <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{detail}</p>
+                    <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{check.detail}</p>
                   </div>
                 </div>
               ))}
@@ -1952,13 +2222,15 @@ function WorkspaceRenderedReview({
                 <CircleDot aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-gray-400" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <h4 className="truncate text-[12px] font-bold text-slate-900">T3X Action</h4>
+                    <h4 className="truncate text-[12px] font-bold text-slate-900">
+                      Review snapshot
+                    </h4>
                     <span className="shrink-0 rounded border border-gray-200 bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
-                      Not run
+                      {reviewSnapshot ? 'Prepared' : 'Not prepared'}
                     </span>
                   </div>
                   <p className="mb-1 mt-0.5 text-[11px] leading-4 text-slate-500">
-                    PRD export &amp; link check
+                    Prepare an immutable review from the current draft.
                   </p>
                   <div className="flex justify-end">
                     <button
@@ -1968,7 +2240,7 @@ function WorkspaceRenderedReview({
                       type="button"
                     >
                       <Play aria-hidden="true" className="size-3.5 fill-current" />
-                      {controller.isBusy ? 'Running…' : 'Run T3X Action'}
+                      {controller.isBusy ? 'Preparing…' : 'Prepare review'}
                     </button>
                   </div>
                 </div>
@@ -2009,39 +2281,48 @@ function WorkspaceReviewChecksView({
   onOpenCompose: () => void;
   onOpenStructure: () => void;
 }) {
+  const candidate = controller.candidate;
+  const projectId = candidate.projectId;
+  const workspaceId = candidate.id;
+  const currentSnapshotId = controller.review.reviewSnapshot?.snapshotId ?? null;
+  const {
+    history,
+    historyError,
+    historyLoading,
+    selectedSnapshotId,
+    setSelectedSnapshotId,
+    selectedSnapshot,
+    snapshotError,
+    snapshotLoading,
+  } = useWorkspaceReviewHistory(projectId, workspaceId, currentSnapshotId);
+
+  const activeSnapshot = selectedSnapshotId ? selectedSnapshot : null;
+  const activeChecks = selectedSnapshotId
+    ? activeSnapshot
+      ? checksFromSnapshot(activeSnapshot)
+      : []
+    : checks;
   const initialIndex = Math.max(
     0,
-    checks.findIndex((check) => check.status === 'failed')
+    activeChecks.findIndex((check) => check.status === 'failed')
   );
   const [selectedIndex, setSelectedIndex] = useState(initialIndex);
-  const selected = checks[selectedIndex] ?? checks[0];
-  const candidate = controller.candidate;
-  const passedCount = checks.filter((check) => check.status === 'passed').length;
-  const failedCount = checks.filter((check) => check.status === 'failed').length;
-  const pendingCount = checks.length - passedCount - failedCount;
+  useEffect(() => {
+    setSelectedIndex(initialIndex);
+  }, [selectedSnapshotId, initialIndex]);
+  const selected = activeChecks[selectedIndex] ?? activeChecks[0];
+  const passedCount = activeChecks.filter((check) => check.status === 'passed').length;
+  const failedCount = activeChecks.filter((check) => check.status === 'failed').length;
+  const pendingCount = activeChecks.length - passedCount - failedCount;
   const candidateLabel = candidate.id || `draft-v${String(candidate.revision ?? 1)}`;
   const compactCandidate =
     candidateLabel.length > 18 ? `${candidateLabel.slice(0, 15)}…` : candidateLabel;
-  const schemaLabel = _formatProposalSchemaLabel(candidate);
+  const schemaLabel = activeSnapshot
+    ? 'Snapshot projection'
+    : _formatProposalSchemaLabel(candidate);
   const selectedStatus = selected?.status ?? 'pending';
-  const gap = candidate.schemaReview.gaps[0];
+  const gap = selectedSnapshotId ? null : candidate.schemaReview.gaps[0];
   const selectedReady = selectedStatus === 'passed';
-  const runLabel = `${selected?.label ?? 'Check'} · draft v${String(candidate.revision ?? 1)}`;
-  const logText = [
-    `INFO  Bound schema ${schemaLabel}`,
-    `INFO  Checking candidate ${candidateLabel}`,
-    selected?.detail ?? 'No check detail is available.',
-    `${selectedStatus.toUpperCase()}  ${selectedReady ? 'Check passed.' : selectedStatus === 'failed' ? 'Check failed.' : 'Check has not completed.'}`,
-  ].join('\n');
-  const downloadLog = () => {
-    if (typeof document === 'undefined') return;
-    const url = URL.createObjectURL(new Blob([logText], { type: 'text/plain;charset=utf-8' }));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `workspace-check-${String(candidate.revision ?? 1)}.log`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
 
   return (
     <section aria-label="Workspace review checks" className={checksStyles.surface}>
@@ -2103,7 +2384,7 @@ function WorkspaceReviewChecksView({
         <aside className={checksStyles.projectChecks}>
           <h2>Project checks</h2>
           <div>
-            {checks.map((check, index) => (
+            {activeChecks.map((check, index) => (
               <button
                 className={index === selectedIndex ? checksStyles.selectedItem : undefined}
                 key={check.label}
@@ -2127,26 +2408,59 @@ function WorkspaceReviewChecksView({
 
         <aside className={checksStyles.runHistory}>
           <h2>Run history</h2>
-          <button className={checksStyles.selectedItem} type="button">
-            <CheckStatusMark status={selectedStatus} />
+          {historyLoading ? <output>Loading review snapshots…</output> : null}
+          {historyError ? <p role="alert">{historyError}</p> : null}
+          <button
+            className={!selectedSnapshotId ? checksStyles.selectedItem : undefined}
+            onClick={() => setSelectedSnapshotId(null)}
+            type="button"
+          >
+            <CheckStatusMark
+              status={
+                checks.some((check) => check.status === 'failed')
+                  ? 'failed'
+                  : currentSnapshotId && checks.every((check) => check.status === 'passed')
+                    ? 'passed'
+                    : 'pending'
+              }
+            />
             <span>
-              <b>
-                #{candidate.revision ?? 1} · {compactCandidate}
-              </b>
-              <small>{formatRelativeTime(candidate.updatedAt)}</small>
+              <b>Current candidate</b>
+              <small>{currentSnapshotId ?? 'Not reviewed yet'}</small>
             </span>
-            <CheckStatusBadge status={selectedStatus} />
           </button>
-          <div className={checksStyles.noHistory}>
-            No earlier run is recorded for this candidate.
-          </div>
+          {history.map((snapshot) => (
+            <button
+              className={
+                selectedSnapshotId === snapshot.snapshot_id ? checksStyles.selectedItem : undefined
+              }
+              key={snapshot.snapshot_id}
+              onClick={() => setSelectedSnapshotId(snapshot.snapshot_id)}
+              type="button"
+            >
+              <CheckStatusMark status={snapshotCheckStatus(snapshot)} />
+              <span>
+                <b>Revision {snapshot.snapshot.review.precondition.workspaceRevision}</b>
+                <small>
+                  {new Date(snapshot.created_at).toLocaleString()} · {snapshot.snapshot_id}
+                </small>
+              </span>
+              <CheckStatusBadge status={snapshotCheckStatus(snapshot)} />
+            </button>
+          ))}
+          {!historyLoading && !historyError && history.length === 0 ? (
+            <div className={checksStyles.noHistory}>No review snapshots recorded.</div>
+          ) : null}
         </aside>
 
         <main className={checksStyles.checkDetail}>
           <div className={checksStyles.detailHeading}>
             <div>
               <CheckStatusMark status={selectedStatus} large />
-              <h2>{selected?.label ?? 'Check'} · Current run</h2>
+              <h2>
+                {selected?.label ?? 'Check'} ·{' '}
+                {selectedSnapshotId ? 'Saved review' : 'Current candidate'}
+              </h2>
               <CheckStatusBadge status={selectedStatus} ready />
             </div>
             <button
@@ -2155,16 +2469,23 @@ function WorkspaceReviewChecksView({
               type="button"
             >
               <RefreshCw aria-hidden="true" />
-              {controller.isBusy ? 'Running…' : 'Re-run current'}
+              {controller.isBusy ? 'Preparing…' : 'Prepare current review'}
             </button>
           </div>
 
           <section className={checksStyles.metadataCard}>
             {[
-              ['Candidate', compactCandidate],
-              ['Schema', schemaLabel],
+              [
+                'Candidate',
+                activeSnapshot
+                  ? activeSnapshot.snapshot.request.id
+                  : selectedSnapshotId
+                    ? 'Loading saved review'
+                    : compactCandidate,
+              ],
+              ['Schema', selectedSnapshotId ? 'Snapshot projection' : schemaLabel],
               ['Profile', selected?.requirement ?? 'required'],
-              ['Run', `check-${String(candidate.revision ?? 1)}`],
+              ['Snapshot', selectedSnapshotId ?? currentSnapshotId ?? 'Not prepared'],
             ].map(([label, value]) => (
               <div key={label}>
                 <span>{label}</span>
@@ -2176,28 +2497,35 @@ function WorkspaceReviewChecksView({
             ))}
           </section>
 
-          <section className={checksStyles.detailCard}>
-            <h3>Validation result</h3>
-            <div className={checksStyles.validationResult}>
-              <span className={checksStyles.validResult}>
-                <Check aria-hidden="true" />
-                <b>Valid:</b> Yes
-              </span>
-              <span
-                className={selectedReady ? checksStyles.validResult : checksStyles.invalidResult}
-              >
-                {selectedReady ? <Check aria-hidden="true" /> : <X aria-hidden="true" />}
-                <b>Ready:</b> {selectedReady ? 'Yes' : 'No'}
-              </span>
-              <p>
-                {selectedStatus === 'failed' ? '1 error' : '0 errors'}
-                <i>·</i>
-                <b>{gap ? '1 gap' : '0 gaps'}</b>
-                <i>·</i>
-                {gap ? '1 suggested fix' : '0 suggested fixes'}
-              </p>
-            </div>
-          </section>
+          {snapshotLoading ? <output>Loading selected review…</output> : null}
+          {snapshotError ? <p role="alert">{snapshotError}</p> : null}
+
+          {!selectedSnapshotId || activeSnapshot ? (
+            <section className={checksStyles.detailCard}>
+              <h3>Validation result</h3>
+              <div className={checksStyles.validationResult}>
+                <span
+                  className={
+                    selectedStatus === 'passed'
+                      ? checksStyles.validResult
+                      : checksStyles.invalidResult
+                  }
+                >
+                  <Check aria-hidden="true" />
+                  <b>Status:</b> {selectedStatus}
+                </span>
+                <span
+                  className={selectedReady ? checksStyles.validResult : checksStyles.invalidResult}
+                >
+                  {selectedReady ? <Check aria-hidden="true" /> : <X aria-hidden="true" />}
+                  <b>Ready:</b> {selectedReady ? 'Yes' : 'No'}
+                </span>
+                <p>
+                  {failedCount} failed · {pendingCount} pending · {passedCount} passed
+                </p>
+              </div>
+            </section>
+          ) : null}
 
           {gap ? (
             <section className={checksStyles.detailCard}>
@@ -2217,18 +2545,22 @@ function WorkspaceReviewChecksView({
             </section>
           ) : null}
 
-          <section className={checksStyles.detailCard}>
-            <div className={checksStyles.cardTitle}>
-              <h3>Suggested fix</h3>
-              <button onClick={onOpenCompose} type="button">
-                <ExternalLink aria-hidden="true" />
-                Open in Compose
-              </button>
-            </div>
-            <p className={checksStyles.suggestion}>
-              {gap ? 'Add the required field with a valid value.' : selected?.detail}
-            </p>
-          </section>
+          {!selectedSnapshotId || activeSnapshot ? (
+            <section className={checksStyles.detailCard}>
+              <div className={checksStyles.cardTitle}>
+                <h3>Check detail</h3>
+                <button onClick={onOpenCompose} type="button">
+                  <ExternalLink aria-hidden="true" />
+                  Open current Compose
+                </button>
+              </div>
+              <p className={checksStyles.suggestion}>
+                {gap
+                  ? 'Add the required field with a valid value.'
+                  : (selected?.detail ?? 'No check detail is available.')}
+              </p>
+            </section>
+          ) : null}
 
           {gap ? (
             <section className={checksStyles.detailCard}>
@@ -2242,25 +2574,6 @@ function WorkspaceReviewChecksView({
               </div>
             </section>
           ) : null}
-
-          <section className={cn(checksStyles.detailCard, checksStyles.logCard)}>
-            <div className={checksStyles.cardTitle}>
-              <h3>
-                Run log <code>{runLabel}</code>
-              </h3>
-              <div>
-                <button type="button">
-                  <ExternalLink aria-hidden="true" />
-                  View full log
-                </button>
-                <button onClick={downloadLog} type="button">
-                  <Download aria-hidden="true" />
-                  Download
-                </button>
-              </div>
-            </div>
-            <pre>{logText}</pre>
-          </section>
         </main>
       </div>
     </section>
@@ -2385,6 +2698,12 @@ function WorkspaceReviewStructureView({
             preparing={preparing}
             selectedRow={selectedRow}
             snapshotCurrent={snapshotCurrent}
+            validationReady={
+              snapshotCurrent &&
+              checks.some(
+                (check) => check.label === 'Schema validation' && check.status === 'passed'
+              )
+            }
           />
         ) : (
           <WorkspaceReviewStructureTree
@@ -3520,19 +3839,17 @@ function findWorkspaceReviewSource(
   sources: SourceBundleItem[],
   sourceRef: string | undefined
 ): SourceBundleItem | undefined {
-  if (!sourceRef) return sources[0];
+  if (!sourceRef) return undefined;
   const normalizedRef = sourceRef.replace(/^(material|source_chat|chat):/, '');
-  return (
-    sources.find(
-      (item) =>
-        item.id === sourceRef ||
-        item.id === normalizedRef ||
-        item.materialId === sourceRef ||
-        item.materialId === normalizedRef ||
-        item.conversationId === sourceRef ||
-        item.conversationId === normalizedRef ||
-        sourceRef.includes(item.id)
-    ) ?? sources[0]
+  return sources.find(
+    (item) =>
+      item.id === sourceRef ||
+      item.id === normalizedRef ||
+      item.materialId === sourceRef ||
+      item.materialId === normalizedRef ||
+      item.conversationId === sourceRef ||
+      item.conversationId === normalizedRef ||
+      sourceRef.includes(item.id)
   );
 }
 
@@ -3566,6 +3883,26 @@ async function prepareAndOpenReview(
 ) {
   onModeChange('review');
   await controller.prepareReview();
+}
+
+function reviewSectionRows(value: unknown): Array<[string, string]> {
+  if (value === undefined || value === null) return [];
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    return [['Detail', formatOperationValue(value)]];
+  }
+  return Object.entries(value).flatMap(([key, entry]) => {
+    const label = key.replace(/[_-]+/g, ' ');
+    if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+      return Object.entries(entry).map(
+        ([field, fieldValue]) =>
+          [`${label} · ${field.replace(/[_-]+/g, ' ')}`, formatOperationValue(fieldValue)] as [
+            string,
+            string,
+          ]
+      );
+    }
+    return [[label, formatOperationValue(entry)] as [string, string]];
+  });
 }
 
 function formatOperationValue(value: unknown): string {
@@ -3652,6 +3989,33 @@ function getReviewChecks(controller: WorkspaceComposeReviewController): ReviewCh
         : 'Protocol object integrity will be checked when the review snapshot is prepared.',
   });
   return checks;
+}
+
+function checksFromSnapshot(
+  snapshot: WorkspaceTransitionReviewSnapshotEnvelope
+): ReviewCheckView[] {
+  const checks = snapshot.snapshot.transition.checks;
+  return [
+    statementCheck('Deterministic replay', checks.replay, 'required', 'Replay not observed.'),
+    statementCheck('Schema validation', checks.validation, 'required', 'Validation not observed.'),
+    {
+      label: 'Object integrity',
+      requirement: 'system',
+      status: checks.objectIntegrity === 'verified' ? 'passed' : 'pending',
+      detail:
+        checks.objectIntegrity === 'verified'
+          ? 'Protocol object integrity verified.'
+          : 'Object integrity was not verified in this snapshot.',
+    },
+  ];
+}
+
+function snapshotCheckStatus(
+  snapshot: WorkspaceTransitionReviewSnapshotEnvelope
+): ReviewCheckStatus {
+  const checks = checksFromSnapshot(snapshot);
+  if (checks.some((check) => check.status === 'failed')) return 'failed';
+  return checks.every((check) => check.status === 'passed') ? 'passed' : 'pending';
 }
 
 function statementCheck(

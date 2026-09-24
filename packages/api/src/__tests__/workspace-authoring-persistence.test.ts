@@ -18,6 +18,7 @@ import { materializeTransitionProposal } from '../lib/transition-control-plane/m
 import {
   buildAuthoringEffect,
   buildAuthoringPreparation,
+  ensureWorkspaceAuthoringSchema,
   initializeWorkspaceAuthoring,
   publishWorkspaceAuthoringAction,
   readWorkspaceAuthoring,
@@ -39,7 +40,7 @@ describe('durable Draft authoring commands', () => {
   afterAll(async () => {
     await setup?.cleanup();
   });
-  async function initialize(workspaceId: string) {
+  async function initialize(workspaceId: string, unbound = false) {
     await insertBranch(setup.db, { projectId, name: workspaceId });
     const draft = await upsertWorkspaceDraft(setup.db, {
       project_id: projectId,
@@ -49,7 +50,9 @@ describe('durable Draft authoring commands', () => {
       workspace_state: {
         targetBranch: workspaceId,
         yopsDraft: { operations: [] },
-        schemaBindings: [{ canonicalName: 't3x/prd', version: 'v2', mode: 'pinned' }],
+        schemaBindings: unbound
+          ? []
+          : [{ canonicalName: 't3x/prd', version: 'v2', mode: 'pinned' }],
       },
     });
     return initializeWorkspaceAuthoring(setup.db, {
@@ -61,6 +64,27 @@ describe('durable Draft authoring commands', () => {
       actor,
     });
   }
+  it('repairs missing Schema with revision protection and leaves immutable history intact', async () => {
+    const init = await initialize('unbound', true);
+    const input = { projectId, workspaceId: 'unbound', expectedRevision: init.draft.revision };
+    await expect(
+      ensureWorkspaceAuthoringSchema(setup.db, { ...input, expectedRevision: 0 })
+    ).rejects.toThrow();
+    const revision = await ensureWorkspaceAuthoringSchema(setup.db, input);
+    const saved = (await findWorkspaceDraft(setup.db, projectId, 'unbound'))!;
+    expect(revision).toBe(init.draft.revision + 1);
+    expect(saved.workspace_state?.authoringLedger).toEqual(
+      init.draft.workspace_state?.authoringLedger
+    );
+    expect(saved.workspace_state?.authoringBasis).toEqual(
+      init.draft.workspace_state?.authoringBasis
+    );
+    expect(saved.workspace_state?.schemaBindings).toEqual([
+      expect.objectContaining({ canonicalName: 't3x/prd', version: 'v2' }),
+    ]);
+    await ensureWorkspaceAuthoringSchema(setup.db, { ...input, expectedRevision: revision });
+    expect((await findWorkspaceDraft(setup.db, projectId, 'unbound'))?.revision).toBe(revision);
+  });
   it('persists a multi-node action, recovers a lost response, and reconstructs immutable views', async () => {
     const init = await initialize('durable');
     const command = {

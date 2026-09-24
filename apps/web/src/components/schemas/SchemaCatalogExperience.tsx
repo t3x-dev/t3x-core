@@ -128,10 +128,19 @@ export function SchemaCatalogExperience({
       )}
       {view === 'release' ? (
         <div className="min-h-0 flex-1 overflow-hidden">
+          {!selectedRelease && !catalog.loading && !catalog.error && catalog.data?.has_more ? (
+            <button
+              disabled={catalog.morePending}
+              onClick={() => void catalog.loadMore()}
+              type="button"
+            >
+              {catalog.morePending ? 'Loading more releases…' : 'Search more releases'}
+            </button>
+          ) : null}
           <SchemaReleasePage
             error={catalog.error}
             item={selectedRelease}
-            loading={catalog.loading}
+            loading={catalog.loading || (!selectedRelease && !!catalog.data?.has_more)}
             onBack={() =>
               navigate('browse', {
                 catalogName: undefined,
@@ -168,8 +177,10 @@ export function SchemaCatalogExperience({
         </SchemaStudioExperience>
       ) : (
         <ExploreDiscoverySurface
+          projectId={projectId}
           onBrowse={() => navigate('browse')}
           onSearch={(query) => navigate('browse', { q: query || undefined })}
+          onOpenRelease={openRelease}
         />
       )}
     </section>

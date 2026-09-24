@@ -8,16 +8,12 @@ import type {
 import {
   Building2,
   ChevronDown,
-  Columns3,
   Copy,
-  Hand,
   Loader2,
   MoreHorizontal,
   Plus,
   Search,
   X,
-  ZoomIn,
-  ZoomOut,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
@@ -492,21 +488,6 @@ export function MembersSettingsPanel() {
         </section>
       </div>
 
-      <div className={styles.prototypeTools} aria-label="View tools" role="toolbar">
-        <button type="button" title="Zoom Out">
-          <ZoomOut size={20} />
-        </button>
-        <button type="button" title="Zoom In">
-          <ZoomIn size={20} />
-        </button>
-        <i />
-        <button type="button" title="Pan Tool">
-          <Hand size={20} />
-        </button>
-        <button type="button" title="Fit to Screen">
-          <Columns3 size={20} />
-        </button>
-      </div>
       <InviteDialog
         open={inviteOpen}
         busy={inviteBusy}

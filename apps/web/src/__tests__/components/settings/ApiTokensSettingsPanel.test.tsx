@@ -46,6 +46,13 @@ beforeEach(() => {
 });
 
 describe('ApiTokensSettingsPanel', () => {
+  it('shows an honest empty state when the server has no keys', async () => {
+    mocks.listApiKeys.mockResolvedValue([]);
+    render(<ApiTokensSettingsPanel />);
+
+    expect(await screen.findByText('No API tokens yet.')).toBeVisible();
+    expect(screen.queryByText('Production')).not.toBeInTheDocument();
+  });
   it('renders live API keys and filters them by search and scope', async () => {
     render(<ApiTokensSettingsPanel />);
 

@@ -90,7 +90,7 @@ export default function WebhooksPage() {
   const [testingId, setTestingId] = useState<string | null>(null);
 
   const projectHref = useMemo(
-    () => (projectId ? `/settings?project=${encodeURIComponent(projectId)}` : '/settings'),
+    () => (projectId ? `/project/${encodeURIComponent(projectId)}/settings` : '/settings'),
     [projectId]
   );
 
@@ -180,26 +180,24 @@ export default function WebhooksPage() {
   const handleTest = useCallback(
     async (webhook: WebhookData) => {
       setTestingId(webhook.webhook_id);
-      let status: DeliveryRecord['status'] = 'failed';
       try {
         const result = await testWebhook(webhook.webhook_id);
-        status = result.ok ? 'success' : 'failed';
-        if (result.ok) toast.success(`Test successful (HTTP ${result.status})`);
-        else toast.error(`Test failed (HTTP ${result.status})`);
-      } catch (err) {
-        toast.error(formatUserFacingError(err, 'Test request failed.'));
-      } finally {
         setDeliveries((current) => [
           {
             id: `${webhook.webhook_id}-${Date.now()}`,
             endpoint: webhook.url,
-            event: webhook.events[0] ?? 'webhook.test',
-            status,
+            event: 'webhook.test',
+            status: result.ok ? 'success' : 'failed',
             deliveredAt: new Date(),
             webhookId: webhook.webhook_id,
           },
           ...current,
         ]);
+        if (result.ok) toast.success(`Test successful (HTTP ${result.status})`);
+        else toast.error(`Test failed (HTTP ${result.status})`);
+      } catch (err) {
+        toast.error(formatUserFacingError(err, 'Test request failed.'));
+      } finally {
         setTestingId(null);
       }
     },
@@ -251,7 +249,7 @@ export default function WebhooksPage() {
                     <th>Endpoint</th>
                     <th>Events</th>
                     <th>Status</th>
-                    <th>Last delivery</th>
+                    <th>Last test (this session)</th>
                     <th className={styles.actionColumn}>Actions</th>
                   </tr>
                 </thead>
@@ -380,7 +378,7 @@ export default function WebhooksPage() {
           <section className={styles.panel} aria-labelledby="delivery-list-title">
             <div className={styles.panelTitle}>
               <ClipboardList aria-hidden="true" />
-              <h2 id="delivery-list-title">Recent deliveries</h2>
+              <h2 id="delivery-list-title">Test results in this session</h2>
             </div>
             <div className={styles.tableScroll}>
               <table className={styles.table}>
@@ -397,7 +395,8 @@ export default function WebhooksPage() {
                   {deliveries.length === 0 ? (
                     <tr>
                       <td colSpan={5} className={styles.emptyCell}>
-                        Delivery attempts will appear here after you send a test.
+                        No test result in this browser session. Delivery history is not available
+                        yet.
                       </td>
                     </tr>
                   ) : (
@@ -433,13 +432,7 @@ export default function WebhooksPage() {
                                 Retry
                               </Button>
                             ) : null}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => toast.info(`${eventLabel(delivery.event)} delivery`)}
-                            >
-                              Details
-                            </Button>
+                            <span title="No persisted delivery details available">—</span>
                           </td>
                         </tr>
                       );

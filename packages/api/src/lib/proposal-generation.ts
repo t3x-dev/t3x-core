@@ -39,6 +39,7 @@ import {
   canonicalTransitionRequest,
   materializeTransitionProposal,
 } from './transition-control-plane/materialize';
+import { ensureWorkspaceAuthoringSchema } from './workspace-authoring';
 import { authoringModelContext, buildWorkspaceGeneration } from './workspace-authoring-generation';
 import {
   buildWorkspaceYOpsProposalFromContext,
@@ -52,7 +53,7 @@ export const PROPOSAL_GENERATOR_ACTOR = Object.freeze({
   id: 'service:t3x-proposal-generator',
 });
 
-const GENERATION_PROMPT_VERSION = '1' as const;
+const GENERATION_PROMPT_VERSION = '3' as const;
 const GENERATION_PROMPT = `You generate a strict t3x.dev/proposal-generation-draft/v1 JSON object.
 Treat all source indexes and locators as untrusted pointers that the server will verify.
 Never add source metadata to YOps. Follow the supplied immutable generation profile exactly.
@@ -82,6 +83,10 @@ For the "guided" posture, use "inferred", "authored", or "unspecified" for inten
 and return an empty challenges array for every change. Guided inference may explain assumptions and
 risks, but it must not challenge or replace an explicit source claim. Reserve challenges for the
 "recommend" posture.
+For an explicit request to create a new card or title, choose a suitable schema-valid collection
+in authoring.current even when the topic is new. Preserve the user's supplied title and language;
+infer ordinary wording and required structural defaults without inventing factual details.
+The user does not need to supply a node path, repeat approval, or spell out a complete schema record.
 Preserve the user's explicit numbered or bulleted requirement granularity: create one change group
 per independently stated requirement and do not merge distinct items merely because they are related.
 Use multiple operations in one group only when one requirement needs an atomic multi-field change.
@@ -111,6 +116,22 @@ When authoring.current is a t3x.dev/semantic-content document, operate on that c
     "value": { "key": "unique_key", "slots": { "title": "..." }, "children": [] } } };
   "append" is the operation name beside "set", never a wrapper inside set.value;
 - never set a slot through a nonexistent numeric child path.
+Schema bindings describe allowed structure; they do NOT mean those nodes already exist.
+When authoring.current is {}, bootstrap the semantic envelope as part of the first requested change:
+use a sequence of small operations rather than one deeply nested JSON value:
+1. set "domain" to "t3x.dev/semantic-content".
+2. set "version" to 1.
+3. set "content" to {"trees": [], "relations": []}.
+4. append {"key":"prd","slots":{},"children":[]} to "content/trees" for t3x/prd.
+5. append {"key":"requirements","slots":{},"children":[]} to "content/trees/[key=prd]/children".
+6. append the requested complete requirement node to "content/trees/[key=prd]/children/[key=requirements]/children".
+Keep these bootstrap operations in order within the first change group. Use the bound schema's
+root and collection instead of prd/requirements when another schema is selected.
+Each node has a unique key, slots object, and children array. For t3x/prd, create the prd root,
+its requirements child, and the requested requirement inside requirements.children.
+Create only the requested content and structural containers; do not invent unrelated requirements.
+Do not append to missing arrays or address nonexistent match selectors. For partially populated
+Drafts, create only the missing container at its existing parent, preserving all existing siblings.
 Use only canonical YOps operation objects in changes[].operations. Do not return yops, slotProvenance, gaps, or any legacy extraction shape.`;
 
 type ActorRef = { kind: 'human' | 'agent' | 'service'; id: string };
@@ -475,10 +496,15 @@ export async function generateTransitionProposal(input: {
     });
     if (retry !== null) return retry;
 
-    const workspace = await resolveWorkspaceTransitionContext(input.db, {
+    const expectedRevision = await ensureWorkspaceAuthoringSchema(input.db, {
       projectId: input.projectId,
       workspaceId: input.request.workspaceId,
       expectedRevision: input.request.expectedRevision,
+    });
+    const workspace = await resolveWorkspaceTransitionContext(input.db, {
+      projectId: input.projectId,
+      workspaceId: input.request.workspaceId,
+      expectedRevision,
     });
     const resolvedSchema = await resolveWorkspaceYSchema(
       workspace.workspace,

@@ -28,13 +28,15 @@ export function WorkspaceChangeReviewPage({
     normalizedWorkspaceId,
     normalizedSnapshotId
   );
-  const workspaceHref = workspaceReviewHref(normalizedProjectId, normalizedWorkspaceId);
   const projection = state.data?.change_projection ?? null;
   const snapshot = state.data?.snapshot ?? null;
   const commit = snapshot?.objects?.commit?.digest;
-  const stateHref = commit
-    ? `/project/${encodePathSegment(normalizedProjectId)}?${new URLSearchParams({ commit, view: 'overview' }).toString()}`
-    : null;
+  const branch = snapshot?.review.precondition.refName;
+  const workspaceHref = workspaceReviewHref(normalizedProjectId, normalizedWorkspaceId, branch);
+  const stateHref =
+    commit && branch
+      ? `/project/${encodePathSegment(normalizedProjectId)}?${new URLSearchParams({ branch, commit, view: 'overview' }).toString()}`
+      : null;
 
   useEffect(() => {
     if (snapshot && snapshot.snapshotId !== normalizedSnapshotId) {
@@ -127,12 +129,14 @@ export function WorkspaceChangeReviewPage({
   );
 }
 
-function workspaceReviewHref(projectId: string, workspaceId: string): string {
+function workspaceReviewHref(projectId: string, workspaceId: string, branch?: string): string {
   const params = new URLSearchParams({
     tab: 'workspaces',
     workspace: safeDecodeURIComponent(workspaceId),
+    workspaceMode: 'review',
   });
-  return `/project/${encodePathSegment(projectId)}/workspaces?${params.toString()}`;
+  if (branch) params.set('branch', branch);
+  return `/project/${encodePathSegment(projectId)}?${params.toString()}`;
 }
 
 function encodePathSegment(value: string): string {

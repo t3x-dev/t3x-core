@@ -85,6 +85,48 @@ beforeEach(() => {
 });
 
 describe('ProjectReviewsTab', () => {
+  it('opens a linked PR number from Community against the real project API', async () => {
+    const linkedRequest = {
+      id: 'pr-7',
+      number: 7,
+      project_id: 'proj_real',
+      title: 'Linked review',
+      description: '',
+      source_branch: 'feature',
+      target_branch: 'main',
+      source_commit_id: 'source',
+      target_base_commit_id: 'base',
+      merge_draft_id: null,
+      merge_commit_id: null,
+      status: 'open',
+      author_id: 'user-1',
+      steward_id: null,
+      review_owner_id: null,
+      workspace_id: null,
+      release_lane_id: null,
+      linked_work: null,
+      created_at: '2026-09-01T00:00:00Z',
+      updated_at: '2026-09-01T00:00:00Z',
+      merged_at: null,
+      closed_at: null,
+    };
+    pullRequestApi.fetchPullRequests.mockResolvedValue({
+      pull_requests: [],
+      counts: { active: 0, merged: 0 },
+    });
+    pullRequestApi.fetchPullRequest.mockResolvedValue({
+      ...linkedRequest,
+      activity: [],
+      checks: [],
+      diff_summary: { changed_nodes: 0, yops_operations: 0, output_impacts: 0, source_refs: 0 },
+    });
+    render(<ProjectReviewsTab projectId="proj_real" initialPullRequestNumber={7} />);
+
+    await waitFor(() =>
+      expect(pullRequestApi.fetchPullRequest).toHaveBeenCalledWith('proj_real', 7)
+    );
+    expect(await screen.findByText('Linked review')).toBeInTheDocument();
+  });
   it('renders the pull request list with the State page visual constitution', () => {
     render(<ProjectReviewsTab />);
 

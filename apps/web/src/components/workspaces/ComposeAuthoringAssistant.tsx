@@ -5,7 +5,7 @@ import type {
   WorkspaceAuthoringCard,
   WorkspaceAuthoringOutcome,
 } from '@t3x-dev/api-client';
-import { ArrowUp, Sparkles, Square } from 'lucide-react';
+import { AlertTriangle, ArrowUp, Square } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GenerationModelSelector } from '@/components/generation/GenerationModelSelector';
 import { providerSupports } from '@/domain/providerCapabilities';
@@ -41,21 +41,32 @@ export function ComposeAuthoringAssistant({
   activityCards?: Record<string, WorkspaceAuthoringCard[]>;
 }) {
   const [conversationId, setConversationId] = useState(initialConversationId);
-  const [allowProposal, setAllowProposal] = useState(true);
   const [pendingCandidate, setPendingCandidate] = useState<string | null>(
     initialPendingCandidate ?? null
   );
   const [starting, setStarting] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [publicationError, setPublicationError] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [published, setPublished] = useState<AssistantPublication | null>(null);
   const publication = useRef<{ transitionId: string; requestId: string; turnId?: string } | null>(
     null
   );
+  const composeDefaultApplied = useRef(false);
   const model = useChatModelSelection({});
   const thinkingEnabled = useChatSessionStore((state) => state.thinkingEnabled);
   const setThinking = useChatSessionStore((state) => state.setThinking);
   const supportsThinking = providerSupports(model.selectedProvider ?? '', 'thinking');
+
+  useEffect(() => {
+    if (composeDefaultApplied.current || model.loading || !model.isSelectionReady) return;
+    composeDefaultApplied.current = true;
+    if (model.selectedProvider === 'openai' && model.selectedModel === 'gpt-5.4') return;
+    const openai = model.providers.find((provider) => provider.name === 'openai');
+    if (openai?.models.some((entry) => entry.id === 'gpt-5.4')) {
+      model.handleModelChange('openai', 'gpt-5.4');
+    }
+  }, [model]);
 
   useEffect(() => {
     if (initialPendingCandidate) setPendingCandidate(initialPendingCandidate);
@@ -75,8 +86,11 @@ export function ComposeAuthoringAssistant({
           setPublished({ turnId: identity.turnId, kind: outcome.kind, action: outcome.action });
         publication.current = null;
         setPendingCandidate(null);
+        setPublicationError(null);
       } catch (error) {
-        setLocalError(error instanceof Error ? error.message : 'Could not publish this proposal.');
+        setPublicationError(
+          error instanceof Error ? error.message : 'Could not publish this proposal.'
+        );
       } finally {
         setPublishing(false);
       }
@@ -90,8 +104,9 @@ export function ComposeAuthoringAssistant({
     model: model.selectedModel ?? undefined,
     workspaceAssistant: {
       ...context,
-      allowProposal,
+      allowProposal: true,
       onCandidate: (transitionId, turnId) => {
+        setPublicationError(null);
         setPendingCandidate(transitionId);
         void publishTransition(transitionId, turnId);
       },
@@ -209,17 +224,13 @@ export function ComposeAuthoringAssistant({
         chat={chatView}
         variant="discussion"
       />
-      {pendingCandidate ? (
-        <section className={styles.candidateNotice} aria-label="Generated proposal">
+      {pendingCandidate && publicationError ? (
+        <section className={styles.candidateNotice} aria-label="Proposal publication failed">
           <div>
-            <Sparkles aria-hidden="true" />
+            <AlertTriangle aria-hidden="true" />
             <span>
-              <strong>Proposal ready</strong>
-              <small>
-                {publishing
-                  ? 'Verifying and publishing this proposal to the Draft…'
-                  : 'Publication needs attention. Retry after reviewing the error below.'}
-              </small>
+              <strong>Proposal publication failed</strong>
+              <small>Review the error below, then retry publication.</small>
             </span>
           </div>
           <button disabled={publishing} onClick={() => void publish()} type="button">
@@ -227,12 +238,12 @@ export function ComposeAuthoringAssistant({
           </button>
         </section>
       ) : null}
-      {localError || chat.error || chat.warning ? (
+      {publicationError || localError || chat.error || chat.warning ? (
         <p
           className={styles.authoringAssistantNotice}
-          role={localError || chat.error ? 'alert' : 'status'}
+          role={publicationError || localError || chat.error ? 'alert' : 'status'}
         >
-          {localError ?? chat.error ?? chat.warning}
+          {publicationError ?? localError ?? chat.error ?? chat.warning}
         </p>
       ) : null}
       {!conversationId ? (
@@ -245,14 +256,6 @@ export function ComposeAuthoringAssistant({
           {starting ? 'Starting…' : 'Start workspace conversation'}
         </button>
       ) : null}
-      <label className={styles.proposalPermission}>
-        <input
-          checked={allowProposal}
-          onChange={(event) => setAllowProposal(event.target.checked)}
-          type="checkbox"
-        />
-        Generate a proposal from change requests
-      </label>
       <fieldset className={styles.discussionComposer} aria-label="Message composer">
         <textarea
           aria-label="Workspace instruction"
@@ -263,32 +266,34 @@ export function ComposeAuthoringAssistant({
             event.preventDefault();
             if (!sendDisabled) chat.sendMessage();
           }}
-          placeholder="Ask about this Draft…"
+          placeholder="Reply, or ask the assistant to change this node…"
           rows={3}
           value={chat.input}
         />
         <div className={styles.discussionComposerFooter}>
-          <GenerationModelSelector
-            onModelChange={model.handleModelChange}
-            onThinkingChange={setThinking}
-            selectedModel={model.selectedModel ?? ''}
-            selectedProvider={model.selectedProvider ?? ''}
-            supportsThinking={supportsThinking}
-            thinkingEnabled={thinkingEnabled}
-          />
-          <button
-            aria-label={chat.isStreaming ? 'Stop generating' : 'Send message'}
-            className={styles.send}
-            disabled={!chat.isStreaming && sendDisabled}
-            onClick={() => (chat.isStreaming ? chat.stopGenerating() : chat.sendMessage())}
-            type="button"
-          >
-            {chat.isStreaming ? (
-              <Square aria-hidden="true" className="size-4 fill-current text-current" />
-            ) : (
-              <ArrowUp aria-hidden="true" className="size-4" />
-            )}
-          </button>
+          <div className={styles.composerSubmit}>
+            <GenerationModelSelector
+              onModelChange={model.handleModelChange}
+              onThinkingChange={setThinking}
+              selectedModel={model.selectedModel ?? ''}
+              selectedProvider={model.selectedProvider ?? ''}
+              supportsThinking={supportsThinking}
+              thinkingEnabled={thinkingEnabled}
+            />
+            <button
+              aria-label={chat.isStreaming ? 'Stop generating' : 'Send message'}
+              className={styles.send}
+              disabled={!chat.isStreaming && sendDisabled}
+              onClick={() => (chat.isStreaming ? chat.stopGenerating() : chat.sendMessage())}
+              type="button"
+            >
+              {chat.isStreaming ? (
+                <Square aria-hidden="true" className="size-4 fill-current text-current" />
+              ) : (
+                <ArrowUp aria-hidden="true" className="size-4" />
+              )}
+            </button>
+          </div>
         </div>
       </fieldset>
     </div>

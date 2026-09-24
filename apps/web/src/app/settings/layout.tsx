@@ -4,6 +4,7 @@ import {
   Box,
   ChevronUp,
   Circle,
+  HelpCircle,
   KeyRound,
   LogOut,
   PanelLeft,
@@ -16,6 +17,7 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { ProjectRouteShell } from '@/components/project/ProjectRouteShell';
+import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
 import { useSession } from '@/hooks/shared/useSession';
 import styles from './SettingsLayout.module.css';
 
@@ -40,6 +42,13 @@ const PERSONAL_NAV: SettingsNavItem[] = [
     icon: Box,
     activePaths: ['/settings/providers'],
   },
+  {
+    href: '/settings/provider-credentials',
+    label: 'Provider credentials',
+    icon: KeyRound,
+    activePaths: ['/settings/provider-credentials'],
+  },
+  { href: '/settings/help', label: 'Help', icon: HelpCircle, activePaths: ['/settings/help'] },
 ];
 
 const ORGANIZATION_NAV: SettingsNavItem[] = [
@@ -64,7 +73,7 @@ const ORGANIZATION_NAV: SettingsNavItem[] = [
   },
   {
     href: '/settings/usage',
-    label: 'Plan & usage',
+    label: 'Usage',
     icon: PanelLeft,
     activePaths: ['/settings/usage'],
   },
@@ -117,12 +126,13 @@ function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
   const currentPath = usePathname() ?? '';
   const projectId = useSearchParams().get('project')?.trim() ?? '';
   const { clear, getKey } = useSession();
+  const { activeAccount } = useNamespaceAccounts();
   const [isAuthEnabled, setIsAuthEnabled] = useState(false);
 
   useEffect(() => setIsAuthEnabled(Boolean(getKey())), [getKey]);
 
   return (
-    <ProjectRouteShell fallbackProjectName="orbit-labs" projectId={projectId}>
+    <ProjectRouteShell fallbackProjectName="Project" projectId={projectId}>
       <div className={styles.shell}>
         <aside className={styles.sidebar} aria-label="Settings navigation">
           <section>
@@ -140,7 +150,11 @@ function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
           </section>
 
           <section>
-            <h2 className={styles.groupTitle}>Organization: orbit-labs</h2>
+            <h2 className={styles.groupTitle}>
+              {activeAccount
+                ? `${activeAccount.namespace.kind === 'organization' ? 'Organization' : 'Namespace'}: ${activeAccount.namespace.display_name}`
+                : 'Organization: No active namespace'}
+            </h2>
             <nav className={styles.navList}>
               {ORGANIZATION_NAV.map((item) => (
                 <SettingsNavLink

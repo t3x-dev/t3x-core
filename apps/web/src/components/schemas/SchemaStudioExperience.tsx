@@ -179,6 +179,7 @@ export function SchemaStudioExperience({
   const applySelection = useApplyStudioSelection(projectId);
   const [selection, setSelection] = useState<string[]>([]);
   const [workspaceId, setWorkspaceId] = useState(params?.get('workspace') ?? '');
+  const requestedWorkspaceId = params?.get('workspace') ?? '';
   const [mode, setMode] = useState<'structure' | 'yaml'>('structure');
   const [activeModuleId, setActiveModuleId] = useState('requirements');
   const [collapsedSources, setCollapsedSources] = useState<Set<string>>(new Set());
@@ -196,6 +197,10 @@ export function SchemaStudioExperience({
       mounted.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    setWorkspaceId(requestedWorkspaceId);
+  }, [requestedWorkspaceId]);
 
   const requested = params?.get('candidate');
   useEffect(() => {
@@ -250,17 +255,25 @@ export function SchemaStudioExperience({
     return [...bySource.values()];
   }, [candidates.items, selection]);
 
-  const visibleSources = liveSources.length ? liveSources : demoSources;
+  const showExplicitDemo = params?.get('demo') === '1';
+  const visibleSources = liveSources.length ? liveSources : showExplicitDemo ? demoSources : [];
   const liveComposition = liveSources
     .flatMap((source) => source.modules)
     .filter((item) => item.checked);
-  const composition = liveSources.length ? liveComposition : demoComposition;
+  const composition = liveSources.length
+    ? liveComposition
+    : showExplicitDemo
+      ? demoComposition
+      : [];
   const activeModule =
     visibleSources.flatMap((source) => source.modules).find((item) => item.id === activeModuleId) ??
     composition[1] ??
     composition[0];
   const selectedWorkspaceTitle =
-    target?.title ?? workspaces.workspaces[0]?.title ?? 'Main workspace';
+    target?.title ??
+    (workspaceId
+      ? 'Workspace unavailable'
+      : (workspaces.workspaces[0]?.title ?? 'Select a workspace'));
 
   function choose(module: StudioModule) {
     setActiveModuleId(module.id);
@@ -281,7 +294,7 @@ export function SchemaStudioExperience({
   }
 
   async function apply() {
-    if (!review?.workspace || applying) return;
+    if (!review?.workspace || !target || review.workspace.id !== target.id || applying) return;
     setApplying(true);
     setError(undefined);
     try {
@@ -308,16 +321,15 @@ export function SchemaStudioExperience({
   }
 
   function openReview() {
-    if (data?.workspace && data.report.valid && data.adoption.allowed) setReview(data);
+    if (target && data?.workspace?.id === target.id && data?.report.valid && data?.adoption.allowed)
+      setReview(data);
   }
 
   function downloadDefinition() {
-    const blob = new Blob(
-      [JSON.stringify(data?.schema ?? { modules: composition.map((item) => item.title) }, null, 2)],
-      {
-        type: 'application/json',
-      }
-    );
+    if (!data?.schema) return;
+    const blob = new Blob([JSON.stringify(data.schema, null, 2)], {
+      type: 'application/json',
+    });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
@@ -327,8 +339,17 @@ export function SchemaStudioExperience({
   }
 
   const canReview =
-    !!data?.workspace && !!data.report.valid && !!data.adoption.allowed && !applying;
+    !!target &&
+    data?.workspace?.id === target.id &&
+    !!data?.report.valid &&
+    !!data?.adoption.allowed &&
+    !applying;
   const repoPath = getProjectIdRepoPath(projectId);
+  const browseParams = new URLSearchParams({ tab: 'schemas', schemaView: 'browse' });
+  const routeBranch = params?.get('branch');
+  if (routeBranch) browseParams.set('branch', routeBranch);
+  if (workspaceId) browseParams.set('workspace', workspaceId);
+  const browseHref = `${repoPath}?${browseParams.toString()}`;
   const workspaceLink = target
     ? `${getProjectIdWorkspacePath(projectId, { branch: target.targetBranch })}&workspace=${encodeURIComponent(target.id)}`
     : getProjectIdWorkspacePath(projectId);
@@ -346,6 +367,16 @@ export function SchemaStudioExperience({
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
         rel="stylesheet"
       />
+
+      {!workspaces.loading && !workspaces.error && workspaceId && !target ? (
+        <p
+          className="mx-4 mt-3 rounded-lg border border-[var(--status-error)]/30 bg-[var(--status-error-muted)] p-2 text-sm text-[var(--status-error)]"
+          role="alert"
+        >
+          Workspace {workspaceId} was not found in this project. Select a valid Workspace before
+          applying.
+        </p>
+      ) : null}
 
       {error ? (
         <p
@@ -375,6 +406,14 @@ export function SchemaStudioExperience({
               <p className="px-5 py-3 text-sm text-red-600" role="alert">
                 {candidates.error}
               </p>
+            ) : null}
+            {!candidates.loading && !candidates.error && visibleSources.length === 0 ? (
+              <div className="px-5 py-4 text-sm text-blue-700">
+                <p>No Studio candidates in this project.</p>
+                <Link className="mt-2 inline-block font-semibold underline" href={browseHref}>
+                  Browse schemas to add one
+                </Link>
+              </div>
             ) : null}
             {visibleSources.map((source) => {
               const collapsed = collapsedSources.has(source.name);
@@ -529,11 +568,9 @@ export function SchemaStudioExperience({
           <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-3">
             {mode === 'yaml' ? (
               <pre className="min-h-full whitespace-pre-wrap rounded-[12px] bg-slate-950 p-5 font-mono text-xs leading-6 text-blue-100">
-                {JSON.stringify(
-                  data?.schema ?? { modules: composition.map((item) => item.title) },
-                  null,
-                  2
-                )}
+                {data?.schema
+                  ? JSON.stringify(data.schema, null, 2)
+                  : 'No preview for this selection.'}
               </pre>
             ) : composition.length ? (
               <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}>
@@ -554,7 +591,7 @@ export function SchemaStudioExperience({
                 <i className="ri-box-3-line text-3xl text-blue-600" />
                 <h3 className="text-lg font-semibold">Shape your next piece of work</h3>
                 <p className="text-sm text-blue-500">
-                  Choose a source module to compose its exact definition.
+                  Add a release from Browse, then select it to compose its exact definition.
                 </p>
               </div>
             )}
@@ -572,7 +609,7 @@ export function SchemaStudioExperience({
               tone={activeModule?.tone ?? 'purple'}
             />
             <h2 className="text-lg font-bold text-blue-900">
-              {activeModule?.title ?? 'Requirements'}
+              {activeModule?.title ?? 'No module selected'}
             </h2>
           </div>
           <div className="mb-5">
@@ -588,46 +625,43 @@ export function SchemaStudioExperience({
                   small
                   tone={activeModule?.sourceTone ?? 'black'}
                 />
-                <b className="text-sm text-blue-900">{activeModule?.source ?? 'T3X PRD'}</b>
+                <b className="text-sm text-blue-900">{activeModule?.source ?? '—'}</b>
               </span>
             </InfoRow>
             <InfoRow label="Module path">
               <span className="rounded-full border border-blue-100 bg-blue-50/50 px-3 py-1 text-sm font-semibold text-blue-600">
-                {activeModule?.title ?? 'Requirements'}
+                {activeModule?.title ?? '—'}
               </span>
             </InfoRow>
             <InfoRow label="Pinned commit">
               <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-[13px] font-semibold text-blue-600">
-                Pinned source
+                {activeModule?.candidate?.source?.hash ?? 'No source selected'}
               </span>
             </InfoRow>
             <Link
               className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-800"
-              href={`${repoPath}?tab=schemas&schemaView=browse`}
+              href={browseHref}
               style={{ color: '#2563eb' }}
             >
               <i className="ri-external-link-line text-lg" />
-              View source project
+              Browse source releases
             </Link>
           </div>
           <hr className="mb-5 border-t border-blue-50" />
           <div className="mb-5">
             <h3 className="mb-3 text-[15px] font-bold text-blue-900">Module settings</h3>
             <div className="flex flex-wrap gap-2">
-              {['Required', 'Repeatable', 'Structured'].map((setting) => (
-                <span
-                  className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-600 shadow-sm"
-                  key={setting}
-                >
-                  {setting}
-                </span>
-              ))}
+              <span className="text-xs text-blue-500">
+                Select a candidate to inspect its definition.
+              </span>
             </div>
           </div>
           <hr className="mb-5 border-t border-blue-50" />
           <div>
             <h3 className="mb-1.5 text-[15px] font-bold text-blue-900">Dependencies</h3>
-            <p className="text-xs font-medium text-blue-400">None</p>
+            <p className="text-xs font-medium text-blue-400">
+              See the exact selection preview for dependencies.
+            </p>
           </div>
           {!workspaces.loading &&
           !workspaces.error &&
@@ -707,13 +741,13 @@ export function SchemaStudioExperience({
           onClick={() => setZoom((value) => Math.min(1.2, value + 0.05))}
         />
         <span className="mx-1 h-5 w-px bg-slate-200" />
-        <ToolButton icon="ri-drag-move-fill" label="Move" />
         <ToolButton icon="ri-aspect-ratio-line" label="Fit view" onClick={() => setZoom(1)} />
         <span className="mx-1 h-5 w-px bg-slate-200" />
         <ToolButton
           icon="ri-download-2-line"
           label="Download definition"
           onClick={downloadDefinition}
+          disabled={!data?.schema}
         />
       </div>
 
@@ -926,15 +960,18 @@ function ToolButton({
   icon,
   label,
   onClick,
+  disabled,
 }: {
   icon: string;
   label: string;
   onClick?: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       aria-label={label}
       className="flex h-7 w-7 items-center justify-center rounded-[5px] text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-bg)]"
+      disabled={disabled}
       onClick={onClick}
       type="button"
     >

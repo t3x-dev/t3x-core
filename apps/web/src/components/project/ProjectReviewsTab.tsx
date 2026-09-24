@@ -37,7 +37,7 @@ import {
   UserRound,
   XCircle,
 } from 'lucide-react';
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -479,7 +479,15 @@ function toCompareCandidate(
   };
 }
 
-export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
+export function ProjectReviewsTab({
+  projectId,
+  initialPullRequestNumber,
+  onPullRequestNumberChange,
+}: {
+  projectId?: string;
+  initialPullRequestNumber?: number;
+  onPullRequestNumberChange?: (number?: number) => void;
+} = {}) {
   const {
     closePullRequest: closeProjectPullRequest,
     createPullRequest: createProjectPullRequest,
@@ -497,7 +505,9 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
   const [mode, setMode] = useState<PullRequestListMode>('open');
   const [statusFilter, setStatusFilter] = useState<'all' | PullRequestStatus>('all');
   const [view, setView] = useState<PullRequestView>('list');
-  const [selectedId, setSelectedId] = useState(INITIAL_PULL_REQUESTS[0]?.id ?? '');
+  const [selectedId, setSelectedId] = useState(
+    projectId ? '' : (INITIAL_PULL_REQUESTS[0]?.id ?? '')
+  );
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState<PullRequestDetailTab>('overview');
   const [query, setQuery] = useState('');
@@ -522,6 +532,46 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
     targetBranch: 'main',
   }));
   const [apiError, setApiError] = useState<string | null>(null);
+  const openedDeepLink = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!projectId) return;
+    const key = initialPullRequestNumber ? `${projectId}:${initialPullRequestNumber}` : null;
+    if (openedDeepLink.current === key) return;
+    openedDeepLink.current = key;
+    if (!key || !initialPullRequestNumber) {
+      setView('list');
+      setDetailError(null);
+      return;
+    }
+    let cancelled = false;
+    setDetailError(null);
+    setSelectedId('');
+    setView('detail');
+    setDetailLoadingId(key);
+    fetchProjectPullRequest(projectId, initialPullRequestNumber)
+      .then((detail) => {
+        if (cancelled) return;
+        const mapped = toProjectPullRequestDetail(detail);
+        setPullRequests((items) => [
+          mapped,
+          ...items.filter((item) => item.number !== mapped.number),
+        ]);
+        setSelectedId(mapped.id);
+      })
+      .catch((err) => {
+        if (!cancelled)
+          setDetailError(
+            err instanceof Error ? err.message : 'Could not load pull request details.'
+          );
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoadingId(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchProjectPullRequest, initialPullRequestNumber, projectId]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -530,7 +580,19 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
     setApiError(null);
     fetchPullRequests(projectId)
       .then((data) => {
-        if (!cancelled) setPullRequests(data.pull_requests.map(toProjectPullRequest));
+        if (!cancelled)
+          setPullRequests((current) => {
+            const listed = data.pull_requests.map((item) => {
+              const previous = current.find((entry) => entry.number === item.number);
+              return previous?.checks ? previous : toProjectPullRequest(item);
+            });
+            const linkedDetail = current.find(
+              (entry) => entry.number === initialPullRequestNumber && entry.checks
+            );
+            return linkedDetail && !listed.some((entry) => entry.number === linkedDetail.number)
+              ? [linkedDetail, ...listed]
+              : listed;
+          });
       })
       .catch((err) => {
         if (!cancelled) {
@@ -541,7 +603,7 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
     return () => {
       cancelled = true;
     };
-  }, [fetchPullRequests, projectId]);
+  }, [fetchPullRequests, initialPullRequestNumber, projectId]);
 
   useEffect(() => {
     if (!projectId || view !== 'create') return;
@@ -620,8 +682,7 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
   );
   const closedPullRequests = pullRequests.filter((item) => item.status === 'closed');
   const mergedPullRequests = pullRequests.filter((item) => item.status === 'merged');
-  const selectedPullRequest =
-    pullRequests.find((item) => item.id === selectedId) ?? openPullRequests[0] ?? pullRequests[0];
+  const selectedPullRequest = pullRequests.find((item) => item.id === selectedId);
 
   const visiblePullRequests = useMemo(() => {
     const source =
@@ -710,6 +771,11 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
     setDetailError(null);
     setDetailTab('structured-diff');
     setView('detail');
+
+    if (projectId && onPullRequestNumberChange) {
+      onPullRequestNumberChange(pullRequest.number);
+      return;
+    }
 
     if (!projectId) {
       const candidate = compareCandidates.find(
@@ -980,6 +1046,27 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
     );
   }
 
+  if (view === 'detail' && !selectedPullRequest && detailLoadingId) {
+    return <output className={listStyles.page}>Loading pull request…</output>;
+  }
+
+  if (view === 'detail' && !selectedPullRequest && detailError) {
+    return (
+      <section className={listStyles.page}>
+        <p role="alert">{detailError}</p>
+        <button
+          onClick={() => {
+            onPullRequestNumberChange?.(undefined);
+            setView('list');
+          }}
+          type="button"
+        >
+          Back to pull requests
+        </button>
+      </section>
+    );
+  }
+
   if (view === 'detail' && selectedPullRequest) {
     return (
       <PullRequestDetailView
@@ -991,7 +1078,10 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
         detailTab={detailTab}
         mergeError={mergeError}
         merging={mergingId === selectedPullRequest.id}
-        onBack={() => setView('list')}
+        onBack={() => {
+          onPullRequestNumberChange?.(undefined);
+          setView('list');
+        }}
         onClose={() => closePullRequest(selectedPullRequest)}
         onChangeTab={setDetailTab}
         onMerge={() => mergePullRequest(selectedPullRequest)}
@@ -1008,7 +1098,7 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
       <header className={listStyles.pageHeader}>
         <div>
           <h1>Pull requests</h1>
-          <p>Changes proposed to release-control</p>
+          <p>Changes proposed to this project</p>
         </div>
         <Button
           aria-label="Create PR"

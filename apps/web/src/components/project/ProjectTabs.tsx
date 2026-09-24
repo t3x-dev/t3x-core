@@ -1,4 +1,3 @@
-import { Braces, Database, GitPullRequest, Grid2X2, Layers3, Settings } from 'lucide-react';
 import Link from 'next/link';
 import {
   getProjectTabSegment,
@@ -9,20 +8,22 @@ import { cn } from '@/utils/cn';
 
 export interface ProjectTabsProps {
   activeTab: ProjectTabId;
-  composeChrome?: boolean;
+  branch?: string | null;
   repoPath: string;
   projectIdNavigation?: boolean;
   settingsHref?: string;
   stacked?: boolean;
+  workspaceId?: string | null;
 }
 
 export function ProjectTabs({
   activeTab,
-  composeChrome = false,
+  branch,
   repoPath,
   projectIdNavigation = false,
   settingsHref = '/settings',
   stacked = false,
+  workspaceId,
 }: ProjectTabsProps) {
   return (
     <nav
@@ -36,16 +37,25 @@ export function ProjectTabs({
       {PROJECT_TABS.map((tab) => {
         const selected = activeTab === tab.id;
         const visibleLabel = tab.id === 'reviews' ? 'PRs' : tab.label;
-        const Icon = {
-          state: Database,
-          schemas: Braces,
-          workspaces: Layers3,
-          reviews: GitPullRequest,
-          outputs: Grid2X2,
-          community: Grid2X2,
-          settings: Settings,
-        }[tab.id];
-
+        const baseHref =
+          tab.id === 'settings'
+            ? settingsHref
+            : tab.id === 'state'
+              ? repoPath
+              : projectIdNavigation
+                ? `${repoPath}?tab=${getProjectTabSegment(tab.id)}`
+                : `${repoPath}/${getProjectTabSegment(tab.id)}`;
+        const context = new URLSearchParams();
+        if (branch && tab.id !== 'settings') {
+          context.set('branch', branch);
+        }
+        if (workspaceId && (tab.id === 'schemas' || tab.id === 'workspaces')) {
+          context.set('workspace', workspaceId);
+        }
+        const contextQuery = context.toString();
+        const href = contextQuery
+          ? `${baseHref}${baseHref.includes('?') ? '&' : '?'}${contextQuery}`
+          : baseHref;
         return (
           <Link
             aria-label={tab.label}
@@ -53,27 +63,14 @@ export function ProjectTabs({
             className={cn(
               'relative inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--radius-md)] px-3.5 text-[14px] font-medium leading-5 transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50',
-              composeChrome
-                ? selected
-                  ? 'font-semibold text-[var(--text-primary)] after:absolute after:inset-x-3 after:bottom-[-4px] after:h-0.5 after:rounded-full after:bg-[var(--text-primary)]'
-                  : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
-                : selected
-                  ? 'bg-[var(--accent-commit-soft)] font-semibold !text-[var(--accent-commit)]'
-                  : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+              selected
+                ? 'bg-[var(--accent-commit-soft)] font-semibold !text-[var(--accent-commit)]'
+                : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
             )}
-            href={
-              tab.id === 'settings'
-                ? settingsHref
-                : tab.id === 'state'
-                  ? repoPath
-                  : projectIdNavigation
-                    ? `${repoPath}?tab=${getProjectTabSegment(tab.id)}`
-                    : `${repoPath}/${getProjectTabSegment(tab.id)}`
-            }
+            href={href}
             key={tab.id}
             scroll={false}
           >
-            {composeChrome ? <Icon aria-hidden="true" className="size-3.5" /> : null}
             <span>{visibleLabel}</span>
           </Link>
         );

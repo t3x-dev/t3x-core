@@ -89,7 +89,7 @@ describe('ComposeActivityTimeline', () => {
       {meta.comparison}: {String(operation.beforeValue)} → {String(operation.afterValue)}
     </div>
   );
-  it('opens the latest event, summarizes older events and expands an older row', () => {
+  it('summarizes events without idle durations and expands an older row', () => {
     render(
       <ComposeActivityTimeline
         activity={fixture()}
@@ -99,13 +99,12 @@ describe('ComposeActivityTimeline', () => {
         updatedAt="2026-09-21"
       />
     );
-    expect(screen.getByTestId('card-n3')).toHaveTextContent('event: 25 → 30');
+    expect(screen.queryByTestId('card-n3')).not.toBeInTheDocument();
     expect(screen.queryByTestId('card-n2')).not.toBeInTheDocument();
-    expect(screen.getByText('35 min idle · New event')).toBeInTheDocument();
-    expect(screen.getByText('MCP')).toBeInTheDocument();
-    // Manual and MCP use the same change icon; their source is kept in the badge.
+    expect(screen.queryByText(/idle/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('MCP')).not.toBeInTheDocument();
+    expect(screen.getByText(/Sep 21/)).toHaveAttribute('data-compact', 'true');
     expect(screen.getAllByRole('img', { name: 'Modified fields' })).toHaveLength(4);
-    expect(screen.getAllByRole('img', { name: 'Idle interval' }).length).toBeGreaterThan(0);
     expect(document.querySelector('.lucide-circle')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Adjust pilot allocation/ }));
     expect(screen.getByTestId('card-n2')).toBeInTheDocument();

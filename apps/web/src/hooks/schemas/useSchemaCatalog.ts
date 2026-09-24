@@ -9,7 +9,7 @@ import {
 } from '@/infrastructure/schemaCatalog';
 import { fetchAuthoringTarget } from '@/infrastructure/stateAuthoring';
 
-export function useSchemaCatalog(projectId: string, query: string, enabled = true) {
+export function useSchemaCatalog(projectId: string | null, query: string, enabled = true) {
   const key = `${projectId}:${query}`;
   const [result, setResult] = useState<{ key: string; data?: SchemaCatalogPage; error?: string }>();
   const [retry, setRetry] = useState(0);

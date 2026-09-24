@@ -1,15 +1,12 @@
 import type { WorkspaceAuthoringCard } from '@t3x-dev/api-client';
 import {
   CheckCircle2,
-  Clock3,
-  FileText,
+  ChevronDown,
   GitCompareArrows,
   History,
-  MessageSquare,
   Minus,
   Pencil,
   Plus,
-  Sparkles,
 } from 'lucide-react';
 import { Fragment, type ReactNode, useState } from 'react';
 import {
@@ -50,20 +47,13 @@ const day = (value: string) =>
   });
 const dayLabel = (value: string) => {
   const date = new Date(value);
-  const prefix = date.toDateString() === new Date().toDateString() ? 'TODAY · ' : '';
-  return `${prefix}${date
-    .toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-    .toUpperCase()}`;
+  const today = new Date();
+  if (date.toDateString() === today.toDateString()) return 'Today';
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 };
-
-function durationLabel(milliseconds: number) {
-  const minutes = Math.floor(milliseconds / 60000);
-  if (minutes < 60) return `${minutes} min idle`;
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-  const remainingHours = hours % 24;
-  return days ? `${days} d${remainingHours ? ` ${remainingHours} h` : ''} idle` : `${hours} h idle`;
-}
 
 type ComposeChangeFilter = 'all' | 'modified' | 'added' | 'attention';
 
@@ -111,8 +101,10 @@ export function ComposeActivityTimeline({
       fallback
     ) : (
       <div className={styles.timeline}>
-        <p className={styles.date}>
-          <span>{dayLabel(updatedAt)}</span>
+        <p className={styles.date} title={day(updatedAt)}>
+          <span data-compact={dayLabel(updatedAt).length > 9 || undefined}>
+            {dayLabel(updatedAt)}
+          </span>
         </p>
         <section className={styles.event} data-latest="true" aria-label="Current proposal">
           <time className={styles.eventTime} dateTime={updatedAt}>
@@ -190,8 +182,10 @@ export function ComposeActivityTimeline({
         return (
           <Fragment key={event.id}>
             {index === 0 || day(event.endedAt) !== day(visibleEvents[index - 1].event.endedAt) ? (
-              <p className={styles.date}>
-                <span>{dayLabel(event.endedAt)}</span>
+              <p className={styles.date} title={day(event.endedAt)}>
+                <span data-compact={dayLabel(event.endedAt).length > 9 || undefined}>
+                  {dayLabel(event.endedAt)}
+                </span>
               </p>
             ) : null}
             <section
@@ -230,15 +224,6 @@ export function ComposeActivityTimeline({
                       </span>
                       {index === 0 ? <span className={styles.latestBadge}>Latest</span> : null}
                     </span>
-                    <span className={styles.meta}>
-                      <span className={styles.channel} data-channel={latest.channel}>
-                        {latest.channel === 'assistant' ? <Sparkles aria-hidden="true" /> : null}
-                        {latest.channel === 'import' ? <FileText aria-hidden="true" /> : null}
-                        {latest.channel === 'manual' ? <Pencil aria-hidden="true" /> : null}
-                        {latest.channel === 'mcp' ? <MessageSquare aria-hidden="true" /> : null}
-                        {activityChannelLabel(latest.channel)}
-                      </span>
-                    </span>
                   </span>
                   <span className={styles.author} title={actor}>
                     <span>
@@ -246,6 +231,7 @@ export function ComposeActivityTimeline({
                     </span>
                     {actor}
                   </span>
+                  <ChevronDown aria-hidden="true" className={styles.disclosure} />
                 </button>
                 {open ? (
                   <div className={composeStyles.actionList}>
@@ -286,7 +272,7 @@ export function ComposeActivityTimeline({
                           <span className={styles.valueSummary}>
                             <ValueChange before={before} after={after} kind={cardKind} />
                           </span>
-                          <CheckCircle2 aria-label="Verified" className={styles.verified} />
+                          <CheckCircle2 aria-label="Applied to Draft" className={styles.verified} />
                         </button>
                       );
                     })}
@@ -294,21 +280,6 @@ export function ComposeActivityTimeline({
                 )}
               </div>
             </section>
-            {event.idleBeforeMs > 0 ? (
-              <div className={styles.gap}>
-                <span aria-hidden="true" />
-                <span className={styles.gapRail} aria-hidden="true" />
-                <span className={styles.gapCopy}>
-                  <strong>
-                    <Clock3 aria-hidden="true" /> {durationLabel(event.idleBeforeMs)}
-                  </strong>
-                  <small>
-                    {time(visibleEvents[index + 1]?.event.endedAt ?? event.startedAt)} →{' '}
-                    {time(event.startedAt)}
-                  </small>
-                </span>
-              </div>
-            ) : null}
           </Fragment>
         );
       })}

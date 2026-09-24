@@ -78,11 +78,16 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
     return projected;
   }, [candidate.id, candidate.projectId, enabled, pageCount]);
   useEffect(() => {
-    let active = true;
+    // Only a different workspace invalidates the visible projection. Clearing it
+    // on every revision unmounts the assistant and loses its chat/scroll state.
     setView(null);
     setActions([]);
     setCards({});
     setError(null);
+  }, [enabled, candidate.id, candidate.projectId]);
+
+  useEffect(() => {
+    let active = true;
     if (!enabled) {
       setLoading(false);
       return;

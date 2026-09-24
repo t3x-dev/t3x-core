@@ -6,13 +6,12 @@ import {
 } from '@t3x-dev/api-client';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
-export async function fetchSchemaCatalog(projectId: string, query: string) {
+export async function fetchSchemaCatalog(projectId: string | null, query: string) {
+  const path = projectId
+    ? `${API_V1}/projects/${encodeURIComponent(projectId)}/yschema/catalog`
+    : `${API_V1}/yschema/catalog`;
   return SchemaCatalogPageSchema.parse(
-    await handleResponse(
-      await fetchWithTimeout(
-        `${API_V1}/projects/${encodeURIComponent(projectId)}/yschema/catalog?${query}`
-      )
-    )
+    await handleResponse(await fetchWithTimeout(`${path}?${query}`))
   );
 }
 export async function fetchSchemaCollections() {

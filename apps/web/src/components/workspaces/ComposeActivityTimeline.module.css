@@ -18,30 +18,33 @@
 .date {
   position: relative;
   display: grid;
-  height: 38px;
+  height: 28px;
   grid-template-columns: var(--timeline-gutter) var(--timeline-rail) minmax(0, 1fr);
   align-items: center;
   margin: 0;
 }
+.date::after {
+  height: 1px;
+  grid-column: 3;
+  margin-left: 10px;
+  background: var(--stroke-divider);
+  content: "";
+}
 .date > span {
   z-index: 1;
-  grid-column: 2 / 4;
-  justify-self: start;
-  min-height: 22px;
-  margin-left: -20px;
-  border-radius: var(--radius-pill);
-  background: var(--text-primary);
-  padding: 3px 10px;
-  box-shadow: 0 0 0 4px var(--surface-panel);
-  color: var(--surface-panel);
+  display: flex;
+  grid-column: 1;
+  align-items: center;
+  justify-content: center;
+  padding-right: 0;
+  color: var(--text-secondary);
   font-size: 11px;
   font-weight: 650;
-  letter-spacing: 0.02em;
   line-height: 16px;
+  white-space: nowrap;
 }
-.date:not(:first-child) > span {
-  background: var(--surface-app);
-  color: var(--text-secondary);
+.date > span[data-compact="true"] {
+  font-size: 10px;
 }
 .event {
   position: relative;
@@ -227,6 +230,17 @@
   font-size: 9px;
   font-weight: 650;
 }
+.disclosure {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin-left: 4px;
+  color: var(--text-tertiary);
+  transition: transform 120ms ease;
+}
+.eventToggle[aria-expanded="true"] .disclosure {
+  transform: rotate(180deg);
+}
 .preview {
   min-width: 0;
   margin: 4px 0 0 -10px;
@@ -239,8 +253,11 @@
   grid-template-columns: 18px 190px minmax(0, 1fr) 16px;
   align-items: center;
   gap: 12px;
-  border-radius: 8px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: 4px;
+  background: var(--surface-card);
   padding: 0 12px 0 10px;
+  box-shadow: var(--fx-shadow-md);
   text-align: left;
   color: var(--text-primary);
   font-size: 13px;
@@ -249,10 +266,10 @@
   background: var(--hover-bg);
 }
 .event[data-latest="true"] .preview button:first-child {
-  background: var(--accent-commit-soft);
+  background: var(--surface-card);
 }
 .event[data-latest="true"] .preview button:first-child .cardLabel {
-  color: var(--accent-commit);
+  color: var(--text-secondary);
 }
 .changeMark {
   display: grid;
@@ -325,63 +342,6 @@
   height: 15px;
   color: var(--status-success);
 }
-.gap {
-  position: relative;
-  display: grid;
-  min-height: 30px;
-  grid-template-columns: var(--timeline-gutter) var(--timeline-rail) minmax(0, 1fr);
-  align-items: center;
-  margin-bottom: 6px;
-  color: var(--text-tertiary);
-  font-size: 11px;
-}
-.gapRail {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  width: 8px;
-  height: 100%;
-  grid-column: 2;
-  place-items: center;
-  justify-self: center;
-  background: var(--surface-panel);
-}
-.gapRail::before {
-  width: 2px;
-  height: 100%;
-  background: repeating-linear-gradient(to bottom, var(--text-tertiary) 0 3px, transparent 3px 7px);
-  content: "";
-}
-.gapCopy {
-  display: flex;
-  min-width: 0;
-  grid-column: 3;
-  align-items: center;
-  gap: 8px;
-  padding-left: 10px;
-}
-.gapCopy strong {
-  display: inline-flex;
-  height: 24px;
-  flex: none;
-  align-items: center;
-  gap: 6px;
-  border-radius: var(--radius-pill);
-  background: var(--surface-app);
-  padding: 0 10px;
-  color: var(--text-primary);
-  font-size: 10px;
-  font-weight: 650;
-}
-.gapCopy strong svg {
-  width: 12px;
-  height: 12px;
-}
-.gapCopy small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .message {
   padding: 18px 0 18px calc(var(--timeline-gutter) + var(--timeline-rail) + 10px);
   color: var(--text-secondary);
@@ -404,6 +364,9 @@
   .author {
     display: none;
   }
+  .date > span {
+    font-size: 10px;
+  }
   .preview button {
     grid-template-columns: 18px minmax(90px, 150px) minmax(0, 1fr) 16px;
     gap: 8px;
@@ -421,7 +384,14 @@
     padding-left: 6px;
   }
   .date > span {
-    margin-left: -12px;
+    grid-column: 2 / 4;
+    justify-content: flex-start;
+    margin-left: 6px;
+    padding-right: 0;
+    font-size: 11px;
+  }
+  .date::after {
+    display: none;
   }
   .preview button {
     grid-template-columns: 18px minmax(0, 0.7fr) minmax(0, 1.3fr) 16px;

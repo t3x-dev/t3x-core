@@ -23,6 +23,8 @@ export function useUsageSettings(days: number) {
     previousFrom.setDate(previousFrom.getDate() - days + 1);
     setLoading(true);
     setError(null);
+    setData(null);
+    setPreviousData(null);
     Promise.all([
       getUsageDashboard(from, to, controller.signal),
       getUsageDashboard(previousFrom, previousTo, controller.signal),
