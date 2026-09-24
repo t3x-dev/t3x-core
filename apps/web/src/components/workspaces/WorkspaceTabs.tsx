@@ -96,6 +96,8 @@ export function WorkspaceTabs(props: WorkspaceTabsProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col" role="tabpanel">
       <WorkspaceComposeReviewSurface
+        scenarioOptions={props.scenarioOptions}
+        onScenarioSelect={props.onScenarioSelect}
         branchOptions={props.branchOptions}
         candidate={props.candidate}
         controller={controller}

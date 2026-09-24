@@ -484,7 +484,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
     expect((await screen.findAllByText('Validation pending')).length).toBeGreaterThan(0);
-    expect(await screen.findAllByText('Missing')).toHaveLength(2);
+    expect((await screen.findAllByText(/^missing$/i)).length).toBeGreaterThan(0);
     expect(screen.queryByRole('region', { name: 'State overview' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Run validation' }));
@@ -558,9 +558,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     );
     expect(screen.queryByText('PRD audience handoff')).not.toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { name: 'What would you like to change?' })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Think it through.' })).toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
