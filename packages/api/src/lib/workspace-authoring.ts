@@ -135,9 +135,21 @@ export async function initializeWorkspaceAuthoring(
     if (head.head !== input.expectedRefHead)
       throw new DraftAuthoringConflictError('Ref head changed');
     const base = head.format === 'empty' ? createYOpsState({}) : head.state;
+    // Exact-source workspaces use a different codec and review lifecycle. A YOps
+    // ledger must not hide their editor or silently replace their document basis.
+    if (workspace.sourceArtifact)
+      throw new DraftAuthoringConflictError(
+        'Exact-source Workspaces must continue through source Review; Draft activity does not support this format'
+      );
     const operations = (workspace.yopsDraft as { operations?: unknown[] } | undefined)?.operations;
+    const extractionOperations = (
+      workspace.extractionProposal as { operations?: unknown[] } | undefined
+    )?.operations;
     const hasLegacyEdits = Boolean(
-      operations?.length || draft.nodes?.length || draft.semantic_points?.length
+      operations?.length ||
+        extractionOperations?.length ||
+        draft.nodes?.length ||
+        draft.semantic_points?.length
     );
     const oldBase = workspace.baseCommitHash ?? draft.parent_commit_hash;
     if (oldBase != null && oldBase !== head.head && input.legacyDocument === undefined)
