@@ -16,7 +16,11 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
-import { DEFAULT_OWNER_SLUG, getProjectRepoPath } from '@/domain/project/repoPath';
+import {
+  DEFAULT_OWNER_SLUG,
+  getProjectIdRepoPath,
+  getProjectRepoPath,
+} from '@/domain/project/repoPath';
 import { useProjects } from '@/hooks/projects/useProjects';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 import { cn } from '@/utils/cn';
@@ -90,7 +94,7 @@ function ProjectCard({
     >
       <div className="flex min-w-0 items-start justify-between gap-4">
         <Link
-          href={getProjectRepoPath(project, ownerSlug)}
+          href={getProjectIdRepoPath(project.id)}
           onClick={() => recordRecentProjectOpen(project.id)}
           className="min-w-0 flex-1 rounded-[var(--radius-control)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
         >

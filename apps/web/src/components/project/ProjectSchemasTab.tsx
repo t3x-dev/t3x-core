@@ -8,7 +8,6 @@ import {
   SchemaRegistry,
 } from '@/components/schemas';
 import { SchemaCatalogExperience } from '@/components/schemas/SchemaCatalogExperience';
-import { getSchemaRegistryPreview } from '@/data/schemaReleases';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { mergePublishedSchemaVersions } from '@/domain/schemas/publishedSchemaVersions';
 import {
@@ -52,7 +51,7 @@ function ProjectSchemaStudio({ projectId, schemaBindings }: ProjectSchemasTabPro
   const registry = useMemo(
     () =>
       mergePublishedSchemaVersions(
-        getSchemaRegistryPreview(projectId),
+        { defaultFamilyId: '', families: [] },
         publishedVersions.versions,
         projectId
       ),
@@ -142,44 +141,63 @@ function ProjectSchemaStudio({ projectId, schemaBindings }: ProjectSchemasTabPro
   );
 
   return (
-    <SchemaRegistry
-      key={projectId}
-      {...registry}
-      onArchiveIdentity={(family) => identityManagement.setLifecycle(family, 'archive')}
-      onRestoreIdentity={(family) => identityManagement.setLifecycle(family, 'restore')}
-      onUpdateIdentity={identityManagement.updateIdentity}
-      compositionWorkspace={
-        workspaceTarget?.revision
-          ? {
-              projectId,
-              workspaceId: workspaceTarget.id,
-              workspaceTitle: workspaceTarget.title,
-              workspaceRevision: workspaceTarget.revision,
-              composition: workspaceTarget.schemaComposition,
-              appliedCompositionRevision: workspaceBinding?.compositionRevision,
-              appliedSchemaHash: workspaceBinding?.schemaHash,
-              onSaved: async () => {
-                await projectWorkspaces.refresh();
-              },
-              onPublished: async () => {
-                await publishedVersions.refresh();
-              },
-            }
-          : undefined
-      }
-      bindingActions={{
-        feedback,
-        onApplyToWorkspace: handleApplyToWorkspace,
-        pending,
-        workspaceTarget: workspaceTarget
-          ? {
-              binding: workspaceBinding,
-              id: workspaceTarget.id,
-              title: workspaceTarget.title,
-            }
-          : undefined,
-      }}
-    />
+    <>
+      {!projectWorkspaces.loading &&
+      (requestedWorkspaceId || requestedBranch) &&
+      !workspaceTarget ? (
+        <p className="p-4 text-sm text-[var(--status-error)]" role="alert">
+          {requestedWorkspaceId
+            ? `Workspace ${requestedWorkspaceId} was not found on this branch in this project.`
+            : `No Workspace was found on branch ${requestedBranch}.`}{' '}
+          No Schema binding will be changed.
+        </p>
+      ) : null}
+      {publishedVersions.pending ? <output>Loading published schema versions…</output> : null}
+      {publishedVersions.error ? <p role="alert">{publishedVersions.error}</p> : null}
+      {!publishedVersions.pending && !publishedVersions.error && registry.families.length === 0 ? (
+        <p className="p-4 text-sm text-[var(--text-secondary)]">
+          No project schema versions are published yet. Built-in artifacts are available in Compose.
+        </p>
+      ) : null}
+      <SchemaRegistry
+        key={projectId}
+        {...registry}
+        onArchiveIdentity={(family) => identityManagement.setLifecycle(family, 'archive')}
+        onRestoreIdentity={(family) => identityManagement.setLifecycle(family, 'restore')}
+        onUpdateIdentity={identityManagement.updateIdentity}
+        compositionWorkspace={
+          workspaceTarget?.revision
+            ? {
+                projectId,
+                workspaceId: workspaceTarget.id,
+                workspaceTitle: workspaceTarget.title,
+                workspaceRevision: workspaceTarget.revision,
+                composition: workspaceTarget.schemaComposition,
+                appliedCompositionRevision: workspaceBinding?.compositionRevision,
+                appliedSchemaHash: workspaceBinding?.schemaHash,
+                onSaved: async () => {
+                  await projectWorkspaces.refresh();
+                },
+                onPublished: async () => {
+                  await publishedVersions.refresh();
+                },
+              }
+            : undefined
+        }
+        bindingActions={{
+          feedback,
+          onApplyToWorkspace: handleApplyToWorkspace,
+          pending,
+          workspaceTarget: workspaceTarget
+            ? {
+                binding: workspaceBinding,
+                id: workspaceTarget.id,
+                title: workspaceTarget.title,
+              }
+            : undefined,
+        }}
+      />
+    </>
   );
 }
 
@@ -191,15 +209,17 @@ function resolveWorkspaceTarget(
   const explicitWorkspace = workspaces.find(
     (workspace) => workspace.id === requestedWorkspaceId?.trim()
   );
-  if (explicitWorkspace) return explicitWorkspace;
+  if (requestedWorkspaceId?.trim()) {
+    return explicitWorkspace &&
+      (!requestedBranch || explicitWorkspace.targetBranch === requestedBranch)
+      ? explicitWorkspace
+      : undefined;
+  }
 
   const branch = requestedBranch?.trim() || 'main';
   return (
     workspaces.find(
       (workspace) => workspace.targetBranch === branch && workspace.status !== 'committed'
-    ) ??
-    workspaces.find((workspace) => workspace.targetBranch === branch) ??
-    workspaces.find((workspace) => workspace.status !== 'committed') ??
-    workspaces[0]
+    ) ?? workspaces.find((workspace) => workspace.targetBranch === branch)
   );
 }

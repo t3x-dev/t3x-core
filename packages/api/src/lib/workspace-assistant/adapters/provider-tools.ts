@@ -79,6 +79,9 @@ export async function runAssistantProvider(input: {
       content: [{ type: 'tool_result', tool_use_id: toolUseId, content: JSON.stringify(result) }],
     });
   }
+  const canStreamPlainResponse =
+    typeof input.provider.streamFromPrompt === 'function' &&
+    (!hasTools || Boolean(input.initialToolCall));
   for (let step = 0; step < maxSteps; step++) {
     if (input.signal?.aborted) {
       await input.emit({ type: 'done', reason: 'cancelled' });
@@ -87,6 +90,41 @@ export async function runAssistantProvider(input: {
     await input.assertCurrent();
     if (JSON.stringify(prompt).length > 128_000)
       throw new TypeError('Assistant continuation exceeds context budget');
+    if (canStreamPlainResponse) {
+      await executeMeteredInference({
+        runtime: input.inference.runtime,
+        input: {
+          runId: input.inference.runId,
+          attemptIndex: step,
+          feature: 'workspace.assistant.chat',
+          requestedModel: input.model,
+          scope: input.inference.scope,
+        },
+        resolvedProvider: input.provider.id,
+        resolvedModel: input.model,
+        invoke: async () => {
+          let usage = { inputTokens: 0, outputTokens: 0 };
+          for await (const event of input.provider.streamFromPrompt!(
+            prompt,
+            { model: input.model, maxTokens: 4096 },
+            input.signal
+          )) {
+            if (input.signal?.aborted) break;
+            if (event.type === 'text' && event.text) {
+              await input.emit({ type: 'text', content: event.text });
+            } else if (event.type === 'done') {
+              usage = event.usage;
+            }
+          }
+          return { value: undefined, usage };
+        },
+      });
+      await input.emit({
+        type: 'done',
+        reason: input.signal?.aborted ? 'cancelled' : 'completed',
+      });
+      return;
+    }
     const execution = await executeMeteredInference({
       runtime: input.inference.runtime,
       input: {

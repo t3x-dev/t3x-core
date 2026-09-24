@@ -1,6 +1,16 @@
 'use client';
 
-import { ArrowUpRight, Bot, Check, Copy, Loader2, Search, Terminal, UserRound } from 'lucide-react';
+import {
+  ArrowUpRight,
+  Bot,
+  Check,
+  Copy,
+  Loader2,
+  Search,
+  Sparkles,
+  Terminal,
+  UserRound,
+} from 'lucide-react';
 import Image from 'next/image';
 import { type ReactNode, useCallback, useState } from 'react';
 import {
@@ -10,23 +20,57 @@ import {
   ConversationScrollButton,
 } from '@/components/ai-elements/conversation';
 import { MessageAction, MessageActions, MessageResponse } from '@/components/ai-elements/message';
+import type { WorkspaceAssistantActivity as AssistantActivity } from '@/hooks/sourceThreads/useSourceThreadGeneration';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import { cn } from '@/utils/cn';
+import {
+  type AssistantActivityRecord,
+  type AssistantPublication,
+  WorkspaceAssistantActivity,
+} from './WorkspaceAssistantActivity';
 import styles from './WorkspaceComposeChat.module.css';
 
 type WorkspaceComposeChatState = WorkspaceComposeReviewController['chat'];
 type WorkspaceComposeCitation = NonNullable<WorkspaceComposeChatState['citations']>[number];
 
+const STREAM_ANIMATION = {
+  animation: 'fadeIn',
+  duration: 90,
+  easing: 'cubic-bezier(0.2, 0, 0, 1)',
+  maxBacklogMs: 160,
+  sep: 'char',
+  stagger: 1,
+} as const;
+
+function discussionText(content: string) {
+  return content
+    .replace(/```[^\n]*\n?([\s\S]*?)```/g, '$1')
+    .replace(/```[^\n]*\n?/g, '')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/`/g, '')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^\s*[-*]\s+/gm, '• ')
+    .trim();
+}
+
 interface WorkspaceComposeChatProps {
   chat: WorkspaceComposeChatState;
   variant?: 'default' | 'discussion';
   discussionAction?: ReactNode;
+  assistantActivity?: AssistantActivity | null;
+  assistantPublication?: AssistantPublication | null;
+  assistantPublishing?: boolean;
+  assistantRecords?: Record<string, AssistantActivityRecord>;
 }
 
 export function WorkspaceComposeChat({
   chat,
   variant = 'default',
   discussionAction,
+  assistantActivity,
+  assistantPublication,
+  assistantPublishing = false,
+  assistantRecords,
 }: WorkspaceComposeChatProps) {
   const [copyError, setCopyError] = useState<string | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
@@ -35,6 +79,7 @@ export function WorkspaceComposeChat({
   const latestAssistantId = [...messages]
     .reverse()
     .find((message) => message.role === 'assistant')?.id;
+  const currentActivity = assistantActivity;
 
   const copyMessage = useCallback(async (messageId: string, content: string) => {
     if (!content.trim()) return;
@@ -53,6 +98,7 @@ export function WorkspaceComposeChat({
 
   return (
     <Conversation
+      initial="instant"
       className={cn(
         'min-h-0 bg-[var(--surface-panel)] text-[var(--text-primary)]',
         variant === 'discussion' && styles.discussion
@@ -63,52 +109,69 @@ export function WorkspaceComposeChat({
         className={cn(styles.content, variant === 'discussion' && styles.discussionContent)}
       >
         {messages.length === 0 && !chat.isLoading ? (
-          <ConversationEmptyState className="my-auto min-h-[260px] items-start gap-5 px-0 py-10 text-left">
+          <ConversationEmptyState
+            className={cn(
+              'my-auto min-h-[260px] items-start gap-5 px-0 py-10 text-left',
+              variant === 'discussion' && 'justify-start'
+            )}
+          >
             <span className="flex size-10 items-center justify-center rounded-xl border border-[var(--stroke-divider)] bg-[var(--surface-app)]">
-              <Terminal className="size-5" aria-hidden="true" />
+              {variant === 'discussion' ? (
+                <Sparkles aria-hidden="true" className="size-5 text-[var(--accent-conversation)]" />
+              ) : (
+                <Terminal className="size-5" aria-hidden="true" />
+              )}
             </span>
             <div>
               <h2 className="text-2xl font-semibold tracking-tight">
-                What would you like to change?
+                {variant === 'discussion' ? 'Think it through.' : 'What would you like to change?'}
               </h2>
+              {variant === 'discussion' ? (
+                <p className="mt-2 max-w-[32rem] text-[13px] leading-5 text-[var(--text-secondary)]">
+                  Ask about the current Draft, selected sources, or the node you are inspecting.
+                  Changes are only published after validation.
+                </p>
+              ) : null}
             </div>
-            <div className="grid w-full gap-2 sm:grid-cols-3">
-              {[
-                [
-                  'Explore',
-                  'Understand this workspace',
-                  'Explain the current workspace and the changes it contains.',
-                ],
-                [
-                  'Refine',
-                  'Make a focused change',
-                  'Help me refine this workspace. Ask me what I want to change first.',
-                ],
-                [
-                  'Review',
-                  'Find gaps and next steps',
-                  'Review the current proposal for missing requirements and open questions.',
-                ],
-              ].map(([label, title, prompt]) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => {
-                    chat.setInput(prompt!);
-                    document
-                      .querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')
-                      ?.focus();
-                  }}
-                  className="group rounded-xl border border-[var(--stroke-divider)] p-3 text-left transition-colors hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-                >
-                  <span className="flex items-center justify-between text-xs text-[var(--text-tertiary)]">
-                    {label}
-                    <ArrowUpRight className="size-3.5" aria-hidden="true" />
-                  </span>
-                  <span className="mt-2 block text-[13px] font-medium leading-5">{title}</span>
-                </button>
-              ))}
-            </div>
+            {variant !== 'discussion' ? (
+              <div className="grid w-full gap-2 sm:grid-cols-3">
+                {[
+                  [
+                    'Explore',
+                    'Understand this workspace',
+                    'Explain the current workspace and the changes it contains.',
+                  ],
+                  [
+                    'Refine',
+                    'Make a focused change',
+                    'Help me refine this workspace. Ask me what I want to change first.',
+                  ],
+                  [
+                    'Review',
+                    'Find gaps and next steps',
+                    'Review the current proposal for missing requirements and open questions.',
+                  ],
+                ].map(([label, title, prompt]) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => {
+                      chat.setInput(prompt!);
+                      document
+                        .querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')
+                        ?.focus();
+                    }}
+                    className="group rounded-xl border border-[var(--stroke-divider)] p-3 text-left transition-colors hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                  >
+                    <span className="flex items-center justify-between text-xs text-[var(--text-tertiary)]">
+                      {label}
+                      <ArrowUpRight className="size-3.5" aria-hidden="true" />
+                    </span>
+                    <span className="mt-2 block text-[13px] font-medium leading-5">{title}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </ConversationEmptyState>
         ) : null}
         {copyError ? (
@@ -119,6 +182,20 @@ export function WorkspaceComposeChat({
         {messages.map((message) => {
           const isStreaming = message.id.endsWith(':streaming');
           const showCurrentStreamMeta = isStreaming && message.id === latestAssistantId;
+          const showLiveActivity =
+            currentActivity &&
+            messages.at(-1)?.role === 'assistant' &&
+            message.role === 'assistant' &&
+            message.id === latestAssistantId;
+          const record = showLiveActivity
+            ? {
+                activity: currentActivity,
+                publication:
+                  assistantPublication?.turnId === currentActivity.turnId
+                    ? assistantPublication
+                    : null,
+              }
+            : assistantRecords?.[message.id];
           return (
             <ComposeChatMessage
               copied={copiedMessageId === message.id}
@@ -128,6 +205,13 @@ export function WorkspaceComposeChat({
               onCopy={() => void copyMessage(message.id, message.content)}
               variant={variant}
             >
+              {record ? (
+                <WorkspaceAssistantActivity
+                  activity={record.activity}
+                  publishing={Boolean(showLiveActivity && assistantPublishing)}
+                  publication={record.publication}
+                />
+              ) : null}
               {showCurrentStreamMeta ? (
                 <CurrentStreamMeta
                   citations={citations}
@@ -139,6 +223,14 @@ export function WorkspaceComposeChat({
             </ComposeChatMessage>
           );
         })}
+        {currentActivity && messages.at(-1)?.role === 'user' ? (
+          <div className={styles.activityOnly}>
+            <WorkspaceAssistantActivity
+              activity={currentActivity}
+              publishing={assistantPublishing}
+            />
+          </div>
+        ) : null}
         {chat.isLoading && !chat.isStreaming ? <PendingAssistantMessage /> : null}
         {!chat.isStreaming && citations.length > 0 && latestAssistantId ? (
           <CitationList citations={citations} />
@@ -187,21 +279,25 @@ function ComposeChatMessage({
             </button>
           ) : null}
         </div>
-        <div className={styles.discussionBubble}>
-          {children}
-          {isUser ? (
-            <p>{message.content}</p>
-          ) : (
-            <MessageResponse
-              isAnimating={isStreaming}
-              mode={isStreaming ? 'streaming' : 'static'}
-              parseIncompleteMarkdown={isStreaming}
-              skipHtml
-            >
-              {message.content}
-            </MessageResponse>
-          )}
-        </div>
+        {children}
+        {isUser || message.content.trim() ? (
+          <div className={styles.discussionBubble}>
+            {isUser ? (
+              <p>{message.content}</p>
+            ) : (
+              <MessageResponse
+                animated={false}
+                className={styles.discussionText}
+                isAnimating={isStreaming}
+                mode={isStreaming ? 'streaming' : 'static'}
+                parseIncompleteMarkdown={isStreaming}
+                skipHtml
+              >
+                {discussionText(message.content)}
+              </MessageResponse>
+            )}
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -238,6 +334,8 @@ function ComposeChatMessage({
         <div className={styles.assistantContent}>
           {children}
           <MessageResponse
+            animated={isStreaming ? STREAM_ANIMATION : false}
+            caret={isStreaming ? 'block' : undefined}
             isAnimating={isStreaming}
             mode={isStreaming ? 'streaming' : 'static'}
             parseIncompleteMarkdown={isStreaming}

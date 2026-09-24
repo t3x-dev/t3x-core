@@ -89,6 +89,23 @@ describe('metered Assistant loop', () => {
     expect(metered).toHaveBeenCalledTimes(1);
     expect(events[0]).toEqual({ type: 'capabilities', tools: false, proposal: false });
   });
+  it('forwards provider text deltas instead of buffering the complete reply', async () => {
+    const { input, metered, events } = fixture();
+    const streamFromPrompt = vi.fn(async function* () {
+      yield { type: 'text' as const, text: 'Current ' };
+      yield { type: 'text' as const, text: 'value is 25' };
+      yield { type: 'done' as const, usage };
+    });
+    await runAssistantProvider({
+      ...input,
+      provider: { id: 'test', streamFromPrompt } as unknown as LLMProvider,
+      capabilities: {},
+    });
+    expect(metered).toHaveBeenCalledOnce();
+    expect(events).toContainEqual({ type: 'text', content: 'Current ' });
+    expect(events).toContainEqual({ type: 'text', content: 'value is 25' });
+    expect(events.at(-1)).toEqual({ type: 'done', reason: 'completed' });
+  });
   it('executes an explicitly requested proposal before the assistant response', async () => {
     const { input, events } = fixture();
     const execute = vi.fn(async () => ({ status: 'candidate', transitionId: 'transition:1' }));
@@ -125,6 +142,45 @@ describe('metered Assistant loop', () => {
       })
     );
     expect(generateWithTools).toHaveBeenCalledOnce();
+  });
+  it('streams the response after a server-required proposal operation', async () => {
+    const { input, events } = fixture();
+    const execute = vi.fn(async () => ({ status: 'candidate', transitionId: 'transition:1' }));
+    const generateWithTools = vi.fn();
+    const streamFromPrompt = vi.fn(async function* () {
+      yield { type: 'text' as const, text: 'Candidate ' };
+      yield { type: 'text' as const, text: 'generated.' };
+      yield { type: 'done' as const, usage };
+    });
+    await runAssistantProvider({
+      ...input,
+      provider: {
+        id: 'test',
+        generateWithTools,
+        streamFromPrompt,
+      } as unknown as LLMProvider,
+      capabilities: {
+        requestProposal: {
+          definition: { name: 'requestProposal', description: 'proposal', input_schema: {} },
+          execute,
+        },
+      },
+      initialToolCall: {
+        name: 'requestProposal',
+        input: { instruction: 'change replicas from 4 to 10' },
+      },
+    });
+    expect(execute).toHaveBeenCalledOnce();
+    expect(generateWithTools).not.toHaveBeenCalled();
+    expect(streamFromPrompt).toHaveBeenCalledOnce();
+    expect(events.map((event) => event.type)).toEqual([
+      'capabilities',
+      'operation',
+      'operation',
+      'text',
+      'text',
+      'done',
+    ]);
   });
   it('rejects arbitrary code tools and stops before a stale continuation', async () => {
     const { input } = fixture();

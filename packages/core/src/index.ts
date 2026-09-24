@@ -128,6 +128,8 @@ export {
   type Tier3Behavior,
   type UpdateStance,
 } from './extractors/extractionStyleConfig';
+export { buildTargetedReaskPrompt } from './extractors/v2/pipeline';
+export { mapProviderErrorToExtractionFailure } from './extractors/v2/providerAdapters';
 export type { Lesson, LessonSource } from './feedback';
 // ═══════════════════════════════════════════════════════════════════════════
 // Feedback Module (Lesson generation + collection)

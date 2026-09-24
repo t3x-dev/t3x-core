@@ -8,6 +8,7 @@ import SettingsLayout from '@/app/settings/layout';
 
 let mockPathname = '/settings';
 let mockSearchParams = new URLSearchParams();
+let activeNamespaceName: string | null = 'Orbit Labs';
 
 vi.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
@@ -39,6 +40,14 @@ vi.mock('@/hooks/projects/useProjectDetail', () => ({
   }),
 }));
 
+vi.mock('@/hooks/accounts/useNamespaceAccounts', () => ({
+  useNamespaceAccounts: () => ({
+    activeAccount: activeNamespaceName
+      ? { namespace: { kind: 'organization', display_name: activeNamespaceName } }
+      : null,
+  }),
+}));
+
 function renderLayout() {
   return render(
     <SettingsLayout>
@@ -56,7 +65,7 @@ describe('SettingsLayout', () => {
 
     expect(screen.getByRole('banner')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: /Plan & usage/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Usage' })).toHaveAttribute(
       'href',
       '/settings/usage?project=proj_test'
     );
@@ -78,7 +87,7 @@ describe('SettingsLayout', () => {
     renderLayout();
 
     expect(screen.getByText('Personal')).toBeInTheDocument();
-    expect(screen.getByText('Organization: orbit-labs')).toBeInTheDocument();
+    expect(screen.getByText('Organization: Orbit Labs')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Profile/i })).toHaveAttribute(
       'href',
       '/settings/profile'
@@ -95,10 +104,12 @@ describe('SettingsLayout', () => {
       'href',
       '/settings/members'
     );
-    expect(screen.getByRole('link', { name: /Plan & usage/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Usage' })).toHaveAttribute('href', '/settings/usage');
+    expect(screen.getByRole('link', { name: 'Provider credentials' })).toHaveAttribute(
       'href',
-      '/settings/usage'
+      '/settings/provider-credentials'
     );
+    expect(screen.getByRole('link', { name: 'Help' })).toHaveAttribute('href', '/settings/help');
   });
 
   it('marks the current settings destination', () => {
@@ -107,10 +118,22 @@ describe('SettingsLayout', () => {
 
     renderLayout();
 
-    expect(screen.getByRole('link', { name: /Plan & usage/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Usage' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('shows the selected namespace and preserves the API tokens compatibility route', () => {
+    activeNamespaceName = 'New Team';
+    mockPathname = '/settings/access';
+    mockSearchParams = new URLSearchParams();
+
+    renderLayout();
+
+    expect(screen.getByText('Organization: New Team')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'API tokens' })).toHaveAttribute(
       'aria-current',
       'page'
     );
+    activeNamespaceName = 'Orbit Labs';
   });
 
   it('marks Members as the current organization destination', () => {

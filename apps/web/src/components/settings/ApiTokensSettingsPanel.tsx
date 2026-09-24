@@ -13,55 +13,7 @@ type StatusFilter = 'all' | 'active' | 'revoked';
 
 interface TokenDisplay extends T3xApiKey {
   expires_at?: string | null;
-  demo?: boolean;
 }
-
-const demoTokens: TokenDisplay[] = [
-  {
-    id: 'demo-production',
-    key_prefix: 't3x_••••9a2f',
-    name: 'Production',
-    project_id: null,
-    created_at: '2026-07-28T10:24:00',
-    last_used_at: '2026-09-12T09:14:00',
-    revoked_at: null,
-    expires_at: null,
-    demo: true,
-  },
-  {
-    id: 'demo-staging',
-    key_prefix: 't3x_••••7c1d',
-    name: 'Staging',
-    project_id: null,
-    created_at: '2026-08-06T15:17:00',
-    last_used_at: '2026-09-10T14:41:00',
-    revoked_at: null,
-    expires_at: '2026-12-31T23:59:59',
-    demo: true,
-  },
-  {
-    id: 'demo-cli-release',
-    key_prefix: 't3x_••••b4e9',
-    name: 'CLI release',
-    project_id: 'project-release',
-    created_at: '2026-07-14T11:03:00',
-    last_used_at: '2026-09-11T18:22:00',
-    revoked_at: null,
-    expires_at: '2026-12-31T23:59:59',
-    demo: true,
-  },
-  {
-    id: 'demo-ci-workflow',
-    key_prefix: 't3x_••••d8f3',
-    name: 'CI workflow',
-    project_id: null,
-    created_at: '2026-08-12T09:55:00',
-    last_used_at: '2026-09-12T13:07:00',
-    revoked_at: null,
-    expires_at: null,
-    demo: true,
-  },
-];
 
 function dateParts(value: string) {
   const date = new Date(value);
@@ -99,6 +51,7 @@ export function ApiTokensSettingsPanel() {
   const { listApiKeys, createApiKey, revokeApiKey } = useAccessSettings();
   const [apiKeys, setApiKeys] = useState<T3xApiKey[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState<ScopeFilter>('all');
   const [status, setStatus] = useState<StatusFilter>('all');
@@ -109,14 +62,14 @@ export function ApiTokensSettingsPanel() {
   const [createdKey, setCreatedKey] = useState<CreatedT3xApiKey | null>(null);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<string | null>(null);
-  const [hiddenDemoTokens, setHiddenDemoTokens] = useState<Set<string>>(new Set());
 
   const loadKeys = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       setApiKeys(await listApiKeys());
     } catch (error) {
-      toast.error(formatUserFacingError(error, 'Failed to load API tokens.'));
+      setLoadError(formatUserFacingError(error, 'Failed to load API tokens.'));
     } finally {
       setLoading(false);
     }
@@ -126,11 +79,7 @@ export function ApiTokensSettingsPanel() {
     void loadKeys();
   }, [loadKeys]);
 
-  const displayTokens = useMemo<TokenDisplay[]>(
-    () =>
-      apiKeys.length > 0 ? apiKeys : demoTokens.filter((token) => !hiddenDemoTokens.has(token.id)),
-    [apiKeys, hiddenDemoTokens]
-  );
+  const displayTokens: TokenDisplay[] = apiKeys;
 
   const filteredTokens = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -193,16 +142,11 @@ export function ApiTokensSettingsPanel() {
 
   async function handleRevoke(token: TokenDisplay) {
     setOpenMenu(null);
-    if (token.demo) {
-      setHiddenDemoTokens((current) => new Set(current).add(token.id));
-      toast.success('Demo token removed');
-      return;
-    }
     if (!window.confirm(`Revoke API token "${token.name}"? This cannot be undone.`)) return;
     setRevoking(token.id);
     try {
       await revokeApiKey(token.id);
-      setApiKeys((current) => current.filter((candidate) => candidate.id !== token.id));
+      await loadKeys();
       toast.success('API token revoked');
     } catch (error) {
       toast.error(formatUserFacingError(error, 'Failed to revoke API token.'));
@@ -221,8 +165,6 @@ export function ApiTokensSettingsPanel() {
         <nav aria-label="Breadcrumb" className={styles.breadcrumbs}>
           <Link href="/settings">Settings</Link>
           <span>/</span>
-          <Link href="/settings">orbit-labs</Link>
-          <span>/</span>
           <strong>API tokens</strong>
         </nav>
 
@@ -238,7 +180,10 @@ export function ApiTokensSettingsPanel() {
           <div className={styles.toolbar}>
             <button
               className={styles.primaryButton}
-              onClick={() => setShowCreate(true)}
+              onClick={() => {
+                setCreatedKey(null);
+                setShowCreate(true);
+              }}
               type="button"
             >
               <i aria-hidden="true" className="ph ph-plus" />
@@ -288,6 +233,14 @@ export function ApiTokensSettingsPanel() {
           </div>
 
           <div className={styles.tableWrap}>
+            {loadError ? (
+              <p role="alert">
+                {loadError}{' '}
+                <button onClick={() => void loadKeys()} type="button">
+                  Retry
+                </button>
+              </p>
+            ) : null}
             <table className={`${styles.table} ${styles.tokensTable}`}>
               <thead>
                 <tr>
@@ -354,7 +307,7 @@ export function ApiTokensSettingsPanel() {
                         {expires ? (
                           <>
                             <span>{expires.date}</span>
-                            <small>in 3 months</small>
+                            <small>{expires.time}</small>
                           </>
                         ) : (
                           'Never'
@@ -389,8 +342,10 @@ export function ApiTokensSettingsPanel() {
                 })}
               </tbody>
             </table>
-            {!loading && filteredTokens.length === 0 ? (
-              <div className={styles.empty}>No API tokens match these filters.</div>
+            {!loading && !loadError && filteredTokens.length === 0 ? (
+              <div className={styles.empty}>
+                {apiKeys.length === 0 ? 'No API tokens yet.' : 'No API tokens match these filters.'}
+              </div>
             ) : null}
           </div>
         </section>
@@ -398,7 +353,7 @@ export function ApiTokensSettingsPanel() {
         <section aria-label="Token activity" className={styles.card}>
           <header className={styles.activityHeader}>
             <h2>Token activity</h2>
-            <p>Recent events for your API tokens.</p>
+            <p>Latest recorded use per token, not a request history.</p>
           </header>
           <div className={styles.tableWrap}>
             <table className={`${styles.table} ${styles.activityTable}`}>
@@ -421,7 +376,7 @@ export function ApiTokensSettingsPanel() {
                       {activityTimestamp(token.last_used_at ?? token.created_at)}
                     </td>
                     <td>
-                      <span className={styles.usedBadge}>Used</span>
+                      <span className={styles.usedBadge}>Last used</span>
                     </td>
                     <td>
                       <span className={styles.tokenName}>{token.name}</span>{' '}
@@ -429,7 +384,7 @@ export function ApiTokensSettingsPanel() {
                         ({displayPrefix(token.key_prefix)})
                       </span>
                     </td>
-                    <td className={styles.details}>API request</td>
+                    <td className={styles.details}>Recorded by the API</td>
                   </tr>
                 ))}
               </tbody>

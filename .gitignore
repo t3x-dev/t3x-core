@@ -111,6 +111,8 @@ demo/
 
 # Internal working material stays outside the repository.
 .codex-ppt*/
+/.aochuang_build/
+/.chart-data-*/
 /outputs/
 /docs/plans/
 /docs/verification/

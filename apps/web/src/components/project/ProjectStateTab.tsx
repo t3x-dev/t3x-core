@@ -48,7 +48,7 @@ import {
   type StructuredDiffKind,
 } from '@/domain/diff/structuredStateDiff';
 import { shortHash } from '@/domain/format/formatters';
-import { getProjectRepoPath } from '@/domain/project/repoPath';
+import { getProjectIdRepoPath, getProjectIdWorkspacePath } from '@/domain/project/repoPath';
 import {
   buildCanonicalStateYaml,
   buildStatePointRows,
@@ -469,9 +469,8 @@ export function ProjectStateTab({
     `/project/${encodeURIComponent(projectId)}/history?branch=${encodeURIComponent(branchFocus)}`,
     currentStateReturnTo
   );
-  const repositoryPath = getProjectRepoPath({ id: projectId, name: projectName });
-  const workspaceBasePath = `${repositoryPath}/workspaces`;
-  const workspaceHref = `${workspaceBasePath}?branch=${encodeURIComponent(branchFocus || 'main')}`;
+  const schemaHref = `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ tab: 'schemas', branch: branchFocus }).toString()}`;
+  const workspaceHref = getProjectIdWorkspacePath(projectId, { branch: branchFocus });
   const mainHeadCommitHash = branchHeads.main ?? null;
   const latestBranchHeadHash = branchHeads[branchFocus] ?? null;
   const availableHeadHash =
@@ -512,17 +511,9 @@ export function ProjectStateTab({
         yopsDraft: { id: `draft:${workspaceId}`, operations: [] },
         outputTargets: [],
       });
-      pushRoute(`${workspaceBasePath}?branch=${encodeURIComponent(name)}`);
+      pushRoute(getProjectIdWorkspacePath(projectId, { branch: name }));
     },
-    [
-      branchFocus,
-      createBranch,
-      mainSchemaBindings,
-      projectId,
-      pushRoute,
-      saveDraft,
-      workspaceBasePath,
-    ]
+    [branchFocus, createBranch, mainSchemaBindings, projectId, pushRoute, saveDraft]
   );
   const checkCurrentBranchForUpdates = useCallback(async () => {
     setFreshnessChecking(true);
@@ -681,7 +672,7 @@ export function ProjectStateTab({
                       projectOwner={projectOwner}
                       projectVisibility={projectVisibility}
                       schemaName={schemaName}
-                      schemaHref={`${repositoryPath}/schemas`}
+                      schemaHref={schemaHref}
                       onViewStructure={() => updateActiveView('structure')}
                       validationLabel={readinessLabel}
                       refName={branchFocus}
@@ -723,7 +714,7 @@ export function ProjectStateTab({
                                         : 'workspace'
                                     }
                                     schemaName={schemaName}
-                                    schemaRegistryHref={`${repositoryPath}/schemas`}
+                                    schemaRegistryHref={schemaHref}
                                     validationGapCount={validationGapCount}
                                     validationReady={validationReady}
                                     yamlText={yamlText}

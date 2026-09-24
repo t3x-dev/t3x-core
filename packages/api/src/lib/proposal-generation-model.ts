@@ -1,4 +1,13 @@
-import { ProposalGenerationDraftSchema, type ProposalGenerationDraftV1 } from '@t3x-dev/core';
+import {
+  applyNativeYOps,
+  buildTargetedReaskPrompt,
+  type LLMPrompt,
+  LLMProviderError,
+  mapProviderErrorToExtractionFailure,
+  NativeYOpSchema,
+  ProposalGenerationDraftSchema,
+  type ProposalGenerationDraftV1,
+} from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import {
   type ProposalGenerationModel,
@@ -58,39 +67,81 @@ export async function defaultProposalGenerationModel(input: {
     provider: resolved.providerId,
     model: resolved.model,
     async generate(generation) {
-      const result = await provider.generateStructured!(
-        {
-          system: generation.prompt,
-          messages: [
-            {
-              role: 'user',
-              content: JSON.stringify({
-                profile: generation.profile,
-                context: generation.context,
-                base: generation.base,
-                ...(generation.authoring ? { authoring: generation.authoring } : {}),
-                yschema: generation.yschema.value,
-                sources: generation.sources.map((source, sourceIndex) => ({
-                  sourceIndex,
-                  resource: source.resource,
-                  title: source.title,
-                  content: source.content,
-                })),
-                instruction: generation.instruction,
-                ...(generation.conversationTranscript
-                  ? { conversation: generation.conversationTranscript }
-                  : {}),
-              }),
-            },
-          ],
-        },
-        ProposalGenerationDraftSchema,
-        { model: resolved.model, temperature: 0, maxTokens: 16_000 }
-      );
-      return {
-        draft: normalizeGeneratedClaims(result.data, generation.sources),
-        usage: result.usage,
+      const basePrompt: LLMPrompt = {
+        system: generation.prompt,
+        messages: [
+          {
+            role: 'user',
+            content: JSON.stringify({
+              profile: generation.profile,
+              context: generation.context,
+              base: generation.base,
+              ...(generation.authoring ? { authoring: generation.authoring } : {}),
+              yschema: generation.yschema.value,
+              sources: generation.sources.map((source, sourceIndex) => ({
+                sourceIndex,
+                resource: source.resource,
+                title: source.title,
+                content: source.content,
+              })),
+              instruction: generation.instruction,
+              ...(generation.conversationTranscript
+                ? { conversation: generation.conversationTranscript }
+                : {}),
+            }),
+          },
+        ],
       };
+      let prompt = basePrompt;
+      for (let attempt = 1; ; attempt += 1) {
+        try {
+          const result = await provider.generateStructured!(prompt, ProposalGenerationDraftSchema, {
+            model: resolved.model,
+            temperature: 0,
+            maxTokens: 16_000,
+          });
+          const draft = normalizeGeneratedClaims(result.data, generation.sources);
+          if (generation.authoring) {
+            const operations = NativeYOpSchema.array().safeParse(
+              draft.changes.flatMap((change) => change.operations)
+            );
+            const applied = operations.success
+              ? applyNativeYOps(generation.authoring.current, operations.data)
+              : null;
+            if (!operations.success || !applied?.ok) {
+              throw new LLMProviderError(
+                resolved.providerId,
+                undefined,
+                'Generated operations cannot be applied to the current Draft',
+                'SCHEMA_MISMATCH',
+                {
+                  jsonText: JSON.stringify(draft),
+                  issues: operations.success
+                    ? [
+                        {
+                          path: ['changes', 'operations'],
+                          message: applied?.error?.message ?? 'Invalid operation',
+                        },
+                      ]
+                    : operations.error.issues,
+                }
+              );
+            }
+          }
+          return {
+            draft,
+            usage: result.usage,
+          };
+        } catch (error) {
+          if (!(error instanceof Error)) throw error;
+          const failure = mapProviderErrorToExtractionFailure(resolved.providerId, error);
+          // Reuse extraction's bounded, error-specific repair, not publication retries.
+          if (failure.retry.strategy !== 'targeted_reask' || attempt >= failure.retry.maxAttempts) {
+            throw error;
+          }
+          prompt = buildTargetedReaskPrompt(basePrompt, failure, {}, 'ProposalGenerationDraft');
+        }
+      }
     },
   };
 }

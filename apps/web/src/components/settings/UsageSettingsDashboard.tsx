@@ -3,20 +3,13 @@
 import {
   ArrowDown,
   ArrowUp,
-  Building2,
   CalendarDays,
   ChevronDown,
-  Columns3,
-  Download,
   FileText,
-  Hand,
   Minus,
   Package,
   RefreshCw,
-  Users,
   Zap,
-  ZoomIn,
-  ZoomOut,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
@@ -34,10 +27,6 @@ function compactNumber(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `${(value / 1_000).toFixed(value >= 100_000 ? 0 : 1)}K`;
   return value.toLocaleString('en-US');
-}
-
-function fullDate(value: Date): string {
-  return value.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function shortDate(value: Date): string {
@@ -95,8 +84,6 @@ export function UsageSettingsDashboard() {
   const rows = useMemo(() => chartRows(data?.summary ?? [], days), [data?.summary, days]);
   const models = data?.by_model ?? [];
   const total = data?.total ?? { requests: 0, input_tokens: 0, output_tokens: 0 };
-  const renewal = new Date();
-  renewal.setMonth(renewal.getMonth() + 1, 0);
 
   return (
     <div className={styles.page}>
@@ -104,18 +91,12 @@ export function UsageSettingsDashboard() {
         <nav className={styles.breadcrumb} aria-label="Breadcrumb">
           <Link href="/settings">Settings</Link>
           <span>/</span>
-          <Link href="/settings">orbit-labs</Link>
-          <span>/</span>
-          <strong>Plan & usage</strong>
+          <strong>Usage</strong>
         </nav>
 
         <div className={styles.titleRow}>
           <div className={styles.titleGroup}>
-            <h1>Plan & usage</h1>
-            <span className={styles.organizationBadge}>
-              <Building2 size={14} strokeWidth={2.5} />
-              Organization
-            </span>
+            <h1>Usage</h1>
           </div>
           <div className={styles.rangeWrap}>
             <button
@@ -147,28 +128,7 @@ export function UsageSettingsDashboard() {
           </div>
         </div>
 
-        <section className={styles.planCard}>
-          <div className={styles.planIdentity}>
-            <span className={styles.planIcon}>
-              <Users size={22} />
-            </span>
-            <div>
-              <h2>Team plan</h2>
-              <p>
-                For orbit-labs <span>•</span> Multiple members
-              </p>
-            </div>
-          </div>
-          <div className={styles.planActions}>
-            <div>
-              <span>Next renewal</span>
-              <strong>{fullDate(renewal)}</strong>
-            </div>
-            <button type="button">Manage plan</button>
-          </div>
-        </section>
-
-        <h2 className={styles.sectionTitle}>This month</h2>
+        <h2 className={styles.sectionTitle}>Last {days} days</h2>
         <div className={styles.metrics}>
           <MetricCard
             icon={Package}
@@ -203,25 +163,6 @@ export function UsageSettingsDashboard() {
 
         <UsageChart rows={rows} days={days} loading={loading} />
         <UsageTable rows={models} requestTotal={total.requests} loading={loading} />
-      </div>
-      <div className={styles.prototypeTools} aria-label="View tools" role="toolbar">
-        <button type="button" title="Zoom Out">
-          <ZoomOut size={20} />
-        </button>
-        <button type="button" title="Zoom In">
-          <ZoomIn size={20} />
-        </button>
-        <i />
-        <button type="button" title="Pan Tool">
-          <Hand size={20} />
-        </button>
-        <button type="button" title="Fit to Screen">
-          <Columns3 size={20} />
-        </button>
-        <i />
-        <button type="button" title="Download">
-          <Download size={20} />
-        </button>
       </div>
     </div>
   );

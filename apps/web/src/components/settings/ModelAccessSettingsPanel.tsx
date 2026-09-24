@@ -1,6 +1,6 @@
 'use client';
 
-import { Building2, Cloud, Columns3, Download, Hand, Loader2, ZoomIn, ZoomOut } from 'lucide-react';
+import { Building2, Cloud, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -362,25 +362,6 @@ export function ModelAccessSettingsPanel() {
             </section>
           </>
         ) : null}
-      </div>
-
-      <div className={styles.prototypeTools} aria-label="View tools" role="toolbar">
-        <button type="button" title="Zoom Out">
-          <ZoomOut size={20} />
-        </button>
-        <button type="button" title="Zoom In">
-          <ZoomIn size={20} />
-        </button>
-        <i />
-        <button type="button" title="Pan Tool">
-          <Hand size={20} />
-        </button>
-        <button type="button" title="Fit to Screen">
-          <Columns3 size={20} />
-        </button>
-        <button type="button" title="Download">
-          <Download size={20} />
-        </button>
       </div>
     </div>
   );

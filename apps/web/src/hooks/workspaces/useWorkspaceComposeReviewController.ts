@@ -23,6 +23,7 @@ import type {
   SourceBundleItem,
   SourceConversationTurn,
   WorkspaceCandidate,
+  WorkspaceSourceArtifact,
 } from '@/types/workspaces';
 import type { WorkspaceYOpsValidationResult } from '@/types/workspaceYops';
 
@@ -243,6 +244,41 @@ export function useWorkspaceComposeReviewController({
     [onDraftCommand]
   );
 
+  const updateSourceArtifact = useCallback(
+    async (artifact: WorkspaceSourceArtifact | undefined) => {
+      if (!onDraftCommand) throw new Error('Workspace saving is unavailable.');
+      const saved = await onDraftCommand(
+        { ...workingCandidate, sourceArtifact: artifact },
+        'source.artifact'
+      );
+      setWorkingCandidate(saved);
+      setReview(EMPTY_REVIEW);
+      return saved;
+    },
+    [onDraftCommand, workingCandidate]
+  );
+
+  const ensureSaved = useCallback(async () => {
+    const needsSchema = workingCandidate.schemaBindings.length === 0;
+    if (
+      workingCandidate.authoringLedger ||
+      (workingCandidate.revision !== undefined && !needsSchema)
+    )
+      return workingCandidate;
+    if (!onDraftCommand) throw new Error('Workspace saving is unavailable.');
+    return persistCandidate(
+      needsSchema
+        ? {
+            ...workingCandidate,
+            schemaBindings: [
+              { schemaName: 'PRD Schema', canonicalName: 't3x/prd', version: 'v2', mode: 'pinned' },
+            ],
+          }
+        : workingCandidate,
+      'authoring.initialize'
+    );
+  }, [workingCandidate, onDraftCommand, persistCandidate]);
+
   const resolveCollaborationConflict = useCallback(async () => {
     if (!onApplyAfterRefresh || busyAction) return false;
     setBusyAction('collaboration.apply_after_refresh');
@@ -405,6 +441,51 @@ export function useWorkspaceComposeReviewController({
     },
     [uploadFile]
   );
+
+  const generateChanges = useCallback(async () => {
+    if (!onPrepareDraft || busyAction) return false;
+    const generation = reviewGenerationRef.current + 1;
+    reviewGenerationRef.current = generation;
+    setBusyAction('draft.generate');
+    setLocalError(null);
+    setNotice('Generating structured changes from the selected source evidence…');
+    setReview(EMPTY_REVIEW);
+    try {
+      const sourceSyncedCandidate =
+        persistedSourceTurns.length > 0
+          ? await syncChatSource(persistedSourceTurns)
+          : workingCandidate;
+      const prepared = await onPrepareDraft(sourceSyncedCandidate, {
+        instruction: chat.input.trim() || undefined,
+        provider: modelSelection.selectedProvider ?? undefined,
+        model: modelSelection.selectedModel ?? undefined,
+      });
+      if (generation !== reviewGenerationRef.current) return false;
+      setWorkingCandidate(prepared);
+      setNotice(
+        prepared.yopsDraft.operations.length > 0
+          ? `${prepared.yopsDraft.operations.length} structured changes generated.`
+          : 'No structured changes were generated. Add source evidence and try again.'
+      );
+      return prepared.yopsDraft.operations.length > 0;
+    } catch (error) {
+      if (generation !== reviewGenerationRef.current) return false;
+      setLocalError(formatUserFacingError(error, 'Change generation failed.'));
+      setNotice(null);
+      return false;
+    } finally {
+      setBusyAction(null);
+    }
+  }, [
+    busyAction,
+    chat.input,
+    modelSelection.selectedModel,
+    modelSelection.selectedProvider,
+    onPrepareDraft,
+    persistedSourceTurns,
+    syncChatSource,
+    workingCandidate,
+  ]);
 
   const prepareReview = useCallback(async () => {
     if (!onPrepareDraft || busyAction) return false;
@@ -601,9 +682,11 @@ export function useWorkspaceComposeReviewController({
       warning: chat.warning,
     },
     copyReceipt,
+    ensureSaved,
     decide,
     decisionReason,
     error: localError ?? flowError ?? chat.error,
+    generateChanges,
     hasCollaborationConflict,
     isBusy: Boolean(busyAction),
     model: {
@@ -651,6 +734,7 @@ export function useWorkspaceComposeReviewController({
     setDecisionReason,
     sourceBusy: materialUpload.uploading || busyAction?.startsWith('source:') === true,
     toggleMaterialSource,
+    updateSourceArtifact,
     uploadFile,
     viewBaseCommit,
     viewCommit,

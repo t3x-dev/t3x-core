@@ -78,11 +78,16 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
     return projected;
   }, [candidate.id, candidate.projectId, enabled, pageCount]);
   useEffect(() => {
-    let active = true;
+    // Only a different workspace invalidates the visible projection. Clearing it
+    // on every revision unmounts the assistant and loses its chat/scroll state.
     setView(null);
     setActions([]);
     setCards({});
     setError(null);
+  }, [enabled, candidate.id, candidate.projectId]);
+
+  useEffect(() => {
+    let active = true;
     if (!enabled) {
       setLoading(false);
       return;
@@ -259,7 +264,7 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
     const api = getSharedApiClient();
     const conversation = await api.sourceThreads.create({
       project_id: candidate.projectId,
-      title: 'Workspace source thread',
+      title: 'Compose assistant',
     });
     const result = await api.workspaces.get(candidate.projectId, candidate.id);
     const current = result.workspace as unknown as WorkspaceCandidate;
@@ -268,7 +273,7 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
     const source = {
       id: `chat:${conversation.conversation_id}`,
       type: 'chat' as const,
-      title: 'Workspace source thread',
+      title: 'Compose assistant',
       conversationId: conversation.conversation_id,
     };
     await saveProjectWorkspace(candidate.projectId, candidate.id, {

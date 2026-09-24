@@ -1,15 +1,6 @@
 'use client';
 
-import {
-  Columns3,
-  Download,
-  GripVertical,
-  Hand,
-  Loader2,
-  UserRound,
-  ZoomIn,
-  ZoomOut,
-} from 'lucide-react';
+import { GripVertical, Loader2, UserRound } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -220,24 +211,6 @@ export function PersonalModelSettingsPanel() {
             </div>
           </>
         ) : null}
-      </div>
-      <div className={styles.prototypeTools} aria-label="View tools" role="toolbar">
-        <button type="button" title="Zoom Out">
-          <ZoomOut size={20} />
-        </button>
-        <button type="button" title="Zoom In">
-          <ZoomIn size={20} />
-        </button>
-        <i />
-        <button type="button" title="Pan Tool">
-          <Hand size={20} />
-        </button>
-        <button type="button" title="Fit to Screen">
-          <Columns3 size={20} />
-        </button>
-        <button type="button" title="Download">
-          <Download size={20} />
-        </button>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
+import type { WorkspaceAuthoringCard } from '@t3x-dev/api-client';
 import {
-  ArrowRight,
+  CheckCircle2,
   ChevronDown,
-  Clock3,
   GitCompareArrows,
   History,
   Minus,
@@ -13,11 +13,17 @@ import {
   activityChangeKind,
   activityChannelLabel,
   activityOperation,
-  activityValue,
   type ComposeActivityMeta,
   composeEventCards,
   groupComposeActivity,
 } from '@/domain/composeActivity';
+import {
+  composeActorLabel,
+  composeNodeTitle,
+  composePathLabel,
+  composeTextChangeSegments,
+  composeValueChangeLabels,
+} from '@/domain/composePresentation';
 import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import type { WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 import styles from './ComposeActivityTimeline.module.css';
@@ -40,15 +46,51 @@ const day = (value: string) =>
     month: 'long',
     day: 'numeric',
   });
+const dayLabel = (value: string) => {
+  const date = new Date(value);
+  const today = new Date();
+  if (date.toDateString() === today.toDateString()) return 'Today';
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+};
+
+type ComposeChangeFilter = 'all' | 'modified' | 'added' | 'attention';
+
+function matchesFilter(card: WorkspaceAuthoringCard, filter: ComposeChangeFilter) {
+  if (filter === 'all') return true;
+  const kind = activityChangeKind([card]);
+  if (filter === 'added') return kind === 'added';
+  if (filter === 'modified') return kind === 'modified' || kind === 'mixed';
+  return kind === 'removed';
+}
+
+function ValueChange({ before, after, kind }: { before: string; after: string; kind: string }) {
+  if (kind === 'added') return <ins title={after}>{after}</ins>;
+  if (kind === 'removed') return <del title={before}>{before}</del>;
+  if (before === after) return <span title={after}>{after}</span>;
+  const change = composeTextChangeSegments(before, after);
+  return (
+    <span title={`${before} → ${after}`}>
+      {change.prefix}
+      {change.before ? <del>{change.before}</del> : null}
+      {change.after ? <ins>{change.after}</ins> : null}
+      {change.suffix}
+    </span>
+  );
+}
 
 export function ComposeActivityTimeline({
   activity,
+  filter = 'all',
   scope,
   renderCard,
   fallback,
   updatedAt,
 }: {
   activity: ReturnType<typeof useComposeActivity>;
+  filter?: ComposeChangeFilter;
   scope: 'latest' | 'all';
   renderCard: (operation: WorkspaceYOpsDraftOperation, meta: ComposeActivityMeta) => ReactNode;
   fallback: ReactNode;
@@ -60,8 +102,15 @@ export function ComposeActivityTimeline({
       fallback
     ) : (
       <div className={styles.timeline}>
-        <p className={styles.date}>{day(updatedAt)}</p>
+        <p className={styles.date} title={day(updatedAt)}>
+          <span data-compact={dayLabel(updatedAt).length > 9 || undefined}>
+            {dayLabel(updatedAt)}
+          </span>
+        </p>
         <section className={styles.event} data-latest="true" aria-label="Current proposal">
+          <time className={styles.eventTime} dateTime={updatedAt}>
+            {time(updatedAt)}
+          </time>
           <span
             className={styles.icon}
             data-kind="recorded"
@@ -69,13 +118,19 @@ export function ComposeActivityTimeline({
             aria-label="Event history unavailable"
             title="Event history unavailable"
           >
-            <History size={18} aria-hidden="true" />
+            <History size={13} aria-hidden="true" />
           </span>
-          <div className={styles.heading}>
-            <strong>Current proposal</strong>
-            <small>Earlier event history is not available for this draft.</small>
+          <div className={styles.eventBody}>
+            <div className={styles.heading}>
+              <span className={styles.titleLine}>
+                <strong>Current proposal</strong>
+              </span>
+              <span className={styles.meta}>
+                Earlier event history is not available for this draft.
+              </span>
+            </div>
+            {fallback}
           </div>
-          {fallback}
         </section>
       </div>
     );
@@ -92,148 +147,143 @@ export function ComposeActivityTimeline({
   if (scope === 'all')
     return (
       <div className={composeStyles.actionList}>
-        {activity.view?.netDiff.map((card) =>
-          renderCard(activityOperation(card), { eventId: 'all', comparison: 'draft' })
-        )}
-        {!activity.view?.netDiff.length ? (
+        {activity.view?.netDiff
+          .filter((card) => matchesFilter(card, filter))
+          .map((card) =>
+            renderCard(activityOperation(card), { eventId: 'all', comparison: 'draft' })
+          )}
+        {!activity.view?.netDiff.filter((card) => matchesFilter(card, filter)).length ? (
           <p className={styles.message}>Current draft matches Base. Event history is retained.</p>
         ) : null}
       </div>
     );
   const events = groupComposeActivity(activity.actions);
+  const visibleEvents = events
+    .map((event) => ({
+      event,
+      cards: composeEventCards(event, activity.cards).filter((card) => matchesFilter(card, filter)),
+    }))
+    .filter(({ cards }) => cards.length > 0);
   return (
     <section className={styles.timeline} aria-label="Change activity timeline">
-      {!events.length ? <p className={styles.message}>No saved change events yet.</p> : null}
-      {events.map((event, index) => {
+      {!visibleEvents.length ? <p className={styles.message}>No matching changes.</p> : null}
+      {visibleEvents.map(({ event, cards: eventCards }, index) => {
         const latest = event.actions.at(-1)!;
-        const eventCards = composeEventCards(event, activity.cards);
-        const open = expanded[event.id] ?? index === 0;
+        const open = expanded[event.id] ?? false;
         const toggle = () => setExpanded((current) => ({ ...current, [event.id]: !open }));
-        // Use each saved delta so an add-then-remove event does not lose its meaning.
-        const kind = activityChangeKind(
-          event.actions.flatMap((action) => activity.cards[action.actionId] ?? [])
-        );
+        // Keep the event node consistent with the concrete rows the user can inspect.
+        const kind = activityChangeKind(eventCards);
         const { Icon, label } = changeMarkers[kind];
         const title =
           event.actions.length > 1
             ? 'Continuous manual edits'
             : latest.reason || `${activityChannelLabel(latest.channel)} changes`;
-        const actor = latest.actor.id === 'human:local-user' ? 'You' : latest.actor.id;
-        const minutes = Math.floor(
-          (Date.parse(event.endedAt) - Date.parse(event.startedAt)) / 60000
-        );
+        const actor =
+          latest.actor.id === 'human:local-user' ? 'You' : composeActorLabel(latest.actor.id);
         return (
           <Fragment key={event.id}>
-            {index === 0 || day(event.endedAt) !== day(events[index - 1].endedAt) ? (
-              <p className={styles.date}>{day(event.endedAt)}</p>
+            {index === 0 || day(event.endedAt) !== day(visibleEvents[index - 1].event.endedAt) ? (
+              <p className={styles.date} title={day(event.endedAt)}>
+                <span data-compact={dayLabel(event.endedAt).length > 9 || undefined}>
+                  {dayLabel(event.endedAt)}
+                </span>
+              </p>
             ) : null}
             <section
               className={styles.event}
               data-latest={index === 0}
               aria-label={`Event: ${title}`}
             >
-              <button
-                className={styles.eventToggle}
-                onClick={toggle}
-                aria-expanded={open}
-                type="button"
+              <time className={styles.eventTime} dateTime={event.endedAt}>
+                {time(event.endedAt)}
+                {event.endedAt !== event.startedAt ? (
+                  <small>from {time(event.startedAt)}</small>
+                ) : null}
+              </time>
+              <span
+                className={styles.icon}
+                data-kind={kind}
+                data-latest={index === 0}
+                role="img"
+                aria-label={label}
+                title={label}
               >
-                <span
-                  className={styles.icon}
-                  data-kind={kind}
-                  role="img"
-                  aria-label={label}
-                  title={label}
+                <Icon size={13} aria-hidden="true" />
+              </span>
+              <div className={styles.eventBody}>
+                <button
+                  className={styles.eventToggle}
+                  onClick={toggle}
+                  aria-expanded={open}
+                  type="button"
                 >
-                  <Icon size={18} aria-hidden="true" />
-                </span>
-                <span className={styles.heading}>
-                  <strong title={title}>{title}</strong>
-                  <span className={styles.meta}>
-                    <span title={actor}>{actor}</span>
-                    <span className={styles.channel} data-channel={latest.channel}>
-                      {activityChannelLabel(latest.channel)}
-                    </span>
-                    <time dateTime={event.startedAt}>
-                      {time(event.startedAt)}
-                      {event.endedAt !== event.startedAt ? ` – ${time(event.endedAt)}` : ''}
-                    </time>
-                    <span>
-                      {eventCards.length} {eventCards.length === 1 ? 'field' : 'fields'}
-                    </span>
-                    {minutes >= 60 ? (
-                      <span className={styles.channel}>
-                        {Math.floor(minutes / 60)}h {minutes % 60 || ''}
-                        {minutes % 60 ? 'm' : ''} continuous · 1 event
+                  <span className={styles.heading}>
+                    <span className={styles.titleLine}>
+                      <strong title={title}>{title}</strong>
+                      <span className={styles.proposalId}>
+                        P-{String(latest.sequence).padStart(2, '0')}
                       </span>
-                    ) : null}
+                      {index === 0 ? <span className={styles.latestBadge}>Latest</span> : null}
+                    </span>
                   </span>
-                </span>
-                <ChevronDown size={14} className={open ? styles.openChevron : undefined} />
-              </button>
-              {open ? (
-                <div className={composeStyles.actionList}>
-                  {eventCards.map((card) => {
-                    const lastTouch = event.actions.findLast((action) =>
-                      activity.cards[action.actionId]?.some((item) => item.nodeId === card.nodeId)
-                    )!;
-                    return renderCard(activityOperation(card, lastTouch.reason), {
-                      eventId: event.id,
-                      actionId: lastTouch.actionId,
-                      actor: lastTouch.actor.id === 'human:local-user' ? 'You' : lastTouch.actor.id,
-                      channel: lastTouch.channel,
-                      timestamp: lastTouch.publishedAt,
-                      comparison: 'event',
-                    });
-                  })}
-                  {!eventCards.length ? (
-                    <p className={styles.message}>No field changes; the event is retained.</p>
-                  ) : null}
-                </div>
-              ) : (
-                <div className={styles.preview}>
-                  {eventCards.map((card) => (
-                    <button
-                      type="button"
-                      onClick={toggle}
-                      key={`${card.nodeId}:${card.path}`}
-                      aria-label={`Expand ${card.path}`}
-                    >
-                      <span title={card.path}>{card.path}</span>
-                      <strong className={composeStyles.before} title={activityValue(card.before)}>
-                        {activityValue(card.before)}
-                      </strong>
-                      <ArrowRight size={13} />
-                      <strong className={composeStyles.after} title={activityValue(card.after)}>
-                        {activityValue(card.after)}
-                      </strong>
-                      <ChevronDown size={14} />
-                    </button>
-                  ))}
-                  {!eventCards.length ? (
-                    <button type="button" onClick={toggle}>
-                      View event <ChevronDown size={14} />
-                    </button>
-                  ) : null}
-                </div>
-              )}
-            </section>
-            {event.idleBeforeMs > 0 ? (
-              <div className={styles.gap}>
-                <span
-                  className={styles.icon}
-                  role="img"
-                  aria-label="Idle interval"
-                  title="Idle interval"
-                >
-                  <Clock3 size={18} aria-hidden="true" />
-                </span>
-                <strong>{Math.floor(event.idleBeforeMs / 60000)} min idle · New event</strong>
-                <small>
-                  {time(events[index + 1]?.endedAt ?? event.startedAt)} to {time(event.startedAt)}
-                </small>
+                  <span className={styles.author} title={actor}>
+                    <span>
+                      {latest.channel === 'assistant' ? 'AI' : actor.slice(0, 1).toUpperCase()}
+                    </span>
+                    {actor}
+                  </span>
+                  <ChevronDown aria-hidden="true" className={styles.disclosure} />
+                </button>
+                {open ? (
+                  <div className={composeStyles.actionList}>
+                    {eventCards.map((card) => {
+                      const lastTouch = event.actions.findLast((action) =>
+                        activity.cards[action.actionId]?.some((item) => item.nodeId === card.nodeId)
+                      )!;
+                      return renderCard(activityOperation(card, lastTouch.reason), {
+                        eventId: event.id,
+                        actionId: lastTouch.actionId,
+                        actor:
+                          lastTouch.actor.id === 'human:local-user' ? 'You' : lastTouch.actor.id,
+                        channel: lastTouch.channel,
+                        timestamp: lastTouch.publishedAt,
+                        comparison: 'event',
+                      });
+                    })}
+                  </div>
+                ) : (
+                  <div className={styles.preview}>
+                    {eventCards.map((card) => {
+                      const cardLabel =
+                        composeNodeTitle(card.after) ??
+                        composeNodeTitle(card.before) ??
+                        composePathLabel(card.path, card.nodeId);
+                      const { before, after } = composeValueChangeLabels(card.before, card.after);
+                      const cardKind = activityChangeKind([card]);
+                      return (
+                        <button
+                          type="button"
+                          onClick={toggle}
+                          key={`${card.nodeId}:${card.path}`}
+                          aria-label={`Expand ${cardLabel}`}
+                        >
+                          <span className={styles.changeMark} data-kind={cardKind}>
+                            {cardKind === 'added' ? '+' : cardKind === 'removed' ? '−' : '~'}
+                          </span>
+                          <span className={styles.cardLabel} title={cardLabel}>
+                            {cardLabel}
+                          </span>
+                          <span className={styles.valueSummary}>
+                            <ValueChange before={before} after={after} kind={cardKind} />
+                          </span>
+                          <CheckCircle2 aria-label="Applied to Draft" className={styles.verified} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            ) : null}
+            </section>
           </Fragment>
         );
       })}

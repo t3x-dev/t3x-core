@@ -45,7 +45,7 @@ export const MODEL_CATALOG: Record<ProviderName, Record<string, ModelInfo>> = {
   openai: {
     'gpt-5.4': {
       id: 'gpt-5.4',
-      label: 'GPT-5.4',
+      label: 'gpt5.4',
       provider: 'openai',
       capabilities: ['function_calling', 'structured_output'],
       maxOutputTokens: 131072,

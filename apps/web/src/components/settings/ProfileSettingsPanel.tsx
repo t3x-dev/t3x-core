@@ -1,18 +1,6 @@
 'use client';
 
-import {
-  Camera,
-  Columns3,
-  Download,
-  Hand,
-  Laptop,
-  Loader2,
-  Monitor,
-  Smartphone,
-  UserRound,
-  ZoomIn,
-  ZoomOut,
-} from 'lucide-react';
+import { Camera, Laptop, Loader2, Monitor, Smartphone, UserRound } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { type ChangeEvent, useEffect, useRef, useState } from 'react';
@@ -103,7 +91,7 @@ export function ProfileSettingsPanel() {
       const name = resolveLocalWorkspaceName(draft.name);
       setLocalWorkspaceName(name);
       setDraft({ ...draft, name });
-      toast.success('Profile saved');
+      toast.success('Local profile name saved in this browser');
       return;
     }
     try {
@@ -305,25 +293,6 @@ export function ProfileSettingsPanel() {
             </section>
           </>
         ) : null}
-      </div>
-
-      <div className={styles.prototypeTools} aria-label="View tools" role="toolbar">
-        <button type="button" title="Zoom Out">
-          <ZoomOut size={20} />
-        </button>
-        <button type="button" title="Zoom In">
-          <ZoomIn size={20} />
-        </button>
-        <i />
-        <button type="button" title="Pan Tool">
-          <Hand size={20} />
-        </button>
-        <button type="button" title="Fit to Screen">
-          <Columns3 size={20} />
-        </button>
-        <button type="button" title="Download">
-          <Download size={20} />
-        </button>
       </div>
     </div>
   );

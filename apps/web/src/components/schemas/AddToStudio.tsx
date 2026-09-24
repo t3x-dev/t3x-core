@@ -104,7 +104,9 @@ function Destination({
           onChange={(event) => setProjectId(event.target.value)}
           className="mb-5 mt-2 h-9 w-full rounded-[5px] border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2.5 text-[13px] text-[var(--text-primary)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
         >
-          {!projects.some((project) => project.project_id === defaultProjectId) ? (
+          {!defaultProjectId ? <option value="">Select a project</option> : null}
+          {defaultProjectId &&
+          !projects.some((project) => project.project_id === defaultProjectId) ? (
             <option value={defaultProjectId}>Current project</option>
           ) : null}
           {projects.map((project) => (
@@ -119,14 +121,20 @@ function Destination({
           {error}
         </p>
       ) : null}
-      <CandidateConfirmation
-        key={projectId}
-        projectId={projectId}
-        workspaceId={projectId === defaultProjectId ? defaultWorkspaceId : undefined}
-        source={source}
-        embedded={embedded}
-        onDone={onDone}
-      />
+      {projectId ? (
+        <CandidateConfirmation
+          key={projectId}
+          projectId={projectId}
+          workspaceId={projectId === defaultProjectId ? defaultWorkspaceId : undefined}
+          source={source}
+          embedded={embedded}
+          onDone={onDone}
+        />
+      ) : (
+        <p className="text-sm text-[var(--text-tertiary)]">
+          Choose a destination project to add this release.
+        </p>
+      )}
     </div>
   );
 }

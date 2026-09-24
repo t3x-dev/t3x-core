@@ -3,12 +3,8 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { LogoIcon } from '@/components/chat/sidebar/LogoIcon';
 import { ProjectTabs } from '@/components/project/ProjectTabs';
-import type { ProjectTabId } from '@/components/project/projectTabModel';
-import {
-  DEFAULT_OWNER_SLUG,
-  getProjectIdRepoPath,
-  getProjectRepoPath,
-} from '@/domain/project/repoPath';
+import { getProjectTabSegment, type ProjectTabId } from '@/components/project/projectTabModel';
+import { getProjectIdRepoPath, getProjectRepoPath } from '@/domain/project/repoPath';
 import type { YSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 
 export interface ProjectShellProject {
@@ -26,18 +22,26 @@ export interface ProjectShellProject {
 
 export interface ProjectShellProps {
   activeTab: ProjectTabId;
+  branch?: string | null;
   projectIdNavigation?: boolean;
+  pullRequestNumber?: number;
+  ownerSlug?: string;
   immersive?: boolean;
   children: ReactNode;
   project: ProjectShellProject;
+  workspaceId?: string | null;
 }
 
 export function ProjectShell({
   activeTab,
+  branch,
   children,
   immersive = false,
   project,
   projectIdNavigation = false,
+  ownerSlug,
+  pullRequestNumber,
+  workspaceId,
 }: ProjectShellProps) {
   const visibilityLabel =
     project.visibility === 'public'
@@ -46,13 +50,28 @@ export function ProjectShell({
         ? 'Unlisted'
         : 'Private';
   const repoPath =
-    projectIdNavigation && project.id
+    project.id && (projectIdNavigation || !ownerSlug)
       ? getProjectIdRepoPath(project.id)
-      : getProjectRepoPath(project);
+      : getProjectRepoPath(project, ownerSlug);
+  const returnParams = new URLSearchParams();
+  if (activeTab !== 'state' && activeTab !== 'settings') {
+    returnParams.set('tab', getProjectTabSegment(activeTab));
+  }
+  if (branch) returnParams.set('branch', branch);
+  if (workspaceId && (activeTab === 'workspaces' || activeTab === 'schemas')) {
+    returnParams.set('workspace', workspaceId);
+  }
+  if (pullRequestNumber && activeTab === 'reviews') {
+    returnParams.set('pr', String(pullRequestNumber));
+  }
+  const returnQuery = returnParams.toString();
+  const returnTo = returnQuery ? `${repoPath}?${returnQuery}` : repoPath;
   const settingsHref = project.id
-    ? `/settings?project=${encodeURIComponent(project.id)}`
+    ? `/project/${encodeURIComponent(project.id)}/settings?returnTo=${encodeURIComponent(returnTo)}`
     : '/settings';
-
+  const ownerLabel = ownerSlug || 'Projects';
+  const ownerMark = ownerSlug ? ownerSlug.slice(0, 2).toUpperCase() : 'P';
+  const newRepositoryHref = ownerSlug ? `/${encodeURIComponent(ownerSlug)}/new` : '/';
   return (
     <div className="flex h-dvh min-h-[680px] flex-col overflow-hidden bg-[var(--surface-app)] text-[var(--text-primary)] [--text-base:14px] [--text-lg:16px] [--text-sm:13px] [--text-xs:12px]">
       <header className="flex h-24 shrink-0 flex-col border-b border-[var(--stroke-divider)] bg-[var(--surface-elevated)] px-3">
@@ -69,7 +88,7 @@ export function ProjectShell({
               <LogoIcon />
             </span>
             <div className="flex min-w-0 items-center gap-1 text-[13px] leading-5">
-              <span className="shrink-0 text-[var(--text-secondary)]">{DEFAULT_OWNER_SLUG}</span>
+              <span className="shrink-0 text-[var(--text-secondary)]">{ownerLabel}</span>
               <span aria-hidden="true" className="text-[var(--text-tertiary)]">
                 /
               </span>
@@ -106,26 +125,28 @@ export function ProjectShell({
             </Link>
             <Link
               className="inline-flex h-[34px] items-center gap-1.5 rounded-[5px] border border-[var(--stroke-default)] bg-[var(--surface-card)] px-3 text-xs font-medium text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)] transition-colors hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
-              href="/"
+              href={newRepositoryHref}
             >
               <Plus aria-hidden="true" className="size-3.5" />
-              Create new
+              {ownerSlug ? 'Create new' : 'Browse projects'}
             </Link>
             <span
-              aria-label="Current user"
+              aria-label={ownerSlug ? `Owner ${ownerSlug}` : 'Projects'}
               className="inline-flex size-8 items-center justify-center rounded-full bg-[var(--hover-bg-strong)] text-xs font-semibold text-[var(--text-secondary)]"
               role="img"
             >
-              {DEFAULT_OWNER_SLUG.charAt(0).toUpperCase()}
+              {ownerMark.charAt(0)}
             </span>
           </nav>
         </div>
         <ProjectTabs
           activeTab={activeTab}
+          branch={branch}
           repoPath={repoPath}
           projectIdNavigation={projectIdNavigation}
           settingsHref={settingsHref}
           stacked
+          workspaceId={workspaceId}
         />
       </header>
       <main

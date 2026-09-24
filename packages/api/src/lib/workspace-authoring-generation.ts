@@ -107,7 +107,7 @@ export function buildWorkspaceGeneration(input: {
     throw new DraftAuthoringConflictError(
       appended.kind === 'no_change'
         ? 'The requested changes are already present'
-        : 'Generated operations cannot be composed against current Draft'
+        : `Generated operations cannot be composed against current Draft: ${'message' in appended ? appended.message : appended.kind}`
     );
   const before = currentComposition(ledger);
   const after = currentComposition(appended.ledger);

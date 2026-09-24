@@ -230,13 +230,34 @@ describe('ProjectDetailPage — project-first shell states', () => {
     );
   });
 
+  it('normalizes legacy tab links under the actual repository owner', async () => {
+    searchParamsValue = new URLSearchParams(
+      'tab=schemas&branch=feature%2Frelease&workspace=workspace_7'
+    );
+    pathnameValue = '/orbit-labs/test-project';
+    routeParamsValue = {};
+
+    render(
+      <ProjectDetailPageContent ownerSlugOverride="orbit-labs" projectIdOverride="proj_test" />
+    );
+
+    await waitFor(() =>
+      expect(replaceMock).toHaveBeenCalledWith(
+        '/orbit-labs/test-project/schemas?branch=feature%2Frelease&workspace=workspace_7',
+        { scroll: false }
+      )
+    );
+  });
+
   it('redirects the legacy project settings query without rendering the old settings panel', () => {
     searchParamsValue = new URLSearchParams('tab=settings');
     pathnameValue = '/project/proj_test';
 
     const view = render(<ProjectDetailPage />);
 
-    expect(replaceMock).toHaveBeenCalledWith('/settings?project=proj_test');
+    expect(replaceMock).toHaveBeenCalledWith(
+      '/project/proj_test/settings?returnTo=%2Fproject%2Fproj_test'
+    );
     expect(view.container).toBeEmptyDOMElement();
   });
 

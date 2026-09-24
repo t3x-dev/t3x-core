@@ -26,12 +26,18 @@ vi.mock('@/hooks/projects/useProjectCrud', () => ({
 vi.mock('@/app/project/[projectId]/page', () => ({
   ProjectDetailPageContent: ({
     initialTabOverride,
+    ownerSlugOverride,
     projectIdOverride,
   }: {
     initialTabOverride?: string;
+    ownerSlugOverride?: string;
     projectIdOverride?: string;
   }) => (
-    <div data-tab={initialTabOverride ?? 'state'} data-testid="project-detail">
+    <div
+      data-owner={ownerSlugOverride}
+      data-tab={initialTabOverride ?? 'state'}
+      data-testid="project-detail"
+    >
       {projectIdOverride}
     </div>
   ),
@@ -99,6 +105,7 @@ describe('OwnerRepoProjectPage', () => {
 
     expect(screen.getByTestId('project-detail')).toHaveTextContent('proj_audit');
     expect(screen.getByTestId('project-detail')).toHaveAttribute('data-tab', 'state');
+    expect(screen.getByTestId('project-detail')).toHaveAttribute('data-owner', 't3x-dev');
     expect(fetchProjects).not.toHaveBeenCalled();
   });
 
@@ -116,9 +123,21 @@ describe('OwnerRepoProjectPage', () => {
 
     render(<OwnerRepoProjectPage />);
 
-    expect(replaceMock).toHaveBeenCalledWith('/settings?project=proj_audit');
+    expect(replaceMock).toHaveBeenCalledWith(
+      '/project/proj_audit/settings?returnTo=%2Ft3x-dev%2Fmobile-click-audit'
+    );
     expect(screen.queryByTestId('project-detail')).not.toBeInTheDocument();
     expect(fetchProjects).not.toHaveBeenCalled();
+  });
+
+  it('loads the owner-scoped project before redirecting a directly opened settings URL', () => {
+    routeParamsValue = { owner: 't3x-dev', repoPath: ['mobile-click-audit', 'settings'] };
+    useProjectStore.setState({ initialized: false, projectScope: null, projects: [] });
+
+    render(<OwnerRepoProjectPage />);
+
+    expect(fetchProjects).toHaveBeenCalledWith('t3x-dev');
+    expect(replaceMock).not.toHaveBeenCalled();
   });
 
   it('renders a not-found state for invalid repository tab segments', () => {

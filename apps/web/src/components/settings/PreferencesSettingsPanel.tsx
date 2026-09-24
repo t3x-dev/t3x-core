@@ -1,6 +1,6 @@
 'use client';
 
-import { Columns3, Download, Hand, UserRound, ZoomIn, ZoomOut } from 'lucide-react';
+import { UserRound } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
@@ -66,7 +66,7 @@ export function PreferencesSettingsPanel() {
     setDensity(draftDensity);
     setAccentColor(draftAccent);
     setReducedMotion(draftReducedMotion);
-    toast.success('Appearance settings saved');
+    toast.success('Appearance preferences saved in this browser');
   }
 
   return (
@@ -163,29 +163,13 @@ export function PreferencesSettingsPanel() {
         </div>
 
         <div className={styles.saveRow}>
+          <p className="mr-auto text-xs text-[var(--text-tertiary)]">
+            These preferences apply only in this browser.
+          </p>
           <button type="button" onClick={saveChanges}>
             Save changes
           </button>
         </div>
-      </div>
-
-      <div className={styles.prototypeTools} aria-label="View tools" role="toolbar">
-        <button type="button" title="Zoom Out">
-          <ZoomOut size={20} />
-        </button>
-        <button type="button" title="Zoom In">
-          <ZoomIn size={20} />
-        </button>
-        <i />
-        <button type="button" title="Pan Tool">
-          <Hand size={20} />
-        </button>
-        <button type="button" title="Fit to Screen">
-          <Columns3 size={20} />
-        </button>
-        <button type="button" title="Download">
-          <Download size={20} />
-        </button>
       </div>
     </div>
   );

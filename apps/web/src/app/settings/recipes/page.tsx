@@ -107,7 +107,7 @@ export default function RecipesPage() {
   const activeProjectName =
     projects.find((project) => project.id === activeProjectId)?.name ?? 'Current project';
   const settingsHref = projectId
-    ? `/settings?project=${encodeURIComponent(projectId)}`
+    ? `/project/${encodeURIComponent(projectId)}/settings`
     : '/settings';
 
   const fetchAllRecipes = useCallback(async () => {
@@ -322,10 +322,11 @@ export default function RecipesPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => toast.info('Run history is not available yet.')}
+                                disabled
+                                title="Persisted run history is not supported yet"
                               >
                                 <Play aria-hidden="true" />
-                                Run history
+                                Run history unavailable
                               </Button>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>

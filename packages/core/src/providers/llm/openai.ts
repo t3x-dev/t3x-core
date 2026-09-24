@@ -14,10 +14,12 @@ import {
   type LLMProvider,
   LLMProviderError,
   type LLMResult,
+  type LLMTextStreamEvent,
   type StructuredResult,
 } from '../../llm/types';
 import { extractJsonBlock } from './jsonExtract';
 import { tryParseWithRepair } from './jsonRepair';
+import { readProviderSse } from './sse';
 import { toOpenAIStructuredSchema } from './structuredSchema';
 
 /**
@@ -211,6 +213,100 @@ export class OpenAIProvider implements LLMProvider {
         undefined,
         `Request failed: ${error instanceof Error ? error.message : String(error)}`
       );
+    }
+  }
+
+  async *streamFromPrompt(
+    prompt: LLMPrompt,
+    options: LLMGenerateOptions,
+    signal?: AbortSignal
+  ): AsyncGenerator<LLMTextStreamEvent> {
+    const temperature = options.temperature ?? 0.3;
+    const maxTokens = options.maxTokens ?? 2048;
+    const url = `${this.baseUrl}/chat/completions`;
+    const messages: Array<{ role: string; content: string }> = [];
+    if (prompt.system) messages.push({ role: 'system', content: prompt.system });
+    for (const message of prompt.messages) {
+      messages.push({
+        role: message.role,
+        content:
+          typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
+      });
+    }
+
+    const controller = new AbortController();
+    const abort = () => controller.abort(signal?.reason);
+    if (signal?.aborted) abort();
+    else signal?.addEventListener('abort', abort, { once: true });
+    const timeoutId = setTimeout(() => controller.abort(), 120_000);
+    let usage = { inputTokens: 0, outputTokens: 0 };
+    try {
+      const response = await fetchWithProxy(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          ...buildOpenAIChatCompletionBody({
+            model: options.model,
+            maxTokens,
+            temperature,
+            messages,
+            stop: options.stopSequences,
+          }),
+          stream: true,
+          stream_options: { include_usage: true },
+        }),
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        throw new LLMProviderError(
+          this.id,
+          response.status,
+          `API request failed: ${response.status} ${await response.text()}`
+        );
+      }
+      for await (const frame of readProviderSse(response)) {
+        if (frame.data === '[DONE]') break;
+        let data: {
+          choices?: Array<{ delta?: { content?: string } }>;
+          usage?: { prompt_tokens?: number; completion_tokens?: number };
+        };
+        try {
+          data = JSON.parse(frame.data) as typeof data;
+        } catch {
+          continue;
+        }
+        if (data.usage) {
+          usage = {
+            inputTokens: data.usage.prompt_tokens ?? usage.inputTokens,
+            outputTokens: data.usage.completion_tokens ?? usage.outputTokens,
+          };
+        }
+        for (const choice of data.choices ?? []) {
+          const text = choice.delta?.content;
+          if (text) yield { type: 'text', text };
+        }
+      }
+      yield { type: 'done', usage };
+    } catch (error) {
+      if (error instanceof LLMProviderError) throw error;
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new LLMProviderError(
+          this.id,
+          undefined,
+          signal?.aborted ? 'Request cancelled' : 'Request timeout after 120000ms'
+        );
+      }
+      throw new LLMProviderError(
+        this.id,
+        undefined,
+        `Request failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    } finally {
+      clearTimeout(timeoutId);
+      signal?.removeEventListener('abort', abort);
     }
   }
 

@@ -105,7 +105,6 @@ export function WorkspaceTabs(props: WorkspaceTabsProps) {
         onModeChange={(nextMode) =>
           props.onWorkflowTabChange?.(nextMode === 'compose' ? 'chat' : 'validation')
         }
-        onWorkspacesRefresh={props.onWorkspacesRefresh}
       />
     </div>
   );
