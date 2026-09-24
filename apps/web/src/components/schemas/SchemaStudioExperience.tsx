@@ -15,6 +15,10 @@ import {
 } from '@/components/ui/dialog';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { getProjectIdRepoPath, getProjectIdWorkspacePath } from '@/domain/project/repoPath';
+import {
+  listStudioDraftWorkspaces,
+  resolveStudioWorkspaceId,
+} from '@/domain/workspaces/studioTargets';
 import { useStudioCandidates } from '@/hooks/schemas/useStudioCandidates';
 import { useApplyStudioSelection, useStudioPreview } from '@/hooks/schemas/useStudioPreview';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
@@ -202,6 +206,11 @@ export function SchemaStudioExperience({
     if (requested) setSelection([requested]);
   }, [requested]);
 
+  const draftWorkspaces = listStudioDraftWorkspaces(workspaces.workspaces);
+  useEffect(() => {
+    const resolved = resolveStudioWorkspaceId(workspaces.workspaces, workspaceId);
+    if (resolved !== workspaceId) setWorkspaceId(resolved);
+  }, [workspaceId, workspaces.workspaces]);
   const target = workspaces.workspaces.find((item) => item.id === workspaceId);
   const preview = useStudioPreview(
     projectId,
@@ -260,7 +269,7 @@ export function SchemaStudioExperience({
     composition[1] ??
     composition[0];
   const selectedWorkspaceTitle =
-    target?.title ?? workspaces.workspaces[0]?.title ?? 'Main workspace';
+    target?.title ?? draftWorkspaces[0]?.title ?? 'No draft workspace';
 
   function choose(module: StudioModule) {
     setActiveModuleId(module.id);
@@ -629,9 +638,7 @@ export function SchemaStudioExperience({
             <h3 className="mb-1.5 text-[15px] font-bold text-blue-900">Dependencies</h3>
             <p className="text-xs font-medium text-blue-400">None</p>
           </div>
-          {!workspaces.loading &&
-          !workspaces.error &&
-          !workspaces.workspaces.some((item) => item.status !== 'committed') ? (
+          {!workspaces.loading && !workspaces.error && draftWorkspaces.length === 0 ? (
             <div className="mt-6 border-t border-blue-50 pt-4 text-xs text-blue-700">
               Create a Workspace to review and apply this definition.
             </div>
@@ -651,14 +658,15 @@ export function SchemaStudioExperience({
               onChange={(event) => setWorkspaceId(event.target.value)}
               value={workspaceId}
             >
-              <option value="">Main workspace</option>
-              {workspaces.workspaces
-                .filter((item) => item.status !== 'committed')
-                .map((item) => (
+              {draftWorkspaces.length === 0 ? (
+                <option value="">No draft workspace</option>
+              ) : (
+                draftWorkspaces.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.title}
                   </option>
-                ))}
+                ))
+              )}
             </select>
           </label>
           <div className="h-4 w-px bg-blue-200" />

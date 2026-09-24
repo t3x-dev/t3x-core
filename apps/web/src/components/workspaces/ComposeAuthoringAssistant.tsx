@@ -1,7 +1,12 @@
 'use client';
 
-import { ArrowUp, Sparkles, Square } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowUp, Sparkles, Square, X } from 'lucide-react';
+import NextImage from 'next/image';
+import { type ClipboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  clipboardImageFiles,
+  fileToAttachedImage,
+} from '@/components/generation/attachedImageFile';
 import { GenerationModelSelector } from '@/components/generation/GenerationModelSelector';
 import { providerSupports } from '@/domain/providerCapabilities';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
@@ -9,6 +14,7 @@ import { useSourceThreadGeneration } from '@/hooks/sourceThreads/useSourceThread
 import type { WorkspaceAssistantContext } from '@/hooks/workspaces/useWorkspaceAuthoring';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import { useChatSessionStore } from '@/store/chatSessionStore';
+import type { AttachedImage } from '@/types/generation';
 import { WorkspaceComposeChat } from './WorkspaceComposeChat';
 import styles from './WorkspaceComposeSurface.module.css';
 
@@ -35,6 +41,7 @@ export function ComposeAuthoringAssistant({
   const [starting, setStarting] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
   const publication = useRef<{ transitionId: string; requestId: string } | null>(null);
   const model = useChatModelSelection({});
   const thinkingEnabled = useChatSessionStore((state) => state.thinkingEnabled);
@@ -105,7 +112,11 @@ export function ComposeAuthoringAssistant({
     isThinking: chat.isThinking,
     messages,
     searchQuery: chat.searchQuery,
-    send: () => chat.sendMessage(),
+    send: (images?: AttachedImage[]) => {
+      const text = chat.input.trim();
+      if (!text && !images?.length) return;
+      chat.sendMessage(text || 'Attached image', images?.length ? { images } : undefined);
+    },
     setInput: chat.setInput,
     stop: chat.stopGenerating,
     thinkingContent: chat.thinkingContent,
@@ -116,7 +127,7 @@ export function ComposeAuthoringAssistant({
     chat.isLoading ||
     model.loading ||
     !model.isSelectionReady ||
-    !chat.input.trim();
+    (!chat.input.trim() && attachedImages.length === 0);
 
   const startConversation = async () => {
     setStarting(true);
@@ -133,6 +144,40 @@ export function ComposeAuthoringAssistant({
   const publish = async () => {
     if (!pendingCandidate) return;
     await publishTransition(pendingCandidate);
+  };
+
+  const removeImage = (id: string) => {
+    setAttachedImages((current) => {
+      const removed = current.find((image) => image.id === id);
+      if (removed) URL.revokeObjectURL(removed.preview);
+      return current.filter((image) => image.id !== id);
+    });
+  };
+
+  const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = clipboardImageFiles(event.clipboardData);
+    if (!files.length) return;
+    if (!event.clipboardData.getData('text/plain')) event.preventDefault();
+    void Promise.all(files.map(fileToAttachedImage)).then((images) => {
+      setAttachedImages((current) => [...current, ...images]);
+    });
+  };
+
+  const sendComposer = () => {
+    if (
+      !conversationId ||
+      chat.isLoading ||
+      chat.isStreaming ||
+      model.loading ||
+      !model.isSelectionReady
+    )
+      return;
+    const text = chat.input.trim();
+    const images = attachedImages;
+    if (!text && images.length === 0) return;
+    chat.sendMessage(text || 'Attached image', images.length ? { images } : undefined);
+    for (const image of images) URL.revokeObjectURL(image.preview);
+    setAttachedImages([]);
   };
 
   return (
@@ -190,12 +235,29 @@ export function ComposeAuthoringAssistant({
           onKeyDown={(event) => {
             if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
             event.preventDefault();
-            if (!sendDisabled) chat.sendMessage();
+            sendComposer();
           }}
+          onPaste={handlePaste}
           placeholder="Ask about this Draft…"
           rows={3}
           value={chat.input}
         />
+        {attachedImages.length > 0 ? (
+          <div className={styles.imagePreview}>
+            {attachedImages.map((image) => (
+              <span className={styles.imagePreviewItem} key={image.id}>
+                <NextImage alt="" height={48} src={image.preview} unoptimized width={48} />
+                <button
+                  aria-label="Remove image"
+                  onClick={() => removeImage(image.id)}
+                  type="button"
+                >
+                  <X aria-hidden="true" />
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : null}
         <div className={styles.discussionComposerFooter}>
           <GenerationModelSelector
             onModelChange={model.handleModelChange}
@@ -209,7 +271,7 @@ export function ComposeAuthoringAssistant({
             aria-label={chat.isStreaming ? 'Stop generating' : 'Send message'}
             className={styles.send}
             disabled={!chat.isStreaming && sendDisabled}
-            onClick={() => (chat.isStreaming ? chat.stopGenerating() : chat.sendMessage())}
+            onClick={() => (chat.isStreaming ? chat.stopGenerating() : sendComposer())}
             type="button"
           >
             {chat.isStreaming ? (

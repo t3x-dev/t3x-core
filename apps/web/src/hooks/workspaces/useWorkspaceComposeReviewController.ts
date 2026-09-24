@@ -18,6 +18,7 @@ import { decideWorkspaceTransition, reviewWorkspaceTransition } from '@/queries/
 import { useChatSessionStore } from '@/store/chatSessionStore';
 import { usePinsStore } from '@/store/pinsStore';
 import type { Material } from '@/types/api';
+import type { AttachedImage } from '@/types/generation';
 import type {
   SourceBundleItem,
   SourceConversationTurn,
@@ -589,7 +590,11 @@ export function useWorkspaceComposeReviewController({
       isThinking: chat.isThinking,
       messages,
       searchQuery: chat.searchQuery,
-      send: () => chat.sendMessage(),
+      send: (images?: AttachedImage[]) => {
+        const text = chat.input.trim();
+        if (!text && !images?.length) return;
+        chat.sendMessage(text || 'Attached image', images?.length ? { images } : undefined);
+      },
       setInput: chat.setInput,
       stop: chat.stopGenerating,
       thinkingContent: chat.thinkingContent,

@@ -45,10 +45,15 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
+import NextImage from 'next/image';
 import NextLink from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import type { ChangeEvent, KeyboardEvent } from 'react';
+import type { ChangeEvent, ClipboardEvent, KeyboardEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  clipboardImageFiles,
+  fileToAttachedImage,
+} from '@/components/generation/attachedImageFile';
 import { GenerationModelSelector } from '@/components/generation/GenerationModelSelector';
 import { DOCUMENT_SOURCE_ACCEPTED_TYPES } from '@/components/import/documentAcceptTypes';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
@@ -80,6 +85,7 @@ import { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import { useWorkspaceAuthoringBootstrap } from '@/hooks/workspaces/useWorkspaceAuthoringBootstrap';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import { validateWorkspaceCandidateYOps } from '@/hooks/workspaces/useWorkspaceYOps';
+import type { AttachedImage } from '@/types/generation';
 import type {
   SourceBundleItem,
   WorkspaceCandidate,
@@ -677,11 +683,12 @@ function ComposerBar({
   const [sourceValue, setSourceValue] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
   const sendDisabled =
     controller.chat.isLoading ||
     controller.model.loading ||
     !controller.model.ready ||
-    !controller.chat.input.trim();
+    (!controller.chat.input.trim() && attachedImages.length === 0);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -706,11 +713,50 @@ function ComposerBar({
     setSourceValue('');
   };
 
+  const removeImage = (id: string) => {
+    setAttachedImages((current) => {
+      const removed = current.find((image) => image.id === id);
+      if (removed) URL.revokeObjectURL(removed.preview);
+      return current.filter((image) => image.id !== id);
+    });
+  };
+
+  const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = clipboardImageFiles(event.clipboardData);
+    if (!files.length) return;
+    if (!event.clipboardData.getData('text/plain')) event.preventDefault();
+    void Promise.all(files.map(fileToAttachedImage)).then((images) => {
+      setAttachedImages((current) => [...current, ...images]);
+    });
+  };
+
+  const sendComposer = () => {
+    if (controller.chat.isLoading || controller.chat.isStreaming || sendDisabled) return;
+    const images = attachedImages;
+    controller.chat.send(images.length ? images : undefined);
+    for (const image of images) URL.revokeObjectURL(image.preview);
+    setAttachedImages([]);
+  };
+
   const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
     event.preventDefault();
-    if (!sendDisabled) controller.chat.send();
+    sendComposer();
   };
+
+  const imagePreview =
+    attachedImages.length > 0 ? (
+      <div className={composeStyles.imagePreview}>
+        {attachedImages.map((image) => (
+          <span className={composeStyles.imagePreviewItem} key={image.id}>
+            <NextImage alt="" height={48} src={image.preview} unoptimized width={48} />
+            <button aria-label="Remove image" onClick={() => removeImage(image.id)} type="button">
+              <X aria-hidden="true" />
+            </button>
+          </span>
+        ))}
+      </div>
+    ) : null;
 
   if (variant === 'discussion') {
     return (
@@ -738,11 +784,13 @@ function ComposerBar({
             disabled={controller.chat.isLoading}
             onChange={(event) => controller.chat.setInput(event.target.value)}
             onKeyDown={handleComposerKeyDown}
+            onPaste={handlePaste}
             placeholder="Ask about this change…"
             ref={textareaRef}
             rows={3}
             value={controller.chat.input}
           />
+          {imagePreview}
           <div className={composeStyles.discussionComposerFooter}>
             <GenerationModelSelector
               onModelChange={controller.model.change}
@@ -756,7 +804,7 @@ function ComposerBar({
               aria-label={controller.chat.isStreaming ? 'Stop generating' : 'Send message'}
               className={composeStyles.send}
               disabled={!controller.chat.isStreaming && sendDisabled}
-              onClick={controller.chat.isStreaming ? controller.chat.stop : controller.chat.send}
+              onClick={controller.chat.isStreaming ? controller.chat.stop : sendComposer}
               type="button"
             >
               {controller.chat.isStreaming ? (
@@ -821,11 +869,13 @@ function ComposerBar({
             disabled={controller.chat.isLoading}
             onChange={(event) => controller.chat.setInput(event.target.value)}
             onKeyDown={handleComposerKeyDown}
+            onPaste={handlePaste}
             placeholder="Ask T3X anything about your workspace…"
             ref={textareaRef}
             rows={1}
             value={controller.chat.input}
           />
+          {imagePreview}
           <div className={composeStyles.composerTools}>
             <div className="relative flex shrink-0 items-center gap-2 text-[var(--text-tertiary)]">
               <button
@@ -951,7 +1001,7 @@ function ComposerBar({
                 aria-label={controller.chat.isStreaming ? 'Stop generating' : 'Send message'}
                 className={composeStyles.send}
                 disabled={!controller.chat.isStreaming && sendDisabled}
-                onClick={controller.chat.isStreaming ? controller.chat.stop : controller.chat.send}
+                onClick={controller.chat.isStreaming ? controller.chat.stop : sendComposer}
                 type="button"
               >
                 {controller.chat.isStreaming ? (
