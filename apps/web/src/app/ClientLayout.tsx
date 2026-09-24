@@ -56,6 +56,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const setCanvasNotify = useCanvasStore((state) => state.setNotifyCallback);
   const setPinsNotify = usePinsStore((state) => state.setNotifyCallback);
   const density = useSettingsStore((s) => s.density);
+  const accentColor = useSettingsStore((s) => s.accentColor);
+  const reducedMotion = useSettingsStore((s) => s.reducedMotion);
   const cleanupLegacyKeys = useSessionStore((s) => s.cleanupLegacyKeys);
   const params = useParams();
   const projectId = typeof params?.projectId === 'string' ? params.projectId : null;
@@ -70,6 +72,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   useEffect(() => {
     document.documentElement.setAttribute('data-density', density);
   }, [density]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-accent-color', accentColor);
+  }, [accentColor]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-reduced-motion', String(reducedMotion));
+  }, [reducedMotion]);
 
   // Register toast callback with stores
   useEffect(() => {
