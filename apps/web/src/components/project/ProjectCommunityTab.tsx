@@ -1,279 +1,276 @@
-import {
-  ExternalLink,
-  FileCheck2,
-  Link2,
-  MessageCircle,
-  PanelTop,
-  ShieldAlert,
-  Users,
-} from 'lucide-react';
-import type { ComponentType } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+'use client';
 
-type CommunityNoteStatus = 'ready' | 'needs_followup' | 'blocked';
-type CommunityLinkType = 'workspace' | 'output' | 'review';
+import { Box, ChevronRight, FileText, Folder, GitBranch, Link2, List, Users } from 'lucide-react';
+import Image from 'next/image';
+import Link from 'next/link';
+import { getProjectTabSegment } from '@/components/project/projectTabModel';
+import { useNamespaceCollaboration } from '@/hooks/accounts/useNamespaceCollaboration';
+import { useProjectCollaboration } from '@/hooks/accounts/useProjectCollaboration';
+import { useProjectCommunityActivity } from '@/hooks/project/useProjectCommunityActivity';
+import styles from './ProjectCommunityTab.module.css';
 
-interface CommunityHandoffNote {
-  id: string;
-  title: string;
-  author: string;
-  role: string;
-  status: CommunityNoteStatus;
-  linkedLabel: string;
-  linkedType: CommunityLinkType;
-  summary: string;
-  updatedAt: string;
-  actionLabel: string;
+interface ProjectCommunityTabProps {
+  branch?: string | null;
+  projectId: string;
 }
 
-interface ProjectCollaborator {
-  id: string;
-  name: string;
-  role: string;
-  responsibility: string;
-}
-
-interface ExternalContextLink {
-  id: string;
+interface CommunityDestination {
+  description: string;
+  href: string;
+  icon: typeof Box;
   label: string;
-  target: string;
-  summary: string;
+  tone: 'conversation' | 'info' | 'commit';
 }
 
-const HANDOFF_NOTES: CommunityHandoffNote[] = [
-  {
-    id: 'community_prd_handoff',
-    title: 'PRD audience handoff',
-    author: 'Maya Chen',
-    role: 'Product reviewer',
-    status: 'ready',
-    linkedLabel: 'Workspace: PRD audience handoff',
-    linkedType: 'workspace',
-    summary:
-      'Product and engineering reviewers need to confirm the audience wording before YOps apply.',
-    updatedAt: 'Updated 2h ago',
-    actionLabel: 'Open workspace',
-  },
-  {
-    id: 'community_launch_notes',
-    title: 'Release note cleanup',
-    author: 'Noah Park',
-    role: 'Release owner',
-    status: 'needs_followup',
-    linkedLabel: 'Output: Launch notes summary',
-    linkedType: 'output',
-    summary: 'Stale output needs regeneration from the latest committed release-note state.',
-    updatedAt: 'Updated yesterday',
-    actionLabel: 'Open output',
-  },
-  {
-    id: 'community_schema_rollout',
-    title: 'PRD Schema v3 rollout',
-    author: 'Iris Zhang',
-    role: 'Schema owner',
-    status: 'blocked',
-    linkedLabel: 'Review: PRD Schema v3 rollout',
-    linkedType: 'review',
-    summary: 'Migration detail is still needed for 3 existing nodes before schema promotion.',
-    updatedAt: 'Updated 2d ago',
-    actionLabel: 'Open review',
-  },
-];
+export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabProps) {
+  const { guestsQuery } = useProjectCollaboration(projectId);
+  const namespaceId = guestsQuery.data?.namespace_id ?? null;
+  const { membersQuery } = useNamespaceCollaboration({
+    namespaceId,
+    canReadMembers: !!namespaceId,
+    canManageInvitations: false,
+  });
+  const { pullRequests, workspaces, activityError, activityLoading } =
+    useProjectCommunityActivity(projectId);
 
-const COLLABORATORS: ProjectCollaborator[] = [
-  {
-    id: 'collab_product',
-    name: 'Maya Chen',
-    role: 'Product reviewer',
-    responsibility: 'Audience wording and PRD handoff acceptance.',
-  },
-  {
-    id: 'collab_schema',
-    name: 'Iris Zhang',
-    role: 'Schema owner',
-    responsibility: 'Schema migration notes and default schema promotion.',
-  },
-  {
-    id: 'collab_release',
-    name: 'Noah Park',
-    role: 'Release owner',
-    responsibility: 'Launch-note output readiness and external share timing.',
-  },
-];
+  const collaborators = new Map<string, { name: string; scopes: string[] }>();
+  for (const member of membersQuery.data?.members ?? []) {
+    if (member.status !== 'active') continue;
+    collaborators.set(`${member.principal.kind}:${member.principal.principal_id}`, {
+      name: member.principal.display_name ?? member.principal.principal_id,
+      scopes: [`Namespace · ${member.role}`],
+    });
+  }
+  for (const guest of guestsQuery.data?.guests ?? []) {
+    if (guest.status !== 'active') continue;
+    const key = `${guest.principal.kind}:${guest.principal.principal_id}`;
+    const existing = collaborators.get(key);
+    if (existing) existing.scopes.push(`Project guest · ${guest.role}`);
+    else
+      collaborators.set(key, {
+        name: guest.principal.display_name ?? guest.principal.principal_id,
+        scopes: [`Project guest · ${guest.role}`],
+      });
+  }
+  const projectPath = `/project/${encodeURIComponent(projectId)}`;
+  const pullRequestsPath = `${projectPath}?tab=${getProjectTabSegment('reviews')}`;
+  const focusedBranch = branch?.trim() || 'main';
+  const workspacePath = branch?.trim()
+    ? `${projectPath}?${new URLSearchParams({ tab: 'workspaces', branch: focusedBranch }).toString()}`
+    : `${projectPath}?tab=workspaces`;
+  const destinations: CommunityDestination[] = [
+    {
+      description: 'Draft and discuss changes.',
+      href: workspacePath,
+      icon: Box,
+      label: 'Workspaces',
+      tone: 'conversation',
+    },
+    {
+      description: 'Review branch changes.',
+      href: pullRequestsPath,
+      icon: GitBranch,
+      label: 'Pull requests',
+      tone: 'info',
+    },
+    {
+      description: 'Inspect accepted changes.',
+      href: `${projectPath}/history?${new URLSearchParams({ branch: focusedBranch, view: 'list' }).toString()}`,
+      icon: List,
+      label: 'Commit history',
+      tone: 'commit',
+    },
+  ];
 
-const EXTERNAL_CONTEXT_LINKS: ExternalContextLink[] = [
-  {
-    id: 'context_discord',
-    label: 'Discord thread',
-    target: '#prd-audience-handoff',
-    summary: 'Human discussion for reviewer wording; not source evidence until imported.',
-  },
-  {
-    id: 'context_linear',
-    label: 'Linear issue',
-    target: 'T3X-1183',
-    summary: 'Tracks UI rollout coordination and remaining review/output polish.',
-  },
-];
-
-const STATUS_BADGES: Record<CommunityNoteStatus, 'success' | 'pending' | 'warning'> = {
-  ready: 'success',
-  needs_followup: 'pending',
-  blocked: 'warning',
-};
-
-const STATUS_LABELS: Record<CommunityNoteStatus, string> = {
-  ready: 'Ready',
-  needs_followup: 'Needs follow-up',
-  blocked: 'Blocked',
-};
-
-const LINK_TYPE_ICONS: Record<CommunityLinkType, ComponentType<{ className?: string }>> = {
-  output: PanelTop,
-  review: ShieldAlert,
-  workspace: FileCheck2,
-};
-
-export function ProjectCommunityTab() {
   return (
-    <section className="h-full overflow-auto p-4">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <MessageCircle
-              aria-hidden="true"
-              className="h-4 w-4 text-[var(--accent-conversation)]"
-            />
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Project community</h2>
-          </div>
-          <p className="text-sm leading-5 text-[var(--text-secondary)]">
-            Human handoff notes, collaborators, and external context stay linked to project objects
-            without entering deterministic mutation paths.
-          </p>
+    <section className={styles.page}>
+      <header className={styles.intro}>
+        <Image
+          alt=""
+          aria-hidden="true"
+          className={styles.brandMark}
+          height={48}
+          priority
+          src="/community-logo.png"
+          width={48}
+        />
+        <div>
+          <h2>Project community</h2>
+          <p>People and recent project objects, linked to their original workflows.</p>
         </div>
+      </header>
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-          <section
-            aria-label="Handoff notes"
-            className="min-w-0 overflow-hidden rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)]"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-4 py-3">
-              <div>
-                <h3 className="text-sm font-semibold text-[var(--text-primary)]">Handoff notes</h3>
-                <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                  Discussion that references state, reviews, and outputs but does not mutate them.
-                </p>
-              </div>
-              <Badge variant="conversation">{HANDOFF_NOTES.length} notes</Badge>
-            </div>
-
-            <div className="divide-y divide-[var(--stroke-divider)]">
-              {HANDOFF_NOTES.map((note) => (
-                <HandoffNoteRow key={note.id} note={note} />
+      <div className={styles.layout}>
+        <section aria-labelledby="community-empty-title" className={styles.emptyState}>
+          <div className={styles.emptyStateBody}>
+            {pullRequests.length === 0 && workspaces.length === 0 ? (
+              <Image
+                alt=""
+                aria-hidden="true"
+                className={styles.illustration}
+                height={270}
+                priority
+                src="/community-empty-state.png"
+                width={450}
+              />
+            ) : null}
+            <h3 id="community-empty-title">Recent project objects</h3>
+            <p>
+              Workspace and pull request records are shown here. Handoff notes are not supported
+              yet.
+            </p>
+            {activityLoading ? <output>Loading project objects…</output> : null}
+            {activityError ? <p role="alert">{activityError}</p> : null}
+            {!activityLoading && pullRequests.length === 0 && workspaces.length === 0 ? (
+              <p>No recent objects available.</p>
+            ) : null}
+            <ul className="my-5 w-full space-y-2">
+              {pullRequests.slice(0, 6).map((request) => (
+                <li
+                  className="rounded-lg border border-[var(--stroke-default)] p-3 text-sm"
+                  key={request.id}
+                >
+                  <strong>
+                    Pull request #{request.number}: {request.title}
+                  </strong>
+                  <span className="ml-2 text-[var(--text-tertiary)]">
+                    {new Date(request.updated_at).toLocaleString()}
+                  </span>
+                  <Link
+                    className="ml-2 text-[var(--accent-commit)]"
+                    href={`${pullRequestsPath}&pr=${request.number}`}
+                  >
+                    Open pull request
+                  </Link>
+                </li>
               ))}
+              {workspaces.slice(0, 6).map((workspace) => (
+                <li
+                  className="rounded-lg border border-[var(--stroke-default)] p-3 text-sm"
+                  key={workspace.id}
+                >
+                  <strong>Workspace: {workspace.title}</strong>
+                  <span className="ml-2 text-[var(--text-tertiary)]">{workspace.updatedAt}</span>
+                  <Link
+                    className="ml-2 text-[var(--accent-commit)]"
+                    href={`${projectPath}?${new URLSearchParams({ tab: 'workspaces', branch: workspace.targetBranch, workspace: workspace.id }).toString()}`}
+                  >
+                    Open workspace
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <div className={styles.primaryActions}>
+              <Link className={styles.primaryButton} href={workspacePath}>
+                <Folder aria-hidden="true" />
+                Open workspaces
+              </Link>
+              <Link className={styles.secondaryButton} href={pullRequestsPath}>
+                <GitBranch aria-hidden="true" />
+                View pull requests
+              </Link>
             </div>
+          </div>
+
+          <div className={styles.evidenceNote}>
+            <span>
+              <FileText aria-hidden="true" />
+            </span>
+            <p>Source evidence and decisions stay with the linked object.</p>
+          </div>
+        </section>
+
+        <aside className={styles.sidebar}>
+          <section className={styles.sidebarCard}>
+            <h3>Where to go</h3>
+            <p className={styles.sidebarDescription}>
+              Continue the conversation where the work happens.
+            </p>
+            <nav aria-label="Community destinations" className={styles.destinationList}>
+              {destinations.map((destination) => {
+                const Icon = destination.icon;
+                return (
+                  <Link
+                    aria-label={destination.label}
+                    className={styles.destination}
+                    data-tone={destination.tone}
+                    href={destination.href}
+                    key={destination.label}
+                  >
+                    <span className={styles.destinationIcon}>
+                      <Icon aria-hidden="true" />
+                    </span>
+                    <span className={styles.destinationCopy}>
+                      <strong>{destination.label}</strong>
+                      <small>{destination.description}</small>
+                    </span>
+                    <ChevronRight aria-hidden="true" className={styles.chevron} />
+                  </Link>
+                );
+              })}
+            </nav>
           </section>
 
-          <aside className="grid content-start gap-3">
-            <CollaboratorsPanel />
-            <ExternalContextPanel />
-          </aside>
-        </div>
+          <section className={styles.sidebarCard}>
+            <div className={styles.sidebarHeading}>
+              <Users aria-hidden="true" />
+              <h3>Collaborators</h3>
+            </div>
+            {guestsQuery.error ? (
+              <p role="alert">Project collaborators unavailable or access denied.</p>
+            ) : null}
+            {membersQuery.error ? (
+              <p role="alert">Namespace members unavailable or access denied.</p>
+            ) : null}
+            {guestsQuery.isLoading || membersQuery.isLoading ? <p>Loading collaborators…</p> : null}
+            {!guestsQuery.isLoading &&
+            !membersQuery.isLoading &&
+            collaborators.size === 0 &&
+            !guestsQuery.error &&
+            !membersQuery.error ? (
+              <p>No collaborators visible.</p>
+            ) : null}
+            {[...collaborators.entries()].map(([id, person]) => (
+              <p className="mt-3 text-sm" key={id}>
+                <strong>{person.name}</strong>
+                <small className="block text-[var(--text-tertiary)]">
+                  {person.scopes.join(' · ')}
+                </small>
+              </p>
+            ))}
+          </section>
+          <EmptySidebarCard
+            description="Related tools and references will appear here when linked to this project."
+            icon={Link2}
+            title="External context"
+            value="No links connected"
+          />
+        </aside>
       </div>
     </section>
   );
 }
 
-function HandoffNoteRow({ note }: { note: CommunityHandoffNote }) {
-  const LinkedIcon = LINK_TYPE_ICONS[note.linkedType];
-
+function EmptySidebarCard({
+  description,
+  icon: Icon,
+  title,
+  value,
+}: {
+  description: string;
+  icon: typeof Users;
+  title: string;
+  value: string;
+}) {
   return (
-    <article className="grid gap-3 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_150px] lg:items-start">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <h4 className="truncate text-sm font-semibold text-[var(--text-primary)]">
-            {note.title}
-          </h4>
-          <Badge variant={STATUS_BADGES[note.status]}>{STATUS_LABELS[note.status]}</Badge>
-        </div>
-
-        <p className="mt-2 text-sm leading-5 text-[var(--text-secondary)]">{note.summary}</p>
-
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)]">
-          <span className="font-medium text-[var(--text-primary)]">{note.author}</span>
-          <span>{note.role}</span>
-          <span aria-hidden="true">/</span>
-          <span>{note.updatedAt}</span>
-        </div>
-
-        <div className="mt-3 flex min-w-0 items-center gap-2 text-xs text-[var(--text-secondary)]">
-          <LinkedIcon aria-hidden="true" className="h-3.5 w-3.5 text-[var(--accent-branch)]" />
-          <span className="truncate">{note.linkedLabel}</span>
-        </div>
+    <section className={styles.sidebarCard}>
+      <div className={styles.sidebarHeading}>
+        <Icon aria-hidden="true" />
+        <h3>{title}</h3>
       </div>
-
-      <Button
-        aria-label={`${note.actionLabel}: ${note.title}`}
-        className="w-full lg:w-auto"
-        size="sm"
-        type="button"
-        variant="canvas-outline"
-      >
-        <Link2 aria-hidden="true" className="h-4 w-4" />
-        {note.actionLabel}
-      </Button>
-    </article>
-  );
-}
-
-function CollaboratorsPanel() {
-  return (
-    <section className="overflow-hidden rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)]">
-      <div className="flex items-center gap-2 border-b border-[var(--stroke-divider)] px-3 py-3">
-        <Users aria-hidden="true" className="h-4 w-4 text-[var(--accent-conversation)]" />
-        <h3 className="text-sm font-semibold text-[var(--text-primary)]">Project collaborators</h3>
-      </div>
-      <div className="divide-y divide-[var(--stroke-divider)]">
-        {COLLABORATORS.map((collaborator) => (
-          <div className="px-3 py-3" key={collaborator.id}>
-            <div className="flex items-center justify-between gap-2">
-              <p className="truncate text-sm font-semibold text-[var(--text-primary)]">
-                {collaborator.name}
-              </p>
-              <Badge variant="outline">{collaborator.role}</Badge>
-            </div>
-            <p className="mt-2 text-xs leading-5 text-[var(--text-secondary)]">
-              {collaborator.responsibility}
-            </p>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function ExternalContextPanel() {
-  return (
-    <section className="overflow-hidden rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)]">
-      <div className="flex items-center gap-2 border-b border-[var(--stroke-divider)] px-3 py-3">
-        <ExternalLink aria-hidden="true" className="h-4 w-4 text-[var(--text-secondary)]" />
-        <h3 className="text-sm font-semibold text-[var(--text-primary)]">External context</h3>
-      </div>
-      <div className="divide-y divide-[var(--stroke-divider)]">
-        {EXTERNAL_CONTEXT_LINKS.map((link) => (
-          <div className="px-3 py-3" key={link.id}>
-            <div className="flex min-w-0 items-center justify-between gap-2">
-              <p className="truncate text-sm font-semibold text-[var(--text-primary)]">
-                {link.label}
-              </p>
-              <span className="truncate font-mono text-xs text-[var(--text-tertiary)]">
-                {link.target}
-              </span>
-            </div>
-            <p className="mt-2 text-xs leading-5 text-[var(--text-secondary)]">{link.summary}</p>
-          </div>
-        ))}
+      <div className={styles.sidebarEmpty}>
+        <strong>{value}</strong>
+        <p>{description}</p>
       </div>
     </section>
   );

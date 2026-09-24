@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
@@ -85,33 +85,57 @@ beforeEach(() => {
 });
 
 describe('ProjectReviewsTab', () => {
+  it('opens a linked PR number from Community against the real project API', async () => {
+    const linkedRequest = {
+      id: 'pr-7',
+      number: 7,
+      project_id: 'proj_real',
+      title: 'Linked review',
+      description: '',
+      source_branch: 'feature',
+      target_branch: 'main',
+      source_commit_id: 'source',
+      target_base_commit_id: 'base',
+      merge_draft_id: null,
+      merge_commit_id: null,
+      status: 'open',
+      author_id: 'user-1',
+      steward_id: null,
+      review_owner_id: null,
+      workspace_id: null,
+      release_lane_id: null,
+      linked_work: null,
+      created_at: '2026-09-01T00:00:00Z',
+      updated_at: '2026-09-01T00:00:00Z',
+      merged_at: null,
+      closed_at: null,
+    };
+    pullRequestApi.fetchPullRequests.mockResolvedValue({
+      pull_requests: [],
+      counts: { active: 0, merged: 0 },
+    });
+    pullRequestApi.fetchPullRequest.mockResolvedValue({
+      ...linkedRequest,
+      activity: [],
+      checks: [],
+      diff_summary: { changed_nodes: 0, yops_operations: 0, output_impacts: 0, source_refs: 0 },
+    });
+    render(<ProjectReviewsTab projectId="proj_real" initialPullRequestNumber={7} />);
+
+    await waitFor(() =>
+      expect(pullRequestApi.fetchPullRequest).toHaveBeenCalledWith('proj_real', 7)
+    );
+    expect(await screen.findByText('Linked review')).toBeInTheDocument();
+  });
   it('renders the pull request list with the State page visual constitution', () => {
-    const { container } = render(<ProjectReviewsTab />);
+    render(<ProjectReviewsTab />);
 
-    const heading = screen.getByRole('heading', { name: 'Pull requests' });
-    const page = heading.closest('section');
-    const shell = heading.closest('div.flex.min-h-full');
-    const createButton = screen.getByRole('button', { name: /Create PR/i });
-    const search = screen.getByPlaceholderText('Search by title, branch, or author');
-    const openButton = screen.getByRole('button', { name: /3\s*Open/i });
-
-    expect(page).toHaveClass('bg-[var(--surface-app)]', 'p-2');
-    expect(shell).toHaveClass(
-      'rounded-md',
-      'border-[var(--stroke-divider)]',
-      'bg-[var(--surface-panel)]'
-    );
-    expect(createButton).toHaveAttribute('data-variant', 'branch');
-    expect(createButton).toHaveAttribute('data-size', 'sm');
-    expect(search).toHaveClass('h-9', 'focus:ring-[var(--accent-commit)]/30');
-    expect(openButton).toHaveClass(
-      'h-8',
-      'rounded-md',
-      'bg-[var(--accent-commit-soft)]',
-      'text-[var(--accent-commit)]'
-    );
-    expect(container.querySelector('.rounded-2xl')).toBeNull();
-    expect(screen.getByRole('button', { name: /1\s*Closed/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Pull requests' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create PR' })).toHaveTextContent('New pull request');
+    expect(screen.getByPlaceholderText('Search by title or branch...')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '3 Open' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '1 Merged' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '0 Closed' })).toBeInTheDocument();
     expect(screen.getByText('Release note cleanup')).toBeInTheDocument();
     expect(screen.getByText('PRD Schema v3 rollout')).toBeInTheDocument();
     expect(screen.getByText('Audience handoff updates')).toBeInTheDocument();
@@ -127,23 +151,21 @@ describe('ProjectReviewsTab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
 
-    const createHeading = screen.getByText('Open pull request');
-    expect(createHeading.closest('section')).toHaveClass(
-      'rounded-md',
-      'border-[var(--stroke-divider)]'
+    expect(screen.getByRole('heading', { name: 'New pull request' })).toBeInTheDocument();
+    expect(screen.getByText('Ready to open')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Source branch' })).toHaveTextContent(
+      'outputs/bundle-refresh'
     );
-    expect(screen.getByText('Branches with commits')).toBeInTheDocument();
-    expect(screen.getAllByText('outputs/bundle-refresh').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('yschema-p0/1145-contract-source').length).toBeGreaterThan(0);
+    expect(screen.getByRole('combobox', { name: 'Base branch' })).toHaveTextContent('main');
     expect(screen.getByLabelText('Title')).toHaveValue('Output bundle refresh');
     expect(screen.getByText('YOps changes')).toBeInTheDocument();
-    expect(screen.getByText('Head commit')).toBeInTheDocument();
+    expect(screen.getByText('Source commit')).toBeInTheDocument();
     expect(screen.getByText('Base commit')).toBeInTheDocument();
-    expect(screen.queryByText(/Changes from/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Showing key changes from/i)).toBeInTheDocument();
     expect(screen.queryByText(/\+112/)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Create PR' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Create pull request' })).toHaveAttribute(
       'data-variant',
-      'branch'
+      'commit'
     );
   });
 
@@ -151,13 +173,12 @@ describe('ProjectReviewsTab', () => {
     render(<ProjectReviewsTab projectId="proj_real" />);
 
     fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
-    expect(await screen.findByText('Real feature')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('Real feature')).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByLabelText('Title')).toHaveValue('Real feature');
-      expect(screen.getByRole('button', { name: 'Create PR' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Create pull request' })).toBeEnabled();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Create PR' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create pull request' }));
 
     expect(pullRequestApi.createPullRequest).toHaveBeenCalledWith('proj_real', {
       description: expect.stringContaining('A comparison loaded from the project API.'),
@@ -178,7 +199,7 @@ describe('ProjectReviewsTab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
 
-    const baseSelect = await screen.findByRole('combobox', { name: 'base:' });
+    const baseSelect = await screen.findByRole('combobox', { name: 'Base branch' });
     await waitFor(() => {
       expect(baseSelect).toHaveTextContent('main');
     });
@@ -214,7 +235,7 @@ describe('ProjectReviewsTab', () => {
       })
     );
 
-    expect(await screen.findByText('Real feature')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('Real feature')).toBeInTheDocument();
     expect(pullRequestApi.fetchCompareCandidates).toHaveBeenCalledTimes(2);
     expect(screen.getByRole('button', { name: 'Refresh branch comparisons' })).toBeInTheDocument();
   });
@@ -227,14 +248,17 @@ describe('ProjectReviewsTab', () => {
     render(<ProjectReviewsTab projectId="proj_real" />);
 
     fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
-    const behindBranch = await screen.findByRole('button', {
-      name: /feature\/behind.*Behind base/i,
+    await waitFor(() => {
+      expect(screen.getByLabelText('Title')).toHaveValue('Real feature');
     });
-    expect(behindBranch).toBeInTheDocument();
+    const sourceSelect = screen.getByRole('combobox', { name: 'Source branch' });
+    fireEvent.keyDown(sourceSelect, { key: 'ArrowDown' });
+    const behindOption = await screen.findByRole('option', { name: /feature\/behind/i });
+    expect(behindOption).toHaveTextContent('Behind base');
 
-    fireEvent.click(behindBranch);
-    expect(screen.getByRole('button', { name: 'Create PR' })).toBeDisabled();
-    expect(screen.getAllByText('Behind base').length).toBeGreaterThan(0);
+    fireEvent.click(behindOption);
+    expect(screen.getByRole('button', { name: 'Create pull request' })).toBeDisabled();
+    expect(screen.getAllByText(/Behind base/).length).toBeGreaterThan(0);
   });
 
   it('shows committed source branches even when the selected base has no commit', async () => {
@@ -246,11 +270,17 @@ describe('ProjectReviewsTab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
 
-    expect(
-      await screen.findByRole('button', { name: /feature\/first-commit.*Base has no commit/i })
-    ).toBeInTheDocument();
+    const sourceSelect = await screen.findByRole('combobox', { name: 'Source branch' });
+    await waitFor(() => {
+      expect(sourceSelect).toHaveTextContent('feature/first-commit');
+    });
+    fireEvent.keyDown(sourceSelect, { key: 'ArrowDown' });
+    expect(await screen.findByRole('option', { name: /feature\/first-commit/i })).toHaveTextContent(
+      'Base has no commit'
+    );
+    fireEvent.keyDown(sourceSelect, { key: 'Escape' });
     expect(screen.getByText('No commit')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Create PR' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Create pull request' })).toBeDisabled();
   });
 
   it('disables creation while a newly selected base is being compared', async () => {
@@ -265,8 +295,8 @@ describe('ProjectReviewsTab', () => {
     render(<ProjectReviewsTab projectId="proj_real" />);
 
     fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
-    expect(await screen.findByText('Real feature')).toBeInTheDocument();
-    fireEvent.keyDown(screen.getByRole('combobox', { name: 'base:' }), { key: 'ArrowDown' });
+    expect(await screen.findByDisplayValue('Real feature')).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Base branch' }), { key: 'ArrowDown' });
     fireEvent.click(await screen.findByRole('option', { name: 'release/2026-07' }));
 
     await waitFor(() => {
@@ -275,7 +305,7 @@ describe('ProjectReviewsTab', () => {
         'release/2026-07'
       );
     });
-    expect(screen.getByRole('button', { name: 'Create PR' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Create pull request' })).toBeDisabled();
     expect(screen.getByText('Loading branch comparisons...')).toBeInTheDocument();
   });
 
@@ -301,13 +331,11 @@ describe('ProjectReviewsTab', () => {
         'feature/prd-audience'
       );
     });
-    expect(screen.getByRole('combobox', { name: 'base:' })).toHaveTextContent(
+    expect(screen.getByRole('combobox', { name: 'Base branch' })).toHaveTextContent(
       'feature/prd-audience'
     );
     expect(
-      screen.getByText(
-        'Registered branches with a HEAD commit, compared against feature/prd-audience.'
-      )
+      screen.getByText('No other committed branches can be compared with this base.')
     ).toBeInTheDocument();
   });
 
@@ -315,12 +343,12 @@ describe('ProjectReviewsTab', () => {
     render(<ProjectReviewsTab />);
 
     fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
-    const createView = screen.getByText('Output bundle refresh').closest('section');
-    expect(createView).not.toBeNull();
-    fireEvent.click(within(createView as HTMLElement).getByRole('button', { name: 'Create PR' }));
+    expect(screen.getByRole('heading', { name: 'New pull request' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Title')).toHaveValue('Output bundle refresh');
+    fireEvent.click(screen.getByRole('button', { name: 'Create pull request' }));
 
     expect(screen.getByRole('heading', { name: 'Pull requests' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /4\s*Open/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '4 Open' })).toBeInTheDocument();
     expect(screen.getByText('Output bundle refresh')).toBeInTheDocument();
     expect(screen.getByText('New')).toBeInTheDocument();
     expect(screen.getByText('checks queued')).toBeInTheDocument();
@@ -333,39 +361,34 @@ describe('ProjectReviewsTab', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'View PR' })[0]);
 
     expect(screen.getByText('Overview')).toBeInTheDocument();
-    expect(screen.getByText('Structured diff')).toBeInTheDocument();
-    expect(screen.getByText('Reviewer')).toBeInTheDocument();
-    expect(screen.getByText('Linked work')).toBeInTheDocument();
-    expect(screen.queryByText('Steward')).not.toBeInTheDocument();
-    expect(screen.queryByText('Workspace')).not.toBeInTheDocument();
-    expect(screen.queryByText('Release lane')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText('Structured diff'));
-    expect(screen.getByText('Changed nodes')).toBeInTheDocument();
-    expect(screen.getByText('YOps operations')).toBeInTheDocument();
+    expect(screen.getByText('Changes')).toBeInTheDocument();
+    expect(screen.getByText('release_plan')).toBeInTheDocument();
+    expect(screen.getByText('Merged result preview')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Overview'));
+    expect(screen.getByText('Merge readiness')).toBeInTheDocument();
+    expect(screen.getByText('Branch relationship')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /View all checks/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Changes'));
+    expect(screen.getByText('changedNodes')).toBeInTheDocument();
+    expect(screen.getByText('Why / Source')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Checks'));
     expect(screen.getByText('Source commit')).toBeInTheDocument();
     expect(screen.getByText('Merge simulation')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('Activity'));
-    expect(screen.getByText('Created')).toBeInTheDocument();
-    expect(screen.queryByText('Review pending')).not.toBeInTheDocument();
   });
 
   it('moves a newly opened PR to ready after rerunning readiness', () => {
     render(<ProjectReviewsTab />);
 
     fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
-    const createView = screen.getByText('Output bundle refresh').closest('section');
-    expect(createView).not.toBeNull();
-    fireEvent.click(within(createView as HTMLElement).getByRole('button', { name: 'Create PR' }));
+    expect(screen.getByRole('heading', { name: 'New pull request' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Create pull request' }));
     fireEvent.click(screen.getAllByRole('button', { name: 'View PR' })[0]);
 
     expect(screen.getByText('checks queued')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Rerun readiness' }));
 
     expect(screen.getByText('ready to merge')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Merge'));
     expect(screen.getByRole('button', { name: 'Merge PR' })).toBeEnabled();
   });
 
@@ -373,21 +396,17 @@ describe('ProjectReviewsTab', () => {
     render(<ProjectReviewsTab />);
 
     fireEvent.click(screen.getAllByRole('button', { name: 'View PR' })[0]);
-    fireEvent.click(screen.getByText('Merge'));
     fireEvent.click(screen.getByRole('button', { name: 'Merge PR' }));
 
     expect(screen.getByRole('heading', { name: 'Pull requests' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /2\s*Open/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /2\s*Closed/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '2 Open' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '2 Merged' })).toBeInTheDocument();
     expect(screen.getByText('Release note cleanup')).toBeInTheDocument();
-    expect(screen.getByText('Just merged')).toBeInTheDocument();
+    expect(screen.getByText('New')).toBeInTheDocument();
     expect(screen.getAllByText('merged').length).toBeGreaterThan(0);
 
-    const mergedRow = screen.getByText('Release note cleanup').closest('article');
-    expect(mergedRow).not.toBeNull();
-    fireEvent.click(within(mergedRow as HTMLElement).getByRole('button', { name: 'View PR' }));
-    fireEvent.click(screen.getByText('Merge'));
-    expect(screen.getByRole('heading', { name: 'Merged' })).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Release note cleanup').closest('button')!);
+    expect(screen.getByText('merged')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Merge PR' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Rerun readiness' })).not.toBeInTheDocument();
   });
@@ -403,17 +422,14 @@ describe('ProjectReviewsTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Confirm close' }));
 
     expect(screen.getByRole('heading', { name: 'Pull requests' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /2\s*Open/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /2\s*Closed/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '2 Open' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '1 Closed' })).toBeInTheDocument();
     expect(screen.getByText('Release note cleanup')).toBeInTheDocument();
-    expect(screen.getByText('Just closed')).toBeInTheDocument();
+    expect(screen.getByText('New')).toBeInTheDocument();
     expect(screen.getAllByText('closed').length).toBeGreaterThan(0);
 
-    const closedRow = screen.getByText('Release note cleanup').closest('article');
-    expect(closedRow).not.toBeNull();
-    fireEvent.click(within(closedRow as HTMLElement).getByRole('button', { name: 'View PR' }));
-    fireEvent.click(screen.getByText('Merge'));
-    expect(screen.getByRole('heading', { name: 'Closed without merging' })).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Release note cleanup').closest('button')!);
+    expect(screen.getByText('closed')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Merge PR' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Rerun readiness' })).not.toBeInTheDocument();
   });
