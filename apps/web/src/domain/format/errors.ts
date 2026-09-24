@@ -47,6 +47,14 @@ const MISSING_RESOURCE_PATTERNS: Array<{
 function rawMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === 'string') return error;
+  if (
+    error &&
+    typeof error === 'object' &&
+    'message' in error &&
+    typeof error.message === 'string'
+  ) {
+    return error.message;
+  }
   if (error == null) return '';
   return String(error);
 }
@@ -61,6 +69,17 @@ function rawCode(error: unknown): string | null {
     current = (current as { cause?: unknown }).cause;
   }
   return null;
+}
+
+function issueMessages(error: unknown): string[] {
+  if (!error || typeof error !== 'object') return [];
+  const details = (error as { details?: { issues?: unknown } }).details;
+  if (!Array.isArray(details?.issues)) return [];
+  return details.issues.flatMap((issue) => {
+    if (!issue || typeof issue !== 'object') return [];
+    const message = (issue as { message?: unknown }).message;
+    return typeof message === 'string' && message.trim() ? [message.trim()] : [];
+  });
 }
 
 export function isRefHeadIntegrityInvalid(error: unknown): boolean {
@@ -116,6 +135,10 @@ export function formatUserFacingError(
     return 'Network request failed. Check your connection and try again.';
   }
 
+  if (/\b(fetch failed|connect timeout)\b/i.test(message)) {
+    return 'Could not reach the model provider. Check the network and API endpoint, then test again.';
+  }
+
   if (/\b(api key not configured|no configured .*provider|provider key missing)\b/i.test(message)) {
     return 'No provider key is configured. Open Provider settings and connect OpenAI, Anthropic, or Google.';
   }
@@ -137,6 +160,11 @@ export function formatUserFacingError(
 
   if (/^(?:HTTP\s*)?404\b/i.test(message) || /\b404\s+not found\b/i.test(message)) {
     return 'The requested resource is no longer available.';
+  }
+
+  const issues = issueMessages(error);
+  if (issues.length > 0 && !issues.some((issue) => message.includes(issue))) {
+    return `${message}: ${issues.slice(0, 3).join('; ')}`;
   }
 
   return message;

@@ -2,10 +2,12 @@
 
 import { Building2, Cloud, Columns3, Download, Hand, Loader2, ZoomIn, ZoomOut } from 'lucide-react';
 import Link from 'next/link';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { useModelAccessSettings } from '@/hooks/providers/useModelAccessSettings';
-import type { ModelAccessConfig, ProviderInfo } from '@/types/providers';
+import { useProviderCommands } from '@/hooks/providers/useProviderCommands';
+import type { ModelAccessConfig, ProviderInfo, TestConnectionResult } from '@/types/providers';
 import styles from './ModelAccessSettingsPanel.module.css';
 
 type TaskKey = keyof ModelAccessConfig['task_defaults'];
@@ -14,6 +16,7 @@ interface ModelOption {
   id: string;
   label: string;
   provider: 'anthropic' | 'openai' | 'google';
+  providerId: string;
   providerLabel: string;
 }
 
@@ -53,6 +56,7 @@ function modelOptions(providers: ProviderInfo[]): ModelOption[] {
       id,
       label: modelLabel(id),
       provider: kind,
+      providerId: provider.id,
       providerLabel: providerLabel(kind),
     }));
   });
@@ -61,6 +65,24 @@ function modelOptions(providers: ProviderInfo[]): ModelOption[] {
     Boolean(model)
   );
   return featured.length > 0 ? featured : all.slice(0, 4);
+}
+
+function connectionStatus(result: TestConnectionResult | 'loading' | undefined) {
+  if (result === 'loading') return { kind: 'pending' as const, text: 'Testing…' };
+  if (!result) return null;
+  if (result.ok) {
+    return {
+      kind: 'ok' as const,
+      text: result.latency_ms != null ? `Connected · ${result.latency_ms}ms` : 'Connected',
+    };
+  }
+  return {
+    kind: 'error' as const,
+    text: formatUserFacingError(
+      result.error ?? 'Connection test failed.',
+      'Connection test failed.'
+    ),
+  };
 }
 
 function ModelMark({ provider }: { provider: ModelOption['provider'] }) {
@@ -107,8 +129,32 @@ function ModelSelect({
 
 export function ModelAccessSettingsPanel() {
   const { providers, config, loading, saving, error, retry, save } = useModelAccessSettings();
+  const { runProviderConnectionTest } = useProviderCommands();
+  const [tests, setTests] = useState<Record<string, TestConnectionResult | 'loading'>>({});
   const models = modelOptions(providers);
   const enabledModels = models.filter((model) => config?.enabled_models.includes(model.id));
+  const testingAny = Object.values(tests).includes('loading');
+
+  async function testConnection(providerId: string) {
+    setTests((current) => ({ ...current, [providerId]: 'loading' }));
+    try {
+      const result = await runProviderConnectionTest(providerId);
+      setTests((current) => ({ ...current, [providerId]: result }));
+    } catch (cause) {
+      setTests((current) => ({
+        ...current,
+        [providerId]: {
+          ok: false,
+          error: formatUserFacingError(cause, 'Connection test failed.'),
+        },
+      }));
+    }
+  }
+
+  async function testEnabledConnections() {
+    const providerIds = [...new Set(enabledModels.map((model) => model.providerId))];
+    await Promise.all(providerIds.map((providerId) => testConnection(providerId)));
+  }
 
   async function persist(next: ModelAccessConfig) {
     try {
@@ -213,17 +259,50 @@ export function ModelAccessSettingsPanel() {
         {config ? (
           <>
             <section className={styles.availableCard} aria-labelledby="available-models-title">
-              <h2 id="available-models-title">Available models</h2>
+              <div className={styles.cardHeading}>
+                <h2 id="available-models-title">Available models</h2>
+                <button
+                  type="button"
+                  className={styles.testAll}
+                  disabled={saving || testingAny || enabledModels.length === 0}
+                  onClick={() => void testEnabledConnections()}
+                >
+                  {testingAny ? 'Testing…' : 'Test connections'}
+                </button>
+              </div>
               <div className={styles.modelList}>
                 {models.map((model) => {
                   const enabled = config.enabled_models.includes(model.id);
+                  const status = connectionStatus(tests[model.providerId]);
                   return (
                     <div className={styles.modelRow} key={model.id}>
                       <ModelMark provider={model.provider} />
                       <div>
                         <strong>{model.label}</strong>
                         <span>{model.providerLabel}</span>
+                        {status ? (
+                          <output
+                            className={
+                              status.kind === 'ok'
+                                ? styles.testOk
+                                : status.kind === 'error'
+                                  ? styles.testError
+                                  : styles.testPending
+                            }
+                          >
+                            {status.text}
+                          </output>
+                        ) : null}
                       </div>
+                      <button
+                        type="button"
+                        aria-label={`Test ${model.label}`}
+                        className={styles.testButton}
+                        disabled={saving || tests[model.providerId] === 'loading'}
+                        onClick={() => void testConnection(model.providerId)}
+                      >
+                        {tests[model.providerId] === 'loading' ? 'Testing…' : 'Test'}
+                      </button>
                       <span className={styles.stateLabel}>{enabled ? 'Enabled' : 'Disabled'}</span>
                       <button
                         type="button"

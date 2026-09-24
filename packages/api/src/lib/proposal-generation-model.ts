@@ -77,6 +77,9 @@ export async function defaultProposalGenerationModel(input: {
                   content: source.content,
                 })),
                 instruction: generation.instruction,
+                ...(generation.conversationTranscript
+                  ? { conversation: generation.conversationTranscript }
+                  : {}),
               }),
             },
           ],

@@ -59,6 +59,7 @@ export interface WorkspaceTabsProps {
   onYOpsCommitted?: (commitHash: string, branch: string, workspace: WorkspaceCandidate) => void;
   onYOpsScriptSave?: (workspace: WorkspaceCandidate) => Promise<void> | void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
+  onWorkspacesRefresh?: (workspace?: WorkspaceCandidate) => Promise<void> | void;
   onWorkflowTabChange?: (tab: WorkspaceTabId) => void;
   onWorkspaceBranchChange?: (branch: string) => Promise<void> | void;
   sendingToYOps?: boolean;
@@ -104,6 +105,7 @@ export function WorkspaceTabs(props: WorkspaceTabsProps) {
         onModeChange={(nextMode) =>
           props.onWorkflowTabChange?.(nextMode === 'compose' ? 'chat' : 'validation')
         }
+        onWorkspacesRefresh={props.onWorkspacesRefresh}
       />
     </div>
   );

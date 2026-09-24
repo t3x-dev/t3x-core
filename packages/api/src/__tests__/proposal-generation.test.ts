@@ -289,6 +289,86 @@ describe('governed Proposal generation', () => {
     expect(generate).toHaveBeenCalledTimes(1);
   });
 
+  it('passes the Compose conversation transcript into the generation model', async () => {
+    const data = await fixture('Conversation memory');
+    const generate = vi.fn(async () => ({
+      draft: draft(),
+      usage: { inputTokens: 11, outputTokens: 7 },
+    }));
+
+    await generateTransitionProposal({
+      db,
+      projectId: data.projectId,
+      requestId: 'generation:conversation',
+      requester: { kind: 'human', id: 'user:conversation' },
+      request: {
+        workspaceId: data.workspaceId,
+        posture: 'guided',
+        instruction: 'Summarize the conversation into schema-aligned changes.',
+        sourceMaterialIds: [data.material.id],
+        conversationTranscript: 'You: Raise allocation to 25%.\n\nAssistant: That is on page 3.',
+      },
+      resolveModel: async () => model(generate),
+      inference: inference(data.projectId),
+    });
+
+    expect(generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationTranscript: 'You: Raise allocation to 25%.\n\nAssistant: That is on page 3.',
+        context: expect.objectContaining({
+          memories: [expect.objectContaining({ mediaType: 'text/plain;charset=utf-8' })],
+        }),
+      })
+    );
+  });
+
+  it('aligns drifted provider drafts so guided conversation summaries can compile', async () => {
+    const data = await fixture('Aligned conversation draft');
+    const generate = vi.fn(async () => ({
+      draft: {
+        schema: 't3x.dev/proposal-generation-draft/v1',
+        version: 1,
+        posture: 'source_only',
+        intent: { mode: 'authored', value: 'Summarize the conversation', evidencePointers: [] },
+        rationale: { mode: 'unspecified' },
+        changes: [
+          {
+            id: 'audience',
+            operations: [{ add: { path: 'prd/audience', value: 'enterprise operators' } }],
+            claimedOrigin: 'inferred',
+            evidencePointers: [],
+            basisPointers: [{ kind: 'search_result', index: 0 }],
+            assumptions: [],
+            reason: 'The conversation asks for a structured audience slot',
+            challenges: [],
+          },
+        ],
+        alternatives: [],
+        warnings: [],
+      },
+      usage: { inputTokens: 11, outputTokens: 7 },
+    }));
+
+    const generated = await generateTransitionProposal({
+      db,
+      projectId: data.projectId,
+      requestId: 'generation:aligned-conversation',
+      requester: { kind: 'human', id: 'user:aligned' },
+      request: {
+        workspaceId: data.workspaceId,
+        posture: 'guided',
+        instruction: 'Summarize the conversation into schema-aligned changes.',
+        sourceMaterialIds: [data.material.id],
+        conversationTranscript: 'You: Raise allocation to 25%.',
+      },
+      resolveModel: async () => model(generate),
+      inference: inference(data.projectId),
+    });
+
+    expect(generated.reused).toBe(false);
+    expect(generated.view.generation?.groups[0]?.origin).toBe('inferred');
+  });
+
   it('rejects forged quote pointers without persisting a Proposal', async () => {
     const data = await fixture('Forged evidence');
     const generate = vi.fn(async () => ({

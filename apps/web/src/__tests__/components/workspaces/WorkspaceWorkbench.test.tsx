@@ -38,6 +38,13 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams('tab=workspaces'),
 }));
 
+vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
+  useStudioCandidates: () => ({
+    items: [{ available: true, id: 'product-brief', kind: 'module' }],
+    loading: false,
+  }),
+}));
+
 vi.mock('@/hooks/workspaces/useWorkspaceFlow', () => ({
   useWorkspaceFlow: () => ({
     extractCandidate: mocks.extractCandidate,
@@ -261,6 +268,11 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
       />
     );
 
+    expect(mocks.sourceThreadGenerationOptions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        onConversationReady: expect.any(Function),
+      })
+    );
     expect(mocks.sourceThreadGenerationOptions).toHaveBeenCalledWith(
       expect.not.objectContaining({ sourceDraftReply: expect.anything() })
     );

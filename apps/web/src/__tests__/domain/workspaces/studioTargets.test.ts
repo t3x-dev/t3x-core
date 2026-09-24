@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   listStudioDraftWorkspaces,
   resolveStudioWorkspaceId,
+  studioApplyCandidateIds,
+  workspaceHasSchemaBinding,
 } from '@/domain/workspaces/studioTargets';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
@@ -40,5 +42,35 @@ describe('studio workspace targets', () => {
     ]);
     expect(resolveStudioWorkspaceId(drafts, '')).toBe('workspace_branch:main');
     expect(resolveStudioWorkspaceId(drafts, 'workspace_branch:main')).toBe('workspace_branch:main');
+  });
+
+  it('applies a schema candidate when present, otherwise every available module', () => {
+    expect(
+      studioApplyCandidateIds([
+        { id: 'brief', available: true, kind: 'module' },
+        { id: 'blocked', available: false, kind: 'module' },
+      ])
+    ).toEqual(['brief']);
+    expect(
+      studioApplyCandidateIds([
+        { id: 'brief', available: true, kind: 'module' },
+        { id: 'release', available: true, kind: 'schema' },
+      ])
+    ).toEqual(['release']);
+    expect(workspaceHasSchemaBinding({ schemaBindings: [] })).toBe(false);
+    expect(workspaceHasSchemaBinding({ schemaBindings: [{ schemaName: 'Any' }] })).toBe(true);
+  });
+
+  it.each([
+    'product-brief',
+    'care-checklist',
+    'compose-services',
+  ] as const)('uses the same apply-id rule for official starter %s', (id) => {
+    expect(studioApplyCandidateIds([{ available: true, id, kind: 'module' }])).toEqual([id]);
+    expect(
+      workspaceHasSchemaBinding({
+        schemaBindings: [{ schemaName: id, version: '1.0.0' }],
+      })
+    ).toBe(true);
   });
 });

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { ProviderExtractionDraftSchema } from '../../extractors/v2/providerDraft';
 import { LLMProviderError } from '../../llm/types';
 import { OpenAIProvider } from '../../providers/llm/openai';
+import { ProposalGenerationDraftStructuredSchema } from '../../transition-proposals/generationDraft';
 
 vi.spyOn(console, 'log').mockImplementation(() => {});
 
@@ -368,6 +369,86 @@ describe('OpenAIProvider.generateStructured', () => {
     });
     expect(JSON.stringify(schema)).not.toContain('"const"');
     expect(schema.additionalProperties).toBe(false);
+  });
+
+  it('gives proposal generation locators and operations a JSON Schema type', async () => {
+    mockFetchFn.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({
+                      schema: 't3x.dev/proposal-generation-draft/v1',
+                      version: 1,
+                      posture: 'guided',
+                      intent: {
+                        mode: 'authored',
+                        value: 'Prepare the launch PRD',
+                        evidencePointers: [],
+                      },
+                      rationale: { mode: 'unspecified' },
+                      changes: [
+                        {
+                          id: 'audience',
+                          operations: [{ set: { path: 'product/audience', value: 'enterprise' } }],
+                          claimedOrigin: 'inferred',
+                          evidencePointers: [],
+                          basisPointers: [],
+                          assumptions: [],
+                          reason: 'Summarize the conversation',
+                          challenges: [],
+                        },
+                      ],
+                      alternatives: [],
+                      warnings: [],
+                    }),
+                  },
+                },
+              ],
+              usage: { prompt_tokens: 20, completion_tokens: 15 },
+            })
+          ),
+      })
+    );
+
+    const provider = new OpenAIProvider({ apiKey: 'test-key' });
+    await provider.generateStructured(
+      { messages: [{ role: 'user', content: 'Generate' }] },
+      ProposalGenerationDraftStructuredSchema,
+      { model: 'gpt-5.4-mini' }
+    );
+
+    const body = JSON.parse(mockFetchFn.mock.calls[0][1].body);
+    const schema = body.response_format.json_schema.schema;
+    const attributedIntent = schema.properties.intent.anyOf[1];
+    const locatorValue =
+      attributedIntent.properties.evidencePointers.items.properties.locator.properties.value;
+    const operation = schema.properties.changes.items.properties.operations.items;
+
+    expect(locatorValue).toMatchObject({
+      type: 'object',
+      required: expect.arrayContaining(['quote', 'occurrence']),
+      properties: {
+        quote: { type: 'string' },
+        occurrence: { type: 'integer' },
+      },
+    });
+    expect(operation.anyOf).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'object',
+          properties: expect.objectContaining({
+            set: expect.objectContaining({ type: 'object' }),
+          }),
+        }),
+      ])
+    );
+    expect(JSON.stringify(schema)).not.toMatch(/"properties":\{"value":\{\}\}/);
   });
 
   it('F14: surfaces OpenAI refusal with code=REFUSAL and refusalText in details', async () => {

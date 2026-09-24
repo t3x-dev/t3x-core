@@ -1,3 +1,9 @@
+import type { MergeDecision } from '@t3x-dev/core';
+import {
+  buildPullRequestConflictDecision,
+  type PullRequestConflictSide,
+} from '@/domain/project/pullRequestConflictDecision';
+import { getMergeDraft, saveMergeDraft } from '@/infrastructure/mergeApi';
 import {
   type CreateProjectPullRequestInput,
   closeProjectPullRequest,
@@ -53,4 +59,20 @@ export function fetchProjectPullRequestComparisons(
   options: { base?: string } = {}
 ) {
   return listProjectPullRequestComparisons(projectId, options);
+}
+
+export async function applyPullRequestConflictDecision(
+  draftId: string,
+  side: PullRequestConflictSide
+): Promise<MergeDecision> {
+  const draft = await getMergeDraft(draftId);
+  if (!draft.prepared) {
+    throw new Error('Merge draft has no prepared comparison.');
+  }
+  const decisions = buildPullRequestConflictDecision(draft.prepared, side);
+  await saveMergeDraft(draftId, {
+    decisions,
+    expected_decision_revision: draft.decisionRevision,
+  });
+  return decisions;
 }

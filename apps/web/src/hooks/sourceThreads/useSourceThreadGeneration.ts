@@ -56,6 +56,7 @@ export interface UseSourceThreadGenerationOptions {
   sourceDraftReply?: SourceDraftReplyContext;
   workspaceAssistant?: WorkspaceAssistantContext;
   onConversationCreated?: (conversationId: string) => void;
+  onConversationReady?: (conversationId: string) => void | Promise<void>;
   onTurnsSaved?: () => void;
 }
 
@@ -216,6 +217,7 @@ export function useSourceThreadGeneration({
   sourceDraftReply,
   workspaceAssistant,
   onConversationCreated,
+  onConversationReady,
   onTurnsSaved,
 }: UseSourceThreadGenerationOptions): UseSourceThreadGenerationReturn {
   const history = useChatHistory(projectId, conversationId);
@@ -422,6 +424,14 @@ export function useSourceThreadGeneration({
         }
         setTurnsSavedCounter((c) => c + 1);
         onTurnsSaved?.();
+
+        if (!isTemporaryMode && onConversationReady) {
+          try {
+            await onConversationReady(currentConversationId);
+          } catch {
+            // Context prep is best-effort; memory may be empty if it fails.
+          }
+        }
 
         let memoryContext = '';
         if (!isTemporaryMode && !workspaceAssistant && !options?.skipMemoryFetch) {
@@ -740,6 +750,7 @@ export function useSourceThreadGeneration({
       sourceDraftReply,
       workspaceAssistant,
       onConversationCreated,
+      onConversationReady,
       onTurnsSaved,
       webSearchEnabled,
       thinkingEnabled,

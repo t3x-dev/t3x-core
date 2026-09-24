@@ -41,6 +41,7 @@ test('add a pinned source from Overview to another project Studio without changi
     await page.setViewportSize({ width: 1480, height: 900 });
     await page.goto(`${projectPath}/schemas`, { waitUntil: 'networkidle' });
     await page.getByRole('button', { name: 'Explore Team release definition 1.2.3' }).click();
+    await expect(page).toHaveURL(/schemaView=release/);
     await page.getByRole('link', { name: 'Project introduction' }).click();
     await expect(page.getByTestId('state-overview')).toBeVisible();
     await page.getByRole('button', { name: 'Add to Studio', exact: true }).click();

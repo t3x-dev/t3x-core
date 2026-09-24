@@ -76,7 +76,10 @@ export function StateAuthorReadme({
                   <span>{children}</span>
                 ),
               img: ({ src, alt }) =>
-                src ? <img src={src} alt={alt ?? ''} loading="lazy" /> : null,
+                src ? (
+                  // biome-ignore lint/performance/noImgElement: README images are remote URLs with unknown size
+                  <img src={src} alt={alt ?? ''} loading="lazy" />
+                ) : null,
             }}
           >
             {author.readme}

@@ -30,6 +30,9 @@ describe('formatUserFacingError', () => {
     expect(formatUserFacingError(new TypeError('Failed to fetch'))).toBe(
       'Network request failed. Check your connection and try again.'
     );
+    expect(formatUserFacingError(new Error('fetch failed'))).toBe(
+      'Could not reach the model provider. Check the network and API endpoint, then test again.'
+    );
   });
 
   it('explains how to recover from an unverifiable local CommitV2 ref', () => {
@@ -97,6 +100,24 @@ describe('formatUserFacingError', () => {
   it('preserves non-resource business errors', () => {
     expect(formatUserFacingError(new Error('Committed conversations cannot be deleted.'))).toBe(
       'Committed conversations cannot be deleted.'
+    );
+  });
+
+  it('appends compile issues from API error details', () => {
+    expect(
+      formatUserFacingError({
+        message: 'Generated Proposal Draft could not be compiled',
+        details: {
+          issues: [
+            {
+              code: 'POSTURE_MISMATCH',
+              message: 'Draft posture source_only does not match profile guided',
+            },
+          ],
+        },
+      })
+    ).toBe(
+      'Generated Proposal Draft could not be compiled: Draft posture source_only does not match profile guided'
     );
   });
 });

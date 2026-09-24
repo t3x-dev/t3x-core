@@ -10,6 +10,7 @@ Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
 });
 
 const pullRequestApi = vi.hoisted(() => ({
+  applyConflictDecision: vi.fn(),
   closePullRequest: vi.fn(),
   createPullRequest: vi.fn(),
   fetchCompareCandidates: vi.fn(),
@@ -390,5 +391,156 @@ describe('ProjectReviewsTab', () => {
     expect(screen.getByText('closed')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Merge PR' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Rerun readiness' })).not.toBeInTheDocument();
+  });
+
+  it('applies a selected conflict side and enables merge on a blocked PR', () => {
+    render(<ProjectReviewsTab />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'View PR' })[1]);
+    fireEvent.click(screen.getByText('Changes'));
+
+    expect(screen.getByText('Choose 1 conflict to continue.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Merge PR' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Apply resolution' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Use feature' }));
+
+    expect(screen.getByText('Resolution saved. Merge is ready.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Merge PR' })).toBeEnabled();
+    expect(screen.queryByRole('checkbox', { name: 'Use feature' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit merged value' }));
+    expect(screen.getByRole('checkbox', { name: 'Use feature' })).toBeChecked();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Keep main' }));
+    expect(screen.getByRole('button', { name: 'Merge PR' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Edit merged value' })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Keep main' })).not.toBeInTheDocument();
+  });
+
+  it('writes the selected side onto the merge draft before merging a project PR', async () => {
+    pullRequestApi.fetchPullRequests.mockResolvedValue({
+      pull_requests: [
+        {
+          id: 'pr_blocked',
+          number: 1,
+          project_id: 'proj_real',
+          title: 'Propose weekly product brief',
+          description: 'Review the weekly brief.',
+          source_branch: 'review/pr-demo',
+          target_branch: 'main',
+          source_commit_id: 'sha256:feature',
+          target_base_commit_id: 'sha256:main',
+          merge_draft_id: 'mdraft_1',
+          merge_commit_id: null,
+          status: 'blocked',
+          author_id: 'you',
+          steward_id: null,
+          review_owner_id: null,
+          workspace_id: null,
+          release_lane_id: null,
+          linked_work: null,
+          created_at: '2026-09-18T00:00:00.000Z',
+          updated_at: '2026-09-18T00:00:00.000Z',
+          merged_at: null,
+          closed_at: null,
+        },
+      ],
+      counts: { active: 1, merged: 0 },
+    });
+    pullRequestApi.fetchPullRequest.mockResolvedValue({
+      id: 'pr_blocked',
+      number: 1,
+      project_id: 'proj_real',
+      title: 'Propose weekly product brief',
+      description: 'Review the weekly brief.',
+      source_branch: 'review/pr-demo',
+      target_branch: 'main',
+      source_commit_id: 'sha256:feature',
+      target_base_commit_id: 'sha256:main',
+      merge_draft_id: 'mdraft_1',
+      merge_commit_id: null,
+      status: 'blocked',
+      author_id: 'you',
+      steward_id: null,
+      review_owner_id: null,
+      workspace_id: null,
+      release_lane_id: null,
+      linked_work: null,
+      created_at: '2026-09-18T00:00:00.000Z',
+      updated_at: '2026-09-18T00:00:00.000Z',
+      merged_at: null,
+      closed_at: null,
+      diff_summary: { changed_nodes: 2, yops_operations: 0, output_impacts: 0, source_refs: 0 },
+      checks: [
+        {
+          id: 'chk_conflict',
+          pull_request_id: 'pr_blocked',
+          kind: 'conflict_resolution',
+          status: 'blocked',
+          title: 'Conflict resolution',
+          message: '1 structural conflict(s) require a decision.',
+          started_at: null,
+          completed_at: null,
+        },
+      ],
+      activity: [],
+    });
+    const decisions = {
+      conflictResolutions: { 'candidate/product': 'source' as const },
+      keepFromSource: [],
+      keepFromTarget: [],
+      keepRelationsFromSource: true,
+      keepRelationsFromTarget: true,
+    };
+    pullRequestApi.applyConflictDecision.mockResolvedValue(decisions);
+    pullRequestApi.mergePullRequest.mockResolvedValue({
+      id: 'pr_blocked',
+      number: 1,
+      project_id: 'proj_real',
+      title: 'Propose weekly product brief',
+      description: 'Review the weekly brief.',
+      source_branch: 'review/pr-demo',
+      target_branch: 'main',
+      source_commit_id: 'sha256:feature',
+      target_base_commit_id: 'sha256:main',
+      merge_draft_id: 'mdraft_1',
+      merge_commit_id: 'sha256:merged',
+      status: 'merged',
+      author_id: 'you',
+      steward_id: null,
+      review_owner_id: null,
+      workspace_id: null,
+      release_lane_id: null,
+      linked_work: null,
+      created_at: '2026-09-18T00:00:00.000Z',
+      updated_at: '2026-09-18T00:00:00.000Z',
+      merged_at: '2026-09-18T00:01:00.000Z',
+      closed_at: '2026-09-18T00:01:00.000Z',
+      diff_summary: { changed_nodes: 2, yops_operations: 0, output_impacts: 0, source_refs: 0 },
+      checks: [],
+      activity: [],
+    });
+
+    render(<ProjectReviewsTab projectId="proj_real" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'View PR' }));
+    fireEvent.click(screen.getByText('Changes'));
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Use feature' }));
+
+    await waitFor(() => {
+      expect(pullRequestApi.applyConflictDecision).toHaveBeenCalledWith('mdraft_1', 'feature');
+    });
+    expect(screen.getByRole('button', { name: 'Merge PR' })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Merge PR' }));
+    await waitFor(() => {
+      expect(pullRequestApi.mergePullRequest).toHaveBeenCalledWith('proj_real', {
+        expected_source_commit_id: 'sha256:feature',
+        expected_target_commit_id: 'sha256:main',
+        number: 1,
+        decisions,
+      });
+    });
   });
 });

@@ -583,6 +583,7 @@ export async function verifyTransitionCommand<
   operationalResults: TransitionOperationalResult[];
   reused: boolean;
 }> {
+  //这段只做一件事：这张 verify 工单是不是已经做过了。做过就直接把旧结果交回去，不再 Replay。
   const request = input.ports.canonicalTransitionRequest({ operation: 'verify' });
   const receipt = await input.ports.findTransitionVerificationReceipt({
     projectId: input.projectId,
