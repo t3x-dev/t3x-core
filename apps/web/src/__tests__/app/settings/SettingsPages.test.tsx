@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import AccessPage from '@/app/settings/access/page';
 import SettingsPage from '@/app/settings/page';
 import PreferencesPage from '@/app/settings/preferences/page';
+import ProviderCredentialsPage from '@/app/settings/provider-credentials/page';
 import ProvidersPage from '@/app/settings/providers/page';
 
 vi.mock('@/components/settings/AccessSettingsPanel', () => ({
@@ -18,6 +19,10 @@ vi.mock('@/components/settings/NamespaceCollaborationPanel', () => ({
 
 vi.mock('@/components/settings/PreferencesSettingsPanel', () => ({
   PreferencesSettingsPanel: () => <div>Mock Preferences Settings Panel</div>,
+}));
+
+vi.mock('@/components/settings/PersonalModelSettingsPanel', () => ({
+  PersonalModelSettingsPanel: () => <div>Mock Personal Model Panel</div>,
 }));
 
 vi.mock('@/components/settings/ProvidersSettingsPanel', () => ({
@@ -63,12 +68,17 @@ describe('settings pages', () => {
     expect(screen.getByText('Mock Preferences Settings Panel')).toBeInTheDocument();
   });
 
-  it('renders the providers page shell around the shared panel', () => {
+  it('renders personal model preferences', () => {
     render(<ProvidersPage />);
+    expect(screen.getByText('Mock Personal Model Panel')).toBeInTheDocument();
+  });
 
-    expect(screen.getByRole('heading', { name: 'Providers' })).toBeInTheDocument();
+  it('keeps provider credentials behind the capability gate', () => {
+    render(<ProviderCredentialsPage />);
+
+    expect(screen.getByRole('heading', { name: 'Provider credentials' })).toBeInTheDocument();
     expect(
-      screen.getByText('Configure LLM, embedding, and NLP providers for T3X features.')
+      screen.getByText('Configure local provider API keys and connection defaults.')
     ).toBeInTheDocument();
     expect(screen.getByText('Mock Providers Settings Panel')).toBeInTheDocument();
   });
