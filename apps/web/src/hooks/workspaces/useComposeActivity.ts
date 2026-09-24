@@ -259,7 +259,7 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
     const api = getSharedApiClient();
     const conversation = await api.sourceThreads.create({
       project_id: candidate.projectId,
-      title: 'Workspace source thread',
+      title: 'Compose assistant',
     });
     const result = await api.workspaces.get(candidate.projectId, candidate.id);
     const current = result.workspace as unknown as WorkspaceCandidate;
@@ -268,7 +268,7 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
     const source = {
       id: `chat:${conversation.conversation_id}`,
       type: 'chat' as const,
-      title: 'Workspace source thread',
+      title: 'Compose assistant',
       conversationId: conversation.conversation_id,
     };
     await saveProjectWorkspace(candidate.projectId, candidate.id, {

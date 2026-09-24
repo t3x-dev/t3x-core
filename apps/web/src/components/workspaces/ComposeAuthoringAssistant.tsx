@@ -1,5 +1,10 @@
 'use client';
 
+import type {
+  WorkspaceAuthoringAction,
+  WorkspaceAuthoringCard,
+  WorkspaceAuthoringOutcome,
+} from '@t3x-dev/api-client';
 import { ArrowUp, Sparkles, Square } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GenerationModelSelector } from '@/components/generation/GenerationModelSelector';
@@ -9,6 +14,7 @@ import { useSourceThreadGeneration } from '@/hooks/sourceThreads/useSourceThread
 import type { WorkspaceAssistantContext } from '@/hooks/workspaces/useWorkspaceAuthoring';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import { useChatSessionStore } from '@/store/chatSessionStore';
+import type { AssistantActivityRecord, AssistantPublication } from './WorkspaceAssistantActivity';
 import { WorkspaceComposeChat } from './WorkspaceComposeChat';
 import styles from './WorkspaceComposeSurface.module.css';
 
@@ -19,13 +25,20 @@ export function ComposeAuthoringAssistant({
   onCreateConversation,
   onPublishCandidate,
   initialPendingCandidate,
+  activityActions,
+  activityCards,
 }: {
   projectId: string;
   conversationId?: string;
   context: WorkspaceAssistantContext;
   onCreateConversation: () => Promise<string>;
-  onPublishCandidate: (transitionId: string, requestId: string) => Promise<unknown>;
+  onPublishCandidate: (
+    transitionId: string,
+    requestId: string
+  ) => Promise<WorkspaceAuthoringOutcome>;
   initialPendingCandidate?: string;
+  activityActions?: WorkspaceAuthoringAction[];
+  activityCards?: Record<string, WorkspaceAuthoringCard[]>;
 }) {
   const [conversationId, setConversationId] = useState(initialConversationId);
   const [allowProposal, setAllowProposal] = useState(true);
@@ -35,7 +48,10 @@ export function ComposeAuthoringAssistant({
   const [starting, setStarting] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
-  const publication = useRef<{ transitionId: string; requestId: string } | null>(null);
+  const [published, setPublished] = useState<AssistantPublication | null>(null);
+  const publication = useRef<{ transitionId: string; requestId: string; turnId?: string } | null>(
+    null
+  );
   const model = useChatModelSelection({});
   const thinkingEnabled = useChatSessionStore((state) => state.thinkingEnabled);
   const setThinking = useChatSessionStore((state) => state.setThinking);
@@ -45,16 +61,18 @@ export function ComposeAuthoringAssistant({
     if (initialPendingCandidate) setPendingCandidate(initialPendingCandidate);
   }, [initialPendingCandidate]);
   const publishTransition = useCallback(
-    async (transitionId: string) => {
+    async (transitionId: string, turnId?: string) => {
       const identity =
         publication.current?.transitionId === transitionId
           ? publication.current
-          : { transitionId, requestId: crypto.randomUUID() };
+          : { transitionId, requestId: crypto.randomUUID(), turnId };
       publication.current = identity;
       setPublishing(true);
       setLocalError(null);
       try {
-        await onPublishCandidate(identity.transitionId, identity.requestId);
+        const outcome = await onPublishCandidate(identity.transitionId, identity.requestId);
+        if (identity.turnId)
+          setPublished({ turnId: identity.turnId, kind: outcome.kind, action: outcome.action });
         publication.current = null;
         setPendingCandidate(null);
       } catch (error) {
@@ -73,9 +91,9 @@ export function ComposeAuthoringAssistant({
     workspaceAssistant: {
       ...context,
       allowProposal,
-      onCandidate: (transitionId) => {
+      onCandidate: (transitionId, turnId) => {
         setPendingCandidate(transitionId);
-        void publishTransition(transitionId);
+        void publishTransition(transitionId, turnId);
       },
     },
     onConversationCreated: setConversationId,
@@ -111,6 +129,50 @@ export function ComposeAuthoringAssistant({
     thinkingContent: chat.thinkingContent,
     warning: chat.warning,
   };
+  const assistantPublication = published?.action
+    ? { ...published, cards: activityCards?.[published.action.actionId] }
+    : published;
+  const assistantRecords = useMemo(() => {
+    const records: Record<string, AssistantActivityRecord> = {};
+    for (const message of chat.messages) {
+      if (message.role !== 'assistant') continue;
+      const transcript = message.rings?.workspace_assistant;
+      if (!transcript || typeof transcript !== 'object' || !('operations' in transcript)) continue;
+      if (!Array.isArray(transcript.operations)) continue;
+      const operations = transcript.operations.flatMap((event) => {
+        if (!event || typeof event !== 'object' || event.type !== 'operation') return [];
+        if (typeof event.operationId !== 'string' || typeof event.name !== 'string') return [];
+        const result = event.result;
+        return [
+          {
+            id: event.operationId,
+            name: event.name,
+            status: 'completed' as const,
+            transitionId:
+              result && typeof result === 'object' && typeof result.transitionId === 'string'
+                ? result.transitionId
+                : undefined,
+          },
+        ];
+      });
+      const transitionId = operations.find((operation) => operation.transitionId)?.transitionId;
+      const action = transitionId
+        ? activityActions?.find((entry) => entry.generation?.transitionId === transitionId)
+        : undefined;
+      records[message.id] = {
+        activity: { turnId: message.id, phase: 'complete', operations },
+        publication: action
+          ? {
+              turnId: message.id,
+              kind: 'published',
+              action,
+              cards: activityCards?.[action.actionId],
+            }
+          : null,
+      };
+    }
+    return records;
+  }, [chat.messages, activityActions, activityCards]);
   const sendDisabled =
     !conversationId ||
     chat.isLoading ||
@@ -137,7 +199,16 @@ export function ComposeAuthoringAssistant({
 
   return (
     <div className={styles.authoringAssistant}>
-      <WorkspaceComposeChat chat={chatView} variant="discussion" />
+      <WorkspaceComposeChat
+        assistantActivity={chat.workspaceActivity}
+        assistantPublication={assistantPublication}
+        assistantRecords={assistantRecords}
+        assistantPublishing={
+          publishing && publication.current?.turnId === chat.workspaceActivity?.turnId
+        }
+        chat={chatView}
+        variant="discussion"
+      />
       {pendingCandidate ? (
         <section className={styles.candidateNotice} aria-label="Generated proposal">
           <div>

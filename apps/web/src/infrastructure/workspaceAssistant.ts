@@ -8,7 +8,7 @@ export interface WorkspaceAssistantContext {
   selectedNodeId?: string;
   allowProposal?: boolean;
   posture?: 'source_only' | 'guided' | 'recommend';
-  onCandidate?: (transitionId: string) => void;
+  onCandidate?: (transitionId: string, turnId?: string) => void;
 }
 export type WorkspaceAssistantEvent = {
   type: 'context' | 'capabilities' | 'text' | 'operation' | 'done' | 'error';
@@ -16,9 +16,10 @@ export type WorkspaceAssistantEvent = {
   turnHash?: string;
   message?: string;
   operationId?: string;
+  name?: string;
   status?: string;
   result?: { status?: string; transitionId?: string };
-  disclosure?: { partial: boolean };
+  disclosure?: { partial: boolean; omitted?: string[] };
   reason?: string;
 };
 export async function* streamWorkspaceAssistant(

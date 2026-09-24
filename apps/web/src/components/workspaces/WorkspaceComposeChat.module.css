@@ -130,6 +130,10 @@
 .discussionMessage {
   min-width: 0;
 }
+.activityOnly {
+  min-width: 0;
+  margin-top: -8px;
+}
 .discussionMessageHeader {
   display: flex;
   height: 24px;
@@ -182,6 +186,10 @@
   background: #f8f9fa;
   padding: 12px;
 }
+.discussionMessage[data-author="assistant"] .discussionBubble {
+  background: transparent;
+  padding: 0;
+}
 .discussionMessage[data-author="assistant"] .discussionAvatar {
   background: #dbeafe;
   color: #2563eb;
@@ -191,6 +199,9 @@
 }
 .discussionBubble p:last-child {
   margin-bottom: 0;
+}
+.discussionText {
+  white-space: pre-wrap;
 }
 .discussionBubble :is(pre, table) {
   max-width: 100%;

@@ -3,14 +3,47 @@ import { ArrowRight, Clock3, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   activityChannelLabel,
-  activityValue,
   type ComposeActivitySelection,
+  expandComposeActivityCards,
 } from '@/domain/composeActivity';
+import {
+  composeActorLabel,
+  composePathBreadcrumb,
+  composePathLabel,
+  composeValueChangeLabels,
+  composeValueLabel,
+} from '@/domain/composePresentation';
 import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import styles from './WorkspaceComposeSurface.module.css';
 
 function editorValue(value: unknown) {
-  return value === undefined ? '' : JSON.stringify(value, null, 2);
+  if (value === undefined || value === null) return '';
+  return typeof value === 'string' ? value : String(value);
+}
+
+function isSimpleNodeValue(value: unknown) {
+  return (
+    value === undefined ||
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  );
+}
+
+function parseEditorValue(value: string, current: unknown): TransitionProtocolValue {
+  if (typeof current === 'number') {
+    if (!value.trim()) throw new TypeError('Enter a number.');
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) throw new TypeError('Enter a valid number.');
+    return parsed;
+  }
+  if (typeof current === 'boolean') return value === 'true';
+  return value;
+}
+
+function actorLabel(id: string) {
+  return id === 'human:local-user' ? 'You' : composeActorLabel(id);
 }
 
 export function ComposeNodeHistoryPanel({
@@ -50,9 +83,9 @@ export function ComposeNodeHistoryPanel({
     let parsed: unknown;
     if (!remove) {
       try {
-        parsed = JSON.parse(value) as TransitionProtocolValue;
-      } catch {
-        setSaveError('Enter a valid JSON value. Text values need quotation marks.');
+        parsed = parseEditorValue(value, activity.node?.current);
+      } catch (error) {
+        setSaveError(error instanceof Error ? error.message : 'Enter a valid value.');
         return;
       }
     }
@@ -98,7 +131,35 @@ export function ComposeNodeHistoryPanel({
       </div>
     );
 
-  if (activity.nodeLoading || (activity.node && activity.node.nodeId !== nodeId))
+  const derivedEntries = activity.actions.flatMap((action) =>
+    expandComposeActivityCards(activity.cards[action.actionId] ?? [])
+      .filter((card) => card.path === selection.operation.path)
+      .map((card) => ({
+        actionId: action.actionId,
+        sequence: action.sequence,
+        revision: action.afterRevision,
+        channel: action.channel,
+        actor: action.actor,
+        publishedAt: action.publishedAt,
+        ownerNodeId: card.nodeId,
+        beforePath: card.beforePath,
+        afterPath: card.afterPath,
+        before: card.before,
+        after: card.after,
+        isSelected: action.actionId === selection.meta.actionId,
+      }))
+  );
+  const derivedNode = derivedEntries.length
+    ? {
+        nodeId: selection.operation.id,
+        path: selection.operation.path,
+        state: derivedEntries[0].after === undefined ? ('deleted' as const) : ('present' as const),
+        current: composeValueChangeLabels(derivedEntries[0].before, derivedEntries[0].after).after,
+        entries: derivedEntries,
+      }
+    : null;
+
+  if (activity.nodeLoading && !derivedNode)
     return <p className={styles.nodeHistoryMessage}>Loading node history…</p>;
   if (activity.nodeError)
     return (
@@ -106,26 +167,47 @@ export function ComposeNodeHistoryPanel({
         {activity.nodeError}
       </p>
     );
-  if (!activity.node)
+  const node =
+    activity.node?.path === selection.operation.path
+      ? activity.node
+      : (derivedNode ?? activity.node);
+  if (!node)
     return <p className={styles.nodeHistoryMessage}>No history is available for this field.</p>;
-
-  const node = activity.node;
+  const isDerivedNode = node === derivedNode;
+  const latest = node.entries[0];
   return (
     <div className={styles.nodeHistory}>
       <div className={styles.nodeHistoryIdentity}>
         <span>NODE DETAIL</span>
-        <strong>{node.path ?? node.nodeId}</strong>
-        <small>{node.nodeId}</small>
+        <strong>{composePathLabel(node.path, node.nodeId)}</strong>
+        <small title={node.path ?? node.nodeId}>
+          {composePathBreadcrumb(node.path, node.nodeId)}
+        </small>
       </div>
 
       <section className={styles.currentNodeValue}>
         <span>CURRENT VALUE · DRAFT r{activity.compositionRevision ?? '—'}</span>
-        <pre>{activityValue(node.current)}</pre>
-        <small>Current value is separate from the selected historical action · {node.state}</small>
-        {node.state === 'present' && !editing ? (
+        <strong
+          className={styles.nodeCurrentValue}
+          title={composeValueLabel(node.current, 'Absent')}
+        >
+          {composeValueLabel(node.current, 'Absent')}
+        </strong>
+        <small>
+          {latest
+            ? `Latest: ${actorLabel(latest.actor.id)} · ${activityChannelLabel(latest.channel)} · may differ from selected action`
+            : `No saved revisions · ${node.state}`}
+        </small>
+        {node.state === 'present' &&
+        !isDerivedNode &&
+        !editing &&
+        isSimpleNodeValue(node.current) ? (
           <button onClick={startEditing} type="button">
             <Pencil aria-hidden="true" /> Edit current value
           </button>
+        ) : null}
+        {node.state === 'present' && !isDerivedNode && !isSimpleNodeValue(node.current) ? (
+          <small>Edit an individual child field from its own change card.</small>
         ) : null}
       </section>
 
@@ -133,7 +215,19 @@ export function ComposeNodeHistoryPanel({
         <section className={styles.nodeEditor} aria-label="Edit current Draft value">
           <label>
             New value
-            <textarea value={value} onChange={(event) => setValue(event.target.value)} rows={5} />
+            {typeof node.current === 'boolean' ? (
+              <select value={value} onChange={(event) => setValue(event.target.value)}>
+                <option value="true">True</option>
+                <option value="false">False</option>
+              </select>
+            ) : (
+              <input
+                inputMode={typeof node.current === 'number' ? 'decimal' : 'text'}
+                type={typeof node.current === 'number' ? 'number' : 'text'}
+                value={value}
+                onChange={(event) => setValue(event.target.value)}
+              />
+            )}
           </label>
           <label>
             Reason
@@ -164,17 +258,25 @@ export function ComposeNodeHistoryPanel({
       <div className={styles.nodeHistoryTimeline}>
         {node.entries.map((entry) => {
           const action = activity.actions.find((item) => item.actionId === entry.actionId);
-          const actor = entry.actor.id === 'human:local-user' ? 'You' : entry.actor.id;
+          const actor = actorLabel(entry.actor.id);
+          const values = composeValueChangeLabels(entry.before, entry.after);
           return (
             <article key={`${entry.actionId}:${entry.revision}`} data-selected={entry.isSelected}>
               <small>
-                {new Date(entry.publishedAt).toLocaleString()} · {actor} ·{' '}
-                {activityChannelLabel(entry.channel)}
+                {new Date(entry.publishedAt).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}{' '}
+                · {actor} / {activityChannelLabel(entry.channel)}
               </small>
-              <div>
-                <code>{activityValue(entry.before)}</code>
+              <div className={styles.nodeHistoryDelta}>
+                <span className={styles.nodeHistoryBefore} title={values.before}>
+                  {values.before}
+                </span>
                 <ArrowRight aria-hidden="true" />
-                <code>{activityValue(entry.after)}</code>
+                <span className={styles.nodeHistoryAfter} title={values.after}>
+                  {values.after}
+                </span>
               </div>
               {action?.reason ? <p>{action.reason}</p> : null}
               <button onClick={() => onOpenAction(entry.actionId, entry.ownerNodeId)} type="button">
@@ -191,7 +293,7 @@ export function ComposeNodeHistoryPanel({
           onClick={() => void activity.loadOlderNode(node.nodeId, selection.meta.actionId)}
           type="button"
         >
-          Load earlier revisions
+          Show earlier revisions
         </button>
       ) : null}
       <p className={styles.nodeHistoryFootnote}>

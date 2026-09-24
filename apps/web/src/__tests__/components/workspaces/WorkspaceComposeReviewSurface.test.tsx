@@ -250,7 +250,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     ).toContainElement(screen.getByRole('tablist', { name: 'Change scope' }));
     expect(screen.getByRole('heading', { name: 'Proposed changes' })).toBeVisible();
     expect(screen.getAllByText('Before event')).toHaveLength(2);
-    fireEvent.click(screen.getByRole('button', { name: 'Discuss /rollout/approval' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Discuss Approval' }));
     expect(
       within(screen.getByRole('complementary', { name: 'Discuss change' })).getByText(
         'rollout/approval'
@@ -459,9 +459,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(
       screen.queryByRole('navigation', { name: 'Workspace navigation' })
     ).not.toBeInTheDocument();
-    const inspectWithoutHistory = screen.getByRole('button', {
-      name: 'Inspect /prd/summary/outcome',
-    });
+    const inspectWithoutHistory = screen.getByRole('button', { name: 'Inspect Outcome' });
     expect(inspectWithoutHistory).toBeDisabled();
     fireEvent.click(inspectWithoutHistory);
     expect(prepareReview).not.toHaveBeenCalled();

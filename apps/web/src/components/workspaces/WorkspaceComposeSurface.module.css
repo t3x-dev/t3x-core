@@ -1441,7 +1441,7 @@
   flex: none;
   align-items: center;
   gap: 8px;
-  border-bottom: 0;
+  border-bottom: 1px solid var(--stroke-divider);
   padding: 16px 20px;
 }
 .discussionHeader > svg {
@@ -1479,8 +1479,8 @@
   margin: 0;
   align-items: center;
   gap: 6px;
-  border-radius: 4px;
-  padding: 0 9px;
+  border-radius: 8px;
+  padding: 0 11px;
   font-size: 12px;
   color: var(--text-secondary);
 }
@@ -1495,42 +1495,6 @@
 }
 .discussionClose {
   margin-left: auto;
-}
-.discussionContext {
-  display: grid;
-  min-height: 120px;
-  flex: none;
-  grid-template-columns: 32px minmax(0, 1fr);
-  align-items: center;
-  gap: 24px 12px;
-  padding: 28px 20px 16px;
-}
-.changeIcon {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  place-items: center;
-  border-radius: 4px;
-  background: var(--accent-commit-soft);
-  color: var(--compose-icon);
-}
-.changeIcon svg {
-  width: 16px;
-  height: 16px;
-}
-.discussionContext strong {
-  overflow-wrap: anywhere;
-  font:
-    700 14px / 20px var(--font-geist-sans),
-    sans-serif;
-}
-.discussionContext small {
-  grid-column: 1 / -1;
-  font-size: 10px;
-  line-height: 16px;
-  font-weight: 600;
-  text-transform: uppercase;
-  color: #98a2b3;
 }
 .discussionComposerWrap {
   flex: none;
@@ -1680,12 +1644,12 @@
   min-height: 0;
   flex: 1;
   overflow-y: auto;
-  padding: 4px 20px 24px;
+  padding: 0 20px 24px;
 }
 .nodeHistoryIdentity {
   display: grid;
   gap: 5px;
-  padding: 10px 0 16px;
+  padding: 20px 0 18px;
 }
 .nodeHistoryIdentity > span,
 .currentNodeValue > span {
@@ -1696,7 +1660,8 @@
 }
 .nodeHistoryIdentity strong {
   overflow-wrap: anywhere;
-  font-size: 14px;
+  font-size: 16px;
+  line-height: 22px;
 }
 .nodeHistoryIdentity small {
   overflow: hidden;
@@ -1707,18 +1672,24 @@
 }
 .currentNodeValue {
   display: grid;
-  gap: 10px;
-  border: 1px solid var(--stroke-divider);
-  border-radius: 6px;
-  background: var(--surface-app);
-  padding: 14px;
+  gap: 12px;
+  border: 1px solid var(--compose-selected);
+  border-radius: 10px;
+  background: var(--accent-commit-soft);
+  padding: 16px;
 }
-.currentNodeValue pre {
+.nodeCurrentValue {
+  display: inline-block;
+  width: fit-content;
   margin: 0;
+  border-radius: 4px;
+  background: var(--diff-added-bg);
+  padding: 2px 6px;
   overflow-wrap: anywhere;
-  white-space: pre-wrap;
-  font: 600 13px / 20px var(--font-mono);
-  color: var(--text-primary);
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 650;
+  color: var(--diff-added-text);
 }
 .currentNodeValue small {
   font-size: 10px;
@@ -1733,6 +1704,15 @@
   gap: 6px;
   color: var(--accent-commit);
   font-size: 11px;
+}
+.currentNodeValue > button {
+  width: 100%;
+  min-height: 36px;
+  justify-content: center;
+  border: 1px solid var(--stroke-default);
+  border-radius: 8px;
+  background: var(--surface-card);
+  color: var(--text-primary);
 }
 .currentNodeValue button svg {
   width: 12px;
@@ -1752,17 +1732,19 @@
   font-size: 11px;
   font-weight: 650;
 }
-.nodeEditor textarea,
+.nodeEditor select,
 .nodeEditor input {
   width: 100%;
   border: 1px solid var(--stroke-default);
   border-radius: 4px;
   background: var(--surface-card);
   padding: 8px 9px;
-  font: 12px / 18px var(--font-mono);
+  font:
+    12px / 18px var(--font-geist-sans),
+    sans-serif;
   outline: none;
 }
-.nodeEditor textarea:focus,
+.nodeEditor select:focus,
 .nodeEditor input:focus {
   border-color: var(--accent-commit);
 }
@@ -1824,7 +1806,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 20px 0 10px;
+  padding: 24px 0 14px;
 }
 .nodeHistoryHeading strong {
   font-size: 12px;
@@ -1834,22 +1816,22 @@
   color: var(--text-tertiary);
 }
 .nodeHistoryTimeline {
-  margin-left: 5px;
+  margin-left: 7px;
   border-left: 1px solid var(--stroke-divider);
-  padding-left: 16px;
+  padding-left: 20px;
 }
 .nodeHistoryTimeline article {
   position: relative;
   display: grid;
-  gap: 7px;
-  padding: 0 0 20px;
+  gap: 8px;
+  padding: 0 0 24px;
 }
 .nodeHistoryTimeline article::before {
   position: absolute;
   top: 4px;
-  left: -20px;
-  width: 7px;
-  height: 7px;
+  left: -25px;
+  width: 9px;
+  height: 9px;
   border: 2px solid var(--surface-panel);
   border-radius: 50%;
   background: var(--text-tertiary);
@@ -1868,14 +1850,27 @@
   align-items: center;
   gap: 6px;
 }
-.nodeHistoryTimeline code {
+.nodeHistoryBefore,
+.nodeHistoryAfter {
+  display: block;
+  min-width: 0;
   overflow: hidden;
-  border-radius: 3px;
-  background: var(--surface-app);
-  padding: 4px 6px;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 650;
+}
+.nodeHistoryBefore {
+  color: var(--text-tertiary);
+  text-decoration: line-through;
+}
+.nodeHistoryAfter {
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 4px;
+  background: var(--diff-added-bg);
+  padding: 2px 5px;
+  color: var(--diff-added-text);
 }
 .nodeHistoryTimeline svg {
   width: 12px;
@@ -1885,6 +1880,24 @@
   font-size: 11px;
   line-height: 17px;
   color: var(--text-secondary);
+}
+.nodeHistoryTimeline article > button {
+  min-height: 28px;
+  border: 1px solid var(--stroke-default);
+  border-radius: 7px;
+  background: var(--surface-card);
+  padding: 0 8px;
+}
+.loadNodeHistory {
+  border: 1px solid var(--stroke-default);
+  border-radius: 8px;
+  background: var(--surface-card);
+  padding: 0 12px;
+}
+.nodeHistoryFootnote {
+  border-radius: 8px;
+  background: var(--accent-conversation-soft);
+  padding: 12px;
 }
 .nodeHistoryEmpty,
 .nodeHistoryMessage {
@@ -2093,5 +2106,420 @@
   }
   .composeHeaderMeta {
     gap: 8px;
+  }
+}
+
+/* Compose direction 1E: calm, dense timeline workbench. Scoped here so Review stays untouched. */
+.composeBoard {
+  --surface-panel: #ffffff;
+  --surface-card: #ffffff;
+  --surface-app: #f7f7f8;
+  --surface-elevated: #ffffff;
+  --hover-bg: rgba(15, 18, 30, 0.035);
+  --stroke-default: rgba(15, 18, 30, 0.08);
+  --stroke-divider: rgba(15, 18, 30, 0.08);
+  --stroke-strong: rgba(15, 18, 30, 0.14);
+  --text-primary: #16181d;
+  --text-secondary: #5b606b;
+  --text-tertiary: #8b909a;
+  --accent-commit: #2563eb;
+  --accent-commit-soft: rgba(37, 99, 235, 0.08);
+  --compose-selected: #2563eb;
+  --compose-icon: #5b5bd6;
+  --status-warning: #d97706;
+  --diff-modified-bg: rgba(217, 119, 6, 0.1);
+  --diff-modified-text: #8b5a00;
+  --status-success: #16a34a;
+  --diff-added-bg: #eefbf3;
+  --diff-added-word-bg: rgba(22, 163, 74, 0.22);
+  --diff-added-text: #11632f;
+  --status-error: #dc2626;
+  --diff-removed-bg: #fdf1f1;
+  --diff-removed-word-bg: rgba(220, 38, 38, 0.18);
+  --diff-removed-text: #9b1c1c;
+  --source: #7c3aed;
+  --accent-pending: #ea6a0c;
+  --accent-pending-soft: rgba(234, 106, 12, 0.1);
+  --accent-conversation: #5b5bd6;
+  --accent-conversation-soft: rgba(91, 91, 214, 0.08);
+  --compose-positive-bg: #eefbf3;
+  --compose-positive-text: #11632f;
+  --compose-negative-bg: #fdf1f1;
+  --compose-negative-text: #9b1c1c;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  --on-accent: #ffffff;
+  --compose-canvas: var(--surface-panel);
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 456px);
+  background: var(--surface-app);
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+}
+.composeHeader {
+  display: grid;
+  min-height: 82px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 18px;
+  border-right: 0;
+  border-bottom: 0;
+  padding: 12px 24px 8px;
+  background: var(--surface-panel);
+}
+.composeIdentity {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+.composeTitleRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.composeHeader .composeTitleRow h1 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 24px;
+  letter-spacing: -0.01em;
+}
+.composeTitleRow > svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--text-tertiary);
+}
+.draftBadge {
+  display: inline-flex;
+  height: 20px;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-pending-soft);
+  padding: 0 8px;
+  color: var(--accent-pending);
+  font-size: 11px;
+  font-weight: 550;
+}
+.draftBadge > i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.composeMetaRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 17px;
+  white-space: nowrap;
+}
+.composeMetaRow > i {
+  width: 3px;
+  height: 3px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+.composeMetaRow > span {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+.composeMetaRow svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+.schemaMeta {
+  color: var(--source);
+}
+.verifiedMeta {
+  color: var(--status-success);
+}
+.stageSwitch {
+  height: 32px;
+  align-self: center;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 9px;
+}
+.stageSwitch button {
+  min-width: 94px;
+  border-radius: 6px;
+  padding: 0 12px;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 550;
+}
+.stageSwitch button > span {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-app);
+  color: var(--text-tertiary);
+  font-size: 9px;
+  font-weight: 700;
+}
+.stageSwitch button[aria-selected="true"] > span {
+  background: var(--text-primary);
+  color: var(--surface-panel);
+}
+.composeHeaderMeta {
+  margin-left: 0;
+  align-self: center;
+}
+.composeHeaderMeta:empty {
+  display: none;
+}
+.composeMain {
+  border-right: 0;
+  background: var(--surface-app);
+}
+.sourcesSection {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  padding: 8px 24px 6px;
+}
+.changeFilters {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+.changeFilters > button {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--radius-pill);
+  padding: 0 11px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+.changeFilters > button[aria-pressed="true"] {
+  background: var(--surface-app);
+  color: var(--text-primary);
+}
+.changeFilters b {
+  color: var(--text-tertiary);
+  font-weight: 550;
+}
+.changeFilters span {
+  display: grid;
+  width: 14px;
+  height: 14px;
+  place-items: center;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+}
+.changeFilters span[data-kind="modified"] {
+  background: var(--diff-modified-bg);
+  color: var(--diff-modified-text);
+}
+.changeFilters span[data-kind="added"] {
+  background: var(--diff-added-bg);
+  color: var(--diff-added-text);
+}
+.changeFilters svg {
+  width: 13px;
+  height: 13px;
+  color: var(--status-warning);
+}
+.composeToolbarActions {
+  display: flex;
+  min-width: 0;
+  margin-left: auto;
+  align-items: center;
+  gap: 8px;
+}
+.changeScope {
+  min-height: 28px;
+  margin-left: 0;
+  border-radius: 8px;
+}
+.changeScope button {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.changeScope button[aria-selected="true"] {
+  border: 0;
+}
+.changeScope svg {
+  width: 12px;
+  height: 12px;
+}
+.generateButton,
+.reviewTopButton {
+  display: inline-flex;
+  height: 28px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--stroke-strong);
+  border-radius: 6px;
+  background: var(--surface-card);
+  padding: 0 10px;
+  box-shadow: var(--fx-shadow-sm);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+.generateButton svg {
+  width: 13px;
+  height: 13px;
+  color: var(--source);
+}
+.reviewTopButton {
+  border-color: var(--accent-commit);
+  background: var(--accent-commit);
+  color: var(--on-accent);
+}
+.reviewTopButton > span {
+  display: inline-flex;
+  height: 16px;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--on-accent) 22%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--on-accent) 16%, transparent);
+  padding: 0 4px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+.panel {
+  padding: 4px 0 16px;
+  background: var(--surface-app);
+}
+.panel[data-change-scope="all"] {
+  padding: 12px 24px 24px;
+}
+.discussionSidebar {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--surface-panel);
+  box-shadow: -12px 0 32px rgba(15, 18, 30, 0.08);
+}
+.discussionHeader {
+  min-height: 52px;
+  border-bottom: 0;
+  padding: 12px 16px 4px;
+}
+.discussionTabs button {
+  height: 28px;
+  border-radius: 7px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+.discussionTabs button[aria-selected="true"] {
+  background: var(--accent-conversation-soft);
+  color: var(--accent-conversation);
+}
+.discussionComposer {
+  margin: 0 14px 14px;
+  min-height: 110px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface-app);
+}
+.value.before,
+.value.after {
+  color: var(--text-primary);
+}
+.value del,
+.value ins {
+  border-radius: 3px;
+  padding: 0 2px;
+}
+.value del {
+  background: var(--diff-removed-word-bg);
+  color: var(--diff-removed-text);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+.value ins {
+  background: var(--diff-added-word-bg);
+  color: var(--diff-added-text);
+  text-decoration: none;
+}
+.discussionComposer > textarea {
+  min-height: 58px;
+  height: 58px;
+  padding: 12px 14px 6px;
+  font-size: 12px;
+  line-height: 18px;
+  resize: none;
+}
+.discussionComposerFooter {
+  padding: 6px 10px 8px;
+}
+@media (max-width: 1180px) {
+  .composeBoard {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 38vw);
+  }
+  .sourcesSection {
+    flex-wrap: wrap;
+  }
+  .composeToolbarActions {
+    margin-left: 0;
+  }
+}
+@media (max-width: 900px) {
+  .composeHeader {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .stageSwitch {
+    grid-column: 1;
+    justify-self: start;
+  }
+  .composeHeaderMeta {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .composeMetaRow {
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+}
+@media (max-width: 760px) {
+  .composeHeader,
+  .sourcesSection,
+  .panel[data-change-scope="all"] {
+    padding-inline: 12px;
+  }
+  .changeFilters,
+  .composeToolbarActions {
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .discussionSidebar {
+    margin: 0;
+    border-radius: 0;
+    box-shadow: none;
   }
 }
