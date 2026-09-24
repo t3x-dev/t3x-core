@@ -13,6 +13,33 @@ export function resolveStudioWorkspaceId(
   return drafts[0]?.id ?? '';
 }
 
+/** One open draft per branch. A branch with no saved draft gets a starter. */
+export function listStudioWorkspacesForBranches(
+  workspaces: WorkspaceCandidate[],
+  branches: readonly string[],
+  starterForBranch: (branch: string) => WorkspaceCandidate
+): WorkspaceCandidate[] {
+  const drafts = listStudioDraftWorkspaces(workspaces);
+  const used = new Set<string>();
+  const targets: WorkspaceCandidate[] = [];
+  for (const branch of branches) {
+    const name = branch.trim();
+    if (!name) continue;
+    const existing = drafts.find((workspace) => workspace.targetBranch === name);
+    if (existing) {
+      if (used.has(existing.id)) continue;
+      targets.push(existing);
+      used.add(existing.id);
+      continue;
+    }
+    targets.push(starterForBranch(name));
+  }
+  for (const draft of drafts) {
+    if (!used.has(draft.id)) targets.push(draft);
+  }
+  return targets;
+}
+
 export function studioApplyCandidateIds(
   items: Array<{ available: boolean; id: string; kind: string | null }>
 ): string[] {

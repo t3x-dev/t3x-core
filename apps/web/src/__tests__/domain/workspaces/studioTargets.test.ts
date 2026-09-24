@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
 import {
   listStudioDraftWorkspaces,
+  listStudioWorkspacesForBranches,
   resolveStudioWorkspaceId,
   studioApplyCandidateIds,
   workspaceHasSchemaBinding,
@@ -42,6 +44,25 @@ describe('studio workspace targets', () => {
     ]);
     expect(resolveStudioWorkspaceId(drafts, '')).toBe('workspace_branch:main');
     expect(resolveStudioWorkspaceId(drafts, 'workspace_branch:main')).toBe('workspace_branch:main');
+  });
+
+  it('adds a Main workspace when the main branch has no saved draft', () => {
+    const targets = listStudioWorkspacesForBranches([], ['main'], (branch) =>
+      getProjectWorkspaceStarterCandidate('proj_1', [], branch, null)
+    );
+
+    expect(targets.map((item) => item.title)).toEqual(['Main workspace']);
+    expect(targets[0]?.id).toBe('workspace_branch:main');
+    expect(targets[0]?.targetBranch).toBe('main');
+  });
+
+  it('keeps the saved draft for a branch instead of adding another starter', () => {
+    const saved = workspace('workspace_branch:main', 'Main workspace', 'draft');
+    const targets = listStudioWorkspacesForBranches([saved], ['main'], (branch) =>
+      getProjectWorkspaceStarterCandidate('proj_1', [], branch, null)
+    );
+
+    expect(targets).toEqual([saved]);
   });
 
   it('applies a schema candidate when present, otherwise every available module', () => {

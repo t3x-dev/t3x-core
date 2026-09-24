@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { SchemaStudioExperience } from '@/components/schemas/SchemaStudioExperience';
 
 const mocks = vi.hoisted(() => ({
   apply: vi.fn(),
   data: undefined as unknown,
+  branches: [] as string[],
+  refresh: vi.fn(),
+  push: vi.fn(),
+  saveDraft: vi.fn(),
   workspaces: [] as Array<{
     id: string;
     revision?: number;
@@ -16,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   }>,
 }));
 vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mocks.push }),
   useSearchParams: () => new URLSearchParams('candidate=provider'),
 }));
 vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
@@ -33,7 +38,19 @@ vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
   }),
 }));
 vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
-  useProjectWorkspaces: () => ({ refresh: vi.fn(), workspaces: mocks.workspaces }),
+  useProjectWorkspaces: () => ({ refresh: mocks.refresh, workspaces: mocks.workspaces }),
+}));
+vi.mock('@/hooks/shared/useBranches', () => ({
+  useBranches: () => ({
+    branchHeads: {},
+    branches: mocks.branches,
+    loading: false,
+    refresh: vi.fn(),
+    create: vi.fn(),
+  }),
+}));
+vi.mock('@/queries/workspaces', () => ({
+  saveWorkspaceDraft: (...args: unknown[]) => mocks.saveDraft(...args),
 }));
 vi.mock('@/hooks/schemas/useStudioPreview', () => ({
   useApplyStudioSelection: () => mocks.apply,
@@ -41,6 +58,11 @@ vi.mock('@/hooks/schemas/useStudioPreview', () => ({
 }));
 beforeEach(() => {
   mocks.apply.mockReset();
+  mocks.push.mockReset();
+  mocks.refresh.mockReset();
+  mocks.saveDraft.mockReset();
+  mocks.saveDraft.mockResolvedValue({});
+  mocks.branches = [];
   mocks.workspaces = [];
   mocks.data = {
     samples: [],
@@ -152,4 +174,59 @@ it('selects the only draft workspace once instead of duplicating Main workspace'
   expect(select.querySelectorAll('option')).toHaveLength(1);
   expect(select).toHaveValue('workspace_branch:main');
   expect(select).toHaveTextContent('Main workspace');
+});
+
+it('applies the selected schema to the main branch workspace', async () => {
+  mocks.branches = ['main'];
+  mocks.workspaces = [
+    {
+      id: 'workspace_branch:main',
+      revision: 3,
+      status: 'draft',
+      targetBranch: 'main',
+      title: 'Main workspace',
+    },
+  ];
+  mocks.data = {
+    samples: [],
+    schema: { nodes: {} },
+    schemaHash: 'definition-hash',
+    reviewHash: 'review',
+    renderPlan: [],
+    origins: {},
+    sources: [],
+    modules: [],
+    report: { valid: true, issues: [] },
+    adoption: { allowed: true },
+    workspace: { id: 'workspace_branch:main', revision: 3, changes: [] },
+  };
+  render(<SchemaStudioExperience projectId="p" />);
+  expect(screen.getByLabelText('Target Workspace')).toHaveValue('workspace_branch:main');
+  fireEvent.click(screen.getByRole('button', { name: 'Review & apply' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm & apply' }));
+  expect(mocks.apply).toHaveBeenCalledWith({
+    candidateIds: ['provider'],
+    workspaceId: 'workspace_branch:main',
+    ifRevision: 3,
+    reviewHash: 'review',
+  });
+  await waitFor(() =>
+    expect(mocks.push).toHaveBeenCalledWith(
+      '/project/p?branch=main&tab=workspaces&workspace=workspace_branch%3Amain'
+    )
+  );
+});
+
+it('saves a main branch workspace when none is persisted', async () => {
+  mocks.branches = ['main'];
+  mocks.refresh.mockResolvedValue(undefined);
+  render(<SchemaStudioExperience projectId="p" />);
+  expect(screen.getByLabelText('Target Workspace')).toHaveValue('workspace_branch:main');
+  await waitFor(() => expect(mocks.saveDraft).toHaveBeenCalled());
+  expect(mocks.saveDraft).toHaveBeenCalledWith(
+    'p',
+    'workspace_branch:main',
+    expect.objectContaining({ targetBranch: 'main', title: 'Main workspace', status: 'draft' })
+  );
+  expect(mocks.refresh).toHaveBeenCalled();
 });

@@ -3,7 +3,7 @@
 import type { StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
 import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,14 +14,18 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
 import { getProjectIdRepoPath, getProjectIdWorkspacePath } from '@/domain/project/repoPath';
 import {
   listStudioDraftWorkspaces,
+  listStudioWorkspacesForBranches,
   resolveStudioWorkspaceId,
 } from '@/domain/workspaces/studioTargets';
 import { useStudioCandidates } from '@/hooks/schemas/useStudioCandidates';
 import { useApplyStudioSelection, useStudioPreview } from '@/hooks/schemas/useStudioPreview';
+import { useBranches } from '@/hooks/shared/useBranches';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
+import { saveWorkspaceDraft } from '@/queries/workspaces';
 import styles from './SchemaStudioExperience.module.css';
 import { StudioChanges } from './StudioDefinitionPreview';
 
@@ -178,8 +182,11 @@ export function SchemaStudioExperience({
   children?: ReactNode;
 }) {
   const params = useSearchParams();
+  const router = useRouter();
   const candidates = useStudioCandidates(projectId);
   const workspaces = useProjectWorkspaces(projectId);
+  const projectBranches = useBranches(projectId, true);
+  const ensuringBranches = useRef(new Map<string, Promise<void>>());
   const applySelection = useApplyStudioSelection(projectId);
   const [selection, setSelection] = useState<string[]>([]);
   const [workspaceId, setWorkspaceId] = useState(params?.get('workspace') ?? '');
@@ -206,16 +213,79 @@ export function SchemaStudioExperience({
     if (requested) setSelection([requested]);
   }, [requested]);
 
-  const draftWorkspaces = listStudioDraftWorkspaces(workspaces.workspaces);
+  const draftWorkspaces = useMemo(
+    () =>
+      listStudioWorkspacesForBranches(
+        workspaces.workspaces,
+        projectBranches.branches,
+        (branch) =>
+          getProjectWorkspaceStarterCandidate(
+            projectId,
+            [],
+            branch,
+            projectBranches.branchHeads[branch] ?? null
+          )
+      ),
+    [projectBranches.branchHeads, projectBranches.branches, projectId, workspaces.workspaces]
+  );
   useEffect(() => {
-    const resolved = resolveStudioWorkspaceId(workspaces.workspaces, workspaceId);
+    if (!projectId || projectBranches.loading) return;
+    const persistedBranches = new Set(
+      listStudioDraftWorkspaces(workspaces.workspaces).map((workspace) => workspace.targetBranch)
+    );
+    const missing = projectBranches.branches.filter((branch) => !persistedBranches.has(branch));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      await Promise.all(
+        missing.map((branch) => {
+          const current = ensuringBranches.current.get(branch);
+          if (current) return current;
+          const task = (async () => {
+            try {
+              const starter = getProjectWorkspaceStarterCandidate(
+                projectId,
+                [],
+                branch,
+                projectBranches.branchHeads[branch] ?? null
+              );
+              await saveWorkspaceDraft(projectId, starter.id, starter);
+            } finally {
+              ensuringBranches.current.delete(branch);
+            }
+          })();
+          ensuringBranches.current.set(branch, task);
+          return task;
+        })
+      );
+      if (!cancelled) await workspaces.refresh();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    projectBranches.branchHeads,
+    projectBranches.branches,
+    projectBranches.loading,
+    projectId,
+    workspaces.refresh,
+    workspaces.workspaces,
+  ]);
+  useEffect(() => {
+    const resolved = resolveStudioWorkspaceId(draftWorkspaces, workspaceId);
     if (resolved !== workspaceId) setWorkspaceId(resolved);
-  }, [workspaceId, workspaces.workspaces]);
-  const target = workspaces.workspaces.find((item) => item.id === workspaceId);
+  }, [draftWorkspaces, workspaceId]);
+  const target = draftWorkspaces.find((item) => item.id === workspaceId);
+  const persistedTarget = listStudioDraftWorkspaces(workspaces.workspaces).find(
+    (item) => item.id === workspaceId
+  );
   const preview = useStudioPreview(
     projectId,
-    { candidateIds: selection, ...(workspaceId ? { workspaceId } : {}) },
-    target?.revision
+    {
+      candidateIds: selection,
+      ...(persistedTarget ? { workspaceId: persistedTarget.id } : {}),
+    },
+    persistedTarget?.revision
   );
   const data = preview.data;
   const locked = new Set(
@@ -301,10 +371,12 @@ export function SchemaStudioExperience({
         reviewHash: review.reviewHash,
       });
       if (!mounted.current) return;
-      setReview(undefined);
-      setApplied(true);
-      await workspaces.refresh();
-      if (mounted.current) preview.refresh();
+      const applied =
+        draftWorkspaces.find((item) => item.id === review.workspace.id) ?? target;
+      const href = applied
+        ? `${getProjectIdWorkspacePath(projectId, { branch: applied.targetBranch })}&workspace=${encodeURIComponent(applied.id)}`
+        : getProjectIdWorkspacePath(projectId);
+      router.push(href);
     } catch (cause) {
       if (mounted.current) {
         setError(cause instanceof Error ? cause.message : 'Apply failed');
