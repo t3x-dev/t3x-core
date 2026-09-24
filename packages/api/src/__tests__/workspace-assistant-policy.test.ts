@@ -8,6 +8,16 @@ describe('isExplicitWorkspaceChangeRequest', () => {
       '帮我生成一张新卡片，天气为晴天',
       '创建一个节点：天气为晴天',
       '新建一条需求：天气为晴天',
+      '新建1个卡片天气为晴天',
+      '新建 １ 个卡片天气为晴天',
+      '帮我创建两张卡片',
+      '按 PRD 结构把这张卡片作为一个新条目添加进去。',
+      '把天气为晴天加到需求里面',
+      '我想新增一条需求：天气为晴天',
+      '麻烦你把标题改为天气为晴天',
+      '这个节点补充一下验收条件',
+      'Could you add a card titled Sunny weather?',
+      'Generate 2 new cards',
       'Generate a new card titled Sunny weather',
     ])
       expect(isExplicitWorkspaceChangeRequest(text)).toBe(true);
@@ -18,6 +28,14 @@ describe('isExplicitWorkspaceChangeRequest', () => {
       '如何生成一个新的卡片？',
       '好的',
       '使用中文',
+      '不要按 PRD 结构把这张卡片添加进去',
+      '不要新建1个卡片天气为晴天',
+      '先不修改标题',
+      '解释如何把天气添加到需求里',
+      '如果把标题改为天气会怎样？',
+      '为什么新建1个卡片没有成功？',
+      'How can you add a new card?',
+      'Could you explain how to create a card?',
     ])
       expect(isExplicitWorkspaceChangeRequest(text)).toBe(false);
   });

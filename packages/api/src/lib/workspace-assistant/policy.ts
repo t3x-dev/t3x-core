@@ -22,24 +22,38 @@ const ENGLISH_TARGET_THEN_CHANGE =
 const CHINESE_CHANGE_REQUEST =
   /(?:(?:^|[。！？\n]\s*)(?:请)?(?:把|将|修改|更新|新增|添加|删除|移除|重命名|替换|设置|调整|增加|减少)|(?:把|将).{1,160}(?:改成|修改为|设置为|更新为)|(?:字段|标题|优先级|验收|副本|流量|百分比|结果|摘要|模式|节点|草稿|requirement|replicas).{0,100}(?:改成|修改为|设置为|更新为))/iu;
 const CREATE_WORKSPACE_ITEM =
-  /(?:^|[。！？\n]\s*)(?:请|帮我|请帮我|麻烦|麻烦你)?\s*(?:生成|创建|新建)(?:一个|一张|一条|个|张|条)?(?:新的?|一条新的?)?\s*(?:卡片|节点|需求|标题)|(?:^|[.!?\n]\s*)(?:please\s+)?generate\s+(?:a\s+|an\s+)?(?:new\s+)?(?:card|node|requirement|title)\b/imu;
+  /(?:^|[。！？\n]\s*)(?:请|帮我|请帮我|麻烦|麻烦你)?\s*(?:生成|创建|新建)\s*(?:[0-9一二两三四五六七八九十百]+\s*)?(?:个|张|条)?\s*(?:新的?)?\s*(?:卡片|节点|需求|标题)|(?:^|[.!?\n]\s*)(?:please\s+)?generate\s+(?:a\s+|an\s+|\d+\s+)?(?:new\s+)?(?:cards?|nodes?|requirements?|title)\b/imu;
+const NATURAL_CHINESE_EDIT =
+  /^(?:(?:请|请你|帮我|请帮我|麻烦你?|直接|现在|继续|再|先|我想|我要|我希望|你可以|能不能|可以帮我|能帮我)\s*)*(?:(?:按|按照|根据).{1,80}?(?:把|将|新增|添加|创建|新建|生成|修改|更新|补充)|(?:把|将).{1,160}?(?:添加|加到|加入|新增|改为|改成|修改|更新|删除|移除|补充)|(?:新增|添加|创建|新建|生成|修改|更新|删除|移除|补充|改一下|改成|改为).{0,80}?(?:卡片|节点|需求|条目|标题|字段|内容|草稿|Draft|PRD)|(?:这张卡片|这个节点|这条需求|标题|验收条件|优先级).{0,80}?(?:改为|改成|改一下|修改|更新|删除|移除|补充))/iu;
+const NATURAL_ENGLISH_EDIT =
+  /^(?:(?:please|can you|could you|would you|i want you to|i would like you to)\s+)+(?:add|create|generate|update|change|modify|remove|delete|rename|set)\b/iu;
+const NON_EDIT_CLAUSE =
+  /(?:不要|别|无需|不需要|不允许|暂不|先不|不想|不能|如何|怎么|为什么|是否|能否|怎样|解释|说明|示例|举例|假如|假设|如果|\b(?:do not|don't|without|never|how|why|explain|summarize|example|if)\b)/iu;
 const NEGATED_CHANGE_REQUEST =
   /(?:\b(?:do not|don't|without)\s+(?:add|adjust|change|create|generate|delete|modify|remove|rename|replace|update)(?:\s+or\s+(?:add|adjust|change|create|generate|delete|modify|remove|rename|replace|update))*\b|(?:不要|别|无需|不需要)(?:修改|改动|更新|新增|添加|删除|移除|创建|生成|新建))/giu;
 
 /**
  * The proposal toggle authorizes change requests; it does not turn every chat
- * message into a mutation. Keep this deliberately narrow so short replies and
- * questions can still use the normal streaming conversation path.
+ * message into a mutation. Match everyday requests, not a fixed command syntax;
+ * explanations, negations and standalone confirmations stay conversational.
  */
 export function isExplicitWorkspaceChangeRequest(message: string) {
-  const affirmativeText = message.replace(NEGATED_CHANGE_REQUEST, ' ');
-  return (
-    affirmativeText.trim().length >= 3 &&
-    (ENGLISH_CHANGE_AT_SENTENCE_START.test(affirmativeText) ||
-      ENGLISH_TARGET_THEN_CHANGE.test(affirmativeText) ||
-      CHINESE_CHANGE_REQUEST.test(affirmativeText) ||
-      CREATE_WORKSPACE_ITEM.test(affirmativeText))
-  );
+  return message
+    .normalize('NFKC')
+    .split(/[。！？!?\n]+/u)
+    .some((clause) => {
+      const text = clause.trim();
+      if (text.length < 3 || NON_EDIT_CLAUSE.test(text)) return false;
+      const affirmativeText = text.replace(NEGATED_CHANGE_REQUEST, ' ');
+      return (
+        ENGLISH_CHANGE_AT_SENTENCE_START.test(affirmativeText) ||
+        ENGLISH_TARGET_THEN_CHANGE.test(affirmativeText) ||
+        CHINESE_CHANGE_REQUEST.test(affirmativeText) ||
+        CREATE_WORKSPACE_ITEM.test(affirmativeText) ||
+        NATURAL_CHINESE_EDIT.test(affirmativeText) ||
+        NATURAL_ENGLISH_EDIT.test(affirmativeText)
+      );
+    });
 }
 
 export function assistantProviderCapabilities(provider: Partial<LLMProvider>) {
