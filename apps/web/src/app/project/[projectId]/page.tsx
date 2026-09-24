@@ -499,11 +499,24 @@ export function ProjectDetailPageContent({
       case 'workspaces':
         return <ProjectWorkspacesTab projectId={projectId} schemaBindings={schemaBindings} />;
       case 'reviews':
-        return <ProjectReviewsTab projectId={projectId} />;
+        return (
+          <ProjectReviewsTab
+            initialPullRequestNumber={Number(searchParams.get('pr')) || undefined}
+            key={projectId}
+            onPullRequestNumberChange={(number) => {
+              const next = new URLSearchParams(searchParams.toString());
+              if (number) next.set('pr', String(number));
+              else next.delete('pr');
+              const query = next.toString();
+              router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+            }}
+            projectId={projectId}
+          />
+        );
       case 'outputs':
         return <ProjectOutputsTab key={projectId} projectId={projectId} />;
       case 'community':
-        return <ProjectCommunityTab />;
+        return <ProjectCommunityTab branch={searchParams.get('branch')} projectId={projectId} />;
       default:
         return renderStateTab();
     }
