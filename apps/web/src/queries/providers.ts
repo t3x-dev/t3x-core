@@ -3,6 +3,7 @@
  */
 
 import {
+  getModelAccessConfig,
   getProjectProviderConfig,
   getProviderRoles,
   listProviders,
@@ -35,6 +36,8 @@ export function fetchProviderRoles(): Promise<RoleAssignment[]> {
     }))
   );
 }
+
+export { getModelAccessConfig as fetchModelAccessConfig };
 
 export function fetchProjectProviderConfig(
   projectId: string
