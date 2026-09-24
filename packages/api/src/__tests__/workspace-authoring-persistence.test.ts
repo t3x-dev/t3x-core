@@ -61,6 +61,62 @@ describe('durable Draft authoring commands', () => {
       actor,
     });
   }
+  it('requires explicit import for extraction-only legacy edits', async () => {
+    const draft = await upsertWorkspaceDraft(setup.db, {
+      project_id: projectId,
+      workspace_id: 'extraction-only',
+      title: 'Legacy extraction',
+      target_branch: 'main',
+      workspace_state: {
+        extractionProposal: { operations: [{ set: { path: 'title', value: 'Keep me' } }] },
+      },
+    });
+    const input = {
+      projectId,
+      workspaceId: 'extraction-only',
+      expectedWorkspaceRevision: draft.revision,
+      expectedRefHead: null,
+      actionId: 'import-extraction',
+      actor,
+    };
+    await expect(initializeWorkspaceAuthoring(setup.db, input)).rejects.toThrow(
+      'explicit legacy document import'
+    );
+    const unchanged = await findWorkspaceDraft(setup.db, projectId, input.workspaceId);
+    expect(unchanged?.revision).toBe(draft.revision);
+    expect(unchanged?.workspace_state?.authoringLedger).toBeUndefined();
+    const imported = await initializeWorkspaceAuthoring(setup.db, {
+      ...input,
+      legacyDocument: { title: 'Keep me' },
+    });
+    expect(currentComposition(imported.value.ledger)).toEqual({ title: 'Keep me' });
+  });
+
+  it('does not migrate exact-source Workspaces into the YOps editor', async () => {
+    await insertBranch(setup.db, { projectId, name: 'exact-source' });
+    const draft = await upsertWorkspaceDraft(setup.db, {
+      project_id: projectId,
+      workspace_id: 'exact-source',
+      title: 'Source',
+      target_branch: 'exact-source',
+      workspace_state: { sourceArtifact: { format: 't3x.dev/workspace-source-artifact/v1' } },
+    });
+    await expect(
+      initializeWorkspaceAuthoring(setup.db, {
+        projectId,
+        workspaceId: 'exact-source',
+        expectedWorkspaceRevision: draft.revision,
+        expectedRefHead: null,
+        actionId: 'import-source',
+        actor,
+        legacyDocument: {},
+      })
+    ).rejects.toThrow('Exact-source Workspaces');
+    const unchanged = await findWorkspaceDraft(setup.db, projectId, 'exact-source');
+    expect(unchanged?.revision).toBe(draft.revision);
+    expect(unchanged?.workspace_state?.authoringLedger).toBeUndefined();
+  });
+
   it('persists a multi-node action, recovers a lost response, and reconstructs immutable views', async () => {
     const init = await initialize('durable');
     const command = {
