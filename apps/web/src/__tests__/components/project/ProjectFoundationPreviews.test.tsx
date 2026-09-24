@@ -46,7 +46,7 @@ describe('project foundation previews', () => {
   it('opens Schema discovery without preselecting or applying a definition', () => {
     render(<ProjectSchemasTab projectId="proj_other" />);
 
-    expect(screen.getByRole('heading', { name: 'What will you define next?' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Curated schemas' })).toBeInTheDocument();
     expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   });
 

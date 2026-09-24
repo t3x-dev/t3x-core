@@ -6,13 +6,12 @@ import {
 } from '@t3x-dev/api-client';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
-export async function fetchSchemaCatalog(projectId: string, query: string) {
+export async function fetchSchemaCatalog(projectId: string | null, query: string) {
+  const path = projectId
+    ? `${API_V1}/projects/${encodeURIComponent(projectId)}/yschema/catalog`
+    : `${API_V1}/yschema/catalog`;
   return SchemaCatalogPageSchema.parse(
-    await handleResponse(
-      await fetchWithTimeout(
-        `${API_V1}/projects/${encodeURIComponent(projectId)}/yschema/catalog?${query}`
-      )
-    )
+    await handleResponse(await fetchWithTimeout(`${path}?${query}`))
   );
 }
 export async function fetchSchemaCollections() {
@@ -44,6 +43,12 @@ export async function fetchSchemaIntroduction(
   return result.presentation;
 }
 
+export type SchemaReleaseReading = {
+  artifactHash: string;
+  readme: string | null;
+  manifest: Record<string, unknown>;
+};
+
 /** Resolve release reading lazily; discovery lists never download entire manifests. */
 export async function fetchSchemaReleaseReading(
   projectId: string,
@@ -58,7 +63,7 @@ export async function fetchSchemaReleaseReading(
     expectedHash: hash,
     ...(sourceProjectId ? { sourceProjectId } : {}),
   });
-  const result = await handleResponse<{ artifactHash: string; readme: string | null }>(
+  const result = await handleResponse<SchemaReleaseReading>(
     await fetchWithTimeout(
       `${API_V1}/projects/${encodeURIComponent(projectId)}/schema-studio/source?${query}`
     )
