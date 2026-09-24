@@ -1,0 +1,43 @@
+{
+  "slug": "protocol-steps",
+  "title": "Protocol steps",
+  "description": "Write a repeatable protocol as named, ordered steps.",
+  "license": "Apache-2.0",
+  "tags": ["science", "research", "ecosystem:t3x"],
+  "companionSchema": {
+    "canonicalName": "t3x/protocol-steps",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "list": {
+      "title": "Slide prep"
+    },
+    "items": {
+      "fix": {
+        "step": "Fix sample",
+        "detail": "10 minutes in buffer",
+        "done": false
+      }
+    }
+  },
+  "demonstration": {
+    "message": "Mark the rinse step done",
+    "value": {
+      "list": {
+        "title": "Slide prep"
+      },
+      "items": {
+        "fix": {
+          "step": "Fix sample",
+          "detail": "10 minutes in buffer",
+          "done": true
+        },
+        "rinse": {
+          "step": "Rinse",
+          "detail": "Two distilled-water rinses",
+          "done": false
+        }
+      }
+    }
+  }
+}

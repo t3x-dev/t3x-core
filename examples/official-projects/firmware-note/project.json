@@ -1,0 +1,30 @@
+{
+  "slug": "firmware-note",
+  "title": "Firmware note",
+  "description": "Record a firmware target and the reviewed rollout window.",
+  "license": "Apache-2.0",
+  "tags": ["devices", "iot", "ecosystem:t3x"],
+  "companionSchema": {
+    "canonicalName": "t3x/firmware-note",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "record": {
+      "device_class": "hallway-sensor",
+      "version": "2026.9.1",
+      "window": "",
+      "notes": "Wait for battery check"
+    }
+  },
+  "demonstration": {
+    "message": "Set the rollout window",
+    "value": {
+      "record": {
+        "device_class": "hallway-sensor",
+        "version": "2026.9.1",
+        "window": "Sunday 02:00",
+        "notes": "Wait for battery check"
+      }
+    }
+  }
+}

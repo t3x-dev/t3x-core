@@ -1,0 +1,43 @@
+{
+  "slug": "prompt-pack",
+  "title": "Prompt pack",
+  "description": "Keep named prompts reviewable before they are reused.",
+  "license": "Apache-2.0",
+  "tags": ["ai", "agents", "ecosystem:t3x"],
+  "companionSchema": {
+    "canonicalName": "t3x/prompt-pack",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "list": {
+      "title": "Support prompts"
+    },
+    "items": {
+      "greeting": {
+        "name": "Greeting",
+        "text": "Reply briefly and name the next step.",
+        "audience": "support"
+      }
+    }
+  },
+  "demonstration": {
+    "message": "Add the refusal prompt",
+    "value": {
+      "list": {
+        "title": "Support prompts"
+      },
+      "items": {
+        "greeting": {
+          "name": "Greeting",
+          "text": "Reply briefly and name the next step.",
+          "audience": "support"
+        },
+        "refusal": {
+          "name": "Refusal",
+          "text": "Decline unsafe requests and offer a safer alternative.",
+          "audience": "support"
+        }
+      }
+    }
+  }
+}

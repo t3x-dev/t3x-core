@@ -1,0 +1,30 @@
+{
+  "slug": "metric-snapshot",
+  "title": "Metric snapshot",
+  "description": "Pin a named metric, value and comparison window.",
+  "license": "Apache-2.0",
+  "tags": ["data", "visualization", "ecosystem:t3x"],
+  "companionSchema": {
+    "canonicalName": "t3x/metric-snapshot",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "record": {
+      "metric": "Weekly active editors",
+      "window": "2026-W36",
+      "value": "12",
+      "note": ""
+    }
+  },
+  "demonstration": {
+    "message": "Record this week’s value",
+    "value": {
+      "record": {
+        "metric": "Weekly active editors",
+        "window": "2026-W36",
+        "value": "12",
+        "note": "Two new reviewers joined."
+      }
+    }
+  }
+}
