@@ -4,6 +4,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
 import { useSourceThreadGeneration } from '@/hooks/sourceThreads/useSourceThreadGeneration';
 import type { WorkspaceAssistantContext } from '@/hooks/workspaces/useWorkspaceAuthoring';
+import styles from './WorkspaceAssistantPanel.module.css';
 
 export function WorkspaceAssistantPanel({
   projectId,
@@ -30,14 +31,20 @@ export function WorkspaceAssistantPanel({
     onConversationCreated: setConversationId,
   });
   return (
-    <section aria-label="Workspace Assistant" className="flex min-h-0 flex-1 flex-col gap-3 p-4">
+    <section
+      aria-label="Workspace Assistant"
+      className={`${styles.panel} flex min-h-0 flex-1 flex-col gap-3 p-4`}
+    >
       <div>
         <h3 className="text-sm font-semibold">Workspace Assistant</h3>
         <p className="mt-1 text-xs text-[var(--text-secondary)]">
           Current Draft r{context.workspaceRevision} · selected sources · T3X tools
         </p>
       </div>
-      <div className="min-h-24 flex-1 space-y-4 overflow-auto" aria-live="polite">
+      <div
+        className={`${styles.messages} min-h-24 flex-1 space-y-4 overflow-auto`}
+        aria-live="polite"
+      >
         {chat.messages.length === 0 ? (
           <p className="text-sm text-[var(--text-secondary)]">
             Discuss a change or ask about an earlier action. Draft editing also works with Chat
@@ -45,7 +52,7 @@ export function WorkspaceAssistantPanel({
           </p>
         ) : null}
         {chat.messages.map((message) => (
-          <div key={message.id} className="space-y-1">
+          <div key={message.id} className={styles.message} data-role={message.role}>
             <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
               {message.role === 'user' ? 'You' : 'Assistant'}
             </span>
@@ -90,21 +97,22 @@ export function WorkspaceAssistantPanel({
       {chat.warning ? (
         <output className="text-xs text-[var(--text-secondary)]">{chat.warning}</output>
       ) : null}
-      <label className="flex items-center gap-2 text-xs">
+      <label className={`${styles.permission} flex items-center gap-2 text-xs`}>
         <input
           type="checkbox"
           checked={allowProposal}
           onChange={(event) => setAllowProposal(event.target.checked)}
         />
-        Allow proposal requests in this message
+        Generate a proposal from this message
       </label>
       <Textarea
+        className={styles.composer}
         aria-label="Message Workspace Assistant"
         value={chat.input}
         onChange={(event) => chat.setInput(event.target.value)}
         placeholder="Discuss this Draft…"
       />
-      <div className="flex justify-end">
+      <div className={`${styles.actions} flex justify-end`}>
         <Button
           size="sm"
           disabled={!conversationId || !chat.input.trim() || chat.isStreaming}

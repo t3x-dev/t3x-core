@@ -26,6 +26,7 @@ import { DraftNodeChangeDetail } from './DraftNodeChangeDetail';
 import { TransitionDecisionControls } from './TransitionDecisionControls';
 import { TransitionReviewPanel } from './TransitionReviewPanel';
 import { WorkspaceAssistantPanel } from './WorkspaceAssistantPanel';
+import styles from './WorkspaceAuthoringSurface.module.css';
 
 const valueText = (value: unknown) =>
   value === undefined ? 'Absent' : JSON.stringify(value, null, 2);
@@ -52,7 +53,7 @@ export function DraftChangeCard({
     <button
       type="button"
       onClick={onInspect}
-      className="group min-w-0 rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 text-left shadow-sm transition-colors hover:border-[var(--text-secondary)] focus-visible:outline-2 focus-visible:outline-offset-2"
+      className={`${styles.changeCard} group min-w-0 rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 text-left transition-colors hover:border-[var(--text-secondary)] focus-visible:outline-2 focus-visible:outline-offset-2`}
     >
       <div className="flex items-center justify-between gap-2">
         <span className="truncate font-mono text-[11px] font-medium" title={card.path}>
@@ -253,11 +254,15 @@ export function WorkspaceAuthoringSurface({ candidate }: { candidate: WorkspaceC
     expected_ref_head: view.basis.refHead,
   };
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-panel)] text-[var(--text-primary)]">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] px-5 py-3">
+    <div
+      className={`${styles.surface} flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-panel)] text-[var(--text-primary)]`}
+    >
+      <header
+        className={`${styles.header} flex flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] px-5 py-3`}
+      >
         <div>
           <h2 className="text-sm font-semibold">
-            Compose{' '}
+            {candidate.title}{' '}
             <span className="ml-2 rounded bg-[var(--surface-card)] px-2 py-0.5 font-mono text-[10px]">
               DRAFT · r{view.compositionRevision}
             </span>
@@ -355,7 +360,7 @@ export function WorkspaceAuthoringSurface({ candidate }: { candidate: WorkspaceC
         </p>
       ) : null}
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <main className="min-h-0 min-w-0 flex-1 overflow-auto p-5">
+        <main className={`${styles.main} min-h-0 min-w-0 flex-1 overflow-auto p-5`}>
           {scope === 'review' && review ? (
             <div className="space-y-4">
               <p className="text-xs text-[var(--text-secondary)]">
@@ -543,7 +548,7 @@ export function WorkspaceAuthoringSurface({ candidate }: { candidate: WorkspaceC
         </main>
         {
           <aside
-            className={`${panel ? 'flex' : 'hidden'} min-h-0 max-h-[55vh] w-full shrink-0 flex-col lg:max-h-none border-t border-[var(--stroke-divider)] lg:w-96 lg:border-t-0 lg:border-l`}
+            className={`${styles.sidePanel} ${panel ? 'flex' : 'hidden'} min-h-0 max-h-[55vh] w-full shrink-0 flex-col lg:max-h-none border-t border-[var(--stroke-divider)] lg:w-96 lg:border-t-0 lg:border-l`}
           >
             <div className="flex items-center justify-between border-b border-[var(--stroke-divider)] px-4 py-2">
               <span className="text-[11px] font-semibold">
@@ -778,7 +783,9 @@ export function WorkspaceAuthoringSurface({ candidate }: { candidate: WorkspaceC
           </div>
         ) : null}
       </section>
-      <footer className="space-y-3 border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] px-5 py-3">
+      <footer
+        className={`${styles.footer} space-y-3 border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] px-5 py-3`}
+      >
         {[
           ...new Set([
             ...pending,

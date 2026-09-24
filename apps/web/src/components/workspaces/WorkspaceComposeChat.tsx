@@ -1,6 +1,17 @@
 'use client';
 
-import { ArrowUpRight, Check, Copy, Loader2, Search, Terminal } from 'lucide-react';
+import {
+  ArrowUpRight,
+  Bot,
+  Check,
+  Copy,
+  Loader2,
+  Search,
+  Sparkles,
+  Terminal,
+  UserRound,
+} from 'lucide-react';
+import Image from 'next/image';
 import { type ReactNode, useCallback, useState } from 'react';
 import {
   Conversation,
@@ -8,24 +19,59 @@ import {
   ConversationEmptyState,
   ConversationScrollButton,
 } from '@/components/ai-elements/conversation';
-import {
-  Message,
-  MessageAction,
-  MessageActions,
-  MessageContent,
-  MessageResponse,
-} from '@/components/ai-elements/message';
+import { MessageAction, MessageActions, MessageResponse } from '@/components/ai-elements/message';
+import type { WorkspaceAssistantActivity as AssistantActivity } from '@/hooks/sourceThreads/useSourceThreadGeneration';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import { cn } from '@/utils/cn';
+import {
+  type AssistantActivityRecord,
+  type AssistantPublication,
+  WorkspaceAssistantActivity,
+} from './WorkspaceAssistantActivity';
+import styles from './WorkspaceComposeChat.module.css';
 
 type WorkspaceComposeChatState = WorkspaceComposeReviewController['chat'];
 type WorkspaceComposeCitation = NonNullable<WorkspaceComposeChatState['citations']>[number];
 
-interface WorkspaceComposeChatProps {
-  chat: WorkspaceComposeChatState;
+const STREAM_ANIMATION = {
+  animation: 'fadeIn',
+  duration: 90,
+  easing: 'cubic-bezier(0.2, 0, 0, 1)',
+  maxBacklogMs: 160,
+  sep: 'char',
+  stagger: 1,
+} as const;
+
+function discussionText(content: string) {
+  return content
+    .replace(/```[^\n]*\n?([\s\S]*?)```/g, '$1')
+    .replace(/```[^\n]*\n?/g, '')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/`/g, '')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^\s*[-*]\s+/gm, '• ')
+    .trim();
 }
 
-export function WorkspaceComposeChat({ chat }: WorkspaceComposeChatProps) {
+interface WorkspaceComposeChatProps {
+  chat: WorkspaceComposeChatState;
+  variant?: 'default' | 'discussion';
+  discussionAction?: ReactNode;
+  assistantActivity?: AssistantActivity | null;
+  assistantPublication?: AssistantPublication | null;
+  assistantPublishing?: boolean;
+  assistantRecords?: Record<string, AssistantActivityRecord>;
+}
+
+export function WorkspaceComposeChat({
+  chat,
+  variant = 'default',
+  discussionAction,
+  assistantActivity,
+  assistantPublication,
+  assistantPublishing = false,
+  assistantRecords,
+}: WorkspaceComposeChatProps) {
   const [copyError, setCopyError] = useState<string | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const messages = chat.messages ?? [];
@@ -33,6 +79,7 @@ export function WorkspaceComposeChat({ chat }: WorkspaceComposeChatProps) {
   const latestAssistantId = [...messages]
     .reverse()
     .find((message) => message.role === 'assistant')?.id;
+  const currentActivity = assistantActivity;
 
   const copyMessage = useCallback(async (messageId: string, content: string) => {
     if (!content.trim()) return;
@@ -50,61 +97,81 @@ export function WorkspaceComposeChat({ chat }: WorkspaceComposeChatProps) {
   }, []);
 
   return (
-    <Conversation className="min-h-0 bg-[var(--surface-panel)] text-[var(--text-primary)]">
+    <Conversation
+      initial="instant"
+      className={cn(
+        'min-h-0 bg-[var(--surface-panel)] text-[var(--text-primary)]',
+        variant === 'discussion' && styles.discussion
+      )}
+    >
       <ConversationContent
         scrollClassName="chat-scrollbar"
-        className="mx-auto min-h-full w-full max-w-[820px] gap-7 px-5 pb-8 pt-7 md:px-8"
+        className={cn(styles.content, variant === 'discussion' && styles.discussionContent)}
       >
         {messages.length === 0 && !chat.isLoading ? (
-          <ConversationEmptyState className="my-auto min-h-[260px] items-start gap-5 px-0 py-10 text-left">
+          <ConversationEmptyState
+            className={cn(
+              'my-auto min-h-[260px] items-start gap-5 px-0 py-10 text-left',
+              variant === 'discussion' && 'justify-start'
+            )}
+          >
             <span className="flex size-10 items-center justify-center rounded-xl border border-[var(--stroke-divider)] bg-[var(--surface-app)]">
-              <Terminal className="size-5" aria-hidden="true" />
+              {variant === 'discussion' ? (
+                <Sparkles aria-hidden="true" className="size-5 text-[var(--accent-conversation)]" />
+              ) : (
+                <Terminal className="size-5" aria-hidden="true" />
+              )}
             </span>
             <div>
               <h2 className="text-2xl font-semibold tracking-tight">
-                What would you like to change?
+                {variant === 'discussion' ? 'Think it through.' : 'What would you like to change?'}
               </h2>
-              <p className="mt-2 max-w-md text-sm leading-6 text-[var(--text-secondary)]">
-                Describe the outcome, add your sources, and shape the next version together.
-              </p>
+              {variant === 'discussion' ? (
+                <p className="mt-2 max-w-[32rem] text-[13px] leading-5 text-[var(--text-secondary)]">
+                  Ask about the current Draft, selected sources, or the node you are inspecting.
+                  Changes are only published after validation.
+                </p>
+              ) : null}
             </div>
-            <div className="grid w-full gap-2 sm:grid-cols-3">
-              {[
-                [
-                  'Explore',
-                  'Understand this workspace',
-                  'Explain the current workspace and the changes it contains.',
-                ],
-                [
-                  'Refine',
-                  'Make a focused change',
-                  'Help me refine this workspace. Ask me what I want to change first.',
-                ],
-                [
-                  'Review',
-                  'Find gaps and next steps',
-                  'Review the current proposal for missing requirements and open questions.',
-                ],
-              ].map(([label, title, prompt]) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => {
-                    chat.setInput(prompt!);
-                    document
-                      .querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')
-                      ?.focus();
-                  }}
-                  className="group rounded-xl border border-[var(--stroke-divider)] p-3 text-left transition-colors hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-                >
-                  <span className="flex items-center justify-between text-xs text-[var(--text-tertiary)]">
-                    {label}
-                    <ArrowUpRight className="size-3.5" aria-hidden="true" />
-                  </span>
-                  <span className="mt-2 block text-[13px] font-medium leading-5">{title}</span>
-                </button>
-              ))}
-            </div>
+            {variant !== 'discussion' ? (
+              <div className="grid w-full gap-2 sm:grid-cols-3">
+                {[
+                  [
+                    'Explore',
+                    'Understand this workspace',
+                    'Explain the current workspace and the changes it contains.',
+                  ],
+                  [
+                    'Refine',
+                    'Make a focused change',
+                    'Help me refine this workspace. Ask me what I want to change first.',
+                  ],
+                  [
+                    'Review',
+                    'Find gaps and next steps',
+                    'Review the current proposal for missing requirements and open questions.',
+                  ],
+                ].map(([label, title, prompt]) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => {
+                      chat.setInput(prompt!);
+                      document
+                        .querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')
+                        ?.focus();
+                    }}
+                    className="group rounded-xl border border-[var(--stroke-divider)] p-3 text-left transition-colors hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                  >
+                    <span className="flex items-center justify-between text-xs text-[var(--text-tertiary)]">
+                      {label}
+                      <ArrowUpRight className="size-3.5" aria-hidden="true" />
+                    </span>
+                    <span className="mt-2 block text-[13px] font-medium leading-5">{title}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </ConversationEmptyState>
         ) : null}
         {copyError ? (
@@ -115,6 +182,20 @@ export function WorkspaceComposeChat({ chat }: WorkspaceComposeChatProps) {
         {messages.map((message) => {
           const isStreaming = message.id.endsWith(':streaming');
           const showCurrentStreamMeta = isStreaming && message.id === latestAssistantId;
+          const showLiveActivity =
+            currentActivity &&
+            messages.at(-1)?.role === 'assistant' &&
+            message.role === 'assistant' &&
+            message.id === latestAssistantId;
+          const record = showLiveActivity
+            ? {
+                activity: currentActivity,
+                publication:
+                  assistantPublication?.turnId === currentActivity.turnId
+                    ? assistantPublication
+                    : null,
+              }
+            : assistantRecords?.[message.id];
           return (
             <ComposeChatMessage
               copied={copiedMessageId === message.id}
@@ -122,7 +203,15 @@ export function WorkspaceComposeChat({ chat }: WorkspaceComposeChatProps) {
               key={message.id}
               message={message}
               onCopy={() => void copyMessage(message.id, message.content)}
+              variant={variant}
             >
+              {record ? (
+                <WorkspaceAssistantActivity
+                  activity={record.activity}
+                  publishing={Boolean(showLiveActivity && assistantPublishing)}
+                  publication={record.publication}
+                />
+              ) : null}
               {showCurrentStreamMeta ? (
                 <CurrentStreamMeta
                   citations={citations}
@@ -134,10 +223,19 @@ export function WorkspaceComposeChat({ chat }: WorkspaceComposeChatProps) {
             </ComposeChatMessage>
           );
         })}
+        {currentActivity && messages.at(-1)?.role === 'user' ? (
+          <div className={styles.activityOnly}>
+            <WorkspaceAssistantActivity
+              activity={currentActivity}
+              publishing={assistantPublishing}
+            />
+          </div>
+        ) : null}
         {chat.isLoading && !chat.isStreaming ? <PendingAssistantMessage /> : null}
         {!chat.isStreaming && citations.length > 0 && latestAssistantId ? (
           <CitationList citations={citations} />
         ) : null}
+        {discussionAction}
       </ConversationContent>
       <ConversationScrollButton aria-label="Scroll to latest message" />
     </Conversation>
@@ -150,74 +248,136 @@ function ComposeChatMessage({
   copied,
   onCopy,
   children,
+  variant,
 }: {
   message: WorkspaceComposeChatState['messages'][number];
   isStreaming: boolean;
   copied: boolean;
   onCopy: () => void;
   children?: ReactNode;
+  variant: 'default' | 'discussion';
 }) {
   const isUser = message.role === 'user';
 
+  if (variant === 'discussion') {
+    const Avatar = isUser ? UserRound : Bot;
+    return (
+      <div className={styles.discussionMessage} data-author={isUser ? 'user' : 'assistant'}>
+        <div className={styles.discussionMessageHeader}>
+          <span className={styles.discussionAvatar}>
+            <Avatar aria-hidden="true" />
+          </span>
+          <strong>{isUser ? 'You' : 'Assistant'}</strong>
+          {isStreaming ? <span>Working…</span> : null}
+          {!isUser && !isStreaming ? (
+            <button
+              aria-label={copied ? 'Message copied' : 'Copy message'}
+              onClick={onCopy}
+              type="button"
+            >
+              {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+            </button>
+          ) : null}
+        </div>
+        {children}
+        {isUser || message.content.trim() ? (
+          <div className={styles.discussionBubble}>
+            {isUser ? (
+              <p>{message.content}</p>
+            ) : (
+              <MessageResponse
+                animated={false}
+                className={styles.discussionText}
+                isAnimating={isStreaming}
+                mode={isStreaming ? 'streaming' : 'static'}
+                parseIncompleteMarkdown={isStreaming}
+                skipHtml
+              >
+                {discussionText(message.content)}
+              </MessageResponse>
+            )}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   if (isUser) {
     return (
-      <Message className="max-w-full" from="user">
-        <MessageContent className="max-w-[85%] rounded-[18px] border border-[var(--stroke-divider)] bg-[var(--surface-app)] px-4 py-2.5 text-[14px] leading-6 text-[var(--text-primary)] shadow-none">
-          <p className="break-words whitespace-pre-wrap">{message.content}</p>
-        </MessageContent>
-      </Message>
+      <div className={styles.message}>
+        <span className={styles.avatar}>Y</span>
+        <div className={styles.messageBody}>
+          <div className={styles.messageHeader}>
+            <strong>You</strong>
+          </div>
+          <p className={styles.userText}>{message.content}</p>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Message className="w-full max-w-full gap-3" from="assistant">
-      <div className="flex items-center gap-2 text-xs font-medium text-[var(--text-secondary)]">
-        <span className="flex size-6 items-center justify-center rounded-md bg-[var(--text-primary)] text-[var(--surface-panel)]">
-          <Terminal className="size-3.5" aria-hidden="true" />
-        </span>
-        T3X{' '}
-        <span className="font-normal text-[var(--text-tertiary)]">
-          {isStreaming ? 'Working' : 'Assistant'}
-        </span>
+    <div className={styles.message}>
+      <Image
+        alt=""
+        aria-hidden="true"
+        className={styles.assistantAvatar}
+        height={38}
+        src="/favicon.svg"
+        width={38}
+      />
+      <div className={styles.messageBody}>
+        <div className={styles.messageHeader}>
+          <strong>T3X Assistant</strong>
+          <span>{isStreaming ? 'Working…' : ''}</span>
+        </div>
+        <div className={styles.assistantContent}>
+          {children}
+          <MessageResponse
+            animated={isStreaming ? STREAM_ANIMATION : false}
+            caret={isStreaming ? 'block' : undefined}
+            isAnimating={isStreaming}
+            mode={isStreaming ? 'streaming' : 'static'}
+            parseIncompleteMarkdown={isStreaming}
+            skipHtml
+          >
+            {message.content}
+          </MessageResponse>
+          {!isStreaming ? (
+            <MessageActions className={styles.actions}>
+              <MessageAction
+                aria-label={copied ? 'Message copied' : 'Copy message'}
+                label={copied ? 'Copied' : 'Copy'}
+                onClick={onCopy}
+                tooltip={copied ? 'Copied' : 'Copy response'}
+                variant="ghost"
+              >
+                {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+              </MessageAction>
+            </MessageActions>
+          ) : null}
+        </div>
       </div>
-      <MessageContent className="w-full max-w-full overflow-visible bg-transparent p-0">
-        {children}
-        <MessageResponse
-          isAnimating={isStreaming}
-          mode={isStreaming ? 'streaming' : 'static'}
-          parseIncompleteMarkdown={isStreaming}
-          skipHtml
-        >
-          {message.content}
-        </MessageResponse>
-        {!isStreaming ? (
-          <MessageActions className="mt-3 gap-1 text-[var(--text-tertiary)] opacity-60 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-            <MessageAction
-              aria-label={copied ? 'Message copied' : 'Copy message'}
-              label={copied ? 'Copied' : 'Copy'}
-              onClick={onCopy}
-              tooltip={copied ? 'Copied' : 'Copy response'}
-              variant="ghost"
-            >
-              {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-            </MessageAction>
-          </MessageActions>
-        ) : null}
-      </MessageContent>
-    </Message>
+    </div>
   );
 }
 
 function PendingAssistantMessage() {
   return (
-    <Message className="max-w-full" from="assistant">
-      <MessageContent className="w-full max-w-[720px] bg-transparent p-0">
-        <output className="inline-flex items-center gap-2 py-2 text-[13px] text-[var(--text-secondary)]">
-          <Loader2 className="size-3.5 animate-spin text-[var(--accent-commit)]" />
-          Working…
-        </output>
-      </MessageContent>
-    </Message>
+    <div className={styles.pending}>
+      <Image
+        alt=""
+        aria-hidden="true"
+        className={styles.assistantAvatar}
+        height={38}
+        src="/favicon.svg"
+        width={38}
+      />
+      <output className={styles.pendingText}>
+        <Loader2 className="size-3.5 animate-spin text-[var(--accent-commit)]" />
+        Working…
+      </output>
+    </div>
   );
 }
 
