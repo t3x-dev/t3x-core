@@ -4,6 +4,7 @@ import { persist } from 'zustand/middleware';
 export type UserExperience = 'general' | 'developer';
 export type ViewMode = 'canvas' | 'timeline';
 export type Density = 'compact' | 'comfortable';
+export type AccentColor = 'blue' | 'purple' | 'teal';
 export const DEFAULT_LOCAL_WORKSPACE_NAME = 'Local user';
 const LEGACY_LOCAL_WORKSPACE_NAME = 'Local Workspace';
 export type LocalWorkspaceAvatarColor =
@@ -21,6 +22,8 @@ interface SettingsState {
   userExperience: UserExperience;
   defaultView: ViewMode;
   density: Density;
+  accentColor: AccentColor;
+  reducedMotion: boolean;
   localWorkspaceName: string;
   localWorkspaceAvatarColor: LocalWorkspaceAvatarColor;
 
@@ -29,6 +32,8 @@ interface SettingsState {
   setUserExperience: (experience: UserExperience) => void;
   setDefaultView: (view: ViewMode) => void;
   setDensity: (density: Density) => void;
+  setAccentColor: (accentColor: AccentColor) => void;
+  setReducedMotion: (reducedMotion: boolean) => void;
   setLocalWorkspaceName: (name: string) => void;
   setLocalWorkspaceAvatarColor: (color: LocalWorkspaceAvatarColor) => void;
 }
@@ -47,6 +52,8 @@ export const useSettingsStore = create<SettingsState>()(
       userExperience: 'general',
       defaultView: 'timeline',
       density: 'comfortable',
+      accentColor: 'blue',
+      reducedMotion: false,
       localWorkspaceName: DEFAULT_LOCAL_WORKSPACE_NAME,
       localWorkspaceAvatarColor: 'blue',
 
@@ -59,6 +66,8 @@ export const useSettingsStore = create<SettingsState>()(
         set({ userExperience: experience, developerMode: experience === 'developer' }),
       setDefaultView: (view) => set({ defaultView: view }),
       setDensity: (density) => set({ density }),
+      setAccentColor: (accentColor) => set({ accentColor }),
+      setReducedMotion: (reducedMotion) => set({ reducedMotion }),
       setLocalWorkspaceName: (name) => set({ localWorkspaceName: name }),
       setLocalWorkspaceAvatarColor: (color) => set({ localWorkspaceAvatarColor: color }),
     }),
@@ -69,6 +78,8 @@ export const useSettingsStore = create<SettingsState>()(
         userExperience: state.userExperience,
         defaultView: state.defaultView,
         density: state.density,
+        accentColor: state.accentColor,
+        reducedMotion: state.reducedMotion,
         localWorkspaceName: state.localWorkspaceName,
         localWorkspaceAvatarColor: state.localWorkspaceAvatarColor,
       }),
