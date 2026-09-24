@@ -487,7 +487,6 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(await screen.findAllByText('Missing')).toHaveLength(2);
     expect(screen.queryByRole('region', { name: 'State overview' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Revision details'));
     fireEvent.click(screen.getByRole('button', { name: 'Run validation' }));
 
     await waitFor(() => {

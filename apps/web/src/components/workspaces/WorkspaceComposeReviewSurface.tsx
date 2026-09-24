@@ -1679,8 +1679,9 @@ interface WorkspaceReviewStructureModel {
   rows: WorkspaceReviewStructureRow[];
 }
 
-interface WorkspaceReviewStructureRow extends StatePointRow {
+export interface WorkspaceReviewStructureRow extends StatePointRow {
   childCount?: number;
+  collapseByDefault?: boolean;
   diff?: WorkspaceReviewDiffMeta;
   parentPath: string | null;
   removedFromParent?: boolean;
@@ -1838,6 +1839,74 @@ function WorkspaceReviewStructureView({
         view={view}
       />
     </section>
+  );
+}
+
+export function WorkspaceReviewStructureTree({
+  activeRowId,
+  expansionRequest,
+  modifiedLabel,
+  modifiedOnly = false,
+  onSelectRow,
+  query = '',
+  rows,
+}: {
+  activeRowId: string | null;
+  expansionRequest?: { id: number; mode: 'all' | 'none' } | null;
+  modifiedLabel: string;
+  modifiedOnly?: boolean;
+  onSelectRow: (rowId: string) => void;
+  query?: string;
+  rows: WorkspaceReviewStructureRow[];
+}) {
+  const [expansionOverrides, setExpansionOverrides] = useState<Record<string, boolean>>({});
+  const filtering = query.trim().length > 0 || modifiedOnly;
+  const visibleRows = useMemo(() => {
+    if (filtering) return filterWorkspaceReviewStructureRows(rows, query, modifiedOnly);
+    return filterCollapsedWorkspaceReviewRows(rows, (row) =>
+      isWorkspaceReviewRowExpanded(row, expansionOverrides)
+    );
+  }, [expansionOverrides, filtering, modifiedOnly, query, rows]);
+  const toggleRow = useCallback((row: WorkspaceReviewStructureRow) => {
+    setExpansionOverrides((current) => ({
+      ...current,
+      [row.id]: !isWorkspaceReviewRowExpanded(row, current),
+    }));
+  }, []);
+  useEffect(() => {
+    if (!expansionRequest) return;
+    setExpansionOverrides(
+      Object.fromEntries(
+        rows.filter((row) => row.expandable).map((row) => [row.id, expansionRequest.mode === 'all'])
+      )
+    );
+  }, [expansionRequest, rows]);
+
+  return (
+    <StateScrollArea className="min-h-0 flex-1 overflow-auto" label="Workspace structure rows">
+      <table className="w-full table-fixed border-collapse">
+        <colgroup>
+          <col className="w-[29%]" />
+          <col className="w-[34%]" />
+          <col className="w-[25%]" />
+          <col className="w-[12%]" />
+        </colgroup>
+        <tbody>
+          {visibleRows.map((row) => (
+            <WorkspaceReviewStructureTableRow
+              changeReason=""
+              expanded={filtering || isWorkspaceReviewRowExpanded(row, expansionOverrides)}
+              key={row.id}
+              modifiedLabel={modifiedLabel}
+              onSelect={() => onSelectRow(row.id)}
+              onToggle={() => toggleRow(row)}
+              row={row}
+              selected={activeRowId === row.id}
+            />
+          ))}
+        </tbody>
+      </table>
+    </StateScrollArea>
   );
 }
 
@@ -3395,7 +3464,7 @@ function isEmptyWorkspaceReviewBaseline(value: WorkspaceYOpsValue): boolean {
   return false;
 }
 
-function buildWorkspaceReviewStructureRows(
+export function buildWorkspaceReviewStructureRows(
   rows: StatePointRow[],
   diffChanges: StructuredDiffChange[]
 ): WorkspaceReviewStructureRow[] {
@@ -3604,6 +3673,7 @@ function isWorkspaceReviewRowExpanded(
   overrides: Record<string, boolean>
 ): boolean {
   if (overrides[row.id] !== undefined) return overrides[row.id];
+  if (row.collapseByDefault) return false;
   return row.depth < 2 || Boolean(row.diff);
 }
 

@@ -483,6 +483,8 @@ export function ProjectDetailPageContent({
         projectId={projectId}
         projectName={project.name}
         projectDescription={project.description}
+        projectOwner={project.owner}
+        projectVisibility={project.visibility}
         validation={project.yschemaValidation}
         validationError={yschemaValidationError}
         validationRunning={yschemaValidationRunning}

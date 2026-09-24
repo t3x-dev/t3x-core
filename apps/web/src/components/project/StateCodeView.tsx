@@ -1,8 +1,9 @@
 'use client';
 
 import { JSON_SCHEMA, load } from 'js-yaml';
-import { Check, Code2, Copy, GitBranch, Search } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Copy, Info, Search, X } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import styles from '@/components/project/StateCodeView.module.css';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { cn } from '@/utils/cn';
 
@@ -11,8 +12,6 @@ type CodeMode = 'yaml' | 'json' | 'raw';
 /** Read-only formats of the selected State. Never reads HEAD or runs validation. */
 export function StateCodeView({
   yamlText,
-  branch,
-  rootKey,
   commitHash,
 }: {
   yamlText: string;
@@ -21,8 +20,10 @@ export function StateCodeView({
   commitHash: string;
 }) {
   const [mode, setMode] = useState<CodeMode>('yaml');
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(true);
+  const [query, setQuery] = useState('allocation');
+  const [activeMatch, setActiveMatch] = useState(0);
+  const [wrapLines, setWrapLines] = useState(true);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -44,11 +45,22 @@ export function StateCodeView({
   const error = mode === 'json' ? json.error : null;
   const lines = text.split('\n');
   const search = searchOpen ? query.trim().toLowerCase() : '';
-  const matches = search ? lines.filter((line) => line.toLowerCase().includes(search)).length : 0;
+  const matchingLines = useMemo(
+    () =>
+      search
+        ? lines.reduce<number[]>((results, line, index) => {
+            if (line.toLowerCase().includes(search)) results.push(index);
+            return results;
+          }, [])
+        : [],
+    [lines, search]
+  );
+  const matches = matchingLines.length;
 
   useEffect(() => {
     if (searchOpen) input.current?.focus();
   }, [searchOpen]);
+  useEffect(() => setActiveMatch(0), [mode, query, yamlText]);
   useEffect(() => {
     copySequence.current += 1;
     setCopied(false);
@@ -72,166 +84,235 @@ export function StateCodeView({
     }
   }
 
-  const fileName = `${rootKey}-state.${mode === 'json' ? 'json' : 'yaml'}`;
+  async function copyRevision() {
+    try {
+      await navigator.clipboard.writeText(commitHash);
+    } catch {
+      setCopyError('Clipboard unavailable. Select and copy the revision directly.');
+    }
+  }
+
+  function moveMatch(direction: -1 | 1) {
+    if (!matches) return;
+    setActiveMatch((current) => (current + direction + matches) % matches);
+  }
+
+  const shortHash = commitHash.replace(/^sha256:/, '').slice(0, 7);
+  const modeLabel = mode === 'raw' ? 'Plain YAML' : mode.toUpperCase();
 
   return (
     <section
       aria-label="YAML code view"
-      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--surface-panel)]"
+      className={cn(styles.root, 'min-h-0 flex-1 overflow-hidden')}
     >
-      <header className="flex min-h-[64px] shrink-0 flex-wrap items-center gap-3 border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-5 py-3">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-[5px] bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]">
-          <Code2 aria-hidden="true" className="size-4" strokeWidth={2.2} />
-        </span>
-        <div className="min-w-0">
-          <h2 className="truncate text-[14px] font-semibold leading-5 text-[var(--text-primary)]">
-            {fileName}
-          </h2>
-          <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs leading-[18px] text-[var(--text-tertiary)]">
-            <GitBranch aria-hidden="true" className="size-3" />
-            <span className="truncate font-mono">{branch}</span>
-            <span aria-hidden="true" className="text-[var(--text-quaternary)]">
-              /
-            </span>
-            <span className="truncate font-mono">{rootKey}</span>
-            <span aria-hidden="true" className="text-[var(--text-quaternary)]">
-              /
-            </span>
-            <span className="truncate font-mono">{fileName}</span>
+      <div className={styles.card}>
+        <header className={styles.toolbar}>
+          <div className={styles.titleGroup}>
+            <h2>State source</h2>
+            <span className={styles.readOnly}>Read-only</span>
           </div>
-        </div>
 
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          <div
-            aria-label="Code format"
-            className="hidden h-8 items-center rounded-[5px] border border-[var(--stroke-divider)] bg-[var(--surface-app)] p-[2px] text-xs font-medium leading-4 sm:inline-flex"
-            role="toolbar"
-          >
-            {(['yaml', 'json', 'raw'] as const).map((format) => (
+          <div className={styles.controls}>
+            <div aria-label="Code format" className={styles.formatTabs} role="toolbar">
+              {(['yaml', 'json', 'raw'] as const).map((format) => (
+                <button
+                  aria-label={format === 'raw' ? 'Raw' : undefined}
+                  aria-pressed={mode === format}
+                  className={cn(styles.formatButton, mode === format && styles.formatButtonActive)}
+                  key={format}
+                  onClick={() => setMode(format)}
+                  type="button"
+                >
+                  {format === 'raw' ? 'Plain YAML' : format.toUpperCase()}
+                </button>
+              ))}
+            </div>
+            <span aria-hidden="true" className={styles.separator} />
+            <label className={styles.wrapControl}>
+              <span>Wrap lines</span>
               <button
-                aria-pressed={mode === format}
-                className={cn(
-                  'h-full rounded-[4px] px-3 text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-panel)] hover:text-[var(--text-primary)]',
-                  mode === format &&
-                    'border border-[var(--stroke-divider)] bg-[var(--surface-card)] text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)]'
-                )}
-                key={format}
-                onClick={() => setMode(format)}
+                aria-label="Wrap lines"
+                aria-pressed={wrapLines}
+                className={cn(styles.switch, wrapLines && styles.switchOn)}
+                onClick={() => setWrapLines((value) => !value)}
                 type="button"
               >
-                {format === 'raw' ? 'Raw' : format.toUpperCase()}
+                <span />
               </button>
-            ))}
+            </label>
+            <button
+              aria-label={copied ? 'Copied code' : `Copy ${mode === 'json' ? 'JSON' : 'YAML'} code`}
+              className={styles.copyButton}
+              disabled={Boolean(error)}
+              onClick={() => void copy()}
+              type="button"
+            >
+              {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+              <span>{copied ? 'Copied' : 'Copy'}</span>
+            </button>
+            <button
+              aria-label="Find in code"
+              className={cn(styles.findButton, searchOpen && 'sr-only')}
+              onClick={() => setSearchOpen(true)}
+              type="button"
+            >
+              <Search aria-hidden="true" />
+            </button>
           </div>
-          <button
-            aria-label={copied ? 'Copied code' : `Copy ${mode === 'json' ? 'JSON' : 'YAML'} code`}
-            className="inline-flex size-8 items-center justify-center rounded-[5px] border border-[var(--stroke-divider)] bg-[var(--surface-card)] text-[var(--text-secondary)] shadow-[var(--fx-shadow-sm)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
-            disabled={Boolean(error)}
-            onClick={() => void copy()}
-            title={copied ? 'Copied' : 'Copy code'}
-            type="button"
-          >
-            {copied ? (
-              <Check aria-hidden="true" className="size-3.5 text-[var(--status-success)]" />
-            ) : (
-              <Copy aria-hidden="true" className="size-3.5" />
-            )}
-          </button>
-          <button
-            aria-label="Find in code"
-            aria-pressed={searchOpen}
-            className={cn(
-              'inline-flex size-8 items-center justify-center rounded-[5px] border border-[var(--stroke-divider)] bg-[var(--surface-card)] text-[var(--text-secondary)] shadow-[var(--fx-shadow-sm)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50',
-              searchOpen && 'border-[var(--accent-commit)]/40 text-[var(--accent-commit)]'
-            )}
-            onClick={() => setSearchOpen((open) => !open)}
-            title="Find in code"
-            type="button"
-          >
-            <Search aria-hidden="true" className="size-3.5" />
-          </button>
-        </div>
-      </header>
+        </header>
 
-      {searchOpen && (
-        <div className="flex shrink-0 items-center gap-3 border-b border-[var(--stroke-divider)] px-4 py-2">
-          <input
-            ref={input}
-            aria-label="Find in code"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            className="h-8 min-w-0 flex-1 rounded border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 text-[13px]"
-            placeholder="Find in code…"
-          />
-          <output className="shrink-0 text-[12px] text-[var(--text-tertiary)]">
-            {matches} matching lines
-          </output>
+        {searchOpen ? (
+          <div className={styles.searchRow}>
+            <div className={styles.searchField}>
+              <Search aria-hidden="true" />
+              <input
+                ref={input}
+                aria-label="Find in code"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Find in code…"
+              />
+            </div>
+            <output className={styles.matchCount}>
+              {matches ? `${Math.min(activeMatch + 1, matches)} of ${matches}` : '0 of 0'}
+              <span className="sr-only">{matches} matching lines</span>
+            </output>
+            <div className={styles.matchButtons}>
+              <button aria-label="Previous match" onClick={() => moveMatch(-1)} type="button">
+                <ChevronUp aria-hidden="true" />
+              </button>
+              <button aria-label="Next match" onClick={() => moveMatch(1)} type="button">
+                <ChevronDown aria-hidden="true" />
+              </button>
+            </div>
+            <span aria-hidden="true" className={styles.separator} />
+            <button
+              aria-label="Close search"
+              className={styles.closeSearch}
+              onClick={() => setSearchOpen(false)}
+              type="button"
+            >
+              <X aria-hidden="true" />
+              <span>Close</span>
+            </button>
+          </div>
+        ) : null}
+
+        {(error || copyError) && (
+          <p role="alert" className={styles.error}>
+            {error ?? copyError}
+          </p>
+        )}
+
+        <StateScrollArea
+          label={
+            mode === 'json'
+              ? 'JSON content'
+              : mode === 'raw'
+                ? 'Raw YAML content'
+                : 'Canonical YAML content'
+          }
+          horizontal
+          className={cn(styles.codeArea, 'min-h-0 flex-1')}
+          viewportClassName={styles.viewport}
+        >
+          <code className={cn(styles.code, 'min-w-max')}>
+            {!error &&
+              lines.map((line, index) => (
+                <div className={styles.codeLine} key={`${index}:${line}`}>
+                  <span aria-hidden="true" className={styles.lineNumber}>
+                    {index + 1}
+                  </span>
+                  <span
+                    className={cn(
+                      styles.lineText,
+                      'whitespace-pre',
+                      wrapLines && styles.lineTextWrapped
+                    )}
+                  >
+                    {mode === 'raw' ? markSearch(line, search) : highlightLine(line, mode, search)}
+                  </span>
+                </div>
+              ))}
+          </code>
+        </StateScrollArea>
+
+        <div className={styles.statusRow}>
+          <span>{modeLabel === 'YAML' ? 'Canonical YAML' : modeLabel}</span>
+          <span aria-hidden="true">·</span>
+          <span>Read-only</span>
+          <span className={styles.revision}>
+            Revision <code>{shortHash}</code>
+            <button
+              aria-label="Copy revision hash"
+              onClick={() => void copyRevision()}
+              type="button"
+            >
+              <Copy aria-hidden="true" />
+            </button>
+          </span>
         </div>
-      )}
-      {(error || copyError) && (
-        <p role="alert" className="px-4 py-2 text-[13px] text-[var(--status-danger)]">
-          {error ?? copyError}
-        </p>
-      )}
-      <StateScrollArea
-        label={
-          mode === 'json'
-            ? 'JSON content'
-            : mode === 'raw'
-              ? 'Raw YAML content'
-              : 'Canonical YAML content'
-        }
-        horizontal
-        className="min-h-0 min-w-0 flex-1 bg-[var(--editor-bg)]"
-        viewportClassName="font-mono text-[13px] leading-[22px] text-[var(--text-primary)]"
-      >
-        <code className="block min-w-max py-4 pr-6">
-          {!error &&
-            lines.map((line, index) => (
-              <div
-                key={`${index}:${line}`}
-                className={cn(
-                  'grid min-h-[22px] grid-cols-[48px_max-content]',
-                  search && line.toLowerCase().includes(search) && 'bg-[var(--accent-commit-soft)]'
-                )}
-              >
-                <span
-                  aria-hidden="true"
-                  className="sticky left-0 select-none border-r border-[var(--stroke-divider)] bg-[var(--editor-gutter)] px-3 text-right text-[var(--text-tertiary)]"
-                >
-                  {index + 1}
-                </span>
-                <span className="whitespace-pre px-4">
-                  {mode === 'raw' ? line : highlightLine(line)}
-                </span>
-              </div>
-            ))}
-        </code>
-      </StateScrollArea>
-      <footer className="flex min-h-9 shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t border-[var(--stroke-divider)] px-4 py-2 text-[12px] text-[var(--text-tertiary)]">
-        <span>Selected commit</span>
-        <span>{error ? 'JSON unavailable' : `${lines.length} lines`}</span>
-        <span className="ml-auto font-mono">
-          {mode === 'raw' ? 'RAW YAML' : mode === 'json' ? 'PARSED JSON' : 'CANONICAL YAML'}
-        </span>
-      </footer>
+        <div className={styles.noteRow}>
+          <span className={styles.infoIcon}>
+            <Info aria-hidden="true" />
+          </span>
+          <span>Plain YAML shows the same YAML without syntax highlighting.</span>
+          <span className={styles.proposeNote}>
+            Propose a change to update this committed state.
+          </span>
+        </div>
+      </div>
     </section>
   );
 }
 
-function highlightLine(line: string): ReactNode {
-  // Cosmetic token coloring only. Preserve every character; React escapes the source.
+function highlightLine(line: string, mode: CodeMode, search: string): ReactNode {
+  if (mode === 'json') return highlightJsonLine(line, search);
   const match = line.match(/^(\s*(?:-\s+)?)("(?:[^"\\]|\\.)*"|[^:#]+)(:)(\s*)(.*)$/);
-  if (!match) return line;
+  if (!match) return markSearch(line, search);
   return (
     <>
       {match[1]}
-      <span className="font-semibold text-[var(--accent-commit)]">
-        {match[2]}
-        {match[3]}
-      </span>
+      <span className={styles.key}>{markSearch(`${match[2]}${match[3]}`, search)}</span>
       {match[4]}
-      {match[5]}
+      <span className={valueClass(match[5])}>{markSearch(match[5], search)}</span>
+    </>
+  );
+}
+
+function highlightJsonLine(line: string, search: string): ReactNode {
+  const match = line.match(/^(\s*)("(?:[^"\\]|\\.)*")(\s*:\s*)?(.*)$/);
+  if (!match) return markSearch(line, search);
+  return (
+    <>
+      {match[1]}
+      <span className={match[3] ? styles.key : styles.stringValue}>
+        {markSearch(match[2], search)}
+      </span>
+      {match[3]}
+      <span className={valueClass(match[4])}>{markSearch(match[4], search)}</span>
+    </>
+  );
+}
+
+function valueClass(value: string): string | undefined {
+  const clean = value.replace(/,$/, '').trim();
+  if (/^(true|false)$/.test(clean)) return styles.booleanValue;
+  if (clean === 'null') return styles.nullValue;
+  if (/^-?\d+(?:\.\d+)?$/.test(clean)) return styles.numberValue;
+  if (/^".*"$/.test(clean)) return styles.stringValue;
+  return undefined;
+}
+
+function markSearch(text: string, search: string): ReactNode {
+  if (!search) return text;
+  const index = text.toLowerCase().indexOf(search);
+  if (index < 0) return text;
+  return (
+    <>
+      {text.slice(0, index)}
+      <mark className={styles.searchMatch}>{text.slice(index, index + search.length)}</mark>
+      {text.slice(index + search.length)}
     </>
   );
 }

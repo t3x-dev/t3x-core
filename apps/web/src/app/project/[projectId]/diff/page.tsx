@@ -28,7 +28,7 @@ function DiffPageContent() {
 
   if (!baseHash || !targetHash) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="flex h-full min-h-0 items-center justify-center bg-background">
         <div className="text-center max-w-md">
           <div className="text-4xl mb-4">:(</div>
           <h1 className="text-xl font-semibold mb-2">Missing parameters</h1>
@@ -54,7 +54,7 @@ export default function DiffRoute() {
   return (
     <Suspense
       fallback={
-        <div className="flex h-screen items-center justify-center bg-background">
+        <div className="flex h-full min-h-0 items-center justify-center bg-background">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
         </div>
       }

@@ -7,9 +7,10 @@
  * Clickable → opens the shared State structure and audit view inside History.
  */
 
-import { Minus, Pencil, Plus } from 'lucide-react';
+import { ChevronRight, GitBranch } from 'lucide-react';
 import { formatDate, relativeTime, shortHash } from '@/domain/format/formatters';
 import { cn } from '@/utils/cn';
+import styles from './HistoryList.module.css';
 
 // ============================================================================
 // Types
@@ -59,98 +60,80 @@ export function CommitHistoryRow({
   isActive,
   onOpen,
 }: CommitHistoryRowProps) {
+  const authorName = author?.name || author?.type || 'Unknown';
+  const authorInitial = authorName.trim().charAt(0).toUpperCase() || 'U';
+  const date = new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(committedAt));
+
   return (
     <button
       type="button"
       onClick={() => onOpen(hash)}
       data-commit-hash={hash}
-      className={cn(
-        'group flex w-full items-stretch rounded-md -mx-2 px-2 text-left transition-colors hover:bg-[var(--hover-bg)]',
-        isActive && 'bg-[var(--hover-bg)] ring-1 ring-[var(--accent-commit)]/30'
-      )}
+      data-history-last={isLast || undefined}
+      className={cn(styles.row, isActive && styles.rowActive)}
     >
-      {/* DAG column */}
-      <div className="w-8 flex flex-col items-center shrink-0 py-1">
-        {/* Top connector line */}
-        {!isFirst && <div className="w-px flex-1 bg-[var(--stroke-divider)]" />}
-        {isFirst && <div className="flex-1" />}
+      <span className={styles.date} title={formatDate(committedAt)}>
+        <span>{date}</span>
+        <span className={styles.dateRelative}>{relativeTime(committedAt)}</span>
+      </span>
 
-        {/* Commit dot */}
-        <div
+      <span className={styles.rail}>
+        <span
           className={cn(
-            'w-3 h-3 rounded-full border-2 shrink-0',
-            parentCount >= 2
-              ? 'border-[var(--accent-merge)] bg-[var(--accent-merge)]/20'
-              : parentCount === 0
-                ? 'border-[var(--accent-commit)] bg-[var(--accent-commit)]'
-                : 'border-[var(--accent-commit)] bg-[var(--surface-card)]'
+            styles.dot,
+            isFirst && styles.dotFirst,
+            parentCount === 0 && styles.dotRoot
           )}
         />
+      </span>
 
-        {/* Bottom connector line */}
-        {!isLast && <div className="w-px flex-1 bg-[var(--stroke-divider)]" />}
-        {isLast && <div className="flex-1" />}
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 min-w-0 py-2.5 pl-2">
-        {/* First line: hash + message */}
-        <div className="flex items-center gap-2 mb-0.5">
-          <span className="font-mono text-xs text-[var(--status-info)] group-hover:underline">
-            {shortHash(hash)}
+      <span className={styles.commit}>
+        <span className={styles.message}>{message || 'Untitled commit'}</span>
+        <span className={styles.meta}>
+          <span className={styles.hash}>{shortHash(hash)}</span>
+          <span className={styles.author}>
+            <span className={styles.avatar}>{authorInitial}</span>
+            <span>{authorName}</span>
           </span>
-          <span className="text-sm text-[var(--text-primary)] truncate">
-            {message || 'No message'}
-          </span>
-        </div>
-
-        {/* Second line: stats + branch + author + time */}
-        <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-tertiary)]">
-          {/* Diff stats */}
-          {diffStats && (
-            <span className="flex items-center gap-1.5">
-              {diffStats.addedCount > 0 && (
-                <span className="flex items-center gap-0.5 text-[var(--diff-added-line)]">
-                  <Plus size={10} />
-                  {diffStats.addedCount}
-                </span>
-              )}
-              {diffStats.modifiedCount > 0 && (
-                <span className="flex items-center gap-0.5 text-[var(--diff-modified-line)]">
-                  <Pencil size={10} />
-                  {diffStats.modifiedCount}
-                </span>
-              )}
-              {diffStats.removedCount > 0 && (
-                <span className="flex items-center gap-0.5 text-[var(--diff-removed-line)]">
-                  <Minus size={10} />
-                  {diffStats.removedCount}
-                </span>
-              )}
-            </span>
-          )}
-
-          {/* Tree count */}
-          {nodeCount != null && (
-            <span className="text-[var(--text-tertiary)]">
-              {nodeCount} tree{nodeCount !== 1 ? 's' : ''}
-            </span>
-          )}
-
-          {/* Branch badge */}
+          <span className={styles.metaDivider} />
           {branch && (
-            <span className="px-1.5 py-0.5 rounded text-[0.6rem] font-medium border border-[var(--stroke-divider)] bg-[var(--hover-bg)]">
-              {branch}
+            <span className={styles.branch}>
+              <GitBranch size={13} strokeWidth={2} />
+              <span>{branch}</span>
             </span>
           )}
+          {parentCount === 0 && <span className={styles.rootBadge}>Root commit</span>}
+          {parentCount >= 2 && <span className={styles.rootBadge}>Merge commit</span>}
+          {nodeCount == null ? null : <span className="sr-only">{nodeCount} trees</span>}
+        </span>
+      </span>
 
-          {/* Author */}
-          <span>{author?.name || author?.type || 'unknown'}</span>
+      <span className={styles.stats}>
+        {diffStats && diffStats.addedCount > 0 && (
+          <span className={`${styles.stat} ${styles.added}`}>
+            <strong>+{diffStats.addedCount}</strong>
+            <span>{diffStats.addedCount} added</span>
+          </span>
+        )}
+        {diffStats && diffStats.modifiedCount > 0 && (
+          <span className={`${styles.stat} ${styles.modified}`}>
+            <strong>~{diffStats.modifiedCount}</strong>
+            <span>{diffStats.modifiedCount} modified</span>
+          </span>
+        )}
+        {diffStats && diffStats.removedCount > 0 && (
+          <span className={`${styles.stat} ${styles.removed}`}>
+            <strong>−{diffStats.removedCount}</strong>
+            <span>{diffStats.removedCount} removed</span>
+          </span>
+        )}
+      </span>
 
-          {/* Time */}
-          <span title={formatDate(committedAt)}>{relativeTime(committedAt)}</span>
-        </div>
-      </div>
+      <ChevronRight className={styles.chevron} size={20} strokeWidth={2} />
     </button>
   );
 }

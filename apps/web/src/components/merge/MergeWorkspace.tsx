@@ -381,7 +381,7 @@ export function MergeWorkspace({
   // Loading state for tree data
   if (treeLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[var(--surface-app)]">
+      <div className="flex h-full min-h-0 items-center justify-center bg-[var(--surface-app)]">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto text-[var(--accent-commit)]" />
           <p className="mt-4 text-[var(--text-secondary)]">Preparing tree merge...</p>
@@ -421,7 +421,7 @@ export function MergeWorkspace({
         variants={containerVariants}
         initial="initial"
         animate="animate"
-        className="relative flex h-screen flex-col bg-[var(--surface-app)]"
+        className="relative flex h-full min-h-0 flex-col bg-[var(--surface-app)]"
       >
         {/* Merge Review Dialog (tree mode) */}
         <MergeReviewDialog
@@ -725,7 +725,7 @@ export function MergeWorkspace({
 
   // No tree merge result — show empty state
   return (
-    <div className="flex h-screen items-center justify-center bg-[var(--surface-app)]">
+    <div className="flex h-full min-h-0 items-center justify-center bg-[var(--surface-app)]">
       <EmptyState
         icon={GitMerge}
         title={`No ${t('merge').toLowerCase()} data available`}
