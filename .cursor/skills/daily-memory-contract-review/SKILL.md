@@ -27,15 +27,15 @@ Use the Memories tool. Do not edit code, invent a memory schema, open a pull req
 
 `GetConversationMemoryResponse` in `packages/api/src/schemas/contracts.ts` is the only memory shape. It is `text`, `token_estimate`, and `sources` of `{ type, id, title? }`. Generation may place `text` into a system message. Replay, Decide, and Commit do not read this object and do not call a model.
 
-Known readers of `GET /v1/conversations/:id/memory`:
+The locked readers are:
 
-- `packages/api/src/schemas/contracts.ts` defines the response.
-- `apps/web/src/infrastructure/pins.ts` expects `BuiltContext`.
-- `apps/web/src/infrastructure/conversations.ts` `getConversationMemoryText` expects `{ text }` only.
-- `packages/api/src/lib/context-manifest.ts` builds the manifest that projects into the response.
-- `apps/web/src/hooks/sourceThreads/useSourceThreadGeneration.ts` reads `text` as a system message.
+- `packages/api/src/routes/conversations.openapi.ts` publishes `GetConversationMemoryResponse` and parses the payload with `ConversationMemorySchema`.
+- `apps/web/src/infrastructure/pins.ts` reads that payload as `BuiltContext`.
+- `apps/web/src/infrastructure/conversations.ts` `getConversationMemoryText` reads the same payload and returns `{ text }`.
+- `apps/web/src/hooks/sourceThreads/conversationMemorySystemMessage.ts` places `text` on the system message.
+- `apps/web/src/__tests__/hooks/sourceThreads/conversationMemorySystemMessage.test.ts` locks that choice.
 
-While those readers disagree, the standing result is `unarmed`. That disagreement is already known. Do not comment on it again, and do not design a replacement object.
+A matching run is `clear`.
 
 ## What a new delta is
 
@@ -43,7 +43,7 @@ Comment only when something new appears since the stored fingerprint:
 
 - a new reader or writer of `/memory` whose type is not `GetConversationMemoryResponse`
 - a new field on that response
-- a new model call on the Replay, Decide, or Commit path
-- a new test that locks this response, which moves the lane from `unarmed` to `clear` if the readers match
+- the memory route schema is no longer `GetConversationMemoryResponse`
+- generation sends `token_estimate` or `sources` to the model, or a model call appears on the Replay, Decide, or Commit path
 
 Record the file pair or test as `evidence`. Do not edit the files.
