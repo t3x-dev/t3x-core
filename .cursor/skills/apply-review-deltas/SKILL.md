@@ -1,41 +1,44 @@
 ---
 name: apply-review-deltas
-description: Apply one accepted T3X daily-review delta list. Use only when a human comment contains the marker "apply deltas".
+description: Apply named T3X daily-review delta ids after a human comment on the daily review pull request.
 disable-model-invocation: true
 ---
 
 # Apply review deltas
 
-Read `.cursor/skills/daily-review-memory/SKILL.md`. Do not start from a daily automation's own issue or comment. Cursor does not wake an automation from the `cursor` bot.
+The three checks do not start this automation. A human comment on the open `daily review` pull request does.
 
 ## Automation prompt
 
 ```text
-A human asked to apply daily-review deltas on t3x-dev/t3x-core.
+A human named daily-review delta ids to apply on t3x-dev/t3x-core.
 Read and follow .cursor/skills/apply-review-deltas/SKILL.md.
-Use the Memories tool. Push the fix to the existing branch. Do not merge.
+Use the Memories tool. Push only those fixes to the daily review pull request branch. Do not merge.
 ```
 
 ## Automation settings
 
-- Trigger: GitHub "Comment added" on a pull request, and GitHub issue comments if that trigger is available.
-- Repository: `t3x-dev/t3x-core`. The pull request supplies the branch.
-- Tools: Memories on. Computer use on only when a delta names a WebUI flow. Pull request creation stays off because the branch already exists.
+- Trigger: GitHub "Comment added" on a pull request.
+- Repository: `t3x-dev/t3x-core`. The commented pull request supplies the branch.
+- Tools: Memories on. Computer use on only when a named delta is a WebUI flow. Pull request creation off.
 - Model: the implementation model selected for the automation.
 
 ## Gate
 
-Run only when the triggering comment contains `apply deltas` and was written by a human account. Ignore comments from `cursor` and other bots.
+Run only when all of these are true:
 
-The comment must point at one daily issue or quote one delta list. If it does not, reply with `no delta list` and stop.
+- The pull request title is `daily review`.
+- The comment was written by a human account. Ignore `cursor` and other bots.
+- The comment contains `apply` followed by one or more delta ids that appear in the pull request body.
+
+If the comment says `apply deltas` and names no id, reply `name an id, for example apply api-boot` and stop. If an id is not in the body, reply `unknown id` and stop. Do not edit files.
 
 ## Work
 
-1. Read the delta ids in that list. Change only the files named in `location`.
-2. Re-run the `evidence` command for each delta.
-3. If a WebUI delta names a spec, run that Playwright spec. Do not explore other screens.
-4. Commit and push to the pull request branch.
-5. Reply on the same thread with the commands you ran and their results.
-6. Update the matching memory lane: remove the fixed delta ids and recompute `fingerprint`. Leave the lane `deltas` when any id remains.
+1. For each named id, read its evidence and location from the matching open `daily: <lane>` issue.
+2. Change only the files named by those locations.
+3. Re-run the evidence command for each named id. For a WebUI spec, run that spec only.
+4. Commit and push to this pull request branch.
+5. Reply on the comment with the ids applied, the files changed, and the command results. Leave every unnamed delta untouched.
 
-Do not change `AGENTS.md`, `RELEASE.md`, `release/surface.yaml`, or the protocol packages unless the accepted delta names that file. Do not add a memory field. Do not merge.
+Do not change `AGENTS.md`, `RELEASE.md`, `release/surface.yaml`, or the protocol packages unless the named delta's location is that file. Do not merge.

@@ -65,4 +65,8 @@ If `gh` cannot create the issue, leave the delta list in the run summary and in 
 
 ## Action rule
 
-A delta issue is feedback. Code changes happen only under `apply-review-deltas`, and only after a human comment contains `apply deltas`.
+A checker issue is feedback. Checkers do not open a pull request.
+
+`.cursor/skills/daily-review-summary/SKILL.md` reads the open `daily:` issues and, when any lane has deltas, opens or updates one draft pull request titled `daily review`. The pull request body is the summary. It does not change product code.
+
+Code changes happen only under `apply-review-deltas`, on that pull request, after a human comment names the delta ids to apply.
