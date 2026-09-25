@@ -200,7 +200,6 @@
     ]
   },
   "reviewSnapshotReferences": [
-    "apps/web/e2e/flows/workspace-complex-flow.spec.ts",
     "apps/web/src/components/workspaces/ChangeDecisionHandoff.tsx",
     "apps/web/src/components/workspaces/ProposalGenerationReviewView.tsx",
     "apps/web/src/components/workspaces/SourceTransitionTab.tsx",
