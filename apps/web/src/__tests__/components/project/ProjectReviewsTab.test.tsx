@@ -335,7 +335,7 @@ describe('ProjectReviewsTab', () => {
       'feature/prd-audience'
     );
     expect(
-      screen.getByText('No other committed branches can be compared with this base.')
+      await screen.findByText('No other committed branches can be compared with this base.')
     ).toBeInTheDocument();
   });
 
