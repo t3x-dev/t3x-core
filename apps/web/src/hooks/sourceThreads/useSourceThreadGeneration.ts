@@ -10,6 +10,7 @@ import { syncSavedTurnIntoWorkspace } from '@/hooks/conversations/syncSavedTurnI
 import { type ChatMessage, useChatHistory } from '@/hooks/conversations/useChatHistory';
 import { useChatStreamState } from '@/hooks/conversations/useChatStreamState';
 import { useChatWarnings } from '@/hooks/conversations/useChatWarnings';
+import { conversationMemorySystemMessage } from '@/hooks/sourceThreads/conversationMemorySystemMessage';
 import {
   type GenerationCitation,
   type GenerationContentBlock,
@@ -200,15 +201,6 @@ function assistantStreamStatusRings(
       status: 'partial',
       reason,
     },
-  };
-}
-
-function buildMemorySystemMessage(memoryContext: string): GenerationMessage | null {
-  const content = memoryContext.trim();
-  if (!content) return null;
-  return {
-    role: 'system',
-    content,
   };
 }
 
@@ -447,17 +439,15 @@ export function useSourceThreadGeneration({
         setTurnsSavedCounter((c) => c + 1);
         onTurnsSaved?.();
 
-        let memoryContext = '';
+        let systemMessage: GenerationMessage | null = null;
         if (!isTemporaryMode && !workspaceAssistant && !options?.skipMemoryFetch) {
           try {
             const ctx = await sourceThreadApi.memory(currentConversationId);
-            if (ctx.text) memoryContext = ctx.text;
+            systemMessage = conversationMemorySystemMessage(ctx);
           } catch {
             // Memory fetch failed — proceed without context.
           }
         }
-
-        const systemMessage = buildMemorySystemMessage(memoryContext);
         const messages: GenerationMessage[] = [
           ...(systemMessage ? [systemMessage] : []),
           ...previousMessages,

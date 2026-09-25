@@ -37,6 +37,7 @@ import {
   IdParamSchema,
   SuccessResponseSchema,
 } from '../schemas/common';
+import { ConversationMemorySchema, GetConversationMemoryResponse } from '../schemas/contracts';
 
 export const conversationRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 
@@ -844,7 +845,7 @@ const getMemoryRoute = createRoute({
       description: 'Built context object',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.unknown()),
+          schema: GetConversationMemoryResponse,
         },
       },
     },
@@ -873,14 +874,16 @@ conversationRoutes.openapi(getMemoryRoute, async (c) => {
 
     const manifest = await buildConversationContextManifest(db, conversationId);
 
+    const data = ConversationMemorySchema.parse({
+      text: manifest.chat_context_text,
+      token_estimate: manifest.token_estimate,
+      sources: manifest.sources,
+    });
+
     return c.json(
       {
         success: true as const,
-        data: {
-          text: manifest.chat_context_text,
-          token_estimate: manifest.token_estimate,
-          sources: manifest.sources,
-        },
+        data,
       },
       200
     );

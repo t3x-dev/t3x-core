@@ -502,8 +502,8 @@ export const UpdateConversationContextRequest = z.object({
 export const UpdateConversationContextResponse = SuccessResponse(ConversationContextResponse);
 
 // GET /v1/conversations/:id/memory
-export const GetConversationMemoryResponse = SuccessResponse(
-  z.object({
+export const ConversationMemorySchema = z
+  .object({
     text: z.string(),
     token_estimate: z.number(),
     sources: z.array(
@@ -514,7 +514,9 @@ export const GetConversationMemoryResponse = SuccessResponse(
       })
     ),
   })
-);
+  .openapi('ConversationMemory');
+
+export const GetConversationMemoryResponse = SuccessResponse(ConversationMemorySchema);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Extraction Style Config

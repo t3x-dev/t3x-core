@@ -3,6 +3,7 @@
  */
 
 import { API_V1, buildQueryString, fetchWithTimeout, handleResponse } from './core';
+import type { BuiltContext } from './pins';
 import type { Conversation, ConversationListData } from './types';
 
 export async function listConversations(
@@ -82,14 +83,14 @@ export async function updateConversation(
 }
 
 /**
- * Fetch the plain-text memory representation of a conversation
- * for clipboard/export style flows. Distinct from
- * `@/infrastructure/pins.getConversationMemory`, which returns the
- * structured BuiltContext used by chat context assembly.
+ * Fetch conversation memory and return its prompt text.
+ * The response is `BuiltContext`; callers that need the estimate or sources
+ * use `getConversationMemory`.
  */
 export async function getConversationMemoryText(conversationId: string): Promise<{ text: string }> {
   const res = await fetchWithTimeout(
     `${API_V1}/conversations/${encodeURIComponent(conversationId)}/memory`
   );
-  return handleResponse<{ text: string }>(res);
+  const memory = await handleResponse<BuiltContext>(res);
+  return { text: memory.text };
 }
