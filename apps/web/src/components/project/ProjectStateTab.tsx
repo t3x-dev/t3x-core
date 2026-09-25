@@ -35,6 +35,7 @@ import { StatePrdReader } from '@/components/project/StatePrdReader';
 import { StatePromptReader } from '@/components/project/StatePromptReader';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { StateSkillReader } from '@/components/project/StateSkillReader';
+import { StateExportButton } from '@/components/shared/StateExportButton';
 import { Button } from '@/components/ui/button';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -600,6 +601,7 @@ export function ProjectStateTab({
           {activeView !== 'canvas' ? (
             <>
               <StateInspectionToolbar
+                projectId={projectId}
                 activeView={activeView}
                 branch={branchFocus || 'main'}
                 branchOptions={branchOptions}
@@ -770,6 +772,7 @@ export function ProjectStateTab({
               projectId={projectId}
               projectName={projectName}
               snapshotLoading={branchesLoading}
+              stateHref={`${pathname}?branch=${encodeURIComponent(branchFocus || 'main')}`}
             />
           )}
         </main>
@@ -779,6 +782,7 @@ export function ProjectStateTab({
 }
 
 function StateInspectionToolbar({
+  projectId,
   activeView,
   branch,
   branchOptions,
@@ -790,6 +794,7 @@ function StateInspectionToolbar({
   onViewChange,
   workspaceHref,
 }: {
+  projectId: string;
   activeView: ProjectSnapshotView;
   branch: string;
   branchOptions: string[];
@@ -798,7 +803,7 @@ function StateInspectionToolbar({
   historyHref: string;
   onBranchChange: (branch: string) => void;
   onCreateBranch: (name: string) => Promise<void>;
-  onViewChange: (view: ProjectSnapshotView) => void;
+  onViewChange: (view: ProjectStateView) => void;
   workspaceHref: string;
 }) {
   return (
@@ -828,6 +833,12 @@ function StateInspectionToolbar({
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
+        <Button size="sm" variant="canvas-outline" onClick={() => onViewChange('canvas')}>
+          Canvas
+        </Button>
+        {headCommit ? (
+          <StateExportButton projectId={projectId} commitDigest={headCommit.hash} />
+        ) : null}
         <Button
           asChild
           className="h-[34px] rounded-[5px] px-3 text-xs text-[var(--text-primary)]"
@@ -947,6 +958,7 @@ function StateCanvasView({
   projectId,
   projectName,
   snapshotLoading,
+  stateHref,
 }: {
   branch: string;
   branchHeadHash: string | null;
@@ -954,6 +966,7 @@ function StateCanvasView({
   projectId: string;
   projectName: string;
   snapshotLoading: boolean;
+  stateHref: string;
 }) {
   const canvasProjectId = useCanvasStore((state) => state.projectId);
   const canvasLoading = useCanvasStore((state) => state.loading);
@@ -997,6 +1010,7 @@ function StateCanvasView({
       <div className="min-h-0 flex-1">
         <CanvasWorkspace
           embedded
+          stateHref={stateHref}
           focusedBranch={branch}
           focusedCommitHash={focusedCommitHash}
           projectName={projectName}

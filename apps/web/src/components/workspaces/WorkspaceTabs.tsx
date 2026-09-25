@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import {
   useWorkspaceComposeReviewController,
   type WorkspaceDraftCommandName,
@@ -15,6 +16,7 @@ import type {
   ProposalGenerationReviewState,
 } from './ProposalGenerationReviewView';
 import { WorkspaceComposeReviewSurface } from './WorkspaceComposeReviewSurface';
+import { PostCommitActions } from './YOpsDraftTab';
 
 type WorkspaceSurfaceMode = 'compose' | 'review';
 
@@ -94,7 +96,25 @@ export function WorkspaceTabs(props: WorkspaceTabsProps) {
   });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col" role="tabpanel">
+    <div className="flex min-h-0 flex-1 flex-col overflow-auto" role="tabpanel">
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-4 py-2 text-sm">
+        <h2 className="font-semibold">{props.candidate.title}</h2>
+        <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--text-secondary)]">
+          {props.candidate.baseCommitHash ? (
+            <span>
+              Based on {props.candidate.baseCommitHash.replace(/^sha256:/, '').slice(0, 12)}
+            </span>
+          ) : null}
+          <span>Next commit to {props.candidate.targetBranch ?? 'main'}</span>
+          {props.candidate.schemaBindings.length > 0 ? (
+            <Link
+              href={`/project/${encodeURIComponent(props.candidate.projectId)}?tab=schemas&schemaView=active&workspace=${encodeURIComponent(props.candidate.id)}`}
+            >
+              View definition
+            </Link>
+          ) : null}
+        </div>
+      </header>
       <WorkspaceComposeReviewSurface
         scenarioOptions={props.scenarioOptions}
         onScenarioSelect={props.onScenarioSelect}
@@ -107,6 +127,18 @@ export function WorkspaceTabs(props: WorkspaceTabsProps) {
           props.onWorkflowTabChange?.(nextMode === 'compose' ? 'chat' : 'validation')
         }
       />
+      {props.candidate.lastCommitHash ? (
+        <div className="shrink-0 px-4 pb-4">
+          <PostCommitActions
+            branchOptions={props.branchOptions ?? []}
+            busy={props.continuationBusy ?? false}
+            commitHash={props.candidate.lastCommitHash}
+            onContinueFromCommit={props.onContinueFromCommit}
+            onViewCommitInState={props.onViewCommitInState}
+            targetBranch={props.candidate.targetBranch ?? 'main'}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

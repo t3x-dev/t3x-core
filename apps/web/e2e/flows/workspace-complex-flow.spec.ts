@@ -120,28 +120,37 @@ test('complex workspace: multiple sources flow through proposal, validation, pre
       await includeMaterial(request, projectId, materialId);
     }
 
+    // Extraction follows an explicit contract; an unbound workspace only has
+    // the generic summary fallback and cannot produce PRD requirements.
+    const seeded = await request.patch(`${API_BASE}/projects/${projectId}/workspaces/${workspaceId}`, {
+      data: { workspace: {
+        id: workspaceId, projectId, title: 'Main workspace', targetBranch: 'main', status: 'draft',
+        summary: '', updatedAt: new Date().toISOString(), baseCommitHash: null, sourceBundle: [],
+        schemaBindings: [{ canonicalName: 't3x/prd', schemaName: 'PRD Schema', version: 'v2', mode: 'pinned' }],
+        schemaCandidate: { summary: '', fields: [] }, schemaReview: { verdict: 'ready', summary: '', gaps: [] },
+        yopsDraft: { id: 'complex-draft', operations: [] }, outputTargets: [],
+      } },
+    });
+    expect(seeded.ok(), await seeded.text()).toBe(true);
+
     const workspaceUrl =
       `/t3x-dev/${repoSlug(projectName)}/workspaces` +
       `?workspace=${encodeURIComponent(workspaceId)}`;
     await page.goto(workspaceUrl);
 
-    await expect(
-      page.getByRole('heading', { exact: true, name: 'T3X Workspace' })
-    ).toBeVisible();
-    await expect(
-      page.getByRole('heading', { exact: true, name: 'Main workspace' })
-    ).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Workspace detail' })).toBeVisible();
+    const sources = page.getByRole('button', { name: 'Open 3 workspace sources' });
+    await expect(sources).toBeVisible();
     for (const source of COMPLEX_SOURCES) {
-      await expect(page.getByText(source.title, { exact: true }).first()).toBeVisible();
+      await expect(sources).toHaveAttribute('title', new RegExp(source.title));
     }
-    await expect(page.getByText('3 sources', { exact: true })).toBeVisible();
-
     await page.screenshot({ path: testInfo.outputPath('workspace-compose.png') });
-    await page.getByRole('button', { name: 'Generate candidate proposal' }).click();
-    await expect(page.getByRole('tab', { name: /Proposal/ })).toHaveAttribute(
-      'aria-selected',
-      'true'
+    const generated = page.waitForResponse(response =>
+      response.request().method() === 'POST' && response.url().endsWith('/yops-draft')
     );
+    await page.getByRole('button', { name: 'Generate changes', exact: true }).click();
+    expect((await generated).ok()).toBe(true);
+    await expect(page.getByText(/12 structured changes generated/)).toBeVisible();
 
     const extractedResponse = await request.get(
       `${API_BASE}/projects/${projectId}/workspaces/${encodeURIComponent(workspaceId)}`
@@ -171,16 +180,6 @@ test('complex workspace: multiple sources flow through proposal, validation, pre
       ])
     );
 
-    await page.getByRole('button', { name: 'Generate YOps proposal' }).click();
-    await expect(page.getByRole('tab', { name: /Validation/ })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
-    await expect(page.getByText('Proposal ready', { exact: true })).toBeVisible();
-    await expect(page.getByText('YOps validation not run', { exact: true })).toBeVisible();
-    await expect(page.getByText(/changes passed/)).toHaveCount(0);
-    await page.screenshot({ path: testInfo.outputPath('workspace-review.png') });
-
     const yopsResponse = await request.get(
       `${API_BASE}/projects/${projectId}/workspaces/${encodeURIComponent(workspaceId)}`
     );
@@ -196,36 +195,15 @@ test('complex workspace: multiple sources flow through proposal, validation, pre
       ])
     );
 
-    await page.getByRole('button', { name: /Validate proposal/ }).click();
-    await expect(page.getByText('YOps validation passed', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Apply YOps/ })).toBeEnabled();
-    await expect(page.getByText('YSchema pass', { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Review full draft', exact: true }).click();
+    await expect(page.getByRole('tab', { name: 'Review', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByText('Review snapshot ready for decision.', { exact: true })).toBeVisible();
+    await expect(page.getByText('Branch head precondition', { exact: true }).first()).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('workspace-review-validated.png') });
-
-    await page.getByRole('button', { name: /Apply YOps/ }).click();
-    await expect(page.getByRole('tab', { name: /Preview/ })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
-    await expect(page.getByRole('region', { name: 'PRD preview' })).toContainText(
-      'Branch head precondition'
-    );
-    await expect(page.getByRole('region', { name: 'PRD preview' })).toContainText(
-      'Review is blocked when the target branch differs from the verified workspace branch.'
-    );
-    await expect(page.getByText('Preview ready for commit', { exact: true })).toBeVisible();
-
-    await page.getByRole('button', { name: 'Continue to Commit' }).click();
-    await page.getByLabel('Change note (optional)').fill(
-      'Verify multi-source evidence, deterministic validation, and branch-safe commit review.'
-    );
-    await page.getByRole('button', { name: 'Review change' }).click();
-    await expect(page.getByLabel('Validation: passed')).toContainText('passed');
-    await expect(page.getByRole('heading', { name: 'Decide in Changes' })).toBeVisible();
-    await page.getByRole('link', { name: 'Open Changes' }).last().click();
+    await page.getByRole('button', { name: 'Commit changes', exact: true }).click();
     await expect(page).toHaveURL(/\/changes\//);
     await expect(
-      page.getByText('Changes is the review and decision surface backed by an immutable ReviewSnapshot.')
+      page.getByRole('heading', { name: 'Review Workspace change', exact: true })
     ).toBeVisible();
     await expect(page.getByRole('button', { name: 'Approve and save' })).toBeEnabled();
     await page.getByRole('button', { name: 'Approve and save' }).click();
@@ -234,19 +212,13 @@ test('complex workspace: multiple sources flow through proposal, validation, pre
     );
 
     await page.goto(workspaceUrl);
-    await page.getByRole('tab', { name: 'Review', exact: true }).click();
-    await page.getByRole('tab', { name: /Commit/ }).click();
-    await expect(page.getByRole('tab', { name: /Commit/ })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
-    await expect(page.getByRole('button', { name: 'View in State' })).toBeVisible();
-    await expect(page.getByText(/sha256:[0-9a-f]{64}/).first()).toBeVisible();
+    await expect(page.getByRole('complementary', { name: 'Post-commit actions' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'View in State' }).first()).toBeVisible();
 
     await page.getByRole('link', { name: 'Pull requests' }).click();
     await page.getByRole('button', { name: /Create PR/i }).click();
-    await expect(page.getByRole('heading', { name: 'Open pull request' })).toBeVisible();
-    await expect(page.getByRole('combobox', { name: 'base:' })).toContainText('main');
+    await expect(page.getByRole('heading', { name: 'New pull request' })).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'Base branch' })).toContainText('main');
     await expect(
       page.getByText('No other committed branches can be compared with this base.')
     ).toBeVisible();

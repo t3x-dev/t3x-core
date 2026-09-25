@@ -21,9 +21,11 @@ import {
 import Image from 'next/image';
 import Link from 'next/link';
 import { type ReactNode, useRef, useState } from 'react';
+import { StateAuthorEditor } from '@/components/project/StateAuthorEditor';
 import { resourceUrl, StateAuthorReadme } from '@/components/project/StateAuthorReadme';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { StateSemanticReader, StateValueReader } from '@/components/project/StateValueReader';
+import { StateSchemaAdoption } from '@/components/schemas/StateSchemaAdoption';
 import { Button } from '@/components/ui/button';
 import { useStateOverview } from '@/hooks/commits/useStateOverview';
 import styles from './StateOverviewView.module.css';
@@ -59,6 +61,8 @@ export function StateOverviewView({
   schemaHref,
   onViewStructure,
   reader,
+  refName,
+  onAuthorRevision,
 }: {
   projectId: string;
   commitDigest: string;
@@ -143,6 +147,32 @@ export function StateOverviewView({
 
   return (
     <div className={styles.root} data-testid="state-overview">
+      {!expanded ? (
+        <div className="flex flex-wrap items-center justify-end gap-3 px-4 pt-3">
+          <StateSchemaAdoption projectId={projectId} commitDigest={commitDigest} />
+          {refName && onAuthorRevision ? (
+            <StateAuthorEditor
+              key={`${projectId}:${refName}:${commitDigest}`}
+              projectId={projectId}
+              refName={refName}
+              commitDigest={commitDigest}
+              onSaved={onAuthorRevision}
+              initial={{
+                description: author?.description ?? '',
+                readme: author?.readme ?? '',
+                tags: author?.tags ?? [],
+                avatarPath: author?.avatarPath ?? undefined,
+                resources: resources.map(({ path, mediaType, alt, base64 }) => ({
+                  path,
+                  mediaType,
+                  alt,
+                  base64,
+                })),
+              }}
+            />
+          ) : null}
+        </div>
+      ) : null}
       {!expanded ? (
         <header className={styles.projectHeader}>
           {isReleaseControl ? (

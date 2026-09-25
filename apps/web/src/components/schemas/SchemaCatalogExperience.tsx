@@ -64,7 +64,7 @@ export function SchemaCatalogExperience({
   const catalog = useSchemaCatalog(
     projectId,
     filters.toString(),
-    view === 'browse' || view === 'release'
+    view === 'browse' || view === 'release' || view === 'discover'
   );
   const collections = useSchemaCollections();
   function navigate(nextView: View, updates: Record<string, string | undefined> = {}) {
@@ -177,6 +177,10 @@ export function SchemaCatalogExperience({
         </SchemaStudioExperience>
       ) : (
         <ExploreDiscoverySurface
+          items={items}
+          loading={catalog.loading}
+          error={catalog.error}
+          onOpen={openRelease}
           onBrowse={() => navigate('browse')}
           onSearch={(query) => navigate('browse', { q: query || undefined })}
         />
@@ -264,6 +268,48 @@ function SchemaBrowse({
             <strong>Search results</strong>
             <span>{visibleItems.length}</span>
           </div>
+          <form
+            key={`${params.get('tags') ?? ''}:${params.get('ecosystem') ?? ''}`}
+            className="mb-5 space-y-3 text-sm"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const data = new FormData(event.currentTarget);
+              navigate('browse', {
+                tags: String(data.get('tags') ?? '').trim() || undefined,
+                ecosystem: String(data.get('ecosystem') ?? '').trim() || undefined,
+              });
+            }}
+          >
+            <label className="block">
+              Tags
+              <input
+                className="mt-1 w-full rounded border p-2"
+                name="tags"
+                defaultValue={params.get('tags') ?? ''}
+              />
+            </label>
+            <label className="block">
+              Ecosystem
+              <input
+                className="mt-1 w-full rounded border p-2"
+                name="ecosystem"
+                defaultValue={params.get('ecosystem') ?? ''}
+              />
+            </label>
+            <button className="rounded border px-3 py-2" type="submit">
+              Apply filters
+            </button>
+            <button
+              className="ml-2 underline"
+              type="button"
+              onClick={() => {
+                setPublisherScope(undefined);
+                navigate('browse', Object.fromEntries(filterKeys.map((key) => [key, undefined])));
+              }}
+            >
+              Clear filters
+            </button>
+          </form>
           <BrowseFilterSection title="Publisher">
             <BrowseCheck
               checked={publisherScope === 'official'}

@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { StateExportButton } from '@/components/shared/StateExportButton';
 import {
   buildWorkspaceReviewStructureRows,
   WorkspaceReviewStructureTree,
@@ -236,6 +237,7 @@ export function CommitHistoryDiffView({
           </div>
         </div>
         <div className={styles.headerAside}>
+          <StateExportButton projectId={commit.project_id} commitDigest={commit.hash} />
           <div className={styles.revisionCompare}>
             <span>
               Parent <code>{parentDigest}</code>

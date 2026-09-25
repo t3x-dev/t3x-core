@@ -394,7 +394,12 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     );
 
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
-    fireEvent.click(screen.getByRole('button', { name: 'View in State' }));
+    fireEvent.click(
+      within(screen.getByRole('complementary', { name: 'Post-commit actions' })).getByRole(
+        'button',
+        { name: 'View in State' }
+      )
+    );
 
     expect(mocks.onViewCommitInState).toHaveBeenCalledWith(
       'sha256:committed-workspace',
