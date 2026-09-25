@@ -23,6 +23,7 @@ test('State and historical Commit export the selected exact value', async ({ pag
     expect(currentDownload.suggestedFilename()).toMatch(/\.yaml$/);
     await page.keyboard.press('Escape');
     await page.goto(`/project/${projectId}/history`);
+    await page.getByRole('button', { name: 'List View', exact: true }).click();
     await page.getByText('Original configuration', { exact: true }).click();
     await page.getByRole('button', { name: 'Export', exact: true }).click();
     await expect(page.getByRole('dialog')).toContainText(first);

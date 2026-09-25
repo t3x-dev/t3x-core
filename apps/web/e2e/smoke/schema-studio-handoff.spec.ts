@@ -59,7 +59,7 @@ test('add a pinned source from Overview to another project Studio without changi
     await drawer.getByLabel('Destination project').selectOption(destination.projectId);
     await expect(drawer.getByText('Saved as a candidate')).toBeVisible();
     await drawer.getByRole('button', { name: 'Open Studio', exact: true }).click();
-    await expect(page.getByRole('region', { name: 'Saved Studio candidates' })).toContainText('Team release definition');
+    await expect(page.getByRole('complementary', { name: 'Studio sources' })).toContainText('Team release definition');
     await page.setViewportSize({ width: 1480, height: 900 });
     await page.screenshot({ path: testInfo.outputPath('candidates-desktop.png'), animations: 'disabled' });
     expect((await (await request.get(`${API_BASE}/projects/${destination.projectId}/schema-studio/candidates`)).json()).data.items).toHaveLength(1);

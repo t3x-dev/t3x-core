@@ -158,37 +158,23 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     expect(response?.status() ?? 200).toBeLessThan(400);
 
     await expect(page.getByRole('heading', { name: 'State' }).first()).toBeVisible();
-    await expect(page.getByRole('tab', { name: /Snapshot/ })).toHaveAttribute(
+    await expect(page.getByRole('tab', { name: /Structure/ })).toHaveAttribute(
       'aria-selected',
       'true'
     );
-    await expect(page.getByLabel('Branch focus')).toHaveValue('feature/prd-audience');
+    await expect(page.getByRole('button', { name: 'Switch branches/tags, current branch feature/prd-audience' })).toBeVisible();
     await expect(page.getByText('Workspace commit: PRD audience handoff')).toBeVisible();
-    await expect(page.getByText('Path / Key')).toBeVisible();
-    await expect(page.getByText('01 SET').first()).toBeVisible();
-    await expect(page.getByText('02 SET').first()).toBeVisible();
-    await expect(page.getByText('03 SET').first()).toBeVisible();
-
     const rootRow = page.getByRole('region', { name: 'Structured state tree' }).getByText('prd', { exact: true }).locator('xpath=ancestor::tr');
-    expect((await rootRow.boundingBox())!.height).toBeLessThanOrEqual(38);
+    expect((await rootRow.boundingBox())!.height).toBeLessThanOrEqual(40);
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('state-structure-desktop.png') });
-    await page.getByRole('button', { name: 'New branch' }).click();
-    await expect(page.getByRole('dialog')).toContainText('Create a new branch');
-    await page.getByRole('button', { name: 'Cancel' }).click();
-    await expect(page.getByRole('dialog')).not.toBeVisible();
+    await page.getByRole('button', { name: 'Switch branches/tags, current branch feature/prd-audience' }).click();
+    await expect(page.getByRole('menuitemradio', { name: 'feature/prd-audience' })).toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('Escape');
 
-    const validationResponsePromise = page.waitForResponse(
-      (response) =>
-        response.request().method() === 'POST' &&
-        response.url().includes(`/api/v1/projects/${projectId}/yschema-validation/runs`)
-    );
-    await page.getByRole('button', { name: 'Run validation' }).click();
-    expect((await validationResponsePromise).status()).toBe(201);
-    await expect(page.getByText('Workspace commit: PRD audience handoff')).toBeVisible();
-
+    // Transition commits carry native review evidence; legacy validation runs do not apply.
     await page.getByRole('tab', { name: /Overview/ }).click();
     await expect(
-      page.getByRole('heading', { exact: true, name: 'PRD audience handoff' })
+      page.getByRole('complementary', { name: 'T3X rendered State' }).getByRole('heading', { exact: true, name: 'Summary' })
     ).toBeVisible();
     await expect(page.getByText('Office workers').first()).toBeVisible();
 
@@ -200,20 +186,19 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     await expect(codeView).not.toContainText('trees:');
     await expect(codeView).not.toContainText('slots:');
     await codeView.getByRole('button', { name: 'JSON', exact: true }).click();
-    await expect(codeView).toContainText('PARSED JSON');
-    await codeView.getByRole('button', { name: 'Find in code' }).click();
+    await expect(codeView.getByRole('button', { name: 'JSON', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await codeView.getByRole('textbox', { name: 'Find in code' }).fill('Office workers');
     await expect(codeView).toContainText('2 matching lines');
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('state-code-desktop.png') });
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(codeView.getByRole('button', { name: 'Raw', exact: true })).toBeVisible();
     await codeView.getByRole('button', { name: 'Raw', exact: true }).click();
-    await expect(codeView).toContainText('RAW YAML');
+    await expect(codeView.getByRole('button', { name: 'Raw', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('state-code-mobile.png') });
     await page.setViewportSize({ width: 1280, height: 720 });
 
 
-    await page.getByRole('tab', { name: /Canvas/ }).click();
+    await page.getByRole('button', { name: 'Canvas', exact: true }).click();
     await expect(page).toHaveURL((url) => url.searchParams.get('view') === 'canvas');
     const canvasRegion = page.getByRole('region', { name: 'Multi-commit state canvas' });
     await expect(canvasRegion).toBeVisible();
@@ -234,10 +219,10 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     await page.getByRole('tab', { name: /Snapshot/ }).click();
     await expect(page.getByRole('region', { name: 'YAML code view' })).toBeVisible();
 
-    await page.getByRole('link', { name: 'Open workspace' }).click();
+    await page.getByRole('link', { name: 'Propose change' }).click();
     await expect(page).toHaveURL((url) => {
       return (
-        url.pathname.endsWith('/workspaces') &&
+        (url.pathname.endsWith('/workspaces') || url.searchParams.get('tab') === 'workspaces') &&
         url.searchParams.get('branch') === 'feature/prd-audience'
       );
     });

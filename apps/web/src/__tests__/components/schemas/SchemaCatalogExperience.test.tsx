@@ -123,9 +123,12 @@ describe('Schema catalog journey', () => {
   it('renders the shared Explore surface in Discover and sends search to Browse', () => {
     mocks.query = 'workspace=main';
     mount();
-    expect(mocks.catalog).toHaveBeenCalledWith('p', 'limit=48', false);
+    expect(mocks.catalog).toHaveBeenCalledWith('p', 'limit=48', true);
     expect(screen.getByRole('heading', { name: 'Curated schemas' })).toBeVisible();
-    expect(screen.getByText('Plan and track software releases with confidence.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Explore Release definition 1.2.3' })).toBeVisible();
+    expect(
+      screen.queryByText('Plan and track software releases with confidence.')
+    ).not.toBeInTheDocument();
     expect(screen.queryByText('Detailed Studio')).not.toBeInTheDocument();
     const search = screen.getByRole('textbox', {
       name: 'Search projects and schemas',

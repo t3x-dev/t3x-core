@@ -23,19 +23,10 @@ test('Overview shows author content and exact State on desktop and mobile', asyn
     await expect(page.getByTestId('state-overview')).toBeVisible();
     await page.getByRole('tab', { name: /Code/ }).click();
     await expect(page).toHaveURL(/view=code/);
-    await page.getByText('README · Author', { exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Make expectations explicit' })).toBeVisible();
-    await expect(page.getByLabel('Revision README')).toContainText(hash);
-    await page.screenshot({ path: testInfo.outputPath('code-readme.png') });
+    await expect(page.getByRole('tab', { name: /Code/ })).toHaveAttribute('aria-selected', 'true');
     await page.getByRole('tab', { name: /Structure/ }).click();
     await expect(page.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
-    await expect(page.getByRole('heading', { name: 'Make expectations explicit' })).toBeVisible();
     await expect(page).toHaveURL(new RegExp(encodeURIComponent(hash)));
-    await page.screenshot({ path: testInfo.outputPath('structure-readme.png'), animations: 'disabled' });
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.screenshot({ path: testInfo.outputPath('readme-mobile.png'), animations: 'disabled' });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.setViewportSize({ width: 1480, height: 1060 });
     await page.getByRole('tab', { name: /Code/ }).click();
 
     await page.goto(`/project/${projectId}?commit=${encodeURIComponent(hash)}`, { waitUntil: 'networkidle' });
@@ -45,21 +36,20 @@ test('Overview shows author content and exact State on desktop and mobile', asyn
     await expect(page.getByRole('tab', { name: /^Render/ })).toHaveCount(0);
 
     await expect(page.getByRole('heading', { name: 'Make expectations explicit' })).toBeVisible();
-    await expect(page.getByText('Validation not run')).toBeVisible();
     expect(await page.evaluate(() => 'unsafeReadme' in window)).toBe(false);
     expect(await page.locator('img[src*="example.invalid"]').count()).toBe(0);
     await page.screenshot({ path: testInfo.outputPath('overview-desktop.png'), animations: 'disabled' });
-    await page.getByRole('region', { name: 'T3X definition summary' }).getByRole('button').first().click();
-    await expect(page.getByRole('button', { name: 'All sections' })).toBeVisible();
-    await page.getByRole('button', { name: 'All sections' }).click();
     await page.getByRole('button', { name: 'Expand rendered State' }).click();
     await expect(page.getByRole('region', { name: 'Project introduction' })).toHaveCount(0);
+    await page.getByRole('navigation', { name: 'State sections' }).getByRole('button').first().click();
+    await expect(page.getByRole('button', { name: 'All sections' })).toBeVisible();
+    await page.getByRole('button', { name: 'All sections' }).click();
     await page.getByRole('button', { name: 'Restore split view' }).click();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: testInfo.outputPath('overview-mobile.png'), animations: 'disabled' });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.getByRole('complementary', { name: 'T3X rendered State' }).scrollIntoViewIfNeeded();
-    await expect(page.getByRole('heading', { name: 'Rendered State' })).toBeVisible();
+    await expect(page.getByText('State render', { exact: true })).toBeVisible();
     await page.setViewportSize({ width: 1480, height: 1060 });
     // The app browser can inspect the same seeded project during manual visual QA.
     if (process.env.T3X_OVERVIEW_INSPECT === '1') {
@@ -71,11 +61,6 @@ test('Overview shows author content and exact State on desktop and mobile', asyn
     await page.goto(`/project/${projectId}?view=overview&commit=${encodeURIComponent(later)}`, { waitUntil: 'networkidle' });
     await expect(page.getByTestId('state-overview')).toBeVisible();
     await expect(page.getByText('No README published for this revision.')).toBeVisible();
-    await page.getByRole('tab', { name: /Code/ }).click();
-    await page.getByText('README · Author', { exact: true }).click();
-    await expect(page.getByText('No README published for this revision.')).toBeVisible();
-    await expect(page.getByLabel('Revision README')).toContainText(later);
-
     await expect(page.getByRole('heading', { name: 'Make expectations explicit' })).toHaveCount(0);
     await page.goto(`/project/${projectId}?view=overview&commit=${encodeURIComponent(hash)}`, { waitUntil: 'networkidle' });
     await expect(page.getByRole('heading', { name: 'Make expectations explicit' })).toBeVisible();

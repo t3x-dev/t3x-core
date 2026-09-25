@@ -64,6 +64,6 @@
 
 @media (max-width: 1023px) {
   .root {
-    min-width: 1000px;
+    min-width: 0;
   }
 }

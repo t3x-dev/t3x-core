@@ -23,7 +23,7 @@ test('Studio compares modules, reviews exact apply, invalidates a stale review, 
     }
     await page.setViewportSize({ width: 1480, height: 960 });
     await page.goto(`${projectPath}/schemas?schemaView=studio&candidate=${candidates['t3x/prd-core']}`, { waitUntil: 'networkidle' });
-    await expect(page.getByRole('heading', { name: 'Definition preview' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Composed structure' })).toBeVisible();
     await page.getByLabel('Target Workspace').selectOption(workspaceId);
     await expect(page.getByRole('button', { name: 'Review & apply', exact: true })).toBeEnabled();
     // Legacy V1 requires are suggestions in open V2 composition, not mandatory locks.
@@ -33,13 +33,13 @@ test('Studio compares modules, reviews exact apply, invalidates a stale review, 
     await expect(page.getByRole('button', { name: 'Review & apply', exact: true })).toBeEnabled();
     await expect(page.getByRole('checkbox', { name: 'Select System Architecture 1.0.0' })).toBeEnabled();
     await page.getByRole('checkbox', { name: 'Select Technology Stack 1.0.0' }).uncheck();
-    await page.getByLabel('Compare with').selectOption(candidates['t3x/prd-core']!);
+    await page.getByLabel('Compare with').selectOption(candidates['t3x/prd-technology-stack']!);
     await expect(page.getByText(/Comparison ·/)).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('studio-desktop.png'), animations: 'disabled' });
     await page.getByLabel('X-ray').check();
-    await page.getByRole('button', { name: 'code', exact: true }).click();
+    await page.getByRole('tab', { name: 'YAML', exact: true }).click();
     await expect(page.locator('pre')).toContainText('system_architecture');
-    await page.getByRole('button', { name: 'preview', exact: true }).click();
+    await page.getByRole('tab', { name: 'Structure', exact: true }).click();
     await page.getByRole('button', { name: 'Review & apply', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Apply exact definition' });
     await expect(dialog).toContainText('Release planning');
@@ -64,14 +64,18 @@ test('Studio compares modules, reviews exact apply, invalidates a stale review, 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: testInfo.outputPath('studio-mobile.png'), animations: 'disabled' });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    const studioBox = await page.getByRole('region', { name: 'Schema Studio', exact: true }).boundingBox();
+    expect(studioBox!.x + studioBox!.width).toBeLessThanOrEqual(390);
+    const applyBox = await page.getByRole('button', { name: 'Review & apply', exact: true }).boundingBox();
+    expect(applyBox!.x + applyBox!.width).toBeLessThanOrEqual(390);
     await page.setViewportSize({ width: 1480, height: 960 });
-    await page.goto(`${projectPath}/schemas`, { waitUntil: 'networkidle' });
+    await page.goto(`${projectPath}/schemas?schemaView=active&workspace=${workspaceId}`, { waitUntil: 'networkidle' });
     await expect(page.getByRole('region', { name: 'Active schema bindings' })).toContainText('Release planning');
     await expect(page.getByRole('region', { name: 'Active schema bindings' })).toContainText('Needs review');
     await page.screenshot({ path: testInfo.outputPath('studio-active.png'), animations: 'disabled' });
     await page.getByRole('link', { name: 'Open Workspace review & history' }).click();
     await expect(page).toHaveURL(/workspaces|tab=workspaces/);
-    await page.goto(`${projectPath}/schemas`, { waitUntil: 'networkidle' });
+    await page.goto(`${projectPath}/schemas?schemaView=active&workspace=${workspaceId}`, { waitUntil: 'networkidle' });
     await expect(page.getByRole('region', { name: 'Active schema bindings' })).toContainText(`revision ${applied.revision}`);
     expect(errors).toEqual([]);
   } finally { await cleanupProject(request, projectId); }

@@ -1,7 +1,9 @@
 'use client';
 
+import type { SchemaCatalogItem } from '@t3x-dev/api-client';
 import type { FormEvent } from 'react';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { CatalogLogo } from './CatalogLogo';
 import styles from './ExploreDiscoverySurface.module.css';
 
 type IconWeight = 'regular' | 'fill' | 'bold';
@@ -227,7 +229,15 @@ function PhosphorIcon({
 export function ExploreDiscoverySurface({
   onBrowse,
   onSearch,
+  items,
+  onOpen,
+  loading,
+  error,
 }: {
+  items?: SchemaCatalogItem[];
+  onOpen?: (item: SchemaCatalogItem) => void;
+  loading?: boolean;
+  error?: string;
   onBrowse?: () => void;
   onSearch?: (query: string) => void;
 }) {
@@ -283,107 +293,145 @@ export function ExploreDiscoverySurface({
           />
         </header>
 
-        <section className="mb-7">
-          <div className="mb-4 flex items-center gap-3">
-            <h1 className="text-[24px] font-bold tracking-tight text-[var(--text-primary)]">
-              Curated schemas
-            </h1>
-            <div className="flex items-center gap-1.5 rounded-full border border-[var(--stroke-default)] bg-[var(--color-brand-muted)] px-3 py-1 text-[13px] font-medium text-[var(--color-brand)]">
-              <PhosphorIcon className="text-base" name="cube" />
-              <span>Usable schemas</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {curatedSchemas.map((schema) => (
-              <article
-                className="group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-[var(--fx-shadow-sm)] transition-shadow hover:shadow-md"
-                key={schema.name}
-              >
-                <div className={`h-24 w-full ${schema.cover}`} />
-                <div className="relative flex flex-1 flex-col p-4 pt-8">
-                  <div
-                    className="absolute -top-7 left-4 flex h-14 w-14 items-center justify-center rounded-[14px] border-4 border-[var(--surface-panel)] shadow-sm"
-                    style={{ background: schema.iconBackground, color: schema.iconColor }}
-                  >
-                    <PhosphorIcon
-                      className="text-[28px]"
-                      name={schema.icon}
-                      weight={schema.iconWeight}
-                    />
-                  </div>
-                  <div className="mb-0.5 text-[12px] font-medium text-[var(--text-secondary)]">
-                    {schema.owner}
-                  </div>
-                  <div className="mb-1 flex items-center justify-between">
-                    <h3 className="text-[18px] font-bold text-[var(--text-primary)]">
-                      {schema.name}
-                    </h3>
-                    <PhosphorIcon
-                      className="-translate-x-2 text-xl text-[var(--color-brand)] opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100"
-                      name="arrow-right"
-                    />
-                  </div>
-                  <p className="mb-4 flex-1 text-[13px] leading-5 text-[var(--text-secondary)]">
-                    {schema.description}
-                  </p>
-                  <div className="mt-auto flex items-center gap-2 border-t border-[var(--stroke-divider)] pt-3 text-[12px] text-[var(--text-secondary)]">
-                    <PhosphorIcon className="text-lg text-[var(--color-brand)]" name="graph" />
-                    <span className="flex items-center gap-2">
-                      {schema.tags.map((tag, index) => (
-                        <span className="flex items-center gap-2" key={tag}>
-                          {index > 0 ? (
-                            <i className="h-[3px] w-[3px] rounded-full bg-[var(--text-tertiary)]" />
-                          ) : null}
-                          {tag}
-                        </span>
-                      ))}
-                    </span>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <div className="xl:col-span-2">
+        {items ? (
+          <section aria-label="Published schemas">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-[21px] font-bold tracking-tight text-[var(--text-primary)]">
-                Discover schemas
-              </h2>
-              <button
-                className="flex items-center gap-1 text-[15px] font-medium text-[var(--color-brand)] hover:underline"
-                onClick={onBrowse}
-                style={{ color: 'var(--color-brand)' }}
-                type="button"
-              >
-                Browse all <PhosphorIcon name="arrow-right" />
+              <h1 className="text-2xl font-bold">Curated schemas</h1>
+              <button type="button" onClick={onBrowse}>
+                Browse all
               </button>
             </div>
-
-            <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
-              {discoveredSchemas.map((schema) => (
-                <DiscoveredSchema key={schema.name} schema={schema} />
+            {loading ? <output>Loading schemas…</output> : null}
+            {error ? <p role="alert">{error}</p> : null}
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+              {items.map((item) => (
+                <button
+                  key={`${item.identity.canonicalName}:${item.release.hash}`}
+                  type="button"
+                  onClick={() => onOpen?.(item)}
+                  aria-label={`Explore ${item.identity.displayName || item.identity.canonicalName} ${item.release.version}`}
+                  className="flex min-w-0 flex-col gap-3 rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-5 text-left shadow-sm"
+                >
+                  <CatalogLogo item={item} size="large" />
+                  <h2 className="text-lg font-bold">
+                    {item.identity.displayName || item.identity.canonicalName}
+                  </h2>
+                  <p className="text-sm text-[var(--text-secondary)]">
+                    {item.identity.description}
+                  </p>
+                  <p className="text-xs">
+                    {item.identity.publisher} · {item.release.version}
+                  </p>
+                </button>
               ))}
             </div>
-          </div>
+            {!loading && !error && items.length === 0 ? <p>No published schemas found.</p> : null}
+          </section>
+        ) : (
+          <>
+            <section className="mb-7">
+              <div className="mb-4 flex items-center gap-3">
+                <h1 className="text-[24px] font-bold tracking-tight text-[var(--text-primary)]">
+                  Curated schemas
+                </h1>
+                <div className="flex items-center gap-1.5 rounded-full border border-[var(--stroke-default)] bg-[var(--color-brand-muted)] px-3 py-1 text-[13px] font-medium text-[var(--color-brand)]">
+                  <PhosphorIcon className="text-base" name="cube" />
+                  <span>Usable schemas</span>
+                </div>
+              </div>
 
-          <aside className="h-fit rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-5 shadow-[var(--fx-shadow-sm)] xl:col-span-1">
-            <h2 className="mb-4 text-[18px] font-bold tracking-tight text-[var(--text-primary)]">
-              Schema picks
-            </h2>
-            <div className="flex flex-col gap-4">
-              {schemaPicks.map((schema, index) => (
-                <SchemaPick
-                  isLast={index === schemaPicks.length - 1}
-                  key={schema.name}
-                  schema={schema}
-                />
-              ))}
-            </div>
-          </aside>
-        </section>
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+                {curatedSchemas.map((schema) => (
+                  <article
+                    className="group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-[var(--fx-shadow-sm)] transition-shadow hover:shadow-md"
+                    key={schema.name}
+                  >
+                    <div className={`h-24 w-full ${schema.cover}`} />
+                    <div className="relative flex flex-1 flex-col p-4 pt-8">
+                      <div
+                        className="absolute -top-7 left-4 flex h-14 w-14 items-center justify-center rounded-[14px] border-4 border-[var(--surface-panel)] shadow-sm"
+                        style={{ background: schema.iconBackground, color: schema.iconColor }}
+                      >
+                        <PhosphorIcon
+                          className="text-[28px]"
+                          name={schema.icon}
+                          weight={schema.iconWeight}
+                        />
+                      </div>
+                      <div className="mb-0.5 text-[12px] font-medium text-[var(--text-secondary)]">
+                        {schema.owner}
+                      </div>
+                      <div className="mb-1 flex items-center justify-between">
+                        <h3 className="text-[18px] font-bold text-[var(--text-primary)]">
+                          {schema.name}
+                        </h3>
+                        <PhosphorIcon
+                          className="-translate-x-2 text-xl text-[var(--color-brand)] opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100"
+                          name="arrow-right"
+                        />
+                      </div>
+                      <p className="mb-4 flex-1 text-[13px] leading-5 text-[var(--text-secondary)]">
+                        {schema.description}
+                      </p>
+                      <div className="mt-auto flex items-center gap-2 border-t border-[var(--stroke-divider)] pt-3 text-[12px] text-[var(--text-secondary)]">
+                        <PhosphorIcon className="text-lg text-[var(--color-brand)]" name="graph" />
+                        <span className="flex items-center gap-2">
+                          {schema.tags.map((tag, index) => (
+                            <span className="flex items-center gap-2" key={tag}>
+                              {index > 0 ? (
+                                <i className="h-[3px] w-[3px] rounded-full bg-[var(--text-tertiary)]" />
+                              ) : null}
+                              {tag}
+                            </span>
+                          ))}
+                        </span>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+              <div className="xl:col-span-2">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-[21px] font-bold tracking-tight text-[var(--text-primary)]">
+                    Discover schemas
+                  </h2>
+                  <button
+                    className="flex items-center gap-1 text-[15px] font-medium text-[var(--color-brand)] hover:underline"
+                    onClick={onBrowse}
+                    style={{ color: 'var(--color-brand)' }}
+                    type="button"
+                  >
+                    Browse all <PhosphorIcon name="arrow-right" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
+                  {discoveredSchemas.map((schema) => (
+                    <DiscoveredSchema key={schema.name} schema={schema} />
+                  ))}
+                </div>
+              </div>
+
+              <aside className="h-fit rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-5 shadow-[var(--fx-shadow-sm)] xl:col-span-1">
+                <h2 className="mb-4 text-[18px] font-bold tracking-tight text-[var(--text-primary)]">
+                  Schema picks
+                </h2>
+                <div className="flex flex-col gap-4">
+                  {schemaPicks.map((schema, index) => (
+                    <SchemaPick
+                      isLast={index === schemaPicks.length - 1}
+                      key={schema.name}
+                      schema={schema}
+                    />
+                  ))}
+                </div>
+              </aside>
+            </section>
+          </>
+        )}
       </main>
     </>
   );

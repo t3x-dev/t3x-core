@@ -165,7 +165,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     navigationMocks.searchParams = new URLSearchParams();
   });
 
-  it('keeps the original Compose surface and composer even when an authoring ledger exists', async () => {
+  function renderAuthoringComposer() {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     // Ledger presence must not silently replace the established Compose interface.
     Object.assign(candidate, { authoringLedger: { actions: [] } });
@@ -267,6 +267,11 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
 
+    return { branchChange, publishCandidate };
+  }
+
+  it('keeps the original Compose surface and composer even when an authoring ledger exists', () => {
+    const { branchChange } = renderAuthoringComposer();
     const addSource = screen.getByRole('button', { name: 'Add source' });
     expect(screen.getByRole('tab', { name: 'Compose' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Sources' })).toBeInTheDocument();
@@ -287,6 +292,28 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
     expect(composer).toContainElement(modelSelector);
     expect(composer).toContainElement(send);
+    expect(screen.queryByRole('button', { name: 'Add attachment' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Workspace workflow tabs')).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Workspace scenario' })).not.toBeInTheDocument();
+    expect(addSource.querySelector('.lucide-file-up')).toBeInTheDocument();
+    expect(addSource.querySelector('.lucide-database')).not.toBeInTheDocument();
+    const branchSwitcher = screen.getByRole('button', { name: /Switch branches\/tags/ });
+    expect(branchSwitcher).toHaveTextContent('main');
+    fireEvent.click(branchSwitcher);
+    fireEvent.click(
+      within(screen.getByRole('menu', { name: 'Switch branches/tags' })).getByRole(
+        'menuitemradio',
+        { name: 'release' }
+      )
+    );
+    expect(branchChange).toHaveBeenCalledWith('release');
+    expect(modelSelector.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+  });
+
+  it('switches immutable action scopes and opens discussion for the inspected node', () => {
+    renderAuthoringComposer();
     const allChanges = screen.getByRole('tab', { name: 'All changes' });
     const latestAction = screen.getByRole('tab', { name: 'Latest' });
     expect(latestAction).toHaveAttribute('aria-selected', 'true');
@@ -308,26 +335,11 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     fireEvent.click(latestAction);
     expect(latestAction).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByText('Action history is not available for this draft.')).toBeNull();
+  });
 
-    expect(screen.queryByRole('button', { name: 'Add attachment' })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Workspace workflow tabs')).not.toBeInTheDocument();
-    expect(screen.queryByRole('combobox', { name: 'Workspace scenario' })).not.toBeInTheDocument();
-    expect(addSource.querySelector('.lucide-file-up')).toBeInTheDocument();
-    expect(addSource.querySelector('.lucide-database')).not.toBeInTheDocument();
-    const branchSwitcher = screen.getByRole('button', { name: /Switch branches\/tags/ });
-    expect(branchSwitcher).toHaveTextContent('main');
-    fireEvent.click(branchSwitcher);
-    fireEvent.click(
-      within(screen.getByRole('menu', { name: 'Switch branches/tags' })).getByRole(
-        'menuitemradio',
-        { name: 'release' }
-      )
-    );
-    expect(branchChange).toHaveBeenCalledWith('release');
-    expect(modelSelector.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
-    );
-
+  it('preserves failed proposal publication and exposes retry after reopening discussion', async () => {
+    const { publishCandidate } = renderAuthoringComposer();
+    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
     fireEvent.click(screen.getByRole('button', { name: 'Close discussion' }));
     expect(screen.queryByRole('complementary', { name: 'Discuss change' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Show discussion' }));
@@ -350,6 +362,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Candidate posture verification has not passed.'
     );
+    expect(publishCandidate).toHaveBeenCalled();
   });
 
   it('routes composer send and file input to the controller', () => {

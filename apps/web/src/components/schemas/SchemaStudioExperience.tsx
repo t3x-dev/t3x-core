@@ -20,6 +20,7 @@ import { useApplyStudioSelection, useStudioPreview } from '@/hooks/schemas/useSt
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import styles from './SchemaStudioExperience.module.css';
 import { StudioChanges } from './StudioDefinitionPreview';
+import { StudioSamplePreview } from './StudioSamplePreview';
 
 type ModuleTone = 'blue' | 'purple' | 'orange' | 'green' | 'rose' | 'slate' | 'amber';
 
@@ -180,7 +181,9 @@ export function SchemaStudioExperience({
   const [selection, setSelection] = useState<string[]>([]);
   const [workspaceId, setWorkspaceId] = useState(params?.get('workspace') ?? '');
   const requestedWorkspaceId = params?.get('workspace') ?? '';
-  const [mode, setMode] = useState<'structure' | 'yaml'>('structure');
+  const [mode, setMode] = useState<'structure' | 'yaml' | 'sample'>('structure');
+  const [compareId, setCompareId] = useState('');
+  const [xray, setXray] = useState(false);
   const [activeModuleId, setActiveModuleId] = useState('requirements');
   const [collapsedSources, setCollapsedSources] = useState<Set<string>>(new Set());
   const [advanced, setAdvanced] = useState(false);
@@ -210,10 +213,21 @@ export function SchemaStudioExperience({
   const target = workspaces.workspaces.find((item) => item.id === workspaceId);
   const preview = useStudioPreview(
     projectId,
-    { candidateIds: selection, ...(workspaceId ? { workspaceId } : {}) },
+    {
+      candidateIds: selection,
+      ...(workspaceId ? { workspaceId } : {}),
+      ...(compareId ? { compareToCandidateIds: [compareId] } : {}),
+    },
     target?.revision
   );
   const data = preview.data;
+  useEffect(() => {
+    if (
+      selection.includes(compareId) ||
+      !candidates.items.some((item) => item.id === compareId && item.available)
+    )
+      setCompareId('');
+  }, [selection, compareId, candidates.items]);
   const locked = new Set(
     data?.modules.filter((item) => item.requiredBy.length).map((item) => item.candidateId)
   );
@@ -223,7 +237,7 @@ export function SchemaStudioExperience({
     setReview(undefined);
     setError(undefined);
     setApplied(false);
-  }, [candidateSelectionKey, workspaceId]);
+  }, [candidateSelectionKey, workspaceId, compareId]);
 
   const liveSources = useMemo<StudioSource[]>(() => {
     if (!candidates.items.length) return [];
@@ -357,7 +371,7 @@ export function SchemaStudioExperience({
   return (
     <section
       aria-label="Schema Studio"
-      className={`${styles.root} flex min-h-0 w-full flex-1 flex-col overflow-hidden bg-[var(--surface-card)] text-[var(--text-primary)]`}
+      className={`${styles.root} flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-[var(--surface-card)] text-[var(--text-primary)]`}
     >
       <link
         href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css"
@@ -378,6 +392,17 @@ export function SchemaStudioExperience({
         </p>
       ) : null}
 
+      {preview.error || (data?.adoption.allowed === false && data.adoption.reason) ? (
+        <p
+          className="mx-4 mt-3 rounded-lg border border-[var(--status-error-muted)] bg-[var(--status-error-muted)] p-2 text-sm text-[var(--status-error)]"
+          role="alert"
+        >
+          {preview.error || data?.adoption.reason}
+        </p>
+      ) : null}
+
+      {applied ? <output className="mx-4 mt-3 text-sm">Exact definition applied.</output> : null}
+
       {error ? (
         <p
           className="mx-4 mt-3 rounded-lg border border-[var(--status-error-muted)] bg-[var(--status-error-muted)] p-2 text-sm text-[var(--status-error)]"
@@ -389,11 +414,11 @@ export function SchemaStudioExperience({
 
       <main
         aria-label="Studio composition"
-        className="relative grid flex-1 grid-cols-[280px_minmax(500px,1fr)_320px] grid-rows-[48px_minmax(0,1fr)] gap-x-3 gap-y-2 overflow-hidden p-3"
+        className="relative flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-auto p-3 xl:grid xl:grid-cols-[280px_minmax(0,1fr)_320px] xl:grid-rows-[auto_minmax(0,1fr)] xl:overflow-hidden"
       >
         <aside
           aria-label="Studio sources"
-          className="col-start-1 row-span-2 row-start-1 flex min-h-0 flex-col rounded-[12px] border border-[var(--color-brand-muted)] bg-[var(--surface-panel)] shadow-sm"
+          className="col-start-1 row-span-2 row-start-1 flex min-h-0 shrink-0 flex-col xl:shrink rounded-[12px] border border-[var(--color-brand-muted)] bg-[var(--surface-panel)] shadow-sm"
         >
           <div className="shrink-0 px-4 pb-1.5 pt-3">
             <h2 className="text-base font-bold text-[var(--color-brand-hover)]">Sources</h2>
@@ -456,7 +481,7 @@ export function SchemaStudioExperience({
                         return (
                           <div className="contents" key={module.id}>
                             <label
-                              className="group flex items-center gap-2 py-1 text-left"
+                              className="group relative flex items-center gap-2 py-1 text-left"
                               onClick={() => setActiveModuleId(module.id)}
                             >
                               <input
@@ -466,7 +491,7 @@ export function SchemaStudioExperience({
                                     : module.title
                                 }
                                 checked={module.checked}
-                                className="sr-only"
+                                className="absolute left-0 h-4 w-4 cursor-pointer opacity-0"
                                 disabled={disabled}
                                 onChange={() => choose(module)}
                                 readOnly={!module.candidate}
@@ -515,19 +540,38 @@ export function SchemaStudioExperience({
               );
             })}
           </div>
+          <label className="block p-3 text-sm">
+            Compare with
+            <select
+              className="mt-2 w-full rounded border p-2"
+              value={compareId}
+              disabled={applying}
+              onChange={(event) => setCompareId(event.target.value)}
+            >
+              <option value="">No comparison</option>
+              {candidates.items
+                .filter((item) => item.available && !selection.includes(item.id))
+                .map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.title} · {item.source?.version}
+                  </option>
+                ))}
+            </select>
+          </label>
         </aside>
 
         <div
           aria-label="Studio controls"
-          className="col-span-2 col-start-2 row-start-1 flex min-w-0 items-center justify-between gap-4 rounded-[12px] border border-[var(--color-brand-muted)] bg-[var(--surface-panel)] px-3 shadow-sm"
+          className="col-span-2 col-start-2 row-start-1 flex min-w-0 flex-wrap items-center justify-between gap-4 rounded-[12px] border border-[var(--color-brand-muted)] bg-[var(--surface-panel)] px-3 shadow-sm"
           role="toolbar"
         >
-          <div className="flex min-w-0 items-center gap-5">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 xl:gap-5">
             <SegmentedControl
               ariaLabel="Studio view"
               items={[
                 { label: 'Structure', value: 'structure' },
                 { label: 'YAML', value: 'yaml' },
+                { label: 'Sample', value: 'sample' },
               ]}
               onValueChange={setMode}
               value={mode}
@@ -539,6 +583,14 @@ export function SchemaStudioExperience({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            <label className="flex items-center gap-1 text-xs">
+              <input
+                type="checkbox"
+                checked={xray}
+                onChange={(event) => setXray(event.target.checked)}
+              />
+              X-ray
+            </label>
             <button
               aria-label="Advanced definition workbench"
               className="flex h-[34px] items-center gap-1.5 rounded-[5px] border border-[var(--stroke-default)] bg-[var(--surface-card)] px-3 text-xs font-semibold text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)] transition-colors hover:bg-[var(--hover-bg)]"
@@ -561,7 +613,7 @@ export function SchemaStudioExperience({
 
         <section
           aria-label="Composed structure"
-          className="col-start-2 row-start-2 flex min-h-0 min-w-[500px] flex-col overflow-hidden rounded-[12px] border border-[var(--color-brand-muted)] bg-[var(--surface-panel)] shadow-sm"
+          className="col-start-2 row-start-2 flex min-h-[300px] min-w-0 shrink-0 flex-col xl:min-h-0 xl:shrink overflow-hidden rounded-[12px] border border-[var(--color-brand-muted)] bg-[var(--surface-panel)] shadow-sm"
         >
           <div className="flex shrink-0 items-center gap-3 border-b border-[var(--color-brand-muted)] px-4 py-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-brand)] text-[var(--on-accent)] shadow-sm">
@@ -572,7 +624,19 @@ export function SchemaStudioExperience({
             </h2>
           </div>
           <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-3">
-            {mode === 'yaml' ? (
+            {mode === 'sample' && data ? (
+              <StudioSamplePreview
+                key={`${data.selectionHash}:${data.schemaHash}`}
+                projectId={projectId}
+                candidateIds={selection}
+                title={candidates.items
+                  .filter((item) => selection.includes(item.id))
+                  .map((item) => item.title)
+                  .join(' + ')}
+                preview={data}
+                xray={xray}
+              />
+            ) : mode === 'yaml' ? (
               <pre className="min-h-full whitespace-pre-wrap rounded-[12px] bg-[var(--text-primary)] p-5 font-mono text-xs leading-6 text-[var(--color-brand-muted)]">
                 {data?.schema
                   ? JSON.stringify(data.schema, null, 2)
@@ -601,12 +665,18 @@ export function SchemaStudioExperience({
                 </p>
               </div>
             )}
+            {data?.comparison ? (
+              <details open className="mt-4 border-t p-3">
+                <summary>Comparison · {data.comparison.changes.length} changes</summary>
+                <StudioChanges changes={data.comparison.changes} />
+              </details>
+            ) : null}
           </div>
         </section>
 
         <aside
           aria-label="Module details"
-          className="col-start-3 row-start-2 flex min-h-0 w-[320px] flex-col overflow-y-auto rounded-[12px] border border-[var(--color-brand-muted)] bg-[var(--surface-panel)] p-4 shadow-sm"
+          className="col-start-3 row-start-2 flex min-h-0 w-full shrink-0 flex-col xl:w-[320px] xl:shrink overflow-y-auto rounded-[12px] border border-[var(--color-brand-muted)] bg-[var(--surface-panel)] p-4 shadow-sm"
         >
           <div className="mb-5 flex items-center gap-3">
             <ModuleIcon
@@ -685,8 +755,8 @@ export function SchemaStudioExperience({
         </aside>
       </main>
 
-      <footer className="z-10 flex shrink-0 items-center justify-between border-t border-[var(--color-brand-muted)] bg-[var(--surface-panel)] px-6 py-3 shadow-[var(--fx-shadow-sm)]">
-        <div className="flex items-center gap-4 text-[var(--color-brand-hover)]">
+      <footer className="z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[var(--color-brand-muted)] bg-[var(--surface-panel)] px-6 py-3 shadow-[var(--fx-shadow-sm)]">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 text-[var(--color-brand-hover)]">
           <label className="relative flex h-[34px] items-center gap-2 rounded-[5px] border border-[var(--stroke-default)] bg-[var(--surface-card)] px-3 text-xs font-medium text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)] transition-colors hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)]">
             <i className="ri-focus-3-line text-lg" />
             <span>{selectedWorkspaceTitle}</span>
@@ -741,7 +811,7 @@ export function SchemaStudioExperience({
         </div>
       </footer>
 
-      <div className="fixed bottom-4 left-1/2 z-20 flex h-[34px] -translate-x-1/2 items-center gap-1 rounded-[5px] border border-[var(--stroke-default)] bg-[var(--surface-card)] px-1 shadow-[var(--fx-shadow-sm)]">
+      <div className="mx-auto mb-2 flex h-[34px] shrink-0 items-center xl:fixed xl:bottom-4 xl:left-1/2 xl:z-20 xl:mb-0 xl:-translate-x-1/2 gap-1 rounded-[5px] border border-[var(--stroke-default)] bg-[var(--surface-card)] px-1 shadow-[var(--fx-shadow-sm)]">
         <ToolButton
           icon="ri-subtract-line"
           label="Zoom out"
@@ -803,6 +873,18 @@ export function SchemaStudioExperience({
                 <summary className="cursor-pointer">Reviewed definition hash</summary>
                 <p className="mt-2 break-all font-mono">{review.schemaHash}</p>
               </details>
+              {review.reviewHash !== data?.reviewHash ? (
+                <div role="alert" className="rounded bg-[var(--status-warning-muted)] p-3 text-sm">
+                  The Workspace or selection changed. Review the updated changes before applying.
+                  <Button
+                    disabled={!data || preview.loading || applying}
+                    onClick={() => setReview(data)}
+                    variant="outline"
+                  >
+                    Refresh review
+                  </Button>
+                </div>
+              ) : null}
               <div className="flex justify-end gap-3">
                 <Button disabled={applying} onClick={() => setReview(undefined)} variant="outline">
                   Cancel

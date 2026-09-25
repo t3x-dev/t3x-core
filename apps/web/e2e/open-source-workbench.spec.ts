@@ -193,8 +193,9 @@ test.describe('Open-source workbench visual smoke', () => {
           path: () => `/project/${projectId}/leaf/${leafId}`,
           ready: async (p) => {
             await expect(p.getByText('Output').first()).toBeVisible({ timeout: 15000 });
-            await expect(p.getByText('Source nodes').first()).toBeVisible();
-            await expect(p.getByRole('button', { name: 'Generate & Verify' })).toBeVisible();
+            await expect(p.getByRole('region', { name: 'Legacy Leaf archive' })).toBeVisible();
+            await expect(p.getByRole('button', { name: 'Generate & Verify' })).toHaveCount(0);
+            await expect(p.getByRole('button', { name: 'Export record' })).toBeVisible();
           },
         },
         {

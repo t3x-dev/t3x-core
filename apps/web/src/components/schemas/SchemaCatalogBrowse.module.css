@@ -678,12 +678,15 @@
   }
 
   .body {
+    flex-direction: column;
     overflow: visible;
   }
 
   .sidebar {
-    width: 220px;
-    min-width: 220px;
+    width: 100%;
+    min-width: 0;
+    max-height: 240px;
+    flex-shrink: 0;
   }
 
   .main {

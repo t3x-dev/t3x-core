@@ -115,9 +115,8 @@ jobs:
       - name: Smoke local install
         run: pnpm smoke:local-install
 
+      # Archive fixtures require the disposable embedded database owned by this runner.
       - name: Run full browser qualification
-        env:
-          DATABASE_URL: postgresql://postgres:password@localhost:5432/postgres
         run: pnpm e2e:full
 
       - name: Run authenticated browser qualification

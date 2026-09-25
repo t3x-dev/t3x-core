@@ -114,6 +114,13 @@ try {
     await runCommand('pnpm', ['build:webui'], runtimeEnv);
   }
 
+  if (runtimeEnv.DATABASE_URL) {
+    // External test databases do not get the embedded runtime's bootstrap.
+    // Migrate explicitly before starting the API, whose runtime role does no DDL.
+    const { migratePostgresStorage } = await import('../packages/storage/dist/index.js');
+    await migratePostgresStorage({ connectionString: runtimeEnv.DATABASE_URL });
+  }
+
   const runner = startLoggedProcess('runner', 'node', ['apps/runner/dist/server.js'], {
     ...runtimeEnv,
     PORT: runnerPort,
