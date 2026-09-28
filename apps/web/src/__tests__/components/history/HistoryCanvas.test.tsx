@@ -27,6 +27,29 @@ const feature = commit('sha256:feature', 'Canary rollout', [root.hash], 'feature
 const merge = commit('sha256:merge', 'Merge PR #24', [main.hash, feature.hash]);
 
 describe('HistoryCanvas', () => {
+  it('lets the whole canvas branch pill change the selected branch', () => {
+    const onBranchChange = vi.fn();
+    render(
+      <HistoryCanvas
+        branches={[
+          { branch_id: 'main', name: 'main' },
+          { branch_id: 'de-v', name: 'de-v' },
+        ]}
+        commits={[{ commit: root }]}
+        selectedBranch="de-v"
+        onBack={vi.fn()}
+        onBranchChange={onBranchChange}
+        onListView={vi.fn()}
+        onViewDiff={vi.fn()}
+      />
+    );
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Canvas branch filter' }), {
+      target: { value: 'main' },
+    });
+    expect(onBranchChange).toHaveBeenCalledWith('main');
+  });
+
   it('keeps graph controls and diff navigation connected to history callbacks', () => {
     const onListView = vi.fn();
     const onViewDiff = vi.fn();
@@ -65,6 +88,56 @@ describe('HistoryCanvas', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Inspect Create release plan' }));
     expect(screen.getByRole('heading', { name: 'Create release plan' })).toBeInTheDocument();
     expect(screen.getByText('Root commit has no parent.')).toBeInTheDocument();
+  });
+
+  it('lets the canvas tools select, pan, reset, and download the graph', () => {
+    const createObjectURL = vi.fn(() => 'blob:history');
+    const revokeObjectURL = vi.fn();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL });
+
+    const { container } = render(
+      <HistoryCanvas
+        branches={[]}
+        commits={[merge, feature, main, root].map((item) => ({ commit: item }))}
+        selectedBranch="de-v"
+        onBack={vi.fn()}
+        onBranchChange={vi.fn()}
+        onListView={vi.fn()}
+        onViewDiff={vi.fn()}
+      />
+    );
+
+    const canvas = screen.getByRole('region', { name: 'Commit graph canvas' });
+    const viewport = container.querySelector('[data-history-viewport="true"]');
+    expect(viewport).toHaveStyle({ transform: 'translate(0px, 0px) scale(1)' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pan tool' }));
+    expect(screen.getByRole('button', { name: 'Pan tool' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    fireEvent.pointerDown(canvas, { clientX: 120, clientY: 80, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 180, clientY: 110, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { pointerId: 1 });
+    expect(viewport).toHaveStyle({ transform: 'translate(60px, 30px) scale(1)' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset canvas view' }));
+    expect(viewport).toHaveStyle({ transform: 'translate(0px, 0px) scale(1)' });
+    expect(screen.getByRole('button', { name: 'Select tool' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Download canvas' }));
+      expect(createObjectURL).toHaveBeenCalledOnce();
+      expect(click).toHaveBeenCalledOnce();
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:history');
+    } finally {
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    }
   });
 
   it('keeps connector coordinates in the same pixel space as the graph nodes', () => {
