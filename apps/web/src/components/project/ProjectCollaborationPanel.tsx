@@ -16,6 +16,7 @@ import {
 import { buildInvitationUrl } from '@/domain/collaboration/invitationLink';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { useProjectCollaboration } from '@/hooks/accounts/useProjectCollaboration';
+import { SettingsSection } from './settings/SettingsSection';
 
 const PROJECT_ROLES: readonly ProjectGrantRole[] = ['admin', 'editor', 'viewer'];
 
@@ -129,163 +130,166 @@ export function ProjectCollaborationPanel({ projectId }: { projectId: string }) 
   }
 
   return (
-    <section className="mt-12 space-y-4 border-t border-[var(--stroke-divider)] pt-8">
-      <div>
-        <h2 className="flex items-center gap-2 text-lg font-semibold text-[var(--text-primary)]">
-          <UserRoundCog className="h-5 w-5" /> Project access
-        </h2>
-        <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Grant access to this project without adding someone to the whole workspace.
-        </p>
-      </div>
-
-      {guestsQuery.error ? (
-        <p className="text-sm text-destructive">
-          {formatUserFacingError(guestsQuery.error, 'Failed to load project guests.')}
-        </p>
-      ) : guestsQuery.isLoading && !guestsQuery.data ? (
-        <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
-          <Loader2 className="h-4 w-4 animate-spin" /> Checking project access
-        </div>
-      ) : canManageGuests ? (
-        <>
-          <div className="divide-y divide-[var(--stroke-divider)] rounded-xl border border-[var(--stroke-divider)] px-4">
-            {(guestsQuery.data?.guests ?? []).filter((guest) => guest.status === 'active')
-              .length === 0 ? (
-              <p className="py-4 text-sm text-[var(--text-tertiary)]">No project-only guests.</p>
-            ) : (
-              (guestsQuery.data?.guests ?? [])
-                .filter((guest) => guest.status === 'active')
-                .map((guest) => (
-                  <div key={guest.grant_id} className="flex items-center gap-3 py-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-[var(--text-primary)]">
-                        {principalLabel(guest)}
-                      </p>
-                      <p className="truncate text-xs text-[var(--text-tertiary)]">
-                        Project-only access
-                        {guest.expires_at
-                          ? ` · expires ${new Date(guest.expires_at).toLocaleDateString()}`
-                          : ''}
-                      </p>
+    <SettingsSection
+      description="Grant access to this project without adding someone to the whole workspace."
+      icon={UserRoundCog}
+      id="access"
+      title="Project access"
+    >
+      <div className="space-y-4">
+        {guestsQuery.error ? (
+          <p className="text-sm text-destructive">
+            {formatUserFacingError(guestsQuery.error, 'Failed to load project guests.')}
+          </p>
+        ) : guestsQuery.isLoading && !guestsQuery.data ? (
+          <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+            <Loader2 className="h-4 w-4 animate-spin" /> Checking project access
+          </div>
+        ) : canManageGuests ? (
+          <>
+            <div className="divide-y divide-[var(--stroke-divider)] rounded-xl border border-[var(--stroke-divider)] px-4">
+              {(guestsQuery.data?.guests ?? []).filter((guest) => guest.status === 'active')
+                .length === 0 ? (
+                <p className="py-4 text-sm text-[var(--text-tertiary)]">No project-only guests.</p>
+              ) : (
+                (guestsQuery.data?.guests ?? [])
+                  .filter((guest) => guest.status === 'active')
+                  .map((guest) => (
+                    <div key={guest.grant_id} className="flex items-center gap-3 py-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-[var(--text-primary)]">
+                          {principalLabel(guest)}
+                        </p>
+                        <p className="truncate text-xs text-[var(--text-tertiary)]">
+                          Project-only access
+                          {guest.expires_at
+                            ? ` · expires ${new Date(guest.expires_at).toLocaleDateString()}`
+                            : ''}
+                        </p>
+                      </div>
+                      <Select
+                        value={guest.role}
+                        disabled={busyGuestId === guest.grant_id}
+                        onValueChange={(role) =>
+                          void changeGuestRole(guest, role as ProjectGrantRole)
+                        }
+                      >
+                        <SelectTrigger className="w-28" size="sm" aria-label="Project guest role">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PROJECT_ROLES.map((role) => (
+                            <SelectItem key={role} value={role}>
+                              {role}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Remove ${principalLabel(guest)}`}
+                        disabled={busyGuestId === guest.grant_id}
+                        onClick={() => void revokeGuest(guest)}
+                      >
+                        {busyGuestId === guest.grant_id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </Button>
                     </div>
-                    <Select
-                      value={guest.role}
-                      disabled={busyGuestId === guest.grant_id}
-                      onValueChange={(role) =>
-                        void changeGuestRole(guest, role as ProjectGrantRole)
-                      }
-                    >
-                      <SelectTrigger className="w-28" size="sm" aria-label="Project guest role">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PROJECT_ROLES.map((role) => (
-                          <SelectItem key={role} value={role}>
-                            {role}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  ))
+              )}
+            </div>
+
+            <div className="space-y-3 rounded-xl border border-[var(--stroke-divider)] p-4">
+              <div>
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
+                  <MailPlus className="h-4 w-4" /> Invite a project guest
+                </h3>
+                <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                  The invitation expires after seven days and grants access only to this project.
+                </p>
+              </div>
+              <form
+                className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_120px_auto]"
+                onSubmit={(event) => void createInvitation(event)}
+              >
+                <Input
+                  type="email"
+                  aria-label="Project invitee email"
+                  placeholder="guest@example.com"
+                  value={inviteEmail}
+                  onChange={(event) => setInviteEmail(event.target.value)}
+                  required
+                />
+                <Select
+                  value={inviteRole}
+                  onValueChange={(role) => setInviteRole(role as ProjectGrantRole)}
+                >
+                  <SelectTrigger className="w-full" aria-label="Project invitation role">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PROJECT_ROLES.map((role) => (
+                      <SelectItem key={role} value={role}>
+                        {role}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button type="submit" disabled={isInviting || !inviteEmail.trim()}>
+                  {isInviting && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Invite
+                </Button>
+              </form>
+
+              {invitationUrl && (
+                <div className="flex items-center gap-2 rounded-xl bg-[var(--surface-secondary)] p-3">
+                  <code className="min-w-0 flex-1 truncate text-xs">{invitationUrl}</code>
+                  <Button type="button" variant="outline" size="sm" onClick={copyInvitationUrl}>
+                    <Copy className="h-3.5 w-3.5" /> Copy link
+                  </Button>
+                </div>
+              )}
+
+              {invitationsQuery.error && (
+                <p className="text-sm text-destructive">
+                  {formatUserFacingError(
+                    invitationsQuery.error,
+                    'Failed to load project invitations.'
+                  )}
+                </p>
+              )}
+              {(invitationsQuery.data?.invitations ?? [])
+                .filter((invitation) => invitation.status === 'pending')
+                .map((invitation) => (
+                  <div key={invitation.invitation_id} className="flex items-center gap-3 text-sm">
+                    <span className="min-w-0 flex-1 truncate text-[var(--text-secondary)]">
+                      {invitation.recipient.email ?? invitation.recipient.user_id} ·{' '}
+                      {invitation.role}
+                    </span>
                     <Button
                       type="button"
                       variant="ghost"
-                      size="icon"
-                      aria-label={`Remove ${principalLabel(guest)}`}
-                      disabled={busyGuestId === guest.grant_id}
-                      onClick={() => void revokeGuest(guest)}
+                      size="sm"
+                      disabled={busyInvitationId === invitation.invitation_id}
+                      onClick={() => void revokeInvitation(invitation.invitation_id)}
                     >
-                      {busyGuestId === guest.grant_id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
-                      )}
+                      Revoke
                     </Button>
                   </div>
-                ))
-            )}
-          </div>
-
-          <div className="space-y-3 rounded-xl border border-[var(--stroke-divider)] p-4">
-            <div>
-              <h3 className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
-                <MailPlus className="h-4 w-4" /> Invite a project guest
-              </h3>
-              <p className="mt-1 text-xs text-[var(--text-tertiary)]">
-                The invitation expires after seven days and grants access only to this project.
-              </p>
+                ))}
             </div>
-            <form
-              className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_120px_auto]"
-              onSubmit={(event) => void createInvitation(event)}
-            >
-              <Input
-                type="email"
-                aria-label="Project invitee email"
-                placeholder="guest@example.com"
-                value={inviteEmail}
-                onChange={(event) => setInviteEmail(event.target.value)}
-                required
-              />
-              <Select
-                value={inviteRole}
-                onValueChange={(role) => setInviteRole(role as ProjectGrantRole)}
-              >
-                <SelectTrigger className="w-full" aria-label="Project invitation role">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PROJECT_ROLES.map((role) => (
-                    <SelectItem key={role} value={role}>
-                      {role}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button type="submit" disabled={isInviting || !inviteEmail.trim()}>
-                {isInviting && <Loader2 className="h-4 w-4 animate-spin" />}
-                Invite
-              </Button>
-            </form>
-
-            {invitationUrl && (
-              <div className="flex items-center gap-2 rounded-xl bg-[var(--surface-secondary)] p-3">
-                <code className="min-w-0 flex-1 truncate text-xs">{invitationUrl}</code>
-                <Button type="button" variant="outline" size="sm" onClick={copyInvitationUrl}>
-                  <Copy className="h-3.5 w-3.5" /> Copy link
-                </Button>
-              </div>
-            )}
-
-            {invitationsQuery.error && (
-              <p className="text-sm text-destructive">
-                {formatUserFacingError(
-                  invitationsQuery.error,
-                  'Failed to load project invitations.'
-                )}
-              </p>
-            )}
-            {(invitationsQuery.data?.invitations ?? [])
-              .filter((invitation) => invitation.status === 'pending')
-              .map((invitation) => (
-                <div key={invitation.invitation_id} className="flex items-center gap-3 text-sm">
-                  <span className="min-w-0 flex-1 truncate text-[var(--text-secondary)]">
-                    {invitation.recipient.email ?? invitation.recipient.user_id} · {invitation.role}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={busyInvitationId === invitation.invitation_id}
-                    onClick={() => void revokeInvitation(invitation.invitation_id)}
-                  >
-                    Revoke
-                  </Button>
-                </div>
-              ))}
-          </div>
-        </>
-      ) : null}
-    </section>
+          </>
+        ) : (
+          <p className="text-[13px] text-[var(--text-secondary)]">
+            Only project administrators can view and manage project guests.
+          </p>
+        )}
+      </div>
+    </SettingsSection>
   );
 }

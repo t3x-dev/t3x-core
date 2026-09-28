@@ -111,6 +111,7 @@ export type {
   Conversation,
   LLMProviderInfo,
   Project,
+  ProjectDetail,
   ProjectVisibility,
   Turn,
 } from '@/infrastructure/types';

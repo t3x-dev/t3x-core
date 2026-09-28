@@ -152,8 +152,8 @@ export function ProjectShell({
       <main
         className={
           immersive || activeTab === 'state' || activeTab === 'workspaces'
-            ? 'min-h-0 flex-1 overflow-hidden'
-            : 'min-h-0 flex-1 overflow-auto'
+            ? 'relative min-h-0 flex-1 overflow-hidden'
+            : 'relative min-h-0 flex-1 overflow-auto'
         }
       >
         {children}

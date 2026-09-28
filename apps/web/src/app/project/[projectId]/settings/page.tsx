@@ -17,17 +17,32 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ArrowLeft, CheckCircle2, Circle, GripVertical, Loader2, RotateCcw } from 'lucide-react';
+import {
+  ArrowLeft,
+  Bot,
+  CheckCircle2,
+  Circle,
+  GripVertical,
+  Loader2,
+  RotateCcw,
+  Sparkles,
+} from 'lucide-react';
 import Link from 'next/link';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { AutopilotSettings } from '@/components/autopilot/AutopilotSettings';
 import { ProjectCollaborationPanel } from '@/components/project/ProjectCollaborationPanel';
 import { ProjectVisibilitySettings } from '@/components/project/ProjectVisibilitySettings';
+import { ProjectDangerZone } from '@/components/project/settings/ProjectDangerZone';
+import { ProjectExportSettings } from '@/components/project/settings/ProjectExportSettings';
+import { ProjectGeneralSettings } from '@/components/project/settings/ProjectGeneralSettings';
+import { ProjectIntegritySettings } from '@/components/project/settings/ProjectIntegritySettings';
+import { ProjectSettingsNav } from '@/components/project/settings/ProjectSettingsNav';
+import { SettingsSection } from '@/components/project/settings/SettingsSection';
 import { ModelSelector } from '@/components/shared/ModelSelector';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
+import { projectDescription, useProjectSettings } from '@/hooks/projects/useProjectSettings';
 import { useProviderCommands } from '@/hooks/providers/useProviderCommands';
-import { fetchProject } from '@/queries/project';
 import {
   fetchProjectProviderConfig,
   fetchProviderRoles,
@@ -217,6 +232,7 @@ export default function ProjectSettingsPage() {
 
 function ProjectSettingsPageContent() {
   const { projectId } = useParams<{ projectId: string }>();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const requestedReturnTo = searchParams.get('returnTo');
   const returnTo =
@@ -225,6 +241,7 @@ function ProjectSettingsPageContent() {
     !requestedReturnTo.includes('\\')
       ? requestedReturnTo
       : `/project/${encodeURIComponent(projectId)}`;
+  const settings = useProjectSettings(projectId);
   const { saveProjectProviderConfig } = useProviderCommands();
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [globalRoles, setGlobalRoles] = useState<RoleAssignment[]>([]);
@@ -233,50 +250,36 @@ function ProjectSettingsPageContent() {
   const [saving, setSaving] = useState(false);
   const [providerError, setProviderError] = useState<string | null>(null);
   const [modelError, setModelError] = useState<string | null>(null);
-  const [projectModel, setProjectModel] = useState<{
+  const [savedModel, setSavedModel] = useState<{
     provider: string | null;
     model: string | null;
   } | null>(null);
-  const [modelLoading, setModelLoading] = useState(true);
   const [modelVersion, setModelVersion] = useState(0);
   const { setModel: updateProjectModel } = useProjectCrud();
+  const projectModel =
+    savedModel ??
+    (settings.project
+      ? {
+          provider: settings.project.default_provider ?? null,
+          model: settings.project.default_model ?? null,
+        }
+      : null);
 
   const handleModelChange = async (provider: string | null, model: string | null) => {
     setModelError(null);
     try {
       await updateProjectModel(projectId, provider, model);
-      setProjectModel({ provider, model });
+      setSavedModel({ provider, model });
     } catch (error) {
       setModelError(error instanceof Error ? error.message : 'Failed to save model settings.');
       setModelVersion((version) => version + 1);
     }
   };
 
-  useEffect(() => {
-    let cancelled = false;
-    setModelLoading(true);
-    setModelError(null);
-    fetchProject(projectId)
-      .then((value) => {
-        if (!cancelled)
-          setProjectModel({
-            provider: value.default_provider ?? null,
-            model: value.default_model ?? null,
-          });
-      })
-      .catch((error) => {
-        if (!cancelled)
-          setModelError(
-            error instanceof Error ? error.message : 'Failed to load project model settings.'
-          );
-      })
-      .finally(() => {
-        if (!cancelled) setModelLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId]);
+  const handleDelete = async () => {
+    await settings.remove();
+    router.push('/');
+  };
 
   const loadData = useCallback(async () => {
     try {
@@ -399,119 +402,172 @@ function ProjectSettingsPageContent() {
   };
 
   const grouped = groupByRole(providers);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-6 w-6 animate-spin text-[var(--text-tertiary)]" />
-      </div>
-    );
-  }
+  const project = settings.project;
 
   return (
-    <div className="max-w-3xl mx-auto py-8 px-6">
-      <div className="mb-2">
-        <Link
-          href={returnTo}
-          className="inline-flex items-center gap-1 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
-        >
-          <ArrowLeft className="h-3 w-3" />
-          Back to project
-        </Link>
-      </div>
-
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold text-[var(--text-primary)]">Project Settings</h1>
-          <p className="text-sm text-[var(--text-secondary)] mt-1">
-            Manage this project&apos;s privacy, collaboration, and local provider overrides.
-            {saving && <span className="ml-2 text-xs text-[var(--text-tertiary)]">Saving...</span>}
-          </p>
+    <div className="mx-auto grid max-w-[1180px] gap-8 px-6 pb-24 pt-8 lg:grid-cols-[200px_minmax(0,1fr)]">
+      <aside className="hidden lg:block">
+        <div className="sticky top-8">
+          <ProjectSettingsNav />
         </div>
+      </aside>
 
-        {overriddenRoles.size > 0 && (
-          <button
-            type="button"
-            onClick={handleResetToGlobal}
-            disabled={saving}
-            className={cn(
-              'flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium',
-              'border border-[var(--stroke-divider)]',
-              'text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
-              'hover:bg-[var(--hover-bg)] transition-colors',
-              'disabled:opacity-50 disabled:cursor-not-allowed'
-            )}
+      <div className="min-w-0 space-y-6">
+        <header>
+          <Link
+            href={returnTo}
+            className="mb-3 inline-flex items-center gap-1 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
           >
-            <RotateCcw className="h-3 w-3" />
-            Reset to Global
-          </button>
-        )}
-      </div>
-
-      <ProjectVisibilitySettings projectId={projectId} />
-
-      <div className="mt-12 border-t border-[var(--stroke-divider)] pt-8">
-        <h2 className="text-lg font-semibold text-[var(--text-primary)]">Provider overrides</h2>
-        <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Override the global provider order for this project.
-        </p>
-        {providerError ? (
-          <p className="mt-2 text-sm text-[var(--status-error)]" role="alert">
-            {providerError}
+            <ArrowLeft className="h-3 w-3" />
+            Back to project
+          </Link>
+          <h1 className="text-[22px] font-bold leading-7 tracking-[-0.02em] text-[var(--text-primary)]">
+            Settings
+          </h1>
+          <p className="mt-1 text-[13px] text-[var(--text-secondary)]">
+            How this repository is identified, shared, automated, verified and exported.
           </p>
-        ) : null}
-      </div>
+        </header>
 
-      <div className="mt-6 space-y-8">
-        {(Object.keys(ROLE_LABELS) as RoleGroup[]).map((role) => {
-          const roleProviders = grouped[role] ?? [];
-          if (roleProviders.length === 0) return null;
-
-          return (
-            <SortableRoleGroup
-              key={role}
-              role={role}
-              providers={roleProviders}
-              isOverridden={overriddenRoles.has(role)}
-              onReorder={handleReorder}
-            />
-          );
-        })}
-      </div>
-
-      {/* Default AI Model */}
-      <div className="mt-12 pt-8 border-t border-[var(--stroke-divider)]">
-        <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Default AI Model</h1>
-        <p className="text-sm text-[var(--text-secondary)] mb-6">
-          Set the default provider and model used for AI operations in this project.
-        </p>
-        {modelError ? (
-          <p className="mb-3 text-sm text-[var(--status-error)]" role="alert">
-            {modelError}
+        {settings.loading ? (
+          <div className="flex h-40 items-center justify-center rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-elevated)]">
+            <Loader2 className="size-5 animate-spin text-[var(--text-tertiary)]" />
+          </div>
+        ) : !project ? (
+          <p
+            className="rounded-xl border border-[var(--status-error)]/25 bg-[var(--surface-elevated)] p-5 text-[13px] text-[var(--status-error)]"
+            role="alert"
+          >
+            {settings.error ?? 'Repository not found.'}
           </p>
-        ) : null}
-        {modelLoading ? (
-          <output>Loading project model settings…</output>
-        ) : projectModel ? (
-          <ModelSelector
-            initialProvider={projectModel.provider}
-            initialModel={projectModel.model}
-            key={modelVersion}
-            onChange={handleModelChange}
+        ) : (
+          <ProjectGeneralSettings
+            key={`${project.name}:${projectDescription(project)}`}
+            onSave={settings.saveGeneral}
+            project={project}
           />
+        )}
+
+        <ProjectVisibilitySettings projectId={projectId} />
+        <ProjectCollaborationPanel projectId={projectId} />
+
+        <SettingsSection
+          action={
+            overriddenRoles.size > 0 ? (
+              <button
+                className={cn(
+                  'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium',
+                  'border border-[var(--stroke-default)]',
+                  'text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
+                  'hover:bg-[var(--hover-bg)] transition-colors',
+                  'disabled:cursor-not-allowed disabled:opacity-50'
+                )}
+                disabled={saving}
+                onClick={handleResetToGlobal}
+                type="button"
+              >
+                <RotateCcw className="size-3" />
+                Reset to global
+              </button>
+            ) : null
+          }
+          description={
+            <>
+              The model and provider order used when AI proposes changes here. Replay and commits
+              never depend on them.
+              {saving && <span className="ml-2 text-[var(--text-tertiary)]">Saving...</span>}
+            </>
+          }
+          icon={Sparkles}
+          id="ai"
+          title="AI defaults"
+        >
+          <div className="grid gap-6">
+            <div>
+              <h3 className="text-[13px] font-semibold text-[var(--text-primary)]">
+                Default model
+              </h3>
+              <p className="mb-3 mt-0.5 text-xs text-[var(--text-tertiary)]">
+                Used for AI operations in this project unless a run picks another model.
+              </p>
+              {modelError ? (
+                <p className="mb-3 text-xs text-[var(--status-error)]" role="alert">
+                  {modelError}
+                </p>
+              ) : null}
+              {settings.loading ? (
+                <output className="text-xs text-[var(--text-tertiary)]">
+                  Loading project model settings...
+                </output>
+              ) : projectModel ? (
+                <ModelSelector
+                  initialModel={projectModel.model}
+                  initialProvider={projectModel.provider}
+                  key={modelVersion}
+                  onChange={handleModelChange}
+                />
+              ) : null}
+            </div>
+
+            <div className="border-t border-[var(--stroke-divider)] pt-5">
+              <h3 className="text-[13px] font-semibold text-[var(--text-primary)]">
+                Provider overrides
+              </h3>
+              <p className="mb-4 mt-0.5 text-xs text-[var(--text-tertiary)]">
+                Override the global fallback order for this project only.
+              </p>
+              {providerError ? (
+                <p className="mb-3 text-xs text-[var(--status-error)]" role="alert">
+                  {providerError}
+                </p>
+              ) : null}
+              {loading ? (
+                <div className="flex h-20 items-center justify-center">
+                  <Loader2 className="size-4 animate-spin text-[var(--text-tertiary)]" />
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {(Object.keys(ROLE_LABELS) as RoleGroup[]).map((role) => {
+                    const roleProviders = grouped[role] ?? [];
+                    if (roleProviders.length === 0) return null;
+                    return (
+                      <SortableRoleGroup
+                        isOverridden={overriddenRoles.has(role)}
+                        key={role}
+                        onReorder={handleReorder}
+                        providers={roleProviders}
+                        role={role}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </SettingsSection>
+
+        <SettingsSection
+          description="Commit extracted state automatically once it meets these thresholds."
+          icon={Bot}
+          id="autopilot"
+          title="Autopilot"
+        >
+          <AutopilotSettings projectId={projectId} />
+        </SettingsSection>
+
+        <ProjectIntegritySettings onVerify={settings.verify} />
+
+        {project ? (
+          <>
+            <ProjectExportSettings
+              onExport={settings.exportArchive}
+              projectId={projectId}
+              projectName={project.name}
+            />
+            <ProjectDangerZone onDelete={handleDelete} project={project} />
+          </>
         ) : null}
       </div>
-
-      {/* Autopilot Settings */}
-      <div className="mt-12 pt-8 border-t border-[var(--stroke-divider)]">
-        <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Autopilot</h1>
-        <p className="text-sm text-[var(--text-secondary)] mb-6">
-          Configure automatic knowledge commit rules for this project.
-        </p>
-        <AutopilotSettings projectId={projectId} />
-      </div>
-
-      <ProjectCollaborationPanel projectId={projectId} />
     </div>
   );
 }

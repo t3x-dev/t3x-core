@@ -27,6 +27,14 @@ const bootstrapMocks = vi.hoisted(() => ({
 vi.mock('@/hooks/workspaces/useWorkspaceAuthoringBootstrap', () => ({
   useWorkspaceAuthoringBootstrap: () => bootstrapMocks.value,
 }));
+vi.mock('@/hooks/schemas/useProjectYSchemaVersions', () => ({
+  useProjectYSchemaVersions: () => ({
+    error: undefined,
+    pending: false,
+    refresh: vi.fn(),
+    versions: [],
+  }),
+}));
 vi.mock('@/hooks/workspaces/useComposeActivity', () => ({
   useComposeActivity: () =>
     activityMocks.value ?? {
@@ -736,5 +744,203 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
     expect(onModeChange).toHaveBeenCalledWith('compose');
+  });
+
+  it('lets Compose keep the default Schema or pin another published Schema', () => {
+    const bindSchema = vi.fn();
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    render(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={
+          {
+            busyAction: null,
+            bindSchema,
+            candidate,
+            chat: {
+              error: null,
+              input: '',
+              isLoading: false,
+              isStreaming: false,
+              messages: [],
+              send: vi.fn(),
+              setInput: vi.fn(),
+              stop: vi.fn(),
+              warning: null,
+            },
+            error: null,
+            hasCollaborationConflict: false,
+            isBusy: false,
+            materialSources: [],
+            model: {
+              availabilityError: null,
+              change: vi.fn(),
+              loading: false,
+              ready: true,
+              selectedModel: 'gpt-5.4',
+              selectedProvider: 'openai',
+            },
+            notice: null,
+            scenarios: { options: [], selectedId: candidate.id },
+            sourceBusy: false,
+          } as unknown as WorkspaceComposeReviewController
+        }
+        mode="compose"
+        onModeChange={vi.fn()}
+      />
+    );
+
+    const schema = screen.getByRole('combobox', { name: 'Workspace schema' });
+    expect(schema).toHaveValue('default');
+    expect(
+      within(schema).getByRole('option', { name: 'Default · PRD Schema v2' })
+    ).toBeInTheDocument();
+    fireEvent.change(schema, { target: { value: 't3x/prompt@v1' } });
+    expect(bindSchema).toHaveBeenCalledWith(
+      expect.objectContaining({ canonicalName: 't3x/prompt', version: 'v1' })
+    );
+  });
+
+  it('renders Compose authoring cards in Review instead of empty PRD boilerplate', async () => {
+    const candidate = {
+      ...getProjectWorkspaceStarterCandidate('proj_1'),
+      title: 'Main workspace',
+      summary: 'Collect source evidence and build the next structured state commit.',
+      schemaBindings: getWorkspacePreviewCandidates('proj_1')[0]!.schemaBindings,
+    };
+    const weatherTree = [
+      {
+        key: 'prd',
+        slots: {},
+        children: [
+          {
+            key: 'requirements',
+            slots: {},
+            children: [{ key: 'weather', slots: { title: '天气为晴天' }, children: [] }],
+          },
+        ],
+      },
+    ];
+    const current = {
+      domain: 't3x.dev/semantic-content',
+      version: 1,
+      content: { trees: weatherTree, relations: [] },
+    };
+    const cards = [
+      {
+        nodeId: 'weather',
+        path: 'content/trees/[key=prd]/children/[key=requirements]/children/[key=weather]/slots/title',
+        after: '天气为晴天',
+      },
+      { nodeId: 'domain', path: 'domain', after: 't3x.dev/semantic-content' },
+      { nodeId: 'version', path: 'version', after: 1 },
+    ];
+    activityMocks.value = {
+      enabled: true,
+      loading: false,
+      error: null,
+      actions: [],
+      cards: {},
+      cursor: null,
+      node: null,
+      nodeLoading: false,
+      nodeError: null,
+      nodeCursor: null,
+      notice: null,
+      newActivity: null,
+      compositionRevision: 2,
+      workspaceRevision: 4,
+      basis: { refName: 'main', refHead: null, baseDigest: 'empty' },
+      refresh: vi.fn(),
+      loadOlder: vi.fn(),
+      loadLatest: vi.fn(),
+      inspectNode: vi.fn(),
+      selectActionNode: vi.fn(),
+      loadOlderNode: vi.fn(),
+      publish: vi.fn(),
+      publishCandidate: vi.fn(),
+      createAssistantConversation: vi.fn(),
+      view: {
+        schema: 't3x.application/workspace-authoring-view/v1',
+        projectionVersion: 1,
+        workspaceRevision: 4,
+        compositionRevision: 2,
+        basis: { refName: 'main', refHead: null, baseDigest: 'empty' },
+        actions: [],
+        selected: null,
+        netDiff: cards,
+        node: null,
+        nextBeforeSequence: null,
+        base: {},
+        current,
+      },
+    } as unknown as ReturnType<typeof useComposeActivity>;
+    const controller = {
+      busyAction: null,
+      candidate,
+      chat: {
+        error: null,
+        input: '',
+        isLoading: false,
+        isStreaming: false,
+        messages: [],
+        send: vi.fn(),
+        setInput: vi.fn(),
+        stop: vi.fn(),
+        warning: null,
+      },
+      error: null,
+      hasCollaborationConflict: false,
+      isBusy: false,
+      materialSources: [],
+      model: {
+        availabilityError: null,
+        change: vi.fn(),
+        loading: false,
+        ready: true,
+        selectedModel: 'gpt-5.4-mini',
+        selectedProvider: 'openai',
+      },
+      notice: null,
+      prepareReview: vi.fn(),
+      renderedYaml: '',
+      review: {
+        changeProjection: null,
+        commands: null,
+        content: null,
+        deterministicValidation: null,
+        precondition: null,
+        reviewSnapshot: null,
+        transitionId: null,
+        view: null,
+      },
+      scenarios: { options: [], selectedId: candidate.id },
+      sourceBusy: false,
+    } as unknown as WorkspaceComposeReviewController;
+
+    render(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="review"
+        onModeChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText('Rendered result')).toBeInTheDocument();
+    expect(screen.getAllByText('天气为晴天').length).toBeGreaterThan(0);
+    expect(screen.getByText('Proposed changes')).toBeInTheDocument();
+    expect(screen.getByText('t3x.dev/semantic-content')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(screen.queryByText('No outcome has been recorded.')).not.toBeInTheDocument();
+    expect(screen.queryByText(candidate.summary)).not.toBeInTheDocument();
+    expect(screen.queryByText('No rollout plan recorded.')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Structure diff' }));
+    expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
+    expect(screen.queryByText('No structured changes are prepared yet')).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole('table')).getByTitle('prd/requirements/weather/title')
+    ).toBeInTheDocument();
   });
 });
