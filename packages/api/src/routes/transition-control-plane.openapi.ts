@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { type ApiKey, LLMProviderError, ProposalGenerationDraftSchema } from '@t3x-dev/core';
+import { type ApiKey, LLMProviderError } from '@t3x-dev/core';
 import {
   ConflictError,
   DecisionNotAuthorizedError,
@@ -32,12 +32,11 @@ import {
   generateTransitionProposal,
   ProposalGenerationContextError,
   ProposalGenerationDraftError,
-  type ProposalGenerationModel,
   ProposalGenerationProviderError,
   type ProposalGenerationRequest,
 } from '../lib/proposal-generation';
+import { defaultProposalGenerationModel } from '../lib/proposal-generation-model';
 import { createProposalGenerationPostureProvider } from '../lib/proposal-generation-posture-provider';
-import { resolveProviderAndModel } from '../lib/provider-resolver';
 import {
   requireTransitionAuthority,
   TransitionProjectScopeDeniedError,
@@ -60,12 +59,12 @@ import {
 import {
   commitTransition,
   decideTransition,
-  digestTransitionReviewPrecondition,
   TransitionAutomatedOverrideDeniedError,
   TransitionDecisionDeniedError,
   TransitionDecisionMembershipError,
   TransitionReviewStaleError,
 } from '../lib/transition-control-plane/lifecycle';
+import { wireTransitionView as wireView } from '../lib/transition-control-plane/wire';
 import {
   resolveCanonicalWorkspaceSourceCommitProjection,
   WorkspaceSourceArtifactError,
@@ -200,6 +199,7 @@ const ProposalGenerationRequestSchema = z
     workspace_id: WorkspaceIdSchema,
     posture: z.enum(['source_only', 'guided', 'recommend']).default('guided'),
     instruction: z.string().trim().min(1).max(20_000),
+    source_turn_hashes: z.array(z.string().trim().min(1).max(200)).max(64).optional(),
     source_material_ids: z.array(z.string().trim().min(1).max(200)).max(256).default([]),
     if_revision: z.number().int().min(1).optional(),
     provider: z.string().trim().min(1).max(100).optional(),
@@ -366,52 +366,6 @@ function apiKey(c: Context): ApiKey | undefined {
   return c.get('apiKey') as ApiKey | undefined;
 }
 
-type TransitionPreconditionView = Awaited<ReturnType<typeof inspectTransition>>['precondition'];
-
-function wireViewPrecondition(precondition: TransitionPreconditionView) {
-  const policyDigest = precondition.policyDigest;
-  const wired = {
-    workspace_revision: precondition.workspaceRevision,
-    ref_name: precondition.refName,
-    ref_head: precondition.refHead,
-    effect_digest: precondition.effectDigest,
-    proposal_digest: precondition.proposalDigest,
-    statement_digests: precondition.statementDigests,
-    policy_digest: policyDigest,
-  };
-
-  if (policyDigest === null) return wired;
-
-  return {
-    ...wired,
-    review_digest: digestTransitionReviewPrecondition({
-      ...precondition,
-      policyDigest,
-    }),
-  };
-}
-
-function wireView(view: Awaited<ReturnType<typeof inspectTransition>>) {
-  return {
-    transition_id: view.transitionId,
-    project_id: view.projectId,
-    workspace_id: view.workspaceId,
-    request_kind: view.requestKind,
-    request_id: view.requestId,
-    created_at: view.createdAt,
-    precondition: wireViewPrecondition(view.precondition),
-    transition: view.transition,
-    statements: view.statements.map((statement) => ({
-      digest: statement.digest,
-      source: statement.source,
-      issuer: statement.issuer,
-      request_id: statement.requestId,
-      created_at: statement.createdAt,
-    })),
-    ...(view.generation === undefined ? {} : { generation: view.generation }),
-  };
-}
-
 function wireRequest(body: z.infer<typeof ProposeRequestSchema>) {
   const common = {
     workspaceId: body.workspace_id,
@@ -553,59 +507,6 @@ function controlPlaneError(c: Context, error: unknown) {
   }
   pinoLogger.error({ err: error }, 'Transition control-plane operation failed');
   return errorResponse(c, 'INTERNAL_ERROR', 'Transition control-plane operation failed');
-}
-
-async function defaultProposalGenerationModel(input: {
-  db: Awaited<ReturnType<typeof getDB>>;
-  projectId: string;
-  request: ProposalGenerationRequest;
-}): Promise<ProposalGenerationModel> {
-  const resolved = await resolveProviderAndModel({
-    db: input.db,
-    projectId: input.projectId,
-    requestedProvider: input.request.requestedProvider,
-    requestedModel: input.request.requestedModel,
-    unavailableMessage: 'No configured Proposal generation provider is available',
-  });
-  if (!resolved.ok) throw new ProposalGenerationProviderError(resolved.message);
-  const provider = resolved.provider;
-  if (!('generateStructured' in provider) || typeof provider.generateStructured !== 'function') {
-    throw new ProposalGenerationProviderError(
-      `Provider ${resolved.providerId} does not support strict structured generation`
-    );
-  }
-  return {
-    provider: resolved.providerId,
-    model: resolved.model,
-    async generate(generation) {
-      const result = await provider.generateStructured!(
-        {
-          system: generation.prompt,
-          messages: [
-            {
-              role: 'user',
-              content: JSON.stringify({
-                profile: generation.profile,
-                context: generation.context,
-                base: generation.base,
-                yschema: generation.yschema.value,
-                sources: generation.sources.map((source, sourceIndex) => ({
-                  sourceIndex,
-                  resource: source.resource,
-                  title: source.title,
-                  content: source.content,
-                })),
-                instruction: generation.instruction,
-              }),
-            },
-          ],
-        },
-        ProposalGenerationDraftSchema,
-        { model: resolved.model, temperature: 0, maxTokens: 16_000 }
-      );
-      return { draft: result.data, usage: result.usage };
-    },
-  };
 }
 
 const defaultInferenceRuntime = createInferenceRuntime();
@@ -867,6 +768,7 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
         posture: body.posture,
         instruction: body.instruction,
         sourceMaterialIds: body.source_material_ids,
+        sourceTurnHashes: body.source_turn_hashes,
         ...(body.if_revision === undefined ? {} : { expectedRevision: body.if_revision }),
         ...(body.provider === undefined ? {} : { requestedProvider: body.provider }),
         ...(body.model === undefined ? {} : { requestedModel: body.model }),

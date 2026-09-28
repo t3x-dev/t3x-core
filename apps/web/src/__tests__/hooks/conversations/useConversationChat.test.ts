@@ -529,6 +529,51 @@ describe('useConversationChat', () => {
     );
   });
 
+  it('awaits conversation context prep before fetching memory', async () => {
+    const ready = deferred<void>();
+    const callOrder: string[] = [];
+    const onConversationReady = vi.fn(() => {
+      callOrder.push('ready');
+      return ready.promise;
+    });
+    getConversationMemoryMock.mockImplementation(async () => {
+      callOrder.push('memory');
+      return { text: '## Source Materials\nImported note' };
+    });
+
+    const { result } = renderHook(() =>
+      useConversationChat({
+        projectId: 'proj_1',
+        conversationId: 'conv_existing',
+        title: 'Meal planning',
+        provider: 'google',
+        model: 'gemini-3.6-flash',
+        onConversationReady,
+      })
+    );
+
+    result.current.sendMessage('Can you see the imported file?');
+
+    await waitFor(() => {
+      expect(onConversationReady).toHaveBeenCalledWith('conv_existing');
+    });
+    expect(getConversationMemoryMock).not.toHaveBeenCalled();
+
+    ready.resolve();
+
+    await waitFor(() => {
+      expect(chatStreamMock).toHaveBeenCalled();
+    });
+    expect(callOrder).toEqual(['ready', 'memory']);
+    const [request] = chatStreamMock.mock.calls[0] as [
+      { messages: Array<{ role: string; content: string }> },
+    ];
+    expect(request.messages[0]).toEqual({
+      role: 'system',
+      content: '## Source Materials\nImported note',
+    });
+  });
+
   it('keeps regular chat generation on the streaming generation lane', async () => {
     const { result } = renderHook(() =>
       useConversationChat({

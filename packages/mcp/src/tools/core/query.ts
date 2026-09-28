@@ -33,6 +33,7 @@ const SINGULAR_TARGETS = [
   'source_thread',
   'source_evidence',
   'workspace',
+  'workspace_activity',
   'conversation',
 ] as const;
 const PLURAL_TARGETS = [
@@ -64,6 +65,7 @@ export const queryDef: ToolDef = {
     '',
     'Notes:',
     '  source_evidence also requires `project_id` and is available through the API backend',
+    '  workspace_activity shows action-scoped cards and immutable node history; optional action_id, node_id and before_sequence',
     '  workspace / workspaces require `project_id` and the authenticated API backend',
     '  conversation / conversations are compatibility aliases for source_thread / source_threads',
     '',
@@ -93,6 +95,12 @@ export const queryDef: ToolDef = {
         type: 'number',
         description: 'Max results to return (default 20).',
       },
+      action_id: {
+        type: 'string',
+        description: 'Selected immutable action; does not restrict the current Draft.',
+      },
+      node_id: { type: 'string', description: 'Node identity for exact history.' },
+      before_sequence: { type: 'integer', minimum: 1, description: 'History pagination cursor.' },
       offset: {
         type: 'number',
         description: 'Skip first N results (default 0).',
@@ -117,6 +125,8 @@ export const queryHandler: ToolHandler = async (args) => {
     );
   }
 
+  if (target === 'workspace_activity' && !isApiBackend())
+    return fail('workspace_activity requires the authenticated API backend');
   const id = args.id as string | undefined;
   const projectId = args.project_id as string | undefined;
   const limit = (args.limit as number | undefined) ?? 20;
@@ -154,6 +164,18 @@ export const queryHandler: ToolHandler = async (args) => {
             );
           }
           return ok(await client.sourceThreads.evidence(projectId, id, { limit, offset }));
+        case 'workspace_activity':
+          if (!projectId) return fail('project_id is required for workspace_activity');
+          return ok(
+            await client.workspaces.authoring.read(projectId, id, {
+              limit,
+              ...(typeof args.action_id === 'string' ? { action_id: args.action_id } : {}),
+              ...(typeof args.node_id === 'string' ? { node_id: args.node_id } : {}),
+              ...(typeof args.before_sequence === 'number'
+                ? { before_sequence: args.before_sequence }
+                : {}),
+            })
+          );
         case 'workspace':
           if (!projectId) {
             return fail('"project_id" is required for target="workspace".');

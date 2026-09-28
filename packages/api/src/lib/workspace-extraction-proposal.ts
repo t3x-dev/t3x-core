@@ -7,6 +7,7 @@ import {
 } from '@t3x-dev/core';
 import {
   type AnyDB,
+  DraftAuthoringConflictError,
   findConversationById,
   findTurnsByHashes,
   recordEvent,
@@ -283,6 +284,12 @@ export async function createWorkspaceExtractionProposal(
     workspaceId: input.workspaceId,
     expectedRevision: input.expectedRevision,
   });
+  // Retired writer for ledger-backed Drafts: reject before paid inference,
+  // not only when the storage guard finally attempts to persist its result.
+  if (context.workspace.authoringLedger)
+    throw new DraftAuthoringConflictError(
+      'Use proposal-generations and explicit publication for an authoring Draft'
+    );
   const conversation = await findConversationById(db, input.source.id);
   if (!conversation) {
     throw new WorkspaceExtractionProposalError(

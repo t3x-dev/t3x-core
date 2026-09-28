@@ -54,7 +54,8 @@ export async function updateAutopilotConfig(
       body: JSON.stringify(config),
     }
   );
-  return handleResponse<AutopilotConfig>(res);
+  const data = await handleResponse<{ config: AutopilotConfig }>(res);
+  return data.config;
 }
 
 /**

@@ -70,12 +70,12 @@ test.describe('Project Lifecycle', () => {
   test('PL-04: Project not found shows error', async ({ page }) => {
     await page.goto('/project/proj_nonexistent_999');
 
-    await expect(page.getByText('Something went wrong', { exact: true })).toBeVisible({
+    await expect(page.getByText('Project not found', { exact: true })).toBeVisible({
       timeout: 15000,
     });
     await expect(
-      page.getByText('This project is no longer available.', { exact: true })
+      page.getByText(/does not exist or was deleted/)
     ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Back to projects' })).toBeVisible();
   });
 });

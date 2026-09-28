@@ -1,0 +1,43 @@
+{
+  "slug": "scheduled-jobs",
+  "title": "Scheduled jobs",
+  "description": "Declare cron-like jobs and their expected cadence.",
+  "license": "Apache-2.0",
+  "tags": ["infrastructure", "devops", "homelab", "ecosystem:t3x"],
+  "companionSchema": {
+    "canonicalName": "t3x/scheduled-jobs",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "list": {
+      "title": "Ops jobs"
+    },
+    "items": {
+      "prune": {
+        "name": "Prune logs",
+        "cadence": "0 3 * * *",
+        "command": "find /var/log -mtime +14 -delete"
+      }
+    }
+  },
+  "demonstration": {
+    "message": "Add the nightly backup window",
+    "value": {
+      "list": {
+        "title": "Ops jobs"
+      },
+      "items": {
+        "prune": {
+          "name": "Prune logs",
+          "cadence": "0 3 * * *",
+          "command": "find /var/log -mtime +14 -delete"
+        },
+        "backup": {
+          "name": "Backup volumes",
+          "cadence": "30 3 * * *",
+          "command": "restic backup /var/lib/app"
+        }
+      }
+    }
+  }
+}

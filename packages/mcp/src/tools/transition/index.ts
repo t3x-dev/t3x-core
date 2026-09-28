@@ -34,7 +34,7 @@ function errorResult(
   );
 }
 
-async function withTransitionApi(
+export async function withTransitionApi(
   action: (client: T3xClient) => Promise<unknown>
 ): Promise<ToolResult> {
   if (!isApiBackend()) {

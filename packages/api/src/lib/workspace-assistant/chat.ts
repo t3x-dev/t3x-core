@@ -1,0 +1,68 @@
+import type { DraftActionActor, DraftYOp } from '@t3x-dev/application';
+import type { LLMProvider } from '@t3x-dev/core';
+import type { AnyDB } from '@t3x-dev/storage';
+import { type AssistantEvent, runAssistantProvider } from './adapters/provider-tools';
+import { createAssistantCapabilities } from './capabilities';
+import { assertAssistantContextCurrent, prepareAssistantContext } from './context';
+import type { AssistantContextInput, AssistantInference } from './contracts';
+import { isExplicitWorkspaceChangeRequest } from './policy';
+
+export async function chatWithWorkspace(input: {
+  db: AnyDB;
+  context: AssistantContextInput;
+  actor: DraftActionActor;
+  provider: LLMProvider;
+  model: string;
+  inference: AssistantInference;
+  operationNamespace: string;
+  authorize: (capability: 'read' | 'propose') => Promise<void>;
+  exactEdit?: { operations: DraftYOp[]; reason?: string };
+  proposal?: {
+    posture: 'source_only' | 'guided' | 'recommend';
+    requestedProvider?: string;
+    requestedModel?: string;
+  };
+  signal?: AbortSignal;
+  emit: (
+    event:
+      | AssistantEvent
+      | {
+          type: 'context';
+          workspaceRevision: number;
+          compositionRevision: number;
+          disclosure: unknown;
+        }
+  ) => Promise<void>;
+}) {
+  const prepared = await prepareAssistantContext(input.db, input.context, () =>
+    input.authorize('read')
+  );
+  await input.emit({
+    type: 'context',
+    workspaceRevision: prepared.workspaceRevision,
+    compositionRevision: prepared.compositionRevision,
+    disclosure: prepared.disclosure,
+  });
+  const capabilities = createAssistantCapabilities({ ...input, prepared });
+  const latestUserTurn = prepared.turns.at(-1);
+  const shouldGenerateProposal =
+    Boolean(input.proposal) &&
+    !input.exactEdit &&
+    latestUserTurn?.role === 'user' &&
+    isExplicitWorkspaceChangeRequest(latestUserTurn.content);
+  const prompt = structuredClone(prepared.prompt);
+  if (!input.proposal && !input.exactEdit) {
+    prompt.system +=
+      '\n\nNo Workspace write or proposal capability is enabled for this message. Do not claim that anything was changed, saved, added, updated, or proposed. If the user asks for a change, state clearly that no change was made and ask them to enable proposal generation.';
+  }
+  await runAssistantProvider({
+    ...input,
+    prompt,
+    capabilities,
+    initialToolCall: shouldGenerateProposal
+      ? { name: 'requestProposal', input: { instruction: latestUserTurn.content } }
+      : undefined,
+    assertCurrent: () =>
+      assertAssistantContextCurrent(input.db, prepared, () => input.authorize('read')),
+  });
+}

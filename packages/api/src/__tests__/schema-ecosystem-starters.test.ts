@@ -42,9 +42,31 @@ it.each(
   expect(invalid.errors.length + invalid.gaps.length).toBeGreaterThan(0);
 });
 it('keeps tags open and makes no external execution claim', () => {
+  const collectionTags = [
+    'infrastructure',
+    'devops',
+    'homelab',
+    'ai',
+    'agents',
+    'evaluation',
+    'science',
+    'research',
+    'security',
+    'detection',
+    'devices',
+    'iot',
+    'automation',
+    'data',
+    'visualization',
+    'planning',
+    'work',
+    'care',
+  ];
+  expect(schemaEcosystemStarters).toHaveLength(30);
   for (const module of schemaEcosystemStarters) {
     expect(module.license).toBe('Apache-2.0');
     expect(module.provides.every((item) => item.capability.startsWith('t3x.starter.'))).toBe(true);
+    expect(module.tags.some((tag) => collectionTags.includes(tag))).toBe(true);
   }
   expect(schemaEcosystemStarters[2]?.readme).toContain('does not validate port syntax');
 });

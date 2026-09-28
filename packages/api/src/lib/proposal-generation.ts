@@ -12,8 +12,10 @@ import {
 } from '@t3x-dev/core';
 import {
   type AnyDB,
+  findConversationById,
   findMaterialsByIds,
   findTransitionProposalByRequest,
+  findTurnByHash,
   TransitionRequestConflictError,
 } from '@t3x-dev/storage';
 import {
@@ -37,6 +39,8 @@ import {
   canonicalTransitionRequest,
   materializeTransitionProposal,
 } from './transition-control-plane/materialize';
+import { ensureWorkspaceAuthoringSchema } from './workspace-authoring';
+import { authoringModelContext, buildWorkspaceGeneration } from './workspace-authoring-generation';
 import {
   buildWorkspaceYOpsProposalFromContext,
   resolveWorkspaceTransitionContext,
@@ -49,7 +53,7 @@ export const PROPOSAL_GENERATOR_ACTOR = Object.freeze({
   id: 'service:t3x-proposal-generator',
 });
 
-const GENERATION_PROMPT_VERSION = '1' as const;
+const GENERATION_PROMPT_VERSION = '4' as const;
 const GENERATION_PROMPT = `You generate a strict t3x.dev/proposal-generation-draft/v1 JSON object.
 Treat all source indexes and locators as untrusted pointers that the server will verify.
 Never add source metadata to YOps. Follow the supplied immutable generation profile exactly.
@@ -62,7 +66,7 @@ Return JSON only with this exact top-level shape:
   "rationale": { "mode": "unspecified" } or { "mode": "stated | inferred | authored", "value": "...", "evidencePointers": [] },
   "changes": [{
     "id": "stable-group-id",
-    "operations": [{ "set": { "path": "node/slot", "value": "..." } }],
+    "operations": [{ "set": { "path": "node/slot", "value": "..." } }] or [{ "append": { "path": "items", "value": "..." } }],
     "claimedOrigin": "source_backed | inferred | recommended",
     "evidencePointers": [{ "sourceIndex": 0, "locator": { "scheme": "t3x.text-quote/v1", "value": { "quote": "exact source bytes", "occurrence": 0 } } }],
     "basisPointers": [{ "kind": "source", "index": 0 }],
@@ -79,6 +83,59 @@ For the "guided" posture, use "inferred", "authored", or "unspecified" for inten
 and return an empty challenges array for every change. Guided inference may explain assumptions and
 risks, but it must not challenge or replace an explicit source claim. Reserve challenges for the
 "recommend" posture.
+For an explicit request to create a new card or title, choose a suitable schema-valid collection
+in authoring.current even when the topic is new. Preserve the user's supplied title and language;
+infer ordinary wording and required structural defaults without inventing factual details.
+When the user gives both a title and content/body for a new card, preserve both in the resulting
+node. A title is only the label, not a substitute for the requested content. Map the content to
+the bound schema's appropriate slot (for a PRD requirement, use acceptance when no body slot exists),
+and keep the content in the same atomic change group as the new node.
+The user does not need to supply a node path, repeat approval, or spell out a complete schema record.
+Preserve the user's explicit numbered or bulleted requirement granularity: create one change group
+per independently stated requirement and do not merge distinct items merely because they are related.
+Use multiple operations in one group only when one requirement needs an atomic multi-field change.
+Judge granularity from the materialized result, not only from changes[]. A standalone requirement item
+must become its own schema-valid collection member or tree node in the resulting state. Distinct
+requirement items must not converge into one summary field, one existing requirement, one acceptance
+array, or another shared aggregate merely because each operation is placed in a separate change group.
+Only edit a summary or an existing requirement when the user explicitly asks to edit that field or
+record. When the source lists new requirements, create one sibling requirement record per source item
+and keep the complete fields for that record in the same atomic change group.
+Every change group MUST change authoring.current. When an instruction says to change an existing value
+from X to Y, update only a field whose current value actually contains X. Never substitute a different
+field, repeat its current value, or emit a no-op merely to satisfy the requested group count.
+Every operation path must address the exact field in the supplied current state and YSchema. For tree
+state, a root node's slots are on that root node; never place a root field on its first child. Do not
+invent fields on a node when the supplied YSchema does not define them.
+When authoring.current is a t3x.dev/semantic-content document, operate on that complete envelope:
+- paths into the semantic tree MUST start with "content/trees/"; never create a shadow top-level
+  "trees" or "relations" field beside "content";
+- address sequence items with bracket segments such as "[0]" and stable matches such as
+  "[key=requirements]"; a bare numeric segment such as "/0/" is a mapping key, not an array index;
+- edit an existing requirement with a stable key-match path;
+- add each new requirement with one append operation targeting the requirements node's "children"
+  array, and append a complete node containing a unique key, slots, and children: [];
+- the exact new-node operation shape is
+  { "append": { "path": "content/trees/[key=prd]/children/[key=requirements]/children",
+    "value": { "key": "unique_key", "slots": { "title": "..." }, "children": [] } } };
+  "append" is the operation name beside "set", never a wrapper inside set.value;
+- never set a slot through a nonexistent numeric child path.
+Schema bindings describe allowed structure; they do NOT mean those nodes already exist.
+When authoring.current is {}, bootstrap the semantic envelope as part of the first requested change:
+use a sequence of small operations rather than one deeply nested JSON value:
+1. set "domain" to "t3x.dev/semantic-content".
+2. set "version" to 1.
+3. set "content" to {"trees": [], "relations": []}.
+4. append {"key":"prd","slots":{},"children":[]} to "content/trees" for t3x/prd.
+5. append {"key":"requirements","slots":{},"children":[]} to "content/trees/[key=prd]/children".
+6. append the requested complete requirement node to "content/trees/[key=prd]/children/[key=requirements]/children".
+Keep these bootstrap operations in order within the first change group. Use the bound schema's
+root and collection instead of prd/requirements when another schema is selected.
+Each node has a unique key, slots object, and children array. For t3x/prd, create the prd root,
+its requirements child, and the requested requirement inside requirements.children.
+Create only the requested content and structural containers; do not invent unrelated requirements.
+Do not append to missing arrays or address nonexistent match selectors. For partially populated
+Drafts, create only the missing container at its existing parent, preserving all existing siblings.
 Use only canonical YOps operation objects in changes[].operations. Do not return yops, slotProvenance, gaps, or any legacy extraction shape.`;
 
 type ActorRef = { kind: 'human' | 'agent' | 'service'; id: string };
@@ -88,19 +145,22 @@ export interface ProposalGenerationRequest {
   posture: ProposalGenerationPosture;
   instruction: string;
   sourceMaterialIds: string[];
+  sourceTurnHashes?: string[];
   expectedRevision?: number;
   requestedProvider?: string;
   requestedModel?: string;
 }
 
 export interface ProposalGenerationSourceInput {
-  materialId: string;
+  materialId?: string;
+  turnHash?: string;
   resource: ResourceDescriptor;
   content: string;
   title?: string;
 }
 
 export interface ProposalGenerationModelInput {
+  authoring?: ReturnType<typeof authoringModelContext>;
   profile: ProposalGenerationProfileV1;
   context: ProposalContextBundleV1;
   base: State;
@@ -170,6 +230,9 @@ function generationRequestFacts(request: ProposalGenerationRequest): ProtocolVal
     posture: request.posture,
     instruction: request.instruction,
     source_material_ids: [...new Set(request.sourceMaterialIds)].sort(),
+    ...(request.sourceTurnHashes?.length
+      ? { source_turn_hashes: [...new Set(request.sourceTurnHashes)].sort() }
+      : {}),
     ...(request.expectedRevision === undefined ? {} : { if_revision: request.expectedRevision }),
     ...(request.requestedProvider === undefined ? {} : { provider: request.requestedProvider }),
     ...(request.requestedModel === undefined ? {} : { model: request.requestedModel }),
@@ -275,10 +338,11 @@ function verifiedEvidenceBindings(
   });
 }
 
-async function resolveSources(
+export async function resolveProposalGenerationSources(
   db: AnyDB,
   projectId: string,
-  sourceMaterialIds: readonly string[]
+  sourceMaterialIds: readonly string[],
+  sourceTurnHashes: readonly string[] = []
 ): Promise<ProposalGenerationSourceInput[]> {
   const ids = [...new Set(sourceMaterialIds.map((id) => id.trim()))].sort();
   if (ids.some((id) => id.length === 0)) {
@@ -286,7 +350,7 @@ async function resolveSources(
   }
   const materials = await findMaterialsByIds(db, ids);
   const byId = new Map(materials.map((material) => [material.id, material]));
-  return ids.map((id) => {
+  const documents: ProposalGenerationSourceInput[] = ids.map((id) => {
     const material = byId.get(id);
     if (material === undefined || material.project_id !== projectId || material.archived_at) {
       throw new ProposalGenerationContextError(
@@ -304,20 +368,55 @@ async function resolveSources(
       ...(material.title === undefined ? {} : { title: material.title }),
     };
   });
+  const hashes = [...new Set(sourceTurnHashes)].sort();
+  const turns = await Promise.all(hashes.map((hash) => findTurnByHash(db, hash)));
+  for (const hash of hashes) {
+    const turn = turns.find((turn) => turn?.turnHash === hash);
+    const conversation = turn ? await findConversationById(db, turn.conversationId) : null;
+    if (
+      !turn ||
+      turn.projectId !== projectId ||
+      turn.role !== 'user' ||
+      conversation?.projectId !== projectId
+    )
+      throw new ProposalGenerationContextError(
+        'Only original user turns in authorized project conversations can be Sources'
+      );
+    documents.push({
+      turnHash: hash,
+      resource: {
+        uri: `t3x://projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(turn.conversationId)}/turns/${encodeURIComponent(hash)}`,
+        mediaType: 'text/plain;charset=utf-8',
+        digest: sha256(turn.content),
+      },
+      content: turn.content,
+      title: 'Original source user turn',
+    });
+  }
+  return documents;
 }
 
 const inFlightByDatabase = new WeakMap<
   object,
-  Map<string, Promise<{ view: TransitionControlPlaneView; reused: boolean }>>
+  Map<
+    string,
+    { digest: string; promise: Promise<{ view: TransitionControlPlaneView; reused: boolean }> }
+  >
 >();
 
 function generationFlights(
   db: AnyDB
-): Map<string, Promise<{ view: TransitionControlPlaneView; reused: boolean }>> {
+): Map<
+  string,
+  { digest: string; promise: Promise<{ view: TransitionControlPlaneView; reused: boolean }> }
+> {
   const key = db as unknown as object;
   const existing = inFlightByDatabase.get(key);
   if (existing !== undefined) return existing;
-  const created = new Map<string, Promise<{ view: TransitionControlPlaneView; reused: boolean }>>();
+  const created = new Map<
+    string,
+    { digest: string; promise: Promise<{ view: TransitionControlPlaneView; reused: boolean }> }
+  >();
   inFlightByDatabase.set(key, created);
   return created;
 }
@@ -385,7 +484,11 @@ export async function generateTransitionProposal(input: {
   const inFlight = generationFlights(input.db);
   const flightKey = `${input.projectId}\u0000${membershipRequestId}`;
   const active = inFlight.get(flightKey);
-  if (active !== undefined) return active;
+  if (active !== undefined) {
+    if (active.digest !== request.digest)
+      throw new TransitionRequestConflictError(membershipRequestId);
+    return active.promise;
+  }
 
   const work = (async () => {
     const retry = await existingGeneration({
@@ -397,10 +500,15 @@ export async function generateTransitionProposal(input: {
     });
     if (retry !== null) return retry;
 
-    const workspace = await resolveWorkspaceTransitionContext(input.db, {
+    const expectedRevision = await ensureWorkspaceAuthoringSchema(input.db, {
       projectId: input.projectId,
       workspaceId: input.request.workspaceId,
       expectedRevision: input.request.expectedRevision,
+    });
+    const workspace = await resolveWorkspaceTransitionContext(input.db, {
+      projectId: input.projectId,
+      workspaceId: input.request.workspaceId,
+      expectedRevision,
     });
     const resolvedSchema = await resolveWorkspaceYSchema(
       workspace.workspace,
@@ -414,10 +522,11 @@ export async function generateTransitionProposal(input: {
       );
     }
     const yschema = resolvedSchema.schema;
-    const sources = await resolveSources(
+    const sources = await resolveProposalGenerationSources(
       input.db,
       input.projectId,
-      input.request.sourceMaterialIds
+      input.request.sourceMaterialIds,
+      input.request.sourceTurnHashes
     );
     const profile = proposalGenerationProfileResource(input.request.posture);
     const schemaResource = createYSchemaResourceDescriptor(
@@ -436,18 +545,34 @@ export async function generateTransitionProposal(input: {
       `t3x://proposal-generation/prompts/v${GENERATION_PROMPT_VERSION}`,
       GENERATION_PROMPT
     );
+    const authoring = workspace.workspace.authoringLedger
+      ? authoringModelContext(workspace.workspace)
+      : undefined;
     const context: ProposalContextBundleV1 = {
       schema: 't3x.dev/proposal-context-bundle/v1',
       version: 1,
       base: describeProtocolObject(workspace.base),
       yschema: schemaResource,
       sources: sources.map((source) => source.resource),
-      memories: [],
+      memories: authoring ? [authoring.manifest] : [],
       searchResults: [],
       userInstruction: instructionResource,
       prompt: promptResource,
     };
 
+    // Fixed generation cannot retrieve missing state during a tool loop. Fail visibly rather than silently truncate.
+    if (
+      JSON.stringify({
+        base: workspace.base,
+        authoring,
+        yschema,
+        sources,
+        instruction: input.request.instruction,
+      }).length > 256_000
+    )
+      throw new ProposalGenerationContextError(
+        'Proposal context exceeds the generation budget; select smaller source excerpts or a smaller Workspace'
+      );
     const model = await input.resolveModel();
     const execution = await executeMeteredInference({
       runtime: input.inference.runtime,
@@ -465,6 +590,7 @@ export async function generateTransitionProposal(input: {
           profile: profile.profile,
           context,
           base: workspace.base,
+          ...(authoring ? { authoring } : {}),
           yschema: { resource: schemaResource, value: yschema },
           sources,
           instruction: input.request.instruction,
@@ -510,11 +636,29 @@ export async function generateTransitionProposal(input: {
         compiled.issues
       );
     }
-    const built = buildWorkspaceYOpsProposalFromContext(workspace, {
-      operations: compiled.operations,
-      actor: PROPOSAL_GENERATOR_ACTOR,
-      proposalDraft: compiled.proposalDraft,
-    });
+    const composed = authoring
+      ? buildWorkspaceGeneration({
+          workspace: workspace.workspace,
+          workspaceRevision: workspace.workspaceRevision,
+          actionId: membershipRequestId,
+          operations: compiled.operations,
+          generation: compiled.preparation,
+          proposalDraft: compiled.proposalDraft,
+        })
+      : null;
+    const built = composed
+      ? {
+          ...workspace,
+          refName: workspace.targetBranch,
+          refHead: workspace.head.head,
+          actor: PROPOSAL_GENERATOR_ACTOR,
+          ...composed,
+        }
+      : buildWorkspaceYOpsProposalFromContext(workspace, {
+          operations: compiled.operations,
+          actor: PROPOSAL_GENERATOR_ACTOR,
+          proposalDraft: compiled.proposalDraft,
+        });
     let created: Awaited<ReturnType<typeof materializeTransitionProposal>>;
     try {
       created = await materializeTransitionProposal({
@@ -526,7 +670,8 @@ export async function generateTransitionProposal(input: {
         refHead: built.refHead,
         requestKind: 'structured_yops',
         requestFacts,
-        preparationFacts: compiled.preparation as unknown as ProtocolValue,
+        preparationFacts: (composed?.preparation ??
+          compiled.preparation) as unknown as ProtocolValue,
         requestId: membershipRequestId,
         actor: PROPOSAL_GENERATOR_ACTOR,
         base: built.base,
@@ -557,10 +702,11 @@ export async function generateTransitionProposal(input: {
       reused: created.reused,
     };
   })();
-  inFlight.set(flightKey, work);
+  const flight = { digest: request.digest, promise: work };
+  inFlight.set(flightKey, flight);
   try {
     return await work;
   } finally {
-    if (inFlight.get(flightKey) === work) inFlight.delete(flightKey);
+    if (inFlight.get(flightKey) === flight) inFlight.delete(flightKey);
   }
 }

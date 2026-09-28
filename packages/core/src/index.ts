@@ -128,6 +128,8 @@ export {
   type Tier3Behavior,
   type UpdateStance,
 } from './extractors/extractionStyleConfig';
+export { buildTargetedReaskPrompt } from './extractors/v2/pipeline';
+export { mapProviderErrorToExtractionFailure } from './extractors/v2/providerAdapters';
 export type { Lesson, LessonSource } from './feedback';
 // ═══════════════════════════════════════════════════════════════════════════
 // Feedback Module (Lesson generation + collection)
@@ -515,6 +517,16 @@ export { getYOpsJsonSchema } from './t3x-yops/jsonSchema';
 // Transition adapters — one-way integration; native engines stay autonomous
 // ═══════════════════════════════════════════════════════════════════════════
 export * from './transition-adapters';
+export {
+  applyNativeYOps,
+  canonicalNativeYValue,
+  compileNativeYOpsToPrimitives,
+  type NativeYOp,
+  NativeYOpSchema,
+  type NativeYValue,
+  parseNativeYOpsPath,
+  resolveNativeYOpsPath,
+} from './transition-adapters/yopsAuthoring';
 export * from './transition-commits';
 export * from './transition-decisions';
 export * from './transition-projection';

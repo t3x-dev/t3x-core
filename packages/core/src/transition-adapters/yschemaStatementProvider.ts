@@ -260,3 +260,23 @@ export function runYSchemaStatementProvider(
     () => yopsStateCodec.decode(input.state.value) as ValidationInput['tree']
   );
 }
+
+/** Validate a named root of a native document without changing the Statement subject. */
+export function runYSchemaRootStatementProvider(
+  input: YSchemaStatementProviderInput & { rootKey: string }
+): YSchemaValidationStatement {
+  return runYSchemaStatementProviderForTree(input, () => {
+    const value = yopsStateCodec.decode(input.state.value);
+    if (
+      value === null ||
+      typeof value !== 'object' ||
+      Array.isArray(value) ||
+      Object.getOwnPropertyDescriptor(value, input.rootKey) === undefined
+    )
+      throw new SchemaInvalidError(
+        'Native document does not contain the schema root',
+        '$.state.value'
+      );
+    return (value as Record<string, unknown>)[input.rootKey] as ValidationInput['tree'];
+  });
+}

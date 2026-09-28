@@ -11,7 +11,13 @@ import type postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { insertProject } from '../queries/projects';
-import { estimateCost, getUsageSummary, getUsageTotal, recordUsage } from '../queries/token-usage';
+import {
+  estimateCost,
+  getUsageByModel,
+  getUsageSummary,
+  getUsageTotal,
+  recordUsage,
+} from '../queries/token-usage';
 import { createTestDB, testData } from './setup';
 
 describe('Token Usage Storage', () => {
@@ -137,6 +143,7 @@ describe('Token Usage Storage', () => {
 
       expect(result.length).toBe(3); // 3 distinct days
       // First day has 2 records
+      expect(result[0].requests).toBe(2);
       expect(result[0].input_tokens).toBe(200);
       expect(result[0].output_tokens).toBe(100);
     });
@@ -189,6 +196,7 @@ describe('Token Usage Storage', () => {
 
       expect(result.input_tokens).toBe(3000);
       expect(result.output_tokens).toBe(1500);
+      expect(result.requests).toBe(3);
       expect(result.estimated_cost).toBeCloseTo(0.0315, 4);
     });
 
@@ -202,6 +210,33 @@ describe('Token Usage Storage', () => {
       expect(result.input_tokens).toBe(0);
       expect(result.output_tokens).toBe(0);
       expect(result.estimated_cost).toBe(0);
+      expect(result.requests).toBe(0);
+    });
+  });
+
+  describe('getUsageByModel', () => {
+    it('groups records by model and orders by request count', async () => {
+      const userId = 'user_by_model';
+      for (const [index, model] of ['gpt-4o', 'gpt-4o', 'claude-haiku-3-5'].entries()) {
+        await sql.unsafe(
+          `INSERT INTO token_usage (id, user_id, project_id, endpoint, model, input_tokens, output_tokens, estimated_cost, created_at)
+           VALUES ('tu_model_${index}', '${userId}', '${testProjectId}', 'chat', '${model}', 100, 50, 0.001, '2025-04-15T12:00:00.000Z')`
+        );
+      }
+
+      const result = await getUsageByModel(db, {
+        user_id: userId,
+        from: new Date('2025-04-01T00:00:00Z'),
+        to: new Date('2025-04-30T23:59:59Z'),
+      });
+
+      expect(result).toHaveLength(2);
+      expect(result[0]).toMatchObject({
+        model: 'gpt-4o',
+        requests: 2,
+        input_tokens: 200,
+        output_tokens: 100,
+      });
     });
   });
 

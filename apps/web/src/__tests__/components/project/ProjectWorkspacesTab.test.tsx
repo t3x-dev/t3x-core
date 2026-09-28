@@ -88,6 +88,21 @@ describe('ProjectWorkspacesTab navigation and persisted drafts', () => {
     expect(mocks.props.candidates).toHaveLength(1);
     expect(mocks.props.candidates[0]).toMatchObject({ id: 'requested', revision: 4 });
   });
+  it('does not silently open another Workspace for a stale deep link', () => {
+    mocks.workspaces = [draft('available')];
+    mocks.query = 'tab=workspaces&workspace=missing';
+    render(<ProjectWorkspacesTab projectId="proj_test" />);
+    expect(mocks.props.viewState).toBe('error');
+    expect(mocks.props.errorMessage).toContain('Workspace missing was not found');
+  });
+  it('does not silently switch the branch of an explicitly requested Workspace', () => {
+    mocks.workspaces = [draft('requested', 'release')];
+    mocks.branchHeads = { main: null, release: null };
+    mocks.query = 'tab=workspaces&branch=main&workspace=requested';
+    render(<ProjectWorkspacesTab projectId="proj_test" />);
+    expect(mocks.props.viewState).toBe('error');
+    expect(mocks.props.errorMessage).toContain('belongs to release, not main');
+  });
   it('keeps persisted unbound drafts unbound', () => {
     mocks.workspaces = [draft('persisted')];
     mocks.query = 'tab=workspaces&workspace=persisted';

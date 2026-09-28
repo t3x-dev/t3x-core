@@ -1,18 +1,14 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import {
-  type DeploymentCapabilities,
-  SELF_HOSTED_DEPLOYMENT_CAPABILITIES,
-} from '@t3x-dev/api-client';
 import { render, screen } from '@testing-library/react';
 import type React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import SettingsLayout from '@/app/settings/layout';
-import { DeploymentCapabilitiesProvider } from '@/components/deployment/DeploymentCapabilitiesProvider';
 
 let mockPathname = '/settings';
 let mockSearchParams = new URLSearchParams();
+let activeNamespaceName: string | null = 'Orbit Labs';
 
 vi.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
@@ -38,68 +34,123 @@ vi.mock('@/hooks/shared/useSession', () => ({
   }),
 }));
 
-function renderLayout(capabilities: DeploymentCapabilities = SELF_HOSTED_DEPLOYMENT_CAPABILITIES) {
+vi.mock('@/hooks/projects/useProjectDetail', () => ({
+  useProjectDetail: () => ({
+    loadProject: vi.fn().mockRejectedValue(new Error('not needed in layout test')),
+  }),
+}));
+
+vi.mock('@/hooks/accounts/useNamespaceAccounts', () => ({
+  useNamespaceAccounts: () => ({
+    activeAccount: activeNamespaceName
+      ? { namespace: { kind: 'organization', display_name: activeNamespaceName } }
+      : null,
+  }),
+}));
+
+function renderLayout() {
   return render(
-    <DeploymentCapabilitiesProvider initialCapabilities={capabilities}>
-      <SettingsLayout>
-        <div>Settings content</div>
-      </SettingsLayout>
-    </DeploymentCapabilitiesProvider>
+    <SettingsLayout>
+      <div>Settings content</div>
+    </SettingsLayout>
   );
 }
 
 describe('SettingsLayout', () => {
-  it('groups settings navigation by product ownership and scope', () => {
+  it('keeps the shared project title bar on settings pages', () => {
+    mockPathname = '/settings';
+    mockSearchParams = new URLSearchParams('project=proj_test');
+
+    renderLayout();
+
+    expect(screen.getByRole('banner')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Usage' })).toHaveAttribute(
+      'href',
+      '/settings/usage?project=proj_test'
+    );
+    expect(screen.getByText('Automations')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Webhooks/i })).toHaveAttribute(
+      'href',
+      '/settings/webhooks?project=proj_test'
+    );
+    expect(screen.getByRole('link', { name: /Recipes/i })).toHaveAttribute(
+      'href',
+      '/settings/recipes?project=proj_test'
+    );
+  });
+
+  it('uses the shared personal and organization navigation', () => {
     mockPathname = '/settings';
     mockSearchParams = new URLSearchParams();
 
     renderLayout();
 
-    expect(screen.getByText('OVERVIEW')).toBeInTheDocument();
-    expect(screen.getByText('LOCAL')).toBeInTheDocument();
-    expect(screen.getByText('AI')).toBeInTheDocument();
-    expect(screen.getByText('ACCESS')).toBeInTheDocument();
-    expect(screen.getByText('AUTOMATION')).toBeInTheDocument();
-    expect(screen.getByText('PROJECT')).toBeInTheDocument();
-
-    expect(screen.getByRole('link', { name: /Back/i })).toHaveAttribute('href', '/');
-    expect(screen.getByRole('link', { name: /Overview/i })).toHaveAttribute('href', '/settings');
+    expect(screen.getByText('Personal')).toBeInTheDocument();
+    expect(screen.getByText('Organization: Orbit Labs')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Profile/i })).toHaveAttribute(
       'href',
       '/settings/profile'
     );
-    expect(screen.getByRole('link', { name: /Providers/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Appearance/i })).toHaveAttribute(
       'href',
-      '/settings/providers'
+      '/settings/preferences'
     );
-    expect(screen.getByRole('link', { name: /Webhooks/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Model access/i })).toHaveAttribute(
       'href',
-      '/settings/webhooks'
+      '/settings/model-access'
     );
-    expect(screen.getByText('Project overrides are edited from each project.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Members/i })).toHaveAttribute(
+      'href',
+      '/settings/members'
+    );
+    expect(screen.getByRole('link', { name: 'Usage' })).toHaveAttribute('href', '/settings/usage');
+    expect(screen.getByRole('link', { name: 'Provider credentials' })).toHaveAttribute(
+      'href',
+      '/settings/provider-credentials'
+    );
+    expect(screen.getByRole('link', { name: 'Help' })).toHaveAttribute('href', '/settings/help');
   });
 
-  it('uses a safe return target for the back link', () => {
-    mockPathname = '/settings/providers';
-    mockSearchParams = new URLSearchParams('returnTo=%2Ft3x-dev%2Fsettings');
+  it('marks the current settings destination', () => {
+    mockPathname = '/settings/usage';
+    mockSearchParams = new URLSearchParams();
 
     renderLayout();
 
-    expect(screen.getByRole('link', { name: /Back/i })).toHaveAttribute(
-      'href',
-      '/t3x-dev/settings'
-    );
+    expect(screen.getByRole('link', { name: 'Usage' })).toHaveAttribute('aria-current', 'page');
   });
 
-  it('does not advertise local provider administration in managed mode', () => {
-    renderLayout({
-      ...SELF_HOSTED_DEPLOYMENT_CAPABILITIES,
-      deployment_mode: 'managed',
-      provider_credentials: { administration: 'disabled' },
-      inference: { mode: 'managed' },
-    });
+  it('shows the selected namespace and preserves the API tokens compatibility route', () => {
+    activeNamespaceName = 'New Team';
+    mockPathname = '/settings/access';
+    mockSearchParams = new URLSearchParams();
 
-    expect(screen.queryByText('AI')).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Providers/i })).not.toBeInTheDocument();
+    renderLayout();
+
+    expect(screen.getByText('Organization: New Team')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'API tokens' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    activeNamespaceName = 'Orbit Labs';
+  });
+
+  it('marks Members as the current organization destination', () => {
+    mockPathname = '/settings/members';
+    mockSearchParams = new URLSearchParams();
+
+    renderLayout();
+
+    expect(screen.getByRole('link', { name: /Members/i })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('marks Webhooks as the current automation destination', () => {
+    mockPathname = '/settings/webhooks';
+    mockSearchParams = new URLSearchParams('project=proj_test');
+
+    renderLayout();
+
+    expect(screen.getByRole('link', { name: /Webhooks/i })).toHaveAttribute('aria-current', 'page');
   });
 });

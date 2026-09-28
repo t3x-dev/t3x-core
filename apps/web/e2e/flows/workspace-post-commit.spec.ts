@@ -249,11 +249,9 @@ async function openCommittedWorkspace(page: Page, fixture: CommittedWorkspaceFix
   await page.goto(
     `${fixture.repoPath}/workspaces?workspace=${encodeURIComponent(fixture.workspaceId)}`
   );
-  await expect(page.getByRole('heading', { exact: true, name: 'T3X Workspace' })).toBeVisible({
+  await expect(page.getByRole('region', { name: 'Workspace detail' })).toBeVisible({
     timeout: 15_000,
   });
-  await page.getByRole('tab', { exact: true, name: 'Review' }).click();
-  await page.getByRole('tab', { exact: true, name: 'Commit' }).click();
   await expect(page.getByRole('complementary', { name: 'Post-commit actions' })).toBeVisible();
 }
 
@@ -291,7 +289,7 @@ test('post-commit: View in State focuses the commit, then Continue starts a main
   try {
     await openCommittedWorkspace(page, fixture);
 
-    await page.getByRole('button', { exact: true, name: 'View in State' }).click();
+    await page.getByRole('complementary', { name: 'Post-commit actions' }).getByRole('button', { exact: true, name: 'View in State' }).click();
     await expect(page).toHaveURL((url) => {
       return (
         url.pathname === fixture.repoPath &&
@@ -330,13 +328,10 @@ test('post-commit: View in State focuses the commit, then Continue starts a main
       'aria-selected',
       'true'
     );
-    await expect(page.getByRole('tab', { exact: true, name: 'Chat' })).toHaveAttribute(
-      'data-state',
-      'active'
-    );
+    await expect(page.getByRole('textbox', { name: 'Workspace instruction' })).toBeVisible();
     await expect(page.getByText(`Based on ${fixture.commitHash.slice(7, 19)}`)).toBeVisible();
     await expect(page.getByText('Next commit to main')).toBeVisible();
-    await expect(page.getByText('No source chat turns yet.')).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Workspace instruction' })).toHaveValue('');
 
     const workspace = await readWorkspace(request, fixture);
     expect(workspace.status).toBe('draft');
@@ -411,7 +406,7 @@ test('post-commit: Create a new branch starts a fresh iteration from the committ
     );
     await expect(page.getByText(`Based on ${fixture.commitHash.slice(7, 19)}`)).toBeVisible();
     await expect(page.getByText(`Next commit to ${branchName}`)).toBeVisible();
-    await expect(page.getByText('No source chat turns yet.')).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Workspace instruction' })).toHaveValue('');
 
     const workspace = await readWorkspace(request, nextFixture);
     expect(workspace.status).toBe('draft');
@@ -449,8 +444,9 @@ test('post-commit: delivery downloads exact State and keeps one receipt on repea
   const browserErrors = watchRelevantBrowserErrors(page);
   try {
     await openCommittedWorkspace(page, fixture);
+    await page.getByRole('tab', { name: 'Review', exact: true }).click();
     await page.getByRole('button', { name: 'Delivery', exact: true }).click();
-    const panel = page.getByRole('dialog');
+    const panel = page.getByRole('region', { name: 'Workspace delivery' });
     await expect(panel.getByRole('button', { name: 'Download State' })).toBeEnabled();
     await expect(panel).toContainText(fixture.commitHash);
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('workspace-delivery-desktop.png') });

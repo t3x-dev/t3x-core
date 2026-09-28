@@ -42,15 +42,16 @@ test('State opens History and Commit with its inline parent Diff and a complete 
 
     await page.goto(`/project/${projectId}`);
     await expect(
-      page.getByRole('heading', { level: 1, name: /Repository navigation/ })
+      page.getByRole('heading', { level: 1, name: /Repository navigation/ }).first()
     ).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole('tab', { name: /Snapshot/ })).toBeVisible();
-    await expect(page.getByLabel('Branch focus')).toHaveValue('main');
+    await expect(page.getByRole('tab', { name: 'Overview', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Switch branches/tags, current branch main' })).toBeVisible();
     await expect(page.getByText('Repository navigation revision', { exact: true })).toBeVisible();
 
     await page.getByRole('link', { name: 'History', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Commit History', exact: true })).toBeVisible();
-    await expect(page.getByRole('combobox', { name: 'Branch filter' })).toHaveValue('main');
+    await page.getByRole('button', { name: 'List View', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'History', exact: true })).toBeVisible();
+    await expect(page).toHaveURL((url) => url.searchParams.get('branch') === 'main');
 
     const targetRow = page.locator(`[data-commit-hash="${targetHash}"]`);
     await expect(targetRow).toContainText('Repository navigation revision');
@@ -59,17 +60,16 @@ test('State opens History and Commit with its inline parent Diff and a complete 
     await expect(
       page.getByRole('heading', { name: 'Repository navigation revision', exact: true })
     ).toBeVisible({ timeout: 15_000 });
-    const inlineDiff = page.getByRole('region', { name: 'T3X Diff' });
-    await expect(inlineDiff).toBeVisible();
-    await expect(inlineDiff).toContainText('Parent → Selected commit');
-    await expect(inlineDiff).toContainText('3 field changes');
-    await expect(inlineDiff.getByRole('treeitem', { name: /good_reply added/ })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Structure diff' })).toBeVisible();
+    const totals = page.getByRole('group', { name: 'Change totals' });
+    await expect.poll(async () => (await totals.locator('[data-kind]').allTextContents()).reduce((sum, value) => sum + Number(value.trim()), 0)).toBe(3);
+    await expect(page.getByText('good_reply', { exact: true }).first()).toBeVisible();
 
-    await page.getByRole('button', { name: 'Back to commit history' }).click();
-    await expect(page.getByRole('heading', { name: 'Commit History', exact: true })).toBeVisible();
-    await expect(page.getByRole('combobox', { name: 'Branch filter' })).toHaveValue('main');
-    await page.getByRole('button', { name: 'Back', exact: true }).click();
-    await expect(page.getByRole('tab', { name: /Snapshot/ })).toBeVisible();
+    await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('button', { name: 'History', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'History', exact: true })).toBeVisible();
+    await expect(page).toHaveURL((url) => url.searchParams.get('branch') === 'main');
+    await page.getByRole('button', { name: 'Back to current State', exact: true }).click();
+    await expect(page.getByRole('tab', { name: 'Overview', exact: true })).toBeVisible();
 
     expect(browserErrors, browserErrors.join('\n')).toEqual([]);
   } finally {

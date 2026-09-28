@@ -48,6 +48,11 @@ import {
 } from '@t3x-dev/storage';
 import type { CanonicalTimestamp } from '@t3x-dev/transition';
 import type { ProvenanceIndex, YSchema, YSchemaRelation } from '@t3x-dev/yschema';
+import { createProposalGenerationPostureProvider } from './proposal-generation-posture-provider';
+import {
+  PROPOSAL_GENERATION_POSTURE_PROVIDER_SOURCE,
+  resolveApplicableTransitionPolicy,
+} from './transition-control-plane/applicable-policy';
 import {
   commitTransition,
   decideTransition,
@@ -59,6 +64,11 @@ import {
   materializeTransitionProposal,
   materializeTransitionStatement,
 } from './transition-control-plane/materialize';
+import {
+  buildAuthoringEffect,
+  buildAuthoringPreparation,
+  workspaceAuthoringState,
+} from './workspace-authoring';
 import {
   buildWorkspaceReviewArtifacts,
   persistWorkspaceReviewArtifacts,
@@ -419,6 +429,16 @@ export async function resolveWorkspaceTransitionContext(
     projectId: input.projectId,
     refName: targetBranch,
   });
+  if (workspace.authoringLedger) {
+    const { basis } = workspaceAuthoringState(workspace);
+    const headState = head.format === 'empty' ? createYOpsState({}) : head.state;
+    if (
+      basis.refName !== targetBranch ||
+      basis.refHead !== head.head ||
+      basis.baseDigest !== describeTransitionObject(headState).digest
+    )
+      throw new WorkspaceTransitionReviewStaleError();
+  }
   return {
     base: head.format === 'empty' ? createYOpsState({}) : head.state,
     head,
@@ -507,15 +527,30 @@ async function prepareWorkspaceTransition(
   const context = await resolveWorkspaceTransitionContext(db, input);
   const base = context.base;
   const target = createRepositorySemanticState(input.content);
-  const { effect, result } = createYOpsReplacementEffect({
-    base,
-    target,
-    expectedBase: describeTransitionObject(base),
-  });
+  const authoring = context.workspace.authoringLedger
+    ? workspaceAuthoringState(context.workspace)
+    : null;
+  const { effect, result } = authoring
+    ? buildAuthoringEffect(authoring.ledger)
+    : createYOpsReplacementEffect({
+        base,
+        target,
+        expectedBase: describeTransitionObject(base),
+      });
+  if (
+    authoring &&
+    describeTransitionObject(target).digest !== describeTransitionObject(result).digest
+  )
+    throw new WorkspaceTransitionReviewStaleError();
+  const generated =
+    authoring?.ledger.actions.some((action) => action.generation !== undefined) ?? false;
+  const proposalActor = generated
+    ? { kind: 'service' as const, id: 'service:t3x-authoring-review' }
+    : input.actor;
   const compiled = compileProposalDraft({
     draft: createHumanProposalDraft({ why: input.why?.trim() || undefined }),
     effect,
-    actor: input.actor,
+    actor: proposalActor,
   });
   if (!compiled.ok) {
     throw new TypeError(
@@ -584,10 +619,45 @@ async function prepareWorkspaceTransition(
     { statement: replay, issuerContext: { actor: REPLAY_ACTOR } },
     { statement: validation, issuerContext: { actor: VALIDATION_ACTOR } },
   ];
+  const preparation = authoring ? buildAuthoringPreparation(context.workspace) : null;
+  if (generated) {
+    if (!input.policyBinding)
+      throw new TypeError('Generated Draft Review requires a server-bound ref policy');
+    const posture = await createProposalGenerationPostureProvider().verify({
+      db,
+      projectId: input.projectId,
+      workspaceId: input.workspaceId,
+      transitionId: `workspace:${input.workspaceId}:${context.workspaceRevision}`,
+      requestKind: 'structured_yops',
+      requestFacts: {},
+      preparationFacts: JSON.parse(JSON.stringify(preparation)),
+      base,
+      result,
+      effect,
+      proposal,
+      run: {
+        id: `workspace:${input.workspaceId}:revision:${context.workspaceRevision}:posture`,
+        recordedAt,
+      },
+    });
+    if (posture.outcome !== 'statement')
+      throw new TypeError('Generated Draft posture assessment is missing');
+    observations.push({
+      statement: posture.statement,
+      issuerContext: { actor: posture.statement.actor },
+    });
+  }
   const statementDigests = observations
     .map((observation) => describeTransitionObject(observation.statement).digest)
     .sort();
-  const policyBinding = input.policyBinding ?? WORKSPACE_POLICY;
+  const policyBinding =
+    generated && input.policyBinding
+      ? resolveApplicableTransitionPolicy({
+          refPolicyBinding: input.policyBinding,
+          requestKind: 'structured_yops',
+          preparationFacts: preparation ? JSON.parse(JSON.stringify(preparation)) : null,
+        })
+      : (input.policyBinding ?? WORKSPACE_POLICY);
   const precondition: WorkspaceTransitionPrecondition = {
     workspaceRevision: context.workspaceRevision,
     refHead: context.head.head,
@@ -610,7 +680,7 @@ async function prepareWorkspaceTransition(
     },
   });
   return {
-    actor: input.actor,
+    actor: proposalActor,
     base,
     content: input.content,
     effect,
@@ -675,6 +745,13 @@ async function materializePreparedWorkspaceTransition(
       effect_digest: prepared.precondition.effectDigest,
       proposal_digest: proposalDigest,
     },
+    ...(prepared.workspace.authoringLedger
+      ? {
+          preparationFacts: buildAuthoringPreparation(
+            prepared.workspace
+          ) as unknown as ProtocolValue,
+        }
+      : {}),
     requestId,
     actor: prepared.actor,
     base: prepared.base,
@@ -694,6 +771,9 @@ async function materializePreparedWorkspaceTransition(
   const durableObservations = [
     { observation: prepared.observations[0]!, source: 'server:workspace-replay' },
     { observation: prepared.observations[1]!, source: 'server:workspace-yschema' },
+    ...prepared.observations
+      .slice(2)
+      .map((observation) => ({ observation, source: PROPOSAL_GENERATION_POSTURE_PROVIDER_SOURCE })),
   ] as const;
   const statements: TransitionStatementMembership[] = [];
   for (const { observation, source } of durableObservations) {
@@ -869,7 +949,15 @@ export async function decideWorkspaceTransition(
           ) {
             throw new TransitionReviewStaleError();
           }
-          const policyBinding = refPolicyBinding ?? WORKSPACE_POLICY;
+          const policyBinding = refPolicyBinding
+            ? resolveApplicableTransitionPolicy({
+                refPolicyBinding,
+                requestKind: lockedGraph.membership.requestKind,
+                preparationFacts: lockedGraph.preparation
+                  ? JSON.parse(lockedGraph.preparation.canonicalJson)
+                  : null,
+              })
+            : WORKSPACE_POLICY;
           return {
             policyDigest: policyBinding.resource.digest,
             authority: {

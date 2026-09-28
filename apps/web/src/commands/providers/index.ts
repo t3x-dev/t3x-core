@@ -4,10 +4,12 @@
 
 import {
   deleteLocalProvider,
+  type ModelAccessConfig,
   type ProjectProviderConfig,
   type RoleAssignment,
   type TestConnectionResult,
   testProvider,
+  updateModelAccessConfig,
   updateProjectProviderConfig,
   updateProviderRoles,
   upsertLocalProvider,
@@ -37,6 +39,10 @@ export function runProviderConnectionTest(providerId: string): Promise<TestConne
 
 export function saveProviderRoles(roles: RoleAssignment[]): Promise<RoleAssignment[]> {
   return updateProviderRoles(roles);
+}
+
+export function saveModelAccessConfig(config: ModelAccessConfig): Promise<ModelAccessConfig> {
+  return updateModelAccessConfig(config);
 }
 
 export function saveProjectProviderConfig(

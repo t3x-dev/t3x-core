@@ -307,3 +307,14 @@ export async function findTurnsInWindow(
 
   return chain.slice(startIndex);
 }
+
+/** Retain exact original turn bytes through authoring publication. */
+export async function lockTurnsForAuthoring(db: AnyDB, hashes: readonly string[]): Promise<Turn[]> {
+  if (!hashes.length) return [];
+  return db
+    .select()
+    .from(turns)
+    .where(inArray(turns.turnHash, [...new Set(hashes)].sort()))
+    .orderBy(turns.turnHash)
+    .for('share');
+}

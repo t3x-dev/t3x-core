@@ -72,7 +72,7 @@ export default function MergeWorkspacePage() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="flex h-full min-h-0 items-center justify-center bg-background">
         <div className="text-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
           <p className="mt-4 text-muted-foreground">Loading merge workspace...</p>
@@ -83,7 +83,7 @@ export default function MergeWorkspacePage() {
 
   if (error) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="flex h-full min-h-0 items-center justify-center bg-background">
         <div className="text-center max-w-md">
           <div className="text-4xl mb-[var(--space-group)]">:(</div>
           <h1 className="text-xl font-semibold mb-[var(--space-item)]">Failed to load merge</h1>

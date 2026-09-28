@@ -215,7 +215,30 @@ export class T3xClient {
       legacyYOpsEvidence: (projectId, conversationId, params) =>
         this.getLegacyYOpsEvidence(projectId, conversationId, params),
     });
+    const authoringPath = (projectId: string, workspaceId: string) =>
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/authoring`;
     this.workspaces = Object.freeze<RepositoryWorkspaceCapability>({
+      authoring: Object.freeze({
+        prepareReview: (projectId, workspaceId, input) =>
+          this.request('POST', `${authoringPath(projectId, workspaceId)}/reviews`, input),
+        read: (projectId, workspaceId, query) =>
+          this.request(
+            'GET',
+            authoringPath(projectId, workspaceId),
+            undefined,
+            query ? { ...query } : undefined
+          ),
+        initialize: (projectId, workspaceId, input) =>
+          this.request('POST', authoringPath(projectId, workspaceId), input),
+        publish: (projectId, workspaceId, input) =>
+          this.request('POST', `${authoringPath(projectId, workspaceId)}/actions`, input),
+        publishCandidate: (projectId, workspaceId, transitionId, input) =>
+          this.request(
+            'POST',
+            `${authoringPath(projectId, workspaceId)}/candidates/${encodeURIComponent(transitionId)}/publication`,
+            input
+          ),
+      } satisfies import('./workspace-authoring').WorkspaceAuthoringCapability),
       list: (projectId) => this.listRepositoryWorkspaces(projectId),
       get: (projectId, workspaceId) => this.getRepositoryWorkspace(projectId, workspaceId),
       createExtractionProposal: (projectId, workspaceId, input) =>
@@ -695,7 +718,7 @@ export class T3xClient {
 
   async listSourceThreadTurns(
     conversationId: string,
-    params?: PaginationParams
+    params?: PaginationParams & { order?: 'asc' | 'desc' }
   ): Promise<ListTurnsResponse> {
     return this.request<ListTurnsResponse>('GET', '/v1/turns', undefined, {
       conversation_id: conversationId,

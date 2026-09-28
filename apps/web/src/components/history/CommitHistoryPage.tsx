@@ -12,7 +12,19 @@
  * - Relative time + hover tooltip
  */
 
-import { ArrowLeft, GitBranch, GitCommit, History, Keyboard, Loader2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  ChevronDown,
+  GitBranch,
+  GitCommit,
+  GitFork,
+  History,
+  Keyboard,
+  Loader2,
+  Search,
+  UserRound,
+} from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -31,6 +43,8 @@ import type { ApiCommit, Branch } from '@/types/api';
 import { safeInternalReturnTo } from '@/utils/navigationReturn';
 import { CommitHistoryDiffView } from './CommitHistoryDiffView';
 import { CommitHistoryRow } from './CommitHistoryRow';
+import { HistoryCanvas } from './HistoryCanvas';
+import styles from './HistoryList.module.css';
 
 // ============================================================================
 // Types
@@ -62,9 +76,9 @@ const HISTORY_TOUR_STEPS: FeatureTourStep[] = [
   },
   {
     id: 'filter',
-    label: 'Branch',
-    title: 'Filter branch',
-    description: 'Focus one path.',
+    label: 'Filter',
+    title: 'Filter history',
+    description: 'Focus one author or search the timeline.',
     target: 'history-branch-filter',
     tone: 'pending',
     icon: GitBranch,
@@ -98,6 +112,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const branchFromUrl = searchParams.get('branch')?.trim() || 'all';
+  const historyView = searchParams.get('view') === 'list' ? 'list' : 'canvas';
   const returnHref = safeInternalReturnTo(
     searchParams.get('returnTo'),
     `/project/${encodeURIComponent(projectId)}`
@@ -116,6 +131,8 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
   const [parentCommit, setParentCommit] = useState<ApiCommit | null>(null);
   const [parentLoading, setParentLoading] = useState(false);
   const [parentError, setParentError] = useState<string | null>(null);
+  const [authorFilter, setAuthorFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const { loadBranches } = useBranchesList();
   const { loadCommit } = useCommitByHash();
   const { loadCommits } = useCommitsList();
@@ -131,6 +148,18 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
       const params = new URLSearchParams(searchParams.toString());
       if (branch === 'all') params.delete('branch');
       else params.set('branch', branch);
+      const query = params.toString();
+      router.replace(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
+    },
+    [pathname, router, searchParams]
+  );
+
+  const handleViewChange = useCallback(
+    (view: 'canvas' | 'list') => {
+      setSelectedCommitHash(null);
+      const params = new URLSearchParams(searchParams.toString());
+      if (view === 'canvas') params.delete('view');
+      else params.set('view', 'list');
       const query = params.toString();
       router.replace(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
     },
@@ -262,7 +291,28 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
   }, [commits, loadCommit, projectId, selectedCommit]);
 
   // Keyboard navigation
-  const commitHashes = useMemo(() => commits.map((c) => c.commit.hash), [commits]);
+  const authorOptions = useMemo(() => {
+    const authors = new Set<string>();
+    for (const item of commits) {
+      authors.add(item.commit.author?.name || item.commit.author?.type || 'Unknown');
+    }
+    return [...authors].sort((a, b) => a.localeCompare(b));
+  }, [commits]);
+  const visibleCommits = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase();
+    return commits.filter(({ commit }) => {
+      const author = commit.author?.name || commit.author?.type || 'Unknown';
+      if (authorFilter !== 'all' && author !== authorFilter) return false;
+      if (!query) return true;
+      return [commit.message, commit.hash, commit.branch, author]
+        .filter((value): value is string => Boolean(value))
+        .some((value) => value.toLocaleLowerCase().includes(query));
+    });
+  }, [authorFilter, commits, searchQuery]);
+  const commitHashes = useMemo(
+    () => visibleCommits.map((item) => item.commit.hash),
+    [visibleCommits]
+  );
 
   const handleNavOpen = useCallback((hash: string) => {
     setSelectedCommitHash(hash);
@@ -298,61 +348,93 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
   // Render
   // ─────────────────────────────────────────────────────────────────────────
 
+  if (!loading && !error && !selectedCommit && commits.length > 0 && historyView === 'canvas') {
+    return (
+      <HistoryCanvas
+        branches={branches}
+        commits={commits}
+        selectedBranch={selectedBranch}
+        onBack={() => router.replace(returnHref)}
+        onBranchChange={handleBranchChange}
+        onListView={() => handleViewChange('list')}
+        onViewDiff={handleNavOpen}
+      />
+    );
+  }
+
   return (
-    <div className="flex h-screen flex-col bg-[var(--surface-app)]">
-      {/* ═══════ HEADER ═══════ */}
-      <header
-        className="flex h-11 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4"
-        data-intro-target="history-header"
-      >
-        <div className="flex items-center gap-3">
-          <button
-            aria-label="Back"
-            type="button"
-            onClick={() => router.replace(returnHref)}
-            className="rounded-md p-1.5 text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
-          >
-            <ArrowLeft size={16} />
-          </button>
-          <div className="flex items-center gap-2">
-            <History size={16} className="text-[var(--text-secondary)]" />
-            <h1
-              data-intro-target="history-keyboard"
-              title="j / k: navigate · o: open · Esc: deselect"
-              className="text-[14px] font-semibold text-[var(--text-primary)]"
+    <div
+      className={
+        selectedCommit ? 'flex h-full min-h-0 flex-col bg-[var(--surface-app)]' : styles.page
+      }
+    >
+      {!selectedCommit && (
+        <>
+          <header className={styles.header} data-intro-target="history-header">
+            <div className={styles.headingGroup}>
+              <h1
+                className={styles.title}
+                data-intro-target="history-keyboard"
+                title="j / k: navigate · o: open · Esc: deselect"
+              >
+                History
+              </h1>
+              <button
+                className={styles.canvasButton}
+                onClick={() => handleViewChange('canvas')}
+                type="button"
+              >
+                <GitFork size={16} strokeWidth={2} />
+                Open Canvas
+                <ArrowUpRight size={14} strokeWidth={2} />
+              </button>
+            </div>
+            <button
+              aria-label="Back to current State"
+              className={styles.backButton}
+              onClick={() => router.replace(returnHref)}
+              type="button"
             >
-              Commit History
-            </h1>
-          </div>
-        </div>
+              <ArrowLeft size={15} strokeWidth={2} />
+              <span>Back to current State</span>
+            </button>
+          </header>
 
-        <div className="flex items-center gap-3">
-          {/* Branch filter */}
-          <div className="flex items-center gap-2" data-intro-target="history-branch-filter">
-            <GitBranch size={14} className="text-[var(--text-tertiary)]" />
-            <select
-              aria-label="Branch filter"
-              className="h-7 max-w-48 rounded-[5px] border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 text-[13px] text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
-              value={selectedBranch}
-              onChange={(e) => handleBranchChange(e.target.value)}
-            >
-              <option value="all">All branches</option>
-              {branches.map((b) => (
-                <option key={b.branch_id} value={b.name}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
+          <div className={styles.controls}>
+            <label className={styles.filterControl} data-intro-target="history-branch-filter">
+              <UserRound size={15} strokeWidth={2} />
+              <select
+                aria-label="Author filter"
+                value={authorFilter}
+                onChange={(event) => setAuthorFilter(event.target.value)}
+              >
+                <option value="all">All authors</option>
+                {authorOptions.map((author) => (
+                  <option key={author} value={author}>
+                    {author}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className={styles.filterChevron} size={13} strokeWidth={2} />
+            </label>
+            <span className={styles.controlDivider} />
+            <label className={styles.searchControl}>
+              <Search size={16} strokeWidth={2} />
+              <input
+                aria-label="Search commits"
+                placeholder="Search commits..."
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+              />
+            </label>
           </div>
-        </div>
-      </header>
+        </>
+      )}
 
-      {/* ═══════ SCROLLABLE CONTENT ═══════ */}
       <div
         className={
-          selectedCommit
-            ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'
-            : 'min-h-0 flex-1 overflow-y-auto'
+          selectedCommit ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden' : styles.content
         }
       >
         {selectedCommit ? (
@@ -388,68 +470,76 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
             />
           )
         ) : (
-          <div className="max-w-3xl mx-auto px-6 py-6">
+          <>
             {/* Loading */}
             {loading && (
-              <div className="flex items-center justify-center py-16">
-                <div className="flex flex-col items-center gap-3">
-                  <Loader2 className="h-6 w-6 animate-spin text-[var(--text-tertiary)]" />
-                  <span className="text-sm text-[var(--text-tertiary)]">Loading history...</span>
-                </div>
+              <div className={styles.feedback}>
+                <Loader2 className={styles.spinner} size={20} />
+                Loading history...
               </div>
             )}
 
             {/* Error */}
             {error && !loading && (
-              <div className="text-center py-8">
-                <p className="text-sm text-[var(--status-error)]">{error}</p>
+              <div className={styles.feedback} role="alert">
+                {error}
               </div>
             )}
 
             {/* Empty state */}
             {!loading && !error && commits.length === 0 && (
-              <div className="text-center py-16">
-                <History
-                  size={32}
-                  className="mx-auto mb-3 text-[var(--text-tertiary)]"
-                  strokeWidth={1}
-                />
-                <p className="text-sm text-[var(--text-tertiary)]">No commits found</p>
-                {selectedBranch !== 'all' && (
-                  <button
-                    type="button"
-                    onClick={() => handleBranchChange('all')}
-                    className="mt-2 text-xs text-[var(--status-info)] hover:underline"
-                  >
-                    Show all branches
-                  </button>
-                )}
+              <div className={styles.feedback}>
+                <div>
+                  <History size={28} strokeWidth={1.5} />
+                  <p>No commits found</p>
+                  {selectedBranch !== 'all' && (
+                    <button
+                      type="button"
+                      onClick={() => handleBranchChange('all')}
+                      className="mt-2 text-xs text-[var(--status-info)] hover:underline"
+                    >
+                      Show all branches
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 
             {/* Commit timeline */}
-            {!loading && !error && commits.length > 0 && (
-              <div className="space-y-0" data-intro-target="history-timeline">
-                {commits.map((item, index) => (
-                  <CommitHistoryRow
-                    key={item.commit.hash}
-                    hash={item.commit.hash}
-                    message={item.commit.message}
-                    author={item.commit.author}
-                    committedAt={item.commit.committed_at}
-                    branch={item.commit.branch}
-                    parentCount={(item.commit.parents ?? []).length}
-                    diffStats={item.diffStats}
-                    nodeCount={item.nodeCount}
-                    isFirst={index === 0}
-                    isLast={index === commits.length - 1}
-                    isActive={activeHash === item.commit.hash}
-                    onOpen={handleNavOpen}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+            {!loading &&
+              !error &&
+              commits.length > 0 &&
+              (visibleCommits.length > 0 ? (
+                <div className={styles.timeline} data-intro-target="history-timeline">
+                  {visibleCommits.map((item, index) => (
+                    <CommitHistoryRow
+                      key={item.commit.hash}
+                      hash={item.commit.hash}
+                      message={item.commit.message}
+                      author={item.commit.author}
+                      committedAt={item.commit.committed_at}
+                      branch={item.commit.branch}
+                      parentCount={(item.commit.parents ?? []).length}
+                      diffStats={item.diffStats}
+                      nodeCount={item.nodeCount}
+                      isFirst={index === 0}
+                      isLast={index === visibleCommits.length - 1}
+                      isActive={activeHash === item.commit.hash}
+                      onOpen={handleNavOpen}
+                    />
+                  ))}
+                  <div className={styles.beginning}>
+                    <span />
+                    <span className={styles.beginningRail}>
+                      <span className={styles.beginningDot} />
+                    </span>
+                    <span className={styles.beginningLabel}>Beginning of history</span>
+                  </div>
+                </div>
+              ) : (
+                <div className={styles.feedback}>No commits match these filters.</div>
+              ))}
+          </>
         )}
       </div>
       <FeatureTourOverlay

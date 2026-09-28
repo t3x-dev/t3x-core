@@ -17,6 +17,8 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import {
   GENERATION_RUNTIME_PROVIDER_IDS,
+  getAllModels,
+  getModelInfo,
   getModelsByProvider,
   normalizeLocalProviderId as normalizeSharedLocalProviderId,
   type ProviderName,
@@ -26,8 +28,10 @@ import {
 } from '@t3x-dev/core';
 import {
   deleteProviderCredential,
+  getGlobalSetting,
   getProviderCredentialBundle,
   type LocalProviderId,
+  setGlobalSetting,
   updateProviderCredentialTestResult,
   upsertProviderCredential,
 } from '@t3x-dev/storage';
@@ -46,6 +50,7 @@ import {
   LocalProviderParamSchema,
   LocalProviderStatusSchema,
   LocalProviderWriteSchema,
+  ModelAccessConfigSchema,
   ProviderConfigSchema,
   ProviderListSchema,
   ProviderTestParamSchema,
@@ -53,6 +58,50 @@ import {
   RoleAssignmentWriteSchema,
   TestResultSchema,
 } from '../schemas/providers';
+
+type ModelAccessConfig = {
+  enabled_models: string[];
+  default_model: string | null;
+  task_defaults: Record<
+    'compose' | 'extraction' | 'validation',
+    { primary_model: string; fallback_model: string | null }
+  >;
+};
+
+const MODEL_ACCESS_CONFIG_KEY = 'organization_model_access_v1';
+
+function defaultModelAccessConfig(): ModelAccessConfig {
+  const models = getAllModels().map((model) => model.id);
+  const defaultModel = models[0] ?? null;
+  const fallbackModel = models.find((model) => model !== defaultModel) ?? null;
+  const taskDefault = { primary_model: defaultModel ?? '', fallback_model: fallbackModel };
+  return {
+    enabled_models: models,
+    default_model: defaultModel,
+    task_defaults: {
+      compose: { ...taskDefault },
+      extraction: { ...taskDefault },
+      validation: { ...taskDefault, fallback_model: null },
+    },
+  };
+}
+
+function validateModelAccessConfig(config: ModelAccessConfig): string | null {
+  const enabled = new Set(config.enabled_models);
+  for (const model of enabled) {
+    if (!getModelInfo(model)) return `Unknown model: ${model}`;
+  }
+  if (config.default_model && !enabled.has(config.default_model)) {
+    return 'Default model must be enabled';
+  }
+  for (const [task, selection] of Object.entries(config.task_defaults)) {
+    if (!enabled.has(selection.primary_model)) return `${task} primary model must be enabled`;
+    if (selection.fallback_model && !enabled.has(selection.fallback_model)) {
+      return `${task} fallback model must be enabled`;
+    }
+  }
+  return null;
+}
 
 export const providersRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
@@ -695,4 +744,63 @@ providersRoutes.openapi(updateConfigRoute, async (c) => {
       400
     );
   }
+});
+
+// ============================================================
+// Organization model access policy
+// ============================================================
+
+const getModelAccessRoute = createRoute({
+  method: 'get',
+  path: '/v1/providers/model-access',
+  tags: ['Providers'],
+  summary: 'Get organization model access policy',
+  responses: {
+    200: {
+      description: 'Organization model access policy',
+      content: { 'application/json': { schema: SuccessResponseSchema(ModelAccessConfigSchema) } },
+    },
+  },
+});
+
+providersRoutes.openapi(getModelAccessRoute, async (c) => {
+  const db = await getDB();
+  const saved = await getGlobalSetting<ModelAccessConfig>(db, MODEL_ACCESS_CONFIG_KEY);
+  return c.json({ success: true as const, data: saved ?? defaultModelAccessConfig() });
+});
+
+const updateModelAccessRoute = createRoute({
+  method: 'put',
+  path: '/v1/providers/model-access',
+  tags: ['Providers'],
+  summary: 'Update organization model access policy',
+  request: { body: { content: { 'application/json': { schema: ModelAccessConfigSchema } } } },
+  responses: {
+    200: {
+      description: 'Updated organization model access policy',
+      content: { 'application/json': { schema: SuccessResponseSchema(ModelAccessConfigSchema) } },
+    },
+    400: {
+      description: 'Invalid model access policy',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+// @ts-expect-error - OpenAPI handler return type
+providersRoutes.openapi(updateModelAccessRoute, async (c) => {
+  const body = c.req.valid('json');
+  const validationError = validateModelAccessConfig(body);
+  if (validationError) {
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'INVALID_MODEL_ACCESS', message: validationError },
+      },
+      400
+    );
+  }
+  const db = await getDB();
+  await setGlobalSetting(db, MODEL_ACCESS_CONFIG_KEY, body);
+  return c.json({ success: true as const, data: body });
 });

@@ -87,7 +87,12 @@ it('reads exact published author content without candidate creation, respecting 
   const url = `/v1/projects/${target}/schema-studio/source?${query}`;
   const result = await app.request(url);
   expect(result.status).toBe(200);
-  expect((await result.json()).data.readme).toBe('# Exact author introduction');
+  const reading = (await result.json()).data;
+  expect(reading.readme).toBe('# Exact author introduction');
+  expect(reading.manifest).toMatchObject({
+    canonicalName: 'team/candidate',
+    readme: '# Exact author introduction',
+  });
   expect(await listSchemaStudioCandidates(db, target)).toEqual([]);
   denied.add(`${source}:project:read`);
   expect((await app.request(url)).status).toBe(404);

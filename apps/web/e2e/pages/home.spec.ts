@@ -66,7 +66,7 @@ test.describe('Home Page', () => {
     await expect(projectEntry).toBeVisible({ timeout: 15000 });
   });
 
-  test('Click repository navigates to its namespace-scoped State page', async ({
+  test('Click repository navigates to its exact project State page', async ({
     page,
     request,
   }) => {
@@ -78,8 +78,8 @@ test.describe('Home Page', () => {
     const projectCard = page.locator('article').filter({ hasText: projectName }).first();
     await projectCard.getByRole('link').click();
 
-    await expect(page).toHaveURL(/\/t3x-dev\/home-nav-e2e$/);
-    await expect(page.getByRole('tab', { name: /Snapshot/ })).toBeVisible({
+    await expect(page).toHaveURL(new RegExp(`/project/${projectId}$`));
+    await expect(page.getByRole('tab', { name: 'Overview', exact: true })).toBeVisible({
       timeout: 15000,
     });
   });
@@ -111,7 +111,7 @@ test.describe('Home Page', () => {
     projectIdsToCleanup.push(projectId);
 
     await expect(page).toHaveURL(new RegExp(`/t3x-dev/release-ui-${suffix}$`));
-    await expect(page.getByRole('tab', { name: /Snapshot/ })).toBeVisible({
+    await expect(page.getByRole('tab', { name: 'Overview', exact: true })).toBeVisible({
       timeout: 15000,
     });
 

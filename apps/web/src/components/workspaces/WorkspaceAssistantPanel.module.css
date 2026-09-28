@@ -1,0 +1,65 @@
+.panel {
+  gap: 0;
+  padding: 0;
+  background: #fff;
+  color: #1c2339;
+}
+
+.panel > div:first-child {
+  border-bottom: 1px solid #e6e9f1;
+  padding: 14px 16px;
+}
+
+.panel > div:first-child h3 {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.messages {
+  padding: 16px;
+  scrollbar-color: #d8deea transparent;
+}
+
+.message {
+  display: grid;
+  gap: 5px;
+  border-bottom: 1px solid #edf0f5;
+  padding: 0 0 14px;
+}
+
+.message[data-role="user"] p {
+  border-radius: 7px;
+  background: #f4f6fa;
+  padding: 9px 10px;
+}
+
+.permission {
+  margin: 0 16px 10px;
+  color: #667086;
+}
+
+.permission input {
+  accent-color: var(--accent-commit);
+}
+
+.composer {
+  min-height: 104px;
+  margin: 0 16px;
+  width: calc(100% - 32px);
+  resize: vertical;
+  border-color: #dfe4ed;
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: none;
+}
+
+.actions {
+  gap: 6px;
+  padding: 10px 16px 16px;
+}
+
+.actions button {
+  min-height: 32px;
+  border-radius: 6px;
+  box-shadow: none;
+}

@@ -12,10 +12,12 @@
  * - Fork creates a new draft from a committed draft
  */
 
+import { isDeepStrictEqual } from 'node:util';
 import type { CreateDraftInput, Draft, DraftConstraint, DraftStatus } from '@t3x-dev/core';
 import { generateDraftId } from '@t3x-dev/core';
-import { and, desc, eq, isNotNull, ne } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, ne, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
+import { branches } from '../schema';
 import { type DraftRecord, drafts } from '../schema-trees';
 
 // ============================================================
@@ -94,7 +96,7 @@ export interface WorkspaceDraftInput {
 /**
  * Convert database row to Draft API type
  */
-function rowToDraft(row: DraftRecord): Draft {
+export function rowToDraft(row: DraftRecord): Draft {
   return {
     id: row.id,
     project_id: row.projectId,
@@ -131,6 +133,11 @@ function rowToDraft(row: DraftRecord): Draft {
  * Create a new Draft
  */
 export async function insertDraft(db: AnyDB, input: CreateDraftInput): Promise<Draft> {
+  if (
+    input.workspace_state?.authoringLedger !== undefined ||
+    input.workspace_state?.authoringBasis !== undefined
+  )
+    throw new DraftAuthoringConflictError('Authoring state requires the command service');
   const id = generateDraftId();
   const now = new Date();
 
@@ -221,6 +228,9 @@ export async function updateDraft(
   input: UpdateDraftInput,
   ifRevision: number
 ): Promise<Draft> {
+  const previous = await findDraftById(db, draftId);
+  if (!previous) throw new NotFoundError(draftId);
+  assertLegacyDraftWrite(previous, input);
   const now = new Date();
   const updateData: Record<string, unknown> = { updatedAt: now };
 
@@ -444,7 +454,18 @@ export async function upsertWorkspaceDraft(
  * Delete a Draft
  */
 export async function deleteDraft(db: AnyDB, draftId: string): Promise<void> {
-  await db.delete(drafts).where(eq(drafts.id, draftId));
+  // Authoring history is retained when a workspace is removed from active lists.
+  // A single conditional DELETE also prevents racing initial ledger publication.
+  const rows = await db
+    .delete(drafts)
+    .where(
+      and(eq(drafts.id, draftId), sql`${drafts.workspaceStateJson}->'authoringLedger' IS NULL`)
+    )
+    .returning();
+  if (rows.length === 0 && (await findDraftById(db, draftId))?.workspace_state?.authoringLedger)
+    throw new DraftAuthoringConflictError(
+      'Authoring history must be retained; abandon the Draft instead'
+    );
 }
 
 // ============================================================
@@ -557,4 +578,165 @@ export async function promoteDraft(db: AnyDB, draftId: string): Promise<Draft> {
   }
 
   return rowToDraft(rows[0]);
+}
+
+export class DraftAuthoringConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DraftAuthoringConflictError';
+  }
+}
+
+const EDITABLE_WORKSPACE_METADATA = new Set([
+  'title',
+  'description',
+  'sourceBundle',
+  'updatedAt',
+  'outputTargets',
+]);
+function withoutMetadata(value: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(value).filter(([key]) => !EDITABLE_WORKSPACE_METADATA.has(key))
+  );
+}
+
+/** All legacy writers pass this guard before the same row revision CAS. */
+export function assertLegacyDraftWrite(previous: Draft, input: UpdateDraftInput) {
+  const stored = previous.workspace_state ?? {};
+  const incoming = input.workspace_state;
+  if (!stored.authoringLedger) {
+    if (incoming?.authoringLedger !== undefined || incoming?.authoringBasis !== undefined)
+      throw new DraftAuthoringConflictError('Authoring state requires the command service');
+    return;
+  }
+  if (
+    (incoming && !isDeepStrictEqual(withoutMetadata(stored), withoutMetadata(incoming))) ||
+    (input.target_branch !== undefined && input.target_branch !== previous.target_branch) ||
+    (input.parent_commit_hash !== undefined &&
+      input.parent_commit_hash !== previous.parent_commit_hash) ||
+    input.nodes !== undefined ||
+    input.constraints !== undefined ||
+    input.semantic_points !== undefined ||
+    (input.status !== undefined && input.status !== previous.status)
+  )
+    throw new DraftAuthoringConflictError('This Draft is managed by immutable authoring commands');
+}
+
+type AuthoringLedgerStorage = {
+  base: unknown;
+  schema: string;
+  version: number;
+  compositionRevision: number;
+  actions: unknown[];
+  receipts?: unknown[];
+};
+function assertAppendOnlyWorkspace(
+  previous: Record<string, unknown>,
+  next: Record<string, unknown>
+) {
+  const before = previous.authoringLedger as AuthoringLedgerStorage | undefined;
+  const after = next.authoringLedger as AuthoringLedgerStorage | undefined;
+  if (
+    !after ||
+    !Array.isArray(after.actions) ||
+    !Number.isInteger(after.compositionRevision) ||
+    after.compositionRevision !== after.actions.length
+  )
+    throw new DraftAuthoringConflictError('Invalid authoring publication');
+  if (!before) return;
+  if (
+    !isDeepStrictEqual(previous.authoringBasis, next.authoringBasis) ||
+    !isDeepStrictEqual(before.base, after.base) ||
+    before.schema !== after.schema ||
+    before.version !== after.version ||
+    after.actions.length < before.actions.length ||
+    !isDeepStrictEqual(before.actions, after.actions.slice(0, before.actions.length)) ||
+    !isDeepStrictEqual(
+      before.receipts ?? [],
+      (after.receipts ?? []).slice(0, (before.receipts ?? []).length)
+    )
+  )
+    throw new DraftAuthoringConflictError('Published authoring facts cannot be changed');
+}
+
+/** Internal application transaction, never a client-selected write bypass.
+ * Locks the target ref before the Draft. The callback must revalidate basis and
+ * permissions; a callback failure rolls back both publication and outcome.
+ */
+export async function transactWorkspaceAuthoring<T>(
+  db: AnyDB,
+  input: { projectId: string; workspaceId: string; refName: string },
+  command: (
+    tx: AnyDB,
+    draft: Draft
+  ) => Promise<{ workspace: Record<string, unknown> | null; value: T }>
+): Promise<{ draft: Draft; value: T }> {
+  type TxRunner = { transaction<R>(fn: (tx: unknown) => Promise<R>): Promise<R> };
+  return (db as unknown as TxRunner).transaction(async (rawTx) => {
+    const tx = rawTx as AnyDB;
+    const [branch] = await tx
+      .select()
+      .from(branches)
+      .where(and(eq(branches.projectId, input.projectId), eq(branches.name, input.refName)))
+      .for('update');
+    if (!branch) throw new DraftAuthoringConflictError('Target ref does not exist');
+    const [row] = await tx
+      .select()
+      .from(drafts)
+      .where(and(eq(drafts.projectId, input.projectId), eq(drafts.workspaceId, input.workspaceId)))
+      .for('update');
+    if (!row) throw new NotFoundError(input.workspaceId);
+    const draft = rowToDraft(row);
+    const result = await command(tx, draft);
+    if (!result.workspace) return { draft, value: result.value };
+    if (draft.status !== 'editing') throw new DraftAuthoringConflictError('Draft is not editable');
+    assertAppendOnlyWorkspace(draft.workspace_state ?? {}, result.workspace);
+    const [saved] = await tx
+      .update(drafts)
+      .set({
+        workspaceStateJson: result.workspace,
+        revision: draft.revision + 1,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(drafts.id, draft.id), eq(drafts.revision, draft.revision)))
+      .returning();
+    if (!saved) throw new ConflictError(draft.id, draft.revision);
+    return { draft: rowToDraft(saved), value: result.value };
+  });
+}
+
+/** Used only inside the authorized canonical Commit transaction, after graph persistence. */
+export async function sealWorkspaceAuthoring(
+  db: AnyDB,
+  input: { draft: Draft; commitDigest: string; workspace: Record<string, unknown> }
+): Promise<Draft> {
+  if (
+    !input.draft.workspace_state?.authoringLedger ||
+    !isDeepStrictEqual(
+      input.draft.workspace_state.authoringLedger,
+      input.workspace.authoringLedger
+    ) ||
+    !isDeepStrictEqual(input.draft.workspace_state.authoringBasis, input.workspace.authoringBasis)
+  )
+    throw new DraftAuthoringConflictError('Commit must retain the exact frozen authoring manifest');
+  const [saved] = await db
+    .update(drafts)
+    .set({
+      workspaceStateJson: input.workspace,
+      status: 'committed',
+      committedAs: input.commitDigest,
+      revision: input.draft.revision + 1,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(drafts.id, input.draft.id),
+        eq(drafts.projectId, input.draft.project_id),
+        eq(drafts.revision, input.draft.revision),
+        eq(drafts.status, 'editing')
+      )
+    )
+    .returning();
+  if (!saved) throw new ConflictError(input.draft.id, input.draft.revision);
+  return rowToDraft(saved);
 }

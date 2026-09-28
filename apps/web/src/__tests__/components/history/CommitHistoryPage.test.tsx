@@ -10,11 +10,12 @@ const mocks = vi.hoisted(() => ({
   loadCommits: vi.fn(),
   loadBranches: vi.fn(),
   loadDiff: vi.fn(),
+  routerReplace: vi.fn(),
 }));
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: vi.fn() }),
+  useRouter: () => ({ replace: mocks.routerReplace }),
   usePathname: () => '/project/proj_test/history',
-  useSearchParams: () => new URLSearchParams('branch=main'),
+  useSearchParams: () => new URLSearchParams('branch=main&view=list'),
 }));
 vi.mock('@/hooks/commits/useCommitByHash', () => ({
   useCommitByHash: () => ({ loadCommit: mocks.loadCommit }),
@@ -53,6 +54,7 @@ const selected: ApiCommit = {
   hash: 'sha256:second',
   parents: [root.hash],
   message: 'Update title',
+  author: { type: 'human', name: 'Maya Chen' },
   committed_at: '2026-09-02T00:00:00Z',
   content: { trees: [{ key: 'prd', slots: { title: 'Revised' }, children: [] }], relations: [] },
 };
@@ -65,17 +67,15 @@ describe('History node navigation', () => {
       stats: { addedCount: 0, modifiedCount: 1, removedCount: 0 },
     });
   });
-  it('opens historical nodes in State structure and returns to the same history list', async () => {
+  it('opens historical nodes in the YAML review and returns to the same history list', async () => {
     mocks.loadCommits.mockResolvedValue([selected, root]);
     render(<CommitHistoryPage projectId="proj_test" />);
     fireEvent.click(await screen.findByRole('button', { name: /Update title/ }));
-    expect(await screen.findByLabelText('Structured state tree')).toBeInTheDocument();
-    const revisionDetails = screen.getByText('Revision details').closest('details');
-    expect(revisionDetails).not.toHaveAttribute('open');
-    expect(screen.getByText('Parent root → Selected second')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Back to commit history' }));
+    expect(await screen.findByRole('region', { name: 'Commit YAML' })).toHaveTextContent('Revised');
+    expect(screen.getByRole('region', { name: 'Parent YAML' })).toHaveTextContent('Original');
+    fireEvent.click(screen.getByRole('button', { name: 'History' }));
     fireEvent.click(screen.getByRole('button', { name: /Initial state/ }));
-    expect(await screen.findByText('Empty state → Selected root')).toBeInTheDocument();
+    expect((await screen.findAllByText('empty', { exact: true })).length).toBeGreaterThan(0);
     expect(screen.queryByText('Revised')).not.toBeInTheDocument();
     expect(mocks.loadCommit).not.toHaveBeenCalled();
   });
@@ -90,5 +90,27 @@ describe('History node navigation', () => {
     ).toBeInTheDocument();
     expect(screen.queryByLabelText('Structured state tree')).not.toBeInTheDocument();
     expect(screen.queryByText(/Empty state →/)).not.toBeInTheDocument();
+  });
+
+  it('filters the timeline and switches back to Canvas without replacing history data', async () => {
+    mocks.loadCommits.mockResolvedValue([selected, root]);
+    render(<CommitHistoryPage projectId="proj_test" />);
+
+    const search = await screen.findByRole('searchbox', { name: 'Search commits' });
+    fireEvent.change(search, { target: { value: 'Initial' } });
+    expect(screen.getByRole('button', { name: /Initial state/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Update title/ })).not.toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: '' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Author filter' }), {
+      target: { value: 'Maya Chen' },
+    });
+    expect(screen.getByRole('button', { name: /Update title/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Initial state/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Open Canvas/ }));
+    expect(mocks.routerReplace).toHaveBeenLastCalledWith('/project/proj_test/history?branch=main', {
+      scroll: false,
+    });
   });
 });

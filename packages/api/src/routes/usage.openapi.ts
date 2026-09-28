@@ -8,7 +8,14 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { getUsageByEndpoint, getUsageSummary, getUsageTotal, recordUsage } from '@t3x-dev/storage';
+import {
+  getUsageByEndpoint,
+  getUsageByModel,
+  getUsageSummary,
+  getUsageTotal,
+  recordUsage,
+} from '@t3x-dev/storage';
+import { isAuthenticationDisabled } from '../lib/auth-config';
 import { getDB } from '../lib/db';
 import { createError, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
@@ -33,12 +40,14 @@ function getUserId(c: { get: (key: string) => unknown }): string | null {
 
 const UsageSummaryRowSchema = z.object({
   period: z.string(),
+  requests: z.number(),
   input_tokens: z.number(),
   output_tokens: z.number(),
   estimated_cost: z.number(),
 });
 
 const UsageTotalSchema = z.object({
+  requests: z.number(),
   input_tokens: z.number(),
   output_tokens: z.number(),
   estimated_cost: z.number(),
@@ -46,6 +55,14 @@ const UsageTotalSchema = z.object({
 
 const UsageByEndpointRowSchema = z.object({
   endpoint: z.string(),
+  input_tokens: z.number(),
+  output_tokens: z.number(),
+  estimated_cost: z.number(),
+});
+
+const UsageByModelRowSchema = z.object({
+  model: z.string(),
+  requests: z.number(),
   input_tokens: z.number(),
   output_tokens: z.number(),
   estimated_cost: z.number(),
@@ -91,6 +108,7 @@ const getUsageRoute = createRoute({
               summary: z.array(UsageSummaryRowSchema),
               total: UsageTotalSchema,
               by_endpoint: z.array(UsageByEndpointRowSchema),
+              by_model: z.array(UsageByModelRowSchema),
             })
           ),
         },
@@ -107,7 +125,7 @@ const getUsageRoute = createRoute({
 
 usageRoutes.openapi(getUsageRoute, async (c) => {
   const userId = getUserId(c);
-  if (!userId) {
+  if (!userId && !isAuthenticationDisabled()) {
     return c.json(createError('UNAUTHORIZED', 'Authentication required'), 401);
   }
 
@@ -118,13 +136,14 @@ usageRoutes.openapi(getUsageRoute, async (c) => {
 
   const db = await getDB();
 
-  const [summary, total, by_endpoint] = await Promise.all([
+  const [summary, total, by_endpoint, by_model] = await Promise.all([
     getUsageSummary(db, { user_id: userId, from, to, group_by }),
     getUsageTotal(db, { user_id: userId, from, to }),
     getUsageByEndpoint(db, { user_id: userId, from, to }),
+    getUsageByModel(db, { user_id: userId, from, to }),
   ]);
 
-  return c.json({ success: true as const, data: { summary, total, by_endpoint } }, 200);
+  return c.json({ success: true as const, data: { summary, total, by_endpoint, by_model } }, 200);
 });
 
 // ============================================================

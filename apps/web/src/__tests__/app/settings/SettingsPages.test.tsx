@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import AccessPage from '@/app/settings/access/page';
 import SettingsPage from '@/app/settings/page';
 import PreferencesPage from '@/app/settings/preferences/page';
+import ProviderCredentialsPage from '@/app/settings/provider-credentials/page';
 import ProvidersPage from '@/app/settings/providers/page';
 
 vi.mock('@/components/settings/AccessSettingsPanel', () => ({
@@ -20,8 +21,16 @@ vi.mock('@/components/settings/PreferencesSettingsPanel', () => ({
   PreferencesSettingsPanel: () => <div>Mock Preferences Settings Panel</div>,
 }));
 
+vi.mock('@/components/settings/PersonalModelSettingsPanel', () => ({
+  PersonalModelSettingsPanel: () => <div>Mock Personal Model Panel</div>,
+}));
+
 vi.mock('@/components/settings/ProvidersSettingsPanel', () => ({
   ProvidersSettingsPanel: () => <div>Mock Providers Settings Panel</div>,
+}));
+
+vi.mock('@/components/settings/GeneralSettingsPanel', () => ({
+  GeneralSettingsPanel: () => <div>Mock General Settings Panel</div>,
 }));
 
 vi.mock('@/components/deployment/DeploymentCapabilitiesProvider', () => ({
@@ -36,30 +45,10 @@ vi.mock('@/components/deployment/DeploymentCapabilitiesProvider', () => ({
 }));
 
 describe('settings pages', () => {
-  it('renders the overview as an entry map without unverified runtime claims', () => {
+  it('renders the organization General settings page', () => {
     render(<SettingsPage />);
 
-    expect(screen.getByRole('heading', { name: 'Overview' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /AI Providers Configure/i })).toHaveAttribute(
-      'href',
-      '/settings/providers'
-    );
-    expect(screen.getByRole('link', { name: /API Access Configure/i })).toHaveAttribute(
-      'href',
-      '/settings/access'
-    );
-    expect(screen.getByRole('link', { name: /Workspace Defaults Open/i })).toHaveAttribute(
-      'href',
-      '/settings/preferences'
-    );
-    expect(screen.getByText('Automation')).toBeInTheDocument();
-    expect(
-      screen.getByText(/Runtime-dependent checks are shown inside the pages that can verify them\./)
-    ).toBeInTheDocument();
-    expect(screen.getAllByText('Requires backend runtime')).toHaveLength(2);
-    expect(screen.queryByText('AI readiness')).not.toBeInTheDocument();
-    expect(screen.queryByText('Access readiness')).not.toBeInTheDocument();
-    expect(screen.queryByText('Providers configured')).not.toBeInTheDocument();
+    expect(screen.getByText('Mock General Settings Panel')).toBeInTheDocument();
   });
 
   it('renders the access page shell around the shared panel', () => {
@@ -73,22 +62,23 @@ describe('settings pages', () => {
     expect(screen.getByText('Mock Access Settings Panel')).toBeInTheDocument();
   });
 
-  it('renders the preferences page shell around the shared panel', () => {
+  it('delegates appearance content to the shared panel', () => {
     render(<PreferencesPage />);
 
-    expect(screen.getByRole('heading', { name: 'Preferences' })).toBeInTheDocument();
-    expect(
-      screen.getByText('Customize your T3X experience. Changes are saved automatically.')
-    ).toBeInTheDocument();
     expect(screen.getByText('Mock Preferences Settings Panel')).toBeInTheDocument();
   });
 
-  it('renders the providers page shell around the shared panel', () => {
+  it('renders personal model preferences', () => {
     render(<ProvidersPage />);
+    expect(screen.getByText('Mock Personal Model Panel')).toBeInTheDocument();
+  });
 
-    expect(screen.getByRole('heading', { name: 'Providers' })).toBeInTheDocument();
+  it('keeps provider credentials behind the capability gate', () => {
+    render(<ProviderCredentialsPage />);
+
+    expect(screen.getByRole('heading', { name: 'Provider credentials' })).toBeInTheDocument();
     expect(
-      screen.getByText('Configure LLM, embedding, and NLP providers for T3X features.')
+      screen.getByText('Configure local provider API keys and connection defaults.')
     ).toBeInTheDocument();
     expect(screen.getByText('Mock Providers Settings Panel')).toBeInTheDocument();
   });

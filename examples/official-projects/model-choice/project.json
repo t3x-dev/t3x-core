@@ -1,0 +1,30 @@
+{
+  "slug": "model-choice",
+  "title": "Model choice",
+  "description": "Record which model a task should use and why.",
+  "license": "Apache-2.0",
+  "tags": ["ai", "agents", "ecosystem:t3x"],
+  "companionSchema": {
+    "canonicalName": "t3x/model-choice",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "record": {
+      "task": "Draft review",
+      "model": "claude-sonnet",
+      "fallback": "",
+      "reason": "Long structured edits"
+    }
+  },
+  "demonstration": {
+    "message": "Record the fallback model",
+    "value": {
+      "record": {
+        "task": "Draft review",
+        "model": "claude-sonnet",
+        "fallback": "gpt-5.4",
+        "reason": "Long structured edits"
+      }
+    }
+  }
+}

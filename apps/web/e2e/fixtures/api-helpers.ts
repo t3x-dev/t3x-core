@@ -1,3 +1,6 @@
+import { execFile } from 'node:child_process';
+import path from 'node:path';
+import { promisify } from 'node:util';
 import type { APIRequestContext } from '@playwright/test';
 import type { DemoTreeNode } from './open-source-demo-datasets';
 
@@ -174,13 +177,13 @@ export async function createTestLeaf(
   }
   const port = Number(process.env.T3X_PG_PORT);
   if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Invalid fixture DB port');
-  const { createPostgresRuntimeStorage, closePostgresStorage, createLeaf, updateLeafOutput } = await import('@t3x-dev/storage');
-  const db = await createPostgresRuntimeStorage({ connectionString: `postgresql://postgres:password@127.0.0.1:${port}/t3x`, maxConnections: 1 });
-  try {
-    const leaf = await createLeaf(db, { commit_hash: commitHash, project_id: projectId, type: 'deploy_agent', title: options?.title ?? 'Archived E2E Leaf', constraints: constraints as Parameters<typeof createLeaf>[1]['constraints'] ?? [], config: {} });
-    if (options?.output) await updateLeafOutput(db, leaf.id, options.output);
-    return leaf.id;
-  } finally { await closePostgresStorage(); }
+  // Keep storage's native ESM dependencies outside Playwright's module loader.
+  const { stdout } = await promisify(execFile)(process.execPath, [
+    path.join(__dirname, 'seed-archived-leaf.mjs'),
+    JSON.stringify({ commitHash, projectId, constraints, options }),
+  ]);
+  return JSON.parse(stdout.trim()).id;
+
 }
 
 /**

@@ -15,13 +15,15 @@ export interface YAMLLineProps {
   lineNumber?: number;
   status: YAMLLineStatus;
   children: React.ReactNode;
+  /** Exact word highlights already mark deletions; do not strike unchanged context. */
+  strikeThrough?: boolean;
 }
 
 /**
  * Single YAML line: gutter (line number) + marker strip (4px) + content area.
  * Gutter-neutral: background tint only on content area, not gutter.
  */
-export function YAMLLine({ lineNumber, status, children }: YAMLLineProps) {
+export function YAMLLine({ lineNumber, status, children, strikeThrough = true }: YAMLLineProps) {
   const isEmpty = status === 'empty';
 
   return (
@@ -62,10 +64,13 @@ export function YAMLLine({ lineNumber, status, children }: YAMLLineProps) {
       {/* Content */}
       <div
         className={cn(
-          'flex-1 px-[10px] whitespace-pre overflow-hidden text-ellipsis',
+          'min-w-0 flex-1 px-[10px] whitespace-pre-wrap [overflow-wrap:anywhere]',
           status === 'added' && 'bg-[var(--dy-added-bg)]',
           status === 'removed' &&
-            'bg-[var(--dy-removed-bg)] text-[var(--diff-removed-text)] line-through decoration-[var(--dy-removed-accent)]/40 opacity-90',
+            'bg-[var(--dy-removed-bg)] text-[var(--diff-removed-text)] opacity-90',
+          status === 'removed' &&
+            strikeThrough &&
+            'line-through decoration-[var(--dy-removed-accent)]/40',
           status === 'added' && 'text-[var(--diff-added-text)]',
           status === 'modified' && 'bg-[var(--dy-modified-bg)] text-[var(--diff-modified-text)]',
           status === 'source' && 'bg-[var(--merge-src-bg)]',

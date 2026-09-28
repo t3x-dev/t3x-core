@@ -220,6 +220,27 @@ export function isGeneratedProposalPreparation(preparationFacts: ProtocolValue |
     preparationFacts !== null &&
     typeof preparationFacts === 'object' &&
     !Array.isArray(preparationFacts) &&
-    preparationFacts.schema === PROPOSAL_GENERATION_PREPARATION_SCHEMA
+    (preparationFacts.schema === PROPOSAL_GENERATION_PREPARATION_SCHEMA ||
+      preparationFacts.schema === 't3x.application/workspace-generation-preparation/v1' ||
+      (preparationFacts.schema === 't3x.application/workspace-authoring-preparation/v1' &&
+        isGeneratedAuthoringManifest(preparationFacts)))
+  );
+}
+
+function isGeneratedAuthoringManifest(value: { [key: string]: ProtocolValue }): boolean {
+  const ledger = value.ledger;
+  if (
+    !ledger ||
+    typeof ledger !== 'object' ||
+    Array.isArray(ledger) ||
+    !Array.isArray(ledger.actions)
+  )
+    return true;
+  return ledger.actions.some(
+    (action) =>
+      !!action &&
+      typeof action === 'object' &&
+      !Array.isArray(action) &&
+      action.generation !== undefined
   );
 }

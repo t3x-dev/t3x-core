@@ -111,7 +111,7 @@ describe('ProjectDirectoryPage', () => {
     expect(screen.queryByText('hi@t3x.dev')).not.toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /prd-workflow/i })[0]).toHaveAttribute(
       'href',
-      '/t3x-dev/prd-workflow'
+      '/project/proj_prd'
     );
     expect(screen.getAllByText('/t3x-dev/prd-workflow').length).toBeGreaterThan(0);
     expect(screen.queryByRole('link', { name: 'Chats' })).not.toBeInTheDocument();
@@ -150,7 +150,7 @@ describe('ProjectDirectoryPage', () => {
     );
     expect(screen.getAllByRole('link', { name: /prd-workflow/i })[0]).toHaveAttribute(
       'href',
-      '/lqw905/prd-workflow'
+      '/project/proj_prd'
     );
     expect(screen.getAllByText('/lqw905/prd-workflow').length).toBeGreaterThan(0);
     for (const link of screen.getAllByRole('link', { name: /new repository/i })) {
@@ -169,8 +169,8 @@ describe('ProjectDirectoryPage', () => {
     expect(recentSection).not.toBeNull();
 
     const recentLinks = within(recentSection as HTMLElement).getAllByRole('link');
-    expect(recentLinks[0]).toHaveAttribute('href', '/t3x-dev/t3x-core');
-    expect(recentLinks[1]).toHaveAttribute('href', '/t3x-dev/prd-workflow');
+    expect(recentLinks[0]).toHaveAttribute('href', '/project/proj_core');
+    expect(recentLinks[1]).toHaveAttribute('href', '/project/proj_prd');
   });
 
   it('filters project rows without leaving the directory', () => {

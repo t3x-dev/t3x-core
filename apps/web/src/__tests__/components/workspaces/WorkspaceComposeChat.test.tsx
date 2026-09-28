@@ -28,6 +28,27 @@ function chatState(overrides: Partial<ComposeChatState> = {}): ComposeChatState 
 }
 
 describe('WorkspaceComposeChat', () => {
+  it('keeps the full conversation accessible in the compact discussion variant', () => {
+    render(
+      <WorkspaceComposeChat
+        variant="discussion"
+        discussionAction={<button type="button">Inspect this change</button>}
+        chat={chatState({
+          messages: Array.from({ length: 5 }, (_, index) => ({
+            author: 'You',
+            role: 'user' as const,
+            id: `message-${index}`,
+            content: `Evidence message ${index}`,
+          })),
+        })}
+      />
+    );
+    for (let index = 0; index < 5; index++) {
+      expect(screen.getByText(`Evidence message ${index}`)).toBeInTheDocument();
+    }
+    expect(screen.getByRole('button', { name: 'Inspect this change' })).toBeInTheDocument();
+  });
+
   it('fills a starting prompt without sending or changing workspace data', () => {
     const setInput = vi.fn();
     const send = vi.fn();
@@ -102,8 +123,10 @@ describe('WorkspaceComposeChat', () => {
       />
     );
 
-    expect(await screen.findByText(/Preparing/)).toBeInTheDocument();
-    expect(screen.getByText('structured')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('log')).toHaveTextContent('Preparing structured source material')
+    );
+    expect(screen.getByRole('log').querySelectorAll('strong')).toHaveLength(1);
     expect(screen.getByText('Searching workspace evidence')).toBeInTheDocument();
   });
 });

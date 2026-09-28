@@ -10,15 +10,22 @@ import { syncSavedTurnIntoWorkspace } from '@/hooks/conversations/syncSavedTurnI
 import { type ChatMessage, useChatHistory } from '@/hooks/conversations/useChatHistory';
 import { useChatStreamState } from '@/hooks/conversations/useChatStreamState';
 import { useChatWarnings } from '@/hooks/conversations/useChatWarnings';
+import { conversationMemorySystemMessage } from '@/hooks/sourceThreads/conversationMemorySystemMessage';
 import {
   type GenerationCitation,
   type GenerationContentBlock,
   type GenerationMessage,
   generationApi,
 } from '@/infrastructure/generation';
+import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
 import type { SourceChatDraftReplyResponse } from '@/infrastructure/sourceChatDraftReplies';
 import { sourceThreadApi } from '@/infrastructure/sourceThreads';
 import type { Turn } from '@/infrastructure/types';
+import {
+  recoverWorkspaceAssistantOperation,
+  streamWorkspaceAssistant,
+  type WorkspaceAssistantContext,
+} from '@/infrastructure/workspaceAssistant';
 import { useChatSessionStore } from '@/store/chatSessionStore';
 import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
@@ -49,7 +56,10 @@ export interface UseSourceThreadGenerationOptions {
   model?: string;
   parentCommitHash?: string;
   sourceDraftReply?: SourceDraftReplyContext;
+  workspaceAssistant?: WorkspaceAssistantContext;
   onConversationCreated?: (conversationId: string) => void;
+  createConversation?: () => Promise<string>;
+  onConversationReady?: (conversationId: string) => void | Promise<void>;
   onTurnsSaved?: () => void;
 }
 
@@ -75,6 +85,18 @@ export interface UseSourceThreadGenerationReturn {
   citations: GenerationCitation[];
   thinkingContent: string;
   isThinking: boolean;
+  workspaceActivity: WorkspaceAssistantActivity | null;
+}
+
+export interface WorkspaceAssistantActivity {
+  turnId: string;
+  phase: 'saving' | 'reading' | 'generating' | 'responding' | 'complete' | 'error';
+  operations: Array<{
+    id: string;
+    name: string;
+    status: 'started' | 'completed';
+    transitionId?: string;
+  }>;
 }
 
 function syncConversationTitle(title: string) {
@@ -183,15 +205,6 @@ function assistantStreamStatusRings(
   };
 }
 
-function buildMemorySystemMessage(memoryContext: string): GenerationMessage | null {
-  const content = memoryContext.trim();
-  if (!content) return null;
-  return {
-    role: 'system',
-    content,
-  };
-}
-
 /**
  * Repository-facing Source Thread generation capability. It composes
  * persisted history, generation stream state, and warnings while keeping
@@ -208,7 +221,10 @@ export function useSourceThreadGeneration({
   model,
   parentCommitHash,
   sourceDraftReply,
+  workspaceAssistant,
   onConversationCreated,
+  createConversation,
+  onConversationReady,
   onTurnsSaved,
 }: UseSourceThreadGenerationOptions): UseSourceThreadGenerationReturn {
   const history = useChatHistory(projectId, conversationId);
@@ -217,6 +233,9 @@ export function useSourceThreadGeneration({
   const isTemporaryMode = !projectId;
 
   const [turnsSavedCounter, setTurnsSavedCounter] = useState(0);
+  const [workspaceActivity, setWorkspaceActivity] = useState<WorkspaceAssistantActivity | null>(
+    null
+  );
 
   const conversationIdRef = useRef(conversationId);
   useEffect(() => {
@@ -338,6 +357,10 @@ export function useSourceThreadGeneration({
       };
       history.setMessages((prev) => [...prev, newUserMessage]);
 
+      if (workspaceAssistant) {
+        setWorkspaceActivity({ turnId: newUserMessage.id, phase: 'saving', operations: [] });
+      }
+
       stream.setIsChatStreaming(true);
       stream.setStreamingContent('');
 
@@ -387,7 +410,9 @@ export function useSourceThreadGeneration({
           onConversationCreated?.(convId);
         } else if (!convId && projectId) {
           const newTitle = title?.trim() ? title : messageTitle;
-          const newConv = await sourceThreadApi.create(projectId, newTitle, parentCommitHash);
+          const newConv = createConversation
+            ? { conversation_id: await createConversation(), title: newTitle }
+            : await sourceThreadApi.create(projectId, newTitle, parentCommitHash);
           convId = newConv.conversation_id;
           conversationIdRef.current = convId;
           initialTitleForGeneratedTitle = newConv.title || newTitle;
@@ -416,17 +441,23 @@ export function useSourceThreadGeneration({
         setTurnsSavedCounter((c) => c + 1);
         onTurnsSaved?.();
 
-        let memoryContext = '';
-        if (!isTemporaryMode && !options?.skipMemoryFetch) {
+        if (!isTemporaryMode && onConversationReady) {
+          try {
+            await onConversationReady(currentConversationId);
+          } catch {
+            // Context preparation is best-effort; memory may be empty if it fails.
+          }
+        }
+
+        let systemMessage: GenerationMessage | null = null;
+        if (!isTemporaryMode && !workspaceAssistant && !options?.skipMemoryFetch) {
           try {
             const ctx = await sourceThreadApi.memory(currentConversationId);
-            if (ctx.text) memoryContext = ctx.text;
+            systemMessage = conversationMemorySystemMessage(ctx);
           } catch {
             // Memory fetch failed — proceed without context.
           }
         }
-
-        const systemMessage = buildMemorySystemMessage(memoryContext);
         const messages: GenerationMessage[] = [
           ...(systemMessage ? [systemMessage] : []),
           ...previousMessages,
@@ -460,6 +491,170 @@ export function useSourceThreadGeneration({
             });
           }
           if (!isTemporaryMode) await saveAssistantResponse(fullResponse, localAssistantMessageId);
+          return;
+        }
+
+        if (!isTemporaryMode && workspaceAssistant && savedUserTurnHash && !images?.length) {
+          // Creating the bound conversation saves the source bundle and advances the Draft revision.
+          let assistantContext = workspaceAssistant;
+          if (!hasExistingConversation && createConversation) {
+            const { workspace } = await getSharedApiClient().workspaces.get(
+              projectId,
+              workspaceAssistant.workspaceId
+            );
+            if (workspace.revision === undefined)
+              throw new Error('Workspace revision is unavailable.');
+            assistantContext = { ...workspaceAssistant, workspaceRevision: workspace.revision };
+          }
+          const controller = new AbortController();
+          stream.abortControllerRef.current = controller;
+          const unfinished = new Set<string>();
+          const completedCandidates = new Set<string>();
+          let receivedText = false;
+          let completed = false;
+          let completedTurnHash: string | undefined;
+          let lastTextDeltaLength = 0;
+          const flushWorkspaceStream = () => {
+            stream.setStreamingContent(stream.tokenBufferRef.current);
+            stream.rafIdRef.current = null;
+          };
+          try {
+            for await (const event of streamWorkspaceAssistant(
+              projectId,
+              assistantContext,
+              { conversationId: currentConversationId, userTurnHash: savedUserTurnHash },
+              { signal: controller.signal, provider, model }
+            )) {
+              if (event.type === 'context') {
+                setWorkspaceActivity((current) =>
+                  current ? { ...current, phase: 'reading' } : current
+                );
+              }
+              if (event.type === 'text') {
+                const delta = event.content ?? '';
+                if (!receivedText) {
+                  receivedText = true;
+                  setWorkspaceActivity((current) =>
+                    current ? { ...current, phase: 'responding' } : current
+                  );
+                }
+                lastTextDeltaLength = delta.length;
+                fullResponse += delta;
+                stream.tokenBufferRef.current = fullResponse;
+                if (stream.rafIdRef.current === null) {
+                  stream.rafIdRef.current = requestAnimationFrame(flushWorkspaceStream);
+                }
+              }
+              if (event.type === 'operation' && event.operationId) {
+                if (event.status === 'started') {
+                  unfinished.add(event.operationId);
+                  setWorkspaceActivity((current) =>
+                    current
+                      ? {
+                          ...current,
+                          phase: event.name === 'requestProposal' ? 'generating' : 'reading',
+                          operations: [
+                            ...current.operations,
+                            {
+                              id: event.operationId!,
+                              name: event.name ?? 'operation',
+                              status: 'started',
+                            },
+                          ],
+                        }
+                      : current
+                  );
+                }
+                if (event.status === 'completed') {
+                  unfinished.delete(event.operationId);
+                  if (event.result?.transitionId)
+                    completedCandidates.add(event.result.transitionId);
+                  setWorkspaceActivity((current) =>
+                    current
+                      ? {
+                          ...current,
+                          phase: receivedText ? 'responding' : 'generating',
+                          operations: current.operations.map((operation) =>
+                            operation.id === event.operationId
+                              ? {
+                                  ...operation,
+                                  status: 'completed',
+                                  transitionId: event.result?.transitionId,
+                                }
+                              : operation
+                          ),
+                        }
+                      : current
+                  );
+                }
+              }
+              if (event.type === 'error') throw new Error(event.message ?? 'Assistant failed');
+              if (event.type === 'done') {
+                completed = true;
+                completedTurnHash = event.turnHash;
+                if (event.content && event.content !== fullResponse) {
+                  lastTextDeltaLength = Math.max(0, event.content.length - fullResponse.length);
+                }
+                fullResponse = event.content ?? fullResponse;
+                stream.tokenBufferRef.current = fullResponse;
+                if (stream.rafIdRef.current !== null) {
+                  cancelAnimationFrame(stream.rafIdRef.current);
+                  stream.rafIdRef.current = null;
+                }
+                if (fullResponse.trim()) stream.setStreamingContent(fullResponse);
+                if (event.reason === 'step_limit')
+                  warnings.setWarning(
+                    'Assistant reached its step limit. Saved proposals remain available.'
+                  );
+              }
+            }
+          } finally {
+            // Reconcile persisted business results; never replay tool calls after EOF or disconnect.
+            for (const operationId of unfinished) {
+              try {
+                const result = await recoverWorkspaceAssistantOperation(
+                  projectId,
+                  workspaceAssistant.workspaceId,
+                  operationId
+                );
+                if (result.status === 'candidate' && result.transitionId)
+                  workspaceAssistant.onCandidate?.(result.transitionId);
+              } catch {
+                warnings.setWarning('Connection ended. Recheck saved proposals before retrying.');
+              }
+            }
+          }
+          if (!completed)
+            warnings.setWarning(
+              'Assistant stream ended before completion. Saved business results were checked.'
+            );
+          if (completed && fullResponse.trim()) {
+            // Keep the streaming surface mounted just long enough for the last
+            // provider delta to finish its visual reveal. This does not delay or
+            // reshape the network stream; it only prevents the final static
+            // message from replacing the animated text in the same frame.
+            await delay(Math.min(450, Math.max(120, lastTextDeltaLength + 90)));
+            history.setMessages((prev) => [
+              ...prev,
+              {
+                id: completedTurnHash ?? `reply-${savedUserTurnHash}`,
+                role: 'assistant',
+                content: fullResponse,
+              },
+            ]);
+          }
+          stream.setStreamingContent('');
+          // Publishing refreshes the workspace authoring projection. Wait until the
+          // assistant turn has been persisted and the done event has updated local
+          // history, otherwise that refresh can reload the conversation in the brief
+          // gap where only the user turn exists and hide the completed reply until a
+          // manual page reload.
+          for (const transitionId of completedCandidates) {
+            workspaceAssistant.onCandidate?.(transitionId, newUserMessage.id);
+          }
+          setWorkspaceActivity((current) =>
+            current ? { ...current, phase: completed ? 'complete' : 'error' } : current
+          );
           return;
         }
 
@@ -612,9 +807,11 @@ export function useSourceThreadGeneration({
           );
         }
       } catch (err) {
+        if (workspaceAssistant)
+          setWorkspaceActivity((current) => (current ? { ...current, phase: 'error' } : current));
         if (err instanceof DOMException && err.name === 'AbortError') {
           const partial = stream.tokenBufferRef.current;
-          if (partial) {
+          if (partial && !workspaceAssistant) {
             const localAssistantMessageId = `msg-${Date.now()}-assistant`;
             history.setMessages((prev) => [
               ...prev,
@@ -659,7 +856,10 @@ export function useSourceThreadGeneration({
       model,
       parentCommitHash,
       sourceDraftReply,
+      workspaceAssistant,
       onConversationCreated,
+      createConversation,
+      onConversationReady,
       onTurnsSaved,
       webSearchEnabled,
       thinkingEnabled,
@@ -722,5 +922,6 @@ export function useSourceThreadGeneration({
     citations: stream.citations,
     thinkingContent: stream.thinkingContent,
     isThinking: stream.isThinking,
+    workspaceActivity,
   };
 }

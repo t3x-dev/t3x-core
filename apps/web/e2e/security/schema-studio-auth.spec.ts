@@ -171,14 +171,14 @@ test('signed-in Studio enforces independent source and destination authority wit
     await page.goto(`/project/${target}?tab=schemas&schemaView=studio&candidate=${candidate.id}`, {
       waitUntil: 'networkidle',
     });
-    await expect(page.getByRole('heading', { name: 'Definition preview' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Composed structure' })).toBeVisible();
     await expect(
       page.getByText('Importing private structure requires edit authority on its source project.')
     ).toBeVisible();
     await expect(page.getByRole('button', { name: 'Review & apply' })).toBeDisabled();
-    await expect(page.getByRole('region', { name: 'Saved Studio candidates' })).toContainText(
-      '1.0.0'
-    );
+    await expect(
+      page.getByRole('checkbox', { name: 'Select Private release definition 1.0.0', exact: true })
+    ).toBeChecked();
     await page.screenshot({
       path: testInfo.outputPath('studio-source-read-only.png'),
       animations: 'disabled',
@@ -190,10 +190,10 @@ test('signed-in Studio enforces independent source and destination authority wit
     );
     expect(revoked.ok(), await revoked.text()).toBe(true);
     await page.reload({ waitUntil: 'networkidle' });
-    await expect(page.getByRole('region', { name: 'Saved Studio candidates' })).toContainText(
+    await expect(page.getByRole('complementary', { name: 'Studio sources' })).toContainText(
       'Unavailable source'
     );
-    await expect(page.getByRole('region', { name: 'Saved Studio candidates' })).not.toContainText(
+    await expect(page.getByRole('complementary', { name: 'Studio sources' })).not.toContainText(
       'Private release definition'
     );
     const list = await api(

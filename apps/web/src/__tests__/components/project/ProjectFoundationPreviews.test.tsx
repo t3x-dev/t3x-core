@@ -37,16 +37,14 @@ describe('project foundation previews', () => {
     );
     expect(screen.queryByText('PRD audience handoff')).not.toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { name: 'What would you like to change?' })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Think it through.' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Compose' })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('opens Schema discovery without preselecting or applying a definition', () => {
     render(<ProjectSchemasTab projectId="proj_other" />);
 
-    expect(screen.getByRole('heading', { name: 'What will you define next?' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Curated schemas' })).toBeInTheDocument();
     expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   });
 

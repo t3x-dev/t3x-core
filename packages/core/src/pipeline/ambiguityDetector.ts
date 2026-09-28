@@ -8,7 +8,7 @@
  * Fail-safe: LLM failure → assume clean (no questions).
  *
  * Two types detected:
- * - vagueness: slot values with hedging language ("about", "maybe", "大概", "左右")
+ * - vagueness: slot values with hedging language ("about", "maybe", "approximately")
  * - structural: node could belong to multiple parent nodes
  *
  * @see docs/hlq_docs/2026-03-20-agentic-pipeline-8step-design.md §4.6
@@ -35,8 +35,7 @@ const SYSTEM_PROMPT = `You detect ambiguity in extracted semantic frames.
 Check for exactly 2 types:
 
 1. **vagueness** — A slot value contains hedging language that makes it imprecise.
-   Indicators: "about", "around", "maybe", "probably", "approximately", "roughly",
-   "大概", "左右", "可能", "差不多", "大约", "估计"
+   Indicators: "about", "around", "maybe", "probably", "approximately", "roughly"
    Only flag when the vague language meaningfully reduces precision.
    Do NOT flag qualitative descriptions (e.g., "good food" is not vague).
 
@@ -50,8 +49,8 @@ Output ONLY JSON:
       "type": "vagueness",
       "frame_id": "f_001",
       "slot_key": "budget",
-      "question": "The budget is '5000左右'. Do you have an exact number?",
-      "current_value": "5000左右"
+      "question": "The budget is 'about 5000'. Do you have an exact number?",
+      "current_value": "about 5000"
     }
   ]
 }

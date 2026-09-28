@@ -87,6 +87,13 @@ export function CanvasToolbar({
             {stats.leaves} output leaf{stats.leaves === 1 ? '' : 's'}
           </span>
         </div>
+        {stateHref ? (
+          <Button asChild size="sm" variant="canvas-outline">
+            <Link data-intro-target="canvas-back-to-state" href={stateHref}>
+              <ArrowLeft aria-hidden="true" className="size-4" /> State
+            </Link>
+          </Button>
+        ) : null}
         <Button
           className="h-8 w-8 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
           onClick={onFitView}

@@ -88,17 +88,22 @@ export function jaccard(tokensA: string[], tokensB: string[]): number {
  * LCS algorithm that returns indices instead of values
  * This allows us to preserve original case when building the diff
  */
-export function lcsIndices(a: string[], b: string[]): { aIndices: number[]; bIndices: number[] } {
+export function lcsIndices(
+  a: string[],
+  b: string[],
+  equals: (left: string, right: string) => boolean = (left, right) =>
+    left.toLowerCase() === right.toLowerCase()
+): { aIndices: number[]; bIndices: number[] } {
   const m = a.length;
   const n = b.length;
   const dp: number[][] = Array(m + 1)
     .fill(null)
     .map(() => Array(n + 1).fill(0));
 
-  // Build DP table using lowercase comparison
+  // Existing callers use case-insensitive comparison; review can request exact equality.
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
-      if (a[i - 1].toLowerCase() === b[j - 1].toLowerCase()) {
+      if (equals(a[i - 1], b[j - 1])) {
         dp[i][j] = dp[i - 1][j - 1] + 1;
       } else {
         dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
@@ -112,7 +117,7 @@ export function lcsIndices(a: string[], b: string[]): { aIndices: number[]; bInd
   let i = m;
   let j = n;
   while (i > 0 && j > 0) {
-    if (a[i - 1].toLowerCase() === b[j - 1].toLowerCase()) {
+    if (equals(a[i - 1], b[j - 1])) {
       aIndices.unshift(i - 1);
       bIndices.unshift(j - 1);
       i--;

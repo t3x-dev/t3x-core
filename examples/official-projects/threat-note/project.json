@@ -1,0 +1,30 @@
+{
+  "slug": "threat-note",
+  "title": "Threat note",
+  "description": "Write a threat, its asset and the accepted mitigation.",
+  "license": "Apache-2.0",
+  "tags": ["security", "detection", "ecosystem:t3x"],
+  "companionSchema": {
+    "canonicalName": "t3x/threat-note",
+    "version": "1.0.0"
+  },
+  "initial": {
+    "record": {
+      "asset": "Catalog API",
+      "threat": "Unreviewed community schema",
+      "mitigation": "Publish only hashed official releases",
+      "status": "open"
+    }
+  },
+  "demonstration": {
+    "message": "Accept the mitigation",
+    "value": {
+      "record": {
+        "asset": "Catalog API",
+        "threat": "Unreviewed community schema",
+        "mitigation": "Publish only hashed official releases",
+        "status": "accepted"
+      }
+    }
+  }
+}

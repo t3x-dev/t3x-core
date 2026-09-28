@@ -16,7 +16,7 @@ test.describe('Error Scenarios', () => {
     await page.goto('/project/proj_invalid_nonexistent');
 
     await expect(
-      page.getByText('This project is no longer available.', { exact: true })
+      page.getByText('Project not found', { exact: true })
     ).toBeVisible({ timeout: 15000 });
   });
 
@@ -35,7 +35,7 @@ test.describe('Error Scenarios', () => {
     await page.goto('/project/proj_invalid/leaf/leaf_invalid');
 
     await expect(
-      page.getByText('This leaf is no longer available.', { exact: true })
+      page.getByRole('alert').filter({ hasText: 'Leaf not found: leaf_invalid' })
     ).toBeVisible({ timeout: 15000 });
   });
 
@@ -67,7 +67,7 @@ test.describe('Error Scenarios', () => {
     await page.goto('/project/proj_nonexistent_recovery');
 
     await expect(
-      page.getByText('This project is no longer available.', { exact: true })
+      page.getByText('Project not found', { exact: true })
     ).toBeVisible({ timeout: 15000 });
 
     // Navigate to home — should work normally

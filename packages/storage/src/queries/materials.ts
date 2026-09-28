@@ -148,3 +148,18 @@ function rowToMaterial(row: MaterialRecord): Material {
     created_by: row.createdBy ?? undefined,
   };
 }
+
+/** Pin source versions during an authoring publication transaction. */
+export async function lockMaterialsForAuthoring(
+  db: AnyDB,
+  ids: readonly string[]
+): Promise<Material[]> {
+  if (ids.length === 0) return [];
+  const rows = await db
+    .select()
+    .from(materials)
+    .where(inArray(materials.id, [...new Set(ids)].sort()))
+    .orderBy(materials.id)
+    .for('share');
+  return rows.map(rowToMaterial);
+}

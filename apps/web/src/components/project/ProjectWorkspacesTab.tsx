@@ -68,7 +68,13 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
     : branchWorkspace;
   const visibleCandidates = branch ? (selectedCandidate ? [selectedCandidate] : []) : candidates;
   const selectedWorkspaceId = branch ? (selectedCandidate?.id ?? null) : requestedWorkspaceId;
-  const navigationError = projectWorkspaces.error;
+  const navigationError =
+    projectWorkspaces.error ??
+    (requestedWorkspaceId && !requestedCandidate
+      ? `Workspace ${requestedWorkspaceId} was not found in this project.`
+      : requestedWorkspaceId && branch && requestedCandidate?.targetBranch !== branch
+        ? `Workspace ${requestedWorkspaceId} belongs to ${requestedCandidate?.targetBranch}, not ${branch}.`
+        : null);
 
   const handleWorkspaceSelect = useCallback(
     (workspaceId: string) => {

@@ -1,14 +1,11 @@
+import { ChevronDown, Globe2, Plus } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { LogoIcon } from '@/components/chat/sidebar/LogoIcon';
 import { ProjectTabs } from '@/components/project/ProjectTabs';
-import type { ProjectTabId } from '@/components/project/projectTabModel';
-import {
-  DEFAULT_OWNER_SLUG,
-  getProjectIdRepoPath,
-  getProjectRepoPath,
-} from '@/domain/project/repoPath';
+import { getProjectTabSegment, type ProjectTabId } from '@/components/project/projectTabModel';
+import { getProjectIdRepoPath, getProjectRepoPath } from '@/domain/project/repoPath';
 import type { YSchemaValidationSummary } from '@/domain/project/yschemaValidation';
-import { cn } from '@/utils/cn';
 
 export interface ProjectShellProject {
   id?: string;
@@ -19,88 +16,142 @@ export interface ProjectShellProject {
   commitsCount?: number;
   branchesCount?: number;
   outputsCount?: number;
+  visibility?: 'private' | 'unlisted' | 'public';
   yschemaValidation?: YSchemaValidationSummary | null;
 }
 
 export interface ProjectShellProps {
   activeTab: ProjectTabId;
+  branch?: string | null;
   projectIdNavigation?: boolean;
+  pullRequestNumber?: number;
+  ownerSlug?: string;
+  immersive?: boolean;
   children: ReactNode;
   project: ProjectShellProject;
+  workspaceId?: string | null;
 }
 
 export function ProjectShell({
   activeTab,
+  branch,
   children,
+  immersive = false,
   project,
   projectIdNavigation = false,
+  ownerSlug,
+  pullRequestNumber,
+  workspaceId,
 }: ProjectShellProps) {
-  const status = project.status ?? 'draft';
-  const repoPath =
-    projectIdNavigation && project.id
-      ? getProjectIdRepoPath(project.id)
-      : getProjectRepoPath(project);
-
+  const visibilityLabel =
+    project.visibility === 'public'
+      ? 'Public'
+      : project.visibility === 'unlisted'
+        ? 'Unlisted'
+        : 'Private';
+  const useProjectIdNavigation = Boolean(project.id && (projectIdNavigation || !ownerSlug));
+  const repoPath = useProjectIdNavigation
+    ? getProjectIdRepoPath(project.id!)
+    : getProjectRepoPath(project, ownerSlug);
+  const returnParams = new URLSearchParams();
+  if (activeTab !== 'state' && activeTab !== 'settings') {
+    returnParams.set('tab', getProjectTabSegment(activeTab));
+  }
+  if (branch) returnParams.set('branch', branch);
+  if (workspaceId && (activeTab === 'workspaces' || activeTab === 'schemas')) {
+    returnParams.set('workspace', workspaceId);
+  }
+  if (pullRequestNumber && activeTab === 'reviews') {
+    returnParams.set('pr', String(pullRequestNumber));
+  }
+  const returnQuery = returnParams.toString();
+  const returnTo = returnQuery ? `${repoPath}?${returnQuery}` : repoPath;
+  const settingsHref = project.id
+    ? `/project/${encodeURIComponent(project.id)}/settings?returnTo=${encodeURIComponent(returnTo)}`
+    : '/settings';
+  const ownerLabel = ownerSlug || 'Projects';
+  const ownerMark = ownerSlug ? ownerSlug.slice(0, 2).toUpperCase() : 'P';
+  const newRepositoryHref = ownerSlug ? `/${encodeURIComponent(ownerSlug)}/new` : '/';
   return (
     <div className="flex h-dvh min-h-[680px] flex-col overflow-hidden bg-[var(--surface-app)] text-[var(--text-primary)] [--text-base:14px] [--text-lg:16px] [--text-sm:13px] [--text-xs:12px]">
-      <header className="flex shrink-0 flex-col border-b border-[var(--stroke-divider)] bg-[var(--surface-elevated)] px-3 min-[1200px]:h-14 min-[1200px]:flex-row min-[1200px]:gap-6 min-[1200px]:px-5">
-        <div className="flex h-14 min-w-0 shrink-0 items-center gap-3 min-[1200px]:max-w-[360px]">
-          <Link
-            aria-label={projectIdNavigation ? 'Back to projects' : `Back to ${DEFAULT_OWNER_SLUG}`}
-            className="inline-flex h-8 shrink-0 items-center text-xl font-extrabold leading-none tracking-normal text-[var(--text-primary)] focus-visible:rounded-[var(--radius-md)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
-            href="/"
-          >
-            T3X
-          </Link>
-          <span aria-hidden="true" className="h-5 w-px shrink-0 bg-[var(--stroke-divider)]" />
-          <div className="flex h-7 min-w-0 max-w-[min(360px,55vw)] items-center gap-1.5 rounded-[var(--radius-md)] bg-[color-mix(in_srgb,var(--text-primary)_4%,var(--surface-elevated))] px-2.5 text-[13px] leading-[18px] shadow-[var(--fx-shadow-sm)]">
-            <span className="shrink-0 font-medium text-[var(--text-tertiary)]">
-              {projectIdNavigation ? 'Project' : DEFAULT_OWNER_SLUG}
-            </span>
-            <span aria-hidden="true" className="shrink-0 text-[var(--text-tertiary)]">
-              /
-            </span>
-            <h1
-              title={project.name}
-              className="min-w-0 truncate font-semibold text-[var(--text-primary)]"
+      <header className="flex h-24 shrink-0 flex-col border-b border-[var(--stroke-divider)] bg-[var(--surface-elevated)] px-3">
+        <div className="flex h-14 min-w-0 shrink-0 items-center justify-between gap-6 px-1">
+          <div className="flex min-w-0 items-center gap-3">
+            <Link
+              aria-label="Back to projects"
+              className="inline-flex h-8 shrink-0 items-center text-xl font-extrabold leading-none tracking-normal text-[var(--text-primary)] focus-visible:rounded-[var(--radius-md)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
+              href="/"
             >
-              {project.name}
-            </h1>
+              T3X
+            </Link>
+            <span aria-hidden="true" className="inline-flex size-8 shrink-0 [&_svg]:size-8">
+              <LogoIcon />
+            </span>
+            <div className="flex min-w-0 items-center gap-1 text-[13px] leading-5">
+              <span className="shrink-0 text-[var(--text-secondary)]">{ownerLabel}</span>
+              <span aria-hidden="true" className="text-[var(--text-tertiary)]">
+                /
+              </span>
+              <h1
+                title={project.name}
+                className="min-w-0 truncate font-semibold text-[var(--text-primary)]"
+              >
+                {project.name}
+              </h1>
+              <ChevronDown
+                aria-hidden="true"
+                className="size-3.5 shrink-0 text-[var(--accent-commit)]"
+              />
+            </div>
+            <span className="inline-flex h-6 shrink-0 items-center gap-1 rounded-[var(--radius-pill)] border border-[var(--accent-commit)]/15 bg-[var(--accent-commit-soft)] px-2 text-[11px] font-medium text-[var(--accent-commit)]">
+              <Globe2 aria-hidden="true" className="size-3" />
+              {visibilityLabel}
+            </span>
+            <p className="sr-only">{project.description || 'Structured state repository'}</p>
           </div>
-          <p className="sr-only">{project.description || 'Structured state repository'}</p>
-          <span
-            className={cn(
-              'inline-flex shrink-0 items-center gap-1.5 text-xs font-medium',
-              status === 'active'
-                ? 'text-[var(--status-success)]'
-                : status === 'paused'
-                  ? 'text-[var(--status-warning)]'
-                  : 'text-[var(--text-tertiary)]'
-            )}
-          >
+
+          <nav aria-label="Global" className="hidden shrink-0 items-center gap-5 min-[760px]:flex">
+            <Link
+              className="text-xs font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] focus-visible:rounded-[var(--radius-control)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
+              href="/templates"
+            >
+              Explore
+            </Link>
+            <Link
+              className="text-xs font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] focus-visible:rounded-[var(--radius-control)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
+              href="/"
+            >
+              Your projects
+            </Link>
+            <Link
+              className="inline-flex h-[34px] items-center gap-1.5 rounded-[5px] border border-[var(--stroke-default)] bg-[var(--surface-card)] px-3 text-xs font-medium text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)] transition-colors hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
+              href={newRepositoryHref}
+            >
+              <Plus aria-hidden="true" className="size-3.5" />
+              {ownerSlug ? 'Create new' : 'Browse projects'}
+            </Link>
             <span
-              aria-hidden="true"
-              className={cn(
-                'size-1.5 rounded-full',
-                status === 'active'
-                  ? 'bg-[var(--status-success)]'
-                  : status === 'paused'
-                    ? 'bg-[var(--status-warning)]'
-                    : 'bg-[var(--text-tertiary)]'
-              )}
-            />
-            {status}
-          </span>
+              aria-label={ownerSlug ? `Owner ${ownerSlug}` : 'Projects'}
+              className="inline-flex size-8 items-center justify-center rounded-full bg-[var(--hover-bg-strong)] text-xs font-semibold text-[var(--text-secondary)]"
+              role="img"
+            >
+              {ownerMark.charAt(0)}
+            </span>
+          </nav>
         </div>
         <ProjectTabs
           activeTab={activeTab}
+          branch={branch}
           repoPath={repoPath}
-          projectIdNavigation={projectIdNavigation}
+          projectIdNavigation={useProjectIdNavigation}
+          settingsHref={settingsHref}
+          stacked
+          workspaceId={workspaceId}
         />
       </header>
       <main
         className={
-          activeTab === 'state' || activeTab === 'workspaces'
+          immersive || activeTab === 'state' || activeTab === 'workspaces'
             ? 'min-h-0 flex-1 overflow-hidden'
             : 'min-h-0 flex-1 overflow-auto'
         }

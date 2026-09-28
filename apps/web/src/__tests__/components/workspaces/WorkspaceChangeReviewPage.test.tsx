@@ -58,6 +58,7 @@ function snapshotResponse() {
       projectId: 'proj_1',
       workspaceId: 'workspace_prd_handoff',
       transitionId: `trn_${'1'.repeat(32)}`,
+      review: { precondition: { refName: 'feature/release' } },
       transition: { mode: 'transition' },
     },
     change_projection: {
@@ -106,7 +107,7 @@ describe('WorkspaceChangeReviewPage', () => {
 
     expect(screen.getByRole('link', { name: 'Workspace' })).toHaveAttribute(
       'href',
-      '/project/proj_1/workspaces?tab=workspaces&workspace=workspace_prd_handoff'
+      '/project/proj_1?tab=workspaces&workspace=workspace_prd_handoff&workspaceMode=review&branch=feature%2Frelease'
     );
     expect(
       await screen.findByRole('heading', { name: 'Review Workspace change' })
@@ -167,7 +168,7 @@ it('links the exact committed State and replaces the obsolete pre-decision snaps
   );
   expect(screen.getByRole('link', { name: 'View State & export' })).toHaveAttribute(
     'href',
-    '/project/proj_1?commit=sha256%3Acommitted&view=overview'
+    '/project/proj_1?branch=feature%2Frelease&commit=sha256%3Acommitted&view=overview'
   );
   expect(replace).toHaveBeenCalledWith(
     '/project/proj_1/changes/workspace_prd_handoff/rvs_committed'

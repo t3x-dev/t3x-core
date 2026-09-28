@@ -123,14 +123,14 @@ function ModuleArtifactDetail({
             </SectionHeading>
             <div
               aria-label={`${artifact.title} instance views`}
-              className="flex w-full rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-0.5 min-[561px]:w-auto"
+              className="flex h-7 w-full gap-[3px] rounded-[4px] bg-[var(--surface-app)] p-[1.5px] min-[561px]:w-auto"
               role="tablist"
             >
               {MODULE_VIEWS.map((item) => (
                 <button
                   aria-controls={`${panelId}-panel`}
                   aria-selected={view === item.id}
-                  className={`h-7 flex-1 rounded-[5px] px-3 text-[10px] font-semibold transition-colors min-[561px]:flex-none ${view === item.id ? 'bg-[var(--surface-card)] text-[var(--accent-commit)] shadow-sm' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                  className={`h-full flex-1 rounded-[4px] border px-3 text-[10px] font-semibold transition-colors min-[561px]:flex-none ${view === item.id ? 'border-[var(--stroke-divider)] bg-[var(--surface-elevated)] text-[var(--text-primary)]' : 'border-transparent text-[var(--text-secondary)] hover:bg-[var(--surface-panel)] hover:text-[var(--text-primary)]'}`}
                   id={`${panelId}-${item.id}-tab`}
                   key={item.id}
                   onClick={() => setView(item.id)}

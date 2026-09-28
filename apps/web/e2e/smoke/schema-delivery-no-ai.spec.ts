@@ -18,13 +18,13 @@ test('no-AI definition adoption, native repair, reviewed decision and exact Comm
     expect(saved.ok(), await saved.text()).toBe(true);
     await page.setViewportSize({ width: 1480, height: 960 });
     await page.goto(`${path}?tab=schemas&schemaView=discover`, { waitUntil: 'networkidle' });
-    await page.getByRole('textbox', { name: 'Search definitions' }).fill('Care checklist');
-    await page.getByRole('textbox', { name: 'Search definitions' }).press('Enter');
+    await page.getByRole('textbox', { name: 'Search projects and schemas' }).fill('Care checklist');
+    await page.getByRole('textbox', { name: 'Search projects and schemas' }).press('Enter');
     await expect(page).toHaveURL(/schemaView=browse/);
     await page.getByRole('button', { name: 'Explore Care checklist 1.0.0', exact: true }).click();
-    await page.getByRole('button', { name: 'Add to Studio', exact: true }).click();
     await page.getByRole('button', { name: 'Add & open Studio', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Sample preview' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Sample', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Sample preview' })).toBeVisible();
     await page.getByLabel('Target Workspace').selectOption(workspaceId);
     await page.getByRole('button', { name: 'Review & apply', exact: true }).click();
     await page.getByRole('dialog', { name: 'Apply exact definition' }).getByRole('button', { name: 'Confirm & apply' }).click();
@@ -41,8 +41,9 @@ test('no-AI definition adoption, native repair, reviewed decision and exact Comm
       { key: 'checklist', slots: { title: 'Daily dog care' }, children: [] },
       { key: 'items', slots: {}, children: [{ key: 'water', slots: { done: false, ...(withTask ? { task: 'Refresh the water bowl' } : {}) }, children: [] }] },
     ] }], relations: [] });
-    await page.getByRole('button', { name: 'Edit content', exact: true }).click();
-    const editor = page.getByRole('dialog', { name: 'Edit Workspace content' });
+    await page.getByRole('tab', { name: 'Review', exact: true }).click();
+    await page.getByRole('button', { name: 'Edit structured State', exact: true }).click();
+    const editor = page.getByRole('region', { name: 'Edit structured content', exact: true }).locator('..');
     const addNode = async (parent: string, name: string) => {
       await editor.getByLabel(`Show Child node in ${parent}`, { exact: true }).click();
       await editor.getByRole('textbox', { name: `Child node in ${parent}`, exact: true }).fill(name);
@@ -75,7 +76,7 @@ test('no-AI definition adoption, native repair, reviewed decision and exact Comm
     await expect(editor.getByRole('link', { name: 'Open Changes', exact: true })).toHaveCount(0);
     const repaired = await browserReview();
     expect(repaired.precondition.effect_digest).not.toBe(incomplete.precondition.effect_digest);
-    await editor.getByRole('region', { name: 'Edit structured content' }).evaluate((element) => { element.scrollTop = 0; });
+    await editor.evaluate((element) => { element.scrollTop = 0; });
     await page.screenshot({ path: testInfo.outputPath('delivery-editor.png'), animations: 'disabled' });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: testInfo.outputPath('delivery-editor-mobile.png'), animations: 'disabled' });

@@ -730,7 +730,7 @@ curateRoutes.openapi(curatePreviewRoute, async (c) => {
       // If conversation has turns, use Ring3 extraction
       if (turns.length > 0) {
         // Use Ring3 segments (rule-based text splitting)
-        // This follows the "Core 优先原則" in CLAUDE.md
+        // This follows the "Core first" principle in CLAUDE.md
         const extracted = extractChunksFromTurns(
           turns.map((t) => ({
             role: t.role,

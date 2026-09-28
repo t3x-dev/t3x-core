@@ -14,10 +14,12 @@ import {
   type LLMProvider,
   LLMProviderError,
   type LLMResult,
+  type LLMTextStreamEvent,
   type StructuredResult,
 } from '../../llm/types';
 import { extractJsonBlock } from './jsonExtract';
 import { tryParseWithRepair } from './jsonRepair';
+import { readProviderSse } from './sse';
 import { normalizeGeminiStructuredData, toGeminiStructuredSchema } from './structuredSchema';
 
 /**
@@ -46,6 +48,17 @@ async function fetchWithProxy(url: string, options: RequestInit): Promise<Respon
     return response as unknown as Response;
   }
   return fetch(url, options);
+}
+
+async function fetchWithTransientRetry(url: string, options: RequestInit): Promise<Response> {
+  const retryable = new Set([429, 500, 502, 503, 504]);
+  const delays = [350, 900];
+  for (let attempt = 0; ; attempt += 1) {
+    const response = await fetchWithProxy(url, options);
+    if (!retryable.has(response.status) || attempt >= delays.length) return response;
+    await response.body?.cancel();
+    await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+  }
 }
 
 export interface GeminiProviderConfig {
@@ -160,7 +173,7 @@ export class GeminiProvider implements LLMProvider {
     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
-      const response = await fetchWithProxy(url, {
+      const response = await fetchWithTransientRetry(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -258,7 +271,7 @@ export class GeminiProvider implements LLMProvider {
     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
-      const response = await fetchWithProxy(url, {
+      const response = await fetchWithTransientRetry(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey },
         body: JSON.stringify(requestBody),
@@ -315,6 +328,101 @@ export class GeminiProvider implements LLMProvider {
     }
   }
 
+  async *streamFromPrompt(
+    prompt: LLMPrompt,
+    options: LLMGenerateOptions,
+    signal?: AbortSignal
+  ): AsyncGenerator<LLMTextStreamEvent> {
+    const temperature = options.temperature ?? 0.3;
+    const maxTokens = options.maxTokens ?? 2048;
+    const model = options.model ?? this.model;
+    const url = `${this.baseUrl}/models/${model}:streamGenerateContent?alt=sse`;
+    const thinkingConfig = this.buildThinkingConfig(model);
+    const contents = prompt.messages.map((message) => ({
+      role: message.role === 'assistant' ? 'model' : message.role,
+      parts: [
+        {
+          text:
+            typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
+        },
+      ],
+    }));
+    const requestBody: Record<string, unknown> = {
+      contents,
+      generationConfig: {
+        ...(this.supportsLegacyGenerationConfig(model) && { temperature }),
+        maxOutputTokens: maxTokens,
+        ...(thinkingConfig && { thinkingConfig }),
+        ...(options.stopSequences && { stopSequences: options.stopSequences }),
+      },
+    };
+    if (prompt.system) requestBody.systemInstruction = { parts: [{ text: prompt.system }] };
+
+    const controller = new AbortController();
+    const abort = () => controller.abort(signal?.reason);
+    if (signal?.aborted) abort();
+    else signal?.addEventListener('abort', abort, { once: true });
+    const timeoutId = setTimeout(() => controller.abort(), 120_000);
+    let usage = { inputTokens: 0, outputTokens: 0 };
+    try {
+      const response = await fetchWithTransientRetry(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        throw new LLMProviderError(
+          this.id,
+          response.status,
+          `API request failed: ${response.status} ${await response.text()}`
+        );
+      }
+      for await (const frame of readProviderSse(response)) {
+        let data: {
+          candidates?: Array<{
+            content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+          }>;
+          usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+        };
+        try {
+          data = JSON.parse(frame.data) as typeof data;
+        } catch {
+          continue;
+        }
+        if (data.usageMetadata) {
+          usage = {
+            inputTokens: data.usageMetadata.promptTokenCount ?? usage.inputTokens,
+            outputTokens: data.usageMetadata.candidatesTokenCount ?? usage.outputTokens,
+          };
+        }
+        for (const candidate of data.candidates ?? []) {
+          for (const part of candidate.content?.parts ?? []) {
+            if (part.thought !== true && part.text) yield { type: 'text', text: part.text };
+          }
+        }
+      }
+      yield { type: 'done', usage };
+    } catch (error) {
+      if (error instanceof LLMProviderError) throw error;
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new LLMProviderError(
+          this.id,
+          undefined,
+          signal?.aborted ? 'Request cancelled' : 'Request timeout after 120000ms'
+        );
+      }
+      throw new LLMProviderError(
+        this.id,
+        undefined,
+        `Request failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    } finally {
+      clearTimeout(timeoutId);
+      signal?.removeEventListener('abort', abort);
+    }
+  }
+
   async generateStructured<T>(
     prompt: LLMPrompt,
     schema: ZodType<T>,
@@ -352,7 +460,7 @@ export class GeminiProvider implements LLMProvider {
     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
-      const response = await fetchWithProxy(url, {
+      const response = await fetchWithTransientRetry(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey },
         body: JSON.stringify(requestBody),

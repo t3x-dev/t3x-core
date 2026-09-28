@@ -24,6 +24,39 @@ export interface UpdateAuthMeInput {
   default_extraction_style?: ExtractionStyleConfig | null;
 }
 
+export interface PersonalModelPreferences {
+  compose_default: string;
+  fallback_model: string | null;
+  quick_switcher: Array<{ model: string; visible: boolean; available: boolean }>;
+}
+
+export interface UpdatePersonalModelPreferences {
+  compose_default: string;
+  fallback_model: string | null;
+  quick_switcher: Array<{ model: string; visible: boolean }>;
+}
+
+export interface ProfileSession {
+  id: string;
+  name: string;
+  current: boolean;
+  last_active: string | null;
+}
+
+export interface ProfileSettings {
+  name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+  timezone: string;
+  sessions: ProfileSession[];
+}
+
+export interface UpdateProfileSettings {
+  name: string;
+  avatar_url?: string | null;
+  timezone: string;
+}
+
 /**
  * Fetch the current authenticated user's profile.
  */
@@ -42,6 +75,46 @@ export async function updateAuthMe(input: UpdateAuthMeInput): Promise<AuthMeData
     body: JSON.stringify(input),
   });
   return handleResponse<AuthMeData>(res);
+}
+
+export async function getPersonalModelPreferences(): Promise<PersonalModelPreferences> {
+  const res = await fetchWithTimeout(`${API_V1}/auth/me/model-preferences`);
+  return handleResponse<PersonalModelPreferences>(res);
+}
+
+export async function updatePersonalModelPreferences(
+  input: UpdatePersonalModelPreferences
+): Promise<PersonalModelPreferences> {
+  const res = await fetchWithTimeout(`${API_V1}/auth/me/model-preferences`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return handleResponse<PersonalModelPreferences>(res);
+}
+
+export async function getProfileSettings(): Promise<ProfileSettings> {
+  const res = await fetchWithTimeout(`${API_V1}/auth/me/profile-settings`);
+  return handleResponse<ProfileSettings>(res);
+}
+
+export async function updateProfileSettings(
+  input: UpdateProfileSettings
+): Promise<ProfileSettings> {
+  const res = await fetchWithTimeout(`${API_V1}/auth/me/profile-settings`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return handleResponse<ProfileSettings>(res);
+}
+
+export async function revokeProfileSession(id: string): Promise<void> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/auth/me/profile-settings/sessions/${encodeURIComponent(id)}`,
+    { method: 'DELETE' }
+  );
+  await handleResponse<{ revoked: true }>(res);
 }
 
 // ── Login / register (pre-session) ──

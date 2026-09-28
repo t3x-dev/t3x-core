@@ -18,6 +18,21 @@ export type { EdgeEvidence, KnowledgeEdge, KnowledgeNode, NeighborNode, NodeMemb
 // State Index Operations
 // ============================================================================
 
+export interface BuildKnowledgeGraphResult {
+  commit_count: number;
+  nodes_created: number;
+  members_created: number;
+  edges_created: number;
+}
+
+export async function buildKnowledgeGraph(projectId: string): Promise<BuildKnowledgeGraphResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/knowledge-graph/build`,
+    { method: 'POST' }
+  );
+  return handleResponse<BuildKnowledgeGraphResult>(res);
+}
+
 /**
  * List knowledge nodes in a project.
  */

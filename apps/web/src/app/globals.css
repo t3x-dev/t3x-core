@@ -10,6 +10,54 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@keyframes sd-fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+[data-sd-animate] {
+  animation: var(--sd-animation, sd-fadeIn) var(--sd-duration, 150ms) var(--sd-easing, ease)
+    var(--sd-delay, 0ms) both;
+}
+
+@keyframes sd-markerIn {
+  from {
+    color: transparent;
+  }
+}
+
+[data-sd-animate-marker]::marker {
+  animation: sd-markerIn var(--sd-marker-duration, 150ms) var(--sd-marker-easing, ease)
+    var(--sd-marker-delay, 0ms) both;
+}
+
+html[data-accent-color="purple"] {
+  --color-brand: #7c3aed;
+  --color-brand-hover: #6d28d9;
+  --primary: #7c3aed;
+  --ring: #7c3aed;
+}
+
+html[data-accent-color="teal"] {
+  --color-brand: #0d9488;
+  --color-brand-hover: #0f766e;
+  --primary: #0d9488;
+  --ring: #0d9488;
+}
+
+html[data-reduced-motion="true"] *,
+html[data-reduced-motion="true"] *::before,
+html[data-reduced-motion="true"] *::after {
+  scroll-behavior: auto !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
 /* ============================================
    T3X Design System — Token Authority Hierarchy
    (See: frontend-art-template.md §1.0)
@@ -447,6 +495,18 @@
 }
 
 /* Dark mode - calm semantic workbench */
+:root:not(.dark) .workspace-rendered-review-theme {
+  --text-primary: #101b48;
+  --text-secondary: #435482;
+  --text-tertiary: #69779c;
+  --accent-commit: #0645ed;
+  --accent-commit-soft: rgba(78, 104, 242, 0.1);
+  --surface-panel: #fff;
+  --surface-app: #f4f6fc;
+  --stroke-default: #d9e0f2;
+  --stroke-divider: #e6eaf5;
+}
+
 .dark {
   --color-text: #f0f4fa;
   --color-text-secondary: #b5becd;

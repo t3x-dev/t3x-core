@@ -54,7 +54,10 @@ export interface ChatStreamEvent {
   citations?: Citation[];
 }
 
-function splitSseFrames(buffer: string, final = false): { frames: string[]; remaining: string } {
+export function splitSseFrames(
+  buffer: string,
+  final = false
+): { frames: string[]; remaining: string } {
   const frames: string[] = [];
   const delimiter = /\r?\n\r?\n/g;
   let frameStart = 0;
@@ -74,7 +77,7 @@ function splitSseFrames(buffer: string, final = false): { frames: string[]; rema
   return { frames, remaining };
 }
 
-function frameData(frame: string): string | null {
+export function frameData(frame: string): string | null {
   const data = frame
     .split(/\r?\n/)
     .map((line) => line.trim())

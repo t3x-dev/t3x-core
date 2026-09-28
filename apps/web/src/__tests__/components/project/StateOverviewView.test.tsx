@@ -47,9 +47,12 @@ it('keeps author Markdown inert and prevents remote image requests', () => {
 });
 it('focuses even an empty JSON key and supports expanding/restoring the render', () => {
   render(<StateOverviewView {...props} />);
-  fireEvent.click(screen.getByRole('button', { name: 'string' }));
-  expect(screen.getByRole('button', { name: /All sections/ })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Contents' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Guide' }));
+  expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Expand rendered State' }));
+  fireEvent.click(screen.getByRole('button', { name: '(empty key)' }));
+  expect(screen.getByRole('button', { name: /All sections/ })).toBeVisible();
   expect(screen.queryByRole('region', { name: 'Project introduction' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Restore split view' }));
   expect(screen.getByRole('region', { name: 'Project introduction' })).toBeVisible();

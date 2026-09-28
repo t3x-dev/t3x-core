@@ -12,6 +12,7 @@ import {
   type LocalProviderCredentialInput,
   type LocalProviderId,
   type LocalProviderStatus,
+  type ModelAccessConfig,
   type ProviderInfo,
   type RoleAssignment,
   type TestConnectionResult,
@@ -24,6 +25,7 @@ export type {
   LocalProviderCredentialInput,
   LocalProviderId,
   LocalProviderStatus,
+  ModelAccessConfig,
   ProviderInfo,
   RoleAssignment,
   TestConnectionResult,
@@ -332,6 +334,22 @@ export async function updateProviderConfig(
     body: JSON.stringify({ roles }),
   });
   return handleResponse<{ roles: RoleAssignment[] }>(res);
+}
+
+export async function getModelAccessConfig(): Promise<ModelAccessConfig> {
+  const res = await fetchWithTimeout(`${API_V1}/providers/model-access`);
+  return handleResponse<ModelAccessConfig>(res);
+}
+
+export async function updateModelAccessConfig(
+  config: ModelAccessConfig
+): Promise<ModelAccessConfig> {
+  const res = await fetchWithTimeout(`${API_V1}/providers/model-access`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  });
+  return handleResponse<ModelAccessConfig>(res);
 }
 
 // ============================================================================

@@ -7,6 +7,7 @@
 
 import { useCallback } from 'react';
 import { deleteKnowledgeGraph } from '@/commands/knowledgeGraph';
+import { buildKnowledgeGraph } from '@/infrastructure/knowledge-graph';
 import {
   fetchKnowledgeNode,
   fetchKnowledgeNodes,
@@ -17,6 +18,7 @@ import { useKnowledgeGraphStore } from '@/store/knowledgeGraphStore';
 
 // Module-scoped so stale requests are discarded even across remounts.
 let fetchGeneration = 0;
+let currentProjectId: string | null = null;
 
 export function useKnowledgeGraph() {
   const nodes = useKnowledgeGraphStore((s) => s.nodes);
@@ -31,6 +33,10 @@ export function useKnowledgeGraph() {
   const fetchNodes = useCallback(async (projectId: string): Promise<void> => {
     const gen = ++fetchGeneration;
     const store = useKnowledgeGraphStore.getState();
+    if (currentProjectId !== projectId) {
+      store.clearGraph();
+      currentProjectId = projectId;
+    }
     store.setLoading(true);
     store.setError(null);
     try {
@@ -92,6 +98,7 @@ export function useKnowledgeGraph() {
   }, []);
 
   return {
+    buildKnowledgeGraph,
     nodes,
     selectedNodeId,
     detailNode,

@@ -230,6 +230,37 @@ describe('ProjectDetailPage — project-first shell states', () => {
     );
   });
 
+  it('normalizes legacy tab links under the actual repository owner', async () => {
+    searchParamsValue = new URLSearchParams(
+      'tab=schemas&branch=feature%2Frelease&workspace=workspace_7'
+    );
+    pathnameValue = '/orbit-labs/test-project';
+    routeParamsValue = {};
+
+    render(
+      <ProjectDetailPageContent ownerSlugOverride="orbit-labs" projectIdOverride="proj_test" />
+    );
+
+    await waitFor(() =>
+      expect(replaceMock).toHaveBeenCalledWith(
+        '/orbit-labs/test-project/schemas?branch=feature%2Frelease&workspace=workspace_7',
+        { scroll: false }
+      )
+    );
+  });
+
+  it('redirects the legacy project settings query without rendering the old settings panel', () => {
+    searchParamsValue = new URLSearchParams('tab=settings');
+    pathnameValue = '/project/proj_test';
+
+    const view = render(<ProjectDetailPage />);
+
+    expect(replaceMock).toHaveBeenCalledWith(
+      '/project/proj_test/settings?returnTo=%2Fproject%2Fproj_test'
+    );
+    expect(view.container).toBeEmptyDOMElement();
+  });
+
   it('renders project detail from an owner/repo route override', () => {
     routeParamsValue = { owner: 't3x-dev', repo: 'test-project' };
     useChatStore.setState({ activeProjectId: null, activeConversationId: null });
@@ -248,7 +279,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     );
 
     expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('heading', { name: 'What will you define next?' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Curated schemas' })).toBeInTheDocument();
 
     view.rerender(
       <ProjectDetailPageContent initialTabOverride="workspaces" projectIdOverride="proj_test" />
@@ -453,10 +484,9 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
     expect((await screen.findAllByText('Validation pending')).length).toBeGreaterThan(0);
-    expect(await screen.findAllByText('Missing')).toHaveLength(2);
+    expect((await screen.findAllByText(/^missing$/i)).length).toBeGreaterThan(0);
     expect(screen.queryByRole('region', { name: 'State overview' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Revision details'));
     fireEvent.click(screen.getByRole('button', { name: 'Run validation' }));
 
     await waitFor(() => {
@@ -480,10 +510,10 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByRole('banner')).toHaveTextContent('Project');
     expect(screen.queryByText('/t3x-dev/test-project')).not.toBeInTheDocument();
     expect(screen.queryByText('repo')).not.toBeInTheDocument();
-    expect(screen.getByText('draft')).toBeInTheDocument();
+    expect(screen.getByText('Private')).toBeInTheDocument();
     expect(screen.queryByText('Validation pending')).not.toBeInTheDocument();
     const projectNavigation = screen.getByRole('navigation', { name: 'Project views' });
-    expect(projectNavigation.closest('header')).toHaveClass('min-[1200px]:h-14');
+    expect(projectNavigation.closest('header')).toHaveClass('h-24');
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
@@ -528,9 +558,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     );
     expect(screen.queryByText('PRD audience handoff')).not.toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { name: 'What would you like to change?' })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Think it through.' })).toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
@@ -540,9 +568,11 @@ describe('ProjectDetailPage — project-first shell states', () => {
     renderProjectContent();
 
     expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('heading', { name: 'What will you define next?' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Curated schemas' })).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Schema views' })).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Search definitions' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('textbox', { name: 'Search projects and schemas' })
+    ).toBeInTheDocument();
     expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   });
 

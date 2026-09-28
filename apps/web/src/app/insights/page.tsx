@@ -84,6 +84,7 @@ export default function InsightsPage() {
   const { t } = useTerminology();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [skippedProjects, setSkippedProjects] = useState(0);
   const [entries, setEntries] = useState<SemanticEntry[]>([]);
   const [ledger, setLedger] = useState<InsightsLedger>(EMPTY_LEDGER);
   const [selectedEntry, setSelectedEntry] = useState<SemanticEntry | null>(null);
@@ -107,8 +108,9 @@ export default function InsightsPage() {
           return;
         }
 
-        // Fetch commits for all projects in parallel (capped per project)
+        // This dashboard intentionally samples a bounded set, not all project history.
         const allCommits: { commit: ApiCommit; projectName: string }[] = [];
+        let failedProjects = 0;
         await Promise.all(
           projects.map(async (project: Project) => {
             try {
@@ -121,10 +123,11 @@ export default function InsightsPage() {
                 allCommits.push({ commit, projectName: project.name });
               }
             } catch {
-              // Skip projects that fail to load
+              failedProjects += 1;
             }
           })
         );
+        setSkippedProjects(failedProjects);
 
         // Sort by date descending
         allCommits.sort(
@@ -199,6 +202,11 @@ export default function InsightsPage() {
         <Lightbulb className="h-5 w-5" />
         <h1 className="text-2xl font-bold tracking-tight">Insights</h1>
       </header>
+      {skippedProjects > 0 ? (
+        <p role="alert" className="text-sm text-destructive">
+          Commits from {skippedProjects} projects could not be loaded; totals below are partial.
+        </p>
+      ) : null}
 
       <Tabs defaultValue="ledger" className="flex-1">
         <TabsList>
@@ -210,7 +218,11 @@ export default function InsightsPage() {
         <TabsContent value="ledger" className="mt-6 space-y-[var(--space-group)]">
           <div className="space-y-1">
             <h2 className="text-lg font-semibold">Ledger</h2>
-            <p className="text-sm text-muted-foreground">Semantic commits across all projects.</p>
+            <p className="text-sm text-muted-foreground">
+              Up to {INSIGHTS_COMMITS_PER_PROJECT} recent commits from each of the first{' '}
+              {INSIGHTS_PROJECT_LIMIT} accessible projects. These are sample totals, not all-time
+              totals.
+            </p>
           </div>
           {isEmpty ? (
             <EmptyState

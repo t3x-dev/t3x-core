@@ -12,8 +12,7 @@ import {
 import { useFeedbackStats } from '@/hooks/feedback/useFeedbackStats';
 import { useLeavesByProject } from '@/hooks/projects/useLeavesByProject';
 import { useProjectsList } from '@/hooks/projects/useProjectsList';
-import type { CosineBucket, FeedbackStats, Project } from '@/types/api';
-import { ConfidenceBucketChart } from './ConfidenceBucketChart';
+import type { FeedbackStats, Project } from '@/types/api';
 import { FeedbackByTypeTable } from './FeedbackByTypeTable';
 import { FeedbackOverview } from './FeedbackOverview';
 
@@ -21,11 +20,10 @@ export function FeedbackTab() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [stats, setStats] = useState<FeedbackStats | null>(null);
-  const [buckets, setBuckets] = useState<CosineBucket[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { loadProjects } = useProjectsList();
-  const { loadStats, loadCosineBuckets } = useFeedbackStats();
+  const { loadStats } = useFeedbackStats();
 
   // Load projects on mount
   useEffect(() => {
@@ -44,7 +42,6 @@ export function FeedbackTab() {
   useEffect(() => {
     if (!selectedProjectId) {
       setStats(null);
-      setBuckets([]);
       return;
     }
 
@@ -52,14 +49,11 @@ export function FeedbackTab() {
     async function loadFeedback() {
       setLoading(true);
       setError(null);
+      setStats(null);
       try {
-        const [statsData, bucketsData] = await Promise.all([
-          loadStats(selectedProjectId!),
-          loadCosineBuckets(selectedProjectId!),
-        ]);
+        const statsData = await loadStats(selectedProjectId!);
         if (!cancelled) {
           setStats(statsData);
-          setBuckets(bucketsData);
         }
       } catch {
         if (!cancelled) {
@@ -75,7 +69,7 @@ export function FeedbackTab() {
     return () => {
       cancelled = true;
     };
-  }, [selectedProjectId, loadStats, loadCosineBuckets]);
+  }, [selectedProjectId, loadStats]);
 
   return (
     <div className="space-y-6">
@@ -119,7 +113,6 @@ export function FeedbackTab() {
         <div className="space-y-6">
           <FeedbackOverview stats={stats.overall} />
           <FeedbackByTypeTable byType={stats.by_inference_type} />
-          <ConfidenceBucketChart buckets={buckets} />
           <LessonsSection projectId={selectedProjectId!} />
         </div>
       )}
@@ -213,8 +206,7 @@ function LessonsSection({ projectId }: { projectId: string }) {
         ))}
       </div>
       <p className="text-xs text-muted-foreground">
-        These lessons are automatically injected into future generations to avoid repeating
-        mistakes.
+        Lessons are derived from failed leaf assertions in this project.
       </p>
     </div>
   );

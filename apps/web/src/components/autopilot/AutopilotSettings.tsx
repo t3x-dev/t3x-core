@@ -77,11 +77,11 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
     [debouncedSave]
   );
 
-  const handleApplyAdaptive = useCallback(async () => {
-    if (!adaptiveResult?.adaptive || !config) return;
-    // Apply adaptive suggestions (cosine threshold delta)
-    // Future: implement specific adaptive actions
-  }, [adaptiveResult, config]);
+  const handleApplyAdaptive = useCallback(() => {
+    toast.info(
+      'These extraction suggestions are read-only. Autopilot configuration does not support applying them.'
+    );
+  }, []);
 
   if (loading) {
     return (

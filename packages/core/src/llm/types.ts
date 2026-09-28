@@ -63,6 +63,13 @@ export interface LLMProvider {
   /** Generate text from a structured prompt (system + messages). Optional. */
   generateFromPrompt?(prompt: LLMPrompt, options: LLMGenerateOptions): Promise<LLMResult>;
 
+  /** Stream visible text from a structured prompt. Optional. */
+  streamFromPrompt?(
+    prompt: LLMPrompt,
+    options: LLMGenerateOptions,
+    signal?: AbortSignal
+  ): AsyncIterable<LLMTextStreamEvent>;
+
   /** Generate structured output using provider-native mechanisms. Optional. */
   generateStructured?<T>(
     prompt: LLMPrompt,
@@ -125,6 +132,10 @@ export interface LLMResult {
   text: string;
   usage: { inputTokens: number; outputTokens: number };
 }
+
+export type LLMTextStreamEvent =
+  | { type: 'text'; text: string }
+  | { type: 'done'; usage: { inputTokens: number; outputTokens: number } };
 
 export interface StructuredResult<T> {
   data: T;

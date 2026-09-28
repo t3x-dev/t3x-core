@@ -1253,7 +1253,7 @@ function CommitReviewView({
   );
 }
 
-function PostCommitActions({
+export function PostCommitActions({
   branchOptions,
   busy,
   commitHash,

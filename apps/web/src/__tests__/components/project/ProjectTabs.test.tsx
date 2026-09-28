@@ -23,9 +23,11 @@ describe('ProjectTabs', () => {
 
     for (const tab of PROJECT_TABS) {
       const href =
-        tab.id === 'state'
-          ? '/t3x-dev/test-project'
-          : `/t3x-dev/test-project/${getProjectTabSegment(tab.id)}`;
+        tab.id === 'settings'
+          ? '/settings'
+          : tab.id === 'state'
+            ? '/t3x-dev/test-project'
+            : `/t3x-dev/test-project/${getProjectTabSegment(tab.id)}`;
       expect(screen.getByRole('link', { name: tab.label })).toHaveAttribute('href', href);
     }
 
@@ -47,6 +49,52 @@ describe('ProjectTabs', () => {
       expect(screen.getByRole('link', { name: tab.label })).toHaveClass('h-8', 'text-[14px]');
     }
     expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('uses public tab segments for project-id query navigation', () => {
+    render(<ProjectTabs activeTab="community" projectIdNavigation repoPath="/project/proj_123" />);
+
+    expect(screen.getByRole('link', { name: 'Pull requests' })).toHaveAttribute(
+      'href',
+      '/project/proj_123?tab=pull-requests'
+    );
+    expect(screen.getByRole('link', { name: 'Community' })).toHaveAttribute(
+      'href',
+      '/project/proj_123?tab=community'
+    );
+  });
+
+  it('keeps branch and Workspace context between State, Schemas, and Workspaces', () => {
+    render(
+      <ProjectTabs
+        activeTab="workspaces"
+        branch="feature/release"
+        projectIdNavigation
+        repoPath="/project/proj_123"
+        workspaceId="workspace_42"
+      />
+    );
+
+    expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute(
+      'href',
+      '/project/proj_123?branch=feature%2Frelease'
+    );
+    expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute(
+      'href',
+      '/project/proj_123?tab=schemas&branch=feature%2Frelease&workspace=workspace_42'
+    );
+    expect(screen.getByRole('link', { name: 'Workspaces' })).toHaveAttribute(
+      'href',
+      '/project/proj_123?tab=workspaces&branch=feature%2Frelease&workspace=workspace_42'
+    );
+    expect(screen.getByRole('link', { name: 'Pull requests' })).toHaveAttribute(
+      'href',
+      '/project/proj_123?tab=pull-requests&branch=feature%2Frelease'
+    );
+    expect(screen.getByRole('link', { name: 'Community' })).toHaveAttribute(
+      'href',
+      '/project/proj_123?tab=community&branch=feature%2Frelease'
+    );
   });
 
   it('keeps tab labels stable for shared A0/W1/S1 ownership', () => {

@@ -1,4 +1,5 @@
-import type { TreeNode as CoreTreeNode, SemanticContent, SlotDiff, TreeDiff } from '@t3x-dev/core';
+import type { TreeNode as CoreTreeNode, SemanticContent, TreeDiff } from '@t3x-dev/core';
+import { type ReviewSlotDiff, withReviewHighlight } from '@/domain/diff/reviewHighlight';
 import { treesToNodes } from '@/domain/tree/treeCompat';
 
 // ── Aligned tree list for split view ──
@@ -8,7 +9,7 @@ export interface AlignedNode {
   type: 'modified' | 'added' | 'removed' | 'identical';
   leftNode?: CoreTreeNode;
   rightNode?: CoreTreeNode;
-  slotDiffs?: SlotDiff[];
+  slotDiffs?: ReviewSlotDiff[];
 }
 
 /**
@@ -48,7 +49,7 @@ export function buildAlignedNodes(
       type: 'modified',
       leftNode: sourceContent ? findNodeByPath(sourceContent.trees, mod.path) : undefined,
       rightNode: targetContent ? findNodeByPath(targetContent.trees, mod.path) : undefined,
-      slotDiffs: mod.slotDiffs,
+      slotDiffs: mod.slotDiffs.map(withReviewHighlight),
     });
   }
 

@@ -8,7 +8,7 @@
  * - PATCH /v1/auth/me  — Update profile (name, avatar_url)
  */
 
-import { type AnyDB, createAccount, createUser } from '@t3x-dev/storage';
+import { type AnyDB, createAccount, createApiKey, createUser } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB } from './setup';
@@ -39,6 +39,21 @@ CREATE TABLE IF NOT EXISTS accounts (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_provider ON accounts(provider, provider_account_id);
+
+CREATE TABLE IF NOT EXISTS api_keys (
+  id TEXT PRIMARY KEY,
+  key_prefix TEXT NOT NULL,
+  key_hash TEXT NOT NULL,
+  name TEXT NOT NULL,
+  project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+  user_id TEXT,
+  principal_kind TEXT NOT NULL DEFAULT 'human',
+  transition_scopes JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_used_at TIMESTAMPTZ,
+  revoked_at TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
 `;
 
 // biome-ignore lint/suspicious/noExplicitAny: test helper
@@ -62,14 +77,14 @@ describe('Auth Me Routes', () => {
   let testUserId: string;
 
   // App with fake auth middleware that injects apiKey context
-  function createAppWithAuth(userId: string | null) {
+  function createAppWithAuth(userId: string | null, apiKeyId = 'ak_test') {
     const app = new Hono();
     app.use('*', async (c, next) => {
       if (userId) {
         // biome-ignore lint/suspicious/noExplicitAny: test mock access
         (c as any).set('apiKey', {
           user_id: userId,
-          id: 'ak_test',
+          id: apiKeyId,
           key_prefix: 'test',
           key_hash: '',
           name: 'test',
@@ -308,6 +323,107 @@ describe('Auth Me Routes', () => {
 
       const data: ApiResponse = await res.json();
       expect(data.data).not.toHaveProperty('linked_accounts');
+    });
+  });
+
+  describe('personal model preferences', () => {
+    it('persists quick switcher preferences and updates the runtime account default', async () => {
+      const app = createAppWithAuth(testUserId);
+      const preferences = {
+        compose_default: 'gpt-5.4',
+        fallback_model: 'claude-sonnet-4-6',
+        quick_switcher: [
+          { model: 'gpt-5.4', visible: true },
+          { model: 'claude-sonnet-4-6', visible: true },
+          { model: 'gemini-2.5-pro', visible: false },
+        ],
+      };
+
+      const putRes = await app.request('/v1/auth/me/model-preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(preferences),
+      });
+      expect(putRes.status).toBe(200);
+
+      const getRes = await app.request('/v1/auth/me/model-preferences');
+      const getJson: ApiResponse = await getRes.json();
+      expect(getJson.data.compose_default).toBe('gpt-5.4');
+      expect(getJson.data.quick_switcher).toEqual(
+        preferences.quick_switcher.map((item) => ({ ...item, available: true }))
+      );
+
+      const meRes = await app.request('/v1/auth/me');
+      const meJson: ApiResponse = await meRes.json();
+      expect(meJson.data.default_provider).toBe('openai');
+      expect(meJson.data.default_model).toBe('gpt-5.4');
+    });
+
+    it('rejects duplicate quick switcher models', async () => {
+      const app = createAppWithAuth(testUserId);
+      const res = await app.request('/v1/auth/me/model-preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          compose_default: 'gpt-5.4',
+          fallback_model: null,
+          quick_switcher: [
+            { model: 'gpt-5.4', visible: true },
+            { model: 'gpt-5.4', visible: false },
+          ],
+        }),
+      });
+
+      expect(res.status).toBe(400);
+      const json: ApiResponse = await res.json();
+      expect(json.error.code).toBe('INVALID_MODEL_PREFERENCES');
+    });
+  });
+
+  describe('profile settings', () => {
+    it('persists personal details and returns real session credentials', async () => {
+      const currentSession = await createApiKey(mockDB, {
+        name: `session:${testUserId}`,
+        userId: testUserId,
+        keyValue: `t3x-profile-current-${Date.now()}`,
+      });
+      const app = createAppWithAuth(testUserId, currentSession.id);
+
+      const patchRes = await app.request('/v1/auth/me/profile-settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Jordan Diaz', timezone: 'America/Los_Angeles' }),
+      });
+      expect(patchRes.status).toBe(200);
+      const patchJson: ApiResponse = await patchRes.json();
+      expect(patchJson.data.name).toBe('Jordan Diaz');
+      expect(patchJson.data.timezone).toBe('America/Los_Angeles');
+      expect(patchJson.data.sessions).toContainEqual(
+        expect.objectContaining({ id: currentSession.id, current: true })
+      );
+
+      const getRes = await app.request('/v1/auth/me/profile-settings');
+      const getJson: ApiResponse = await getRes.json();
+      expect(getJson.data.timezone).toBe('America/Los_Angeles');
+    });
+
+    it('revokes another owned session', async () => {
+      const otherSession = await createApiKey(mockDB, {
+        name: `session:${testUserId}`,
+        userId: testUserId,
+        keyValue: `t3x-profile-other-${Date.now()}`,
+      });
+      const app = createAppWithAuth(testUserId);
+      const res = await app.request(`/v1/auth/me/profile-settings/sessions/${otherSession.id}`, {
+        method: 'DELETE',
+      });
+      expect(res.status).toBe(200);
+
+      const getRes = await app.request('/v1/auth/me/profile-settings');
+      const getJson: ApiResponse = await getRes.json();
+      expect(
+        getJson.data.sessions.some((session: ApiResponse) => session.id === otherSession.id)
+      ).toBe(false);
     });
   });
 });

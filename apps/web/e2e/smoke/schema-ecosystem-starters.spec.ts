@@ -9,25 +9,24 @@ test('original ecosystem starters are discoverable, filterable and importable at
   try {
     await page.setViewportSize({ width: 1480, height: 960 });
     await page.goto(`/project/${projectId}?tab=schemas&schemaView=discover`, { waitUntil: 'networkidle' });
-    await expect(page.getByRole('heading', { name: 'Editor’s Choice' })).toBeVisible();
-    await expect(page.getByText('Make a small service stack readable before you ship it.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Curated schemas' })).toBeVisible();
     for (const title of ['Product brief', 'Care checklist', 'Compose services'])
       await expect(page.getByRole('button', { name: `Explore ${title} 1.0.0`, exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('starters-discover.png'), animations: 'disabled' });
-    await page.getByRole('textbox', { name: 'Search definitions' }).fill('Care checklist');
-    await page.getByRole('textbox', { name: 'Search definitions' }).press('Enter');
+    await page.getByRole('textbox', { name: 'Search projects and schemas' }).fill('Care checklist');
+    await page.getByRole('textbox', { name: 'Search projects and schemas' }).press('Enter');
     await expect(page).toHaveURL(/schemaView=browse/);
     await expect(page.getByRole('button', { name: 'Explore Care checklist 1.0.0', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Explore Compose services 1.0.0', exact: true })).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath('starters-browse.png'), animations: 'disabled' });
     await page.getByRole('button', { name: 'Explore Care checklist 1.0.0', exact: true }).click();
-    await expect(page.getByRole('dialog')).toContainText('Apache-2.0');
+    await expect(page.getByRole('complementary').getByText('Apache-2.0', { exact: true })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Author README' })).toContainText('Rename the routine');
     await page.screenshot({ path: testInfo.outputPath('starters-introduction.png'), animations: 'disabled' });
-    await page.getByRole('button', { name: 'Add to Studio', exact: true }).click();
     await page.getByRole('button', { name: 'Add & open Studio', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Sample preview', exact: true })).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Saved Studio candidates' })).toContainText('Care checklist');
+    await page.getByRole('tab', { name: 'Sample', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Sample preview', exact: true })).toBeVisible();
+    await expect(page.getByRole('complementary', { name: 'Studio sources' })).toContainText('Care checklist');
     const candidates = (await (await request.get(`${API_BASE}/projects/${projectId}/schema-studio/candidates`)).json()).data.items;
     expect(candidates).toHaveLength(1);
     expect(candidates[0].source).toMatchObject({ canonicalName: 't3x/care-checklist', version: '1.0.0' });

@@ -86,13 +86,13 @@ test('project canvas route renders without console errors', async ({ page }) => 
 
 test('legacy Canvas and Leaf routes preserve repository identity', async ({ page }) => {
   await page.goto(`/chat/project/${projectId}/canvas?selected=sha256%3Acommit`);
-  await expect(page).toHaveURL(/\/t3x-dev\/smoke\?view=canvas&selected=sha256%3Acommit$/);
+  await expect(page).toHaveURL(new RegExp(`/project/${projectId}\\?view=canvas&selected=sha256%3Acommit$`));
 
   await page.goto(`/chat/project/${projectId}/leaf?introDemo=1`);
-  await expect(page).toHaveURL(/\/t3x-dev\/smoke\/outputs\?introDemo=1$/);
+  await expect(page).toHaveURL(new RegExp(`/project/${projectId}\\?tab=outputs&introDemo=1$`));
 
   await page.goto(`/chat/project/${projectId}/leaf/leaf_legacy?introDemo=1`);
   await expect(page).toHaveURL(
-    /\/t3x-dev\/smoke\/outputs\?leaf=leaf_legacy&introDemo=1$/
+    new RegExp(`/project/${projectId}\\?tab=outputs&leaf=leaf_legacy&introDemo=1$`)
   );
 });

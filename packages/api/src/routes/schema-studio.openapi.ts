@@ -92,7 +92,7 @@ const readSourceRoute = createRoute({
   method: 'get',
   path: '/v1/projects/{projectId}/schema-studio/source',
   tags: ['YSchema'],
-  summary: 'Read the author introduction of an exact authorized release without adding a candidate',
+  summary: 'Read the exact authorized release without adding a candidate',
   request: { params, query: AddStudioCandidateSchema },
   responses: {
     200: {
@@ -100,7 +100,11 @@ const readSourceRoute = createRoute({
       content: {
         'application/json': {
           schema: SuccessResponseSchema(
-            z.object({ artifactHash: z.string(), readme: z.string().nullable() })
+            z.object({
+              artifactHash: z.string(),
+              readme: z.string().nullable(),
+              manifest: z.record(z.string(), z.unknown()),
+            })
           ),
         },
       },
@@ -135,6 +139,7 @@ schemaStudioRoutes.openapi(readSourceRoute, async (c) => {
       data: {
         artifactHash: view.artifactHash,
         readme: typeof view.manifest.readme === 'string' ? view.manifest.readme : null,
+        manifest: view.manifest,
       },
     },
     200

@@ -6,7 +6,6 @@ import {
   createTestTurn,
 } from './fixtures/api-helpers';
 import { expect, test } from './fixtures/test';
-import { expandWorkspaceIfCollapsed } from './fixtures/workspace';
 
 test.describe('Inherited baseline workspace state', () => {
   let projectId: string;
@@ -53,22 +52,20 @@ test.describe('Inherited baseline workspace state', () => {
     if (projectId) await cleanupProject(request, projectId).catch(() => {});
   });
 
-  test('labels parent-only replay as inherited baseline and blocks commit', async ({ page }) => {
+  test('keeps inherited baseline separate from included sources and source chat read-only', async ({ page }) => {
     await page.goto(`/chat/${conversationId}`, { waitUntil: 'domcontentloaded' });
 
     await expect(page.getByText('I want to eat Beijing roast duck.')).toBeVisible({
       timeout: 10_000,
     });
 
-    await expandWorkspaceIfCollapsed(page);
-    const afterPanel = page.getByTestId('after-panel');
-    await expect(afterPanel).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText('Inherited baseline').first()).toBeVisible({ timeout: 10_000 });
-
     const sourcesButton = page.getByRole('button', { name: 'Open sources' });
     await expect(sourcesButton).toContainText('Baseline');
-    await expect(afterPanel).toContainText('No knowledge extracted yet');
-    await expect(afterPanel).not.toContainText('desired_food');
+    await expect(sourcesButton).toContainText('0 included');
+    await expect(page.getByRole('textbox', { name: 'Reply...' })).toBeDisabled();
+    await expect(page.getByRole('link', { name: 'Open Workspace' })).toHaveAttribute(
+      'href', `/project/${projectId}?branch=main&tab=workspaces&sourceConversation=${conversationId}`
+    );
     await expect(page.getByTestId('commit-button')).not.toBeVisible();
   });
 });

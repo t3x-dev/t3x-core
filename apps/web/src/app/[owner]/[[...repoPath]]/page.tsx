@@ -33,6 +33,7 @@ function OwnerRepoProjectPageContent() {
   const isNewRepositoryPage = repoSlug === 'new' && repoSegments.length === 1;
   const isOrganizationSettingsPage =
     isDefaultOwner && repoSlug === 'settings' && repoSegments.length === 1;
+  const isRepositorySettingsRedirect = repoSegments.length > 1 && tabSegment === 'settings';
   const projects = useProjectStore((state) => state.projects);
   const initialized = useProjectStore((state) => state.initialized);
   const projectScope = useProjectStore((state) => state.projectScope);
@@ -63,6 +64,23 @@ function OwnerRepoProjectPageContent() {
     if (!project || !hasStateTabSegment) return;
     router.replace(`/${ownerSlug}/${repoSlug}`);
   }, [hasStateTabSegment, ownerSlug, project, repoSlug, router]);
+
+  useEffect(() => {
+    if (!isRepositorySettingsRedirect || !project?.id || projectScope !== ownerSlug || loading)
+      return;
+    const returnTo = `/${ownerSlug}/${repoSlug}`;
+    router.replace(
+      `/project/${encodeURIComponent(project.id)}/settings?returnTo=${encodeURIComponent(returnTo)}`
+    );
+  }, [
+    isRepositorySettingsRedirect,
+    loading,
+    ownerSlug,
+    project?.id,
+    projectScope,
+    repoSlug,
+    router,
+  ]);
 
   if (isOwnerDirectory) {
     return <ProjectDirectoryPage ownerSlug={ownerSlug} />;
@@ -115,6 +133,8 @@ function OwnerRepoProjectPageContent() {
     );
   }
 
+  if (isRepositorySettingsRedirect) return null;
+
   if (hasInvalidTabSegment) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-8">
@@ -139,7 +159,11 @@ function OwnerRepoProjectPageContent() {
   }
 
   return (
-    <ProjectDetailPageContent initialTabOverride={initialTab} projectIdOverride={project.id} />
+    <ProjectDetailPageContent
+      initialTabOverride={initialTab}
+      ownerSlugOverride={ownerSlug}
+      projectIdOverride={project.id}
+    />
   );
 }
 

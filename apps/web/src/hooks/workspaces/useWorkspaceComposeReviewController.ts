@@ -2,8 +2,10 @@ import type { ChangeProjectionV1, ReviewSnapshotV1 } from '@t3x-dev/api-client';
 import type { TransitionViewV1 } from '@t3x-dev/core';
 import * as yaml from 'js-yaml';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { updateConversationContextPins } from '@/commands/conversations';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { providerSupports } from '@/domain/providerCapabilities';
+import { includedImportPinIds } from '@/domain/workspaces/includedImportPinIds';
 import { useMaterialUpload } from '@/hooks/materials/useMaterialUpload';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
@@ -18,10 +20,12 @@ import { decideWorkspaceTransition, reviewWorkspaceTransition } from '@/queries/
 import { useChatSessionStore } from '@/store/chatSessionStore';
 import { usePinsStore } from '@/store/pinsStore';
 import type { Material } from '@/types/api';
+import type { AttachedImage } from '@/types/generation';
 import type {
   SourceBundleItem,
   SourceConversationTurn,
   WorkspaceCandidate,
+  WorkspaceSourceArtifact,
 } from '@/types/workspaces';
 import type { WorkspaceYOpsValidationResult } from '@/types/workspaceYops';
 
@@ -116,6 +120,7 @@ export function useWorkspaceComposeReviewController({
   const [hasCollaborationConflict, setHasCollaborationConflict] = useState(false);
   const reviewGenerationRef = useRef(0);
   const activeCandidateIdRef = useRef(candidate.id);
+  const sourceConversationIdRef = useRef(sourceConversationId);
 
   const modelSelection = useChatModelSelection({});
   const thinkingEnabled = useChatSessionStore((state) => state.thinkingEnabled);
@@ -156,8 +161,29 @@ export function useWorkspaceComposeReviewController({
   }, [sourceConversationIdProp]);
 
   useEffect(() => {
+    sourceConversationIdRef.current = sourceConversationId;
+  }, [sourceConversationId]);
+
+  useEffect(() => {
     void refreshPins(candidate.projectId);
   }, [candidate.projectId, refreshPins]);
+
+  const syncImportPinsToConversation = useCallback(async (conversationId: string) => {
+    await updateConversationContextPins(
+      conversationId,
+      includedImportPinIds(usePinsStore.getState().pins)
+    );
+  }, []);
+
+  const syncImportPinsIfConversationReady = useCallback(async () => {
+    const conversationId = sourceConversationIdRef.current;
+    if (!conversationId) return;
+    try {
+      await syncImportPinsToConversation(conversationId);
+    } catch {
+      // The next send retries through onConversationReady.
+    }
+  }, [syncImportPinsToConversation]);
 
   const chat = useSourceThreadGeneration({
     projectId: candidate.projectId,
@@ -167,6 +193,7 @@ export function useWorkspaceComposeReviewController({
     model: modelSelection.selectedModel ?? undefined,
     parentCommitHash: sourceParentCommitHash,
     onConversationCreated: setSourceConversationId,
+    onConversationReady: syncImportPinsToConversation,
   });
 
   const rawMessages = useMemo(() => {
@@ -241,6 +268,41 @@ export function useWorkspaceComposeReviewController({
     },
     [onDraftCommand]
   );
+
+  const updateSourceArtifact = useCallback(
+    async (artifact: WorkspaceSourceArtifact | undefined) => {
+      if (!onDraftCommand) throw new Error('Workspace saving is unavailable.');
+      const saved = await onDraftCommand(
+        { ...workingCandidate, sourceArtifact: artifact },
+        'source.artifact'
+      );
+      setWorkingCandidate(saved);
+      setReview(EMPTY_REVIEW);
+      return saved;
+    },
+    [onDraftCommand, workingCandidate]
+  );
+
+  const ensureSaved = useCallback(async () => {
+    const needsSchema = workingCandidate.schemaBindings.length === 0;
+    if (
+      workingCandidate.authoringLedger ||
+      (workingCandidate.revision !== undefined && !needsSchema)
+    )
+      return workingCandidate;
+    if (!onDraftCommand) throw new Error('Workspace saving is unavailable.');
+    return persistCandidate(
+      needsSchema
+        ? {
+            ...workingCandidate,
+            schemaBindings: [
+              { schemaName: 'PRD Schema', canonicalName: 't3x/prd', version: 'v2', mode: 'pinned' },
+            ],
+          }
+        : workingCandidate,
+      'authoring.initialize'
+    );
+  }, [workingCandidate, onDraftCommand, persistCandidate]);
 
   const resolveCollaborationConflict = useCallback(async () => {
     if (!onApplyAfterRefresh || busyAction) return false;
@@ -332,9 +394,17 @@ export function useWorkspaceComposeReviewController({
       });
       await persistCandidate(nextCandidate, 'source.add');
       await onSourceMaterialUploaded?.();
+      await syncImportPinsIfConversationReady();
       setNotice(`${material.title} added as source evidence.`);
     },
-    [candidate.projectId, onSourceMaterialUploaded, persistCandidate, pinsCrud, workingCandidate]
+    [
+      candidate.projectId,
+      onSourceMaterialUploaded,
+      persistCandidate,
+      pinsCrud,
+      syncImportPinsIfConversationReady,
+      workingCandidate,
+    ]
   );
 
   const toggleMaterialSource = useCallback(
@@ -357,6 +427,7 @@ export function useWorkspaceComposeReviewController({
           );
         }
         await persistCandidate(invalidateWorkspaceProposal(workingCandidate), 'source.include');
+        await syncImportPinsIfConversationReady();
         setNotice(included ? 'Material included as source evidence.' : 'Material excluded.');
       } catch (error) {
         setLocalError(formatUserFacingError(error, 'Material source update failed.'));
@@ -364,7 +435,14 @@ export function useWorkspaceComposeReviewController({
         setBusyAction(null);
       }
     },
-    [busyAction, candidate.projectId, persistCandidate, pinsCrud, workingCandidate]
+    [
+      busyAction,
+      candidate.projectId,
+      persistCandidate,
+      pinsCrud,
+      syncImportPinsIfConversationReady,
+      workingCandidate,
+    ]
   );
 
   const uploadFile = useCallback(
@@ -404,6 +482,51 @@ export function useWorkspaceComposeReviewController({
     },
     [uploadFile]
   );
+
+  const generateChanges = useCallback(async () => {
+    if (!onPrepareDraft || busyAction) return false;
+    const generation = reviewGenerationRef.current + 1;
+    reviewGenerationRef.current = generation;
+    setBusyAction('draft.generate');
+    setLocalError(null);
+    setNotice('Generating structured changes from the selected source evidence…');
+    setReview(EMPTY_REVIEW);
+    try {
+      const sourceSyncedCandidate =
+        persistedSourceTurns.length > 0
+          ? await syncChatSource(persistedSourceTurns)
+          : workingCandidate;
+      const prepared = await onPrepareDraft(sourceSyncedCandidate, {
+        instruction: chat.input.trim() || undefined,
+        provider: modelSelection.selectedProvider ?? undefined,
+        model: modelSelection.selectedModel ?? undefined,
+      });
+      if (generation !== reviewGenerationRef.current) return false;
+      setWorkingCandidate(prepared);
+      setNotice(
+        prepared.yopsDraft.operations.length > 0
+          ? `${prepared.yopsDraft.operations.length} structured changes generated.`
+          : 'No structured changes were generated. Add source evidence and try again.'
+      );
+      return prepared.yopsDraft.operations.length > 0;
+    } catch (error) {
+      if (generation !== reviewGenerationRef.current) return false;
+      setLocalError(formatUserFacingError(error, 'Change generation failed.'));
+      setNotice(null);
+      return false;
+    } finally {
+      setBusyAction(null);
+    }
+  }, [
+    busyAction,
+    chat.input,
+    modelSelection.selectedModel,
+    modelSelection.selectedProvider,
+    onPrepareDraft,
+    persistedSourceTurns,
+    syncChatSource,
+    workingCandidate,
+  ]);
 
   const prepareReview = useCallback(async () => {
     if (!onPrepareDraft || busyAction) return false;
@@ -550,6 +673,12 @@ export function useWorkspaceComposeReviewController({
     if (commitId) onViewCommitInState?.(commitId, workingCandidate.targetBranch);
   }, [onViewCommitInState, review.view, workingCandidate]);
 
+  const viewBaseCommit = useCallback(() => {
+    if (workingCandidate.baseCommitHash) {
+      onViewCommitInState?.(workingCandidate.baseCommitHash, workingCandidate.targetBranch);
+    }
+  }, [onViewCommitInState, workingCandidate.baseCommitHash, workingCandidate.targetBranch]);
+
   const renderedYaml = useMemo(() => {
     if (!review.content) return '';
     return yaml.dump(
@@ -583,16 +712,22 @@ export function useWorkspaceComposeReviewController({
       isThinking: chat.isThinking,
       messages,
       searchQuery: chat.searchQuery,
-      send: () => chat.sendMessage(),
+      send: (images?: AttachedImage[]) => {
+        const text = chat.input.trim();
+        if (!text && !images?.length) return;
+        chat.sendMessage(text || 'Attached image', images?.length ? { images } : undefined);
+      },
       setInput: chat.setInput,
       stop: chat.stopGenerating,
       thinkingContent: chat.thinkingContent,
       warning: chat.warning,
     },
     copyReceipt,
+    ensureSaved,
     decide,
     decisionReason,
     error: localError ?? flowError ?? chat.error,
+    generateChanges,
     hasCollaborationConflict,
     isBusy: Boolean(busyAction),
     model: {
@@ -640,7 +775,9 @@ export function useWorkspaceComposeReviewController({
     setDecisionReason,
     sourceBusy: materialUpload.uploading || busyAction?.startsWith('source:') === true,
     toggleMaterialSource,
+    updateSourceArtifact,
     uploadFile,
+    viewBaseCommit,
     viewCommit,
   };
 }

@@ -24,4 +24,5 @@ export { type StateExportArtifact, StateExportArtifactSchema } from './state-exp
 export * from './state-overview';
 export * from './state-presentation.js';
 export type * from './types.js';
+export type * from './workspace-authoring';
 export * from './workspace-delivery.js';

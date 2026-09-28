@@ -1,0 +1,236 @@
+.trigger {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 220px;
+  height: 24px;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--radius-control);
+  padding: 0 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 450;
+  line-height: 18px;
+}
+.trigger:hover,
+.trigger[aria-expanded="true"] {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+.trigger:focus-visible {
+  outline: 1px solid var(--stroke-strong);
+  outline-offset: 1px;
+}
+.trigger > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trigger svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: var(--text-tertiary);
+}
+.popover {
+  position: fixed;
+  z-index: 9999;
+  display: flex;
+  width: 462px;
+  align-items: flex-end;
+  gap: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+.popover[data-open-left="true"] {
+  flex-direction: row-reverse;
+}
+.settingsPanel,
+.detailPanel,
+.effortPanel {
+  border: 1px solid var(--stroke-default);
+  background: var(--surface-elevated);
+  box-shadow: var(--fx-shadow-lg);
+}
+.settingsPanel {
+  width: 228px;
+  flex: 0 0 228px;
+  border-radius: 12px;
+  padding: 6px;
+}
+.settingsRow,
+.selectorRow {
+  display: flex;
+  width: 100%;
+  height: 28px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 7px;
+  padding: 0 6px;
+  text-align: left;
+  line-height: 18px;
+}
+.selectorRow:hover:not(:disabled),
+.selectorRow[data-active="true"] {
+  background: var(--hover-bg);
+}
+.selectorRow:disabled {
+  cursor: default;
+}
+.rowValue {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 3px;
+  overflow: hidden;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+.rowValue svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+.switch {
+  position: relative;
+  width: 26px;
+  height: 16px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: var(--stroke-strong);
+  transition: background var(--motion-fast) var(--ease-out-soft);
+}
+.switch > span {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--surface-elevated);
+  box-shadow: var(--fx-shadow-sm);
+  transition: transform var(--motion-fast) var(--ease-out-soft);
+}
+.switch[data-checked="true"] {
+  background: var(--accent-commit);
+}
+.switch[data-checked="true"] > span {
+  transform: translateX(10px);
+}
+.switch:disabled {
+  cursor: not-allowed;
+}
+.detailPanel {
+  display: flex;
+  width: 230px;
+  height: 320px;
+  flex: 0 0 230px;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 12px;
+}
+.effortPanel {
+  width: 196px;
+  min-height: 72px;
+  flex: 0 0 196px;
+  border-radius: 12px;
+  padding: 6px;
+}
+.searchBox {
+  display: flex;
+  height: 32px;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  border-bottom: 1px solid var(--stroke-divider);
+  padding: 0 10px;
+}
+.searchBox svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  color: var(--text-tertiary);
+}
+.searchBox input {
+  min-width: 0;
+  flex: 1;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+}
+.searchBox input::placeholder {
+  color: var(--text-tertiary);
+}
+.modelList {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 5px 6px;
+  scrollbar-width: none;
+}
+.option {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  height: 27px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-radius: 7px;
+  padding: 0 6px;
+  text-align: left;
+  line-height: 18px;
+}
+.option:hover {
+  background: var(--hover-bg);
+}
+.option > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.option svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  color: var(--text-secondary);
+}
+.empty {
+  padding: 16px 8px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  text-align: center;
+}
+.addModels {
+  height: 32px;
+  flex: none;
+  border-top: 1px solid var(--stroke-divider);
+  padding: 0 11px;
+  text-align: left;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.addModels:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+@media (max-width: 520px) {
+  .popover {
+    width: calc(100vw - 16px);
+  }
+  .settingsPanel {
+    width: 100%;
+    flex-basis: 100%;
+  }
+  .detailPanel,
+  .effortPanel {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 4px);
+  }
+}

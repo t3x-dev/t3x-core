@@ -21,16 +21,19 @@ export async function generateWorkspaceProposal(input: {
   instruction: string;
   sourceMaterialIds: string[];
   ifRevision?: number;
+  requestId?: string;
+  sourceTurnHashes?: string[];
 }): Promise<ProposalGenerationEnvelope> {
   const res = await fetchWithTimeout(
     `${API_V1}/projects/${encodeURIComponent(input.projectId)}/proposal-generations`,
     {
       body: JSON.stringify({
-        request_id: `proposal-generation:${crypto.randomUUID()}`,
+        request_id: input.requestId ?? `proposal-generation:${crypto.randomUUID()}`,
         workspace_id: input.workspaceId,
         posture: input.posture,
         instruction: input.instruction,
         source_material_ids: input.sourceMaterialIds,
+        source_turn_hashes: input.sourceTurnHashes,
         ...(input.ifRevision === undefined ? {} : { if_revision: input.ifRevision }),
       }),
       headers: { 'Content-Type': 'application/json' },

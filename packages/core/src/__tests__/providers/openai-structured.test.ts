@@ -257,7 +257,49 @@ describe('OpenAIProvider.generateStructured', () => {
     expect(mockFetchFn).toHaveBeenCalledTimes(2);
   });
 
-  it('surfaces structured schema mismatches with raw JSON details', async () => {
+  it('falls back to validated plain-text JSON when OpenAI rejects the response schema', async () => {
+    mockFetchFn
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: false,
+          status: 400,
+          text: () =>
+            Promise.resolve(
+              JSON.stringify({
+                error: { message: "Invalid schema for response_format 'extract_data'" },
+              })
+            ),
+        })
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () =>
+            Promise.resolve(
+              JSON.stringify({
+                choices: [{ message: { content: '{"name":"Alice","age":30}' } }],
+                usage: { prompt_tokens: 12, completion_tokens: 8 },
+              })
+            ),
+        })
+      );
+
+    const provider = new OpenAIProvider({ apiKey: 'test-key' });
+    const schema = z.object({ name: z.string(), age: z.number() });
+    const result = await provider.generateStructured(
+      { messages: [{ role: 'user', content: 'Extract' }] },
+      schema,
+      { model: 'gpt-5.4' }
+    );
+
+    expect(result.data).toEqual({ name: 'Alice', age: 30 });
+    expect(mockFetchFn).toHaveBeenCalledTimes(2);
+    const secondBody = JSON.parse(mockFetchFn.mock.calls[1][1].body);
+    expect(secondBody.response_format).toBeUndefined();
+  });
+
+  it('surfaces schema mismatch details after one schema-guided fallback', async () => {
     mockFetchFn.mockImplementation(() =>
       Promise.resolve({
         ok: true,
@@ -286,7 +328,12 @@ describe('OpenAIProvider.generateStructured', () => {
       }),
     });
 
-    expect(mockFetchFn).toHaveBeenCalledTimes(1);
+    expect(mockFetchFn).toHaveBeenCalledTimes(2);
+    const fallbackBody = JSON.parse(mockFetchFn.mock.calls[1][1].body);
+    expect(fallbackBody.response_format).toBeUndefined();
+    expect(fallbackBody.messages[0]).toMatchObject({ role: 'system' });
+    expect(fallbackBody.messages[0].content).toContain('Return JSON only.');
+    expect(fallbackBody.messages[0].content).toContain('"age":{"type":"number"}');
   });
 
   it('lowers provider draft schema to an OpenAI-compatible strict subset', async () => {

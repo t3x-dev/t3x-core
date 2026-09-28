@@ -113,6 +113,8 @@ import {
   turnRoutes,
   usageRoutes,
   webhooksRoutes,
+  workspaceAssistantRoutes,
+  workspaceAuthoringRoutes,
   workspaceExtractionProposalRoutes,
   workspaceRoutes,
   workspaceValidationRoutes,
@@ -305,6 +307,8 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', createWorkspaceSourceTransitionRoutes(options?.workspaceSourceTransition));
   api.route('/', workspaceExtractionProposalRoutes);
   api.route('/', workspaceRoutes);
+  api.route('/', workspaceAuthoringRoutes);
+  api.route('/', workspaceAssistantRoutes);
 
   // Auth /me route (always available — works with any auth provider)
   api.route('/', authMeRoutes);

@@ -1,4 +1,4 @@
-import { API_BASE } from './fixtures/api-helpers';
+import { API_BASE, createTestLeaf } from './fixtures/api-helpers';
 import { expect, test } from './fixtures/test';
 
 /**
@@ -107,7 +107,7 @@ test.describe('V4 WebUI Flow', () => {
   // ─────────────────────────────────────────────────────────────────────────
   // Scenario 3: Create leaf from commit
   // ─────────────────────────────────────────────────────────────────────────
-  test('3. Create leaf from commit', async ({ request }) => {
+  test('3. Leaf creation is retired while archived leaves remain readable', async ({ request }) => {
     // Create leaf via API
     const response = await request.post(`${API_BASE}/leaves`, {
       data: {
@@ -127,16 +127,11 @@ test.describe('V4 WebUI Flow', () => {
       },
     });
 
-    const data = await response.json();
-    expect(data.success).toBe(true);
-    expect(data.data.id).toBeDefined();
-    expect(data.data.type).toBe('deploy_agent');
-    expect(data.data.constraints).toHaveLength(2);
+    expect(response.status()).toBe(410);
+    leafId = await createTestLeaf(request, commitHash, projectId);
+    const archived = await request.get(`${API_BASE}/leaves/${leafId}`);
+    expect(archived.ok()).toBe(true);
 
-    leafId = data.data.id;
-
-    // Verify constraints have auto-generated IDs
-    expect(data.data.constraints[0].id).toMatch(/^cst_/);
   });
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -194,7 +189,7 @@ test.describe('V4 WebUI Flow', () => {
   // ─────────────────────────────────────────────────────────────────────────
   // Scenario 5: Export context works
   // ─────────────────────────────────────────────────────────────────────────
-  test('5. Export context works', async ({ request }) => {
+  test('5. Structured context manifest remains readable', async ({ request }) => {
     // Create a conversation for export test
     const convResponse = await request.post(`${API_BASE}/conversations`, {
       data: {
@@ -206,36 +201,18 @@ test.describe('V4 WebUI Flow', () => {
     const convData = await convResponse.json();
     const conversationId = convData.data.conversation_id;
 
-    // Test JSON export
-    const jsonExport = await request.get(
-      `${API_BASE}/conversations/${conversationId}/context-export?format=json`
-    );
-
-    expect(jsonExport.ok()).toBe(true);
-    expect(jsonExport.headers()['content-type']).toContain('application/json');
-    expect(jsonExport.headers()['content-disposition']).toContain('attachment');
-
-    const jsonData = await jsonExport.json();
-    expect(jsonData.metadata).toBeDefined();
-    expect(jsonData.metadata.format).toBe('json');
-    expect(jsonData.context).toBeDefined();
-    expect(jsonData.context.text).toBeDefined();
-    expect(jsonData.context.token_estimate).toBeDefined();
-    expect(jsonData.context.sources).toBeDefined();
-
-    // Test Markdown export
-    const mdExport = await request.get(
-      `${API_BASE}/conversations/${conversationId}/context-export?format=markdown`
-    );
-
-    expect(mdExport.ok()).toBe(true);
-    expect(mdExport.headers()['content-type']).toContain('text/markdown');
-    expect(mdExport.headers()['content-disposition']).toContain('.md');
-
-    const mdContent = await mdExport.text();
-    expect(mdContent).toContain('# Context Export');
-    expect(mdContent).toContain('**Conversation ID:**');
-    expect(mdContent).toContain('## Sources');
+    // Context export was retired; the structured manifest is the supported read surface.
+    const retired = await request.get(`${API_BASE}/conversations/${conversationId}/context-export?format=json`);
+    expect(retired.status()).toBe(404);
+    const response = await request.get(`${API_BASE}/conversations/${conversationId}/context-manifest`);
+    expect(response.ok(), await response.text()).toBe(true);
+    const { data } = await response.json();
+    expect(data.conversation_id).toBe(conversationId);
+    expect(data.project_id).toBe(projectId);
+    expect(typeof data.chat_context_text).toBe('string');
+    expect(typeof data.token_estimate).toBe('number');
+    expect(Array.isArray(data.sources)).toBe(true);
+    expect(Array.isArray(data.source_items)).toBe(true);
   });
 });
 

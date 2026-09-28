@@ -1,0 +1,229 @@
+.content {
+  width: 100%;
+  min-height: 100%;
+  max-width: none;
+  padding: 31px 38px 28px;
+  gap: 25px;
+}
+.message {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 40px minmax(0, 1fr);
+  column-gap: 15px;
+  align-items: start;
+}
+.avatar {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-app);
+  font-size: 15px;
+  color: var(--text-primary);
+}
+.assistantAvatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 7px;
+  object-fit: cover;
+}
+.messageBody {
+  min-width: 0;
+}
+.messageHeader {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 20px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.messageHeader strong {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+.userText {
+  margin-top: 2px;
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--text-primary);
+}
+.assistantContent {
+  margin-top: 2px;
+  width: 100%;
+  font-size: 13px;
+  line-height: 20px;
+}
+.assistantContent :global(p) {
+  margin: 0 0 8px;
+}
+.assistantContent :global(ul),
+.assistantContent :global(ol) {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+.assistantContent :global(h2),
+.assistantContent :global(h3) {
+  margin: 10px 0 5px;
+  font-size: 13px;
+}
+.actions {
+  margin-top: 7px;
+  opacity: 0.55;
+}
+.pending {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 15px;
+}
+.pendingText {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.discussion {
+  flex: 1;
+  border-top: 0;
+  background: white;
+}
+.discussionContent {
+  gap: 24px;
+  padding: 12px 20px 24px;
+}
+.discussion .message,
+.discussion .pending {
+  grid-template-columns: 22px minmax(0, 1fr);
+  column-gap: 7px;
+}
+.discussion .avatar,
+.discussion .assistantAvatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+.discussion .messageHeader {
+  height: 22px;
+  font-size: 10px;
+}
+.discussion .messageHeader strong {
+  font-size: 11px;
+}
+.discussion .userText,
+.discussion .assistantContent {
+  margin-top: 4px;
+  border-radius: 5px;
+  background: var(--accent-commit-soft);
+  padding: 10px;
+  font-size: 11px;
+  line-height: 17px;
+}
+.discussion .assistantContent {
+  overflow-wrap: anywhere;
+}
+.discussionMessage {
+  min-width: 0;
+}
+.activityOnly {
+  min-width: 0;
+  margin-top: -8px;
+}
+.discussionMessageHeader {
+  display: flex;
+  height: 24px;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.discussionMessageHeader strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+.discussionAvatar {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--accent-commit);
+  background: var(--accent-commit-soft);
+}
+.discussionAvatar svg {
+  width: 14px;
+  height: 14px;
+}
+.discussionMessageHeader button {
+  margin-left: auto;
+  opacity: 0;
+}
+.discussionMessageHeader button svg {
+  width: 12px;
+  height: 12px;
+}
+.discussionMessage:hover .discussionMessageHeader button,
+.discussionMessageHeader button:focus-visible {
+  opacity: 1;
+}
+.discussionBubble {
+  margin-top: 8px;
+  border-radius: 4px;
+  background: #eef2ff;
+  padding: 16px;
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 21px;
+  overflow-wrap: anywhere;
+}
+.discussionMessage[data-author="user"] .discussionBubble {
+  border-radius: 4px;
+  background: #f8f9fa;
+  padding: 12px;
+}
+.discussionMessage[data-author="assistant"] .discussionBubble {
+  background: transparent;
+  padding: 0;
+}
+.discussionMessage[data-author="assistant"] .discussionAvatar {
+  background: #dbeafe;
+  color: #2563eb;
+}
+.discussionBubble p {
+  margin-block: 0 8px;
+}
+.discussionBubble p:last-child {
+  margin-bottom: 0;
+}
+.discussionText {
+  white-space: pre-wrap;
+}
+.discussionBubble :is(pre, table) {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.discussionBubble ul {
+  padding-left: 16px;
+}
+.discussion .actions {
+  margin-top: 2px;
+}
+@media (max-width: 720px) {
+  .content {
+    padding: 22px 16px;
+  }
+  .message {
+    grid-template-columns: 32px minmax(0, 1fr);
+    column-gap: 10px;
+  }
+  .avatar,
+  .assistantAvatar {
+    width: 32px;
+    height: 32px;
+  }
+}

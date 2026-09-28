@@ -82,6 +82,8 @@ export interface WorkspaceSchemaBinding {
 }
 
 export interface WorkspaceCandidate {
+  authoringLedger?: unknown;
+  authoringBasis?: unknown;
   id: string;
   revision?: number;
   projectId: string;

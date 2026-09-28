@@ -68,3 +68,18 @@ export const LocalProviderParamSchema = z.object({
 export const ProviderConfigSchema = z.object({
   roles: z.array(RoleAssignmentSchema),
 });
+
+export const TaskModelDefaultSchema = z.object({
+  primary_model: z.string(),
+  fallback_model: z.string().nullable(),
+});
+
+export const ModelAccessConfigSchema = z.object({
+  enabled_models: z.array(z.string()),
+  default_model: z.string().nullable(),
+  task_defaults: z.object({
+    compose: TaskModelDefaultSchema,
+    extraction: TaskModelDefaultSchema,
+    validation: TaskModelDefaultSchema,
+  }),
+});

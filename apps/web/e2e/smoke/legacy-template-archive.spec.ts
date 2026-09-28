@@ -11,6 +11,7 @@ test('legacy prompts can be searched, previewed and exported without creating Le
     const writes: string[] = [];
     page.on('request', (req) => { if (/\/(leaves|templates)(\/|\?|$)/.test(req.url()) && !['GET', 'HEAD'].includes(req.method())) writes.push(req.method()); });
     await page.goto('/templates', { waitUntil: 'networkidle' });
+    await page.getByRole('link', { name: 'Legacy prompt archive', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Product requirements brief' })).toBeVisible();
     await page.getByPlaceholder('Search templates...').fill(saved.title);
     await expect(page.getByRole('heading', { name: saved.title })).toBeVisible();

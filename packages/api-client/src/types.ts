@@ -1,3 +1,4 @@
+import type { WorkspaceAuthoringCapability } from './workspace-authoring';
 /**
  * T3X API Client Types
  */
@@ -591,7 +592,7 @@ export interface SourceThreadCapability {
   rename(id: string, input: RenameSourceThreadInput): Promise<RenameSourceThreadResult>;
   listTurns(
     sourceThreadId: string,
-    params?: PaginationParams
+    params?: PaginationParams & { order?: 'asc' | 'desc' }
   ): Promise<ListSourceThreadTurnsResponse>;
   getTurn(hash: string): Promise<SourceThreadTurn>;
   getTurnChain(hash: string): Promise<SourceThreadTurn[]>;
@@ -783,6 +784,7 @@ export interface ListWorkspaceTransitionReviewSnapshotsResponse {
 
 /** Authenticated Repository Review Workspace operations. */
 export interface RepositoryWorkspaceCapability {
+  authoring: WorkspaceAuthoringCapability;
   list(projectId: string): Promise<ListRepositoryWorkspacesResponse>;
   get(projectId: string, workspaceId: string): Promise<RepositoryWorkspaceEnvelope>;
   createExtractionProposal(

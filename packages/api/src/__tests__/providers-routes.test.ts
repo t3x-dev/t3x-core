@@ -613,4 +613,48 @@ describe('Provider Routes', () => {
       ],
     });
   });
+
+  it('persists organization model access defaults', async () => {
+    const policy = {
+      enabled_models: ['claude-sonnet-4-6', 'gpt-5.4'],
+      default_model: 'claude-sonnet-4-6',
+      task_defaults: {
+        compose: { primary_model: 'claude-sonnet-4-6', fallback_model: 'gpt-5.4' },
+        extraction: { primary_model: 'gpt-5.4', fallback_model: 'claude-sonnet-4-6' },
+        validation: { primary_model: 'claude-sonnet-4-6', fallback_model: null },
+      },
+    };
+
+    const putRes = await app.request('/v1/providers/model-access', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(policy),
+    });
+    expect(putRes.status).toBe(200);
+
+    const getRes = await app.request('/v1/providers/model-access');
+    expect(getRes.status).toBe(200);
+    const json: ApiResponse = await getRes.json();
+    expect(json.data).toEqual(policy);
+  });
+
+  it('rejects model access defaults that reference a disabled model', async () => {
+    const res = await app.request('/v1/providers/model-access', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        enabled_models: ['gpt-5.4'],
+        default_model: 'claude-sonnet-4-6',
+        task_defaults: {
+          compose: { primary_model: 'gpt-5.4', fallback_model: null },
+          extraction: { primary_model: 'gpt-5.4', fallback_model: null },
+          validation: { primary_model: 'gpt-5.4', fallback_model: null },
+        },
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const json: ApiResponse = await res.json();
+    expect(json.error.code).toBe('INVALID_MODEL_ACCESS');
+  });
 });
