@@ -3,7 +3,7 @@
 import type { StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
 import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,10 +14,18 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
 import { getProjectIdRepoPath, getProjectIdWorkspacePath } from '@/domain/project/repoPath';
+import {
+  listStudioDraftWorkspaces,
+  listStudioWorkspacesForBranches,
+  resolveStudioWorkspaceId,
+} from '@/domain/workspaces/studioTargets';
 import { useStudioCandidates } from '@/hooks/schemas/useStudioCandidates';
 import { useApplyStudioSelection, useStudioPreview } from '@/hooks/schemas/useStudioPreview';
+import { useBranches } from '@/hooks/shared/useBranches';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
+import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import styles from './SchemaStudioExperience.module.css';
 import { StudioChanges } from './StudioDefinitionPreview';
 import { StudioSamplePreview } from './StudioSamplePreview';
@@ -175,8 +183,12 @@ export function SchemaStudioExperience({
   children?: ReactNode;
 }) {
   const params = useSearchParams();
+  const router = useRouter();
   const candidates = useStudioCandidates(projectId);
   const workspaces = useProjectWorkspaces(projectId);
+  const workspaceFlow = useWorkspaceFlow();
+  const projectBranches = useBranches(projectId, true);
+  const ensuringBranches = useRef(new Map<string, Promise<void>>());
   const applySelection = useApplyStudioSelection(projectId);
   const [selection, setSelection] = useState<string[]>([]);
   const [workspaceId, setWorkspaceId] = useState(params?.get('workspace') ?? '');
@@ -201,24 +213,99 @@ export function SchemaStudioExperience({
     };
   }, []);
 
-  useEffect(() => {
-    setWorkspaceId(requestedWorkspaceId);
-  }, [requestedWorkspaceId]);
-
   const requested = params?.get('candidate');
   useEffect(() => {
     if (requested) setSelection([requested]);
   }, [requested]);
 
-  const target = workspaces.workspaces.find((item) => item.id === workspaceId);
+  const draftWorkspaces = useMemo(
+    () =>
+      listStudioWorkspacesForBranches(workspaces.workspaces, projectBranches.branches, (branch) =>
+        getProjectWorkspaceStarterCandidate(
+          projectId,
+          [],
+          branch,
+          projectBranches.branchHeads[branch] ?? null
+        )
+      ),
+    [projectBranches.branchHeads, projectBranches.branches, projectId, workspaces.workspaces]
+  );
+
+  useEffect(() => {
+    if (projectBranches.loading) return;
+    const persistedBranches = new Set(
+      listStudioDraftWorkspaces(workspaces.workspaces).map((workspace) => workspace.targetBranch)
+    );
+    const missingBranches = projectBranches.branches.filter(
+      (branch) => !persistedBranches.has(branch)
+    );
+    if (missingBranches.length === 0) return;
+
+    let cancelled = false;
+    void Promise.all(
+      missingBranches.map((branch) => {
+        const pending = ensuringBranches.current.get(branch);
+        if (pending) return pending;
+        const task = (async () => {
+          try {
+            const starter = getProjectWorkspaceStarterCandidate(
+              projectId,
+              [],
+              branch,
+              projectBranches.branchHeads[branch] ?? null
+            );
+            await workspaceFlow.saveDraft(starter);
+          } finally {
+            ensuringBranches.current.delete(branch);
+          }
+        })();
+        ensuringBranches.current.set(branch, task);
+        return task;
+      })
+    )
+      .then(async () => {
+        if (!cancelled) await workspaces.refresh();
+      })
+      .catch((cause) => {
+        if (!cancelled && mounted.current) {
+          setError(cause instanceof Error ? cause.message : 'Failed to prepare branch workspace');
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    projectBranches.branchHeads,
+    projectBranches.branches,
+    projectBranches.loading,
+    projectId,
+    workspaceFlow.saveDraft,
+    workspaces.refresh,
+    workspaces.workspaces,
+  ]);
+
+  useEffect(() => {
+    if (requestedWorkspaceId) {
+      setWorkspaceId(requestedWorkspaceId);
+      return;
+    }
+    const resolved = resolveStudioWorkspaceId(draftWorkspaces, workspaceId);
+    if (resolved !== workspaceId) setWorkspaceId(resolved);
+  }, [draftWorkspaces, requestedWorkspaceId, workspaceId]);
+
+  const target = draftWorkspaces.find((item) => item.id === workspaceId);
+  const persistedTarget = listStudioDraftWorkspaces(workspaces.workspaces).find(
+    (item) => item.id === workspaceId
+  );
   const preview = useStudioPreview(
     projectId,
     {
       candidateIds: selection,
-      ...(workspaceId ? { workspaceId } : {}),
+      ...(persistedTarget ? { workspaceId: persistedTarget.id } : {}),
       ...(compareId ? { compareToCandidateIds: [compareId] } : {}),
     },
-    target?.revision
+    persistedTarget?.revision
   );
   const data = preview.data;
   useEffect(() => {
@@ -308,7 +395,13 @@ export function SchemaStudioExperience({
   }
 
   async function apply() {
-    if (!review?.workspace || !target || review.workspace.id !== target.id || applying) return;
+    if (
+      !review?.workspace ||
+      !persistedTarget ||
+      review.workspace.id !== persistedTarget.id ||
+      applying
+    )
+      return;
     setApplying(true);
     setError(undefined);
     try {
@@ -319,10 +412,10 @@ export function SchemaStudioExperience({
         reviewHash: review.reviewHash,
       });
       if (!mounted.current) return;
-      setReview(undefined);
-      setApplied(true);
-      await workspaces.refresh();
-      if (mounted.current) preview.refresh();
+      const href = `${getProjectIdWorkspacePath(projectId, {
+        branch: persistedTarget.targetBranch,
+      })}&workspace=${encodeURIComponent(persistedTarget.id)}`;
+      router.push(href);
     } catch (cause) {
       if (mounted.current) {
         setError(cause instanceof Error ? cause.message : 'Apply failed');
@@ -335,7 +428,12 @@ export function SchemaStudioExperience({
   }
 
   function openReview() {
-    if (target && data?.workspace?.id === target.id && data?.report.valid && data?.adoption.allowed)
+    if (
+      persistedTarget &&
+      data?.workspace?.id === persistedTarget.id &&
+      data?.report.valid &&
+      data?.adoption.allowed
+    )
       setReview(data);
   }
 
@@ -353,8 +451,8 @@ export function SchemaStudioExperience({
   }
 
   const canReview =
-    !!target &&
-    data?.workspace?.id === target.id &&
+    !!persistedTarget &&
+    data?.workspace?.id === persistedTarget.id &&
     !!data?.report.valid &&
     !!data?.adoption.allowed &&
     !applying;
@@ -745,9 +843,7 @@ export function SchemaStudioExperience({
               See the exact selection preview for dependencies.
             </p>
           </div>
-          {!workspaces.loading &&
-          !workspaces.error &&
-          !workspaces.workspaces.some((item) => item.status !== 'committed') ? (
+          {!workspaces.loading && !workspaces.error && draftWorkspaces.length === 0 ? (
             <div className="mt-6 border-t border-[var(--color-brand-muted)] pt-4 text-xs text-[var(--color-brand-hover)]">
               Create a Workspace to review and apply this definition.
             </div>
@@ -767,14 +863,15 @@ export function SchemaStudioExperience({
               onChange={(event) => setWorkspaceId(event.target.value)}
               value={workspaceId}
             >
-              <option value="">Main workspace</option>
-              {workspaces.workspaces
-                .filter((item) => item.status !== 'committed')
-                .map((item) => (
+              {draftWorkspaces.length === 0 ? (
+                <option value="">No draft workspace</option>
+              ) : (
+                draftWorkspaces.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.title}
                   </option>
-                ))}
+                ))
+              )}
             </select>
           </label>
           <div className="h-4 w-px bg-[var(--color-brand-muted)]" />
