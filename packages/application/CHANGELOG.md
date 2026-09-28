@@ -1,5 +1,11 @@
 # @t3x-dev/application
 
+## 1.6.0
+
+### Minor Changes
+
+- [#1593](https://github.com/t3x-dev/t3x-core/pull/1593) [`02e6251`](https://github.com/t3x-dev/t3x-core/commit/02e6251bb3c395460767ae04144321f5f53142f2) Thanks [@etht3x](https://github.com/etht3x)! - Add an append-only Workspace Draft action ledger so Compose can record immutable manual/MCP/Assistant edits without a new protocol envelope.
+
 ## 1.4.0
 
 ### Minor Changes
