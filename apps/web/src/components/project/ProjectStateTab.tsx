@@ -486,8 +486,8 @@ export function ProjectStateTab({
     mainHeadCommitHash
   );
   const handleCreateBranch = useCallback(
-    async (name: string) => {
-      const createdBranch = await createBranch(name, 'main');
+    async (name: string, fromBranch = branchFocus) => {
+      const createdBranch = await createBranch(name, fromBranch);
       const workspaceId = `workspace_branch:${encodeURIComponent(name)}`;
       await saveDraft({
         id: workspaceId,
@@ -514,7 +514,7 @@ export function ProjectStateTab({
       });
       pushRoute(getProjectIdWorkspacePath(projectId, { branch: name }));
     },
-    [createBranch, mainSchemaBindings, projectId, pushRoute, saveDraft]
+    [branchFocus, createBranch, mainSchemaBindings, projectId, pushRoute, saveDraft]
   );
   const checkCurrentBranchForUpdates = useCallback(async () => {
     setFreshnessChecking(true);
@@ -802,7 +802,7 @@ function StateInspectionToolbar({
   headCommitHash: string | null;
   historyHref: string;
   onBranchChange: (branch: string) => void;
-  onCreateBranch: (name: string) => Promise<void>;
+  onCreateBranch: (name: string, fromBranch: string) => Promise<void>;
   onViewChange: (view: ProjectStateView) => void;
   workspaceHref: string;
 }) {

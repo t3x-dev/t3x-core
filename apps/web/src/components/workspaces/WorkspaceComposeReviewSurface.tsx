@@ -355,6 +355,7 @@ function WorkspaceStageHeader({
         <StateBranchControls
           branch={selectedBranch}
           branchOptions={availableBranches}
+          canCreateFromSearch={false}
           disabled={!onBranchChange || availableBranches.length <= 1}
           headCommitHash={null}
           onBranchChange={(branch) => void onBranchChange?.(branch)}
