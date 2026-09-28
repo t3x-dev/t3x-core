@@ -59,6 +59,7 @@ export interface UseSourceThreadGenerationOptions {
   workspaceAssistant?: WorkspaceAssistantContext;
   onConversationCreated?: (conversationId: string) => void;
   createConversation?: () => Promise<string>;
+  onConversationReady?: (conversationId: string) => void | Promise<void>;
   onTurnsSaved?: () => void;
 }
 
@@ -223,6 +224,7 @@ export function useSourceThreadGeneration({
   workspaceAssistant,
   onConversationCreated,
   createConversation,
+  onConversationReady,
   onTurnsSaved,
 }: UseSourceThreadGenerationOptions): UseSourceThreadGenerationReturn {
   const history = useChatHistory(projectId, conversationId);
@@ -438,6 +440,14 @@ export function useSourceThreadGeneration({
         }
         setTurnsSavedCounter((c) => c + 1);
         onTurnsSaved?.();
+
+        if (!isTemporaryMode && onConversationReady) {
+          try {
+            await onConversationReady(currentConversationId);
+          } catch {
+            // Context preparation is best-effort; memory may be empty if it fails.
+          }
+        }
 
         let systemMessage: GenerationMessage | null = null;
         if (!isTemporaryMode && !workspaceAssistant && !options?.skipMemoryFetch) {
@@ -849,6 +859,7 @@ export function useSourceThreadGeneration({
       workspaceAssistant,
       onConversationCreated,
       createConversation,
+      onConversationReady,
       onTurnsSaved,
       webSearchEnabled,
       thinkingEnabled,
