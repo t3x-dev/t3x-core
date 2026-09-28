@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { SchemaStudioExperience } from '@/components/schemas/SchemaStudioExperience';
 
@@ -9,8 +9,21 @@ const mocks = vi.hoisted(() => ({
   previewError: null as string | null,
   apply: vi.fn(),
   query: 'candidate=provider',
+  branches: [] as string[],
+  branchHeads: {} as Record<string, string | null>,
+  workspaces: [] as Array<{
+    id: string;
+    revision?: number;
+    status: 'draft' | 'committed';
+    targetBranch: string;
+    title: string;
+  }>,
+  refresh: vi.fn(),
+  push: vi.fn(),
+  saveDraft: vi.fn(),
 }));
 vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mocks.push }),
   useSearchParams: () => new URLSearchParams(mocks.query),
 }));
 vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
@@ -28,7 +41,26 @@ vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
   }),
 }));
 vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
-  useProjectWorkspaces: () => ({ workspaces: [], refresh: vi.fn() }),
+  useProjectWorkspaces: () => ({
+    error: null,
+    loading: false,
+    workspaces: mocks.workspaces,
+    refresh: mocks.refresh,
+  }),
+}));
+vi.mock('@/hooks/shared/useBranches', () => ({
+  useBranches: () => ({
+    branchHeads: mocks.branchHeads,
+    branches: mocks.branches,
+    loading: false,
+    refresh: vi.fn(),
+    create: vi.fn(),
+  }),
+}));
+vi.mock('@/hooks/workspaces/useWorkspaceFlow', () => ({
+  useWorkspaceFlow: () => ({
+    saveDraft: (...args: unknown[]) => mocks.saveDraft(...args),
+  }),
 }));
 vi.mock('@/hooks/schemas/useStudioPreview', () => ({
   useApplyStudioSelection: () => mocks.apply,
@@ -43,6 +75,13 @@ beforeEach(() => {
   mocks.query = 'candidate=provider';
   mocks.previewError = null;
   mocks.apply.mockReset();
+  mocks.push.mockReset();
+  mocks.refresh.mockReset();
+  mocks.saveDraft.mockReset();
+  mocks.saveDraft.mockResolvedValue({});
+  mocks.branches = [];
+  mocks.branchHeads = {};
+  mocks.workspaces = [];
   mocks.data = {
     samples: [],
     schema: { nodes: {} },
@@ -171,4 +210,80 @@ it('shows preview failures when a selected source becomes unavailable', () => {
   render(<SchemaStudioExperience projectId="p" />);
   expect(screen.getByRole('alert')).toHaveTextContent('Selected source is unavailable');
   expect(screen.getByRole('button', { name: 'Review & apply' })).toBeDisabled();
+});
+
+it('applies the selected schema to the matching branch workspace', async () => {
+  mocks.branches = ['main'];
+  mocks.branchHeads = { main: 'commit-main' };
+  mocks.workspaces = [
+    {
+      id: 'workspace_branch:main',
+      revision: 3,
+      status: 'draft',
+      targetBranch: 'main',
+      title: 'Main workspace',
+    },
+  ];
+  mocks.data = {
+    samples: [],
+    schema: { nodes: {} },
+    schemaHash: 'definition-hash',
+    reviewHash: 'review',
+    renderPlan: [],
+    origins: {},
+    sources: [],
+    modules: [],
+    report: { valid: true, issues: [] },
+    adoption: { allowed: true },
+    workspace: { id: 'workspace_branch:main', revision: 3, changes: [] },
+  };
+
+  render(<SchemaStudioExperience projectId="p" />);
+
+  expect(screen.getByLabelText('Target Workspace')).toHaveValue('workspace_branch:main');
+  fireEvent.click(screen.getByRole('button', { name: 'Review & apply' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm & apply' }));
+  expect(mocks.apply).toHaveBeenCalledWith({
+    candidateIds: ['provider'],
+    workspaceId: 'workspace_branch:main',
+    ifRevision: 3,
+    reviewHash: 'review',
+  });
+  await waitFor(() =>
+    expect(mocks.push).toHaveBeenCalledWith(
+      '/project/p?branch=main&tab=workspaces&workspace=workspace_branch%3Amain'
+    )
+  );
+});
+
+it('creates the missing Studio workspace for each repository branch', async () => {
+  mocks.branches = ['main', 'feature/schema'];
+  mocks.branchHeads = { main: 'commit-main', 'feature/schema': 'commit-feature' };
+  mocks.refresh.mockResolvedValue(undefined);
+
+  render(<SchemaStudioExperience projectId="p" />);
+
+  expect(screen.getByLabelText('Target Workspace')).toHaveValue('workspace_branch:main');
+  await waitFor(() => expect(mocks.saveDraft).toHaveBeenCalledTimes(2));
+  expect(mocks.saveDraft).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: 'workspace_branch:main',
+      projectId: 'p',
+      baseCommitHash: 'commit-main',
+      status: 'draft',
+      targetBranch: 'main',
+      title: 'Main workspace',
+    })
+  );
+  expect(mocks.saveDraft).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: 'workspace_branch:feature%2Fschema',
+      projectId: 'p',
+      baseCommitHash: 'commit-feature',
+      status: 'draft',
+      targetBranch: 'feature/schema',
+      title: 'feature/schema workspace',
+    })
+  );
+  expect(mocks.refresh).toHaveBeenCalled();
 });
