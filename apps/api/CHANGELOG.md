@@ -1,5 +1,12 @@
 # @t3x-dev/api
 
+## 1.5.1
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @t3x-dev/api@1.5.1
+
 ## 1.3.1
 
 ### Patch Changes
