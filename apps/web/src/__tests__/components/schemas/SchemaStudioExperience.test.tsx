@@ -19,11 +19,9 @@ const mocks = vi.hoisted(() => ({
     title: string;
   }>,
   refresh: vi.fn(),
-  push: vi.fn(),
   saveDraft: vi.fn(),
 }));
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mocks.push }),
   useSearchParams: () => new URLSearchParams(mocks.query),
 }));
 vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
@@ -75,7 +73,6 @@ beforeEach(() => {
   mocks.query = 'candidate=provider';
   mocks.previewError = null;
   mocks.apply.mockReset();
-  mocks.push.mockReset();
   mocks.refresh.mockReset();
   mocks.saveDraft.mockReset();
   mocks.saveDraft.mockResolvedValue({});
@@ -250,10 +247,9 @@ it('applies the selected schema to the matching branch workspace', async () => {
     reviewHash: 'review',
   });
   await waitFor(() =>
-    expect(mocks.push).toHaveBeenCalledWith(
-      '/project/p?branch=main&tab=workspaces&workspace=workspace_branch%3Amain'
-    )
+    expect(screen.getByRole('status')).toHaveTextContent('Exact definition applied')
   );
+  expect(mocks.refresh).toHaveBeenCalled();
 });
 
 it('creates the missing Studio workspace for each repository branch', async () => {

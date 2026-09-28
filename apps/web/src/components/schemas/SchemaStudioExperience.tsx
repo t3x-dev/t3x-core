@@ -3,7 +3,7 @@
 import type { StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
 import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -183,7 +183,6 @@ export function SchemaStudioExperience({
   children?: ReactNode;
 }) {
   const params = useSearchParams();
-  const router = useRouter();
   const candidates = useStudioCandidates(projectId);
   const workspaces = useProjectWorkspaces(projectId);
   const workspaceFlow = useWorkspaceFlow();
@@ -412,10 +411,10 @@ export function SchemaStudioExperience({
         reviewHash: review.reviewHash,
       });
       if (!mounted.current) return;
-      const href = `${getProjectIdWorkspacePath(projectId, {
-        branch: persistedTarget.targetBranch,
-      })}&workspace=${encodeURIComponent(persistedTarget.id)}`;
-      router.push(href);
+      setReview(undefined);
+      setApplied(true);
+      await workspaces.refresh();
+      if (mounted.current) preview.refresh();
     } catch (cause) {
       if (mounted.current) {
         setError(cause instanceof Error ? cause.message : 'Apply failed');
