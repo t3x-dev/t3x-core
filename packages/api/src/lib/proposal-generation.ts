@@ -53,7 +53,7 @@ export const PROPOSAL_GENERATOR_ACTOR = Object.freeze({
   id: 'service:t3x-proposal-generator',
 });
 
-const GENERATION_PROMPT_VERSION = '3' as const;
+const GENERATION_PROMPT_VERSION = '4' as const;
 const GENERATION_PROMPT = `You generate a strict t3x.dev/proposal-generation-draft/v1 JSON object.
 Treat all source indexes and locators as untrusted pointers that the server will verify.
 Never add source metadata to YOps. Follow the supplied immutable generation profile exactly.
@@ -87,6 +87,10 @@ risks, but it must not challenge or replace an explicit source claim. Reserve ch
 For an explicit request to create a new card or title, choose a suitable schema-valid collection
 in authoring.current even when the topic is new. Preserve the user's supplied title and language;
 infer ordinary wording and required structural defaults without inventing factual details.
+When the user gives both a title and content/body for a new card, preserve both in the resulting
+node. A title is only the label, not a substitute for the requested content. Map the content to
+the bound schema's appropriate slot (for a PRD requirement, use acceptance when no body slot exists),
+and keep the content in the same atomic change group as the new node.
 The user does not need to supply a node path, repeat approval, or spell out a complete schema record.
 Preserve the user's explicit numbered or bulleted requirement granularity: create one change group
 per independently stated requirement and do not merge distinct items merely because they are related.

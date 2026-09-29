@@ -44,6 +44,67 @@ function normalizeGeneratedClaims(
       : claim;
   return { ...parsed, intent: normalize(parsed.intent), rationale: normalize(parsed.rationale) };
 }
+
+function explicitCardFields(instruction: string): { title: string; content: string } | null {
+  const match = instruction.match(
+    /(?:标题|名称)\s*(?:为|是|[:：])\s*(.+?)\s*(?:[,，]\s*|\s+)(?:内容|正文)\s*(?:为|是|[:：])\s*(.+?)\s*[。！!]?\s*$/u
+  );
+  const title = match?.[1]?.trim().replace(/^["“]|["”]$/g, '');
+  const content = match?.[2]?.trim().replace(/^["“]|["”]$/g, '');
+  // Only complete an unambiguous two-field request; let the model handle longer prose.
+  return title && content && !/[，,；;]/u.test(content) ? { title, content } : null;
+}
+
+function completeExplicitCardContent(
+  draft: ProposalGenerationDraftV1,
+  instruction: string
+): ProposalGenerationDraftV1 {
+  const requested = explicitCardFields(instruction);
+  if (
+    !requested ||
+    JSON.stringify(draft.changes.flatMap((change) => change.operations)).includes(requested.content)
+  )
+    return draft;
+  return {
+    ...draft,
+    changes: draft.changes.map((change) => ({
+      ...change,
+      operations: change.operations.map((operation) => {
+        if (!operation || typeof operation !== 'object' || Array.isArray(operation))
+          return operation;
+        const append = 'append' in operation ? operation.append : null;
+        if (!append || typeof append !== 'object' || Array.isArray(append)) return operation;
+        const path = 'path' in append ? append.path : null;
+        const node = 'value' in append ? append.value : null;
+        if (
+          typeof path !== 'string' ||
+          !path.endsWith('/[key=requirements]/children') ||
+          !node ||
+          typeof node !== 'object' ||
+          Array.isArray(node)
+        )
+          return operation;
+        const slots = 'slots' in node ? node.slots : null;
+        if (!slots || typeof slots !== 'object' || Array.isArray(slots)) return operation;
+        if (!('title' in slots) || slots.title !== requested.title) return operation;
+        return {
+          append: {
+            ...append,
+            value: {
+              ...node,
+              slots: {
+                ...slots,
+                priority: 'priority' in slots ? slots.priority : 'should',
+                acceptance: [requested.content],
+              },
+            },
+          },
+        };
+      }),
+    })),
+  };
+}
+
 export async function defaultProposalGenerationModel(input: {
   db: AnyDB;
   projectId: string;
@@ -100,13 +161,19 @@ export async function defaultProposalGenerationModel(input: {
             temperature: 0,
             maxTokens: 16_000,
           });
-          const draft = normalizeGeneratedClaims(result.data, generation.sources);
+          const draft = completeExplicitCardContent(
+            normalizeGeneratedClaims(result.data, generation.sources),
+            generation.instruction
+          );
           if (generation.authoring) {
             const operations = NativeYOpSchema.array().safeParse(
               draft.changes.flatMap((change) => change.operations)
             );
             const applied = operations.success
-              ? applyNativeYOps(generation.authoring.current, operations.data)
+              ? applyNativeYOps(
+                  generation.authoring.current,
+                  operations.data as Parameters<typeof applyNativeYOps>[1]
+                )
               : null;
             if (!operations.success || !applied?.ok) {
               throw new LLMProviderError(
@@ -124,6 +191,24 @@ export async function defaultProposalGenerationModel(input: {
                         },
                       ]
                     : operations.error.issues,
+                }
+              );
+            }
+            const requestedContent = explicitCardFields(generation.instruction)?.content;
+            if (requestedContent && !JSON.stringify(operations.data).includes(requestedContent)) {
+              throw new LLMProviderError(
+                resolved.providerId,
+                undefined,
+                'Generated card omitted explicitly requested content',
+                'SCHEMA_MISMATCH',
+                {
+                  jsonText: JSON.stringify(draft),
+                  issues: [
+                    {
+                      path: ['changes', 'operations'],
+                      message: `Include the user-supplied card content ${JSON.stringify(requestedContent)} in the schema-valid node, separately from its title.`,
+                    },
+                  ],
                 }
               );
             }

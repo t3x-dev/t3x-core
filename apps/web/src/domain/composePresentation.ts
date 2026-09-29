@@ -59,6 +59,24 @@ export function composeNodeTitle(value: unknown): string | undefined {
   return typeof title === 'string' && title.trim() ? title : undefined;
 }
 
+export function composeNodeContent(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const slots = (value as Record<string, unknown>).slots;
+  if (!slots || typeof slots !== 'object' || Array.isArray(slots)) return undefined;
+  const fields = slots as Record<string, unknown>;
+  for (const key of ['content', 'body', 'description', 'acceptance']) {
+    const field = fields[key];
+    if (typeof field === 'string' && field.trim()) return field;
+    if (Array.isArray(field)) {
+      const content = field.filter(
+        (item): item is string => typeof item === 'string' && !!item.trim()
+      );
+      if (content.length) return content.join('; ');
+    }
+  }
+  return undefined;
+}
+
 export function composeValueLabel(value: unknown, fallback: string): string {
   if (value === undefined) return fallback;
   if (value === null) return 'Empty';
@@ -209,6 +227,17 @@ export function composeValueChangeLabels(
   beforeFallback = 'Absent',
   afterFallback = 'Absent'
 ) {
+  const beforeTitle = composeNodeTitle(before);
+  const afterTitle = composeNodeTitle(after);
+  if (beforeTitle && beforeTitle === afterTitle) {
+    const beforeContent = composeNodeContent(before);
+    const afterContent = composeNodeContent(after);
+    if (beforeContent !== afterContent)
+      return {
+        before: beforeContent ?? 'No content recorded',
+        after: afterContent ?? 'No content recorded',
+      };
+  }
   const pair = changedLeafPair(before, after) ?? { before, after };
   return {
     before: composeValueLabel(pair.before, beforeFallback),

@@ -21,6 +21,7 @@ export type AssistantEvent =
 export async function runAssistantProvider(input: {
   provider: LLMProvider;
   model: string;
+  reasoningEffort?: 'low' | 'medium' | 'high';
   prompt: LLMPrompt;
   capabilities: AssistantCapabilities;
   inference: AssistantInference;
@@ -106,7 +107,7 @@ export async function runAssistantProvider(input: {
           let usage = { inputTokens: 0, outputTokens: 0 };
           for await (const event of input.provider.streamFromPrompt!(
             prompt,
-            { model: input.model, maxTokens: 4096 },
+            { model: input.model, maxTokens: 4096, reasoningEffort: input.reasoningEffort },
             input.signal
           )) {
             if (input.signal?.aborted) break;
@@ -141,12 +142,16 @@ export async function runAssistantProvider(input: {
           const result = await input.provider.generateWithTools!(
             prompt,
             Object.values(input.capabilities).map((capability) => capability.definition),
-            { model: input.model, maxTokens: 4096 }
+            { model: input.model, maxTokens: 4096, reasoningEffort: input.reasoningEffort }
           );
           return { value: result, usage: result.usage };
         }
         const result = input.provider.generateFromPrompt
-          ? await input.provider.generateFromPrompt(prompt, { model: input.model, maxTokens: 4096 })
+          ? await input.provider.generateFromPrompt(prompt, {
+              model: input.model,
+              maxTokens: 4096,
+              reasoningEffort: input.reasoningEffort,
+            })
           : await input.provider.generate(JSON.stringify(prompt), { maxTokens: 4096 });
         return {
           value: {

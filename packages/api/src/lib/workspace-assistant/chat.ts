@@ -13,6 +13,7 @@ export async function chatWithWorkspace(input: {
   actor: DraftActionActor;
   provider: LLMProvider;
   model: string;
+  reasoningEffort?: 'low' | 'medium' | 'high';
   inference: AssistantInference;
   operationNamespace: string;
   authorize: (capability: 'read' | 'propose') => Promise<void>;

@@ -161,6 +161,76 @@ describe('Proposal generation targeted repair', () => {
     expect(generateStructured).toHaveBeenCalledTimes(1);
   });
 
+  it('completes a new PRD requirement with the explicitly requested title and content', async () => {
+    const requested = {
+      ...input,
+      instruction: '新建1个卡片标题为气温 内容为低于30度',
+      authoring: {
+        current: {
+          content: {
+            trees: [
+              {
+                key: 'prd',
+                slots: {},
+                children: [{ key: 'requirements', slots: {}, children: [] }],
+              },
+            ],
+            relations: [],
+          },
+        },
+      },
+    };
+    const path = 'content/trees/[key=prd]/children/[key=requirements]/children';
+    const titleOnly = {
+      ...draft,
+      changes: [
+        {
+          ...draft.changes[0],
+          operations: [
+            {
+              append: {
+                path,
+                value: { key: 'temperature', slots: { title: '气温' }, children: [] },
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const complete = {
+      ...draft,
+      changes: [
+        {
+          ...draft.changes[0],
+          operations: [
+            {
+              append: {
+                path,
+                value: {
+                  key: 'temperature',
+                  slots: { title: '气温', priority: 'should', acceptance: ['低于30度'] },
+                  children: [],
+                },
+              },
+            },
+          ],
+        },
+      ],
+    };
+    generateStructured.mockResolvedValueOnce({ data: titleOnly });
+    expect((await (await model()).generate(requested)).draft).toEqual(complete);
+    expect(generateStructured).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a card if a retry still omits the requested content', async () => {
+    const requested = { ...input, instruction: '新建1个卡片标题为气温 内容为低于30度' };
+    generateStructured.mockResolvedValue({ data: draft });
+    await expect((await model()).generate(requested)).rejects.toThrow(
+      'Generated card omitted explicitly requested content'
+    );
+    expect(generateStructured).toHaveBeenCalledTimes(2);
+  });
+
   it('still accepts in-place edits against an existing Draft', async () => {
     const edit = {
       ...draft,

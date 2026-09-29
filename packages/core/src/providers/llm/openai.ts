@@ -166,6 +166,7 @@ export class OpenAIProvider implements LLMProvider {
         body: JSON.stringify(
           buildOpenAIChatCompletionBody({
             model: options.model,
+            reasoningEffort: options.reasoningEffort,
             maxTokens,
             temperature,
             messages,
@@ -250,6 +251,7 @@ export class OpenAIProvider implements LLMProvider {
         body: JSON.stringify({
           ...buildOpenAIChatCompletionBody({
             model: options.model,
+            reasoningEffort: options.reasoningEffort,
             maxTokens,
             temperature,
             messages,

@@ -19,6 +19,7 @@ import {
 } from '@/domain/composeActivity';
 import {
   composeActorLabel,
+  composeNodeContent,
   composeNodeTitle,
   composePathLabel,
   composeTextChangeSegments,
@@ -258,8 +259,14 @@ export function ComposeActivityTimeline({
                         composeNodeTitle(card.after) ??
                         composeNodeTitle(card.before) ??
                         composePathLabel(card.path, card.nodeId);
-                      const { before, after } = composeValueChangeLabels(card.before, card.after);
                       const cardKind = activityChangeKind([card]);
+                      const { before, after } =
+                        cardKind === 'added' && composeNodeTitle(card.after)
+                          ? {
+                              before: 'Absent',
+                              after: composeNodeContent(card.after) ?? 'No content recorded',
+                            }
+                          : composeValueChangeLabels(card.before, card.after);
                       return (
                         <button
                           type="button"

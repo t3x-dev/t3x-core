@@ -95,10 +95,13 @@
 }
 .switch {
   position: relative;
+  display: block;
+  padding: 0;
+  border: 0;
   width: 26px;
   height: 16px;
   flex: none;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-pill, 9999px);
   background: var(--stroke-strong);
   transition: background var(--motion-fast) var(--ease-out-soft);
 }
@@ -121,6 +124,7 @@
 }
 .switch:disabled {
   cursor: not-allowed;
+  opacity: 0.5;
 }
 .detailPanel {
   display: flex;

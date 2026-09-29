@@ -16,6 +16,7 @@ function fixture() {
     events,
     input: {
       model: 'test-model',
+      reasoningEffort: 'high' as const,
       prompt: {
         system: 'test',
         messages: [{ role: 'user' as const, content: 'Explain current Draft' }],
@@ -66,6 +67,7 @@ describe('metered Assistant loop', () => {
         },
       },
     });
+    expect(generateWithTools.mock.calls[0]?.[2]).toMatchObject({ reasoningEffort: 'high' });
     expect(metered).toHaveBeenCalledTimes(2);
     expect(input.assertCurrent).toHaveBeenCalledTimes(2);
     expect(execute.mock.calls[0]?.[1]).toMatch(/^assistant:[a-f0-9]{64}$/);

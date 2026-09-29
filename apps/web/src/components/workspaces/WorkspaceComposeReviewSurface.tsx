@@ -85,6 +85,7 @@ import {
 } from '@/domain/composeActivity';
 import {
   composeActorLabel,
+  composeNodeContent,
   composeNodeTitle,
   composePathLabel,
   composeTextChangeSegments,
@@ -1321,17 +1322,16 @@ function ProposedDraftPanel({
         : findWorkspaceReviewSource(candidate.sourceBundle, operation.sourceRefs?.[0]);
     const beforeValue = operation.beforeValue;
     const afterValue = meta ? operation.afterValue : (operation.afterValue ?? operation.summary);
-    const valueLabels = composeValueChangeLabels(
-      beforeValue,
-      afterValue,
-      meta ? 'Absent' : 'Current value',
-      meta ? 'Absent' : 'Updated'
-    );
     const addedRequirement =
-      meta?.comparison === 'draft' &&
-      field.label === 'Requirement' &&
-      beforeValue === undefined &&
-      afterValue !== undefined;
+      field.label === 'Requirement' && beforeValue === undefined && afterValue !== undefined;
+    const valueLabels = addedRequirement
+      ? { before: 'Absent', after: composeNodeContent(afterValue) ?? 'No content recorded' }
+      : composeValueChangeLabels(
+          beforeValue,
+          afterValue,
+          meta ? 'Absent' : 'Current value',
+          meta ? 'Absent' : 'Updated'
+        );
     const cardTitle =
       composeNodeTitle(afterValue) ??
       composeNodeTitle(beforeValue) ??
@@ -1404,37 +1404,35 @@ function ProposedDraftPanel({
           </button>
         </div>
         <div className={composeStyles.collapsedDetail}>
-          {!addedRequirement ? (
-            <div className={composeStyles.values}>
-              <div>
-                <span
-                  className={`${composeStyles.value} ${composeStyles.before}`}
-                  title={valueLabels.before}
-                >
-                  {valueChange.prefix}
-                  {valueChange.before ? <del>{valueChange.before}</del> : null}
-                  {valueChange.suffix}
-                </span>
-                <span className={composeStyles.valueLabel}>
-                  {meta?.comparison === 'event' ? 'Before event' : 'Current (base)'}
-                </span>
-              </div>
-              <ArrowRight aria-hidden="true" className={composeStyles.valueArrow} />
-              <div>
-                <span
-                  className={`${composeStyles.value} ${composeStyles.after}`}
-                  title={valueLabels.after}
-                >
-                  {valueChange.prefix}
-                  {valueChange.after ? <ins>{valueChange.after}</ins> : null}
-                  {valueChange.suffix}
-                </span>
-                <span className={composeStyles.valueLabel}>
-                  {meta?.comparison === 'event' ? 'After event' : 'Proposed (draft)'}
-                </span>
-              </div>
+          <div className={composeStyles.values}>
+            <div>
+              <span
+                className={`${composeStyles.value} ${composeStyles.before}`}
+                title={valueLabels.before}
+              >
+                {valueChange.prefix}
+                {valueChange.before ? <del>{valueChange.before}</del> : null}
+                {valueChange.suffix}
+              </span>
+              <span className={composeStyles.valueLabel}>
+                {meta?.comparison === 'event' ? 'Before event' : 'Current (base)'}
+              </span>
             </div>
-          ) : null}
+            <ArrowRight aria-hidden="true" className={composeStyles.valueArrow} />
+            <div>
+              <span
+                className={`${composeStyles.value} ${composeStyles.after}`}
+                title={valueLabels.after}
+              >
+                {valueChange.prefix}
+                {valueChange.after ? <ins>{valueChange.after}</ins> : null}
+                {valueChange.suffix}
+              </span>
+              <span className={composeStyles.valueLabel}>
+                {meta?.comparison === 'event' ? 'After event' : 'Proposed (draft)'}
+              </span>
+            </div>
+          </div>
           {operationSource ? (
             <div className={composeStyles.sourceRow}>
               <FileText aria-hidden="true" className="size-4" />

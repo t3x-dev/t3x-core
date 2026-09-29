@@ -56,11 +56,16 @@ describe('provider prompt streaming', () => {
       ])
     );
     const provider = new OpenAIProvider({ apiKey: 'test' });
-    expect(await collect(provider.streamFromPrompt(prompt, { model: 'gpt-5.4' }))).toEqual([
+    expect(
+      await collect(provider.streamFromPrompt(prompt, { model: 'gpt-5.4', reasoningEffort: 'low' }))
+    ).toEqual([
       { type: 'text', text: 'Hel' },
       { type: 'text', text: 'lo' },
       { type: 'done', usage: { inputTokens: 3, outputTokens: 2 } },
     ]);
+    const body = JSON.parse(mockFetch.mock.calls[0]?.[1].body);
+    expect(body.reasoning_effort).toBe('low');
+    expect(body.temperature).toBeUndefined();
   });
 
   it('streams Gemini visible parts and usage', async () => {

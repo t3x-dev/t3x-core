@@ -252,6 +252,9 @@ export function useSourceThreadGeneration({
 
   const webSearchEnabled = useChatSessionStore((s) => s.webSearchEnabled);
   const thinkingEnabled = useChatSessionStore((s) => s.thinkingEnabled);
+  const reasoningEffort = useChatSessionStore((s) => s.reasoningEffort);
+  const contextMode = useChatSessionStore((s) => s.contextMode);
+  const fastEnabled = useChatSessionStore((s) => s.fastEnabled);
 
   const sendMessage = useCallback(
     async (messageOverride?: string, options?: SendMessageOptions) => {
@@ -533,7 +536,14 @@ export function useSourceThreadGeneration({
               projectId,
               assistantContext,
               { conversationId: currentConversationId, userTurnHash: savedUserTurnHash },
-              { signal: controller.signal, provider, model }
+              {
+                signal: controller.signal,
+                provider,
+                model,
+                reasoningEffort,
+                contextMode,
+                fast: fastEnabled,
+              }
             )) {
               if (event.type === 'context') {
                 setWorkspaceActivity((current) =>
@@ -873,6 +883,9 @@ export function useSourceThreadGeneration({
       onTurnsSaved,
       webSearchEnabled,
       thinkingEnabled,
+      reasoningEffort,
+      contextMode,
+      fastEnabled,
       isTemporaryMode,
     ]
   );

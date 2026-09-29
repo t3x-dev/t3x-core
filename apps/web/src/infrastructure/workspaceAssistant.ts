@@ -26,7 +26,14 @@ export async function* streamWorkspaceAssistant(
   projectId: string,
   context: WorkspaceAssistantContext,
   turn: { conversationId: string; userTurnHash: string },
-  options: { signal: AbortSignal; provider?: string; model?: string }
+  options: {
+    signal: AbortSignal;
+    provider?: string;
+    model?: string;
+    reasoningEffort?: 'low' | 'medium' | 'high';
+    contextMode?: 'auto' | 'compact' | 'expanded';
+    fast?: boolean;
+  }
 ): AsyncGenerator<WorkspaceAssistantEvent> {
   const headers = await injectAuthHeaders(new Headers({ 'Content-Type': 'application/json' }));
   const res = await fetch(
@@ -47,6 +54,9 @@ export async function* streamWorkspaceAssistant(
         posture: context.posture ?? 'source_only',
         provider: options.provider,
         model: options.model,
+        reasoning_effort: options.reasoningEffort,
+        context_mode: options.contextMode,
+        fast: options.fast,
       }),
     }
   );

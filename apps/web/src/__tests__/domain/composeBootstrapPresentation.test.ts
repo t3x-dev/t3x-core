@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { expandComposeActivityCards } from '@/domain/composeActivity';
-import { composeNodeTitle, composeValueChangeLabels } from '@/domain/composePresentation';
+import {
+  composeNodeContent,
+  composeNodeTitle,
+  composeValueChangeLabels,
+} from '@/domain/composePresentation';
 
 describe('Compose bootstrap presentation', () => {
   const requirement = { key: 'req_weather_qingtian', slots: { title: '天气为晴天' }, children: [] };
@@ -26,11 +30,26 @@ describe('Compose bootstrap presentation', () => {
       after: requirement,
     });
     expect(composeNodeTitle(cards[0].after)).toBe('天气为晴天');
+    expect(composeNodeContent(cards[0].after)).toBeUndefined();
     expect(composeValueChangeLabels(undefined, cards[0].after)).toEqual({
       before: 'Absent',
       after: '天气为晴天',
     });
     expect(JSON.stringify(card)).toBe(original);
+  });
+
+  it('keeps a requirement title separate from its saved content', () => {
+    const before = { key: 'temperature', slots: { title: '气温' }, children: [] };
+    const after = {
+      key: 'temperature',
+      slots: { title: '气温', priority: 'should', acceptance: ['低于30度'] },
+      children: [],
+    };
+    expect(composeNodeContent(after)).toBe('低于30度');
+    expect(composeValueChangeLabels(before, after)).toEqual({
+      before: 'No content recorded',
+      after: '低于30度',
+    });
   });
 
   it('handles removal and multiple siblings without dropping requirements', () => {

@@ -246,7 +246,17 @@ export class GeminiProvider implements LLMProvider {
     const maxTokens = options.maxTokens ?? 2048;
     const model = options.model ?? this.model;
     const url = `${this.baseUrl}/models/${model}:generateContent`;
-    const thinkingConfig = this.buildThinkingConfig(model);
+    const thinkingConfig =
+      options.reasoningEffort && this.supportsLegacyGenerationConfig(model)
+        ? {
+            thinkingBudget:
+              options.reasoningEffort === 'high'
+                ? 4096
+                : options.reasoningEffort === 'medium'
+                  ? 2048
+                  : 256,
+          }
+        : this.buildThinkingConfig(model);
 
     const contents = prompt.messages.map((msg) => ({
       role: msg.role === 'assistant' ? 'model' : msg.role,
@@ -337,7 +347,17 @@ export class GeminiProvider implements LLMProvider {
     const maxTokens = options.maxTokens ?? 2048;
     const model = options.model ?? this.model;
     const url = `${this.baseUrl}/models/${model}:streamGenerateContent?alt=sse`;
-    const thinkingConfig = this.buildThinkingConfig(model);
+    const thinkingConfig =
+      options.reasoningEffort && this.supportsLegacyGenerationConfig(model)
+        ? {
+            thinkingBudget:
+              options.reasoningEffort === 'high'
+                ? 4096
+                : options.reasoningEffort === 'medium'
+                  ? 2048
+                  : 256,
+          }
+        : this.buildThinkingConfig(model);
     const contents = prompt.messages.map((message) => ({
       role: message.role === 'assistant' ? 'model' : message.role,
       parts: [

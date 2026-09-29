@@ -65,6 +65,9 @@ const Request = z
     posture: z.enum(['source_only', 'guided', 'recommend']).default('source_only'),
     provider: z.string().max(100).optional(),
     model: z.string().max(200).optional(),
+    reasoning_effort: z.enum(['low', 'medium', 'high']).optional(),
+    context_mode: z.enum(['auto', 'compact', 'expanded']).default('auto'),
+    fast: z.boolean().default(false),
   })
   .strict();
 const Params = z.object({ projectId: z.string().min(1), workspaceId: z.string().min(1) });
@@ -165,10 +168,17 @@ workspaceAssistantRoutes.post(
             sourceMaterialIds: body.source_material_ids,
             selectedActionId: body.selected_action_id,
             selectedNodeId: body.selected_node_id,
+            maxContextChars:
+              body.context_mode === 'compact'
+                ? 16_000
+                : body.context_mode === 'expanded'
+                  ? 96_000
+                  : undefined,
           },
           actor: principal.actor,
           provider,
           model: resolved.model,
+          reasoningEffort: body.fast ? 'low' : body.reasoning_effort,
           inference: {
             runtime: getInferenceRuntime(c) ?? defaultRuntime,
             runId: resolveInferenceRunId(c),
