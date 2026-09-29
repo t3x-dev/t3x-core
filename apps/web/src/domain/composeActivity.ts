@@ -74,18 +74,31 @@ export function composeEventCards(
   event: ComposeActivityEvent,
   cards: Record<string, WorkspaceAuthoringCard[]>
 ) {
-  const merged = new Map<string, WorkspaceAuthoringCard>();
-  for (const action of event.actions)
-    for (const card of cards[action.actionId] ?? []) {
-      const first = merged.get(card.nodeId);
-      merged.set(
-        card.nodeId,
-        first
-          ? { ...card, before: first.before, beforePath: first.beforePath ?? first.path }
-          : { ...card }
-      );
+  const merged: WorkspaceAuthoringCard[] = [];
+  for (const action of event.actions) {
+    // Expand bootstrap containers first so later edits match their actual nodes.
+    const expanded = expandComposeActivityCards(cards[action.actionId] ?? []);
+    for (const card of expanded) {
+      let index = merged.findIndex((item) => item.path === card.path);
+      if (index < 0 && card.beforePath)
+        index = merged.findIndex((item) => item.path === card.beforePath);
+      if (index < 0) {
+        const identities = merged.flatMap((item, i) => (item.nodeId === card.nodeId ? [i] : []));
+        if (
+          identities.length === 1 &&
+          expanded.filter((item) => item.nodeId === card.nodeId).length === 1
+        )
+          index = identities[0];
+      }
+      const first = merged[index];
+      const combined = first
+        ? { ...card, before: first.before, beforePath: first.beforePath ?? first.path }
+        : { ...card };
+      if (index < 0) merged.push(combined);
+      else merged[index] = combined;
     }
-  return expandComposeActivityCards([...merged.values()]);
+  }
+  return merged;
 }
 
 export function expandComposeActivityCards(cards: readonly WorkspaceAuthoringCard[]) {
@@ -138,15 +151,25 @@ function expandComposeActivityCard(card: WorkspaceAuthoringCard): WorkspaceAutho
     addedOrRemoved &&
     Array.isArray(addedOrRemoved.children) &&
     addedOrRemoved.children.length > 0 &&
-    Object.keys(addedOrRemoved).every((key) => ['key', 'slots', 'children'].includes(key)) &&
-    Object.keys(recordValue(addedOrRemoved.slots) ?? {}).length === 0
+    Object.keys(addedOrRemoved).every((key) => ['key', 'slots', 'children'].includes(key))
   ) {
-    return expandComposeActivityCard({
+    // A container can have its own slots as well as children. Neither may hide
+    // the other when the entire subtree is introduced in a single operation.
+    const slots = Object.keys(recordValue(addedOrRemoved.slots) ?? {}).map((key) => ({
       ...card,
-      path: `${card.path}/children`,
-      before: before?.children as TransitionProtocolValue | undefined,
-      after: after?.children as TransitionProtocolValue | undefined,
-    });
+      path: `${card.path}/slots/${key}`,
+      before: recordValue(before?.slots)?.[key] as TransitionProtocolValue | undefined,
+      after: recordValue(after?.slots)?.[key] as TransitionProtocolValue | undefined,
+    }));
+    return [
+      ...slots,
+      ...expandComposeActivityCard({
+        ...card,
+        path: `${card.path}/children`,
+        before: before?.children as TransitionProtocolValue | undefined,
+        after: after?.children as TransitionProtocolValue | undefined,
+      }),
+    ];
   }
   if (before && after && Array.isArray(before.children) && Array.isArray(after.children)) {
     const beforeRest = { ...before, children: undefined };

@@ -630,6 +630,11 @@ it('generates incrementally over saved manual edits, then publishes one verified
   expect(view.pendingCandidates).toEqual([]);
   expect(view.selected?.cards).toHaveLength(1);
   expect(view.netDiff).toHaveLength(2);
+  expect(view.selected?.before).toEqual({ manual: 'keep' });
+  expect(view.selected?.after).toEqual({
+    manual: 'keep',
+    prd: { audience: 'enterprise operators' },
+  });
   const finalGraph = await materializeTransitionProposal({
     db,
     projectId: data.projectId,

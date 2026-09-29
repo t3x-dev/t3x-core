@@ -15,6 +15,7 @@ import {
   type PublishDraftActionResult,
   parseDraftActionLedger,
   publishDraftAction,
+  replayToRevision,
   selectedActionView,
 } from '@t3x-dev/application';
 import { createYOpsEffect, createYOpsState, describeTransitionObject } from '@t3x-dev/core';
@@ -312,7 +313,13 @@ export async function readWorkspaceAuthoring(
       };
     }),
     nextBeforeSequence: actions.length === limit ? actions.at(-1)!.sequence : null,
-    selected,
+    selected: selected
+      ? {
+          ...selected,
+          before: replayToRevision(ledger, selected.action.beforeRevision),
+          after: replayToRevision(ledger, selected.action.afterRevision),
+        }
+      : null,
     base: ledger.base,
     current: currentComposition(ledger),
     netDiff: netDiffCards(ledger),

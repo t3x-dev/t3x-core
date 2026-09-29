@@ -1,5 +1,5 @@
 import type { TransitionProtocolValue } from '@t3x-dev/api-client';
-import { ArrowRight, Clock3, Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import { Clock3, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   activityChannelLabel,
@@ -8,8 +8,10 @@ import {
 } from '@/domain/composeActivity';
 import {
   composeActorLabel,
+  composeNodeTitle,
   composePathBreadcrumb,
   composePathLabel,
+  composeTextDiff,
   composeValueChangeLabels,
   composeValueLabel,
 } from '@/domain/composePresentation';
@@ -166,7 +168,6 @@ export function ComposeNodeHistoryPanel({
       : (derivedNode ?? activity.node);
   if (!node)
     return <p className={styles.nodeHistoryMessage}>No history is available for this field.</p>;
-  const isDerivedNode = node === derivedNode;
   const latest = node.entries[0];
   const startEditingCurrent = () => {
     setValue(editorValue(node.current));
@@ -200,31 +201,19 @@ export function ComposeNodeHistoryPanel({
   return (
     <div className={styles.nodeHistory}>
       <div className={styles.nodeHistoryScroll}>
-        <div className={styles.nodeHistoryIdentity}>
-          <span>NODE DETAIL</span>
-          <strong>{composePathLabel(node.path, node.nodeId)}</strong>
-          <small title={node.path ?? node.nodeId}>
-            {composePathBreadcrumb(node.path, node.nodeId)}
-          </small>
-        </div>
-
-        <section className={styles.currentNodeValue}>
-          <span>CURRENT VALUE · DRAFT r{activity.compositionRevision ?? '—'}</span>
-          <strong
-            className={styles.nodeCurrentValue}
-            title={composeValueLabel(node.current, 'Absent')}
-          >
-            {composeValueLabel(node.current, 'Absent')}
+        <header className={styles.historySummary}>
+          <small>NODE HISTORY · WITHIN THIS DRAFT</small>
+          <strong>
+            {composeNodeTitle(node.current) ?? composePathLabel(node.path, node.nodeId)}
           </strong>
-          <small>
-            {latest
-              ? `Latest: ${actorLabel(latest.actor.id)} · ${activityChannelLabel(latest.channel)} · may differ from selected action`
-              : `No saved revisions · ${node.state}`}
-          </small>
-          {node.state === 'present' && !isDerivedNode && !isSimpleNodeValue(node.current) ? (
-            <small>Edit an individual child field from its own change card.</small>
-          ) : null}
-        </section>
+          <div>
+            Now{' '}
+            <b title={composeValueLabel(node.current, 'Absent')}>
+              {composeValueLabel(node.current, 'Absent')}
+            </b>{' '}
+            · {node.entries.length} changes in this draft
+          </div>
+        </header>
 
         {editing ? (
           <section className={styles.nodeEditor} aria-label="Edit current Draft value">
@@ -275,43 +264,75 @@ export function ComposeNodeHistoryPanel({
 
         {activity.notice ? <p className={styles.nodeHistoryNotice}>{activity.notice}</p> : null}
 
-        <div className={styles.nodeHistoryHeading}>
-          <strong>Revision history</strong>
-          <span>{node.entries.length} saved changes</span>
-        </div>
-        <div className={styles.nodeHistoryTimeline}>
+        <div className={styles.historyCards}>
           {node.entries.map((entry) => {
             const action = activity.actions.find((item) => item.actionId === entry.actionId);
             const actor = actorLabel(entry.actor.id);
             const values = composeValueChangeLabels(entry.before, entry.after);
+            const parts = composeTextDiff(values.before, values.after);
+            const changed = (kind: 'added' | 'removed') =>
+              [
+                ...new Set(
+                  parts.filter((part) => part.kind === kind).map((part) => part.text.trim())
+                ),
+              ]
+                .filter(Boolean)
+                .join(' … ') || '—';
+            const added = entry.before === undefined;
+            const removed = entry.after === undefined;
             return (
-              <article key={`${entry.actionId}:${entry.revision}`} data-selected={entry.isSelected}>
-                <small>
-                  {new Date(entry.publishedAt).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}{' '}
-                  · {actor} / {activityChannelLabel(entry.channel)}
+              <article
+                className={styles.historyCard}
+                key={`${entry.actionId}:${entry.revision}`}
+                data-selected={entry.isSelected}
+                data-channel={entry.channel}
+              >
+                <header>
+                  <strong>{action?.reason || `Change #${entry.sequence}`}</strong>
+                  <span data-kind={added ? 'added' : removed ? 'removed' : 'changed'}>
+                    {added ? 'Added' : removed ? 'Removed' : 'Changed'}
+                  </span>
+                </header>
+                <small className={styles.historyPath} title={node.path ?? node.nodeId}>
+                  {composePathBreadcrumb(node.path, node.nodeId)}
                 </small>
-                <div className={styles.nodeHistoryDelta}>
-                  <span className={styles.nodeHistoryBefore} title={values.before}>
-                    {values.before}
-                  </span>
-                  <ArrowRight aria-hidden="true" />
-                  <span className={styles.nodeHistoryAfter} title={values.after}>
-                    {values.after}
-                  </span>
+                <div className={styles.historyValues}>
+                  {!added && (
+                    <del title={values.before}>{removed ? values.before : changed('removed')}</del>
+                  )}
+                  {!added && !removed && <span>→</span>}
+                  {!removed && (
+                    <ins title={values.after}>{added ? values.after : changed('added')}</ins>
+                  )}
                 </div>
-                {action?.reason ? <p>{action.reason}</p> : null}
-                <button
-                  onClick={() => onOpenAction(entry.actionId, entry.ownerNodeId)}
-                  type="button"
-                >
-                  View action · #{entry.sequence}
-                </button>
+                <footer>
+                  <span className={styles.historyAvatar}>
+                    {entry.channel === 'assistant' ? '✦' : actor.slice(0, 1).toUpperCase()}
+                  </span>
+                  <small>
+                    {actor} · {activityChannelLabel(entry.channel)} ·{' '}
+                    {new Date(entry.publishedAt).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </small>
+                  <button
+                    type="button"
+                    onClick={() => onOpenAction(entry.actionId, entry.ownerNodeId)}
+                  >
+                    In feed ↗
+                  </button>
+                </footer>
               </article>
             );
           })}
+          {activity.nodeCursor === null && node.entries.length > 0 && (
+            <article className={styles.historyBase}>
+              <strong>Before this draft</strong>
+              <small>Initial value</small>
+              <span>{composeValueLabel(node.entries.at(-1)?.before, 'Absent')}</span>
+            </article>
+          )}
         </div>
         {activity.nodeCursor !== null ? (
           <button
@@ -323,9 +344,6 @@ export function ComposeNodeHistoryPanel({
             Show earlier revisions
           </button>
         ) : null}
-        <p className={styles.nodeHistoryFootnote}>
-          History is immutable. Editing today’s value creates a new Action against the latest Draft.
-        </p>
       </div>
       <div className={styles.nodeActionBar}>
         <button

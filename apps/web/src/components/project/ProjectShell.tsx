@@ -67,7 +67,7 @@ export function ProjectShell({
   const returnQuery = returnParams.toString();
   const returnTo = returnQuery ? `${repoPath}?${returnQuery}` : repoPath;
   const settingsHref = project.id
-    ? `/project/${encodeURIComponent(project.id)}/settings?returnTo=${encodeURIComponent(returnTo)}`
+    ? `/settings?project=${encodeURIComponent(project.id)}&returnTo=${encodeURIComponent(returnTo)}`
     : '/settings';
   const ownerLabel = ownerSlug || 'Projects';
   const ownerMark = ownerSlug ? ownerSlug.slice(0, 2).toUpperCase() : 'P';

@@ -1754,13 +1754,13 @@
   width: fit-content;
   margin: 0;
   border-radius: 4px;
-  background: var(--diff-added-bg);
+  background: transparent;
   padding: 2px 6px;
   overflow-wrap: anywhere;
   font-size: 18px;
   line-height: 24px;
   font-weight: 650;
-  color: var(--diff-added-text);
+  color: var(--text-primary);
 }
 .currentNodeValue small {
   font-size: 10px;
@@ -2720,4 +2720,257 @@
     border-radius: 0;
     box-shadow: none;
   }
+}
+
+.nodeHistoryTimeline article > .nodeHistoryDelta {
+  display: block;
+}
+.nodeHistoryInline {
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+}
+.nodeHistoryInline del {
+  background: var(--diff-removed-bg);
+  color: var(--diff-removed-text);
+}
+.nodeHistoryInline ins {
+  background: var(--diff-added-bg);
+  color: var(--diff-added-text);
+  text-decoration: none;
+}
+
+.addedValue {
+  min-width: 0;
+  margin-top: 10px;
+}
+
+.historySummary {
+  display: grid;
+  gap: 8px;
+  padding: 16px 0;
+  color: var(--text-primary);
+}
+.historySummary > small {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+}
+.historySummary > strong {
+  font-size: 15px;
+}
+.historySummary > div {
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.historySummary b {
+  color: var(--text-primary);
+}
+.historyCards {
+  border-left: 2px solid var(--accent-commit-soft);
+  margin: 0 0 12px 5px;
+  padding-left: 13px;
+}
+.historyCard,
+.historyBase {
+  position: relative;
+  border: 1px solid var(--stroke-default);
+  border-radius: 9px;
+  background: var(--surface-card);
+  padding: 9px 10px 0;
+  margin-bottom: 5px;
+}
+.historyCard::before,
+.historyBase::before {
+  content: "";
+  position: absolute;
+  left: -20px;
+  top: 13px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--accent-commit-soft);
+  border-radius: 50%;
+  background: var(--accent-commit);
+}
+.historyCard[data-selected="true"] {
+  border-color: var(--accent-commit);
+  box-shadow: 0 0 0 1px var(--accent-commit-soft);
+}
+.historyCard header {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  justify-content: space-between;
+}
+.historyCard header strong {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+.historyCard header > span {
+  flex: none;
+  font-size: 9px;
+  font-weight: 600;
+  background: var(--status-warning-muted);
+  color: var(--status-warning);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+.historyCard header > span[data-kind="added"] {
+  background: var(--diff-added-bg);
+  color: var(--diff-added-text);
+}
+.historyCard header > span[data-kind="removed"] {
+  background: var(--diff-removed-bg);
+  color: var(--diff-removed-text);
+}
+.historyPath {
+  display: block;
+  font-size: 9px;
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 4px 0;
+}
+.historyValues {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: baseline;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 2px 0 8px;
+  overflow-wrap: anywhere;
+}
+.historyValues del {
+  color: var(--text-tertiary);
+}
+.historyValues ins {
+  background: var(--diff-added-bg);
+  color: var(--diff-added-text);
+  text-decoration: none;
+  font-weight: 600;
+  padding: 0 4px;
+}
+.historyCard footer {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border-top: 1px solid var(--stroke-default);
+  padding: 6px 0;
+}
+.historyCard footer small {
+  font-size: 9px;
+  color: var(--text-tertiary);
+  min-width: 0;
+}
+.historyCard footer button {
+  flex: none;
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--accent-commit);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 0;
+}
+.historyAvatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent-commit);
+  color: white;
+  font-size: 10px;
+}
+.historyBase {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 9px;
+  border-style: dashed;
+  background: var(--surface-app);
+}
+.historyBase strong {
+  font-size: 11px;
+}
+.historyBase small {
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+.historyBase span {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.historyBase::before {
+  background: var(--surface-card);
+}
+
+.reviewToolbar {
+  background: var(--surface-card);
+  padding: 5px 16px;
+}
+.reviewTool {
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.reviewToolActive {
+  background: var(--accent-commit-soft);
+  color: var(--accent-commit);
+}
+
+.workspaceTheme {
+  --surface-panel: #ffffff;
+  --surface-card: #ffffff;
+  --surface-app: #f7f7f8;
+  --surface-elevated: #ffffff;
+  --compose-canvas: var(--surface-panel);
+  --stroke-default: rgba(15, 18, 30, 0.08);
+  --stroke-divider: rgba(15, 18, 30, 0.08);
+  --text-primary: #16181d;
+  --text-secondary: #5b606b;
+  --text-tertiary: #8b909a;
+  --compose-selected: #2563eb;
+  --compose-icon: #5b5bd6;
+  --compose-positive-bg: #eefbf3;
+  --compose-positive-text: #11632f;
+  --compose-negative-bg: #fdf1f1;
+  --compose-negative-text: #9b1c1c;
+  --compose-badge-bg: #dcfce7;
+  --compose-badge-edge: #d4eae0;
+  --compose-badge-text: #15803d;
+  --compose-warning-bg: #fefaf1;
+  --compose-warning-edge: #e8dfc5;
+  --compose-warning-text: #8b6939;
+  --compose-switch-bg: #f3f4f6;
+  --compose-switch-shadow: 0 1px 3px #1c233915, 0 0 0 1px #e8eaf1;
+  --on-accent: #ffffff;
+  --hover-bg: rgba(15, 18, 30, 0.035);
+  --stroke-strong: rgba(15, 18, 30, 0.14);
+  --accent-commit: #2563eb;
+  --accent-commit-soft: rgba(37, 99, 235, 0.08);
+  --status-warning: #d97706;
+  --diff-modified-bg: rgba(217, 119, 6, 0.1);
+  --diff-modified-text: #8b5a00;
+  --status-success: #16a34a;
+  --diff-added-bg: #eefbf3;
+  --diff-added-word-bg: rgba(22, 163, 74, 0.22);
+  --diff-added-text: #11632f;
+  --status-error: #dc2626;
+  --diff-removed-bg: #fdf1f1;
+  --diff-removed-word-bg: rgba(220, 38, 38, 0.18);
+  --diff-removed-text: #9b1c1c;
+  --source: #7c3aed;
+  --accent-pending: #ea6a0c;
+  --accent-pending-soft: rgba(234, 106, 12, 0.1);
+  --accent-conversation: #5b5bd6;
+  --accent-conversation-soft: rgba(91, 91, 214, 0.08);
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
 }

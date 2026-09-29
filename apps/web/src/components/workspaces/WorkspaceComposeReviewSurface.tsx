@@ -81,6 +81,7 @@ import {
   type ComposeActivityMeta,
   type ComposeActivitySelection,
   composeEventCards,
+  expandComposeActivityCards,
   groupComposeActivity,
 } from '@/domain/composeActivity';
 import {
@@ -88,7 +89,7 @@ import {
   composeNodeContent,
   composeNodeTitle,
   composePathLabel,
-  composeTextChangeSegments,
+  composeTextDiff,
   composeValueChangeLabels,
 } from '@/domain/composePresentation';
 import { buildStateYamlReview } from '@/domain/diff/stateYamlReview';
@@ -186,10 +187,12 @@ export function WorkspaceComposeReviewSurface({
   const [reviewPane, setReviewPaneState] = useState<ReviewPane>(() =>
     parseReviewPane(new URLSearchParams(routeQuery).get('reviewPane'))
   );
-  const activity = useComposeActivity(
+  const authoringBootstrap = useWorkspaceAuthoringBootstrap(
     controller.candidate,
-    Boolean(controller.candidate.authoringLedger)
+    controller.ensureSaved
   );
+  // Compose publication and Review must observe the same current Draft projection.
+  const activity = useComposeActivity(controller.candidate, authoringBootstrap.active);
 
   const writeWorkspaceSurfaceUrl = useCallback(
     (nextMode: WorkspaceSurfaceMode, nextPane?: ReviewPane) => {
@@ -245,7 +248,7 @@ export function WorkspaceComposeReviewSurface({
     <div
       className={cn(
         'flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-white text-[var(--text-primary)]',
-        mode === 'review' && reviewPane === 'rendered' && 'workspace-rendered-review-theme'
+        composeStyles.workspaceTheme
       )}
     >
       <div className={composeStyles.workspaceBody}>
@@ -275,6 +278,8 @@ export function WorkspaceComposeReviewSurface({
             </>
           ) : (
             <ComposeSurface
+              activity={activity}
+              authoringBootstrap={authoringBootstrap}
               branchOptions={branchOptions}
               candidate={controller.candidate ?? candidate}
               controller={controller}
@@ -433,20 +438,22 @@ function WorkspaceReviewToolbar({
 }
 
 function ComposeSurface({
+  activity,
+  authoringBootstrap,
   branchOptions,
   candidate,
   controller,
   onBranchChange,
   onModeChange,
 }: {
+  activity: ReturnType<typeof useComposeActivity>;
+  authoringBootstrap: ReturnType<typeof useWorkspaceAuthoringBootstrap>;
   branchOptions: string[];
   candidate: WorkspaceCandidate;
   controller: WorkspaceComposeReviewController;
   onBranchChange?: (branch: string) => Promise<void> | void;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
 }) {
-  const authoringBootstrap = useWorkspaceAuthoringBootstrap(candidate, controller.ensureSaved);
-  const activity = useComposeActivity(candidate, authoringBootstrap.active);
   const [draftEditing, setDraftEditing] = useState(true);
   const editingEnabled = activity.enabled && draftEditing;
   const toggleEditing = async () => {
@@ -1256,7 +1263,14 @@ function ProposedDraftPanel({
   onStepChange: (step: number) => void;
 }) {
   const operations = candidate.yopsDraft.operations;
-  const proposedChangeCount = activity.view?.netDiff.length ?? operations.length;
+  const proposedChangeCount = activity.view
+    ? changeScope === 'all'
+      ? activity.view.netDiff.length
+      : groupComposeActivity(activity.actions).reduce(
+          (count, event) => count + composeEventCards(event, activity.cards).length,
+          0
+        )
+    : operations.length;
   useEffect(() => {
     if (!activity.view) return;
     if (changeScope === 'all') {
@@ -1344,7 +1358,14 @@ function ProposedDraftPanel({
       cardReason.trim() !== '' &&
       cardReason !== cardTitle &&
       cardReason !== valueLabels.after;
-    const valueChange = composeTextChangeSegments(valueLabels.before, valueLabels.after);
+    const valueChange = composeTextDiff(valueLabels.before, valueLabels.after);
+    const changedValue = (kind: 'removed' | 'added') =>
+      [...new Set(valueChange.filter((part) => part.kind === kind).map((part) => part.text.trim()))]
+        .filter(Boolean)
+        .join(' … ') || '—';
+    const isValueModification = beforeValue !== undefined && afterValue !== undefined;
+    const beforeDisplay = isValueModification ? changedValue('removed') : valueLabels.before;
+    const afterDisplay = isValueModification ? changedValue('added') : valueLabels.after;
     return (
       <section
         className={cn(composeStyles.actionCard, selected && composeStyles.current)}
@@ -1404,35 +1425,42 @@ function ProposedDraftPanel({
           </button>
         </div>
         <div className={composeStyles.collapsedDetail}>
-          <div className={composeStyles.values}>
-            <div>
-              <span
-                className={`${composeStyles.value} ${composeStyles.before}`}
-                title={valueLabels.before}
-              >
-                {valueChange.prefix}
-                {valueChange.before ? <del>{valueChange.before}</del> : null}
-                {valueChange.suffix}
-              </span>
-              <span className={composeStyles.valueLabel}>
-                {meta?.comparison === 'event' ? 'Before event' : 'Current (base)'}
-              </span>
-            </div>
-            <ArrowRight aria-hidden="true" className={composeStyles.valueArrow} />
-            <div>
+          {beforeValue === undefined && afterValue !== undefined ? (
+            <div className={composeStyles.addedValue}>
               <span
                 className={`${composeStyles.value} ${composeStyles.after}`}
                 title={valueLabels.after}
               >
-                {valueChange.prefix}
-                {valueChange.after ? <ins>{valueChange.after}</ins> : null}
-                {valueChange.suffix}
-              </span>
-              <span className={composeStyles.valueLabel}>
-                {meta?.comparison === 'event' ? 'After event' : 'Proposed (draft)'}
+                {valueLabels.after}
               </span>
             </div>
-          </div>
+          ) : (
+            <div className={composeStyles.values}>
+              <div>
+                <span
+                  className={`${composeStyles.value} ${composeStyles.before}`}
+                  title={valueLabels.before}
+                >
+                  <del>{beforeDisplay}</del>
+                </span>
+                <span className={composeStyles.valueLabel}>
+                  {meta?.comparison === 'event' ? 'Before event' : 'Current (base)'}
+                </span>
+              </div>
+              <ArrowRight aria-hidden="true" className={composeStyles.valueArrow} />
+              <div>
+                <span
+                  className={`${composeStyles.value} ${composeStyles.after}`}
+                  title={valueLabels.after}
+                >
+                  <ins>{afterDisplay}</ins>
+                </span>
+                <span className={composeStyles.valueLabel}>
+                  {meta?.comparison === 'event' ? 'After event' : 'Proposed (draft)'}
+                </span>
+              </div>
+            </div>
+          )}
           {operationSource ? (
             <div className={composeStyles.sourceRow}>
               <FileText aria-hidden="true" className="size-4" />
@@ -3207,24 +3235,36 @@ function buildAuthoringReviewProjection(
   candidate: WorkspaceCandidate;
   review: WorkspaceComposeReviewController['review'];
 } | null {
-  const baseline = authoringSemanticContent(view?.base);
-  const current = authoringSemanticContent(view?.current);
+  // Review compares the latest published action's Draft snapshots. The ledger
+  // Base remains the basis of cumulative changes and commit verification.
+  const event = view?.selected;
+  const before = event?.before ?? view?.base;
+  const after = event?.after ?? view?.current;
+  const emptyBase =
+    before != null &&
+    typeof before === 'object' &&
+    !Array.isArray(before) &&
+    Object.keys(before).length === 0;
+  const baseline = emptyBase ? { trees: [], relations: [] } : authoringSemanticContent(before);
+  const current = authoringSemanticContent(after);
   if (!view || !baseline || !current) return null;
 
-  const operations = view.netDiff.flatMap((card, index): WorkspaceYOpsDraftOperation[] => {
-    const path = authoringSemanticPath(card.path);
-    if (!path) return [];
-    return [
-      {
-        id: card.nodeId || `authoring-change-${String(index + 1)}`,
-        op: card.after === undefined ? 'unset' : 'set',
-        path,
-        beforeValue: card.before as WorkspaceYOpsValue | undefined,
-        afterValue: card.after as WorkspaceYOpsValue | undefined,
-        summary: `Change ${path}`,
-      },
-    ];
-  });
+  const operations = expandComposeActivityCards(event?.cards ?? view.netDiff).flatMap(
+    (card, index): WorkspaceYOpsDraftOperation[] => {
+      const path = authoringSemanticPath(card.path);
+      if (!path) return [];
+      return [
+        {
+          id: card.nodeId || `authoring-change-${String(index + 1)}`,
+          op: card.after === undefined ? 'unset' : 'set',
+          path,
+          beforeValue: card.before as WorkspaceYOpsValue | undefined,
+          afterValue: card.after as WorkspaceYOpsValue | undefined,
+          summary: `Change ${path}`,
+        },
+      ];
+    }
+  );
   const projectedCandidate: WorkspaceCandidate = {
     ...candidate,
     revision: view.workspaceRevision,

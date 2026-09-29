@@ -553,7 +553,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.getByRole('navigation', { name: 'Review views' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Review' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('button', { name: 'Validation' })).not.toBeInTheDocument();
-    expect(document.querySelector('.workspace-rendered-review-theme')).toBeInTheDocument();
+    expect(document.querySelector('.workspace-rendered-review-theme')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Commit changes' })).toBeDisabled();
     controller.review.reviewSnapshot = {
       projectId: 'proj_1',
@@ -658,6 +658,125 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         'prd/requirements/canary/title'
       )
     ).toHaveTextContent('prd.requirements.canary.title');
+  });
+
+  it.each([
+    false,
+    true,
+  ])('reviews the latest Draft event rather than the empty repository base (update=%s)', async (update) => {
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    Object.assign(candidate, { authoringLedger: { actions: [] } });
+    navigationMocks.searchParams = new URLSearchParams('workspaceMode=review&reviewPane=changes');
+    const current = {
+      domain: 't3x.dev/semantic-content',
+      version: 1,
+      content: {
+        relations: [],
+        trees: [
+          {
+            key: 'prd',
+            slots: {},
+            children: [
+              {
+                key: 'temperature',
+                children: [],
+                slots: { title: '气温', acceptance: ['低于20度'] },
+              },
+            ],
+          },
+        ],
+      },
+    };
+    const before = update ? JSON.parse(JSON.stringify(current)) : {};
+    if (update) before.content.trees[0].children[0].slots.acceptance = ['低于30度'];
+    activityMocks.value = {
+      enabled: true,
+      loading: false,
+      error: null,
+      actions: [],
+      cards: {},
+      view: {
+        base: {},
+        current,
+        workspaceRevision: 7,
+        compositionRevision: 4,
+        selected: {
+          before,
+          after: current,
+          cards: [
+            {
+              nodeId: 'temperature-content',
+              path: 'content/trees/[key=prd]/children/[key=temperature]/slots/acceptance',
+              before: update ? ['低于30度'] : undefined,
+              after: ['低于20度'],
+            },
+          ],
+        },
+        netDiff: [
+          {
+            nodeId: 'temperature-title',
+            path: 'content/trees/[key=prd]/children/[key=temperature]/slots/title',
+            after: '气温',
+          },
+          {
+            nodeId: 'temperature-content',
+            path: 'content/trees/[key=prd]/children/[key=temperature]/slots/acceptance',
+            after: ['低于20度'],
+          },
+        ],
+      },
+    } as unknown as ReturnType<typeof useComposeActivity>;
+    const prepareReview = vi.fn();
+    const controller = {
+      candidate,
+      busyAction: null,
+      isBusy: false,
+      error: null,
+      notice: null,
+      hasCollaborationConflict: false,
+      materialSources: [],
+      sourceBusy: false,
+      scenarios: { options: [], selectedId: candidate.id },
+      prepareReview,
+      chat: {
+        error: null,
+        input: '',
+        isLoading: false,
+        isStreaming: false,
+        messages: [],
+        send: vi.fn(),
+        setInput: vi.fn(),
+        stop: vi.fn(),
+        warning: null,
+      },
+      model: { loading: false, ready: true, selectedModel: 'gpt-5.4', selectedProvider: 'openai' },
+      review: {
+        changeProjection: null,
+        commands: null,
+        content: null,
+        deterministicValidation: null,
+        precondition: null,
+        reviewSnapshot: null,
+        transitionId: null,
+        view: null,
+      },
+    } as unknown as WorkspaceComposeReviewController;
+    render(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="review"
+        onModeChange={vi.fn()}
+      />
+    );
+    const structure = await screen.findByLabelText('Workspace review structure');
+    if (update) {
+      expect(within(structure).getAllByText(/低于30度/).length).toBeGreaterThan(0);
+      expect(screen.getByText(/1 modified/)).toBeTruthy();
+    }
+    expect(within(structure).getAllByText('气温').length).toBeGreaterThan(0);
+    expect(within(structure).getAllByText('低于20度').length).toBeGreaterThan(0);
+    expect(prepareReview).not.toHaveBeenCalled();
   });
 
   it('treats a stale validation review pane as Render', () => {

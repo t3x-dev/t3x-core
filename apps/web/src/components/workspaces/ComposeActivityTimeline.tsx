@@ -22,7 +22,7 @@ import {
   composeNodeContent,
   composeNodeTitle,
   composePathLabel,
-  composeTextChangeSegments,
+  composeTextDiff,
   composeValueChangeLabels,
 } from '@/domain/composePresentation';
 import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
@@ -71,13 +71,17 @@ function ValueChange({ before, after, kind }: { before: string; after: string; k
   if (kind === 'added') return <ins title={after}>{after}</ins>;
   if (kind === 'removed') return <del title={before}>{before}</del>;
   if (before === after) return <span title={after}>{after}</span>;
-  const change = composeTextChangeSegments(before, after);
   return (
     <span title={`${before} → ${after}`}>
-      {change.prefix}
-      {change.before ? <del>{change.before}</del> : null}
-      {change.after ? <ins>{change.after}</ins> : null}
-      {change.suffix}
+      {composeTextDiff(before, after).map((part, index) =>
+        part.kind === 'removed' ? (
+          <del key={index}>{part.text}</del>
+        ) : part.kind === 'added' ? (
+          <ins key={index}>{part.text}</ins>
+        ) : (
+          part.text
+        )
+      )}
     </span>
   );
 }

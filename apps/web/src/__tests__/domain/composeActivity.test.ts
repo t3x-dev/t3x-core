@@ -75,6 +75,55 @@ describe('Compose event grouping', () => {
     expect(events.every((event) => event.idleBeforeMs === 0)).toBe(true);
   });
 
+  it('keeps frequent AI edits separate regardless of the idle gap', () => {
+    const events = groupComposeActivity([
+      action(1, 0, 'assistant'),
+      action(2, 17, 'assistant'),
+      action(3, 40, 'assistant'),
+      action(4, 70, 'assistant'),
+    ]);
+    expect(events.map((event) => event.actions.length)).toEqual([1, 1, 1, 1]);
+  });
+
+  it('merges later node edits into expanded bootstrap cards without losing siblings', () => {
+    const events = groupComposeActivity([action(1, 0), action(2, 17)]);
+    const temperature = {
+      key: 'temperature',
+      slots: { title: 'Temperature', acceptance: ['Below 20'] },
+      children: [],
+    };
+    const sibling = { key: 'other', slots: { title: 'Other' }, children: [] };
+    const path = 'content/trees/[key=prd]/children/[key=temperature]';
+    const cards = composeEventCards(events[0], {
+      'action-1': [
+        {
+          nodeId: 'bootstrap',
+          path: 'content',
+          after: {
+            relations: [],
+            trees: [
+              { key: 'prd', slots: { audience: 'Operators' }, children: [temperature, sibling] },
+            ],
+          },
+        },
+      ],
+      'action-2': [
+        {
+          nodeId: 'temperature',
+          path,
+          beforePath: 'content/trees',
+          before: temperature,
+          after: { ...temperature, slots: { ...temperature.slots, acceptance: ['Below 16'] } },
+        },
+      ],
+    });
+    expect(cards).toHaveLength(3);
+    expect(cards.find((card) => card.path === path)).toMatchObject({
+      before: undefined,
+      after: { slots: { acceptance: ['Below 16'] } },
+    });
+  });
+
   it('does not bridge actors, missing actions, mismatched revisions or invalid timestamps', () => {
     expect(groupComposeActivity([action(1, 0), action(2, 1, 'manual', 'Alex')])).toHaveLength(2);
     expect(groupComposeActivity([action(1, 0), action(3, 1)])).toHaveLength(2);

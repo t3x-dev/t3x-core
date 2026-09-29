@@ -6,9 +6,9 @@
   flex: 1;
   flex-direction: column;
   overflow: hidden;
-  background: #fff;
-  color: #111827;
-  font-family: Inter, var(--font-sans), sans-serif;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-family: var(--font-geist-sans), var(--font-sans), sans-serif;
 }
 .toolbar {
   display: flex;
@@ -16,9 +16,9 @@
   flex: none;
   align-items: center;
   gap: 24px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--stroke-default);
   padding: 10px 24px;
-  background: #fff;
+  background: var(--surface-card);
 }
 .counts {
   display: flex;
@@ -76,7 +76,7 @@
   overflow: hidden;
   border: 0;
   border-radius: 0;
-  background: #fff;
+  background: var(--surface-card);
 }
 .tree {
   width: 100%;
@@ -88,7 +88,7 @@
 .tree td {
   position: relative;
   vertical-align: middle;
-  border-color: #f3f4f6;
+  border-color: var(--stroke-divider);
 }
 .treeRow {
   height: 40px;
@@ -104,25 +104,25 @@
 }
 .treeHeader th {
   height: 40px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--stroke-default);
   padding: 0 24px;
-  background: #fff;
+  background: var(--surface-card);
   text-align: left;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: #6b7280;
+  color: var(--text-tertiary);
 }
 .selectedRow > td {
-  border-top-color: #dbeafe;
-  border-bottom-color: #dbeafe;
+  border-top-color: var(--accent-commit-soft);
+  border-bottom-color: var(--accent-commit-soft);
   background: rgb(239 246 255 / 65%);
 }
 .treePane tr[data-diff-exact="true"]:not(.selectedRow) > td {
-  background: #fff;
+  background: var(--surface-card);
 }
 .objectIcon {
-  color: #9333ea;
+  color: var(--source);
 }
 .fieldCell {
   position: relative;
@@ -137,7 +137,7 @@
   top: 0;
   width: 12px;
   height: 50%;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--stroke-default);
 }
 .fieldKey {
   min-width: 0;
@@ -148,11 +148,11 @@
   font-size: 14px;
   font-weight: 500;
   line-height: 20px;
-  color: #374151;
+  color: var(--text-secondary);
 }
 .parentKey {
   font-weight: 700;
-  color: #111827;
+  color: var(--text-primary);
 }
 .machineKey {
   font-family: inherit;
@@ -198,24 +198,24 @@
 }
 .before {
   border-color: rgb(255 228 230 / 80%);
-  background: #fff1f2;
-  color: #9f1239;
+  background: var(--diff-removed-bg);
+  color: var(--diff-removed-text);
   text-decoration: line-through;
   text-decoration-color: #fda4af;
 }
 .after {
   border-color: rgb(209 250 229 / 80%);
-  background: #ecfdf5;
-  color: #065f46;
+  background: var(--diff-added-bg);
+  color: var(--diff-added-text);
 }
 .whyCell,
 .changedCell {
   overflow: hidden;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--stroke-divider);
   background: inherit;
   padding: 0 14px;
   font-size: 13px;
-  color: #4b5563;
+  color: var(--text-secondary);
 }
 .whyText {
   display: block;
@@ -226,7 +226,7 @@
 .valueCell {
   z-index: 11;
   overflow: visible;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--stroke-divider);
   background: inherit;
   padding: 0 14px;
 }
@@ -264,12 +264,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 14px;
-  color: #1f2937;
+  color: var(--text-primary);
 }
 .changedCell {
   white-space: nowrap;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-tertiary);
 }
 .inspector {
   display: flex;
@@ -279,20 +279,20 @@
   align-self: stretch;
   flex-direction: column;
   overflow-y: auto;
-  border-left: 1px solid #e5e7eb;
+  border-left: 1px solid var(--stroke-default);
   padding: 0;
-  background: #fff;
+  background: var(--surface-card);
   box-shadow: none;
   filter: none;
 }
 .card {
   flex: none;
   overflow: hidden;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--stroke-default);
   border-right: 0;
   border-left: 0;
   border-radius: 0;
-  background: #fff;
+  background: var(--surface-card);
   box-shadow: none;
   filter: none;
 }
@@ -307,20 +307,20 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--stroke-default);
   padding: 8px 12px;
 }
 .cardHeader h2 {
   font-size: 16px;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-primary);
 }
 .copyButton {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   font-size: 9.5px;
-  color: #6b7280;
+  color: var(--text-tertiary);
 }
 .changeContent {
   padding: 10px 12px;
@@ -331,13 +331,13 @@
   max-width: 100%;
   overflow: hidden;
   border-radius: 3px;
-  border: 1px solid #e5e7eb;
-  background: #f9fafb;
+  border: 1px solid var(--stroke-default);
+  background: var(--surface-app);
   padding: 3px 7px;
   text-overflow: ellipsis;
   white-space: nowrap;
   font: 10px / 15px var(--font-mono);
-  color: #374151;
+  color: var(--text-secondary);
 }
 .badge {
   display: inline-flex;
@@ -354,7 +354,7 @@
   display: block;
   margin-bottom: 4px;
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--text-tertiary);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -369,7 +369,7 @@
   margin-top: 11px;
   font-size: 12px;
   line-height: 17px;
-  color: #374151;
+  color: var(--text-secondary);
 }
 .why strong {
   display: block;
@@ -384,9 +384,9 @@
   gap: 8px;
   margin-top: 9px;
   border-radius: 4px;
-  border: 1px solid #e0e7ff;
+  border: 1px solid var(--stroke-default);
   background: rgb(238 242 255 / 55%);
-  color: #4338ca;
+  color: var(--accent-commit);
   padding: 0 9px;
   font-size: 11px;
 }
@@ -405,7 +405,7 @@
   gap: 7px;
   margin-top: 10px;
   border-radius: 4px;
-  background: #2563eb;
+  background: var(--accent-commit);
   font-size: 12px;
   font-weight: 600;
   color: var(--on-accent);
@@ -484,13 +484,13 @@
 }
 .commitAction:disabled {
   cursor: not-allowed;
-  background: #f1f5f9;
-  color: #94a3b8;
+  background: var(--surface-app);
+  color: var(--text-tertiary);
 }
 .commitHint {
   text-align: center;
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 @media (max-width: 1179px) {
   .body {
@@ -505,4 +505,57 @@
     border-top: 1px solid var(--stroke-default);
     padding-top: 0;
   }
+}
+
+/* Shared Compose control density and interaction states. */
+.toolbar {
+  min-height: 42px;
+  padding: 7px 16px;
+  gap: 12px;
+}
+.counts {
+  gap: 10px;
+  font-size: 12px;
+}
+.counts span {
+  border-radius: 5px;
+  padding: 2px 8px;
+  line-height: 18px;
+}
+.revise,
+.runChecks,
+.commitAction {
+  height: 28px;
+  border: 1px solid var(--stroke-strong);
+  border-radius: 6px;
+  padding: 0 10px;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 550;
+  box-shadow: var(--fx-shadow-sm);
+}
+.runChecks {
+  background: var(--surface-card);
+  color: var(--text-primary);
+}
+.revise,
+.commitAction {
+  border-color: var(--accent-commit);
+  background: var(--accent-commit);
+  color: var(--on-accent);
+}
+.revise:hover,
+.commitAction:hover:not(:disabled) {
+  filter: brightness(0.96);
+}
+.runChecks:hover:not(:disabled) {
+  background: var(--hover-bg);
+}
+.surface button:focus-visible {
+  outline: 2px solid var(--accent-commit);
+  outline-offset: 2px;
+}
+.surface button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }

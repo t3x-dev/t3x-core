@@ -285,3 +285,43 @@ export function composeTextChangeSegments(before: string, after: string) {
     suffix: suffixLength ? before.slice(-suffixLength) : '',
   };
 }
+
+/** Keep unchanged islands between edits, including repeated numeric replacements. */
+export function composeTextDiff(before: string, after: string) {
+  type Part = { kind: 'equal' | 'removed' | 'added'; text: string };
+  const tokenize = (text: string) => text.match(/[A-Za-z_]+|\d+(?:\.\d+)?|\s+|[^\s]/gu) ?? [];
+  const a = tokenize(before);
+  const b = tokenize(after);
+  const parts: Part[] = [];
+  const push = (kind: Part['kind'], text: string) => {
+    if (!text) return;
+    const previous = parts.at(-1);
+    if (previous?.kind === kind) previous.text += text;
+    else parts.push({ kind, text });
+  };
+  // Bound memory for exceptionally large values, preserving the common edges.
+  if (a.length * b.length > 1_000_000) {
+    const change = composeTextChangeSegments(before, after);
+    push('equal', change.prefix);
+    push('removed', change.before);
+    push('added', change.after);
+    push('equal', change.suffix);
+    return parts;
+  }
+  const table = Array.from({ length: a.length + 1 }, () => new Uint32Array(b.length + 1));
+  for (let i = a.length - 1; i >= 0; i--)
+    for (let j = b.length - 1; j >= 0; j--)
+      table[i][j] =
+        a[i] === b[j] ? table[i + 1][j + 1] + 1 : Math.max(table[i + 1][j], table[i][j + 1]);
+  let i = 0;
+  let j = 0;
+  while (i < a.length || j < b.length) {
+    if (i < a.length && j < b.length && a[i] === b[j]) {
+      push('equal', a[i++]);
+      j++;
+    } else if (i < a.length && (j === b.length || table[i + 1][j] >= table[i][j + 1]))
+      push('removed', a[i++]);
+    else push('added', b[j++]);
+  }
+  return parts;
+}

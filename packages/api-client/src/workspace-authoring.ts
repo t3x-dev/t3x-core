@@ -48,7 +48,12 @@ export interface WorkspaceAuthoringView {
   candidateWindowTruncated?: boolean;
   actions: WorkspaceAuthoringAction[];
   nextBeforeSequence: number | null;
-  selected: { action: WorkspaceAuthoringAction; cards: WorkspaceAuthoringCard[] } | null;
+  selected: {
+    action: WorkspaceAuthoringAction;
+    cards: WorkspaceAuthoringCard[];
+    before?: TransitionProtocolValue;
+    after?: TransitionProtocolValue;
+  } | null;
   base?: TransitionProtocolValue;
   current?: TransitionProtocolValue;
   netDiff: WorkspaceAuthoringCard[];

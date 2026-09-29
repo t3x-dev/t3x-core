@@ -38,6 +38,44 @@ describe('Compose bootstrap presentation', () => {
     expect(JSON.stringify(card)).toBe(original);
   });
 
+  it('expands a populated root into its own fields and independent child cards', () => {
+    const root = {
+      ...content.trees[0],
+      slots: { problem: 'Late alerts', audience: 'Operators', outcome: 'Prompt detection' },
+      children: [
+        {
+          key: 'requirements',
+          slots: {},
+          children: [
+            requirement,
+            {
+              ...requirement,
+              key: 'temperature',
+              slots: { title: 'Temperature', acceptance: ['Below 18'] },
+            },
+          ],
+        },
+        {
+          key: 'monitoring_ready',
+          slots: { title: 'Monitoring ready', sequence: 1 },
+          children: [],
+        },
+      ],
+    };
+    const card = { nodeId: 'root', path: 'content', after: { trees: [root], relations: [] } };
+    const original = JSON.stringify(card);
+    const expanded = expandComposeActivityCards([card]);
+    expect(expanded).toHaveLength(6);
+    expect(expanded.map((item) => item.path)).toContain('content/trees/[key=prd]/slots/problem');
+    expect(expanded.map((item) => composeNodeTitle(item.after))).toContain('Temperature');
+    expect(JSON.stringify(card)).toBe(original);
+    const removed = expandComposeActivityCards([
+      { nodeId: 'root', path: 'content', before: card.after },
+    ]);
+    expect(removed).toHaveLength(6);
+    expect(removed.every((item) => item.after === undefined)).toBe(true);
+  });
+
   it('keeps a requirement title separate from its saved content', () => {
     const before = { key: 'temperature', slots: { title: '气温' }, children: [] };
     const after = {
