@@ -87,19 +87,16 @@ export function authoringDeterministicValidation(
   };
 }
 
-export function buildAuthoringReviewProjection(
+export function buildAuthoringReviewProjection<
+  TReview extends {
+    content: unknown;
+    deterministicValidation: WorkspaceYOpsValidationResult | null;
+  },
+>(
   candidate: WorkspaceCandidate,
   view: WorkspaceAuthoringView | null | undefined,
-  review: {
-    changeProjection: unknown;
-    content: SemanticContent | null;
-    deterministicValidation: WorkspaceYOpsValidationResult | null;
-    precondition: unknown;
-    reviewSnapshot: unknown;
-    transitionId: string | null;
-    view: unknown;
-  }
-) {
+  review: TReview
+): { candidate: WorkspaceCandidate; review: TReview } | null {
   const documents = authoringReviewDocuments(view);
   if (!view || !documents) return null;
   const operations = authoringReviewOperations(view.netDiff);
@@ -115,7 +112,7 @@ export function buildAuthoringReviewProjection(
     },
     review: {
       ...review,
-      content: documents.current,
+      content: documents.current as TReview['content'],
       deterministicValidation: authoringDeterministicValidation(documents, operations.length),
     },
   };

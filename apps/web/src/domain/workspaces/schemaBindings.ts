@@ -23,7 +23,7 @@ export function isDefaultWorkspaceSchemaBinding(
 ): boolean {
   return (
     binding?.canonicalName === DEFAULT_WORKSPACE_SCHEMA_BINDING.canonicalName &&
-    binding.version === DEFAULT_WORKSPACE_SCHEMA_BINDING.version
+    binding?.version === DEFAULT_WORKSPACE_SCHEMA_BINDING.version
   );
 }
 
