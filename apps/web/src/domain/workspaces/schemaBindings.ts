@@ -9,6 +9,66 @@ export const EMPTY_PROJECT_WORKSPACE_SCHEMA_BINDINGS: ProjectWorkspaceSchemaBind
   byWorkspaceId: {},
 };
 
+export const DEFAULT_WORKSPACE_SCHEMA_BINDING: WorkspaceSchemaBinding = {
+  canonicalName: 't3x/prd',
+  schemaName: 'PRD Schema',
+  version: 'v2',
+  mode: 'pinned',
+};
+
+export const DEFAULT_WORKSPACE_SCHEMA_CHOICE_ID = 'default';
+
+export function isDefaultWorkspaceSchemaBinding(
+  binding: WorkspaceSchemaBinding | undefined
+): boolean {
+  return (
+    binding?.canonicalName === DEFAULT_WORKSPACE_SCHEMA_BINDING.canonicalName &&
+    binding?.version === DEFAULT_WORKSPACE_SCHEMA_BINDING.version
+  );
+}
+
+export function workspaceSchemaChoiceId(binding: WorkspaceSchemaBinding): string {
+  if (isDefaultWorkspaceSchemaBinding(binding)) return DEFAULT_WORKSPACE_SCHEMA_CHOICE_ID;
+  return `${binding.canonicalName ?? binding.schemaName}@${binding.version}`;
+}
+
+export function listWorkspaceSchemaChoices(
+  releases: readonly SchemaReleasePreview[],
+  current?: WorkspaceSchemaBinding
+): Array<{ binding: WorkspaceSchemaBinding; id: string; label: string }> {
+  const choices = [
+    {
+      id: DEFAULT_WORKSPACE_SCHEMA_CHOICE_ID,
+      label: 'Default · PRD Schema v2',
+      binding: DEFAULT_WORKSPACE_SCHEMA_BINDING,
+    },
+  ];
+  const seen = new Set([DEFAULT_WORKSPACE_SCHEMA_CHOICE_ID]);
+  for (const release of releases) {
+    if (!isSchemaReleaseBindable(release) || !/^sha256:[a-f0-9]{64}$/i.test(release.schemaHash)) {
+      continue;
+    }
+    if (release.canonicalName === 't3x/prd' && release.version === 'v2') continue;
+    const binding = schemaReleaseToWorkspaceBinding(release, 'pinned');
+    const id = workspaceSchemaChoiceId(binding);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    choices.push({
+      id,
+      label: `${binding.schemaName} ${binding.version}`,
+      binding,
+    });
+  }
+  if (current && !seen.has(workspaceSchemaChoiceId(current))) {
+    choices.push({
+      id: workspaceSchemaChoiceId(current),
+      label: `${current.schemaName} ${current.version}`,
+      binding: current,
+    });
+  }
+  return choices;
+}
+
 export function schemaReleaseToWorkspaceBinding(
   release: SchemaReleasePreview,
   mode: WorkspaceSchemaBinding['mode']

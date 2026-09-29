@@ -1,5 +1,5 @@
 import type {
-  WorkspaceAuthoringView,
+  WorkspaceAuthoringCard,
   WorkspaceTransitionReviewSnapshotEnvelope,
 } from '@t3x-dev/api-client';
 import type { SemanticContent } from '@t3x-dev/core';
@@ -75,13 +75,13 @@ import { SourceTransitionTab } from '@/components/workspaces/SourceTransitionTab
 import { WorkspaceComposeChat } from '@/components/workspaces/WorkspaceComposeChat';
 import { WorkspaceContentEditor } from '@/components/workspaces/WorkspaceContentEditor';
 import type { WorkspaceYOpsFlowView } from '@/components/workspaces/YOpsDraftTab';
+import { getSchemaRegistryPreview } from '@/data/schemaReleases';
 import {
   activityChannelLabel,
   activityOperation,
   type ComposeActivityMeta,
   type ComposeActivitySelection,
   composeEventCards,
-  expandComposeActivityCards,
   groupComposeActivity,
 } from '@/domain/composeActivity';
 import {
@@ -91,6 +91,7 @@ import {
   composePathLabel,
   composeTextDiff,
   composeValueChangeLabels,
+  composeValueLabel,
 } from '@/domain/composePresentation';
 import { buildStateYamlReview } from '@/domain/diff/stateYamlReview';
 import {
@@ -105,7 +106,18 @@ import {
   selectPrdRenderModel,
   workspaceDraftOperationsToStateOperations,
 } from '@/domain/project/stateViewModel';
+import { mergePublishedSchemaVersions } from '@/domain/schemas/publishedSchemaVersions';
 import { repositoryConversationSourceHref } from '@/domain/sourceEvidenceNavigation';
+import {
+  authoringVisibleCards,
+  buildAuthoringReviewProjection,
+} from '@/domain/workspaces/authoringReview';
+import {
+  DEFAULT_WORKSPACE_SCHEMA_CHOICE_ID,
+  listWorkspaceSchemaChoices,
+  workspaceSchemaChoiceId,
+} from '@/domain/workspaces/schemaBindings';
+import { useProjectYSchemaVersions } from '@/hooks/schemas/useProjectYSchemaVersions';
 import { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import { useWorkspaceAuthoringBootstrap } from '@/hooks/workspaces/useWorkspaceAuthoringBootstrap';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
@@ -258,6 +270,7 @@ export function WorkspaceComposeReviewSurface({
               <WorkspaceStageHeader
                 branchOptions={branchOptions}
                 candidate={controller.candidate ?? candidate}
+                controller={controller}
                 mode={mode}
                 onBranchChange={onBranchChange}
                 onModeChange={setSurfaceMode}
@@ -293,9 +306,53 @@ export function WorkspaceComposeReviewSurface({
   );
 }
 
+function WorkspaceSchemaSelect({
+  candidate,
+  controller,
+}: {
+  candidate: WorkspaceCandidate;
+  controller: WorkspaceComposeReviewController;
+}) {
+  const published = useProjectYSchemaVersions(candidate.projectId);
+  const choices = useMemo(() => {
+    const registry = mergePublishedSchemaVersions(
+      getSchemaRegistryPreview(candidate.projectId),
+      published.versions,
+      candidate.projectId
+    );
+    return listWorkspaceSchemaChoices(
+      registry.families.flatMap((family) => family.releases),
+      candidate.schemaBindings[0]
+    );
+  }, [candidate.projectId, candidate.schemaBindings, published.versions]);
+  const selectedId = candidate.schemaBindings[0]
+    ? workspaceSchemaChoiceId(candidate.schemaBindings[0])
+    : DEFAULT_WORKSPACE_SCHEMA_CHOICE_ID;
+
+  return (
+    <select
+      aria-label="Workspace schema"
+      className="min-w-0 max-w-52 truncate rounded border border-[var(--stroke-divider)] bg-white px-2 py-1 text-xs text-[var(--text-secondary)]"
+      disabled={controller.isBusy || !controller.bindSchema}
+      onChange={(event) => {
+        const choice = choices.find((item) => item.id === event.target.value);
+        if (choice) void controller.bindSchema(choice.binding);
+      }}
+      value={selectedId}
+    >
+      {choices.map((choice) => (
+        <option key={choice.id} value={choice.id}>
+          {choice.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function WorkspaceStageHeader({
   branchOptions,
   candidate,
+  controller,
   discussionOpen,
   mode,
   onBranchChange,
@@ -304,6 +361,7 @@ function WorkspaceStageHeader({
 }: {
   branchOptions: string[];
   candidate: WorkspaceCandidate;
+  controller?: WorkspaceComposeReviewController;
   discussionOpen?: boolean;
   mode: WorkspaceSurfaceMode;
   onBranchChange?: (branch: string) => Promise<void> | void;
@@ -347,6 +405,9 @@ function WorkspaceStageHeader({
         </button>
       </div>
       <div className={composeStyles.composeHeaderMeta}>
+        {controller ? (
+          <WorkspaceSchemaSelect candidate={candidate} controller={controller} />
+        ) : null}
         {onDiscussionToggle ? (
           <button
             aria-label={discussionOpen ? 'Hide discussion' : 'Show discussion'}
@@ -524,6 +585,7 @@ function ComposeSurface({
       <WorkspaceStageHeader
         branchOptions={branchOptions}
         candidate={candidate}
+        controller={controller}
         discussionOpen={discussionOpen}
         mode="compose"
         onBranchChange={onBranchChange}
@@ -1736,6 +1798,8 @@ function ReviewSurface({
   if (pane === 'rendered') {
     return (
       <WorkspaceRenderedReview
+        authoringCards={authoringVisibleCards(activity.view?.netDiff ?? [])}
+        authoringPreview={Boolean(authoringReview)}
         candidate={candidate}
         review={comparisonReview}
         controller={controller}
@@ -1992,6 +2056,8 @@ interface WorkspaceReviewDiffMeta {
 type WorkspaceReviewDiffChange = StructuredDiffChange & { path: string };
 
 function WorkspaceRenderedReview({
+  authoringCards = [],
+  authoringPreview = false,
   candidate,
   review,
   controller,
@@ -1999,6 +2065,8 @@ function WorkspaceRenderedReview({
   onOpenChecks,
   onStructureDiff,
 }: {
+  authoringCards?: WorkspaceAuthoringCard[];
+  authoringPreview?: boolean;
   candidate: WorkspaceCandidate;
   review: WorkspaceComposeReviewController['review'];
   controller: WorkspaceComposeReviewController;
@@ -2025,6 +2093,19 @@ function WorkspaceRenderedReview({
     () => structure.rows.filter((row) => row.diff?.exact),
     [structure.rows]
   );
+  const proposedChanges = authoringPreview ? authoringVisibleCards(authoringCards) : [];
+  const authoringTitle =
+    rendered.requirements[0]?.title?.trim() ||
+    (proposedChanges[0]
+      ? composeValueLabel(proposedChanges[0].after, composePathLabel(proposedChanges[0].path))
+      : '');
+  const renderTitle = authoringPreview
+    ? authoringTitle || rendered.title || candidate.title
+    : rendered.title || candidate.title;
+  const renderLede = authoringPreview
+    ? rendered.audience || rendered.problem || rendered.lede
+    : rendered.audience || rendered.problem || candidate.summary;
+  const showPrdBoilerplate = !authoringPreview;
   const selectedRow = changedRows[0] ?? structure.rows[0] ?? null;
   const selectedKind = selectedRow?.diff?.kind;
   const selectedSource = selectedRow
@@ -2076,75 +2157,115 @@ function WorkspaceRenderedReview({
 
           <div className="flex-1 overflow-y-auto bg-white px-6 py-3">
             <h1 className="text-[28px] font-bold leading-tight tracking-tight text-slate-900">
-              {rendered.title || candidate.title}
+              {renderTitle}
             </h1>
-            <p className="mb-2 mt-0.5 text-[16px] text-slate-500">
-              {rendered.audience || rendered.problem || candidate.summary}
-            </p>
+            {renderLede ? (
+              <p className="mb-2 mt-0.5 text-[16px] text-slate-500">{renderLede}</p>
+            ) : (
+              <div className="mb-2" />
+            )}
 
-            <section className="relative mb-2 pl-4">
-              <div className="absolute bottom-0 left-0 top-0 w-[3px] rounded-full bg-violet-600" />
-              <div className="mb-1 flex items-center gap-2">
-                <h3 className="text-[14px] font-bold text-slate-900">Summary</h3>
-                {changedRows.some((row) => /\/summary\/outcome$/.test(row.path)) ? (
-                  <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
-                    Updated
-                  </span>
-                ) : null}
-              </div>
-              <div className="rounded-md bg-indigo-50/60 px-3 py-1.5 text-[13px] leading-5 text-indigo-900">
-                {rendered.outcome || 'No outcome has been recorded.'}
-              </div>
-            </section>
+            {showPrdBoilerplate ? (
+              <>
+                <section className="relative mb-2 pl-4">
+                  <div className="absolute bottom-0 left-0 top-0 w-[3px] rounded-full bg-violet-600" />
+                  <div className="mb-1 flex items-center gap-2">
+                    <h3 className="text-[14px] font-bold text-slate-900">Summary</h3>
+                    {changedRows.some((row) => /\/summary\/outcome$/.test(row.path)) ? (
+                      <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
+                        Updated
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="rounded-md bg-indigo-50/60 px-3 py-1.5 text-[13px] leading-5 text-indigo-900">
+                    {rendered.outcome || 'No outcome has been recorded.'}
+                  </div>
+                </section>
 
-            <section className="mb-2 pl-4">
-              <h3 className="mb-1 text-[14px] font-bold text-slate-900">Purpose</h3>
-              <p className="text-[13px] leading-5 text-slate-600">
-                {rendered.problem || candidate.summary}
-              </p>
-            </section>
+                <section className="mb-2 pl-4">
+                  <h3 className="mb-1 text-[14px] font-bold text-slate-900">Purpose</h3>
+                  <p className="text-[13px] leading-5 text-slate-600">
+                    {rendered.problem || candidate.summary}
+                  </p>
+                </section>
 
-            <section className="mb-2 pl-4">
-              <h3 className="mb-1 text-[14px] font-bold text-slate-900">Rollout plan</h3>
-              <div className="flex flex-col overflow-hidden rounded-md border border-gray-200">
-                {(rolloutRows.length ? rolloutRows : [['Status', 'No rollout plan recorded.']]).map(
-                  ([label, value], index, rows) => (
-                    <div
-                      className={cn('flex', index < rows.length - 1 && 'border-b border-gray-200')}
-                      key={`${label}:${index}`}
-                    >
-                      <div className="w-1/3 border-r border-gray-200 bg-gray-50/50 px-3 py-0.5 text-[12px] font-medium leading-5 text-slate-500">
-                        {label}
+                <section className="mb-2 pl-4">
+                  <h3 className="mb-1 text-[14px] font-bold text-slate-900">Rollout plan</h3>
+                  <div className="flex flex-col overflow-hidden rounded-md border border-gray-200">
+                    {(rolloutRows.length
+                      ? rolloutRows
+                      : [['Status', 'No rollout plan recorded.']]
+                    ).map(([label, value], index, rows) => (
+                      <div
+                        className={cn(
+                          'flex',
+                          index < rows.length - 1 && 'border-b border-gray-200'
+                        )}
+                        key={`${label}:${index}`}
+                      >
+                        <div className="w-1/3 border-r border-gray-200 bg-gray-50/50 px-3 py-0.5 text-[12px] font-medium leading-5 text-slate-500">
+                          {label}
+                        </div>
+                        <div className="w-2/3 bg-white px-3 py-0.5 text-[12px] leading-5 text-slate-700">
+                          {value}
+                        </div>
                       </div>
-                      <div className="w-2/3 bg-white px-3 py-0.5 text-[12px] leading-5 text-slate-700">
-                        {value}
-                      </div>
-                    </div>
-                  )
-                )}
-              </div>
-            </section>
+                    ))}
+                  </div>
+                </section>
 
-            <section className="relative mb-2 pl-4">
-              <div className="absolute bottom-0 left-0 top-0 w-[3px] rounded-full bg-violet-600" />
-              <div className="mb-1 flex items-center gap-2">
-                <h3 className="text-[14px] font-bold text-slate-900">Rollback readiness</h3>
-                {changedRows.some((row) => /rollback/i.test(row.path)) ? (
-                  <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
-                    Updated
-                  </span>
-                ) : null}
-              </div>
-              <div className="mb-0.5 flex items-center gap-2">
-                <CircleDot aria-hidden="true" className="size-4 text-slate-500" />
-                <span className="text-[13px] font-bold text-slate-700">
-                  {rollback ? 'Recorded' : 'Not recorded'}
-                </span>
-              </div>
-              <p className="max-w-[95%] text-[12px] leading-[1.4] text-slate-600">
-                {rollback ?? 'No rollback detail is present in the current draft.'}
-              </p>
-            </section>
+                <section className="relative mb-2 pl-4">
+                  <div className="absolute bottom-0 left-0 top-0 w-[3px] rounded-full bg-violet-600" />
+                  <div className="mb-1 flex items-center gap-2">
+                    <h3 className="text-[14px] font-bold text-slate-900">Rollback readiness</h3>
+                    {changedRows.some((row) => /rollback/i.test(row.path)) ? (
+                      <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
+                        Updated
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mb-0.5 flex items-center gap-2">
+                    <CircleDot aria-hidden="true" className="size-4 text-slate-500" />
+                    <span className="text-[13px] font-bold text-slate-700">
+                      {rollback ? 'Recorded' : 'Not recorded'}
+                    </span>
+                  </div>
+                  <p className="max-w-[95%] text-[12px] leading-[1.4] text-slate-600">
+                    {rollback ?? 'No rollback detail is present in the current draft.'}
+                  </p>
+                </section>
+              </>
+            ) : null}
+
+            {proposedChanges.length > 0 ? (
+              <section className="mb-2 pl-4">
+                <h3 className="mb-1 text-[14px] font-bold text-slate-900">Proposed changes</h3>
+                <div className="flex flex-col overflow-hidden rounded-md border border-gray-200">
+                  {proposedChanges.map((card, index) => {
+                    const change = composeValueChangeLabels(card.before, card.after);
+                    return (
+                      <div
+                        className={cn(
+                          'flex',
+                          index < proposedChanges.length - 1 && 'border-b border-gray-200'
+                        )}
+                        key={`${card.nodeId}:${card.path}`}
+                      >
+                        <div className="w-1/3 border-r border-gray-200 bg-gray-50/50 px-3 py-1.5 text-[12px] font-medium leading-5 text-slate-500">
+                          {composePathLabel(card.path)}
+                        </div>
+                        <div className="w-2/3 bg-white px-3 py-1.5 text-[12px] leading-5 text-slate-700">
+                          {change.after}
+                          {change.before !== 'Absent' ? (
+                            <span className="ml-2 text-slate-400">from {change.before}</span>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            ) : null}
 
             {rendered.requirements.length > 0 ? (
               <section className="mb-2 pl-4">
@@ -2162,12 +2283,14 @@ function WorkspaceRenderedReview({
               </section>
             ) : null}
 
-            <section className="pl-4">
-              <h3 className="mb-1 text-[14px] font-bold text-slate-900">Notes</h3>
-              <p className="text-[13px] leading-5 text-slate-600">
-                {notes ? formatOperationValue(notes.value) : 'No notes recorded.'}
-              </p>
-            </section>
+            {showPrdBoilerplate || notes ? (
+              <section className="pl-4">
+                <h3 className="mb-1 text-[14px] font-bold text-slate-900">Notes</h3>
+                <p className="text-[13px] leading-5 text-slate-600">
+                  {notes ? formatOperationValue(notes.value) : 'No notes recorded.'}
+                </p>
+              </section>
+            ) : null}
           </div>
 
           <footer className="flex shrink-0 items-center gap-4 border-t border-gray-100 bg-white px-4 py-3">
@@ -2247,7 +2370,8 @@ function WorkspaceRenderedReview({
                 {selectedRow?.diff?.summary ?? 'Current draft value'}
               </h4>
               <p className="mb-2 text-[12px] leading-4 text-slate-600">
-                {selectedRow?.diff?.reason ?? candidate.summary}
+                {selectedRow?.diff?.reason ??
+                  (authoringPreview ? renderLede || renderTitle : candidate.summary)}
               </p>
               <button
                 className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-blue-600 transition-colors hover:text-blue-700"
@@ -3225,92 +3349,6 @@ interface ReviewCheckView {
   label: string;
   requirement: 'required' | 'system';
   status: ReviewCheckStatus;
-}
-
-function buildAuthoringReviewProjection(
-  candidate: WorkspaceCandidate,
-  view: WorkspaceAuthoringView | null,
-  review: WorkspaceComposeReviewController['review']
-): {
-  candidate: WorkspaceCandidate;
-  review: WorkspaceComposeReviewController['review'];
-} | null {
-  // Review compares the latest published action's Draft snapshots. The ledger
-  // Base remains the basis of cumulative changes and commit verification.
-  const event = view?.selected;
-  const before = event?.before ?? view?.base;
-  const after = event?.after ?? view?.current;
-  const emptyBase =
-    before != null &&
-    typeof before === 'object' &&
-    !Array.isArray(before) &&
-    Object.keys(before).length === 0;
-  const baseline = emptyBase ? { trees: [], relations: [] } : authoringSemanticContent(before);
-  const current = authoringSemanticContent(after);
-  if (!view || !baseline || !current) return null;
-
-  const operations = expandComposeActivityCards(event?.cards ?? view.netDiff).flatMap(
-    (card, index): WorkspaceYOpsDraftOperation[] => {
-      const path = authoringSemanticPath(card.path);
-      if (!path) return [];
-      return [
-        {
-          id: card.nodeId || `authoring-change-${String(index + 1)}`,
-          op: card.after === undefined ? 'unset' : 'set',
-          path,
-          beforeValue: card.before as WorkspaceYOpsValue | undefined,
-          afterValue: card.after as WorkspaceYOpsValue | undefined,
-          summary: `Change ${path}`,
-        },
-      ];
-    }
-  );
-  const projectedCandidate: WorkspaceCandidate = {
-    ...candidate,
-    revision: view.workspaceRevision,
-    yopsDraft: {
-      ...candidate.yopsDraft,
-      id: `${candidate.yopsDraft.id}:authoring:${String(view.compositionRevision)}`,
-      operations,
-    },
-  };
-  return {
-    candidate: projectedCandidate,
-    review: {
-      ...review,
-      content: current,
-      deterministicValidation: {
-        ok: true,
-        applied: operations.length,
-        yops: [],
-        baselineTrees: baseline.trees,
-        baselineRelations: baseline.relations,
-        previewTrees: current.trees,
-        previewRelations: current.relations,
-      },
-    },
-  };
-}
-
-function authoringSemanticContent(value: unknown): SemanticContent | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const document = value as Record<string, unknown>;
-  if (document.domain !== 't3x.dev/semantic-content') return null;
-  const content = document.content;
-  if (!content || typeof content !== 'object' || Array.isArray(content)) return null;
-  const semantic = content as Record<string, unknown>;
-  if (!Array.isArray(semantic.trees) || !Array.isArray(semantic.relations)) return null;
-  return { trees: semantic.trees, relations: semantic.relations } as SemanticContent;
-}
-
-function authoringSemanticPath(path: string): string | null {
-  if (!path.startsWith('content/trees/')) return null;
-  const keys = [...path.matchAll(/\[key=(?:"([^"]+)"|([^\]]+))\]/g)].map(
-    (match) => match[1] ?? match[2]
-  );
-  const slot = path.match(/\/slots\/(.+)$/)?.[1];
-  if (slot) keys.push(slot.replace(/^"|"$/g, ''));
-  return keys.length ? keys.join('/') : null;
 }
 
 function buildWorkspaceReviewStructureModel(

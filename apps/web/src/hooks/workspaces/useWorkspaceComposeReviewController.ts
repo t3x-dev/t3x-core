@@ -1,14 +1,30 @@
-import type { ChangeProjectionV1, ReviewSnapshotV1 } from '@t3x-dev/api-client';
+import type {
+  ChangeProjectionV1,
+  ReviewSnapshotV1,
+  WorkspaceAuthoringView,
+} from '@t3x-dev/api-client';
 import type { TransitionViewV1 } from '@t3x-dev/core';
 import * as yaml from 'js-yaml';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { updateConversationContextPins } from '@/commands/conversations';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { providerSupports } from '@/domain/providerCapabilities';
+import {
+  authoringDeterministicValidation,
+  authoringReviewDocuments,
+} from '@/domain/workspaces/authoringReview';
+import { includedImportPinIds } from '@/domain/workspaces/includedImportPinIds';
+import {
+  DEFAULT_WORKSPACE_SCHEMA_BINDING,
+  rebindWorkspaceCandidate,
+  workspaceSchemaBindingsEqual,
+} from '@/domain/workspaces/schemaBindings';
 import { useMaterialUpload } from '@/hooks/materials/useMaterialUpload';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
 import { useSourceThreadGeneration } from '@/hooks/sourceThreads/useSourceThreadGeneration';
 import { validateWorkspaceCandidateYOps } from '@/hooks/workspaces/useWorkspaceYOps';
+import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
 import type {
   WorkspaceTransitionContent,
   WorkspaceTransitionOutcome,
@@ -17,12 +33,14 @@ import type {
 import { decideWorkspaceTransition, reviewWorkspaceTransition } from '@/queries/workspaces';
 import { useChatSessionStore } from '@/store/chatSessionStore';
 import { usePinsStore } from '@/store/pinsStore';
+import { useProjectWorkspaceSchemaBindingsStore } from '@/store/projectWorkspaceSchemaBindingsStore';
 import type { Material } from '@/types/api';
 import type { AttachedImage } from '@/types/generation';
 import type {
   SourceBundleItem,
   SourceConversationTurn,
   WorkspaceCandidate,
+  WorkspaceSchemaBinding,
   WorkspaceSourceArtifact,
 } from '@/types/workspaces';
 import type { WorkspaceYOpsValidationResult } from '@/types/workspaceYops';
@@ -118,6 +136,7 @@ export function useWorkspaceComposeReviewController({
   const [hasCollaborationConflict, setHasCollaborationConflict] = useState(false);
   const reviewGenerationRef = useRef(0);
   const activeCandidateIdRef = useRef(candidate.id);
+  const sourceConversationIdRef = useRef(sourceConversationId);
 
   const modelSelection = useChatModelSelection({});
   const thinkingEnabled = useChatSessionStore((state) => state.thinkingEnabled);
@@ -158,8 +177,29 @@ export function useWorkspaceComposeReviewController({
   }, [sourceConversationIdProp]);
 
   useEffect(() => {
+    sourceConversationIdRef.current = sourceConversationId;
+  }, [sourceConversationId]);
+
+  useEffect(() => {
     void refreshPins(candidate.projectId);
   }, [candidate.projectId, refreshPins]);
+
+  const syncImportPinsToConversation = useCallback(async (conversationId: string) => {
+    await updateConversationContextPins(
+      conversationId,
+      includedImportPinIds(usePinsStore.getState().pins)
+    );
+  }, []);
+
+  const syncImportPinsIfConversationReady = useCallback(async () => {
+    const conversationId = sourceConversationIdRef.current;
+    if (!conversationId) return;
+    try {
+      await syncImportPinsToConversation(conversationId);
+    } catch {
+      // The next send retries through onConversationReady.
+    }
+  }, [syncImportPinsToConversation]);
 
   const chat = useSourceThreadGeneration({
     projectId: candidate.projectId,
@@ -169,6 +209,7 @@ export function useWorkspaceComposeReviewController({
     model: modelSelection.selectedModel ?? undefined,
     parentCommitHash: sourceParentCommitHash,
     onConversationCreated: setSourceConversationId,
+    onConversationReady: syncImportPinsToConversation,
   });
 
   const rawMessages = useMemo(() => {
@@ -270,9 +311,7 @@ export function useWorkspaceComposeReviewController({
       needsSchema
         ? {
             ...workingCandidate,
-            schemaBindings: [
-              { schemaName: 'PRD Schema', canonicalName: 't3x/prd', version: 'v2', mode: 'pinned' },
-            ],
+            schemaBindings: [DEFAULT_WORKSPACE_SCHEMA_BINDING],
           }
         : workingCandidate,
       'authoring.initialize'
@@ -369,9 +408,17 @@ export function useWorkspaceComposeReviewController({
       });
       await persistCandidate(nextCandidate, 'source.add');
       await onSourceMaterialUploaded?.();
+      await syncImportPinsIfConversationReady();
       setNotice(`${material.title} added as source evidence.`);
     },
-    [candidate.projectId, onSourceMaterialUploaded, persistCandidate, pinsCrud, workingCandidate]
+    [
+      candidate.projectId,
+      onSourceMaterialUploaded,
+      persistCandidate,
+      pinsCrud,
+      syncImportPinsIfConversationReady,
+      workingCandidate,
+    ]
   );
 
   const toggleMaterialSource = useCallback(
@@ -394,6 +441,7 @@ export function useWorkspaceComposeReviewController({
           );
         }
         await persistCandidate(invalidateWorkspaceProposal(workingCandidate), 'source.include');
+        await syncImportPinsIfConversationReady();
         setNotice(included ? 'Material included as source evidence.' : 'Material excluded.');
       } catch (error) {
         setLocalError(formatUserFacingError(error, 'Material source update failed.'));
@@ -401,7 +449,14 @@ export function useWorkspaceComposeReviewController({
         setBusyAction(null);
       }
     },
-    [busyAction, candidate.projectId, persistCandidate, pinsCrud, workingCandidate]
+    [
+      busyAction,
+      candidate.projectId,
+      persistCandidate,
+      pinsCrud,
+      syncImportPinsIfConversationReady,
+      workingCandidate,
+    ]
   );
 
   const uploadFile = useCallback(
@@ -488,7 +543,7 @@ export function useWorkspaceComposeReviewController({
   ]);
 
   const prepareReview = useCallback(async () => {
-    if (!onPrepareDraft || busyAction) return false;
+    if (busyAction) return false;
     const generation = reviewGenerationRef.current + 1;
     reviewGenerationRef.current = generation;
     setReview(EMPTY_REVIEW);
@@ -496,6 +551,60 @@ export function useWorkspaceComposeReviewController({
     setLocalError(null);
     setNotice('Preparing the exact deterministic result…');
     try {
+      let authoringView: WorkspaceAuthoringView | null = null;
+      try {
+        authoringView = await getSharedApiClient().workspaces.authoring.read(
+          workingCandidate.projectId,
+          workingCandidate.id
+        );
+      } catch {
+        authoringView = null;
+      }
+      const documents = authoringReviewDocuments(authoringView);
+      if (authoringView && documents) {
+        const reviewed = await getSharedApiClient().workspaces.authoring.prepareReview(
+          workingCandidate.projectId,
+          workingCandidate.id,
+          {
+            request_id: crypto.randomUUID(),
+            expected_workspace_revision: authoringView.workspaceRevision,
+            expected_revision: authoringView.compositionRevision,
+            expected_ref_head: authoringView.basis.refHead,
+            reason: `Review ${authoringView.netDiff.length} authoring Workspace changes.`,
+          }
+        );
+        if (generation !== reviewGenerationRef.current) return false;
+        const latest = await getSharedApiClient()
+          .workspaces.getLatestReviewSnapshot(workingCandidate.projectId, workingCandidate.id, {
+            transition_id: reviewed.view.transition_id,
+          })
+          .catch(() => null);
+        setReview({
+          changeProjection: latest?.change_projection ?? null,
+          content: documents.current,
+          deterministicValidation: authoringDeterministicValidation(
+            documents,
+            authoringView.netDiff.length
+          ),
+          precondition: {
+            workspace_revision: reviewed.view.precondition.workspace_revision,
+            ref_head: reviewed.view.precondition.ref_head,
+            effect_digest: reviewed.view.precondition.effect_digest,
+            proposal_digest: reviewed.view.precondition.proposal_digest,
+            statement_digests: reviewed.view.precondition.statement_digests,
+            policy_digest: reviewed.view.precondition.policy_digest ?? '',
+          },
+          reviewSnapshot: latest?.snapshot ?? null,
+          transitionId: reviewed.view.transition_id,
+          view: reviewed.view.transition,
+        });
+        setNotice('Immutable review prepared from the current draft.');
+        return true;
+      }
+
+      if (!onPrepareDraft) {
+        throw new Error('Prepare the current Compose draft before Review.');
+      }
       const sourceSyncedCandidate =
         persistedSourceTurns.length > 0
           ? await syncChatSource(persistedSourceTurns)
@@ -625,6 +734,23 @@ export function useWorkspaceComposeReviewController({
     }
   }, [review.reviewSnapshot]);
 
+  const bindSchema = useCallback(
+    async (binding: WorkspaceSchemaBinding) => {
+      if (workspaceSchemaBindingsEqual(workingCandidate.schemaBindings[0], binding)) {
+        return workingCandidate;
+      }
+      const next = rebindWorkspaceCandidate(workingCandidate, binding, new Date().toISOString());
+      const saved = await persistCandidate(next, 'schema.bind');
+      useProjectWorkspaceSchemaBindingsStore.getState().bindSchema({
+        binding: saved.schemaBindings[0] ?? binding,
+        projectId: saved.projectId,
+        workspaceId: saved.id,
+      });
+      return saved;
+    },
+    [persistCandidate, workingCandidate]
+  );
+
   const viewCommit = useCallback(() => {
     const commitId =
       committedTransitionId(review.view) ??
@@ -660,6 +786,7 @@ export function useWorkspaceComposeReviewController({
 
   return {
     addPaste,
+    bindSchema,
     busyAction,
     candidate: workingCandidate,
     chat: {

@@ -67,7 +67,7 @@ export function ProjectShell({
   const returnQuery = returnParams.toString();
   const returnTo = returnQuery ? `${repoPath}?${returnQuery}` : repoPath;
   const settingsHref = project.id
-    ? `/settings?project=${encodeURIComponent(project.id)}&returnTo=${encodeURIComponent(returnTo)}`
+    ? `/project/${encodeURIComponent(project.id)}/settings?returnTo=${encodeURIComponent(returnTo)}`
     : '/settings';
   const ownerLabel = ownerSlug || 'Projects';
   const ownerMark = ownerSlug ? ownerSlug.slice(0, 2).toUpperCase() : 'P';
@@ -152,8 +152,8 @@ export function ProjectShell({
       <main
         className={
           immersive || activeTab === 'state' || activeTab === 'workspaces'
-            ? 'min-h-0 flex-1 overflow-hidden'
-            : 'min-h-0 flex-1 overflow-auto'
+            ? 'relative min-h-0 flex-1 overflow-hidden'
+            : 'relative min-h-0 flex-1 overflow-auto'
         }
       >
         {children}

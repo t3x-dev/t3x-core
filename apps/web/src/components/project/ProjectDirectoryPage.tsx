@@ -1,10 +1,20 @@
 'use client';
 
-import { LayoutTemplate, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
+import {
+  ArrowRight,
+  Building2,
+  FolderGit2,
+  LayoutTemplate,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+  UserRound,
+} from 'lucide-react';
 import Link from 'next/link';
 import { type FormEvent, useCallback, useMemo, useState } from 'react';
 import { LogoIcon } from '@/components/chat/sidebar/LogoIcon';
-import styles from '@/components/project/ProjectDirectoryPage.module.css';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -30,8 +40,35 @@ import {
   recordRecentProjectOpen,
 } from '@/utils/recentProjects';
 
+const repoTones = [
+  'bg-[var(--status-info)]',
+  'bg-[var(--accent-branch)]',
+  'bg-[var(--status-success)]',
+  'bg-[var(--accent-pending)]',
+  'bg-[var(--accent-conversation)]',
+];
+
+const focusRing =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50';
+
 function metricValue(value: number | undefined): number {
   return value ?? 0;
+}
+
+function RepoMark({ name, size = 'card' }: { name: string; size?: 'card' | 'row' }) {
+  const hash = Array.from(name).reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) >>> 0, 0);
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        'flex shrink-0 items-center justify-center text-[var(--on-status)] shadow-sm',
+        size === 'card' ? 'size-10 rounded-lg' : 'size-8 rounded-md',
+        repoTones[hash % repoTones.length]
+      )}
+    >
+      <FolderGit2 className={size === 'card' ? 'size-5' : 'size-4'} strokeWidth={1.8} />
+    </span>
+  );
 }
 
 function ProjectMetric({
@@ -72,76 +109,132 @@ function ProjectMetrics({ project }: { project: ProjectSummary }) {
   );
 }
 
-function ProjectCard({
+function ProjectActions({
+  onDelete,
+  onRename,
   project,
-  compact = false,
+}: {
+  onDelete: (project: ProjectSummary) => void;
+  onRename: (project: ProjectSummary) => void;
+  project: ProjectSummary;
+}) {
+  return (
+    <div className="flex shrink-0 items-center gap-0.5 opacity-100 md:opacity-0 md:transition-opacity md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+      <Button
+        aria-label={`Rename repository ${project.name}`}
+        className="size-7"
+        onClick={() => onRename(project)}
+        size="icon-sm"
+        type="button"
+        variant="canvas-ghost"
+      >
+        <Pencil className="size-3.5" />
+      </Button>
+      <Button
+        aria-label={`Delete repository ${project.name}`}
+        className="size-7 text-[var(--status-error)] hover:bg-[var(--status-error)]/10 hover:text-[var(--status-error)]"
+        onClick={() => onDelete(project)}
+        size="icon-sm"
+        type="button"
+        variant="canvas-ghost"
+      >
+        <Trash2 className="size-3.5" />
+      </Button>
+    </div>
+  );
+}
+
+function PinnedProjectCard({
   onDelete,
   onRename,
   ownerSlug,
+  project,
 }: {
-  project: ProjectSummary;
-  compact?: boolean;
   onDelete: (project: ProjectSummary) => void;
   onRename: (project: ProjectSummary) => void;
   ownerSlug: string;
+  project: ProjectSummary;
 }) {
   return (
     <article
       className={cn(
-        'group',
-        compact ? cn(styles.card, styles.cardInteractive, 'p-4') : 'px-5 py-4'
+        'group flex min-h-[132px] min-w-0 flex-col gap-3.5 rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-elevated)] p-4 shadow-[var(--fx-shadow-sm)]',
+        'transition-[border-color,box-shadow] duration-150',
+        'hover:border-[var(--accent-commit)]/35 hover:shadow-[0_2px_5px_rgb(37_99_235/8%)]'
       )}
     >
-      <div className="flex min-w-0 items-start justify-between gap-4">
+      <div className="flex min-w-0 items-start gap-3">
+        <RepoMark name={project.name} />
         <Link
           href={getProjectIdRepoPath(project.id)}
           onClick={() => recordRecentProjectOpen(project.id)}
-          className="min-w-0 flex-1 rounded-[var(--radius-control)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
+          className={cn('min-w-0 flex-1 rounded-[var(--radius-md)] pt-0.5', focusRing)}
         >
-          <h3 className="truncate text-[15px] font-semibold leading-tight text-[var(--text-primary)] transition-colors group-hover:text-[var(--accent-commit)]">
+          <h3 className="truncate text-[15px] font-bold leading-[19px] text-[var(--text-primary)] transition-colors group-hover:text-[var(--accent-commit)]">
             {project.name}
           </h3>
-          <p className="mt-1.5 line-clamp-2 text-[13px] font-normal leading-relaxed text-[var(--text-secondary)]">
+          <p className="mt-1 line-clamp-2 text-[13px] leading-[18px] text-[var(--text-secondary)]">
             {project.description || 'Structured state repository.'}
           </p>
-          <span className={styles.pathChip}>{getProjectRepoPath(project, ownerSlug)}</span>
         </Link>
-        {!compact && (
-          <span className="mt-1 shrink-0 text-xs font-medium text-[var(--text-tertiary)]">
-            Updated {project.updatedAt}
-          </span>
-        )}
-        <div className="flex shrink-0 items-center gap-1 opacity-100 md:opacity-0 md:transition-opacity md:group-hover:opacity-100 md:group-focus-within:opacity-100">
-          <Button
-            aria-label={`Rename repository ${project.name}`}
-            className="size-8"
-            onClick={() => onRename(project)}
-            size="icon-sm"
-            type="button"
-            variant="canvas-ghost"
-          >
-            <Pencil className="size-4" />
-          </Button>
-          <Button
-            aria-label={`Delete repository ${project.name}`}
-            className="size-8 text-[var(--status-error)] hover:bg-[var(--status-error)]/10 hover:text-[var(--status-error)]"
-            onClick={() => onDelete(project)}
-            size="icon-sm"
-            type="button"
-            variant="canvas-ghost"
-          >
-            <Trash2 className="size-4" />
-          </Button>
+        <div className="flex shrink-0 items-center gap-2 pt-0.5">
+          <ProjectActions onDelete={onDelete} onRename={onRename} project={project} />
+          <ArrowRight aria-hidden="true" className="size-4 text-[var(--accent-commit)]" />
         </div>
       </div>
-      <div className="mt-3">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 pl-[52px]">
         <ProjectMetrics project={project} />
+        <span className="truncate font-mono text-xs text-[var(--text-tertiary)]">
+          {getProjectRepoPath(project, ownerSlug)}
+        </span>
       </div>
     </article>
   );
 }
 
-function DirectoryTopBar({
+function ProjectRow({
+  onDelete,
+  onRename,
+  ownerSlug,
+  project,
+}: {
+  onDelete: (project: ProjectSummary) => void;
+  onRename: (project: ProjectSummary) => void;
+  ownerSlug: string;
+  project: ProjectSummary;
+}) {
+  return (
+    <article className="group flex min-w-0 items-center gap-3 px-4 py-3 transition-colors hover:bg-[var(--hover-bg)]">
+      <RepoMark name={project.name} size="row" />
+      <Link
+        href={getProjectIdRepoPath(project.id)}
+        onClick={() => recordRecentProjectOpen(project.id)}
+        className={cn('min-w-0 flex-1 rounded-[var(--radius-md)]', focusRing)}
+      >
+        <div className="flex min-w-0 items-baseline gap-2">
+          <h3 className="truncate text-sm font-semibold text-[var(--text-primary)] transition-colors group-hover:text-[var(--accent-commit)]">
+            {project.name}
+          </h3>
+          <span className="hidden truncate font-mono text-xs text-[var(--text-tertiary)] sm:inline">
+            {getProjectRepoPath(project, ownerSlug)}
+          </span>
+        </div>
+        <p className="mt-0.5 truncate text-xs text-[var(--text-secondary)]">
+          {project.description || 'Structured state repository.'}
+        </p>
+      </Link>
+      <div className="hidden shrink-0 lg:block">
+        <ProjectMetrics project={project} />
+      </div>
+      <span className="hidden w-32 shrink-0 text-right text-xs text-[var(--text-tertiary)] md:block">
+        Updated {project.updatedAt}
+      </span>
+      <ProjectActions onDelete={onDelete} onRename={onRename} project={project} />
+    </article>
+  );
+}
+
+function DirectoryHeader({
   isPersonalNamespace,
   onRefresh,
   ownerSlug,
@@ -154,47 +247,108 @@ function DirectoryTopBar({
 }) {
   const settingsPath = isPersonalNamespace ? '/settings/profile' : `/${ownerSlug}/settings`;
   const newRepositoryPath = `/${ownerSlug}/new`;
+  const NamespaceIcon = isPersonalNamespace ? UserRound : Building2;
+  const tabClass =
+    'relative inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--radius-md)] px-3.5 text-[14px] font-medium leading-5 transition-colors';
 
   return (
-    <header className={styles.topBar}>
-      <div className={styles.topBarInner}>
-        <div className={styles.brand}>
-          <span className={styles.wordmark}>T3X</span>
-          <span className={styles.brandMark}>
+    <header className="flex h-24 shrink-0 flex-col border-b border-[var(--stroke-divider)] bg-[var(--surface-elevated)] px-3">
+      <div className="flex h-14 min-w-0 shrink-0 items-center justify-between gap-6 px-1">
+        <div className="flex min-w-0 items-center gap-3">
+          <Link
+            aria-label="T3X home"
+            className={cn(
+              'inline-flex h-8 shrink-0 items-center text-xl font-extrabold leading-none text-[var(--text-primary)] focus-visible:rounded-[var(--radius-md)]',
+              focusRing
+            )}
+            href="/"
+          >
+            T3X
+          </Link>
+          <span aria-hidden="true" className="inline-flex size-8 shrink-0 [&_svg]:size-8">
             <LogoIcon />
           </span>
-          <span className={styles.ownerPath}>{ownerSlug}</span>
+          <div className="flex min-w-0 items-center gap-1 text-[13px] leading-5">
+            <span className="shrink-0 text-[var(--text-secondary)]">Namespaces</span>
+            <span aria-hidden="true" className="text-[var(--text-tertiary)]">
+              /
+            </span>
+            <span className="min-w-0 truncate font-semibold text-[var(--text-primary)]">
+              {ownerSlug}
+            </span>
+          </div>
+          <span className="inline-flex h-6 shrink-0 items-center gap-1 rounded-[var(--radius-pill)] border border-[var(--accent-commit)]/15 bg-[var(--accent-commit-soft)] px-2 text-[11px] font-medium text-[var(--accent-commit)]">
+            <NamespaceIcon aria-hidden="true" className="size-3" />
+            {isPersonalNamespace ? 'Personal' : 'Organization'}
+          </span>
         </div>
-        <nav aria-label="Namespace navigation" className="hidden items-center gap-1 md:flex">
-          <Link className={styles.navLink} href={settingsPath}>
-            Settings
+
+        <div className="flex shrink-0 items-center gap-3">
+          <Link
+            className={cn(
+              'hidden text-xs font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] focus-visible:rounded-[var(--radius-control)] min-[760px]:inline',
+              focusRing
+            )}
+            href="/templates"
+          >
+            Explore
           </Link>
-        </nav>
-        <div className="ml-auto" />
-        <Link aria-label="New repository" className={styles.createLink} href={newRepositoryPath}>
-          <Plus aria-hidden="true" className="size-3.5" />
-          New repository
-        </Link>
-        <Button
-          aria-label="Refresh repositories"
-          className="size-9"
-          disabled={refreshing}
-          onClick={onRefresh}
-          size="icon"
-          type="button"
-          variant="canvas-outline"
-        >
-          <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
-        </Button>
-        <span aria-hidden="true" className={styles.userMark}>
-          {ownerSlug.charAt(0).toUpperCase()}
-        </span>
+          <Link
+            className={cn(
+              'inline-flex h-[34px] items-center gap-1.5 rounded-[5px] border border-[var(--stroke-default)] bg-[var(--surface-card)] px-3 text-xs font-medium text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)] transition-colors hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)]',
+              focusRing
+            )}
+            href={newRepositoryPath}
+          >
+            <Plus aria-hidden="true" className="size-3.5" />
+            Create new
+          </Link>
+          <Button
+            aria-label="Refresh repositories"
+            className="size-[34px] rounded-[5px]"
+            disabled={refreshing}
+            onClick={onRefresh}
+            size="icon"
+            type="button"
+            variant="canvas-outline"
+          >
+            <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />
+          </Button>
+          <span
+            aria-label={`Owner ${ownerSlug}`}
+            className="inline-flex size-8 items-center justify-center rounded-full bg-[var(--hover-bg-strong)] text-xs font-semibold text-[var(--text-secondary)]"
+            role="img"
+          >
+            {ownerSlug.slice(0, 1).toUpperCase()}
+          </span>
+        </div>
       </div>
+      <nav aria-label="Namespace navigation" className="flex min-h-10 items-center gap-1 pb-1">
+        <span
+          aria-current="page"
+          className={cn(
+            tabClass,
+            'bg-[var(--accent-commit-soft)] font-semibold text-[var(--accent-commit)]'
+          )}
+        >
+          Repositories
+        </span>
+        <Link
+          className={cn(
+            tabClass,
+            'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]',
+            focusRing
+          )}
+          href={settingsPath}
+        >
+          Settings
+        </Link>
+      </nav>
     </header>
   );
 }
 
-function NamespaceHeader({
+function DirectorySideRail({
   dataAvailable,
   isPersonalNamespace,
   ownerSlug,
@@ -206,96 +360,85 @@ function NamespaceHeader({
   projects: ProjectSummary[];
 }) {
   const commits = projects.reduce((sum, project) => sum + metricValue(project.commitsCount), 0);
+  const drafts = projects.filter((project) => project.status === 'draft').length;
+  const recent = projects[0];
   const avatarLabel =
     ownerSlug
       .replace(/[^a-z0-9]/gi, '')
       .slice(0, 2)
       .toUpperCase() || 'T3';
+  const sectionTitle = 'mb-3 text-[15px] font-bold leading-[21px] text-[var(--text-primary)]';
 
   return (
-    <section className={styles.hero}>
-      <div aria-hidden="true" className={styles.heroMark}>
-        {avatarLabel}
-      </div>
-      <div className="min-w-0">
-        <p className={styles.eyebrow}>Owner namespace</p>
-        <h1 className={styles.heroTitle}>{ownerSlug}</h1>
-        <p className={styles.heroCopy}>
+    <aside
+      aria-label="Namespace overview"
+      className="shrink-0 border-b border-[var(--stroke-divider)] bg-[var(--surface-elevated)] px-4 py-5 md:w-[280px] md:overflow-y-auto md:border-r md:border-b-0"
+    >
+      <section className="px-1">
+        <div className="flex items-center gap-3">
+          <div className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-[var(--text-primary)] text-base font-bold text-[var(--surface-card)] shadow-sm">
+            {avatarLabel}
+          </div>
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-bold leading-6 text-[var(--text-primary)]">
+              {ownerSlug}
+            </h1>
+            <span className="text-xs font-medium text-[var(--text-tertiary)]">
+              {isPersonalNamespace ? 'Personal namespace' : 'Organization namespace'}
+            </span>
+          </div>
+        </div>
+        <p className="mt-3 text-[13px] leading-[18px] text-[var(--text-secondary)]">
           {isPersonalNamespace
             ? 'Personal namespace for structured state repositories.'
             : 'Organization namespace for structured state repositories.'}
         </p>
-        <div className={styles.heroStats}>
-          <span className={styles.statChip}>
-            {isPersonalNamespace ? 'Personal namespace' : 'Organization namespace'}
-          </span>
-          <span className={styles.statChip}>{dataAvailable ? projects.length : '—'} repos</span>
-          <span className={styles.statChip}>{dataAvailable ? commits : '—'} commits</span>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function DirectorySideRail({
-  dataAvailable,
-  projects,
-}: {
-  dataAvailable: boolean;
-  projects: ProjectSummary[];
-}) {
-  const drafts = projects.filter((project) => project.status === 'draft').length;
-  const recent = projects[0];
-
-  if (!dataAvailable) {
-    return (
-      <aside className={styles.rail}>
-        <section className={cn(styles.card, styles.railCard)}>
-          <div className={styles.railHead}>
-            <h2 className={styles.railTitle}>Repositories at a glance</h2>
-          </div>
-          <div className={styles.railBody}>
-            <p className={styles.railCopy}>Repository data is unavailable.</p>
-          </div>
-        </section>
-        <section className={cn(styles.card, styles.railCard)}>
-          <div className={styles.railHead}>
-            <h2 className={styles.railTitle}>Recently created</h2>
-          </div>
-          <div className={styles.railBody}>
-            <p className={styles.railCopy}>Retry loading repositories to see recent creations.</p>
-          </div>
-        </section>
-      </aside>
-    );
-  }
-
-  return (
-    <aside className={styles.rail}>
-      <section className={cn(styles.card, styles.railCard)}>
-        <div className={styles.railHead}>
-          <h2 className={styles.railTitle}>Repositories at a glance</h2>
-        </div>
-        <div className={styles.railBody}>
-          <div className={styles.tile}>
-            <div className={styles.tileLabel}>Repositories</div>
-            <div className={styles.tileValue}>{projects.length}</div>
-          </div>
-          <div className={styles.tile}>
-            <div className={styles.tileLabel}>Without commits</div>
-            <div className={styles.tileValue}>{drafts}</div>
-          </div>
-        </div>
       </section>
-      <section className={cn(styles.card, styles.railCard)}>
-        <div className={styles.railHead}>
-          <h2 className={styles.railTitle}>Recently created</h2>
-        </div>
-        <div className={styles.railBody}>
-          <p className={styles.railCopy}>
-            {recent ? `${recent.name} created ${recent.updatedAt}.` : 'No repositories yet.'}
+
+      <div className="mt-5 flex min-h-[41px] items-center justify-between rounded-lg bg-[var(--accent-commit-soft)] px-3 py-2.5">
+        <strong className="text-[15px] font-bold text-[var(--text-primary)]">Repositories</strong>
+        <span className="text-sm font-medium text-[var(--accent-commit)]">
+          {dataAvailable ? projects.length : '\u2014'} repos
+        </span>
+      </div>
+
+      <section className="mt-6 px-1">
+        <h2 className={sectionTitle}>Repositories at a glance</h2>
+        {dataAvailable ? (
+          <div className="flex flex-col gap-2.5">
+            <ProjectMetric label="Repositories" value={projects.length} tone="state" />
+            <ProjectMetric label="Without commits" value={drafts} tone="schema" />
+            <span className="text-xs font-medium text-[var(--text-secondary)]">
+              {commits} commits
+            </span>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2 text-[13px] leading-[18px] text-[var(--text-secondary)]">
+            <p>Repository data is unavailable.</p>
+            <span className="text-xs font-medium">{'\u2014'} commits</span>
+          </div>
+        )}
+      </section>
+
+      <section className="mt-7 border-t border-[var(--stroke-divider)] px-1 pt-6">
+        <h2 className={sectionTitle}>Recently created</h2>
+        {dataAvailable && recent ? (
+          <div className="flex min-w-0 items-center gap-2.5">
+            <RepoMark name={recent.name} size="row" />
+            <div className="min-w-0">
+              <p className="truncate text-[13px] font-semibold text-[var(--text-primary)]">
+                {recent.name}
+              </p>
+              <p className="text-xs text-[var(--text-tertiary)]">Created {recent.updatedAt}</p>
+            </div>
+          </div>
+        ) : (
+          <p className="text-[13px] leading-[18px] text-[var(--text-secondary)]">
+            {dataAvailable
+              ? 'No repositories yet.'
+              : 'Retry loading repositories to see recent creations.'}
           </p>
-        </div>
+        )}
       </section>
     </aside>
   );
@@ -311,11 +454,14 @@ function DirectoryLoadFailure({
   retrying: boolean;
 }) {
   return (
-    <div className={cn(styles.card, styles.blank)} role="alert">
-      <h2 className="text-lg font-bold text-[var(--text-primary)]">
+    <div
+      className="flex min-h-[280px] flex-col items-center justify-center rounded-xl border border-[var(--status-error)]/25 bg-[var(--surface-elevated)] p-8 text-center"
+      role="alert"
+    >
+      <h2 className="text-sm font-semibold text-[var(--text-primary)]">
         Couldn&apos;t load repositories
       </h2>
-      <p className="mt-2 max-w-[520px] text-sm leading-normal text-[var(--text-secondary)]">
+      <p className="mt-2 max-w-[520px] text-[13px] leading-normal text-[var(--text-secondary)]">
         {error}
       </p>
       <Button
@@ -334,12 +480,12 @@ function DirectoryLoadFailure({
 
 function EmptyDirectory({ newRepositoryPath }: { newRepositoryPath: string }) {
   return (
-    <div className={cn(styles.card, styles.blank)}>
-      <div className="flex size-10 items-center justify-center rounded-[var(--radius-control)] border border-[var(--accent-commit)]/20 bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]">
+    <div className="flex min-h-[360px] flex-col items-center justify-center p-8 text-center">
+      <div className="flex size-10 items-center justify-center rounded-lg border border-[var(--accent-commit)]/20 bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]">
         <LayoutTemplate className="size-5" />
       </div>
-      <h2 className="mt-4 text-lg font-bold text-[var(--text-primary)]">No repositories yet</h2>
-      <p className="mt-2 max-w-[420px] text-sm leading-normal text-[var(--text-secondary)]">
+      <h2 className="mt-4 text-sm font-semibold text-[var(--text-primary)]">No repositories yet</h2>
+      <p className="mt-2 max-w-[420px] text-[13px] leading-normal text-[var(--text-secondary)]">
         Create a repository, shape your YAML or JSON in a Workspace, then review, commit, and export
         it.
       </p>
@@ -348,6 +494,19 @@ function EmptyDirectory({ newRepositoryPath }: { newRepositoryPath: string }) {
           <Plus className="size-4" /> New repository
         </Link>
       </Button>
+    </div>
+  );
+}
+
+function SectionHeading({ count, title }: { count?: string; title: string }) {
+  return (
+    <div className="mb-4 flex items-end justify-between gap-6">
+      <h2 className="text-[22px] font-bold leading-7 tracking-[-0.02em] text-[var(--text-primary)]">
+        {title}
+      </h2>
+      {count && (
+        <span className="mb-0.5 text-sm font-medium text-[var(--accent-commit)]">{count}</span>
+      )}
     </div>
   );
 }
@@ -464,25 +623,48 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
   const dataAvailable = hasLoadedProjects || (!loading && !error);
 
   return (
-    <div className={styles.page}>
-      <DirectoryTopBar
+    <div className="flex h-dvh min-h-[560px] flex-col overflow-hidden bg-[var(--surface-app)] text-[var(--text-primary)]">
+      <DirectoryHeader
         isPersonalNamespace={isPersonalNamespace}
         onRefresh={handleRefreshProjects}
         ownerSlug={ownerSlug}
         refreshing={loading}
       />
-      <main className={styles.main}>
-        <div className="min-w-0 space-y-8">
-          <NamespaceHeader
-            dataAvailable={dataAvailable}
-            isPersonalNamespace={isPersonalNamespace}
-            ownerSlug={ownerSlug}
-            projects={projectSummaries}
-          />
 
+      <div className="flex min-h-[73px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] bg-[var(--surface-elevated)] px-6 py-3.5">
+        <label className="relative min-w-[220px] max-w-[800px] flex-1">
+          <span className="sr-only">Find a repository</span>
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[var(--text-primary)]"
+            strokeWidth={2.5}
+          />
+          <input
+            className="h-[45px] w-full rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-elevated)] pl-11 pr-4 text-[15px] text-[var(--text-primary)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-commit)]/40 focus:ring-1 focus:ring-[var(--accent-commit)]/40"
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Find a repository..."
+            value={query}
+          />
+        </label>
+        <Button asChild variant="commit">
+          <Link href={newRepositoryPath}>
+            <Plus className="size-4" /> New repository
+          </Link>
+        </Button>
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
+        <DirectorySideRail
+          dataAvailable={dataAvailable}
+          isPersonalNamespace={isPersonalNamespace}
+          ownerSlug={ownerSlug}
+          projects={projectSummaries}
+        />
+
+        <main className="min-w-0 flex-1 space-y-10 bg-[var(--surface-elevated)] px-5 pb-20 pt-8 md:overflow-y-auto md:px-8">
           {error && hasLoadedProjects && (
             <div
-              className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-card)] border border-[var(--status-error)]/25 bg-[var(--surface-card)] p-4 text-sm font-semibold text-[var(--status-error)]"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--status-error)]/25 bg-[var(--status-error)]/5 px-4 py-3 text-[13px] font-medium text-[var(--status-error)]"
               role="alert"
             >
               <span>Couldn&apos;t refresh repositories. Showing the last loaded data.</span>
@@ -500,11 +682,9 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
           )}
 
           {loading && projectSummaries.length === 0 ? (
-            <div
-              className={cn(styles.card, 'p-8 text-sm font-semibold text-[var(--text-secondary)]')}
-            >
+            <output className="flex min-h-[70px] items-center text-sm text-[var(--text-secondary)]">
               Loading repositories...
-            </div>
+            </output>
           ) : error && projectSummaries.length === 0 ? (
             <DirectoryLoadFailure
               error={error}
@@ -515,64 +695,43 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
             <EmptyDirectory newRepositoryPath={newRepositoryPath} />
           ) : (
             <>
-              <section>
-                <div className={styles.sectionHead}>
-                  <h2 className={styles.sectionTitle}>Pinned repositories</h2>
-                  <span className={cn(styles.sectionMeta, 'hidden md:block')}>
-                    {isPersonalNamespace ? 'Personal' : 'Organization'} repositories with shareable
-                    paths
-                  </span>
-                </div>
-                <div className={styles.pinnedGrid}>
-                  {pinnedProjects.map((project) => (
-                    <ProjectCard
-                      compact
-                      key={project.id}
-                      onDelete={setDeleteTarget}
-                      onRename={openRenameDialog}
-                      ownerSlug={ownerSlug}
-                      project={project}
-                    />
-                  ))}
-                </div>
-              </section>
+              {pinnedProjects.length > 0 && (
+                <section>
+                  <SectionHeading
+                    count={`${isPersonalNamespace ? 'Personal' : 'Organization'} repositories with shareable paths`}
+                    title="Pinned repositories"
+                  />
+                  <div className="grid gap-5 min-[1200px]:grid-cols-2">
+                    {pinnedProjects.map((project) => (
+                      <PinnedProjectCard
+                        key={project.id}
+                        onDelete={setDeleteTarget}
+                        onRename={openRenameDialog}
+                        ownerSlug={ownerSlug}
+                        project={project}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
 
               <section>
-                <div className={styles.sectionHead}>
-                  <h2 className={styles.sectionTitle}>Repositories</h2>
-                  <span className={styles.sectionMeta}>{filteredProjects.length} repos</span>
-                </div>
-                <div className={styles.toolbar}>
-                  <label className={styles.search}>
-                    <span className="sr-only">Find a repository</span>
-                    <Search className={styles.searchIcon} />
-                    <input
-                      className={styles.searchInput}
-                      onChange={(event) => setQuery(event.target.value)}
-                      placeholder="Find a repository..."
-                      value={query}
-                    />
-                  </label>
-                  <Button asChild variant="commit">
-                    <Link href={newRepositoryPath}>
-                      <Plus className="size-4" /> New repository
-                    </Link>
-                  </Button>
-                </div>
-                <div className={cn(styles.card, styles.repoPanel)}>
+                <SectionHeading count={`${filteredProjects.length} repos`} title="Repositories" />
+                <div className="overflow-hidden rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-elevated)] shadow-[var(--fx-shadow-sm)]">
                   {filteredProjects.length > 0 ? (
-                    filteredProjects.map((project) => (
-                      <div className={styles.repoRow} key={project.id}>
-                        <ProjectCard
+                    <div className="divide-y divide-[var(--stroke-divider)]">
+                      {filteredProjects.map((project) => (
+                        <ProjectRow
+                          key={project.id}
                           onDelete={setDeleteTarget}
                           onRename={openRenameDialog}
                           ownerSlug={ownerSlug}
                           project={project}
                         />
-                      </div>
-                    ))
+                      ))}
+                    </div>
                   ) : (
-                    <div className="flex items-center justify-between gap-4 p-5 text-sm font-semibold text-[var(--text-secondary)]">
+                    <div className="flex items-center justify-between gap-4 p-5 text-[13px] text-[var(--text-secondary)]">
                       <span>No repositories match this filter.</span>
                       <Button onClick={() => setQuery('')} type="button" variant="canvas-outline">
                         Clear
@@ -583,9 +742,8 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
               </section>
             </>
           )}
-        </div>
-        <DirectorySideRail dataAvailable={dataAvailable} projects={projectSummaries} />
-      </main>
+        </main>
+      </div>
 
       <Dialog open={Boolean(renameTarget)} onOpenChange={handleRenameDialogOpenChange}>
         <DialogContent className="sm:max-w-[400px]">

@@ -50,7 +50,6 @@ function OwnerRepoProjectPageContent() {
     isNewRepositoryPage,
     isOrganizationSettingsPage,
     isOwnerDirectory,
-    isRepositorySettingsRedirect,
     loading,
     ownerSlug,
     projectScope,
@@ -67,12 +66,21 @@ function OwnerRepoProjectPageContent() {
   }, [hasStateTabSegment, ownerSlug, project, repoSlug, router]);
 
   useEffect(() => {
-    if (!isRepositorySettingsRedirect || !project?.id) return;
+    if (!isRepositorySettingsRedirect || !project?.id || projectScope !== ownerSlug || loading)
+      return;
     const returnTo = `/${ownerSlug}/${repoSlug}`;
     router.replace(
       `/project/${encodeURIComponent(project.id)}/settings?returnTo=${encodeURIComponent(returnTo)}`
     );
-  }, [isRepositorySettingsRedirect, ownerSlug, project?.id, repoSlug, router]);
+  }, [
+    isRepositorySettingsRedirect,
+    loading,
+    ownerSlug,
+    project?.id,
+    projectScope,
+    repoSlug,
+    router,
+  ]);
 
   if (isOwnerDirectory) {
     return <ProjectDirectoryPage ownerSlug={ownerSlug} />;

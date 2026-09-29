@@ -21,6 +21,11 @@ import {
   buildAuthoringPreparation,
   workspaceAuthoringState,
 } from './workspace-authoring';
+import {
+  buildWorkspaceReviewArtifacts,
+  persistWorkspaceReviewArtifacts,
+  reviewSnapshotCreatedAt,
+} from './workspace-review-artifacts';
 import { resolveWorkspaceTransitionContext } from './workspace-transition';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
 import { schemaRootKeyFromBinding } from './yschema-registry';
@@ -144,6 +149,13 @@ export async function prepareWorkspaceAuthoringReview(input: {
       ],
     },
   });
+  if (result.view.precondition.policyDigest !== null) {
+    const artifacts = buildWorkspaceReviewArtifacts({
+      inspection: result.view,
+      createdAt: reviewSnapshotCreatedAt(result.view),
+    });
+    await persistWorkspaceReviewArtifacts(input.db, artifacts);
+  }
   return {
     view: result.view,
     authoring: {
