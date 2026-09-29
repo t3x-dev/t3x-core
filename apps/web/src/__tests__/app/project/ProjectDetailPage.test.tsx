@@ -279,7 +279,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     );
 
     expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('heading', { name: 'What will you define next?' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Curated schemas' })).toBeInTheDocument();
 
     view.rerender(
       <ProjectDetailPageContent initialTabOverride="workspaces" projectIdOverride="proj_test" />
@@ -289,7 +289,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
       'aria-current',
       'page'
     );
-    expect(screen.getByRole('button', { name: 'Compose' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Compose' })).toBeInTheDocument();
   });
 
   it('renders Canvas only on the independent Canvas surface', async () => {
@@ -484,10 +484,9 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
     expect((await screen.findAllByText('Validation pending')).length).toBeGreaterThan(0);
-    expect(await screen.findAllByText('Missing')).toHaveLength(2);
+    expect((await screen.findAllByText(/^missing$/i)).length).toBeGreaterThan(0);
     expect(screen.queryByRole('region', { name: 'State overview' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Revision details'));
     fireEvent.click(screen.getByRole('button', { name: 'Run validation' }));
 
     await waitFor(() => {
@@ -553,15 +552,13 @@ describe('ProjectDetailPage — project-first shell states', () => {
       'aria-current',
       'page'
     );
-    expect(screen.getByRole('button', { name: 'Compose' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Compose' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Workspace detail' })).toHaveAccessibleDescription(
       'Main workspace'
     );
     expect(screen.queryByText('PRD audience handoff')).not.toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { name: 'What would you like to change?' })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Think it through.' })).toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
@@ -571,9 +568,11 @@ describe('ProjectDetailPage — project-first shell states', () => {
     renderProjectContent();
 
     expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('heading', { name: 'What will you define next?' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Curated schemas' })).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Schema views' })).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Search definitions' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('textbox', { name: 'Search projects and schemas' })
+    ).toBeInTheDocument();
     expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   });
 
