@@ -2,11 +2,17 @@
  * OpenAI LLM Provider
  *
  * Implementation of LLMProvider using OpenAI's Chat Completions API.
+ * Tool calling uses the Responses API, which allows function tools together
+ * with reasoning effort.
  */
 
 import type { ZodType } from 'zod';
-import { buildOpenAIChatCompletionBody } from '../../extractors/v2/providerAdapters';
 import {
+  buildOpenAIChatCompletionBody,
+  supportsOpenAIReasoningEffort,
+} from '../../extractors/v2/providerAdapters';
+import {
+  type ContentBlock,
   type LLMBasicGenerateOptions,
   type LLMGenerateOptions,
   type LLMGenerateResult,
@@ -16,6 +22,9 @@ import {
   type LLMResult,
   type LLMTextStreamEvent,
   type StructuredResult,
+  type ToolCall,
+  type ToolDefinition,
+  type ToolUseResult,
 } from '../../llm/types';
 import { extractJsonBlock } from './jsonExtract';
 import { tryParseWithRepair } from './jsonRepair';
@@ -48,6 +57,92 @@ async function fetchWithProxy(url: string, options: RequestInit): Promise<Respon
     return response as unknown as Response;
   }
   return fetch(url, options);
+}
+
+/**
+ * Carries an opaque Responses `reasoning` output item through the assistant
+ * loop. Reasoning models need it replayed before the matching function_call
+ * to continue a tool round with reasoning enabled.
+ */
+const OPENAI_REASONING_BLOCK = 'openai_reasoning';
+
+type OpenAIResponsesInputItem = Record<string, unknown>;
+
+interface OpenAIResponsesOutputItem {
+  type?: string;
+  id?: string;
+  call_id?: string;
+  name?: string;
+  arguments?: string;
+  content?: Array<{ type?: string; text?: string; refusal?: string }>;
+  [key: string]: unknown;
+}
+
+/** The assistant loop records Claude-shaped blocks. Responses continuation uses function_call items. */
+function toOpenAIResponsesInput(prompt: LLMPrompt): OpenAIResponsesInputItem[] {
+  const items: OpenAIResponsesInputItem[] = [];
+  for (const message of prompt.messages) {
+    if (typeof message.content === 'string') {
+      items.push({ role: message.role, content: message.content });
+      continue;
+    }
+    const produced = items.length;
+    let text = '';
+    const flushText = () => {
+      if (text) items.push({ role: message.role, content: text });
+      text = '';
+    };
+    for (const block of message.content) {
+      if (block.type === 'text' && typeof block.text === 'string') {
+        text += block.text;
+      } else if (block.type === 'tool_use') {
+        flushText();
+        items.push({
+          type: 'function_call',
+          call_id: String(block.id ?? ''),
+          name: String(block.name ?? ''),
+          arguments: JSON.stringify(block.input ?? {}),
+        });
+      } else if (block.type === 'tool_result') {
+        flushText();
+        const content = block.content;
+        items.push({
+          type: 'function_call_output',
+          call_id: String(block.tool_use_id ?? ''),
+          output: typeof content === 'string' ? content : JSON.stringify(content ?? ''),
+        });
+      } else if (block.type === OPENAI_REASONING_BLOCK && block.item) {
+        flushText();
+        items.push(block.item as OpenAIResponsesInputItem);
+      }
+    }
+    flushText();
+    if (items.length === produced) {
+      items.push({ role: message.role, content: JSON.stringify(message.content) });
+    }
+  }
+  return items;
+}
+
+function openAIResponsesMessageText(item: OpenAIResponsesOutputItem): string {
+  return (item.content ?? [])
+    .map((part) =>
+      part.type === 'output_text'
+        ? (part.text ?? '')
+        : part.type === 'refusal'
+          ? (part.refusal ?? '')
+          : ''
+    )
+    .join('');
+}
+
+function parseOpenAIToolArguments(raw: unknown): unknown {
+  if (typeof raw !== 'string') return raw ?? {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new SyntaxError('Tool call arguments are not valid JSON');
+  }
 }
 
 export interface OpenAIProviderConfig {
@@ -524,6 +619,137 @@ export class OpenAIProvider implements LLMProvider {
       'SCHEMA_MISMATCH',
       { jsonText, rawText: result.text, issues: parsed.error.issues }
     );
+  }
+
+  async generateWithTools(
+    prompt: LLMPrompt,
+    tools: ToolDefinition[],
+    options: LLMGenerateOptions
+  ): Promise<ToolUseResult> {
+    const temperature = options.temperature ?? 0.3;
+    const maxTokens = options.maxTokens ?? 8192;
+    const url = `${this.baseUrl}/responses`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120_000);
+    const reasoning =
+      options.reasoningEffort && supportsOpenAIReasoningEffort(options.model)
+        ? options.reasoningEffort
+        : undefined;
+
+    try {
+      const response = await fetchWithProxy(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: options.model,
+          ...(prompt.system ? { instructions: prompt.system } : {}),
+          input: toOpenAIResponsesInput(prompt),
+          tools: tools.map((tool) => ({
+            type: 'function',
+            name: tool.name,
+            description: tool.description,
+            parameters: tool.input_schema,
+            strict: false,
+          })),
+          tool_choice: 'auto',
+          max_output_tokens: maxTokens,
+          store: false,
+          ...(reasoning
+            ? { reasoning: { effort: reasoning }, include: ['reasoning.encrypted_content'] }
+            : { temperature }),
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      const responseText = await response.text();
+      if (!response.ok) {
+        throw new LLMProviderError(
+          this.id,
+          response.status,
+          `API request failed: ${response.status} ${responseText}`
+        );
+      }
+
+      const data = JSON.parse(responseText) as {
+        status?: string;
+        incomplete_details?: { reason?: string } | null;
+        output?: OpenAIResponsesOutputItem[];
+        usage?: { input_tokens?: number; output_tokens?: number };
+      };
+      const toolCalls: ToolCall[] = [];
+      const blocks: ContentBlock[] = [];
+      let text = '';
+      try {
+        for (const item of data.output ?? []) {
+          if (item.type === 'reasoning') {
+            blocks.push({ type: OPENAI_REASONING_BLOCK, item });
+          } else if (item.type === 'message') {
+            const itemText = openAIResponsesMessageText(item);
+            if (itemText) {
+              text += itemText;
+              blocks.push({ type: 'text', text: itemText });
+            }
+          } else if (item.type === 'function_call' && item.call_id && item.name) {
+            const call = {
+              id: item.call_id,
+              name: item.name,
+              input: parseOpenAIToolArguments(item.arguments),
+            };
+            toolCalls.push(call);
+            blocks.push({ type: 'tool_use', ...call });
+          }
+        }
+      } catch (error) {
+        throw new LLMProviderError(
+          this.id,
+          undefined,
+          error instanceof Error ? error.message : 'Tool call arguments are not valid JSON'
+        );
+      }
+      const incompleteReason =
+        data.status === 'incomplete' ? data.incomplete_details?.reason : undefined;
+      if (!text && toolCalls.length === 0) {
+        throw new LLMProviderError(
+          this.id,
+          undefined,
+          incompleteReason
+            ? `No content in response (incomplete: ${incompleteReason})`
+            : 'No content in response'
+        );
+      }
+
+      const stopReason =
+        toolCalls.length > 0
+          ? ('tool_use' as const)
+          : incompleteReason === 'max_output_tokens'
+            ? ('max_tokens' as const)
+            : ('end_turn' as const);
+
+      return {
+        tool_calls: toolCalls,
+        stop_reason: stopReason,
+        usage: {
+          inputTokens: data.usage?.input_tokens ?? 0,
+          outputTokens: data.usage?.output_tokens ?? 0,
+        },
+        _rawAssistantContent: blocks,
+      };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof LLMProviderError) throw error;
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new LLMProviderError(this.id, undefined, 'Request timeout after 120000ms');
+      }
+      throw new LLMProviderError(
+        this.id,
+        undefined,
+        `Request failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
 
   async resolveConflict(

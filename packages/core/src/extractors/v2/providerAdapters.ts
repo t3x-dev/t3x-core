@@ -21,6 +21,10 @@ function usesOpenAICompletionTokenField(model: string): boolean {
   return /^gpt-5(\.|-|$)/.test(model);
 }
 
+export function supportsOpenAIReasoningEffort(model: string): boolean {
+  return /^(gpt-5|o[134])/.test(model);
+}
+
 export function buildOpenAIChatCompletionBody(
   input: OpenAIChatCompletionBodyInput
 ): Record<string, unknown> {
@@ -36,7 +40,7 @@ export function buildOpenAIChatCompletionBody(
     body.max_tokens = input.maxTokens;
   }
 
-  if (input.reasoningEffort && /^(gpt-5|o[134])/.test(input.model)) {
+  if (input.reasoningEffort && supportsOpenAIReasoningEffort(input.model)) {
     body.reasoning_effort = input.reasoningEffort;
     delete body.temperature;
   }
