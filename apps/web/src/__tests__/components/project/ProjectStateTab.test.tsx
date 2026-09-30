@@ -32,6 +32,7 @@ vi.mock('@/hooks/workspaces/useCommitTransitionView', () => ({
 }));
 
 vi.mock('@/components/project/StateOverviewView', () => ({
+  EmptyStateProjectHeader: () => <header>Release Control default introduction</header>,
   EmptyStateOverview: () => <section>No commits yet</section>,
   StateOverviewView: ({
     reader,
@@ -1191,6 +1192,7 @@ describe('ProjectStateTab', () => {
     renderStateTab();
 
     await screen.findByText('No commit on this branch');
+    expect(screen.getByText('Release Control default introduction')).toBeInTheDocument();
     expect(screen.getByRole('tablist', { name: 'State views' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Propose change' })).toHaveAttribute(
       'href',

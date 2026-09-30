@@ -689,3 +689,44 @@ export function EmptyStateOverview({ workspaceHref }: { workspaceHref: string })
     </div>
   );
 }
+
+/** Temporary introduction accompanying the default README before the first commit. */
+export function EmptyStateProjectHeader() {
+  return (
+    <div className={styles.sharedHeader}>
+      <div className={styles.page}>
+        <header className={styles.projectHeader}>
+          <div className={styles.avatarFallback}>
+            <Box aria-hidden="true" />
+          </div>
+          <div className={styles.projectIdentity}>
+            <div className={styles.titleLine}>
+              <h1>Release Control</h1>
+              <span className={styles.visibility}>
+                <LockKeyhole aria-hidden="true" />
+                Private
+              </span>
+            </div>
+            <p className={styles.owner}>
+              <span className={styles.publisher}>Y</span>
+              <strong>You</strong>
+              <i />
+              t3x/prd
+              <i />
+              <span>Updated Sep 9</span>
+            </p>
+            <p className={styles.description}>
+              Stage a release, gather evidence at each step, and ship with a record of who approved
+              what.
+            </p>
+            <div className={styles.tags}>
+              <span>release-management</span>
+              <span>structured-state</span>
+              <span>collaboration</span>
+            </div>
+          </div>
+        </header>
+      </div>
+    </div>
+  );
+}

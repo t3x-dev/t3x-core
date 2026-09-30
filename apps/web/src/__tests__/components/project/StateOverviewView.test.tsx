@@ -2,7 +2,11 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { EmptyStateOverview, StateOverviewView } from '@/components/project/StateOverviewView';
+import {
+  EmptyStateOverview,
+  EmptyStateProjectHeader,
+  StateOverviewView,
+} from '@/components/project/StateOverviewView';
 
 const overview = vi.hoisted(() => vi.fn());
 vi.mock('@/hooks/commits/useStateOverview', () => ({ useStateOverview: overview }));
@@ -110,4 +114,14 @@ it('shows the default README for empty repositories without inventing committed 
     '/project/empty?tab=workspaces'
   );
   expect(screen.queryByText('Committed')).not.toBeInTheDocument();
+});
+
+it('renders the default project introduction without loading commit data', () => {
+  overview.mockReturnValue({ data: null, loading: false });
+  render(<EmptyStateProjectHeader />);
+  expect(screen.getByRole('heading', { name: 'Release Control' })).toBeVisible();
+  expect(screen.getByText('Updated Sep 9')).toBeVisible();
+  expect(screen.getByText('release-management')).toBeVisible();
+  expect(screen.getByText('structured-state')).toBeVisible();
+  expect(screen.getByText('collaboration')).toBeVisible();
 });

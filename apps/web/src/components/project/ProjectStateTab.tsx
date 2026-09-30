@@ -36,7 +36,11 @@ import { StateNodeHistoryPanel } from '@/components/history/StateNodeHistoryPane
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
 import { StateCodeView } from '@/components/project/StateCodeView';
-import { EmptyStateOverview, StateOverviewView } from '@/components/project/StateOverviewView';
+import {
+  EmptyStateOverview,
+  EmptyStateProjectHeader,
+  StateOverviewView,
+} from '@/components/project/StateOverviewView';
 import { StatePrdReader } from '@/components/project/StatePrdReader';
 import { StatePromptReader } from '@/components/project/StatePromptReader';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
@@ -618,6 +622,8 @@ export function ProjectStateTab({
                   commits={snapshot.commits}
                   onViewStructure={() => updateActiveView('structure')}
                 />
+              ) : !headCommit && !snapshot.loading && !snapshot.primaryError ? (
+                <EmptyStateProjectHeader />
               ) : null}
               <StateInspectionToolbar
                 projectName={projectName}
