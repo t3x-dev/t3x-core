@@ -130,53 +130,6 @@
   flex: 1;
   padding: 0 28px;
 }
-.page:has(.overviewGrid) .header {
-  padding: 24px 40px 0;
-  border-bottom: 0;
-}
-.page:has(.overviewGrid) .breadcrumb {
-  margin-bottom: 12px;
-  font-size: 14px;
-}
-.page:has(.overviewGrid) .header h1 {
-  font-size: 30px;
-  line-height: 38px;
-  color: #0f172a;
-}
-.page:has(.overviewGrid) .refs {
-  gap: 16px;
-  margin-top: 18px;
-  font-size: 14px;
-}
-.page:has(.overviewGrid) .refs span {
-  height: auto;
-  border: 0;
-  padding: 0;
-  background: transparent;
-}
-.page:has(.overviewGrid) .refs b {
-  padding: 2px 8px;
-}
-.page:has(.overviewGrid) .refs code {
-  font-size: 12px;
-}
-.page:has(.overviewGrid) .tabs {
-  height: 50px;
-  gap: 24px;
-  margin: 14px 40px 0;
-}
-.page:has(.overviewGrid) .tabs button {
-  min-width: auto;
-  padding: 0 4px;
-  font-size: 14px;
-}
-.page:has(.overviewGrid) .content {
-  padding: 0 40px;
-}
-.page:has(.overviewGrid) .footer {
-  padding-right: 40px;
-  padding-left: 40px;
-}
 .overviewGrid {
   display: grid;
   width: 100%;
@@ -1090,5 +1043,514 @@
   .impactList,
   .otherImpact {
     min-width: 760px;
+  }
+}
+
+/* Shared PR visual language from the list and create references. */
+.page {
+  width: 100%;
+  max-width: var(--project-page-max-width, 1264px);
+  margin: 0 auto;
+  color: #16181d;
+  padding: 0 24px;
+  font:
+    13px / 1.45 -apple-system,
+    BlinkMacSystemFont,
+    "Inter",
+    system-ui,
+    sans-serif;
+}
+.page .header {
+  padding: 28px 0 18px;
+  border: 0;
+}
+.page .breadcrumb {
+  color: #8b909a;
+  font-size: 12.5px;
+  margin-bottom: 10px;
+}
+.page .header h1 {
+  color: #16181d;
+  font-size: 26px;
+  line-height: 1.2;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.page .refs {
+  color: #8b909a;
+  gap: 10px;
+  margin-top: 14px;
+  font-size: 12.5px;
+}
+.page .refs span {
+  border: 0;
+  border-radius: 8px;
+  padding: 4px 8px;
+  background: #f1f1f3;
+  height: auto;
+}
+.page .refs b {
+  color: #5b606b;
+  padding: 0;
+  background: transparent;
+  font-weight: 550;
+}
+.page .refs code {
+  color: #8b909a;
+  font-size: 11.5px;
+}
+.headerAside {
+  color: #8b909a;
+  font-size: 12px;
+}
+.page .tabs {
+  display: inline-flex;
+  align-self: flex-start;
+  height: 34px;
+  margin: 0 0 8px;
+  padding: 3px;
+  gap: 2px;
+  border: 0;
+  border-radius: 10px;
+  background: #f1f1f3;
+}
+.page .tabs button {
+  min-width: 0;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #5b606b;
+}
+.page .tabs button.tabActive {
+  background: white;
+  color: #16181d;
+  box-shadow:
+    0 1px 2px rgba(15, 18, 30, 0.1),
+    0 0 0 1px rgba(15, 18, 30, 0.04);
+}
+.page .content {
+  padding: 0;
+}
+.overviewGrid {
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 40px;
+  padding-top: 20px;
+}
+.descriptionCard {
+  border: 0;
+  padding: 0;
+}
+.descriptionCard h3 {
+  color: #16181d;
+  font-size: 15px;
+  font-weight: 650;
+}
+.descriptionCard p {
+  color: #5b606b;
+  font-size: 14px;
+  line-height: 1.65;
+}
+.overviewCard {
+  border: 0;
+  border-radius: 16px;
+  background: #f7f8fa;
+  padding: 16px;
+}
+.overviewCard > h2 {
+  color: #16181d;
+  font-size: 14px;
+  font-weight: 650;
+}
+.readinessHeading h2 {
+  color: #16181d;
+  font-size: 18px;
+  font-weight: 650;
+}
+.readinessHeading span {
+  font-size: 12.5px;
+}
+.readinessCard {
+  border: 0;
+  border-radius: 14px;
+  box-shadow: none;
+  background: #f7f8fa;
+}
+.relationshipRows > div {
+  border-color: rgba(15, 18, 30, 0.06);
+}
+.relationshipRows code {
+  background: white;
+  color: #5b606b;
+  border-radius: 6px;
+}
+.lastReview,
+.overviewChecks small {
+  color: #8b909a;
+}
+.overviewChecks b {
+  color: #16181d;
+  font-size: 13px;
+}
+.diffPanel,
+.inspectorCard,
+.checkCard {
+  border-color: rgba(15, 18, 30, 0.08);
+  border-radius: 14px;
+}
+.diffToolbar,
+.inspectorHeader,
+.checkHeader {
+  background: #f7f8fa;
+}
+.page .footer {
+  padding: 12px 0;
+  margin-top: 16px;
+  border-color: rgba(15, 18, 30, 0.08);
+  color: #8b909a;
+  font-size: 12.5px;
+  flex-wrap: wrap;
+}
+.footerActions {
+  flex-wrap: wrap;
+}
+.footerActions button {
+  border-radius: 8px;
+  font-size: 13px;
+}
+.secondaryAction {
+  border-color: rgba(15, 18, 30, 0.12);
+  color: #5b606b;
+}
+.mergeButton {
+  background: #2563eb;
+}
+@media (max-width: 900px) {
+  .overviewGrid {
+    grid-template-columns: 1fr;
+  }
+  .header {
+    flex-wrap: wrap;
+  }
+  .headerAside {
+    align-items: flex-start;
+  }
+}
+@media (max-width: 600px) {
+  .page {
+    padding: 0 16px;
+  }
+  .page .tabs {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  .page .tabs button {
+    white-space: nowrap;
+  }
+}
+
+/* PR Changes reference: open comparison table and separate inspection cards. */
+.changesLayout {
+  height: auto;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 48px;
+  padding: 10px 0 24px;
+}
+.changesLayout .diffPanel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.diffToolbar {
+  min-height: 34px;
+  padding: 0;
+  margin-bottom: 14px;
+  border: 0;
+  background: transparent;
+  justify-content: space-between;
+  gap: 8px;
+}
+.diffToolbar > div:first-child {
+  gap: 8px;
+  margin: 0;
+}
+.diffToolbar > div:first-child > span {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.addedCount,
+.modifiedCount {
+  background: var(--diff-added-bg);
+  color: var(--diff-added-text, #15803d);
+}
+.conflictCount {
+  background: var(--surface-app);
+  color: var(--text-secondary);
+}
+.viewSwitch {
+  height: 32px;
+  padding: 3px;
+  gap: 2px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--surface-app);
+}
+.viewSwitch button {
+  padding: 0 12px;
+  border-radius: 7px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.viewSwitch .viewActive {
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  box-shadow: var(--fx-shadow-sm);
+}
+.treeWrap {
+  overflow: auto;
+  flex: none;
+}
+.tree {
+  width: 100%;
+  min-width: 680px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.pathColumn {
+  width: 32%;
+}
+.tree th {
+  height: 30px;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+.tree th code {
+  font: 11.5px var(--font-mono);
+  color: var(--text-secondary);
+}
+.tree td {
+  height: 44px;
+  padding: 0 14px;
+  border: 0;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+.tree td:first-child {
+  border-radius: 10px 0 0 10px;
+}
+.tree td:last-child {
+  border-radius: 0 10px 10px 0;
+}
+.tree tr:hover td {
+  background: var(--surface-app);
+}
+.tree tr.treeSelected td {
+  background: var(--accent-commit-soft, #eef2ff);
+  box-shadow:
+    inset 0 1px 0 #b6caff,
+    inset 0 -1px 0 #b6caff;
+}
+.treeField {
+  gap: 8px;
+}
+.treeField b {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.treeField em {
+  display: none;
+}
+.treeValue {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--surface-app);
+  font: 12.5px var(--font-mono);
+}
+.typeIcon {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 22px;
+  flex: none;
+  border-radius: 7px;
+  font: 600 9.5px var(--font-mono);
+  background: var(--diff-added-bg);
+  color: var(--diff-added-text, #15803d);
+}
+.typeIcon[data-type="object"] {
+  background: #f3efff;
+  color: #8055fa;
+}
+.typeIcon[data-type="number"] {
+  background: #fff2e8;
+  color: #ea6a0c;
+}
+.previewBar {
+  margin-top: 16px;
+  padding: 10px 14px;
+  min-height: 38px;
+  gap: 10px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface-app);
+  color: var(--text-tertiary);
+  font-size: 12.5px;
+}
+.previewBar code {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  border: 0;
+  overflow: visible;
+  background: transparent;
+}
+.inspectorCard,
+.checkCard {
+  padding: 18px;
+  border: 0;
+  border-radius: 16px;
+  background: #f7f8fa;
+}
+.inspectorHeader {
+  height: auto;
+  padding: 0;
+  margin-bottom: 14px;
+  border: 0;
+  background: transparent;
+}
+.inspectorHeader h2 {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+.inspectorHeader button {
+  font-size: 12.5px;
+  color: var(--accent-commit);
+}
+.inspectorBody {
+  padding: 0;
+}
+.selectedPath {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  background: #eaf0ff;
+  color: var(--accent-commit);
+  vertical-align: middle;
+}
+.changeBadge {
+  border-radius: 999px;
+  font-size: 11px;
+  margin-left: 8px;
+  background: #fff0df;
+  color: #b45309;
+}
+.beforeAfter {
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+.beforeAfter > div {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.beforeAfter span {
+  padding: 10px 12px;
+  border-radius: 10px;
+  font: 13px var(--font-mono);
+  text-transform: none;
+  letter-spacing: normal;
+  overflow-wrap: anywhere;
+}
+.inspectorBody h3 {
+  margin-top: 16px;
+  border: 0;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+}
+.sourceRow {
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  gap: 8px;
+  border: 0;
+  font-size: 12px;
+}
+.sourceRow b,
+.sourceRow code {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.sourceRow span {
+  grid-column: 2 / -1;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.checkHeader {
+  height: auto;
+  padding: 0;
+  border: 0;
+  margin-bottom: 14px;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: transparent;
+  flex-wrap: wrap;
+}
+.checkHeader > span {
+  width: 100%;
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--diff-added-bg);
+  font-size: 13.5px;
+}
+.compactCheck {
+  margin: 0;
+  border: 0;
+  min-height: 38px;
+}
+.compactCheck b {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.compactCheck small {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+@media (max-width: 1050px) {
+  .changesLayout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+  .inspector {
+    min-height: 0;
   }
 }

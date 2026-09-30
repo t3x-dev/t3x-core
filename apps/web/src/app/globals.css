@@ -2334,3 +2334,9 @@ h3,
     transform 400ms ease-in-out,
     opacity 300ms ease;
 }
+
+/* Shared page boundary across project and schema surfaces. */
+:root {
+  --project-page-max-width: 1264px;
+  --project-page-gutter: 24px;
+}

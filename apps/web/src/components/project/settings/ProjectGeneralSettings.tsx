@@ -1,6 +1,14 @@
 'use client';
 
-import { Check, Copy, Info } from 'lucide-react';
+import {
+  Check,
+  ChevronRight,
+  Copy,
+  FileText,
+  GitBranch,
+  GitCommitHorizontal,
+  Pencil,
+} from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -10,14 +18,15 @@ import { formatUserFacingError } from '@/domain/format/errors';
 import { getProjectIdRepoPath, toRepoSlug } from '@/domain/project/repoPath';
 import { projectDescription } from '@/hooks/projects/useProjectSettings';
 import type { ProjectDetail } from '@/types/api';
-import { SettingsField, SettingsSection } from './SettingsSection';
+import styles from './ProjectGeneralSettings.module.css';
+import { SettingsField } from './SettingsSection';
 
 const DESCRIPTION_LIMIT = 280;
 
 function CopyValue({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <div className="flex h-9 min-w-0 items-center gap-2 rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-app)] pl-3 pr-1">
+    <div className={styles.copyField}>
       <code className="min-w-0 flex-1 truncate font-mono text-xs text-[var(--text-primary)]">
         {value}
       </code>
@@ -49,19 +58,24 @@ function CopyValue({ label, value }: { label: string; value: string }) {
 
 function RepositoryStats({ project }: { project: ProjectDetail }) {
   const stats = [
-    { label: 'Commits', value: project.commits_count ?? project.stats?.commits_count ?? 0 },
-    { label: 'Branches', value: project.branches_count ?? 0 },
-    { label: 'Drafts', value: project.drafts_count ?? 0 },
-    { label: 'Outputs', value: project.outputs_count ?? 0 },
+    {
+      icon: GitCommitHorizontal,
+      label: 'Commits',
+      value: project.commits_count ?? project.stats?.commits_count ?? 0,
+    },
+    { icon: GitBranch, label: 'Branches', value: project.branches_count ?? 0 },
+    { icon: Pencil, label: 'Drafts', value: project.drafts_count ?? 0 },
+    { icon: FileText, label: 'Outputs', value: project.outputs_count ?? 0 },
   ];
   return (
-    <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-[var(--stroke-default)] bg-[var(--stroke-divider)] sm:grid-cols-4">
-      {stats.map((stat) => (
-        <div className="bg-[var(--surface-elevated)] px-4 py-3" key={stat.label}>
-          <dt className="text-xs font-medium text-[var(--text-tertiary)]">{stat.label}</dt>
-          <dd className="mt-0.5 text-lg font-bold tabular-nums text-[var(--text-primary)]">
-            {stat.value}
-          </dd>
+    <dl className={styles.stats}>
+      {stats.map(({ icon: Icon, label, value }) => (
+        <div key={label} data-kind={label}>
+          <span className={styles.statIcon}>
+            <Icon aria-hidden="true" size={16} />
+          </span>
+          <dd>{value}</dd>
+          <dt>{label}</dt>
         </div>
       ))}
     </dl>
@@ -110,15 +124,18 @@ export function ProjectGeneralSettings({
   }
 
   return (
-    <SettingsSection
-      description="How this repository is named and described wherever it is listed."
-      icon={Info}
-      id="general"
-      title="General"
-    >
-      <form className="grid gap-5" onSubmit={handleSubmit}>
+    <section className={styles.general} id="general" aria-labelledby="general-heading">
+      <div className={styles.breadcrumb}>
+        Settings <ChevronRight size={12} aria-hidden="true" /> General
+      </div>
+      <h1 id="general-heading">General</h1>
+      <p className={styles.lead}>
+        Name and describe this project, and find the identifiers other tools use to reach it.
+      </p>
+      <form className={styles.details} onSubmit={handleSubmit}>
+        <h2>Project details</h2>
         <SettingsField
-          hint="Shown in the project header and directory."
+          hint="Shown in the header and in links."
           htmlFor="settings-repo-name"
           label="Repository name"
         >
@@ -142,22 +159,24 @@ export function ProjectGeneralSettings({
         </SettingsField>
 
         <SettingsField
-          hint="A sentence about the state this repository holds."
+          hint="A short summary for people visiting the project."
           htmlFor="settings-repo-description"
           label="Description"
         >
-          <Textarea
-            className="min-h-[76px] resize-y"
-            disabled={saving}
-            id="settings-repo-description"
-            maxLength={DESCRIPTION_LIMIT}
-            onChange={(event) => setDescription(event.target.value)}
-            placeholder="Structured state repository."
-            value={description}
-          />
-          <p className="mt-1 text-right text-[11px] tabular-nums text-[var(--text-tertiary)]">
-            {description.length}/{DESCRIPTION_LIMIT}
-          </p>
+          <div className={styles.descriptionField}>
+            <Textarea
+              className="min-h-[76px] resize-y"
+              disabled={saving}
+              id="settings-repo-description"
+              maxLength={DESCRIPTION_LIMIT}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="Add a description"
+              value={description}
+            />
+            <p className="mt-1 text-right text-[11px] tabular-nums text-[var(--text-tertiary)]">
+              {description.length} / {DESCRIPTION_LIMIT}
+            </p>
+          </div>
         </SettingsField>
 
         {error ? (
@@ -169,7 +188,8 @@ export function ProjectGeneralSettings({
           </p>
         ) : null}
 
-        <div className="flex justify-end gap-2 border-t border-[var(--stroke-divider)] pt-4">
+        <div className={styles.actions}>
+          {dirty ? <span className={styles.unsaved}>You have unsaved changes</span> : null}
           <Button
             disabled={!dirty || saving}
             onClick={() => {
@@ -188,25 +208,20 @@ export function ProjectGeneralSettings({
         </div>
       </form>
 
-      <div className="mt-6 grid gap-5 border-t border-[var(--stroke-divider)] pt-5">
-        <SettingsField hint="Use with the CLI, MCP and API. Never changes." label="Project ID">
+      <div className={styles.identifiers}>
+        <h2>Identifiers</h2>
+        <SettingsField hint="Stable and read-only." label="Project ID">
           <CopyValue label="project ID" value={project.project_id} />
         </SettingsField>
-        <SettingsField hint="Keeps working after a rename." label="Stable link">
+        <SettingsField hint="Keeps working if the project is renamed." label="Stable link">
           <CopyValue label="stable link" value={stableLink} />
         </SettingsField>
-        <SettingsField label="Created">
-          <p className="pt-2 text-[13px] text-[var(--text-secondary)]">
-            {new Date(project.created_at).toLocaleString(undefined, {
-              dateStyle: 'medium',
-              timeStyle: 'short',
-            })}
-          </p>
-        </SettingsField>
-        <SettingsField hint="What lives in this repository today." label="Contents">
-          <RepositoryStats project={project} />
-        </SettingsField>
       </div>
-    </SettingsSection>
+      <div className={styles.contents}>
+        <h2>Contents</h2>
+        <p>What this project currently holds.</p>
+        <RepositoryStats project={project} />
+      </div>
+    </section>
   );
 }

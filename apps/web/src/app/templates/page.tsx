@@ -1,10 +1,9 @@
 import { Suspense } from 'react';
-import { ExploreDiscoverySurface } from '@/components/schemas/ExploreDiscoverySurface';
-
+import { TemplatesCatalogExperience } from '@/components/schemas/TemplatesCatalogExperience';
 export default function TemplatesPage() {
   return (
     <Suspense fallback={null}>
-      <ExploreDiscoverySurface />
+      <TemplatesCatalogExperience />
     </Suspense>
   );
 }

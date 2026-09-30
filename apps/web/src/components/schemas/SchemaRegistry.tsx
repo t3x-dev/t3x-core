@@ -250,11 +250,17 @@ export function SchemaRegistry({
   }
 
   return (
-    <section className="h-full overflow-auto bg-[var(--surface-app)] p-2.5 min-[481px]:p-4">
+    <section
+      data-module-library="true"
+      className="h-full overflow-auto bg-[var(--surface-app)] p-2.5 min-[481px]:p-4"
+    >
       <div className="mx-auto w-full max-w-[1480px]">
         <SchemaRegistryHeader registryView={registryView} onViewChange={setRegistryView} />
 
-        <section className="mt-3 overflow-hidden rounded-[var(--radius-lg)] border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm min-[961px]:grid min-[961px]:min-h-[760px] min-[961px]:grid-cols-[300px_minmax(0,1fr)]">
+        <section
+          data-module-library-layout="true"
+          className="mt-3 overflow-hidden rounded-[var(--radius-lg)] border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm min-[961px]:grid min-[961px]:min-h-[760px] min-[961px]:grid-cols-[300px_minmax(0,1fr)]"
+        >
           <SchemaLibrary
             activeFamilyId={selectedFamily?.id ?? ''}
             families={visibleFamilies}
@@ -266,7 +272,7 @@ export function SchemaRegistry({
           />
 
           {selectedFamily ? (
-            <div className="min-w-0">
+            <div data-module-detail="true" className="min-w-0">
               <SchemaIdentityHeader
                 identityPending={identityPending}
                 onEdit={canManageSelectedIdentity ? openIdentityEditor : undefined}
@@ -278,7 +284,10 @@ export function SchemaRegistry({
                   {identityFeedback}
                 </output>
               ) : null}
-              <section className="grid min-h-[600px] border-t border-[var(--stroke-divider)] min-[1101px]:grid-cols-[250px_minmax(0,1fr)]">
+              <section
+                data-module-versions="true"
+                className="grid min-h-[600px] border-t border-[var(--stroke-divider)] min-[1101px]:grid-cols-[250px_minmax(0,1fr)]"
+              >
                 <SchemaReleaseList
                   onSelectRelease={handleSelectRelease}
                   releases={selectedFamily.releases}
@@ -300,7 +309,10 @@ export function SchemaRegistry({
                     release={selectedRelease}
                   />
                 ) : (
-                  <div className="grid min-h-[420px] place-items-center p-8 text-center">
+                  <div
+                    data-module-empty="true"
+                    className="grid min-h-[420px] place-items-center p-8 text-center"
+                  >
                     <div className="max-w-sm">
                       <h3 className="text-sm font-semibold text-[var(--text-primary)]">
                         Select a Schema version
@@ -501,6 +513,7 @@ function SchemaLibrary({
                 family.id === activeFamilyId &&
                   'border-[var(--accent-commit)]/30 bg-[var(--accent-commit-soft)] shadow-[inset_3px_0_0_var(--accent-commit)]'
               )}
+              aria-pressed={family.id === activeFamilyId}
               key={family.id}
               onClick={() => onSelect(family.id)}
               type="button"

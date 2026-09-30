@@ -104,7 +104,7 @@ describe('ProjectDirectoryPage', () => {
     ).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
-      '/t3x-dev/settings'
+      '/settings/provider-credentials?owner=t3x-dev'
     );
     expect(screen.queryByRole('link', { name: 'Docs' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Templates' })).not.toBeInTheDocument();
@@ -146,7 +146,7 @@ describe('ProjectDirectoryPage', () => {
     expect(screen.queryByText('3 members')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
-      '/settings/profile'
+      '/settings/provider-credentials?owner=lqw905'
     );
     expect(screen.getAllByRole('link', { name: /prd-workflow/i })[0]).toHaveAttribute(
       'href',

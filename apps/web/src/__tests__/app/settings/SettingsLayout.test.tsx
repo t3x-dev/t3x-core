@@ -57,26 +57,24 @@ function renderLayout() {
 }
 
 describe('SettingsLayout', () => {
-  it('keeps the shared project title bar on settings pages', () => {
+  it('keeps account settings outside project navigation even with a legacy project parameter', () => {
     mockPathname = '/settings';
     mockSearchParams = new URLSearchParams('project=proj_test');
 
     renderLayout();
 
     expect(screen.getByRole('banner')).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Project views' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: 'Usage' })).toHaveAttribute(
-      'href',
-      '/settings/usage?project=proj_test'
-    );
+    expect(screen.getByRole('link', { name: 'Usage' })).toHaveAttribute('href', '/settings/usage');
     expect(screen.getByText('Automations')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Webhooks/i })).toHaveAttribute(
       'href',
-      '/settings/webhooks?project=proj_test'
+      '/settings/webhooks'
     );
     expect(screen.getByRole('link', { name: /Recipes/i })).toHaveAttribute(
       'href',
-      '/settings/recipes?project=proj_test'
+      '/settings/recipes'
     );
   });
 

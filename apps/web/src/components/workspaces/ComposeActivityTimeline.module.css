@@ -400,3 +400,69 @@
     display: none;
   }
 }
+
+/* Panel reference spacing; selection never paints the entire event. */
+.timeline {
+  --timeline-gutter: 66px;
+  padding: 8px 32px 24px 24px;
+}
+.timeline::before {
+  left: calc(24px + var(--timeline-gutter) + var(--timeline-rail) / 2 - 1px);
+}
+.date {
+  height: 34px;
+}
+.date::after {
+  display: none;
+}
+.date > span {
+  grid-column: 2 / 4;
+  justify-content: flex-start;
+  padding-left: 6px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.eventTime {
+  padding-top: 16px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+.icon {
+  width: 30px;
+  height: 30px;
+  margin-top: 10px;
+}
+.icon[data-kind="modified"] {
+  background: var(--accent-pending);
+}
+.icon[data-latest="true"] {
+  box-shadow: 0 0 0 5px var(--surface-panel);
+}
+.eventBody {
+  padding: 8px 0 12px 16px;
+  background: transparent;
+}
+.titleLine > strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.preview {
+  margin-left: 0;
+}
+@media (max-width: 900px) {
+  .timeline {
+    --timeline-gutter: 42px;
+    padding-inline: 16px;
+  }
+  .timeline::before {
+    left: calc(16px + var(--timeline-gutter) + var(--timeline-rail) / 2 - 1px);
+  }
+}
+@media (max-width: 620px) {
+  .timeline {
+    --timeline-gutter: 0px;
+  }
+  .eventBody {
+    padding-left: 10px;
+  }
+}

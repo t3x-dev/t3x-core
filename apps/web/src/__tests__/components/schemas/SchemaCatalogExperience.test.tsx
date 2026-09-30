@@ -123,12 +123,12 @@ describe('Schema catalog journey', () => {
   it('renders the shared Explore surface in Discover and sends search to Browse', () => {
     mocks.query = 'workspace=main';
     mount();
-    expect(mocks.catalog).toHaveBeenCalledWith('p', 'selection=editor-picks&limit=24', true);
+    expect(mocks.catalog).toHaveBeenCalledWith('p', 'limit=48', false);
     expect(screen.getByRole('heading', { name: 'Curated schemas' })).toBeVisible();
-    expect(screen.getByText('Review your service configuration.')).toBeVisible();
+    expect(screen.getByText('Ready to use')).toBeVisible();
     expect(screen.queryByText('Detailed Studio')).not.toBeInTheDocument();
     const search = screen.getByRole('searchbox', {
-      name: 'Search accessible projects and schemas',
+      name: 'Search definitions',
     });
     fireEvent.change(search, {
       target: { value: 'dog care' },
@@ -166,7 +166,7 @@ describe('Schema catalog journey', () => {
     expect(screen.getByText(/canonicalName: team\/release/)).toBeVisible();
     expect(screen.getByRole('button', { name: 'Add & open Studio' })).toBeEnabled();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.queryByRole('navigation', { name: 'Schema views' })).not.toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Schema views' })).toBeInTheDocument();
   });
   it('restores Browse filters and keeps the advanced workbench behind an explicit action', () => {
     mocks.query = 'schemaView=browse&tags=infra&format=yaml';
@@ -190,7 +190,8 @@ describe('Schema catalog journey', () => {
       'true'
     );
     const studio = screen.getByRole('region', { name: 'Schema Studio' });
-    expect(schemaViews.parentElement?.nextElementSibling).toBe(studio);
+    expect(studio).not.toContainElement(schemaViews);
+    expect(screen.getByRole('region', { name: 'Schema experience' })).toContainElement(schemaViews);
     expect(screen.queryByText('Detailed Studio')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Advanced definition workbench' }));
     expect(screen.getByText('Detailed Studio')).toBeVisible();

@@ -1,460 +1,571 @@
 'use client';
-
-import type { FormEvent } from 'react';
-import { SegmentedControl } from '@/components/ui/segmented-control';
+import { useRouter } from 'next/navigation';
+import { type FormEvent, useEffect, useRef } from 'react';
+import { useProjectStore } from '@/store/projectStore';
+import { DiscoverCover } from './DiscoverCover';
+import { cx, ReferenceIcon } from './DiscoverReference';
 import styles from './ExploreDiscoverySurface.module.css';
 
-type IconWeight = 'regular' | 'fill' | 'bold';
-
-type SchemaItem = {
-  name: string;
-  version: string;
-  owner: string;
-  avatar: string;
-  description: string;
-  icon: string;
-  iconWeight?: IconWeight;
-  iconBackground: string;
-  iconColor?: string;
-};
-
-type CuratedSchema = {
-  owner: string;
-  name: string;
-  description: string;
-  tags: readonly string[];
-  icon: string;
-  iconWeight?: IconWeight;
-  iconBackground: string;
-  iconColor: string;
-  cover: string;
-};
-
-const curatedSchemas: CuratedSchema[] = [
-  {
-    owner: 'orbit-labs',
-    name: 'Release plan',
-    description: 'Plan and track software releases with confidence.',
-    tags: ['overview', 'requirements', 'rollout'],
-    icon: 'planet',
-    iconBackground: '#111',
-    iconColor: '#ff5733',
-    cover: styles.cardOne,
-  },
-  {
-    owner: 'fern-team',
-    name: 'Service contract',
-    description: 'Define and manage service agreements.',
-    tags: ['service', 'terms', 'owners'],
-    icon: 'leaf',
-    iconWeight: 'fill',
-    iconBackground: '#1a7740',
-    iconColor: '#fff',
-    cover: styles.cardTwo,
-  },
-  {
-    owner: 'maya',
-    name: 'Agent policy',
-    description: 'Set boundaries and behaviors for AI agents.',
-    tags: ['policy', 'permissions', 'checks'],
-    icon: 'sparkle',
-    iconWeight: 'fill',
-    iconBackground: '#7a4efa',
-    iconColor: '#fff',
-    cover: styles.cardThree,
-  },
-];
-
-const discoveredSchemas: SchemaItem[] = [
-  {
-    name: 'Release plan',
-    version: 'v1.2',
-    owner: 'orbit-labs',
-    avatar: 'O',
-    description: 'Plan and great software releases.',
-    icon: 'planet',
-    iconBackground: '#111',
-    iconColor: '#ff5733',
-  },
-  {
-    name: 'Feature flag',
-    version: 'v1.1',
-    owner: 'launchdarkly',
-    avatar: 'L',
-    description: 'Manage feature rollouts and targeting.',
-    icon: 'lightning',
-    iconWeight: 'fill',
-    iconBackground: '#facc15',
-    iconColor: '#161a30',
-  },
-  {
-    name: 'Service contract',
-    version: 'v1.0',
-    owner: 'fern-team',
-    avatar: 'F',
-    description: 'Define and manage service agreements.',
-    icon: 'leaf',
-    iconWeight: 'fill',
-    iconBackground: '#1a7740',
-  },
-  {
-    name: 'Environment',
-    version: 'v1.0',
-    owner: 'cloudroll',
-    avatar: 'C',
-    description: 'Define deployment environments.',
-    icon: 'cube',
-    iconWeight: 'fill',
-    iconBackground: '#3b82f6',
-  },
-  {
-    name: 'Agent policy',
-    version: 'v1.1',
-    owner: 'maya',
-    avatar: 'M',
-    description: 'Set boundaries for AI agents.',
-    icon: 'sparkle',
-    iconWeight: 'fill',
-    iconBackground: '#7a4efa',
-  },
-  {
-    name: 'Access control',
-    version: 'v1.3',
-    owner: 'openmind',
-    avatar: 'O',
-    description: 'Model users, teams, and permissions.',
-    icon: 'users',
-    iconWeight: 'fill',
-    iconBackground: '#8b5cf6',
-  },
-  {
-    name: 'Data catalog',
-    version: 'v0.9',
-    owner: 'neon',
-    avatar: 'N',
-    description: 'Organize and share data assets.',
-    icon: 'database',
-    iconWeight: 'fill',
-    iconBackground: '#4f46e5',
-  },
-  {
-    name: 'Integration',
-    version: 'v1.0',
-    owner: 'apidocs',
-    avatar: 'A',
-    description: 'Define third-party integrations.',
-    icon: 'arrows-left-right',
-    iconWeight: 'bold',
-    iconBackground: '#22c55e',
-  },
-  {
-    name: 'Security control',
-    version: 'v1.0',
-    owner: 'safeguard',
-    avatar: 'S',
-    description: 'Standardize security requirements.',
-    icon: 'shield-check',
-    iconWeight: 'fill',
-    iconBackground: '#f43f5e',
-  },
-  {
-    name: 'Audit log',
-    version: 'v0.8',
-    owner: 'everlog',
-    avatar: 'E',
-    description: 'Capture and query system events.',
-    icon: 'file-text',
-    iconWeight: 'fill',
-    iconBackground: '#f97316',
-  },
-];
-
-const schemaPicks: Array<Omit<SchemaItem, 'owner' | 'avatar'>> = [
-  {
-    name: 'Agent policy',
-    version: 'v1.1',
-    description: 'A great starting point for AI products.',
-    icon: 'sparkle',
-    iconWeight: 'fill',
-    iconBackground: '#7a4efa',
-  },
-  {
-    name: 'Release plan',
-    version: 'v1.2',
-    description: 'Popular with product teams.',
-    icon: 'planet',
-    iconBackground: '#111',
-    iconColor: '#ff5733',
-  },
-  {
-    name: 'Service contract',
-    version: 'v1.0',
-    description: 'Trusted by growing teams.',
-    icon: 'leaf',
-    iconWeight: 'fill',
-    iconBackground: '#1a7740',
-  },
-  {
-    name: 'Data catalog',
-    version: 'v0.9',
-    description: 'Essential for data-driven teams.',
-    icon: 'database',
-    iconWeight: 'fill',
-    iconBackground: '#4f46e5',
-  },
-  {
-    name: 'Security control',
-    version: 'v1.0',
-    description: 'A foundation for safer systems.',
-    icon: 'shield-check',
-    iconWeight: 'fill',
-    iconBackground: '#f43f5e',
-  },
-];
-
-function PhosphorIcon({
-  name,
-  weight = 'regular',
-  className = '',
-}: {
-  name: string;
-  weight?: IconWeight;
-  className?: string;
-}) {
-  const family = weight === 'regular' ? 'ph' : weight === 'fill' ? 'ph-fill' : 'ph-bold';
-  return <i aria-hidden="true" className={`${family} ph-${name} ${className}`} />;
-}
+// Editorial sample content is retained from the supplied design, not live catalog metrics.
 export function ExploreDiscoverySurface({
-  onBrowse,
+  hideNavigation = false,
+  onBrowse: browse,
   onSearch,
+  onStudio: studio,
+  onImport: importSchema,
 }: {
+  hideNavigation?: boolean;
   onBrowse?: () => void;
   onSearch?: (query: string) => void;
+  onStudio?: () => void;
+  onImport?: () => void;
 }) {
+  const router = useRouter();
+  const searchRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    function focusSearch(event: KeyboardEvent) {
+      const target = event.target;
+      if (
+        event.key !== '/' ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        (target instanceof HTMLElement &&
+          (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)))
+      )
+        return;
+      event.preventDefault();
+      searchRef.current?.focus();
+    }
+    document.addEventListener('keydown', focusSearch);
+    return () => document.removeEventListener('keydown', focusSearch);
+  }, []);
+  const projectId = useProjectStore((state) => state.projects[0]?.id);
+  const catalogPath = projectId ? `/project/${encodeURIComponent(projectId)}?tab=schemas` : null;
+  const onBrowse =
+    browse ?? (() => router.push(catalogPath ? `${catalogPath}&schemaView=browse` : '/'));
+  const onStudio =
+    studio ?? (() => router.push(catalogPath ? `${catalogPath}&schemaView=studio` : '/'));
+  const onImport = importSchema ?? onStudio;
+  function submitSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const query = String(new FormData(event.currentTarget).get('q') ?? '').trim();
+    if (onSearch) onSearch(query);
+    else
+      router.push(
+        catalogPath ? `${catalogPath}&schemaView=browse&q=${encodeURIComponent(query)}` : '/'
+      );
+  }
   return (
-    <>
-      <link
-        href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css"
-        rel="stylesheet"
-      />
-      <link
-        href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css"
-        rel="stylesheet"
-      />
-      <link
-        href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css"
-        rel="stylesheet"
-      />
-
-      <main
-        className={`${styles.page} min-h-0 w-full bg-white p-4 text-[#10162f] selection:bg-[#edf2fe] selection:text-[#2563eb] md:p-6`}
-      >
-        <header className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <form
-            className="flex h-[45px] w-full min-w-0 items-center rounded-[8px] border border-[#e2e8f0] bg-white px-3.5 md:max-w-[800px] md:flex-1"
-            onSubmit={(event: FormEvent<HTMLFormElement>) => {
-              event.preventDefault();
-              onSearch?.(String(new FormData(event.currentTarget).get('q') ?? '').trim());
-            }}
-          >
-            <PhosphorIcon className="text-[17px] text-[#1e1b4b]" name="magnifying-glass" />
-            <input
-              aria-label="Search projects and schemas"
-              name="q"
-              className="ml-3 h-full w-full bg-transparent text-[15px] text-[#0f172a] outline-none placeholder:text-[#64748b]"
-              placeholder="Search projects and schemas..."
-              type="text"
-            />
-          </form>
-
-          <SegmentedControl
-            ariaLabel="Catalog type"
-            itemClassName="min-w-[96px] px-5 text-[14px]"
-            items={[
-              { label: 'All', value: 'all' },
-              { label: 'Projects', value: 'projects' },
-              { label: 'Schemas', value: 'schemas' },
-            ]}
-            onValueChange={() => undefined}
-            value="schemas"
-          />
-        </header>
-
-        <section className="mb-7">
-          <div className="mb-4 flex items-center gap-3">
-            <h1 className="text-[24px] font-bold tracking-tight text-[#161a30]">Curated schemas</h1>
-            <div className="flex items-center gap-1.5 rounded-full border border-[#d6e2ff] bg-[#f0f4ff] px-3 py-1 text-[13px] font-medium text-[#2563eb]">
-              <PhosphorIcon className="text-base" name="cube" />
-              <span>Usable schemas</span>
+    <div className={styles.surface} data-content="editorial-preview">
+      <main className={cx('page')}>
+        <div className={cx('ptitle')}>
+          <div className={cx('grow')}></div>
+          <div className={cx('stats')}>
+            <div>
+              <b>128</b>
+              <span>Public schemas</span>
+            </div>
+            <div>
+              <b>6</b>
+              <span>In use here</span>
+            </div>
+            <div>
+              <b>3</b>
+              <span>Updates available</span>
             </div>
           </div>
+          <button type="button" className={cx('btn lg')} onClick={onImport}>
+            <ReferenceIcon name="download" size={14} weight={1.75} />
+            Import
+          </button>
+          <button type="button" className={cx('btn lg primary')} onClick={onStudio}>
+            <ReferenceIcon name="plus" size={14} weight={2.25} />
+            New schema
+          </button>
+        </div>
 
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {curatedSchemas.map((schema) => (
-              <article
-                className="group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-[#e9ebf0] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.03)] transition-shadow hover:shadow-md"
-                key={schema.name}
-              >
-                <div className={`h-24 w-full ${schema.cover}`} />
-                <div className="relative flex flex-1 flex-col p-4 pt-8">
-                  <div
-                    className="absolute -top-7 left-4 flex h-14 w-14 items-center justify-center rounded-[14px] border-4 border-white shadow-sm"
-                    style={{ background: schema.iconBackground, color: schema.iconColor }}
-                  >
-                    <PhosphorIcon
-                      className="text-[28px]"
-                      name={schema.icon}
-                      weight={schema.iconWeight}
-                    />
-                  </div>
-                  <div className="mb-0.5 text-[12px] font-medium text-[#7a859c]">
-                    {schema.owner}
-                  </div>
-                  <div className="mb-1 flex items-center justify-between">
-                    <h3 className="text-[18px] font-bold text-[#161a30]">{schema.name}</h3>
-                    <PhosphorIcon
-                      className="-translate-x-2 text-xl text-[#2563eb] opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100"
-                      name="arrow-right"
-                    />
-                  </div>
-                  <p className="mb-4 flex-1 text-[13px] leading-5 text-[#7a859c]">
-                    {schema.description}
-                  </p>
-                  <div className="mt-auto flex items-center gap-2 border-t border-[#e9ebf0] pt-3 text-[12px] text-[#7a859c]">
-                    <PhosphorIcon className="text-lg text-[#2563eb]" name="graph" />
-                    <span className="flex items-center gap-2">
-                      {schema.tags.map((tag, index) => (
-                        <span className="flex items-center gap-2" key={tag}>
-                          {index > 0 ? (
-                            <i className="h-[3px] w-[3px] rounded-full bg-gray-300" />
-                          ) : null}
-                          {tag}
-                        </span>
-                      ))}
-                    </span>
-                  </div>
-                </div>
-              </article>
-            ))}
+        {!hideNavigation ? (
+          <div className={cx('tool nw')}>
+            <nav className={cx('modes')} aria-label="Schema views">
+              <button type="button" aria-current="page">
+                <span className={cx('on')}>
+                  <ReferenceIcon name="compass" size={14} weight={1.75} />
+                  Discover
+                </span>
+              </button>
+              <button type="button" onClick={onBrowse}>
+                <span>
+                  <ReferenceIcon name="grid" size={14} weight={1.75} />
+                  Browse
+                </span>
+              </button>
+              <button type="button" onClick={onStudio}>
+                <span>
+                  <ReferenceIcon name="pencil" size={14} weight={1.75} />
+                  Studio
+                </span>
+              </button>
+            </nav>
+            <form className={cx('find')} onSubmit={submitSearch}>
+              <ReferenceIcon name="search" size={15} weight={1.75} />
+              <input
+                className={cx('grow')}
+                ref={searchRef}
+                name="q"
+                aria-label="Search projects and schemas"
+                placeholder="Search projects and schemas…"
+                type="search"
+              />
+              <span className={cx('kbd')}>/</span>
+            </form>
+            <div className={cx('scope')}>
+              <span>All</span>
+              <span>Projects</span>
+              <span className={cx('on')}>Schemas</span>
+            </div>
+            <button type="button" className={cx('dd')} onClick={onBrowse}>
+              <ReferenceIcon name="filter" size={14} weight={1.75} />
+              Filters
+            </button>
+            <button type="button" className={cx('dd')} onClick={onBrowse}>
+              Most used
+              <ReferenceIcon name="down" size={12} weight={1.75} className={cx('tx3')} />
+            </button>
           </div>
-        </section>
+        ) : null}
 
-        <section className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <div className="xl:col-span-2">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-[21px] font-bold tracking-tight text-[#161a30]">
-                Discover schemas
-              </h2>
-              <button
-                className="flex items-center gap-1 text-[15px] font-medium text-[#2563eb] hover:underline"
-                onClick={onBrowse}
-                style={{ color: '#2563eb' }}
-                type="button"
-              >
-                Browse all <PhosphorIcon name="arrow-right" />
+        <div className={cx('sh')}>
+          <h2>Curated schemas</h2>
+          <span className={cx('pill blue')} style={{ height: '20px' }}>
+            Ready to use
+          </span>
+          <div className={cx('grow')}></div>
+          <button type="button" className={cx('more')} onClick={onBrowse}>
+            View all 12
+            <ReferenceIcon name="arrowr" size={13} weight={1.75} />
+          </button>
+        </div>
+        <div className={cx('cards')}>
+          <article className={cx('card hot')}>
+            <DiscoverCover kind="release" />
+            <div className={cx('cb')}>
+              <span className={cx('ico o')}>
+                <ReferenceIcon name="box" size={18} weight={1.75} />
+              </span>
+              <div className={cx('ct')}>
+                <h3>Release plan</h3>
+                <span className={cx('ver')}>v1.2</span>
+                <span className={cx('by')}>orbit-labs</span>
+              </div>
+              <p className={cx('cd')}>
+                Stages, rollback windows and approvers for shipping a service safely.
+              </p>
+              <div className={cx('cf')}>
+                <span className={cx('tg')} style={{ display: 'flex', gap: '4px' }}>
+                  <span className={cx('pill')} style={{ height: '20px' }}>
+                    overview
+                  </span>
+                  <span className={cx('pill')} style={{ height: '20px' }}>
+                    rollout
+                  </span>
+                </span>
+                <span className={cx('mt')} style={{ marginLeft: 'auto' }}>
+                  <ReferenceIcon name="download" size={12} weight={1.75} />
+                  1.8k
+                </span>
+                <button type="button" className={cx('use')} onClick={onBrowse}>
+                  <ReferenceIcon name="plus" size={12} weight={2.25} />
+                  Use
+                </button>
+              </div>
+            </div>
+          </article>
+          <article className={cx('card')}>
+            <DiscoverCover kind="circuit" />
+            <div className={cx('cb')}>
+              <span className={cx('ico g')}>
+                <ReferenceIcon name="layers" size={18} weight={1.75} />
+              </span>
+              <div className={cx('ct')}>
+                <h3>Service contract</h3>
+                <span className={cx('ver')}>v2.0</span>
+                <span className={cx('by')}>greenfield</span>
+              </div>
+              <p className={cx('cd')}>
+                Interfaces, SLOs and consumers for internal services, with drift checks.
+              </p>
+              <div className={cx('cf')}>
+                <span style={{ display: 'flex', gap: '4px' }}>
+                  <span className={cx('pill')} style={{ height: '20px' }}>
+                    services
+                  </span>
+                  <span className={cx('pill')} style={{ height: '20px' }}>
+                    slo
+                  </span>
+                </span>
+                <span className={cx('mt')} style={{ marginLeft: 'auto' }}>
+                  <ReferenceIcon name="download" size={12} weight={1.75} />
+                  1.2k
+                </span>
+                <span className={cx('use ghost')}>
+                  <ReferenceIcon name="check" size={12} weight={2.25} />
+                  In use
+                </span>
+              </div>
+            </div>
+          </article>
+          <article className={cx('card')}>
+            <DiscoverCover kind="agent" />
+            <div className={cx('cb')}>
+              <span className={cx('ico v')}>
+                <ReferenceIcon name="sparkles" size={18} weight={1.75} />
+              </span>
+              <div className={cx('ct')}>
+                <h3>Agent policy</h3>
+                <span className={cx('ver')}>v0.9</span>
+                <span className={cx('by')}>lumen</span>
+              </div>
+              <p className={cx('cd')}>
+                Goals, tool permissions and guardrails for production agents.
+              </p>
+              <div className={cx('cf')}>
+                <span style={{ display: 'flex', gap: '4px' }}>
+                  <span className={cx('pill')} style={{ height: '20px' }}>
+                    agents
+                  </span>
+                  <span className={cx('pill')} style={{ height: '20px' }}>
+                    policy
+                  </span>
+                </span>
+                <span className={cx('mt')} style={{ marginLeft: 'auto' }}>
+                  <ReferenceIcon name="download" size={12} weight={1.75} />
+                  640
+                </span>
+                <button type="button" className={cx('use')} onClick={onBrowse}>
+                  <ReferenceIcon name="plus" size={12} weight={2.25} />
+                  Use
+                </button>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div className={cx('cols')}>
+          <section>
+            <div className={cx('sh')} style={{ marginTop: '0' }}>
+              <h2>Discover</h2>
+              <div className={cx('tabsx')}>
+                <span className={cx('on')}>Popular</span>
+                <span>Recently updated</span>
+                <span>Following</span>
+              </div>
+              <div className={cx('grow')}></div>
+              <button type="button" className={cx('more')} onClick={onBrowse}>
+                Browse all
+                <ReferenceIcon name="arrowr" size={13} weight={1.75} />
               </button>
             </div>
-
-            <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
-              {discoveredSchemas.map((schema) => (
-                <DiscoveredSchema key={schema.name} schema={schema} />
-              ))}
+            <div className={cx('lh nw')}>
+              <span></span>
+              <span>SCHEMA</span>
+              <span>TAGS</span>
+              <span>VERSION</span>
+              <span>AUTHOR</span>
+              <span style={{ textAlign: 'right' }}>USES</span>
             </div>
-          </div>
+            <div className={cx('lr nw')}>
+              <span className={cx('ico sm b')}>
+                <ReferenceIcon name="db" size={16} weight={1.75} />
+              </span>
+              <div className={cx('ell')}>
+                <div className={cx('nm')}>
+                  Data catalog<span className={cx('new')}>NEW</span>
+                </div>
+                <div className={cx('ds ell')}>Datasets, owners and lineage in one register</div>
+              </div>
+              <div className={cx('tg')}>
+                <span>data</span>
+                <span>governance</span>
+              </div>
+              <span className={cx('ver')}>v1.0</span>
+              <div className={cx('au')}>
+                <i className={cx('a')} style={{ background: '#3b82f6' }}>
+                  N
+                </i>
+                northwind
+              </div>
+              <div className={cx('us')}>2.4k</div>
+            </div>
+            <div className={cx('lr hov nw')}>
+              <span className={cx('ico sm r')}>
+                <ReferenceIcon name="alert" size={16} weight={1.75} />
+              </span>
+              <div className={cx('ell')}>
+                <div className={cx('nm')}>Incident report</div>
+                <div className={cx('ds ell')}>Timeline, impact, root cause and follow-ups</div>
+              </div>
+              <div className={cx('tg')}>
+                <span>ops</span>
+                <span>postmortem</span>
+              </div>
+              <span className={cx('ver')}>v1.4</span>
+              <div className={cx('au')}>
+                <i className={cx('a')} style={{ background: '#e5484d' }}>
+                  S
+                </i>
+                sre-guild
+              </div>
+              <div className={cx('us')}>2.1k</div>
+            </div>
+            <div className={cx('lr nw')}>
+              <span className={cx('ico sm t')}>
+                <ReferenceIcon name="file" size={16} weight={1.75} />
+              </span>
+              <div className={cx('ell')}>
+                <div className={cx('nm')}>PRD Schema</div>
+                <div className={cx('ds ell')}>
+                  Requirements with owners, priority and acceptance
+                </div>
+              </div>
+              <div className={cx('tg')}>
+                <span>product</span>
+                <span>requirements</span>
+              </div>
+              <span className={cx('ver')}>v2.0</span>
+              <div className={cx('au')}>
+                <i className={cx('a')} style={{ background: '#0d9488' }}>
+                  T
+                </i>
+                t3x-dev
+              </div>
+              <div className={cx('us')}>1.9k</div>
+            </div>
+            <div className={cx('lr nw')}>
+              <span className={cx('ico sm k')}>
+                <ReferenceIcon name="terminal" size={16} weight={1.75} />
+              </span>
+              <div className={cx('ell')}>
+                <div className={cx('nm')}>Runbook</div>
+                <div className={cx('ds ell')}>Steps, preconditions and escalation paths</div>
+              </div>
+              <div className={cx('tg')}>
+                <span>ops</span>
+                <span>on-call</span>
+              </div>
+              <span className={cx('ver')}>v1.1</span>
+              <div className={cx('au')}>
+                <i className={cx('a')} style={{ background: '#475569' }}>
+                  S
+                </i>
+                sre-guild
+              </div>
+              <div className={cx('us')}>1.4k</div>
+            </div>
+            <div className={cx('lr nw')}>
+              <span className={cx('ico sm y')}>
+                <ReferenceIcon name="branch" size={16} weight={1.75} />
+              </span>
+              <div className={cx('ell')}>
+                <div className={cx('nm')}>API changelog</div>
+                <div className={cx('ds ell')}>Versioned changes with breaking-change flags</div>
+              </div>
+              <div className={cx('tg')}>
+                <span>api</span>
+                <span>release</span>
+              </div>
+              <span className={cx('ver')}>v1.3</span>
+              <div className={cx('au')}>
+                <i className={cx('a')} style={{ background: '#d69e2e' }}>
+                  O
+                </i>
+                orbit-labs
+              </div>
+              <div className={cx('us')}>1.1k</div>
+            </div>
+            <div className={cx('lr nw')}>
+              <span className={cx('ico sm p')}>
+                <ReferenceIcon name="settings" size={16} weight={1.75} />
+              </span>
+              <div className={cx('ell')}>
+                <div className={cx('nm')}>Feature flag</div>
+                <div className={cx('ds ell')}>Rollout rules, owners and expiry dates</div>
+              </div>
+              <div className={cx('tg')}>
+                <span>release</span>
+                <span>config</span>
+              </div>
+              <span className={cx('ver')}>v0.8</span>
+              <div className={cx('au')}>
+                <i className={cx('a')} style={{ background: '#d6409f' }}>
+                  L
+                </i>
+                lumen
+              </div>
+              <div className={cx('us')}>920</div>
+            </div>
+            <div className={cx('lr nw')}>
+              <span className={cx('ico sm v')}>
+                <ReferenceIcon name="eye" size={16} weight={1.75} />
+              </span>
+              <div className={cx('ell')}>
+                <div className={cx('nm')}>Model card</div>
+                <div className={cx('ds ell')}>Intended use, evaluation and known limits</div>
+              </div>
+              <div className={cx('tg')}>
+                <span>ml</span>
+                <span>evaluation</span>
+              </div>
+              <span className={cx('ver')}>v1.0</span>
+              <div className={cx('au')}>
+                <i className={cx('a')} style={{ background: '#7c5cf0' }}>
+                  L
+                </i>
+                lumen
+              </div>
+              <div className={cx('us')}>780</div>
+            </div>
+            <div className={cx('lr nw')}>
+              <span className={cx('ico sm g')}>
+                <ReferenceIcon name="shield" size={16} weight={1.75} />
+              </span>
+              <div className={cx('ell')}>
+                <div className={cx('nm')}>Access review</div>
+                <div className={cx('ds ell')}>Roles, grants and quarterly attestations</div>
+              </div>
+              <div className={cx('tg')}>
+                <span>security</span>
+                <span>audit</span>
+              </div>
+              <span className={cx('ver')}>v1.2</span>
+              <div className={cx('au')}>
+                <i className={cx('a')} style={{ background: '#22a05a' }}>
+                  G
+                </i>
+                greenfield
+              </div>
+              <div className={cx('us')}>610</div>
+            </div>
+          </section>
 
-          <aside className="h-fit rounded-2xl border border-[#e9ebf0] bg-white p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] xl:col-span-1">
-            <h2 className="mb-4 text-[18px] font-bold tracking-tight text-[#161a30]">
-              Schema picks
-            </h2>
-            <div className="flex flex-col gap-4">
-              {schemaPicks.map((schema, index) => (
-                <SchemaPick
-                  isLast={index === schemaPicks.length - 1}
-                  key={schema.name}
-                  schema={schema}
-                />
-              ))}
+          <aside className={cx('rail')}>
+            <div className={cx('panel')}>
+              <div className={cx('ph')}>
+                <ReferenceIcon name="trend" size={15} weight={1.75} className={cx('ok')} />
+                Trending this week
+              </div>
+              <div className={cx('pk')}>
+                <span className={cx('rk')}>1</span>
+                <span className={cx('ico sm o')}>
+                  <ReferenceIcon name="box" size={16} weight={1.75} />
+                </span>
+                <div className={cx('ell')}>
+                  <div className={cx('nm')}>Release plan</div>
+                  <div className={cx('ds ell')}>+312 uses</div>
+                </div>
+                <span className={cx('spark')}>
+                  <i style={{ height: '6px' }}></i>
+                  <i style={{ height: '8px' }}></i>
+                  <i style={{ height: '7px' }}></i>
+                  <i style={{ height: '11px' }}></i>
+                  <i style={{ height: '13px' }} className={cx('h')}></i>
+                  <i style={{ height: '18px' }} className={cx('h')}></i>
+                </span>
+              </div>
+              <div className={cx('pk hov')}>
+                <span className={cx('rk')}>2</span>
+                <span className={cx('ico sm v')}>
+                  <ReferenceIcon name="sparkles" size={16} weight={1.75} />
+                </span>
+                <div className={cx('ell')}>
+                  <div className={cx('nm')}>Agent policy</div>
+                  <div className={cx('ds ell')}>+204 uses</div>
+                </div>
+                <span className={cx('spark')}>
+                  <i style={{ height: '4px' }}></i>
+                  <i style={{ height: '5px' }}></i>
+                  <i style={{ height: '9px' }}></i>
+                  <i style={{ height: '8px' }}></i>
+                  <i style={{ height: '14px' }} className={cx('h')}></i>
+                  <i style={{ height: '16px' }} className={cx('h')}></i>
+                </span>
+              </div>
+              <div className={cx('pk')}>
+                <span className={cx('rk')}>3</span>
+                <span className={cx('ico sm g')}>
+                  <ReferenceIcon name="layers" size={16} weight={1.75} />
+                </span>
+                <div className={cx('ell')}>
+                  <div className={cx('nm')}>Service contract</div>
+                  <div className={cx('ds ell')}>+171 uses</div>
+                </div>
+                <span className={cx('spark')}>
+                  <i style={{ height: '9px' }}></i>
+                  <i style={{ height: '10px' }}></i>
+                  <i style={{ height: '8px' }}></i>
+                  <i style={{ height: '12px' }}></i>
+                  <i style={{ height: '11px' }} className={cx('h')}></i>
+                  <i style={{ height: '13px' }} className={cx('h')}></i>
+                </span>
+              </div>
+              <div className={cx('pk')}>
+                <span className={cx('rk')}>4</span>
+                <span className={cx('ico sm b')}>
+                  <ReferenceIcon name="db" size={16} weight={1.75} />
+                </span>
+                <div className={cx('ell')}>
+                  <div className={cx('nm')}>Data catalog</div>
+                  <div className={cx('ds ell')}>+118 uses</div>
+                </div>
+                <span className={cx('spark')}>
+                  <i style={{ height: '5px' }}></i>
+                  <i style={{ height: '6px' }}></i>
+                  <i style={{ height: '6px' }}></i>
+                  <i style={{ height: '8px' }}></i>
+                  <i style={{ height: '9px' }} className={cx('h')}></i>
+                  <i style={{ height: '12px' }} className={cx('h')}></i>
+                </span>
+              </div>
+            </div>
+            <div>
+              <div className={cx('sh')} style={{ margin: '0 0 10px' }}>
+                <h2 style={{ fontSize: '13px' }}>Updates for you</h2>
+                <span className={cx('pill orange')} style={{ height: '18px', fontSize: '10.5px' }}>
+                  3
+                </span>
+              </div>
+              <div className={cx('recent')}>
+                <div className={cx('rc')}>
+                  <span className={cx('d')}>
+                    <ReferenceIcon name="history" size={12} weight={1.75} />
+                  </span>
+                  <div>
+                    <b>Service contract</b> v2.0 adds drift checks
+                    <time>Used in 2 of your projects · 2 h ago</time>
+                  </div>
+                </div>
+                <div className={cx('rc')}>
+                  <span className={cx('d')}>
+                    <ReferenceIcon name="history" size={12} weight={1.75} />
+                  </span>
+                  <div>
+                    <b>PRD Schema</b> v2.0 made <b>owner</b> required
+                    <time>Used in test-bug · yesterday</time>
+                  </div>
+                </div>
+                <div className={cx('rc')}>
+                  <span className={cx('d')}>
+                    <ReferenceIcon name="history" size={12} weight={1.75} />
+                  </span>
+                  <div>
+                    <b>Runbook</b> v1.1 adds escalation paths<time>Sep 26</time>
+                  </div>
+                </div>
+              </div>
             </div>
           </aside>
-        </section>
+        </div>
       </main>
-    </>
-  );
-}
-
-function SchemaIcon({
-  schema,
-  compact = false,
-}: {
-  schema: Pick<SchemaItem, 'icon' | 'iconWeight' | 'iconBackground' | 'iconColor'>;
-  compact?: boolean;
-}) {
-  return (
-    <div
-      className={`mt-1 flex shrink-0 items-center justify-center rounded-xl ${compact ? 'h-9 w-9' : 'h-10 w-10'}`}
-      style={{ background: schema.iconBackground, color: schema.iconColor ?? '#fff' }}
-    >
-      <PhosphorIcon
-        className={compact ? 'text-[18px]' : 'text-[21px]'}
-        name={schema.icon}
-        weight={schema.iconWeight}
-      />
     </div>
-  );
-}
-
-function DiscoveredSchema({ schema }: { schema: SchemaItem }) {
-  return (
-    <article className="group -m-2 flex cursor-pointer items-start gap-3 rounded-xl p-2 transition-colors hover:bg-gray-50">
-      <SchemaIcon schema={schema} />
-      <div className="min-w-0 flex-1">
-        <div className="mb-0.5 flex items-center justify-between gap-2">
-          <h4 className="truncate text-[15px] font-bold text-[#161a30]">{schema.name}</h4>
-          <div className="flex shrink-0 items-center gap-3">
-            <span className="rounded bg-[#edf2fe] px-2 py-0.5 text-[12px] font-bold tracking-wide text-[#2563eb]">
-              {schema.version}
-            </span>
-            <span className="flex w-[90px] items-center gap-1.5">
-              <i className="flex h-5 w-5 items-center justify-center rounded-full bg-[#f1f3f8] text-[10px] font-bold not-italic text-[#161a30]">
-                {schema.avatar}
-              </i>
-              <span className="truncate text-[13px] text-[#7a859c]">{schema.owner}</span>
-            </span>
-          </div>
-        </div>
-        <p className="truncate pr-2 text-[13px] text-[#7a859c]">{schema.description}</p>
-      </div>
-    </article>
-  );
-}
-
-function SchemaPick({
-  schema,
-  isLast,
-}: {
-  schema: Omit<SchemaItem, 'owner' | 'avatar'>;
-  isLast: boolean;
-}) {
-  return (
-    <article className="group flex cursor-pointer items-start gap-3">
-      <SchemaIcon compact schema={schema} />
-      <div
-        className={
-          isLast
-            ? 'min-w-0 flex-1 pb-1'
-            : 'min-w-0 flex-1 border-b border-gray-100 pb-3 transition-colors group-hover:border-transparent'
-        }
-      >
-        <div className="mb-0.5 flex items-center justify-between gap-2">
-          <h4 className="truncate text-[15px] font-bold text-[#161a30] transition-colors group-hover:text-[#2563eb]">
-            {schema.name}
-          </h4>
-          <span className="shrink-0 rounded bg-[#edf2fe] px-2 py-0.5 text-[12px] font-bold tracking-wide text-[#2563eb]">
-            {schema.version}
-          </span>
-        </div>
-        <p className="line-clamp-1 text-[13px] text-[#7a859c]">{schema.description}</p>
-      </div>
-    </article>
   );
 }

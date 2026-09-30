@@ -21,19 +21,16 @@ describe('ProjectShell', () => {
       </ProjectShell>
     );
 
-    for (const activeTab of ['schemas', 'workspaces', 'reviews'] as const) {
+    for (const activeTab of ['workspaces'] as const) {
       view.rerender(
         <ProjectShell activeTab={activeTab} project={project}>
           <div>{activeTab} content</div>
         </ProjectShell>
       );
 
-      expect(screen.getByRole('banner')).toHaveClass('h-24', 'px-3');
-      expect(screen.getByRole('heading', { name: 'Test Project' })).toHaveAttribute(
-        'title',
-        'Test Project'
-      );
-      expect(screen.getByRole('navigation', { name: 'Project views' })).toHaveClass('min-h-10');
+      expect(screen.getByRole('banner')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Test Project' })).toBeInTheDocument();
+      expect(screen.getByRole('navigation', { name: 'Project views' })).toBeInTheDocument();
       expect(screen.getByText('Public')).toBeInTheDocument();
       expect(screen.getByRole('navigation', { name: 'Global' })).toBeInTheDocument();
       expect(screen.queryByText('active')).not.toBeInTheDocument();
@@ -41,22 +38,20 @@ describe('ProjectShell', () => {
     }
   });
 
-  it('uses the shared blue project navigation in Workspace and routes settings correctly', () => {
+  it('uses the reference project navigation in Workspace and routes settings correctly', () => {
     render(
       <ProjectShell activeTab="workspaces" ownerSlug="t3x-dev" project={project}>
         <div>Review content</div>
       </ProjectShell>
     );
 
-    expect(screen.getByRole('banner')).toHaveClass('h-24', 'px-3');
-    expect(document.querySelector('svg[aria-label="T3X Logo"]')).toBeInTheDocument();
+    expect(screen.getByRole('banner')).toBeInTheDocument();
     expect(screen.getByText('t3x-dev')).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'Owner t3x-dev' })).toHaveTextContent('T');
     expect(screen.getByText('Public')).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Global' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Workspaces' })).toHaveClass(
-      'bg-[var(--accent-commit-soft)]',
-      '!text-[var(--accent-commit)]'
+    expect(screen.getByRole('link', { name: 'Workspaces' })).toHaveAttribute(
+      'aria-current',
+      'page'
     );
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
@@ -77,6 +72,8 @@ describe('ProjectShell', () => {
       '/orbit-labs/new'
     );
     expect(screen.getByText('orbit-labs')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Schemas' })).not.toHaveAttribute('aria-current');
 
     view.rerender(
       <ProjectShell activeTab="state" project={project} projectIdNavigation>
@@ -113,8 +110,8 @@ describe('ProjectShell', () => {
       </ProjectShell>
     );
 
-    expect(screen.getByRole('banner')).toHaveClass('h-24');
-    expect(screen.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
+    expect(screen.getByRole('banner')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to projects' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByText('Studio content').closest('main')).toHaveClass(
       'min-h-0',

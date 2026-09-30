@@ -1,0 +1,65 @@
+.segments.segments {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 32px;
+  padding: 3px;
+  gap: 2px;
+  border: 0;
+  border-radius: 10px;
+  background: #f1f1f3;
+  box-shadow: none;
+}
+.segments.segments button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 0;
+  height: 26px;
+  padding: 0 12px;
+  gap: 7px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #5b606b;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  white-space: nowrap;
+  box-shadow: none;
+}
+.segments.segments button[aria-selected="true"] {
+  background: #fff;
+  color: #16181d;
+  box-shadow:
+    0 1px 2px rgba(15, 18, 30, 0.1),
+    0 0 0 1px rgba(15, 18, 30, 0.04);
+}
+.segments.segments svg {
+  width: 14px;
+  height: 14px;
+}
+.branch.branch.branch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  width: auto;
+  min-width: 96px;
+  max-width: 180px;
+  height: 32px;
+  padding: 0 10px;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: #f1f1f3;
+  color: #16181d;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: none;
+}
+.branch.branch.branch:hover {
+  background: #e9eaee;
+}

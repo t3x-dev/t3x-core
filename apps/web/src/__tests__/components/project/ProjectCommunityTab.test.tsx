@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectCommunityTab } from '@/components/project/ProjectCommunityTab';
 
@@ -72,7 +72,7 @@ describe('ProjectCommunityTab', () => {
 
     render(<ProjectCommunityTab projectId="project one" />);
 
-    expect(await screen.findByText(/Pull request #7: Update/)).toBeInTheDocument();
+    expect(await screen.findByText('Update', { exact: false })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open pull request' })).toHaveAttribute(
       'href',
       '/project/project%20one?tab=pull-requests&pr=7'
@@ -96,5 +96,32 @@ describe('ProjectCommunityTab', () => {
       'href',
       '/project/project%20one?tab=workspaces&branch=feature%2Frelease&workspace=workspace_7'
     );
+  });
+  it('filters all records with real counts, including beyond the sixth workspace', async () => {
+    mocks.prs.mockResolvedValue({
+      pull_requests: [
+        { id: 'pr-1', number: 7, title: 'Release change', updated_at: '2026-09-01T00:00:00Z' },
+      ],
+    });
+    mocks.workspaces.mockResolvedValue(
+      Array.from({ length: 7 }, (_, index) => ({
+        id: `ws-${index}`,
+        title: `Draft ${index + 1}`,
+        targetBranch: 'main',
+        updatedAt: '2026-09-01T00:00:00Z',
+      }))
+    );
+    render(<ProjectCommunityTab projectId="project one" />);
+    expect(await screen.findByText('Draft 3')).toBeInTheDocument();
+    expect(screen.queryByText('Draft 7')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show more (4)' }));
+    expect(screen.getByText('Draft 7')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'All 8' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Pull requests 1' }));
+    expect(screen.queryByText('Draft 7')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open pull request' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Workspaces 7' }));
+    expect(screen.getAllByRole('link', { name: 'Open workspace' })).toHaveLength(7);
+    expect(screen.queryByRole('link', { name: 'Open pull request' })).not.toBeInTheDocument();
   });
 });

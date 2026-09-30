@@ -1,8 +1,22 @@
 'use client';
 
-import { Box, ChevronRight, FileText, Folder, GitBranch, Link2, List, Users } from 'lucide-react';
-import Image from 'next/image';
+import {
+  ArrowRight,
+  type Box,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  GitBranch,
+  GitPullRequest,
+  Grid2X2,
+  Info,
+  Layers,
+  Link2,
+  List,
+  type Users,
+} from 'lucide-react';
 import Link from 'next/link';
+import { useState } from 'react';
 import { getProjectTabSegment } from '@/components/project/projectTabModel';
 import { useNamespaceCollaboration } from '@/hooks/accounts/useNamespaceCollaboration';
 import { useProjectCollaboration } from '@/hooks/accounts/useProjectCollaboration';
@@ -23,6 +37,9 @@ interface CommunityDestination {
 }
 
 export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabProps) {
+  const [filter, setFilter] = useState<'all' | 'prs' | 'workspaces'>('all');
+  const [pullRequestsExpanded, setPullRequestsExpanded] = useState(false);
+  const [workspacesExpanded, setWorkspacesExpanded] = useState(false);
   const { guestsQuery } = useProjectCollaboration(projectId);
   const namespaceId = guestsQuery.data?.namespace_id ?? null;
   const { membersQuery } = useNamespaceCollaboration({
@@ -62,14 +79,14 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
     {
       description: 'Draft and discuss changes.',
       href: workspacePath,
-      icon: Box,
+      icon: Layers,
       label: 'Workspaces',
       tone: 'conversation',
     },
     {
       description: 'Review branch changes.',
       href: pullRequestsPath,
-      icon: GitBranch,
+      icon: GitPullRequest,
       label: 'Pull requests',
       tone: 'info',
     },
@@ -85,113 +102,182 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
   return (
     <section className={styles.page}>
       <header className={styles.intro}>
-        <Image
-          alt=""
-          aria-hidden="true"
-          className={styles.brandMark}
-          height={48}
-          priority
-          src="/community-logo.png"
-          width={48}
-        />
-        <div>
+        <span className={styles.brandMark} aria-hidden="true">
+          <svg aria-hidden="true" width="28" height="28" viewBox="0 0 28 28" fill="none">
+            <circle cx="14" cy="14" r="10" stroke="#f0803c" strokeWidth="2.6" />
+            <circle cx="14" cy="14" r="4.6" stroke="#ff5b4d" strokeWidth="2.6" />
+          </svg>
+        </span>
+        <div className={styles.introCopy}>
           <h2>Project community</h2>
           <p>People and recent project objects, linked to their original workflows.</p>
+        </div>
+        <div className={styles.primaryActions}>
+          <Link className={styles.secondaryButton} href={pullRequestsPath}>
+            <GitBranch aria-hidden="true" />
+            View pull requests
+          </Link>
+          <Link className={styles.primaryButton} href={workspacePath}>
+            <Layers aria-hidden="true" />
+            Open workspaces
+          </Link>
         </div>
       </header>
 
       <div className={styles.layout}>
-        <section aria-labelledby="community-empty-title" className={styles.emptyState}>
-          <div className={styles.emptyStateBody}>
-            {pullRequests.length === 0 && workspaces.length === 0 ? (
-              <Image
-                alt=""
-                aria-hidden="true"
-                className={styles.illustration}
-                height={270}
-                priority
-                src="/community-empty-state.png"
-                width={450}
-              />
-            ) : null}
-            <h3 id="community-empty-title">Recent project objects</h3>
-            <p>
-              Workspace and pull request records are shown here. Handoff notes are not supported
-              yet.
+        <section
+          aria-labelledby="community-objects-title"
+          className={styles.objects}
+          aria-busy={activityLoading}
+        >
+          <h3 id="community-objects-title">Recent project objects</h3>
+          <p className={styles.caption}>Workspace and pull request records are shown here.</p>
+          <fieldset className={styles.filters} aria-label="Filter project objects">
+            {(
+              [
+                ['all', 'All', pullRequests.length + workspaces.length],
+                ['prs', 'Pull requests', pullRequests.length],
+                ['workspaces', 'Workspaces', workspaces.length],
+              ] as const
+            ).map(([key, label, count]) => (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={filter === key}
+                onClick={() => setFilter(key)}
+              >
+                {label} <span>{activityLoading ? '…' : count}</span>
+              </button>
+            ))}
+          </fieldset>
+          {activityLoading ? (
+            <output className={styles.message}>Loading project objects…</output>
+          ) : null}
+          {activityError ? (
+            <p className={styles.message} role="alert">
+              {activityError}
             </p>
-            {activityLoading ? <output>Loading project objects…</output> : null}
-            {activityError ? <p role="alert">{activityError}</p> : null}
-            {!activityLoading && pullRequests.length === 0 && workspaces.length === 0 ? (
-              <p>No recent objects available.</p>
-            ) : null}
-            <ul className="my-5 w-full space-y-2">
-              {pullRequests.slice(0, 6).map((request) => (
-                <li
-                  className="rounded-lg border border-[var(--stroke-default)] p-3 text-sm"
-                  key={request.id}
+          ) : null}
+          {!activityLoading &&
+          !activityError &&
+          pullRequests.length === 0 &&
+          workspaces.length === 0 ? (
+            <p className={styles.message}>No recent objects available.</p>
+          ) : null}
+          {filter !== 'workspaces' && pullRequests.length > 0 ? (
+            <>
+              <h4 className={styles.groupHeading}>
+                Pull requests <span>{pullRequests.length}</span>
+              </h4>
+              <ul id="community-pull-requests" className={styles.objectList}>
+                {(pullRequestsExpanded ? pullRequests : pullRequests.slice(0, 3)).map((request) => (
+                  <li className={styles.objectRow} key={request.id}>
+                    <span className={styles.objectIcon} data-tone="info">
+                      <GitPullRequest aria-hidden="true" />
+                    </span>
+                    <div className={styles.objectCopy}>
+                      <strong>
+                        <span className={styles.number}>#{request.number}</span>
+                        {request.title}
+                      </strong>
+                      <p>Pull request · {formatActivityDate(request.updated_at)}</p>
+                    </div>
+                    <Link
+                      className={styles.openObject}
+                      href={`${pullRequestsPath}&pr=${request.number}`}
+                    >
+                      Open pull request
+                      <ArrowRight aria-hidden="true" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              {pullRequests.length > 3 ? (
+                <button
+                  type="button"
+                  className={styles.expandButton}
+                  aria-expanded={pullRequestsExpanded}
+                  aria-controls="community-pull-requests"
+                  onClick={() => setPullRequestsExpanded((expanded) => !expanded)}
                 >
-                  <strong>
-                    Pull request #{request.number}: {request.title}
-                  </strong>
-                  <span className="ml-2 text-[var(--text-tertiary)]">
-                    {new Date(request.updated_at).toLocaleString()}
-                  </span>
-                  <Link
-                    className="ml-2 text-[var(--accent-commit)]"
-                    href={`${pullRequestsPath}&pr=${request.number}`}
-                  >
-                    Open pull request
-                  </Link>
-                </li>
-              ))}
-              {workspaces.slice(0, 6).map((workspace) => (
-                <li
-                  className="rounded-lg border border-[var(--stroke-default)] p-3 text-sm"
-                  key={workspace.id}
+                  {pullRequestsExpanded ? 'Show less' : `Show more (${pullRequests.length - 3})`}
+                  {pullRequestsExpanded ? (
+                    <ChevronUp aria-hidden="true" />
+                  ) : (
+                    <ChevronDown aria-hidden="true" />
+                  )}
+                </button>
+              ) : null}
+            </>
+          ) : null}
+          {filter !== 'prs' && workspaces.length > 0 ? (
+            <>
+              <h4 className={styles.groupHeading}>
+                Workspaces <span>{workspaces.length}</span>
+              </h4>
+              <ul id="community-workspaces" className={styles.objectList}>
+                {(workspacesExpanded ? workspaces : workspaces.slice(0, 3)).map((workspace) => (
+                  <li className={styles.objectRow} key={workspace.id}>
+                    <span className={styles.objectIcon} data-tone="conversation">
+                      <Layers aria-hidden="true" />
+                    </span>
+                    <div className={styles.objectCopy}>
+                      <strong>{workspace.title}</strong>
+                      <p>Workspace · {formatActivityDate(workspace.updatedAt)}</p>
+                    </div>
+                    <Link
+                      className={styles.openObject}
+                      href={`${projectPath}?${new URLSearchParams({ tab: 'workspaces', branch: workspace.targetBranch, workspace: workspace.id }).toString()}`}
+                    >
+                      Open workspace
+                      <ArrowRight aria-hidden="true" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              {workspaces.length > 3 ? (
+                <button
+                  type="button"
+                  className={styles.expandButton}
+                  aria-expanded={workspacesExpanded}
+                  aria-controls="community-workspaces"
+                  onClick={() => setWorkspacesExpanded((expanded) => !expanded)}
                 >
-                  <strong>Workspace: {workspace.title}</strong>
-                  <span className="ml-2 text-[var(--text-tertiary)]">{workspace.updatedAt}</span>
-                  <Link
-                    className="ml-2 text-[var(--accent-commit)]"
-                    href={`${projectPath}?${new URLSearchParams({ tab: 'workspaces', branch: workspace.targetBranch, workspace: workspace.id }).toString()}`}
-                  >
-                    Open workspace
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            <div className={styles.primaryActions}>
-              <Link className={styles.primaryButton} href={workspacePath}>
-                <Folder aria-hidden="true" />
-                Open workspaces
-              </Link>
-              <Link className={styles.secondaryButton} href={pullRequestsPath}>
-                <GitBranch aria-hidden="true" />
-                View pull requests
-              </Link>
-            </div>
-          </div>
-
+                  {workspacesExpanded ? 'Show less' : `Show more (${workspaces.length - 3})`}
+                  {workspacesExpanded ? (
+                    <ChevronUp aria-hidden="true" />
+                  ) : (
+                    <ChevronDown aria-hidden="true" />
+                  )}
+                </button>
+              ) : null}
+            </>
+          ) : null}
+          {!activityLoading &&
+          !activityError &&
+          filter !== 'all' &&
+          (filter === 'prs' ? pullRequests.length : workspaces.length) === 0 &&
+          pullRequests.length + workspaces.length > 0 ? (
+            <p className={styles.message}>
+              No {filter === 'prs' ? 'pull requests' : 'workspaces'} available.
+            </p>
+          ) : null}
           <div className={styles.evidenceNote}>
-            <span>
-              <FileText aria-hidden="true" />
-            </span>
-            <p>Source evidence and decisions stay with the linked object.</p>
+            <Info aria-hidden="true" />
+            <p>Handoff notes are not supported yet.</p>
           </div>
         </section>
 
         <aside className={styles.sidebar}>
           <section className={styles.sidebarCard}>
             <h3>Where to go</h3>
-            <p className={styles.sidebarDescription}>
-              Continue the conversation where the work happens.
-            </p>
             <nav aria-label="Community destinations" className={styles.destinationList}>
               {destinations.map((destination) => {
                 const Icon = destination.icon;
                 return (
                   <Link
                     className={styles.destination}
+                    aria-label={destination.label}
                     data-tone={destination.tone}
                     href={destination.href}
                     key={destination.label}
@@ -212,7 +298,6 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
 
           <section className={styles.sidebarCard}>
             <div className={styles.sidebarHeading}>
-              <Users aria-hidden="true" />
               <h3>Collaborators</h3>
             </div>
             {guestsQuery.error ? (
@@ -227,7 +312,12 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
             collaborators.size === 0 &&
             !guestsQuery.error &&
             !membersQuery.error ? (
-              <p>No collaborators visible.</p>
+              <div className={styles.sidebarEmpty}>
+                <span className={styles.emptyIcon}>
+                  <Grid2X2 aria-hidden="true" />
+                </span>
+                <strong>No collaborators visible.</strong>
+              </div>
             ) : null}
             {[...collaborators.entries()].map(([id, person]) => (
               <p className="mt-3 text-sm" key={id}>
@@ -239,7 +329,7 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
             ))}
           </section>
           <EmptySidebarCard
-            description="Related tools and references will appear here when linked to this project."
+            description="Related tools and references will appear here when linked."
             icon={Link2}
             title="External context"
             value="No links connected"
@@ -264,13 +354,28 @@ function EmptySidebarCard({
   return (
     <section className={styles.sidebarCard}>
       <div className={styles.sidebarHeading}>
-        <Icon aria-hidden="true" />
         <h3>{title}</h3>
       </div>
       <div className={styles.sidebarEmpty}>
+        <span className={styles.emptyIcon}>
+          <Icon aria-hidden="true" />
+        </span>
         <strong>{value}</strong>
         <p>{description}</p>
       </div>
     </section>
   );
+}
+
+function formatActivityDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
 }

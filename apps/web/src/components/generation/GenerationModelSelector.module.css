@@ -34,6 +34,7 @@
   color: var(--text-tertiary);
 }
 .popover {
+  --model-panel-height: 154px;
   position: fixed;
   z-index: 9999;
   display: flex;
@@ -54,6 +55,7 @@
   box-shadow: var(--fx-shadow-lg);
 }
 .settingsPanel {
+  height: var(--model-panel-height);
   width: 228px;
   flex: 0 0 228px;
   border-radius: 12px;
@@ -129,7 +131,7 @@
 .detailPanel {
   display: flex;
   width: 230px;
-  height: 320px;
+  height: var(--model-panel-height);
   flex: 0 0 230px;
   flex-direction: column;
   overflow: hidden;

@@ -1,0 +1,53 @@
+.header {
+  box-sizing: border-box;
+  display: flex;
+  grid-column: 1 / -1;
+  grid-row: 1;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: var(--project-page-max-width, 1264px);
+  min-height: 64px;
+  margin-inline: auto;
+  padding: 16px 24px;
+  background: var(--surface-panel);
+}
+.identity {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.identity > svg {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  padding: 4px;
+  border-radius: 7px;
+  background: #f97316;
+  color: white;
+}
+.identity > span {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.branch {
+  flex: none;
+}
+.meta {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+@media (max-width: 760px) {
+  .identity > span {
+    max-width: 160px;
+  }
+}

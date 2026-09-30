@@ -631,7 +631,11 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       })
     );
     expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
-    expect(screen.queryAllByRole('columnheader')).toHaveLength(0);
+    expect(screen.getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
+      'Field',
+      'Before',
+      'After',
+    ]);
     expect(screen.getByRole('table').querySelector('[data-diff-kind="added"]')).toBeNull();
     expect(
       screen
@@ -1050,7 +1054,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.getAllByText('天气为晴天').length).toBeGreaterThan(0);
     expect(screen.getByText('Proposed changes')).toBeInTheDocument();
     expect(screen.getByText('t3x.dev/semantic-content')).toBeInTheDocument();
-    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: '1', exact: true })).toBeInTheDocument();
     expect(screen.queryByText('No outcome has been recorded.')).not.toBeInTheDocument();
     expect(screen.queryByText(candidate.summary)).not.toBeInTheDocument();
     expect(screen.queryByText('No rollout plan recorded.')).not.toBeInTheDocument();

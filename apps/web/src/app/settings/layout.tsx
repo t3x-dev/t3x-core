@@ -16,7 +16,8 @@ import {
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
-import { ProjectRouteShell } from '@/components/project/ProjectRouteShell';
+import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
+import { DEFAULT_OWNER_SLUG } from '@/domain/project/repoPath';
 import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
 import { useSession } from '@/hooks/shared/useSession';
 import styles from './SettingsLayout.module.css';
@@ -124,7 +125,8 @@ function SettingsNavLink({
 
 function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
   const currentPath = usePathname() ?? '';
-  const projectId = useSearchParams().get('project')?.trim() ?? '';
+  const ownerParam = useSearchParams().get('owner')?.trim();
+  const projectId = '';
   const { clear, getKey } = useSession();
   const { activeAccount } = useNamespaceAccounts();
   const [isAuthEnabled, setIsAuthEnabled] = useState(false);
@@ -132,7 +134,14 @@ function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
   useEffect(() => setIsAuthEnabled(Boolean(getKey())), [getKey]);
 
   return (
-    <ProjectRouteShell fallbackProjectName="Project" projectId={projectId}>
+    <div className={styles.accountLayout}>
+      <DiscoverHeader
+        owner={ownerParam || activeAccount?.namespace.slug || DEFAULT_OWNER_SLUG}
+        namespaceTab="settings"
+        settingsHref="/settings/provider-credentials"
+        newProjectHref={`/${ownerParam || activeAccount?.namespace.slug || DEFAULT_OWNER_SLUG}/new`}
+        visibility="Account"
+      />
       <div className={styles.shell}>
         <aside className={styles.sidebar} aria-label="Settings navigation">
           <section>
@@ -193,7 +202,7 @@ function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
         </aside>
         <div className={styles.content}>{children}</div>
       </div>
-    </ProjectRouteShell>
+    </div>
   );
 }
 

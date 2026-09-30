@@ -32,18 +32,24 @@ vi.mock('@/hooks/workspaces/useCommitTransitionView', () => ({
 }));
 
 vi.mock('@/components/project/StateOverviewView', () => ({
+  EmptyStateOverview: () => <section>No commits yet</section>,
   StateOverviewView: ({
     reader,
     schemaHref,
+    headerOnly,
   }: {
     reader?: (expanded: boolean, expand: () => void) => import('react').ReactNode;
     schemaHref?: string;
-  }) => (
-    <section aria-label="Overview">
-      {schemaHref ? <a href={schemaHref}>View schemas</a> : null}
-      {reader ? reader(true, () => {}) : 'Structured reader'}
-    </section>
-  ),
+    headerOnly?: boolean;
+  }) =>
+    headerOnly ? (
+      <header aria-label="State project header" />
+    ) : (
+      <section aria-label="Overview">
+        {schemaHref ? <a href={schemaHref}>View schemas</a> : null}
+        {reader ? reader(true, () => {}) : 'Structured reader'}
+      </section>
+    ),
 }));
 
 vi.mock('@/components/canvas', () => ({
@@ -644,11 +650,15 @@ describe('ProjectStateTab', () => {
       '/project/proj_test?branch=main&tab=workspaces'
     );
     const tree = screen.getByRole('region', { name: 'Structured state tree' });
-    expect(within(tree).getByRole('region', { name: 'Workspace structure rows' })).toHaveAttribute(
+    expect(within(tree).getByRole('region', { name: 'State structure rows' })).toHaveAttribute(
       'tabindex',
       '0'
     );
-    expect(within(tree).getByRole('table').querySelectorAll('col')).toHaveLength(4);
+    expect(
+      within(tree)
+        .getAllByRole('columnheader')
+        .map((cell) => cell.textContent)
+    ).toEqual(['Field', 'Value', 'Type']);
     expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull();
   });
 
@@ -704,7 +714,7 @@ describe('ProjectStateTab', () => {
 
     await screen.findByText('PRD must conditions committed');
     const structureView = screen.getByRole('region', { name: 'Structured state tree' });
-    expect(within(structureView).getByRole('table').querySelectorAll('col')).toHaveLength(4);
+    expect(within(structureView).getAllByRole('columnheader')).toHaveLength(3);
 
     const mustToggle = within(structureView).getByRole('button', {
       name: 'Expand Must conditions',
@@ -1187,6 +1197,8 @@ describe('ProjectStateTab', () => {
       '/project/proj_test?branch=main&tab=workspaces'
     );
     expect(screen.queryByRole('button', { name: 'New branch' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
+    expect(await screen.findByText('No commits yet')).toBeInTheDocument();
   });
 
   it('switches to canonical YAML Code without exposing internal trees', async () => {
@@ -1203,7 +1215,9 @@ describe('ProjectStateTab', () => {
     expect(codeView).not.toHaveTextContent('slots:');
     expect(within(codeView).queryByRole('button', { name: 'Copy' })).not.toBeInTheDocument();
     expect(within(codeView).queryByRole('button', { name: 'Download' })).not.toBeInTheDocument();
-    expect(codeView).toHaveClass('min-h-0', 'flex-1', 'overflow-hidden');
+    expect(
+      within(codeView).getByRole('complementary', { name: 'Source information' })
+    ).toHaveTextContent('Canonical YAML');
     const codeScroller = within(codeView).getByRole('region', {
       name: 'Canonical YAML content',
     });
@@ -1211,7 +1225,7 @@ describe('ProjectStateTab', () => {
     const codeScrollArea = codeScroller.closest('[data-slot="state-scroll-area"]');
     expect(codeScrollArea).toHaveClass('min-h-0', 'flex-1');
     expect(codeScrollArea).toHaveAttribute('data-scroll-axes', 'both');
-    expect(codeView.querySelector('code')).toHaveClass('min-w-max');
+    expect(codeView.querySelector('code')).toBeInTheDocument();
     expect(within(codeView).getByText('problem:').parentElement).toHaveClass('whitespace-pre');
   });
 

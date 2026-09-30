@@ -1,0 +1,208 @@
+.dialog.dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(1120px, calc(100vw - 32px));
+  max-width: min(1120px, calc(100vw - 32px));
+  height: min(736px, calc(100dvh - 40px));
+  max-height: calc(100dvh - 40px);
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  border-radius: 20px;
+  background: var(--surface-panel);
+}
+.header.header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex: none;
+  gap: 14px;
+  padding: 22px 60px 18px 28px;
+  text-align: left;
+}
+.header h2 {
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+.header p {
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+.icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 12px;
+  background: var(--accent-commit-soft);
+  color: var(--accent-commit);
+}
+.icon svg {
+  width: 20px;
+  height: 20px;
+}
+.body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+}
+.body [data-module-library] {
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+}
+.body [data-module-library] > div:first-child {
+  display: grid;
+  height: 100%;
+  grid-template-columns: 330px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.body [data-module-library] > div > header {
+  grid-column: 2;
+  padding: 22px 28px 0;
+  gap: 12px;
+}
+.body [data-module-library] > div > header > div > p:last-child {
+  display: none;
+}
+.body [data-module-library] > div > header h2 {
+  font-size: 24px;
+  font-weight: 650;
+}
+.body [data-module-library-layout] {
+  display: contents;
+}
+.body [aria-label="Schema library"] {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  border: 0;
+  padding: 16px 14px 14px;
+  background: #f7f8fa;
+  overflow: auto;
+}
+.body [aria-label="Schema library"] > header {
+  padding: 0 0 12px;
+  border: 0;
+}
+.body [aria-label="Schema library"] input {
+  height: 38px;
+  border-radius: 10px;
+  font-size: 13px;
+  background: var(--surface-panel);
+}
+.body [aria-label="Schema library"] header button {
+  font-size: 12.5px;
+  border-radius: 7px;
+}
+.body [aria-label="Schema results"] {
+  padding: 2px;
+  max-height: none;
+  gap: 4px;
+}
+.body [aria-label="Schema results"] > button {
+  padding: 12px;
+  border-radius: 12px;
+}
+.body [aria-label="Schema results"] > button[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--surface-panel);
+  box-shadow: 0 0 0 2px var(--accent-commit);
+}
+.body [aria-label="Schema results"] strong {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.body [aria-label="Schema results"] > button > span:nth-child(2) {
+  font-size: 11.5px;
+}
+.body [data-module-detail] {
+  grid-column: 2;
+  overflow: auto;
+  padding: 22px 28px 24px;
+}
+.body [data-module-detail] > header > div {
+  padding: 0;
+}
+.body [data-module-detail] > header h3 {
+  font-size: 18px;
+  font-weight: 650;
+}
+.body [data-module-detail] > header p {
+  font-size: 12px;
+}
+.body [data-module-detail] dl {
+  margin-top: 18px;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  grid-template-columns: 0.7fr 0.8fr 1.6fr 1.1fr;
+}
+.body [data-module-detail] dl > div {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f7f8fa;
+}
+.body [data-module-detail] dt {
+  font-size: 11px;
+}
+.body [data-module-detail] dd {
+  font-size: 14px;
+}
+.body [data-module-versions] {
+  display: grid;
+  min-height: 280px;
+  margin-top: 20px;
+  border: 0;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 24px;
+}
+.body [aria-label="Schema versions"] {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.body [data-module-empty] {
+  min-height: 280px;
+  padding: 24px;
+  border-radius: 16px;
+  background: #f7f8fa;
+}
+.body [data-module-empty] h3 {
+  font-size: 15px;
+}
+.body [data-module-empty] p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-tertiary);
+}
+@media (max-width: 900px) {
+  .body [data-module-library] > div:first-child {
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+  .body [data-module-versions] {
+    grid-template-columns: 1fr;
+  }
+  .body [data-module-detail] dl {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .body [data-module-library] {
+    overflow: auto;
+  }
+  .body [data-module-library] > div:first-child {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+  }
+  .body [aria-label="Schema library"] {
+    order: -1;
+    max-height: 280px;
+    flex: none;
+  }
+}

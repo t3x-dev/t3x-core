@@ -1,3 +1,4 @@
+import moduleStyles from '@/components/schemas/AddModulesDialog.module.css';
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -110,42 +111,24 @@ it('keeps a required provider checked and locked while blocking a failed definit
   const composition = screen.getByRole('main', { name: 'Studio composition' });
   const sources = screen.getByRole('complementary', { name: 'Studio sources' });
   expect(composition).toContainElement(controls);
-  expect(sources).toHaveClass('col-start-1', 'row-span-2', 'row-start-1');
-  expect(controls).toHaveClass('col-span-2', 'col-start-2', 'row-start-1');
-  expect(screen.getByRole('region', { name: 'Composed structure' })).toHaveClass(
-    'col-start-2',
-    'row-start-2'
-  );
-  expect(screen.getByRole('complementary', { name: 'Module details' })).toHaveClass(
-    'col-start-3',
-    'row-start-2'
+  expect(composition).toContainElement(sources);
+  expect(composition).toContainElement(screen.getByRole('region', { name: 'Composed structure' }));
+  expect(composition).toContainElement(
+    screen.getByRole('complementary', { name: 'Module details' })
   );
   expect(
     within(controls).getByRole('button', { name: 'Advanced definition workbench' })
   ).toBeVisible();
-  expect(within(controls).getByRole('button', { name: 'Review changes' })).toBeVisible();
-  expect(screen.getByLabelText('Target Workspace').closest('label')).toHaveClass(
-    'h-[34px]',
-    'rounded-[5px]'
-  );
-  expect(screen.getByRole('button', { name: 'Check schema' })).toHaveClass(
-    'h-[34px]',
-    'rounded-[5px]'
-  );
-  expect(screen.getByRole('button', { name: 'Review & apply' })).toHaveClass(
-    'h-[34px]',
-    'rounded-[5px]'
-  );
-  expect(screen.getByRole('button', { name: 'Zoom out' }).parentElement).toHaveClass(
-    'h-[34px]',
-    'rounded-[5px]'
-  );
+  expect(within(controls).getByRole('button', { name: 'Review & apply' })).toBeDisabled();
+  expect(screen.getByLabelText('Target Workspace')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Zoom out' })).toBeVisible();
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).toBeChecked();
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Remove Shared foundation' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Review & apply' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('tab', { name: 'Checks', exact: true }));
   expect(screen.getByText('Missing service capability')).toBeVisible();
-  expect(screen.getByText('Not run')).toBeVisible();
+  expect(screen.getByText('Changes require attention')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }));
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).not.toBeChecked();
   expect(mocks.apply).not.toHaveBeenCalled();
@@ -165,16 +148,9 @@ it('opens the module workbench in a wide viewport-bounded dialog with a scrollab
   );
   fireEvent.click(screen.getByRole('button', { name: 'Advanced definition workbench' }));
   const dialog = screen.getByRole('dialog', { name: 'Add modules' });
-  expect(dialog).toHaveClass(
-    'sm:max-w-[min(1100px,calc(100%-2rem))]',
-    'max-h-[90dvh]',
-    'overflow-hidden'
-  );
-  expect(dialog).not.toHaveClass('sm:max-w-lg');
+  expect(dialog).toHaveClass(moduleStyles.dialog);
   expect(within(dialog).getByText('Module workbench content').parentElement).toHaveClass(
-    'min-h-0',
-    'min-w-0',
-    'overflow-auto'
+    moduleStyles.body
   );
   fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

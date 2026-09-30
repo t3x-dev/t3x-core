@@ -6,6 +6,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { type StateYamlReviewLine, stateYamlLinePaths } from '@/domain/diff/stateYamlReview';
 import { cn } from '@/utils/cn';
+import styles from './WorkspaceReviewCode.module.css';
 
 export interface StateCodeReview {
   lines: StateYamlReviewLine[];
@@ -24,12 +25,14 @@ const STATE_CODE_MODES: Array<{ id: StateCodeMode; label: string }> = [
 
 export function WorkspaceReviewCodeView({
   branch,
+  changeCounts,
   rootKey,
   validationReady,
   yamlText,
   review,
 }: {
   branch: string;
+  changeCounts?: { added: number; modified: number; removed: number };
   rootKey: string;
   validationReady: boolean;
   yamlText: string;
@@ -110,7 +113,7 @@ export function WorkspaceReviewCodeView({
       aria-label="YAML code view"
       className={cn(
         'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--surface-app)]',
-        !review && 'p-4'
+        review ? styles.reviewCode : 'p-4'
       )}
     >
       <div
@@ -141,6 +144,13 @@ export function WorkspaceReviewCodeView({
             </div>
           </div>
 
+          {changeCounts ? (
+            <div className={styles.counts}>
+              <span data-kind="added">+ {changeCounts.added} added</span>
+              <span data-kind="modified">~ {changeCounts.modified} modified</span>
+              <span data-kind="removed">− {changeCounts.removed} removed</span>
+            </div>
+          ) : null}
           <div className="ml-auto flex shrink-0 items-center gap-2">
             <div
               aria-label="Code format"

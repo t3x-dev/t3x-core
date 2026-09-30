@@ -18,7 +18,6 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-  ArrowLeft,
   Bot,
   CheckCircle2,
   Circle,
@@ -27,8 +26,7 @@ import {
   RotateCcw,
   Sparkles,
 } from 'lucide-react';
-import Link from 'next/link';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { AutopilotSettings } from '@/components/autopilot/AutopilotSettings';
 import { ProjectCollaborationPanel } from '@/components/project/ProjectCollaborationPanel';
@@ -36,6 +34,7 @@ import { ProjectVisibilitySettings } from '@/components/project/ProjectVisibilit
 import { ProjectDangerZone } from '@/components/project/settings/ProjectDangerZone';
 import { ProjectExportSettings } from '@/components/project/settings/ProjectExportSettings';
 import { ProjectGeneralSettings } from '@/components/project/settings/ProjectGeneralSettings';
+import generalStyles from '@/components/project/settings/ProjectGeneralSettings.module.css';
 import { ProjectIntegritySettings } from '@/components/project/settings/ProjectIntegritySettings';
 import { ProjectSettingsNav } from '@/components/project/settings/ProjectSettingsNav';
 import { SettingsSection } from '@/components/project/settings/SettingsSection';
@@ -233,14 +232,6 @@ export default function ProjectSettingsPage() {
 function ProjectSettingsPageContent() {
   const { projectId } = useParams<{ projectId: string }>();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const requestedReturnTo = searchParams.get('returnTo');
-  const returnTo =
-    requestedReturnTo?.startsWith('/') &&
-    !requestedReturnTo.startsWith('//') &&
-    !requestedReturnTo.includes('\\')
-      ? requestedReturnTo
-      : `/project/${encodeURIComponent(projectId)}`;
   const settings = useProjectSettings(projectId);
   const { saveProjectProviderConfig } = useProviderCommands();
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
@@ -405,30 +396,14 @@ function ProjectSettingsPageContent() {
   const project = settings.project;
 
   return (
-    <div className="mx-auto grid max-w-[1180px] gap-8 px-6 pb-24 pt-8 lg:grid-cols-[200px_minmax(0,1fr)]">
-      <aside className="hidden lg:block">
+    <div className={generalStyles.layout}>
+      <aside className={generalStyles.sidebar}>
         <div className="sticky top-8">
           <ProjectSettingsNav />
         </div>
       </aside>
 
       <div className="min-w-0 space-y-6">
-        <header>
-          <Link
-            href={returnTo}
-            className="mb-3 inline-flex items-center gap-1 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
-          >
-            <ArrowLeft className="h-3 w-3" />
-            Back to project
-          </Link>
-          <h1 className="text-[22px] font-bold leading-7 tracking-[-0.02em] text-[var(--text-primary)]">
-            Settings
-          </h1>
-          <p className="mt-1 text-[13px] text-[var(--text-secondary)]">
-            How this repository is identified, shared, automated, verified and exported.
-          </p>
-        </header>
-
         {settings.loading ? (
           <div className="flex h-40 items-center justify-center rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-elevated)]">
             <Loader2 className="size-5 animate-spin text-[var(--text-tertiary)]" />

@@ -3,7 +3,7 @@
 .shell {
   display: flex;
   width: 100%;
-  height: calc(100dvh - 6rem);
+  flex: 1;
   min-height: 0;
   overflow: hidden;
   background: #fff;
@@ -169,4 +169,11 @@
     flex-basis: 220px;
     width: 220px;
   }
+}
+
+.accountLayout {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
 }

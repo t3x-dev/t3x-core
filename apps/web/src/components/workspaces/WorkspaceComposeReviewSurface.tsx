@@ -16,13 +16,12 @@ import {
   ChevronDown,
   ChevronRight,
   CircleDot,
-  CircleHelp,
   ClipboardPaste,
   Clock3,
   Code2,
   Copy,
-  Download,
   ExternalLink,
+  Eye,
   FileCode2,
   FileText,
   FileUp,
@@ -33,7 +32,7 @@ import {
   ListTree,
   MessageSquare,
   Minus,
-  PanelRightOpen,
+  PanelRight,
   Pencil,
   Percent,
   Play,
@@ -50,7 +49,7 @@ import {
 import NextImage from 'next/image';
 import NextLink from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import type { ChangeEvent, ClipboardEvent, KeyboardEvent } from 'react';
+import type { ChangeEvent, ClipboardEvent, CSSProperties, KeyboardEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   clipboardImageFiles,
@@ -59,6 +58,7 @@ import {
 import { GenerationModelSelector } from '@/components/generation/GenerationModelSelector';
 import { DOCUMENT_SOURCE_ACCEPTED_TYPES } from '@/components/import/documentAcceptTypes';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
+import navigationStyles from '@/components/project/StateNavigationControls.module.css';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import {
   DropdownMenu,
@@ -139,6 +139,8 @@ import composeStyles from './WorkspaceComposeSurface.module.css';
 import checksStyles from './WorkspaceReviewChecks.module.css';
 import { WorkspaceReviewCodeView } from './WorkspaceReviewCodeView';
 import diffStyles from './WorkspaceReviewDiff.module.css';
+import reviewStyles from './WorkspaceReviewReference.module.css';
+import stageHeaderStyles from './WorkspaceStageHeader.module.css';
 
 type WorkspaceSurfaceMode = 'compose' | 'review';
 type ReviewPane = 'rendered' | 'changes' | 'yaml' | 'checks' | 'source' | 'edit' | 'delivery';
@@ -264,7 +266,12 @@ export function WorkspaceComposeReviewSurface({
       )}
     >
       <div className={composeStyles.workspaceBody}>
-        <div className={composeStyles.workspaceContent}>
+        <div
+          className={cn(
+            composeStyles.workspaceContent,
+            mode === 'review' && reviewStyles.workspace
+          )}
+        >
           {mode === 'review' ? (
             <>
               <WorkspaceStageHeader
@@ -353,19 +360,15 @@ function WorkspaceStageHeader({
   branchOptions,
   candidate,
   controller,
-  discussionOpen,
   mode,
   onBranchChange,
-  onDiscussionToggle,
   onModeChange,
 }: {
   branchOptions: string[];
   candidate: WorkspaceCandidate;
   controller?: WorkspaceComposeReviewController;
-  discussionOpen?: boolean;
   mode: WorkspaceSurfaceMode;
   onBranchChange?: (branch: string) => Promise<void> | void;
-  onDiscussionToggle?: () => void;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
 }) {
   const selectedBranch = candidate.targetBranch || 'main';
@@ -374,8 +377,14 @@ function WorkspaceStageHeader({
   );
 
   return (
-    <header className={composeStyles.composeHeader}>
-      <div className={composeStyles.workspaceBranchControl}>
+    <header className={stageHeaderStyles.header}>
+      {
+        <div className={stageHeaderStyles.identity}>
+          <BoxIcon aria-hidden="true" />
+          <span title={candidate.title}>{candidate.title}</span>
+        </div>
+      }
+      <div className={stageHeaderStyles.branch}>
         <StateBranchControls
           branch={selectedBranch}
           branchOptions={availableBranches}
@@ -386,14 +395,14 @@ function WorkspaceStageHeader({
           showCreate={false}
         />
       </div>
-      <div aria-label="Workspace stage" className={composeStyles.stageSwitch} role="tablist">
+      <div aria-label="Workspace stage" className={navigationStyles.segments} role="tablist">
         <button
           aria-selected={mode === 'compose'}
           onClick={() => onModeChange('compose')}
           role="tab"
           type="button"
         >
-          Compose
+          <Pencil aria-hidden="true" /> Compose
         </button>
         <button
           aria-selected={mode === 'review'}
@@ -401,21 +410,12 @@ function WorkspaceStageHeader({
           role="tab"
           type="button"
         >
-          Review
+          <CheckCircle2 aria-hidden="true" /> Review
         </button>
       </div>
-      <div className={composeStyles.composeHeaderMeta}>
+      <div className={stageHeaderStyles.meta}>
         {controller ? (
           <WorkspaceSchemaSelect candidate={candidate} controller={controller} />
-        ) : null}
-        {onDiscussionToggle ? (
-          <button
-            aria-label={discussionOpen ? 'Hide discussion' : 'Show discussion'}
-            onClick={onDiscussionToggle}
-            type="button"
-          >
-            <PanelRightOpen aria-hidden="true" />
-          </button>
         ) : null}
       </div>
     </header>
@@ -435,7 +435,7 @@ function WorkspaceReviewToolbar({
     cn(composeStyles.reviewTool, pane === toolPane && composeStyles.reviewToolActive);
 
   return (
-    <nav aria-label="Review views" className={composeStyles.reviewToolbar}>
+    <nav aria-label="Review views" className={cn(composeStyles.reviewToolbar, reviewStyles.views)}>
       <div className={composeStyles.reviewToolbarGroup}>
         <button
           aria-current={pane === 'rendered' ? 'page' : undefined}
@@ -443,7 +443,7 @@ function WorkspaceReviewToolbar({
           onClick={() => onPaneChange('rendered')}
           type="button"
         >
-          <PanelRightOpen aria-hidden="true" /> Render
+          <Eye aria-hidden="true" /> Render
         </button>
         <button
           aria-current={pane === 'changes' ? 'page' : undefined}
@@ -462,7 +462,7 @@ function WorkspaceReviewToolbar({
           <Code2 aria-hidden="true" /> Rendered YAML
         </button>
       </div>
-      <div className={composeStyles.reviewToolbarGroup}>
+      <div className={cn(composeStyles.reviewToolbarGroup, reviewStyles.secondaryViews)}>
         {controller.candidate.sourceBundle.some(
           (source) =>
             source.materialId &&
@@ -483,7 +483,7 @@ function WorkspaceReviewToolbar({
           onClick={() => onPaneChange('edit')}
           type="button"
         >
-          <Pencil aria-hidden="true" /> Edit structured State
+          Edit structured State
         </button>
         <button
           aria-current={pane === 'delivery' ? 'page' : undefined}
@@ -491,7 +491,7 @@ function WorkspaceReviewToolbar({
           onClick={() => onPaneChange('delivery')}
           type="button"
         >
-          <Download aria-hidden="true" /> Delivery
+          Delivery
         </button>
       </div>
     </nav>
@@ -531,6 +531,29 @@ function ComposeSurface({
   };
   const [currentStep, setCurrentStep] = useState(0);
   const [discussionOpen, setDiscussionOpen] = useState(true);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const dragOrigin = useRef<{ x: number; width: number } | null>(null);
+  const [discussionWidth, setDiscussionWidth] = useState(440);
+  const [resizing, setResizing] = useState(false);
+  useEffect(() => {
+    try {
+      const stored = Number(localStorage.getItem('t3x-workspace-discussion-width'));
+      if (stored >= 320 && stored <= 680) setDiscussionWidth(stored);
+    } catch {
+      /* Storage can be unavailable in private browser contexts. */
+    }
+  }, []);
+  const resizeDiscussion = (width: number) => {
+    const maximum = Math.min(680, Math.max(320, (boardRef.current?.clientWidth ?? 1264) - 400));
+    const next = Math.round(Math.max(320, Math.min(maximum, width)));
+    setDiscussionWidth(next);
+    try {
+      localStorage.setItem('t3x-workspace-discussion-width', String(next));
+    } catch {
+      /* Resizing still works without storage. */
+    }
+  };
+
   const [sidePanel, setSidePanel] = useState<'history' | 'chat'>(
     candidate.authoringLedger ? 'history' : 'chat'
   );
@@ -580,19 +603,104 @@ function ComposeSurface({
 
   return (
     <div
+      ref={boardRef}
+      style={{ '--discussion-width': `${discussionWidth}px` } as CSSProperties}
+      data-resizing={resizing || undefined}
       className={cn(composeStyles.composeBoard, !discussionOpen && composeStyles.discussionClosed)}
     >
       <WorkspaceStageHeader
         branchOptions={branchOptions}
         candidate={candidate}
         controller={controller}
-        discussionOpen={discussionOpen}
         mode="compose"
         onBranchChange={onBranchChange}
-        onDiscussionToggle={() => setDiscussionOpen((open) => !open)}
         onModeChange={onModeChange}
       />
+      <SourceToolbar
+        proposedChangeCount={
+          activity.view
+            ? changeScope === 'all'
+              ? activity.view.netDiff.length
+              : groupComposeActivity(activity.actions).reduce(
+                  (count, event) => count + composeEventCards(event, activity.cards).length,
+                  0
+                )
+            : candidate.yopsDraft.operations.length
+        }
+        authoringBootstrap={authoringBootstrap}
+        authoringEnabled={editingEnabled}
+        onToggleEditing={toggleEditing}
+        candidate={candidate}
+        changeScope={changeScope}
+        controller={controller}
+        onChangeScope={setChangeScope}
+        onDiscuss={() => {
+          setSidePanel('chat');
+          setDiscussionOpen(true);
+        }}
+      />
+
+      {discussionOpen && (
+        // biome-ignore lint/a11y/useSemanticElements: This is an interactive window splitter, not a thematic break.
+        <div
+          role="separator"
+          aria-label="Resize discussion panel"
+          aria-orientation="vertical"
+          aria-valuemin={320}
+          aria-valuemax={680}
+          aria-valuenow={discussionWidth}
+          tabIndex={0}
+          className={composeStyles.discussionResize}
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            const sidebar = boardRef.current?.querySelector('aside[aria-label="Discuss change"]');
+            dragOrigin.current = {
+              x: event.clientX,
+              width: sidebar ? sidebar.getBoundingClientRect().width + 16 : discussionWidth,
+            };
+            event.currentTarget.setPointerCapture(event.pointerId);
+            setResizing(true);
+          }}
+          onPointerMove={(event) => {
+            if (dragOrigin.current)
+              resizeDiscussion(dragOrigin.current.width + dragOrigin.current.x - event.clientX);
+          }}
+          onPointerUp={(event) => {
+            dragOrigin.current = null;
+            setResizing(false);
+            if (event.currentTarget.hasPointerCapture(event.pointerId))
+              event.currentTarget.releasePointerCapture(event.pointerId);
+          }}
+          onLostPointerCapture={() => {
+            dragOrigin.current = null;
+            setResizing(false);
+          }}
+          onPointerCancel={() => {
+            dragOrigin.current = null;
+            setResizing(false);
+          }}
+          onDoubleClick={() => resizeDiscussion(440)}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+              event.preventDefault();
+              resizeDiscussion(discussionWidth + (event.key === 'ArrowLeft' ? 20 : -20));
+            }
+          }}
+        />
+      )}
       <main className={composeStyles.composeMain}>
+        {!discussionOpen ? (
+          <button
+            aria-label="Show discussion"
+            title="Expand sidebar"
+            className={composeStyles.discussionExpand}
+            onClick={() => setDiscussionOpen(true)}
+            type="button"
+          >
+            <PanelRight aria-hidden="true" strokeWidth={1.5} />
+          </button>
+        ) : null}
         {activity.newActivity ? (
           <output className={composeStyles.newActivity}>
             <span>
@@ -604,19 +712,6 @@ function ComposeSurface({
             </button>
           </output>
         ) : null}
-        <SourceToolbar
-          authoringBootstrap={authoringBootstrap}
-          authoringEnabled={editingEnabled}
-          onToggleEditing={toggleEditing}
-          candidate={candidate}
-          changeScope={changeScope}
-          controller={controller}
-          onChangeScope={setChangeScope}
-          onDiscuss={() => {
-            setSidePanel('chat');
-            setDiscussionOpen(true);
-          }}
-        />
 
         <ProposedDraftPanel
           activity={activity}
@@ -665,11 +760,12 @@ function ComposeSurface({
             )}
             <button
               aria-label="Close discussion"
+              title="Collapse sidebar"
               className={composeStyles.discussionClose}
               onClick={() => setDiscussionOpen(false)}
               type="button"
             >
-              <X aria-hidden="true" />
+              <PanelRight aria-hidden="true" strokeWidth={1.5} />
             </button>
           </header>
           {editingEnabled && sidePanel === 'history' ? (
@@ -1107,6 +1203,7 @@ function SourceMenuButton({
 }
 
 function SourceToolbar({
+  proposedChangeCount,
   authoringBootstrap,
   onToggleEditing,
   authoringEnabled,
@@ -1116,6 +1213,7 @@ function SourceToolbar({
   onChangeScope,
   onDiscuss,
 }: {
+  proposedChangeCount: number;
   authoringBootstrap: ReturnType<typeof useWorkspaceAuthoringBootstrap>;
   onToggleEditing: () => Promise<void>;
   authoringEnabled: boolean;
@@ -1164,7 +1262,9 @@ function SourceToolbar({
   return (
     <section className={composeStyles.sourcesSection}>
       <div className={composeStyles.sourcesHeading}>
-        <h2>Sources</h2>
+        <h2 className="sr-only">Proposed changes</h2>
+        <span className="sr-only">{proposedChangeCount} changes</span>
+        <h3 className="sr-only">Sources</h3>
         <div className={composeStyles.sourceChips}>
           {primaryMaterial ? (
             <DropdownMenu>
@@ -1229,7 +1329,7 @@ function SourceToolbar({
         </div>
         <div className={composeStyles.composeToolbarActions}>
           <button
-            className={composeStyles.addManually}
+            className={cn(composeStyles.addManually, composeStyles.editingMode)}
             disabled={authoringBootstrap.busy || controller.isBusy || controller.chat.isLoading}
             onClick={() => void onToggleEditing()}
             title="Switch between discussion only and Draft editing; existing history is preserved"
@@ -1325,14 +1425,6 @@ function ProposedDraftPanel({
   onStepChange: (step: number) => void;
 }) {
   const operations = candidate.yopsDraft.operations;
-  const proposedChangeCount = activity.view
-    ? changeScope === 'all'
-      ? activity.view.netDiff.length
-      : groupComposeActivity(activity.actions).reduce(
-          (count, event) => count + composeEventCards(event, activity.cards).length,
-          0
-        )
-    : operations.length;
   useEffect(() => {
     if (!activity.view) return;
     if (changeScope === 'all') {
@@ -1580,12 +1672,6 @@ function ProposedDraftPanel({
 
   return (
     <div className={composeStyles.panel} data-change-scope={changeScope}>
-      <header className={composeStyles.panelHeader}>
-        <div className={composeStyles.panelTitleRow}>
-          <h2>Proposed changes</h2>
-          <span>{proposedChangeCount}</span>
-        </div>
-      </header>
       <ComposeActivityTimeline
         key={candidate.id}
         activity={activity}
@@ -1975,6 +2061,7 @@ function WorkspaceSourceTools({ controller }: { controller: WorkspaceComposeRevi
 
 function ResultYamlPane({
   model,
+  changeCounts,
   branch,
   selectedRow,
   onSelectRow,
@@ -1983,6 +2070,7 @@ function ResultYamlPane({
   validationReady,
 }: {
   model: WorkspaceReviewStructureModel;
+  changeCounts: { added: number; modified: number; removed: number };
   branch: string;
   selectedRow: WorkspaceReviewStructureRow | null;
   onSelectRow: (id: string) => void;
@@ -2015,6 +2103,7 @@ function ResultYamlPane({
 
   return (
     <WorkspaceReviewCodeView
+      changeCounts={changeCounts}
       branch={branch}
       rootKey={model.rootKey}
       validationReady={validationReady}
@@ -2102,15 +2191,27 @@ function WorkspaceRenderedReview({
   const renderTitle = authoringPreview
     ? authoringTitle || rendered.title || candidate.title
     : rendered.title || candidate.title;
+  const priorTitle = authoringPreview
+    ? selectPrdRenderModel(structure.baseline).requirements.find(
+        (entry) => entry.key === rendered.requirements[0]?.key
+      )?.title
+    : selectPrdRenderModel(structure.baseline).title;
   const renderLede = authoringPreview
     ? rendered.audience || rendered.problem || rendered.lede
     : rendered.audience || rendered.problem || candidate.summary;
   const showPrdBoilerplate = !authoringPreview;
-  const selectedRow = changedRows[0] ?? structure.rows[0] ?? null;
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const selectedRow =
+    structure.rows.find((row) => row.path === selectedPath) ??
+    changedRows[0] ??
+    structure.rows[0] ??
+    null;
+  const selectPath = (path: string) => {
+    const exact = structure.rows.find((row) => row.path === path);
+    const child = changedRows.find((row) => row.path.startsWith(`${path}/`));
+    setSelectedPath((exact ?? child)?.path ?? path);
+  };
   const selectedKind = selectedRow?.diff?.kind;
-  const selectedSource = selectedRow
-    ? workspaceReviewSourceDisplay(candidate, selectedRow, selectedRow.path)
-    : null;
   const reviewChecks = getReviewChecks(controller);
   const copyPath = () => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -2123,346 +2224,211 @@ function WorkspaceRenderedReview({
   };
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
-      {controller.error ? (
-        <div
-          role="alert"
-          className="border-b border-[var(--status-error)]/30 bg-[var(--status-error-muted)] px-7 py-2 text-xs text-[var(--status-error)]"
-        >
-          {controller.error}
-        </div>
-      ) : null}
-      <main className="flex min-h-0 w-full flex-1 overflow-hidden bg-white max-lg:flex-col max-lg:overflow-y-auto">
-        <section
-          aria-label="Rendered result"
-          className="flex min-h-0 w-[60%] shrink-0 flex-col overflow-hidden border-r border-gray-200 bg-white max-lg:min-h-[680px] max-lg:w-full max-lg:border-b max-lg:border-r-0"
-        >
-          <div className="flex shrink-0 items-center justify-between border-b border-gray-100 bg-white px-6 py-3">
-            <div>
-              <h2 className="text-[14px] font-semibold leading-tight text-slate-900">
-                Rendered result · {_formatProposalSchemaLabel(candidate)}
-              </h2>
-              <p className="mt-0.5 text-[12px] text-slate-500">
-                Preview generated from draft r{candidate.revision ?? 1}
-              </p>
-            </div>
-            <button
-              className="flex items-center gap-1.5 text-[13px] font-medium text-blue-600 transition-colors hover:text-blue-700"
-              onClick={onStructureDiff}
-              type="button"
-            >
-              <ExternalLink aria-hidden="true" className="size-4" /> Open structure diff
+    <div className={reviewStyles.renderSurface}>
+      {controller.error ? <p role="alert">{controller.error}</p> : null}
+      <main className={reviewStyles.columns}>
+        <section aria-label="Rendered result" className={reviewStyles.document}>
+          <h1>{renderTitle}</h1>
+          {priorTitle && priorTitle !== renderTitle ? (
+            <p className={reviewStyles.lead}>
+              Replaces <span className={reviewStyles.previousTitle}>{priorTitle}</span>
+            </p>
+          ) : renderLede ? (
+            <p className={reviewStyles.lead}>{renderLede}</p>
+          ) : null}
+          <div className={reviewStyles.documentMeta}>
+            Preview generated from draft r{candidate.revision ?? 1}
+            <button onClick={onStructureDiff} type="button">
+              Open structure diff <ExternalLink aria-hidden="true" />
             </button>
           </div>
-
-          <div className="flex-1 overflow-y-auto bg-white px-6 py-3">
-            <h1 className="text-[28px] font-bold leading-tight tracking-tight text-slate-900">
-              {renderTitle}
-            </h1>
-            {renderLede ? (
-              <p className="mb-2 mt-0.5 text-[16px] text-slate-500">{renderLede}</p>
-            ) : (
-              <div className="mb-2" />
-            )}
-
-            {showPrdBoilerplate ? (
-              <>
-                <section className="relative mb-2 pl-4">
-                  <div className="absolute bottom-0 left-0 top-0 w-[3px] rounded-full bg-violet-600" />
-                  <div className="mb-1 flex items-center gap-2">
-                    <h3 className="text-[14px] font-bold text-slate-900">Summary</h3>
-                    {changedRows.some((row) => /\/summary\/outcome$/.test(row.path)) ? (
-                      <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
-                        Updated
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="rounded-md bg-indigo-50/60 px-3 py-1.5 text-[13px] leading-5 text-indigo-900">
-                    {rendered.outcome || 'No outcome has been recorded.'}
-                  </div>
-                </section>
-
-                <section className="mb-2 pl-4">
-                  <h3 className="mb-1 text-[14px] font-bold text-slate-900">Purpose</h3>
-                  <p className="text-[13px] leading-5 text-slate-600">
-                    {rendered.problem || candidate.summary}
-                  </p>
-                </section>
-
-                <section className="mb-2 pl-4">
-                  <h3 className="mb-1 text-[14px] font-bold text-slate-900">Rollout plan</h3>
-                  <div className="flex flex-col overflow-hidden rounded-md border border-gray-200">
-                    {(rolloutRows.length
-                      ? rolloutRows
-                      : [['Status', 'No rollout plan recorded.']]
-                    ).map(([label, value], index, rows) => (
-                      <div
-                        className={cn(
-                          'flex',
-                          index < rows.length - 1 && 'border-b border-gray-200'
-                        )}
-                        key={`${label}:${index}`}
-                      >
-                        <div className="w-1/3 border-r border-gray-200 bg-gray-50/50 px-3 py-0.5 text-[12px] font-medium leading-5 text-slate-500">
-                          {label}
-                        </div>
-                        <div className="w-2/3 bg-white px-3 py-0.5 text-[12px] leading-5 text-slate-700">
-                          {value}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-
-                <section className="relative mb-2 pl-4">
-                  <div className="absolute bottom-0 left-0 top-0 w-[3px] rounded-full bg-violet-600" />
-                  <div className="mb-1 flex items-center gap-2">
-                    <h3 className="text-[14px] font-bold text-slate-900">Rollback readiness</h3>
-                    {changedRows.some((row) => /rollback/i.test(row.path)) ? (
-                      <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
-                        Updated
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="mb-0.5 flex items-center gap-2">
-                    <CircleDot aria-hidden="true" className="size-4 text-slate-500" />
-                    <span className="text-[13px] font-bold text-slate-700">
-                      {rollback ? 'Recorded' : 'Not recorded'}
-                    </span>
-                  </div>
-                  <p className="max-w-[95%] text-[12px] leading-[1.4] text-slate-600">
-                    {rollback ?? 'No rollback detail is present in the current draft.'}
-                  </p>
-                </section>
-              </>
-            ) : null}
-
-            {proposedChanges.length > 0 ? (
-              <section className="mb-2 pl-4">
-                <h3 className="mb-1 text-[14px] font-bold text-slate-900">Proposed changes</h3>
-                <div className="flex flex-col overflow-hidden rounded-md border border-gray-200">
-                  {proposedChanges.map((card, index) => {
-                    const change = composeValueChangeLabels(card.before, card.after);
-                    return (
-                      <div
-                        className={cn(
-                          'flex',
-                          index < proposedChanges.length - 1 && 'border-b border-gray-200'
-                        )}
-                        key={`${card.nodeId}:${card.path}`}
-                      >
-                        <div className="w-1/3 border-r border-gray-200 bg-gray-50/50 px-3 py-1.5 text-[12px] font-medium leading-5 text-slate-500">
-                          {composePathLabel(card.path)}
-                        </div>
-                        <div className="w-2/3 bg-white px-3 py-1.5 text-[12px] leading-5 text-slate-700">
-                          {change.after}
-                          {change.before !== 'Absent' ? (
-                            <span className="ml-2 text-slate-400">from {change.before}</span>
-                          ) : null}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            ) : null}
-
-            {rendered.requirements.length > 0 ? (
-              <section className="mb-2 pl-4">
-                <h3 className="mb-1 text-[14px] font-bold text-slate-900">Requirements</h3>
-                <div className="grid gap-1.5 sm:grid-cols-2">
-                  {rendered.requirements.map((requirement) => (
-                    <div className="flex items-start gap-2" key={requirement.key}>
-                      <span className="inline-flex size-4 items-center justify-center rounded-full bg-emerald-600 text-white">
-                        <Check aria-hidden="true" className="size-3" />
-                      </span>
-                      <span className="text-[12px] text-slate-600">{requirement.title}</span>
+          {showPrdBoilerplate ? (
+            <>
+              <h3>Summary</h3>
+              <p>{rendered.outcome || 'No outcome has been recorded.'}</p>
+              <h3>Purpose</h3>
+              <p>{rendered.problem || candidate.summary}</p>
+              <h3>Rollout plan</h3>
+              {rolloutRows.length ? (
+                <dl>
+                  {rolloutRows.map(([label, value]) => (
+                    <div key={label}>
+                      <dt>{label}</dt>
+                      <dd>{value}</dd>
                     </div>
                   ))}
-                </div>
-              </section>
-            ) : null}
-
-            {showPrdBoilerplate || notes ? (
-              <section className="pl-4">
-                <h3 className="mb-1 text-[14px] font-bold text-slate-900">Notes</h3>
-                <p className="text-[13px] leading-5 text-slate-600">
-                  {notes ? formatOperationValue(notes.value) : 'No notes recorded.'}
-                </p>
-              </section>
-            ) : null}
-          </div>
-
-          <footer className="flex shrink-0 items-center gap-4 border-t border-gray-100 bg-white px-4 py-3">
+                </dl>
+              ) : (
+                <p>No rollout plan recorded.</p>
+              )}
+              <h3>Rollback readiness</h3>
+              <p>{rollback || 'No rollback detail is present in the current draft.'}</p>
+            </>
+          ) : null}
+          {proposedChanges.length > 0 ? (
+            <section>
+              <h3>
+                Proposed changes <span>{proposedChanges.length}</span>
+              </h3>
+              <div className={reviewStyles.tableScroll}>
+                <table className={reviewStyles.changes}>
+                  <thead>
+                    <tr>
+                      <th>Field</th>
+                      <th>Before</th>
+                      <th>After</th>
+                      <th aria-label="Change type" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {proposedChanges.map((card) => {
+                      const values = composeValueChangeLabels(card.before, card.after);
+                      const kind =
+                        card.before === undefined
+                          ? 'added'
+                          : card.after === undefined
+                            ? 'removed'
+                            : 'modified';
+                      return (
+                        <tr
+                          key={`${card.nodeId}:${card.path}`}
+                          data-selected={selectedPath === card.path}
+                        >
+                          <th>
+                            <button
+                              onClick={() => selectPath(card.path ?? card.nodeId)}
+                              type="button"
+                            >
+                              {composePathLabel(card.path)}
+                            </button>
+                          </th>
+                          <td>{card.before === undefined ? '—' : <del>{values.before}</del>}</td>
+                          <td>{card.after === undefined ? '—' : <ins>{values.after}</ins>}</td>
+                          <td>
+                            <span className={reviewStyles.kind} data-kind={kind}>
+                              {kind === 'added'
+                                ? 'Added'
+                                : kind === 'removed'
+                                  ? 'Removed'
+                                  : 'Modified'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ) : null}
+          {rendered.requirements.length > 0 ? (
+            <section>
+              <h3>
+                Requirements <span>{rendered.requirements.length}</span>
+              </h3>
+              <div className={reviewStyles.requirements}>
+                {rendered.requirements.map((requirement) => {
+                  const row = structure.rows.find(
+                    (entry) =>
+                      entry.path.split('/').includes(requirement.key) && entry.key === 'title'
+                  );
+                  return (
+                    <button
+                      key={requirement.key}
+                      type="button"
+                      data-selected={Boolean(row && selectedRow?.path === row.path)}
+                      disabled={!row}
+                      onClick={() => row && setSelectedPath(row.path)}
+                    >
+                      <CheckCircle2 aria-hidden="true" />
+                      <span>{requirement.title}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+          {showPrdBoilerplate || notes ? (
+            <section>
+              <h3>Notes</h3>
+              <p>{notes ? formatOperationValue(notes.value) : 'No notes recorded.'}</p>
+            </section>
+          ) : null}
+          <footer className={reviewStyles.commitFooter}>
             <button
-              className="flex items-center gap-2 rounded-md bg-slate-100 px-3 py-1.5 text-[12px] font-semibold text-slate-400 disabled:cursor-not-allowed"
               disabled={!reviewSnapshot}
               onClick={() => {
-                if (!reviewSnapshot) return;
-                router.push(
-                  `/project/${encodeURIComponent(reviewSnapshot.projectId)}/changes/${encodeURIComponent(reviewSnapshot.workspaceId)}/${encodeURIComponent(reviewSnapshot.snapshotId)}`
-                );
+                if (reviewSnapshot)
+                  router.push(
+                    `/project/${encodeURIComponent(reviewSnapshot.projectId)}/changes/${encodeURIComponent(reviewSnapshot.workspaceId)}/${encodeURIComponent(reviewSnapshot.snapshotId)}`
+                  );
               }}
               type="button"
             >
-              <Share2 aria-hidden="true" className="size-4" /> Commit changes
+              <Share2 aria-hidden="true" /> Commit changes
             </button>
-            <div className="flex items-center gap-3">
-              <div className="h-5 w-px bg-gray-200" />
-              <span className="text-[12px] text-slate-400">
-                {reviewSnapshot
-                  ? 'Review snapshot ready for decision.'
-                  : 'Review snapshot not prepared.'}
-              </span>
-            </div>
+            <span>
+              {reviewSnapshot
+                ? 'Review snapshot ready for decision.'
+                : 'Review snapshot not prepared.'}
+            </span>
           </footer>
         </section>
-
-        <aside
-          aria-label="Review details"
-          className="flex min-h-0 min-w-[340px] w-[40%] flex-col overflow-y-auto bg-white max-lg:w-full"
-        >
-          <section aria-label="Selected section" className="shrink-0 p-3">
-            <h2 className="mb-2 text-[15px] font-bold text-slate-900">Selected section</h2>
-            <div className="mb-1 flex items-center justify-between">
-              <h3 className="text-[14px] font-bold text-slate-900">
-                {selectedRow?.path ?? 'Current draft'}
-              </h3>
-              <button
-                className="flex items-center gap-1.5 text-[12px] font-medium text-blue-600 transition-colors hover:text-blue-700"
-                onClick={copyPath}
-                type="button"
-              >
-                <Copy aria-hidden="true" className="size-3.5" /> Copy path
+        <aside aria-label="Review details" className={reviewStyles.rail}>
+          <section aria-label="Selected section" className={reviewStyles.panel}>
+            <header>
+              <h2>
+                <Pencil aria-hidden="true" /> Selected change
+              </h2>
+              <button onClick={copyPath} type="button">
+                <Copy aria-hidden="true" /> Copy path
               </button>
-            </div>
-            <div className="mb-2 flex items-center gap-2">
-              <code className="inline-block rounded-md border border-gray-100 bg-gray-50 px-2.5 py-1 text-[11px] leading-4 text-gray-600">
-                {selectedRow?.path ?? 'prd'}
-              </code>
-              <span
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold',
-                  selectedKind === 'added'
-                    ? 'border-[var(--diff-added-border)] bg-[var(--diff-added-bg)] text-[var(--diff-added-text)]'
-                    : selectedKind === 'removed'
-                      ? 'border-[var(--diff-removed-border)] bg-[var(--diff-removed-bg)] text-[var(--diff-removed-text)]'
-                      : selectedKind === 'modified'
-                        ? 'border-[var(--diff-modified-border)] bg-[var(--diff-modified-bg)] text-[var(--diff-modified-text)]'
-                        : 'border-[var(--stroke-divider)] bg-[var(--surface-app)] text-[var(--text-secondary)]'
-                )}
-              >
-                <CircleDot aria-hidden="true" className="size-3" />{' '}
-                {selectedRow ? workspaceReviewKindLabel(selectedRow) : 'Unchanged'}
-              </span>
-            </div>
-            <div className="mt-2">
-              <div className="mb-1 text-[11px] text-slate-500">Source</div>
-              <div className="flex items-center justify-between rounded-md border border-indigo-100/50 bg-indigo-50/40 px-3 py-1.5">
-                <div className="flex items-center gap-2 text-[12px] text-slate-700">
-                  <FileText aria-hidden="true" className="size-4 text-indigo-500" />{' '}
-                  {selectedSource?.label ?? 'No source material linked'}
-                </div>
-              </div>
-            </div>
-            <div className="mt-2">
-              <h4 className="mb-1 text-[13px] font-bold text-slate-900">
-                {selectedRow?.diff?.summary ?? 'Current draft value'}
-              </h4>
-              <p className="mb-2 text-[12px] leading-4 text-slate-600">
-                {selectedRow?.diff?.reason ??
-                  (authoringPreview ? renderLede || renderTitle : candidate.summary)}
-              </p>
-              <button
-                className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-blue-600 transition-colors hover:text-blue-700"
-                onClick={onStructureDiff}
-                type="button"
-              >
-                <Share2 aria-hidden="true" className="size-4" /> Show in structure diff
-              </button>
-              <button
-                className="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-blue-700"
-                onClick={revise}
-                type="button"
-              >
-                <Sparkles aria-hidden="true" className="size-4" /> Ask AI to revise
-              </button>
-            </div>
+            </header>
+            <code className={reviewStyles.path}>
+              {selectedRow?.path.split('/').join(' / ') ?? 'Current draft'}
+            </code>
+            <span className={reviewStyles.kind} data-kind={selectedKind}>
+              {selectedRow ? workspaceReviewKindLabel(selectedRow) : 'Unchanged'}
+            </span>
+            <button className={reviewStyles.primary} onClick={revise} type="button">
+              <Sparkles aria-hidden="true" /> Ask AI to revise
+            </button>
           </section>
           <section
             aria-label={`Checks for draft r${candidate.revision ?? 1}`}
-            className="border-t border-gray-200 p-3"
+            className={reviewStyles.panel}
           >
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-[15px] font-bold text-slate-900">
-                Checks for draft r{candidate.revision ?? 1}
+            <header>
+              <h2>
+                <CheckCircle2 aria-hidden="true" /> Checks for draft r{candidate.revision ?? 1}
               </h2>
-              <span className="text-[11px] font-medium text-slate-500">Review evidence</span>
-            </div>
-            <div className="flex flex-col">
-              {reviewChecks.map((check, index) => (
-                <div
-                  className={cn(
-                    'flex items-start gap-3 border-b border-gray-100',
-                    index === 0 ? 'pb-2' : 'py-2'
-                  )}
-                  key={check.label}
-                >
-                  <CheckStatusMark status={check.status} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <h4 className="truncate text-[12px] font-bold text-slate-900">
-                        {check.label}
-                      </h4>
-                      <CheckStatusBadge status={check.status} />
-                    </div>
-                    <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{check.detail}</p>
-                  </div>
+            </header>
+            {reviewChecks.map((check) => (
+              <div className={reviewStyles.check} key={check.label}>
+                <CheckStatusMark status={check.status} />
+                <div>
+                  <strong>{check.label}</strong>
+                  <small>{check.detail}</small>
                 </div>
-              ))}
-
-              <div className="flex items-start gap-3 pt-2">
-                <CircleDot aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-gray-400" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <h4 className="truncate text-[12px] font-bold text-slate-900">
-                      Review snapshot
-                    </h4>
-                    <span className="shrink-0 rounded border border-gray-200 bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
-                      {reviewSnapshot ? 'Prepared' : 'Not prepared'}
-                    </span>
-                  </div>
-                  <p className="mb-1 mt-0.5 text-[11px] leading-4 text-slate-500">
-                    Prepare an immutable review from the current draft.
-                  </p>
-                  <div className="flex justify-end">
-                    <button
-                      className="flex items-center gap-1.5 rounded border border-blue-200 px-3 py-1 text-[11px] font-semibold text-blue-600 transition-colors hover:bg-blue-50 disabled:opacity-50"
-                      disabled={controller.isBusy}
-                      onClick={() => void controller.prepareReview()}
-                      type="button"
-                    >
-                      <Play aria-hidden="true" className="size-3.5 fill-current" />
-                      {controller.isBusy ? 'Preparing…' : 'Prepare review'}
-                    </button>
-                  </div>
-                </div>
+                <CheckStatusBadge status={check.status} />
               </div>
+            ))}
+            <div className={reviewStyles.check}>
+              <CircleDot aria-hidden="true" />
+              <div>
+                <strong>Review snapshot</strong>
+                <small>{reviewSnapshot ? 'Prepared' : 'Not prepared'}</small>
+              </div>
+              <button
+                disabled={controller.isBusy}
+                onClick={() => void controller.prepareReview()}
+                type="button"
+              >
+                {controller.isBusy ? 'Preparing…' : 'Prepare review'}
+              </button>
             </div>
-            <div className="mt-2 flex items-center gap-2 rounded-md border border-indigo-100/50 bg-indigo-50/50 px-3 py-1.5">
-              <CircleHelp aria-hidden="true" className="size-4 shrink-0 text-indigo-500" />
-              <p className="text-[12px] text-indigo-700">
-                Results tied to this draft; edits require recheck.
-              </p>
-            </div>
-            <button
-              className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2"
-              onClick={onOpenChecks}
-              type="button"
-            >
-              <CheckCircle2 aria-hidden="true" className="size-[18px]" />
-              Open checks
-              <ArrowRight aria-hidden="true" className="ml-1 size-4" />
+            <button className={reviewStyles.primary} onClick={onOpenChecks} type="button">
+              Open checks <ArrowRight aria-hidden="true" />
             </button>
           </section>
         </aside>
@@ -2873,51 +2839,67 @@ function WorkspaceReviewStructureView({
   for (const row of changedRows) changeCounts[row.diff!.kind] += 1;
 
   return (
-    <section aria-label="Workspace review structure" className={diffStyles.surface}>
-      <header className={diffStyles.toolbar}>
-        <div className={diffStyles.counts}>
-          <span className={diffStyles.added}>
-            <Plus aria-hidden="true" />
-            {changeCounts.added} added
-          </span>
-          <span className={diffStyles.modified}>
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M4 12c4-4 4 4 8 0s4 4 8 0" />
-            </svg>
-            {changeCounts.modified} modified
-          </span>
-          <span className={diffStyles.removed}>
-            <Minus aria-hidden="true" />
-            {changeCounts.removed} removed
-          </span>
-        </div>
-      </header>
+    <section
+      aria-label="Workspace review structure"
+      className={cn(diffStyles.surface, diffStyles.reference)}
+    >
       <div className={diffStyles.body}>
-        {yamlModel ? (
-          <ResultYamlPane
-            branch={candidate.targetBranch}
-            model={yamlModel}
-            onSelectRow={onSelectRow}
-            preparing={preparing}
-            selectedRow={selectedRow}
-            snapshotCurrent={snapshotCurrent}
-            validationReady={
-              snapshotCurrent &&
-              checks.some(
-                (check) => check.label === 'Schema validation' && check.status === 'passed'
-              )
-            }
-          />
-        ) : (
-          <WorkspaceReviewStructureTree
-            activeRowId={selectedRow?.id ?? null}
-            modifiedLabel={modifiedLabel}
-            modifiedOnly={modifiedOnly}
-            onSelectRow={onSelectRow}
-            query={query}
-            rows={rows}
-          />
-        )}
+        <div className={diffStyles.mainColumn}>
+          {!yamlModel ? (
+            <header className={diffStyles.toolbar}>
+              <div className={diffStyles.diffHeading}>
+                <h1>Structure diff</h1>
+                <p>
+                  Base <code>{candidate.baseCommitHash?.slice(0, 7) || 'State'}</code> compared with
+                  draft <code>r{candidate.revision ?? 1}</code>
+                </p>
+              </div>
+              <div className={diffStyles.counts}>
+                <span className={diffStyles.added}>
+                  <Plus aria-hidden="true" />
+                  {changeCounts.added} added
+                </span>
+                <span className={diffStyles.modified}>
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M4 12c4-4 4 4 8 0s4 4 8 0" />
+                  </svg>
+                  {changeCounts.modified} modified
+                </span>
+                <span className={diffStyles.removed}>
+                  <Minus aria-hidden="true" />
+                  {changeCounts.removed} removed
+                </span>
+              </div>
+            </header>
+          ) : null}
+          {yamlModel ? (
+            <ResultYamlPane
+              changeCounts={changeCounts}
+              branch={candidate.targetBranch}
+              model={yamlModel}
+              onSelectRow={onSelectRow}
+              preparing={preparing}
+              selectedRow={selectedRow}
+              snapshotCurrent={snapshotCurrent}
+              validationReady={
+                snapshotCurrent &&
+                checks.some(
+                  (check) => check.label === 'Schema validation' && check.status === 'passed'
+                )
+              }
+            />
+          ) : (
+            <WorkspaceReviewStructureTree
+              reference
+              activeRowId={selectedRow?.id ?? null}
+              modifiedLabel={modifiedLabel}
+              modifiedOnly={modifiedOnly}
+              onSelectRow={onSelectRow}
+              query={query}
+              rows={rows}
+            />
+          )}
+        </div>
         <WorkspaceReviewNodeInspector
           candidate={candidate}
           checks={checks}
@@ -2932,6 +2914,7 @@ function WorkspaceReviewStructureView({
 }
 
 export function WorkspaceReviewStructureTree({
+  reference = false,
   activeRowId,
   expansionRequest,
   modifiedLabel,
@@ -2940,6 +2923,7 @@ export function WorkspaceReviewStructureTree({
   query = '',
   rows,
 }: {
+  reference?: boolean;
   activeRowId: string | null;
   expansionRequest?: { id: number; mode: 'all' | 'none' } | null;
   modifiedLabel: string;
@@ -2973,16 +2957,34 @@ export function WorkspaceReviewStructureTree({
 
   return (
     <StateScrollArea className={diffStyles.treePane} label="Workspace structure rows">
-      <table className={diffStyles.tree}>
-        <colgroup>
-          <col className="w-[29%]" />
-          <col className="w-[34%]" />
-          <col className="w-[25%]" />
-          <col className="w-[12%]" />
-        </colgroup>
+      <table className={cn(diffStyles.tree, reference && diffStyles.referenceTree)}>
+        {reference ? (
+          <>
+            <colgroup>
+              <col style={{ width: '40%' }} />
+              <col style={{ width: '30%' }} />
+              <col style={{ width: '30%' }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Before</th>
+                <th>After</th>
+              </tr>
+            </thead>
+          </>
+        ) : (
+          <colgroup>
+            <col className="w-[29%]" />
+            <col className="w-[34%]" />
+            <col className="w-[25%]" />
+            <col className="w-[12%]" />
+          </colgroup>
+        )}
         <tbody>
           {visibleRows.map((row) => (
             <WorkspaceReviewStructureTableRow
+              reference={reference}
               expanded={filtering || isWorkspaceReviewRowExpanded(row, expansionOverrides)}
               key={row.id}
               modifiedLabel={modifiedLabel}
@@ -2999,6 +3001,7 @@ export function WorkspaceReviewStructureTree({
 }
 
 function WorkspaceReviewStructureTableRow({
+  reference,
   expanded,
   modifiedLabel,
   onSelect,
@@ -3006,6 +3009,7 @@ function WorkspaceReviewStructureTableRow({
   row,
   selected,
 }: {
+  reference?: boolean;
   expanded: boolean;
   modifiedLabel: string;
   onSelect: () => void;
@@ -3044,19 +3048,19 @@ function WorkspaceReviewStructureTableRow({
           className={diffStyles.fieldCell}
           style={{
             backgroundImage:
-              row.depth > 0
+              row.depth > 0 && !reference
                 ? 'repeating-linear-gradient(to right, transparent 0 9px, #e5e7eb 9px 10px, transparent 10px 28px)'
                 : undefined,
             backgroundRepeat: 'no-repeat',
-            backgroundSize: `${String(row.depth * 28)}px 100%`,
-            paddingLeft: row.depth * 28,
+            backgroundSize: `${String(row.depth * (reference ? 20 : 28))}px 100%`,
+            paddingLeft: row.depth * (reference ? 20 : 28),
           }}
         >
           {row.depth > 0 ? (
             <span
               aria-hidden="true"
               className={diffStyles.treeElbow}
-              style={{ left: row.depth * 28 - 18 }}
+              style={{ left: row.depth * (reference ? 20 : 28) - 18 }}
             />
           ) : null}
           {row.expandable ? (
@@ -3078,6 +3082,9 @@ function WorkspaceReviewStructureTableRow({
               )}
             </button>
           ) : null}
+          {reference && !row.expandable ? (
+            <FileText aria-hidden="true" className={diffStyles.scalarIcon} />
+          ) : null}
           {row.expandable ? (
             <BoxIcon
               aria-hidden="true"
@@ -3097,13 +3104,46 @@ function WorkspaceReviewStructureTableRow({
           </span>
         </span>
       </td>
-      <td className={diffStyles.valueCell}>
-        <WorkspaceReviewValueCell row={row} />
-      </td>
-      <td className={diffStyles.whyCell}>
-        <WorkspaceReviewWhyCell row={row} />
-      </td>
-      <td className={diffStyles.changedCell}>{row.diff?.exact ? modifiedLabel : '—'}</td>
+      {reference ? (
+        <>
+          <td className={diffStyles.referenceValue}>
+            {row.diff?.exact && row.diff.kind === 'added' ? (
+              <span className={diffStyles.empty}>—</span>
+            ) : row.expandable && !row.diff?.exact ? (
+              ''
+            ) : row.diff?.exact ? (
+              <del>{row.diff.beforeValue}</del>
+            ) : row.value === '-' ? (
+              <span className={diffStyles.empty}>empty</span>
+            ) : (
+              row.value
+            )}
+          </td>
+          <td className={diffStyles.referenceValue}>
+            {row.diff?.exact && row.diff.kind === 'removed' ? (
+              <span className={diffStyles.empty}>—</span>
+            ) : row.expandable && !row.diff?.exact ? (
+              ''
+            ) : row.diff?.exact ? (
+              <ins>{row.diff.afterValue}</ins>
+            ) : row.value === '-' ? (
+              <span className={diffStyles.empty}>empty</span>
+            ) : (
+              row.value
+            )}
+          </td>
+        </>
+      ) : (
+        <>
+          <td className={diffStyles.valueCell}>
+            <WorkspaceReviewValueCell row={row} />
+          </td>
+          <td className={diffStyles.whyCell}>
+            <WorkspaceReviewWhyCell row={row} />
+          </td>
+          <td className={diffStyles.changedCell}>{row.diff?.exact ? modifiedLabel : '—'}</td>
+        </>
+      )}
     </tr>
   );
 }
@@ -3284,10 +3324,10 @@ function WorkspaceReviewChangeReviewPanel({
       </section>
       <section
         className={diffStyles.card}
-        aria-label={`Checks for draft v${candidate.revision ?? 1}`}
+        aria-label={`Checks for draft r${candidate.revision ?? 1}`}
       >
         <header className={diffStyles.cardHeader}>
-          <h2>Checks for draft v{candidate.revision ?? 1}</h2>
+          <h2>Checks for draft r{candidate.revision ?? 1}</h2>
         </header>
         <div className={diffStyles.checkList}>
           {checks.map((check) => (
@@ -3325,7 +3365,9 @@ function WorkspaceReviewChangeReviewPanel({
                   ? 'Passed'
                   : check.status === 'failed'
                     ? 'Failed'
-                    : 'Not run'}
+                    : check.status === 'pending'
+                      ? 'Pending'
+                      : 'Not run'}
               </span>
             </div>
           ))}

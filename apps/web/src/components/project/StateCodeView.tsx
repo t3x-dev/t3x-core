@@ -1,7 +1,20 @@
 'use client';
 
 import { JSON_SCHEMA, load } from 'js-yaml';
-import { Check, ChevronDown, ChevronUp, Copy, Info, Search, X } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Eye,
+  FileText,
+  GitCommit,
+  Info,
+  Pencil,
+  Search,
+  X,
+} from 'lucide-react';
+import Link from 'next/link';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import styles from '@/components/project/StateCodeView.module.css';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
@@ -13,7 +26,11 @@ type CodeMode = 'yaml' | 'json' | 'raw';
 export function StateCodeView({
   yamlText,
   commitHash,
+  schemaName,
+  workspaceHref,
 }: {
+  schemaName?: string;
+  workspaceHref?: string;
   yamlText: string;
   branch: string;
   rootKey: string;
@@ -21,13 +38,14 @@ export function StateCodeView({
 }) {
   const [mode, setMode] = useState<CodeMode>('yaml');
   const [searchOpen, setSearchOpen] = useState(true);
-  const [query, setQuery] = useState('allocation');
+  const [query, setQuery] = useState('');
   const [activeMatch, setActiveMatch] = useState(0);
-  const [wrapLines, setWrapLines] = useState(true);
+  const [wrapLines, setWrapLines] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const copySequence = useRef(0);
+  const codeElement = useRef<HTMLElement>(null);
   const json = useMemo(() => {
     try {
       return {
@@ -56,6 +74,12 @@ export function StateCodeView({
     [lines, search]
   );
   const matches = matchingLines.length;
+  useEffect(() => {
+    if (!search || !matches) return;
+    codeElement.current
+      ?.querySelector(`[data-line="${matchingLines[activeMatch % matches]}"]`)
+      ?.scrollIntoView?.({ block: 'nearest' });
+  }, [activeMatch, matches, matchingLines, search]);
 
   useEffect(() => {
     if (searchOpen) input.current?.focus();
@@ -101,15 +125,18 @@ export function StateCodeView({
   const modeLabel = mode === 'raw' ? 'Plain YAML' : mode.toUpperCase();
 
   return (
-    <section
-      aria-label="YAML code view"
-      className={cn(styles.root, 'min-h-0 flex-1 overflow-hidden')}
-    >
+    <section aria-label="YAML code view" className={styles.root}>
       <div className={styles.card}>
         <header className={styles.toolbar}>
           <div className={styles.titleGroup}>
-            <h2>State source</h2>
-            <span className={styles.readOnly}>Read-only</span>
+            <div>
+              <h2>State source</h2>
+              <p>Committed state as canonical text</p>
+            </div>
+            <span className={styles.readOnly}>
+              <Eye />
+              Read-only
+            </span>
           </div>
 
           <div className={styles.controls}>
@@ -123,13 +150,13 @@ export function StateCodeView({
                   onClick={() => setMode(format)}
                   type="button"
                 >
-                  {format === 'raw' ? 'Plain YAML' : format.toUpperCase()}
+                  {format === 'raw' ? 'Plain' : format.toUpperCase()}
                 </button>
               ))}
             </div>
             <span aria-hidden="true" className={styles.separator} />
             <label className={styles.wrapControl}>
-              <span>Wrap lines</span>
+              <span>Wrap</span>
               <button
                 aria-label="Wrap lines"
                 aria-pressed={wrapLines}
@@ -174,14 +201,24 @@ export function StateCodeView({
               />
             </div>
             <output className={styles.matchCount}>
-              {matches ? `${Math.min(activeMatch + 1, matches)} of ${matches}` : '0 of 0'}
+              {matches ? `${Math.min(activeMatch + 1, matches)} of ${matches}` : 'No matches'}
               <span className="sr-only">{matches} matching lines</span>
             </output>
             <div className={styles.matchButtons}>
-              <button aria-label="Previous match" onClick={() => moveMatch(-1)} type="button">
+              <button
+                aria-label="Previous match"
+                disabled={!matches}
+                onClick={() => moveMatch(-1)}
+                type="button"
+              >
                 <ChevronUp aria-hidden="true" />
               </button>
-              <button aria-label="Next match" onClick={() => moveMatch(1)} type="button">
+              <button
+                aria-label="Next match"
+                disabled={!matches}
+                onClick={() => moveMatch(1)}
+                type="button"
+              >
                 <ChevronDown aria-hidden="true" />
               </button>
             </div>
@@ -204,64 +241,105 @@ export function StateCodeView({
           </p>
         )}
 
-        <StateScrollArea
-          label={
-            mode === 'json'
-              ? 'JSON content'
-              : mode === 'raw'
-                ? 'Raw YAML content'
-                : 'Canonical YAML content'
-          }
-          horizontal
-          className={cn(styles.codeArea, 'min-h-0 flex-1')}
-          viewportClassName={styles.viewport}
-        >
-          <code className={cn(styles.code, 'min-w-max')}>
-            {!error &&
-              lines.map((line, index) => (
-                <div className={styles.codeLine} key={`${index}:${line}`}>
-                  <span aria-hidden="true" className={styles.lineNumber}>
-                    {index + 1}
-                  </span>
-                  <span
+        <div className={styles.sourcePanel}>
+          <StateScrollArea
+            label={
+              mode === 'json'
+                ? 'JSON content'
+                : mode === 'raw'
+                  ? 'Raw YAML content'
+                  : 'Canonical YAML content'
+            }
+            horizontal
+            className={cn(styles.codeArea, 'min-h-0 flex-1')}
+            viewportClassName={styles.viewport}
+          >
+            <code ref={codeElement} className={cn(styles.code, wrapLines && styles.wrapped)}>
+              {!error &&
+                lines.map((line, index) => (
+                  <div
+                    data-line={index}
                     className={cn(
-                      styles.lineText,
-                      'whitespace-pre',
-                      wrapLines && styles.lineTextWrapped
+                      styles.codeLine,
+                      search && matchingLines[activeMatch % matches] === index && styles.activeLine
                     )}
+                    key={`${index}:${line}`}
                   >
-                    {mode === 'raw' ? markSearch(line, search) : highlightLine(line, mode, search)}
-                  </span>
-                </div>
-              ))}
-          </code>
-        </StateScrollArea>
+                    <span aria-hidden="true" className={styles.lineNumber}>
+                      {index + 1}
+                    </span>
+                    <span
+                      className={cn(
+                        styles.lineText,
+                        'whitespace-pre',
+                        wrapLines && styles.lineTextWrapped
+                      )}
+                    >
+                      {mode === 'raw'
+                        ? markSearch(line, search)
+                        : highlightLine(line, mode, search)}
+                    </span>
+                  </div>
+                ))}
+            </code>
+          </StateScrollArea>
 
-        <div className={styles.statusRow}>
-          <span>{modeLabel === 'YAML' ? 'Canonical YAML' : modeLabel}</span>
-          <span aria-hidden="true">·</span>
-          <span>Read-only</span>
-          <span className={styles.revision}>
-            Revision <code>{shortHash}</code>
-            <button
-              aria-label="Copy revision hash"
-              onClick={() => void copyRevision()}
-              type="button"
-            >
-              <Copy aria-hidden="true" />
-            </button>
-          </span>
+          <div className={styles.statusRow}>
+            <FileText aria-hidden="true" />
+            <span>{modeLabel === 'YAML' ? 'Canonical YAML' : modeLabel}</span>
+            <span aria-hidden="true">·</span>
+            <span>Read-only</span>
+            <span className={styles.revision}>
+              <GitCommit aria-hidden="true" />
+              Revision <code>{shortHash}</code>
+              <button
+                aria-label="Copy revision hash"
+                onClick={() => void copyRevision()}
+                type="button"
+              >
+                <Copy aria-hidden="true" />
+              </button>
+            </span>
+          </div>
         </div>
         <div className={styles.noteRow}>
           <span className={styles.infoIcon}>
             <Info aria-hidden="true" />
           </span>
           <span>Plain YAML shows the same YAML without syntax highlighting.</span>
-          <span className={styles.proposeNote}>
-            Propose a change to update this committed state.
-          </span>
         </div>
       </div>
+      <aside className={styles.side} aria-label="Source information">
+        <section className={styles.panel}>
+          <h3>Source</h3>
+          <dl>
+            <dt>Format</dt>
+            <dd>{modeLabel === 'YAML' ? 'Canonical YAML' : modeLabel}</dd>
+            <dt>Lines</dt>
+            <dd>{error ? '—' : lines.length}</dd>
+            <dt>Size</dt>
+            <dd>{error ? '—' : `${new TextEncoder().encode(text).byteLength} B`}</dd>
+            <dt>Revision</dt>
+            <dd>
+              <code>{shortHash}</code>
+            </dd>
+            <dt>Schema</dt>
+            <dd>
+              <code>{schemaName || 'Not specified'}</code>
+            </dd>
+          </dl>
+        </section>
+        <section className={styles.cta}>
+          <h3>Need to change this?</h3>
+          <p>Committed state is read-only. Propose a change to update it with review.</p>
+          {workspaceHref ? (
+            <Link href={workspaceHref}>
+              <Pencil />
+              Propose change
+            </Link>
+          ) : null}
+        </section>
+      </aside>
     </section>
   );
 }
@@ -301,7 +379,7 @@ function valueClass(value: string): string | undefined {
   if (clean === 'null') return styles.nullValue;
   if (/^-?\d+(?:\.\d+)?$/.test(clean)) return styles.numberValue;
   if (/^".*"$/.test(clean)) return styles.stringValue;
-  return undefined;
+  return clean ? styles.stringValue : undefined;
 }
 
 function markSearch(text: string, search: string): ReactNode {

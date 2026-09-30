@@ -1,19 +1,25 @@
 'use client';
 
 import {
+  Box,
   ChevronDown,
   ChevronRight,
   CircleHelp,
   Code2,
   Copy,
   ExternalLink,
+  Eye,
   FileText,
   GitBranch,
   GitCommit,
   History,
   Link2,
+  List,
   type LucideIcon,
+  Maximize2,
+  Minus,
   Network,
+  Pencil,
   Play,
   Search,
   ShieldCheck,
@@ -30,7 +36,7 @@ import { StateNodeHistoryPanel } from '@/components/history/StateNodeHistoryPane
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
 import { StateCodeView } from '@/components/project/StateCodeView';
-import { StateOverviewView } from '@/components/project/StateOverviewView';
+import { EmptyStateOverview, StateOverviewView } from '@/components/project/StateOverviewView';
 import { StatePrdReader } from '@/components/project/StatePrdReader';
 import { StatePromptReader } from '@/components/project/StatePromptReader';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
@@ -38,10 +44,6 @@ import { StateSkillReader } from '@/components/project/StateSkillReader';
 import { Button } from '@/components/ui/button';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import {
-  type WorkspaceReviewStructureRow,
-  WorkspaceReviewStructureTree,
-} from '@/components/workspaces/WorkspaceComposeReviewSurface';
 import {
   buildStructuredStateDiff,
   type StructuredDiffChange,
@@ -80,6 +82,9 @@ import type { ApiCommit } from '@/types/api';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 import { buildReturnTo, withReturnTo } from '@/utils/navigationReturn';
+import inspectionStyles from './StateInspection.module.css';
+import navigationStyles from './StateNavigationControls.module.css';
+import overviewStyles from './StateOverviewView.module.css';
 
 export type ProjectSnapshotView = 'overview' | 'structure' | 'code';
 export type ProjectStateView = ProjectSnapshotView | 'canvas';
@@ -599,7 +604,23 @@ export function ProjectStateTab({
         <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-white">
           {activeView !== 'canvas' ? (
             <>
+              {headCommit && !snapshot.loading && !snapshot.primaryError ? (
+                <StateOverviewView
+                  headerOnly
+                  projectId={projectId}
+                  commitDigest={headCommit.hash}
+                  projectName={projectName}
+                  projectDescription={projectDescription}
+                  projectOwner={projectOwner}
+                  projectVisibility={projectVisibility}
+                  schemaName={schemaName}
+                  schemaHref={schemaHref}
+                  commits={snapshot.commits}
+                  onViewStructure={() => updateActiveView('structure')}
+                />
+              ) : null}
               <StateInspectionToolbar
+                projectName={projectName}
                 activeView={activeView}
                 branch={branchFocus || 'main'}
                 branchOptions={branchOptions}
@@ -611,6 +632,7 @@ export function ProjectStateTab({
                 onViewChange={updateActiveView}
                 workspaceHref={workspaceHref}
               />
+
               {activeView === 'structure' ? (
                 <div className="sr-only">
                   <span>{readinessLabel}</span>
@@ -648,11 +670,15 @@ export function ProjectStateTab({
                 <StateEmpty message={snapshot.primaryError} title="No committed state loaded" />
               ) : null}
               {!snapshot.primaryError && !snapshot.loading && !headCommit ? (
-                <StateEmpty
-                  message="Start in a Workspace, review your changes, and create the first commit."
-                  workspaceHref={workspaceHref}
-                  title="No commit on this branch"
-                />
+                activeView === 'overview' ? (
+                  <EmptyStateOverview workspaceHref={workspaceHref} />
+                ) : (
+                  <StateEmpty
+                    message="Start in a Workspace, review your changes, and create the first commit."
+                    workspaceHref={workspaceHref}
+                    title="No commit on this branch"
+                  />
+                )
               ) : null}
               {!snapshot.primaryError && snapshot.loading ? (
                 <StateEmpty
@@ -665,6 +691,11 @@ export function ProjectStateTab({
                   {activeView === 'overview' ? (
                     <StateOverviewView
                       key={headCommit.hash}
+                      hideHeader
+                      navigation={null}
+                      historyHref={historyHref}
+                      workspaceHref={workspaceHref}
+                      commits={snapshot.commits}
                       projectId={projectId}
                       commitDigest={headCommit.hash}
                       projectName={projectName}
@@ -753,6 +784,8 @@ export function ProjectStateTab({
                   ) : null}
                   {activeView === 'code' ? (
                     <StateCodeView
+                      schemaName={schemaName}
+                      workspaceHref={workspaceHref}
                       yamlText={yamlText}
                       branch={branchFocus}
                       rootKey={rootKey}
@@ -789,7 +822,9 @@ function StateInspectionToolbar({
   onCreateBranch,
   onViewChange,
   workspaceHref,
+  projectName,
 }: {
+  projectName: string;
   activeView: ProjectSnapshotView;
   branch: string;
   branchOptions: string[];
@@ -801,6 +836,57 @@ function StateInspectionToolbar({
   onViewChange: (view: ProjectSnapshotView) => void;
   workspaceHref: string;
 }) {
+  if (headCommit)
+    return (
+      <div className={`${inspectionStyles.surface} ${inspectionStyles.toolbar}`}>
+        {activeView !== 'overview' ? (
+          <h2 className="sr-only">{headCommit.message || 'Committed state'}</h2>
+        ) : null}
+        <div className={inspectionStyles.sub2}>
+          <div className={overviewStyles.toolbar} style={{ margin: 0, minHeight: 32 }}>
+            <div
+              className={cn(overviewStyles.viewTabs, navigationStyles.segments)}
+              role="tablist"
+              aria-label="State views"
+            >
+              {SNAPSHOT_VIEWS.map((view) => {
+                const Icon = view.id === 'overview' ? Eye : view.icon;
+                return (
+                  <button
+                    key={view.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={view.id === activeView}
+                    onClick={() => onViewChange(view.id)}
+                  >
+                    <Icon aria-hidden="true" />
+                    {view.label}
+                  </button>
+                );
+              })}
+            </div>
+            <StateBranchControls
+              branch={branch}
+              branchOptions={branchOptions}
+              headCommitHash={headCommitHash}
+              onBranchChange={onBranchChange}
+              onCreateBranch={onCreateBranch}
+              showCreate={false}
+            />
+          </div>
+          <div className={overviewStyles.actions}>
+            <Link href={historyHref}>
+              <History />
+              History
+            </Link>
+            <Link href={workspaceHref} className={overviewStyles.primary}>
+              <Pencil />
+              Propose change
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
   return (
     <div className="flex min-h-[45px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] bg-white px-8 py-1">
       <div className="flex min-w-0 flex-wrap items-center gap-2.5">
@@ -824,7 +910,6 @@ function StateInspectionToolbar({
           onValueChange={onViewChange}
           value={activeView}
         />
-        {headCommit ? <h2 className="sr-only">{headCommit.message || 'Committed state'}</h2> : null}
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
@@ -1049,10 +1134,6 @@ export function StateStructureView({
   const [walkthroughStep, setWalkthroughStep] = useState<number | null>(null);
   const [walkthroughPlaying, setWalkthroughPlaying] = useState(false);
   const [detailsVisible, setDetailsVisible] = useState(true);
-  const [structureExpansionRequest, setStructureExpansionRequest] = useState<{
-    id: number;
-    mode: 'all' | 'none';
-  } | null>(null);
   const historyTreeRef = useRef<HTMLDivElement>(null);
   const historyClearingSearch = useRef(false);
   const structureRows = useMemo(
@@ -1220,109 +1301,209 @@ export function StateStructureView({
   );
 
   if (!historyPresentation) {
+    const scalarRows = structureRows.filter((row) => !row.expandable);
+    const populated = scalarRows.filter(
+      (row) => !['', '-', 'empty', 'null'].includes(row.value)
+    ).length;
     return (
       <section
         aria-label="Structured state tree"
-        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-[var(--surface-card)] min-[1000px]:overflow-hidden"
+        className={`${inspectionStyles.surface} ${inspectionStyles.page}`}
       >
-        <header className="flex shrink-0 items-start justify-between gap-6 px-6 pb-3 pt-4">
-          <div>
-            <h1 className="text-[24px] font-semibold leading-7 text-[var(--text-primary)]">
-              Structure
-            </h1>
-            <p className="mt-0.5 text-[13px] leading-5 text-[var(--text-secondary)]">
-              Current committed state
-            </p>
-          </div>
-          <div className="flex h-8 items-center gap-2 text-xs text-[var(--text-secondary)]">
-            <span>Revision</span>
-            <code className="font-mono font-semibold text-[var(--text-primary)]">
-              {shortHash(headCommit.hash)}
-            </code>
-            <button
-              aria-label="Copy revision"
-              className="inline-flex size-7 items-center justify-center rounded-[5px] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-              onClick={() => void navigator.clipboard?.writeText(headCommit.hash)}
-              type="button"
+        <div className={cn(inspectionStyles.cols2, !detailsVisible && inspectionStyles.single)}>
+          <div className="min-w-0">
+            <header className={inspectionStyles.ttl}>
+              <div className={inspectionStyles.title}>
+                <h1>Structure</h1>
+                <p>Current committed state</p>
+              </div>
+              <span className={inspectionStyles.rev}>
+                <GitCommit />
+                Revision <code>{shortHash(headCommit.hash)}</code>
+                <button
+                  aria-label="Copy revision"
+                  onClick={() => void navigator.clipboard?.writeText(headCommit.hash)}
+                  type="button"
+                >
+                  <Copy />
+                </button>
+              </span>
+              <span className={inspectionStyles.ro}>
+                <Eye />
+                Read-only
+              </span>
+            </header>
+            <div className={inspectionStyles.stats}>
+              <span>
+                <b>{structureRows.length}</b>fields
+              </span>
+              <span>
+                <b>{structureRows.filter((row) => row.type === 'object').length}</b>objects
+              </span>
+              <span className={inspectionStyles.cmp}>
+                <span>
+                  <b>{populated}</b>of {scalarRows.length} values set
+                </span>
+                <i>
+                  <u
+                    style={{
+                      width: `${scalarRows.length ? (populated / scalarRows.length) * 100 : 0}%`,
+                    }}
+                  />
+                </i>
+              </span>
+            </div>
+            <div className={inspectionStyles.tb}>
+              <label className={inspectionStyles.find}>
+                <Search />
+                <input
+                  aria-label="Find a field or value"
+                  placeholder="Find a field or value..."
+                  value={pathQuery}
+                  onChange={(event) => onPathQueryChange?.(event.target.value)}
+                />
+              </label>
+              <button
+                className={inspectionStyles.gb}
+                type="button"
+                onClick={() =>
+                  setExpansionOverrides(
+                    Object.fromEntries(
+                      structureRows.filter((row) => row.expandable).map((row) => [row.id, true])
+                    )
+                  )
+                }
+              >
+                <Maximize2 />
+                Expand all
+              </button>
+              <button
+                className={inspectionStyles.gb}
+                type="button"
+                onClick={() =>
+                  setExpansionOverrides(
+                    Object.fromEntries(
+                      structureRows.filter((row) => row.expandable).map((row) => [row.id, false])
+                    )
+                  )
+                }
+              >
+                <Minus />
+                Collapse all
+              </button>
+              <label className={inspectionStyles.sw}>
+                Details
+                <input
+                  type="checkbox"
+                  checked={detailsVisible}
+                  onChange={(event) => setDetailsVisible(event.target.checked)}
+                />
+                <span className={inspectionStyles.toggle} />
+              </label>
+            </div>
+            <section
+              className={inspectionStyles.treeScroll}
+              aria-label="State structure rows"
+              // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users must be able to scroll this region.
+              tabIndex={0}
             >
-              <Copy aria-hidden="true" className="size-3.5" />
-            </button>
-            <span className="ml-1 inline-flex h-7 items-center rounded-full bg-[var(--surface-app)] px-3 font-medium text-[var(--text-secondary)]">
-              Read-only
-            </span>
+              <table className={inspectionStyles.tree}>
+                <thead>
+                  <tr className={inspectionStyles.th2}>
+                    <th>Field</th>
+                    <th>Value</th>
+                    <th>Type</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleRows.map((row) => {
+                    const expanded =
+                      searching ||
+                      isStateStructureRowExpanded(
+                        row,
+                        expansionOverrides,
+                        expandedChanges.has(row.id)
+                      );
+                    const select = () => {
+                      setSelectedRowId(row.id);
+                      if (row.expandable) toggleRow(row);
+                    };
+                    return (
+                      <tr
+                        key={row.id}
+                        className={inspectionStyles.rw}
+                        aria-selected={selectedRow?.id === row.id}
+                        tabIndex={0}
+                        onClick={select}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            select();
+                          }
+                        }}
+                      >
+                        <td className={inspectionStyles.k} style={{ paddingLeft: row.depth * 24 }}>
+                          <span className={inspectionStyles.chev}>
+                            {row.expandable ? (
+                              <button
+                                type="button"
+                                aria-label={`${expanded ? 'Collapse' : 'Expand'} ${row.key}`}
+                                aria-expanded={expanded}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  select();
+                                }}
+                              >
+                                {expanded ? <ChevronDown /> : <ChevronRight />}
+                              </button>
+                            ) : null}
+                          </span>
+                          <span
+                            className={cn(
+                              inspectionStyles.ti,
+                              row.type === 'array'
+                                ? inspectionStyles.arr
+                                : row.expandable
+                                  ? inspectionStyles.obj
+                                  : inspectionStyles.str
+                            )}
+                          >
+                            {row.type === 'array' ? (
+                              <List />
+                            ) : row.expandable ? (
+                              <Box />
+                            ) : (
+                              <FileText />
+                            )}
+                          </span>
+                          <span className={inspectionStyles.nm} title={row.path}>
+                            {row.key}
+                          </span>
+                        </td>
+                        <td
+                          className={cn(
+                            inspectionStyles.val,
+                            (row.value === '' || row.value === 'empty') && inspectionStyles.em
+                          )}
+                          title={row.value}
+                        >
+                          {row.value === '-' ? '' : row.value || 'empty'}
+                        </td>
+                        <td className={inspectionStyles.ty}>{row.type}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {!visibleRows.length ? (
+                <p className="p-4 text-sm text-gray-500">No matching fields.</p>
+              ) : null}
+            </section>
+            <footer className={inspectionStyles.tnote}>
+              <Eye />
+              Values are shown as stored. Schema details explain their meaning.
+            </footer>
           </div>
-        </header>
-
-        <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 px-6 pb-2">
-          <label className="relative block h-9 min-w-[220px] flex-1 basis-full min-[720px]:max-w-[506px] min-[720px]:basis-auto">
-            <Search
-              aria-hidden="true"
-              className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--text-secondary)]"
-            />
-            <input
-              className="h-full w-full rounded-[5px] border border-[var(--stroke-default)] bg-[var(--surface-card)] pl-9 pr-3 text-[13px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-commit)] focus:ring-2 focus:ring-[var(--accent-commit)]/15"
-              onChange={(event) => onPathQueryChange?.(event.target.value)}
-              placeholder="Find a field or value..."
-              value={pathQuery}
-            />
-          </label>
-          <button
-            className="h-8 px-1 text-xs font-medium text-[var(--accent-commit)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-            onClick={() =>
-              setStructureExpansionRequest((current) => ({
-                id: (current?.id ?? 0) + 1,
-                mode: 'all',
-              }))
-            }
-            type="button"
-          >
-            Expand all
-          </button>
-          <button
-            className="h-8 px-1 text-xs font-medium text-[var(--accent-commit)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-            onClick={() =>
-              setStructureExpansionRequest((current) => ({
-                id: (current?.id ?? 0) + 1,
-                mode: 'none',
-              }))
-            }
-            type="button"
-          >
-            Collapse all
-          </button>
-          <label className="ml-1 flex cursor-pointer items-center gap-2 text-xs font-medium text-[var(--text-primary)]">
-            <input
-              checked={detailsVisible}
-              className="peer sr-only"
-              onChange={(event) => setDetailsVisible(event.target.checked)}
-              type="checkbox"
-            />
-            <span className="relative h-6 w-10 rounded-full bg-[var(--stroke-strong)] transition-colors peer-checked:bg-[var(--accent-commit)] peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--ring)]">
-              <span className="absolute left-1 top-1 size-4 rounded-full bg-[var(--surface-card)] transition-transform peer-checked:translate-x-4" />
-            </span>
-            Details
-          </label>
-        </div>
-
-        <div
-          className={cn(
-            'grid min-w-0 gap-5 px-6',
-            detailsVisible
-              ? 'min-h-[720px] flex-none grid-cols-1 grid-rows-[320px_380px] min-[1000px]:min-h-0 min-[1000px]:flex-1 min-[1000px]:grid-cols-[minmax(0,1fr)_374px] min-[1000px]:grid-rows-1'
-              : 'min-h-0 flex-1 grid-cols-1'
-          )}
-        >
-          <div className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[5px] border border-[var(--stroke-divider)] bg-[var(--surface-card)]">
-            <WorkspaceReviewStructureTree
-              activeRowId={selectedRow?.id ?? null}
-              expansionRequest={structureExpansionRequest}
-              modifiedLabel={modifiedLabel}
-              onSelectRow={setSelectedRowId}
-              query={pathQuery}
-              rows={structureRows as WorkspaceReviewStructureRow[]}
-            />
-          </div>
-
           {detailsVisible ? (
             <StateFieldTracePanel
               branch={branch}
@@ -1336,11 +1517,6 @@ export function StateStructureView({
             />
           ) : null}
         </div>
-
-        <footer className="flex h-10 shrink-0 items-center justify-between px-6 text-[11px] text-[var(--text-tertiary)]">
-          <span>Values are shown as stored. Schema details explain their meaning.</span>
-          <span>State Structure · committed data</span>
-        </footer>
       </section>
     );
   }
@@ -1575,122 +1751,77 @@ function StateFieldTracePanel({
   const pathParts = row.path.split('/').filter(Boolean);
 
   return (
-    <aside
-      aria-label="Field trace"
-      className="flex min-h-0 flex-col overflow-hidden rounded-[5px] border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3"
-    >
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-[17px] font-semibold leading-6 text-[var(--text-primary)]">
-          Field trace
-        </h2>
+    <aside aria-label="Field trace" className={inspectionStyles.trace}>
+      <header className={inspectionStyles.traceHeader}>
+        <GitCommit />
+        <h2>Field trace</h2>
+        <button aria-label="Hide details" onClick={onClose} type="button">
+          <X />
+        </button>
+      </header>
+      <div className={inspectionStyles.crumb}>
+        <span title={row.path}>root {pathParts.map((part) => ` / ${part}`).join('')}</span>
         <button
-          aria-label="Hide details"
-          className="inline-flex size-7 items-center justify-center rounded-[5px] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-          onClick={onClose}
+          aria-label="Copy field path"
+          onClick={() => void navigator.clipboard?.writeText(row.path)}
           type="button"
         >
-          <X aria-hidden="true" className="size-4" />
+          <Copy />
         </button>
       </div>
-
-      <div className="min-h-0 flex-1 overflow-auto pr-1">
-        <section className="mt-3">
-          <h3 className="text-xs font-semibold text-[var(--text-secondary)]">Path</h3>
-          <div className="mt-1.5 flex min-w-0 items-center gap-2 font-mono text-[13px] text-[var(--text-primary)]">
-            <GitBranch aria-hidden="true" className="size-4 shrink-0 text-[var(--accent-commit)]" />
-            <span className="min-w-0 truncate" title={row.path}>
-              root {pathParts.map((part) => ` / ${part}`).join('')}
-            </span>
-            <button
-              aria-label="Copy field path"
-              className="inline-flex size-6 shrink-0 items-center justify-center rounded-[4px] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]"
-              onClick={() => void navigator.clipboard?.writeText(row.path)}
-              type="button"
-            >
-              <Copy aria-hidden="true" className="size-3.5" />
-            </button>
-          </div>
-        </section>
-
-        <section className="mt-3">
-          <h3 className="text-xs font-semibold text-[var(--text-secondary)]">Current value</h3>
-          <p className="mt-1 break-words text-[18px] font-semibold leading-6 text-[var(--text-primary)]">
-            {currentValue}
-          </p>
-        </section>
-
-        <section className="mt-3">
-          <h3 className="text-xs font-semibold text-[var(--text-secondary)]">Schema contract</h3>
-          <p className="mt-1.5 inline-flex max-w-full rounded-[5px] bg-[var(--accent-commit-soft)] px-2 py-1 font-mono text-xs text-[var(--accent-commit)]">
-            <span className="truncate">
-              {schemaName || 'Unbound schema'} · {row.type}
-            </span>
-          </p>
-        </section>
-
-        <div className="my-3 h-px bg-[var(--stroke-divider)]" />
-
-        <section>
-          <h3 className="text-xs font-semibold text-[var(--text-secondary)]">Last change</h3>
-          <div className="mt-2 grid grid-cols-[32px_minmax(0,1fr)] gap-2">
-            <span
-              aria-hidden="true"
-              className="inline-flex size-7 items-center justify-center rounded-[5px] bg-[var(--diff-modified-word-bg)] font-mono font-semibold text-[var(--diff-modified-text)]"
-            >
-              ~
-            </span>
-            <div className="min-w-0">
-              <p className="break-all font-mono text-[13px] leading-5 text-[var(--text-primary)]">
-                {lastChangeLabel}
-              </p>
+      <section className={inspectionStyles.big}>
+        <h3 className={inspectionStyles.l}>Current value</h3>
+        <p className={inspectionStyles.v}>{currentValue}</p>
+      </section>
+      <section className={inspectionStyles.sc}>
+        <h3 className={inspectionStyles.l}>Schema contract</h3>
+        <p className={inspectionStyles.ctr}>
+          {schemaName || 'Unbound schema'} · {row.type}
+        </p>
+      </section>
+      <section className={inspectionStyles.lc}>
+        <h3 className={inspectionStyles.l}>Activity</h3>
+        <div className={inspectionStyles.tlc}>
+          <div className={`${inspectionStyles.ev} ${inspectionStyles.first}`}>
+            <i className={inspectionStyles.dd} />
+            <div>
+              <h3>Last change</h3>
+              <p>{lastChangeLabel}</p>
               {row.diff?.exact && beforeValue !== currentValue ? (
-                <p className="mt-0.5 font-mono text-xs text-[var(--text-secondary)]">
+                <p>
                   {beforeValue} → {currentValue}
                 </p>
               ) : null}
             </div>
           </div>
-        </section>
-
-        <section className="mt-3">
-          <h3 className="text-xs font-semibold text-[var(--text-secondary)]">Reason</h3>
-          <p className="mt-1 text-[13px] leading-5 text-[var(--text-secondary)]">
-            {stateInspectorWhyText(row, changeReason)}
-          </p>
-          <p className="mt-1 font-mono text-xs text-[var(--text-tertiary)]">
-            {shortHash(headCommit.hash)} · {modifiedLabel}
-          </p>
-        </section>
-
-        <section className="mt-3 flex items-center gap-3">
-          <h3 className="text-xs font-semibold text-[var(--text-secondary)]">Source</h3>
+          <div className={inspectionStyles.ev}>
+            <i className={inspectionStyles.dd} />
+            <div>
+              <h3>Reason</h3>
+              <p>{stateInspectorWhyText(row, changeReason)}</p>
+              <p>
+                {shortHash(headCommit.hash)} · {modifiedLabel}
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+      {sourceHref || sourceLabel ? (
+        <div className={inspectionStyles.hint}>
+          <span>Source</span>
           {sourceHref ? (
-            <Link
-              className="min-w-0 truncate text-[13px] font-medium text-[var(--accent-commit)] hover:underline"
-              href={sourceHref}
-            >
-              {sourceLabel || 'Linked source'}
-            </Link>
+            <Link href={sourceHref}>{sourceLabel || 'Linked source'}</Link>
           ) : (
-            <span className="min-w-0 truncate text-[13px] italic text-[var(--text-tertiary)]">
-              {sourceLabel || 'No linked source'}
-            </span>
+            <span>{sourceLabel}</span>
           )}
-        </section>
-      </div>
-
-      <Button
-        asChild
-        className="mt-1 h-8 shrink-0 justify-start px-0 text-[13px] font-medium"
-        size="sm"
-        variant="link"
+        </div>
+      ) : null}
+      <Link
+        className={inspectionStyles.lnk}
+        href={`/project/${encodeURIComponent(headCommit.project_id)}/history?branch=${encodeURIComponent(branch)}`}
       >
-        <Link
-          href={`/project/${encodeURIComponent(headCommit.project_id)}/history?branch=${encodeURIComponent(branch)}`}
-        >
-          View in history <ExternalLink aria-hidden="true" className="size-3.5" />
-        </Link>
-      </Button>
+        View in history <ExternalLink />
+      </Link>
     </aside>
   );
 }

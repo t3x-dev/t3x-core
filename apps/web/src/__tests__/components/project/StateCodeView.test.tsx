@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { StateCodeView } from '@/components/project/StateCodeView';
 
@@ -59,4 +59,34 @@ it('reports clipboard denial and renders source markup as text', async () => {
   expect(container.querySelector('img')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Copy YAML code' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Clipboard unavailable');
+});
+
+it('derives source metadata from the selected format and navigates between matching lines', () => {
+  const scrollIntoView = vi.fn();
+  HTMLElement.prototype.scrollIntoView = scrollIntoView;
+  render(
+    <StateCodeView
+      {...props}
+      yamlText={'first: 中文\nsecond: 中文'}
+      schemaName="test/schema"
+      workspaceHref="/workspace"
+    />
+  );
+  const info = screen.getByRole('complementary', { name: 'Source information' });
+  expect(within(info).getByText('2')).toBeInTheDocument();
+  expect(within(info).getByText('28 B')).toBeInTheDocument();
+  expect(within(info).getByText('test/schema')).toBeInTheDocument();
+  fireEvent.change(screen.getByRole('textbox', { name: 'Find in code' }), {
+    target: { value: '中文' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Next match' }));
+  expect(screen.getByText('2 of 2')).toBeInTheDocument();
+  expect(scrollIntoView).toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'JSON', exact: true }));
+  expect(within(info).getByText('JSON')).toBeInTheDocument();
+  expect(within(info).getByText('4')).toBeInTheDocument();
+  expect(within(info).getByRole('link', { name: 'Propose change' })).toHaveAttribute(
+    'href',
+    '/workspace'
+  );
 });

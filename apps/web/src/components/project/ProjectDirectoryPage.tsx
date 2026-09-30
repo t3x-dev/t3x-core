@@ -2,7 +2,8 @@
 
 import {
   ArrowRight,
-  Building2,
+  ChevronDown,
+  ChevronUp,
   FolderGit2,
   LayoutTemplate,
   Pencil,
@@ -10,11 +11,10 @@ import {
   RefreshCw,
   Search,
   Trash2,
-  UserRound,
 } from 'lucide-react';
 import Link from 'next/link';
 import { type FormEvent, useCallback, useMemo, useState } from 'react';
-import { LogoIcon } from '@/components/chat/sidebar/LogoIcon';
+import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -39,6 +39,7 @@ import {
   readRecentProjectIds,
   recordRecentProjectOpen,
 } from '@/utils/recentProjects';
+import styles from './ProjectDirectoryPage.module.css';
 
 const repoTones = [
   'bg-[var(--status-info)]',
@@ -234,120 +235,6 @@ function ProjectRow({
   );
 }
 
-function DirectoryHeader({
-  isPersonalNamespace,
-  onRefresh,
-  ownerSlug,
-  refreshing,
-}: {
-  isPersonalNamespace: boolean;
-  onRefresh: () => void;
-  ownerSlug: string;
-  refreshing: boolean;
-}) {
-  const settingsPath = isPersonalNamespace ? '/settings/profile' : `/${ownerSlug}/settings`;
-  const newRepositoryPath = `/${ownerSlug}/new`;
-  const NamespaceIcon = isPersonalNamespace ? UserRound : Building2;
-  const tabClass =
-    'relative inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--radius-md)] px-3.5 text-[14px] font-medium leading-5 transition-colors';
-
-  return (
-    <header className="flex h-24 shrink-0 flex-col border-b border-[var(--stroke-divider)] bg-[var(--surface-elevated)] px-3">
-      <div className="flex h-14 min-w-0 shrink-0 items-center justify-between gap-6 px-1">
-        <div className="flex min-w-0 items-center gap-3">
-          <Link
-            aria-label="T3X home"
-            className={cn(
-              'inline-flex h-8 shrink-0 items-center text-xl font-extrabold leading-none text-[var(--text-primary)] focus-visible:rounded-[var(--radius-md)]',
-              focusRing
-            )}
-            href="/"
-          >
-            T3X
-          </Link>
-          <span aria-hidden="true" className="inline-flex size-8 shrink-0 [&_svg]:size-8">
-            <LogoIcon />
-          </span>
-          <div className="flex min-w-0 items-center gap-1 text-[13px] leading-5">
-            <span className="shrink-0 text-[var(--text-secondary)]">Namespaces</span>
-            <span aria-hidden="true" className="text-[var(--text-tertiary)]">
-              /
-            </span>
-            <span className="min-w-0 truncate font-semibold text-[var(--text-primary)]">
-              {ownerSlug}
-            </span>
-          </div>
-          <span className="inline-flex h-6 shrink-0 items-center gap-1 rounded-[var(--radius-pill)] border border-[var(--accent-commit)]/15 bg-[var(--accent-commit-soft)] px-2 text-[11px] font-medium text-[var(--accent-commit)]">
-            <NamespaceIcon aria-hidden="true" className="size-3" />
-            {isPersonalNamespace ? 'Personal' : 'Organization'}
-          </span>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-3">
-          <Link
-            className={cn(
-              'hidden text-xs font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] focus-visible:rounded-[var(--radius-control)] min-[760px]:inline',
-              focusRing
-            )}
-            href="/templates"
-          >
-            Explore
-          </Link>
-          <Link
-            className={cn(
-              'inline-flex h-[34px] items-center gap-1.5 rounded-[5px] border border-[var(--stroke-default)] bg-[var(--surface-card)] px-3 text-xs font-medium text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)] transition-colors hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)]',
-              focusRing
-            )}
-            href={newRepositoryPath}
-          >
-            <Plus aria-hidden="true" className="size-3.5" />
-            Create new
-          </Link>
-          <Button
-            aria-label="Refresh repositories"
-            className="size-[34px] rounded-[5px]"
-            disabled={refreshing}
-            onClick={onRefresh}
-            size="icon"
-            type="button"
-            variant="canvas-outline"
-          >
-            <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />
-          </Button>
-          <span
-            aria-label={`Owner ${ownerSlug}`}
-            className="inline-flex size-8 items-center justify-center rounded-full bg-[var(--hover-bg-strong)] text-xs font-semibold text-[var(--text-secondary)]"
-            role="img"
-          >
-            {ownerSlug.slice(0, 1).toUpperCase()}
-          </span>
-        </div>
-      </div>
-      <nav aria-label="Namespace navigation" className="flex min-h-10 items-center gap-1 pb-1">
-        <span
-          aria-current="page"
-          className={cn(
-            tabClass,
-            'bg-[var(--accent-commit-soft)] font-semibold text-[var(--accent-commit)]'
-          )}
-        >
-          Repositories
-        </span>
-        <Link
-          className={cn(
-            tabClass,
-            'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]',
-            focusRing
-          )}
-          href={settingsPath}
-        >
-          Settings
-        </Link>
-      </nav>
-    </header>
-  );
-}
-
 function DirectorySideRail({
   dataAvailable,
   isPersonalNamespace,
@@ -523,6 +410,7 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
     rename: renameProject,
   } = useProjects(50, ownerSlug);
   const [query, setQuery] = useState('');
+  const [repositoriesExpanded, setRepositoriesExpanded] = useState(false);
   const [renameTarget, setRenameTarget] = useState<ProjectSummary | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -623,37 +511,16 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
   const dataAvailable = hasLoadedProjects || (!loading && !error);
 
   return (
-    <div className="flex h-dvh min-h-[560px] flex-col overflow-hidden bg-[var(--surface-app)] text-[var(--text-primary)]">
-      <DirectoryHeader
-        isPersonalNamespace={isPersonalNamespace}
-        onRefresh={handleRefreshProjects}
-        ownerSlug={ownerSlug}
-        refreshing={loading}
+    <div className={styles.page}>
+      <DiscoverHeader
+        owner={ownerSlug}
+        namespaceTab="repositories"
+        settingsHref={`/settings/provider-credentials?owner=${encodeURIComponent(ownerSlug)}`}
+        newProjectHref={newRepositoryPath}
+        visibility={isPersonalNamespace ? 'Personal' : 'Organization'}
       />
 
-      <div className="flex min-h-[73px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] bg-[var(--surface-elevated)] px-6 py-3.5">
-        <label className="relative min-w-[220px] max-w-[800px] flex-1">
-          <span className="sr-only">Find a repository</span>
-          <Search
-            aria-hidden="true"
-            className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[var(--text-primary)]"
-            strokeWidth={2.5}
-          />
-          <input
-            className="h-[45px] w-full rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-elevated)] pl-11 pr-4 text-[15px] text-[var(--text-primary)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-commit)]/40 focus:ring-1 focus:ring-[var(--accent-commit)]/40"
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Find a repository..."
-            value={query}
-          />
-        </label>
-        <Button asChild variant="commit">
-          <Link href={newRepositoryPath}>
-            <Plus className="size-4" /> New repository
-          </Link>
-        </Button>
-      </div>
-
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
+      <div className={styles.columns}>
         <DirectorySideRail
           dataAvailable={dataAvailable}
           isPersonalNamespace={isPersonalNamespace}
@@ -661,7 +528,41 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
           projects={projectSummaries}
         />
 
-        <main className="min-w-0 flex-1 space-y-10 bg-[var(--surface-elevated)] px-5 pb-20 pt-8 md:overflow-y-auto md:px-8">
+        <main className={styles.main}>
+          <div className={styles.toolbar}>
+            <Button
+              aria-label="Refresh repositories"
+              disabled={loading}
+              onClick={handleRefreshProjects}
+              size="icon"
+              variant="canvas-outline"
+            >
+              <RefreshCw className={cn('size-4', loading && 'animate-spin')} />
+            </Button>
+            <label className="relative min-w-[220px] max-w-[800px] flex-1">
+              <span className="sr-only">Find a repository</span>
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[var(--text-primary)]"
+                strokeWidth={2.5}
+              />
+              <input
+                className="h-[45px] w-full rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-elevated)] pl-11 pr-4 text-[15px] text-[var(--text-primary)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-commit)]/40 focus:ring-1 focus:ring-[var(--accent-commit)]/40"
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setRepositoriesExpanded(false);
+                }}
+                placeholder="Find a repository..."
+                value={query}
+              />
+            </label>
+            <Button asChild variant="commit">
+              <Link href={newRepositoryPath}>
+                <Plus className="size-4" /> New repository
+              </Link>
+            </Button>
+          </div>
+
           {error && hasLoadedProjects && (
             <div
               className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--status-error)]/25 bg-[var(--status-error)]/5 px-4 py-3 text-[13px] font-medium text-[var(--status-error)]"
@@ -717,18 +618,20 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
 
               <section>
                 <SectionHeading count={`${filteredProjects.length} repos`} title="Repositories" />
-                <div className="overflow-hidden rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-elevated)] shadow-[var(--fx-shadow-sm)]">
+                <div className={styles.repositories} id="repository-list">
                   {filteredProjects.length > 0 ? (
                     <div className="divide-y divide-[var(--stroke-divider)]">
-                      {filteredProjects.map((project) => (
-                        <ProjectRow
-                          key={project.id}
-                          onDelete={setDeleteTarget}
-                          onRename={openRenameDialog}
-                          ownerSlug={ownerSlug}
-                          project={project}
-                        />
-                      ))}
+                      {(repositoriesExpanded ? filteredProjects : filteredProjects.slice(0, 6)).map(
+                        (project) => (
+                          <ProjectRow
+                            key={project.id}
+                            onDelete={setDeleteTarget}
+                            onRename={openRenameDialog}
+                            ownerSlug={ownerSlug}
+                            project={project}
+                          />
+                        )
+                      )}
                     </div>
                   ) : (
                     <div className="flex items-center justify-between gap-4 p-5 text-[13px] text-[var(--text-secondary)]">
@@ -739,6 +642,24 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
                     </div>
                   )}
                 </div>
+                {filteredProjects.length > 6 ? (
+                  <button
+                    className={styles.expand}
+                    aria-expanded={repositoriesExpanded}
+                    aria-controls="repository-list"
+                    onClick={() => setRepositoriesExpanded((value) => !value)}
+                    type="button"
+                  >
+                    {repositoriesExpanded ? (
+                      <ChevronUp aria-hidden="true" />
+                    ) : (
+                      <ChevronDown aria-hidden="true" />
+                    )}
+                    {repositoriesExpanded
+                      ? 'Show less'
+                      : `Show all ${filteredProjects.length} repositories`}
+                  </button>
+                ) : null}
               </section>
             </>
           )}

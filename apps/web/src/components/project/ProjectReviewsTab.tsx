@@ -4,7 +4,6 @@ import {
   ArrowDown as PhArrowDown,
   ArrowRight as PhArrowRight,
   CaretDown as PhCaretDown,
-  CaretRight as PhCaretRight,
   CheckCircle as PhCheckCircle,
   CircleDashed as PhCircleDashed,
   Cube as PhCube,
@@ -38,7 +37,7 @@ import {
   UserRound,
   XCircle,
 } from 'lucide-react';
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -57,6 +56,7 @@ import type {
   ApiProjectPullRequestDetail,
 } from '@/hooks/projects/useProjectPullRequestsApi';
 import { useProjectPullRequestsApi } from '@/hooks/projects/useProjectPullRequestsApi';
+import { usePullRequestChangePreview } from '@/hooks/projects/usePullRequestChangePreview';
 import { cn } from '@/utils/cn';
 import createStyles from './ProjectReviewsCreate.module.css';
 import detailStyles from './ProjectReviewsDetail.module.css';
@@ -89,6 +89,7 @@ interface ProjectPullRequest {
   readinessLabel: string;
   readinessTone: 'success' | 'pending' | 'warning' | 'muted';
   updatedAt: string;
+  updatedAtIso?: string;
   checks?: PullRequestCheck[];
   activity?: PullRequestActivity[];
   diffSummary?: PullRequestDiffSummary;
@@ -344,6 +345,7 @@ function toProjectPullRequest(api: ApiProjectPullRequest): ProjectPullRequest {
     targetBranch: api.target_branch,
     title: api.title,
     updatedAt: new Date(api.updated_at).toLocaleString(),
+    updatedAtIso: api.updated_at,
     workspace: api.workspace_id ?? undefined,
   };
 }
@@ -1078,6 +1080,7 @@ export function ProjectReviewsTab({
   if (view === 'create') {
     return (
       <PullRequestCreateView
+        projectId={projectId}
         baseBranches={baseBranches}
         canCreate={canCreatePullRequest}
         candidates={visibleCompareCandidates}
@@ -1232,15 +1235,6 @@ export function ProjectReviewsTab({
       ) : null}
 
       <div className={listStyles.tableWrap}>
-        <div aria-hidden="true" className={listStyles.tableHeader}>
-          <div>#</div>
-          <div>Title</div>
-          <div>Branches</div>
-          <div>Status</div>
-          <div>Author</div>
-          <div>Updated</div>
-          <div />
-        </div>
         <div className={listStyles.rows}>
           {visiblePullRequests.length > 0 ? (
             visiblePullRequests.map((pullRequest, index) => (
@@ -1315,25 +1309,43 @@ function PullRequestRow({
       onClick={onOpen}
       type="button"
     >
-      <div className={listStyles.number}>
+      <span className={listStyles.number}>
         <GitPullRequestArrow aria-hidden="true" />
-        <span>#{pullRequest.number}</span>
+      </span>
+      <div className={listStyles.requestBody}>
+        <div className={listStyles.title}>
+          <span title={pullRequest.title}>{pullRequest.title}</span>
+          <small>#{pullRequest.number}</small>
+          {highlighted ? <em>New</em> : null}
+        </div>
+        <div className={listStyles.branches}>
+          <code title={pullRequest.sourceBranch}>{pullRequest.sourceBranch}</code>
+          <ArrowRight aria-hidden="true" />
+          <code title={pullRequest.targetBranch}>{pullRequest.targetBranch}</code>
+        </div>
       </div>
-      <div className={listStyles.title}>
-        <span>{pullRequest.title}</span>
-        {highlighted ? <em>New</em> : null}
+      <div className={listStyles.rowMeta}>
+        <ListReadinessBadge pullRequest={pullRequest} />
+        <span className={listStyles.author}>
+          <span className={listStyles.avatar}>{authorInitials(pullRequest.author)}</span>
+          <span>{pullRequest.author}</span>
+        </span>
+        <time
+          className={listStyles.updated}
+          dateTime={pullRequest.updatedAtIso}
+          title={pullRequest.updatedAt}
+        >
+          {pullRequest.updatedAtIso
+            ? new Date(pullRequest.updatedAtIso).toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+              })
+            : pullRequest.updatedAt}
+        </time>
       </div>
-      <div className={listStyles.branches}>
-        <code>{pullRequest.sourceBranch}</code>
-        <ArrowRight aria-hidden="true" />
-        <code>{pullRequest.targetBranch}</code>
-      </div>
-      <ListReadinessBadge pullRequest={pullRequest} />
-      <div className={listStyles.author}>
-        <span className={listStyles.avatar}>{authorInitials(pullRequest.author)}</span>
-        <span>{pullRequest.author}</span>
-      </div>
-      <time className={listStyles.updated}>{pullRequest.updatedAt}</time>
       <ChevronRight aria-hidden="true" className={listStyles.rowArrow} />
     </button>
   );
@@ -1393,6 +1405,7 @@ function scrollToChangePreview() {
 }
 
 function PullRequestCreateView({
+  projectId,
   baseBranches,
   canCreate,
   candidates,
@@ -1406,6 +1419,7 @@ function PullRequestCreateView({
   onRefresh,
   selectedCandidate,
 }: {
+  projectId?: string;
   baseBranches: string[];
   canCreate: boolean;
   candidates: PullRequestCompareCandidate[];
@@ -1429,6 +1443,11 @@ function PullRequestCreateView({
   onRefresh: () => void;
   selectedCandidate: PullRequestCompareCandidate | null;
 }) {
+  const fieldPreview = usePullRequestChangePreview(
+    projectId,
+    selectedCandidate?.headCommitId,
+    selectedCandidate?.baseCommitId
+  );
   const update = (patch: Partial<typeof form>) => onChange({ ...form, ...patch });
   const sourceOptions =
     candidates.length > 0
@@ -1471,234 +1490,260 @@ function PullRequestCreateView({
 
   return (
     <section className={createStyles.page}>
-      <main className={createStyles.mainColumn}>
-        <header className={createStyles.header}>
-          <nav className={createStyles.breadcrumb}>
-            <button onClick={onBack} type="button">
-              Pull requests
-            </button>
-            <span>/</span>
-            <span>New</span>
-          </nav>
-          <h1>New pull request</h1>
-          <p>Create a pull request to propose and review your changes.</p>
-          <button
-            aria-label="Refresh branch comparisons"
-            className={createStyles.srOnly}
-            disabled={compareLoading}
-            onClick={onRefresh}
-            type="button"
-          >
-            Refresh branch comparisons
+      <header className={createStyles.header}>
+        <nav className={createStyles.breadcrumb}>
+          <button onClick={onBack} type="button">
+            Pull requests
           </button>
-        </header>
-
-        {selectedCandidate ? (
-          <div className={createStyles.commitNotice}>
-            <PhCheckCircle aria-hidden="true" size={20} weight="fill" />
-            <span className={createStyles.commitLabel}>Committed to</span>
-            <code>{selectedCandidate.branch}</code>
-            <strong>·</strong>
-            <code>{compareCommitLabel(selectedCandidate.headCommitId)}</code>
-          </div>
-        ) : null}
-
-        <div className={createStyles.branchBar}>
-          <CreateBranchSelect
-            ariaLabel="Source branch"
-            disabled={compareLoading || sourceOptions.length === 0}
-            onChange={(sourceBranch) => {
-              const next = candidates.find((candidate) => candidate.branch === sourceBranch);
-              if (next) {
-                selectCandidate(next);
-                return;
-              }
-              update({ sourceBranch });
-            }}
-            options={sourceOptions}
-            placeholder="Choose branch"
-            value={form.sourceBranch}
-          />
-          <PhArrowRight aria-hidden="true" className={createStyles.branchArrow} size={20} />
-          <CreateBranchSelect
-            ariaLabel="Base branch"
-            disabled={compareLoading || baseBranches.length === 0}
-            onChange={(targetBranch) => update({ sourceBranch: '', targetBranch })}
-            options={baseBranches.map((branch) => ({ value: branch }))}
-            placeholder="Choose base"
-            value={form.targetBranch}
-          />
+          <span>/</span>
+          <span>New</span>
+        </nav>
+        <h1>New pull request</h1>
+        <p>Propose your committed changes for review and merge them into the base branch.</p>
+        <button
+          aria-label="Refresh branch comparisons"
+          className={createStyles.srOnly}
+          disabled={compareLoading}
+          onClick={onRefresh}
+          type="button"
+        >
+          Refresh branch comparisons
+        </button>
+      </header>
+      <div className={createStyles.columns}>
+        <div className={createStyles.mainColumn}>
           {selectedCandidate ? (
+            <div className={createStyles.commitNotice}>
+              <PhCheckCircle aria-hidden="true" size={20} weight="fill" />
+              <span className={createStyles.commitLabel}>Committed to</span>
+              <code>{selectedCandidate.branch}</code>
+              <strong>·</strong>
+              <code>{compareCommitLabel(selectedCandidate.headCommitId)}</code>
+            </div>
+          ) : null}
+
+          <div className={createStyles.branchBar}>
+            <CreateBranchSelect
+              ariaLabel="Source branch"
+              disabled={compareLoading || sourceOptions.length === 0}
+              onChange={(sourceBranch) => {
+                const next = candidates.find((candidate) => candidate.branch === sourceBranch);
+                if (next) {
+                  selectCandidate(next);
+                  return;
+                }
+                update({ sourceBranch });
+              }}
+              options={sourceOptions}
+              placeholder="Choose branch"
+              value={form.sourceBranch}
+            />
+            <PhArrowRight aria-hidden="true" className={createStyles.branchArrow} size={20} />
+            <CreateBranchSelect
+              ariaLabel="Base branch"
+              disabled={compareLoading || baseBranches.length === 0}
+              onChange={(targetBranch) => update({ sourceBranch: '', targetBranch })}
+              options={baseBranches.map((branch) => ({ value: branch }))}
+              placeholder="Choose base"
+              value={form.targetBranch}
+            />
+            {selectedCandidate ? (
+              <button
+                className={createStyles.changedPathsLink}
+                onClick={scrollToChangePreview}
+                type="button"
+              >
+                <PhFileText aria-hidden="true" size={18} />
+                {changedNodeCount} changed nodes
+              </button>
+            ) : null}
+          </div>
+
+          {compareLoading ? (
+            <div className={createStyles.inlineMessage}>Loading branch comparisons...</div>
+          ) : null}
+          {!compareLoading && candidates.length === 0 ? (
+            <div className={createStyles.inlineMessage}>
+              No other committed branches can be compared with this base.
+            </div>
+          ) : null}
+          {selectedCandidate && !canCreate && !compareLoading ? (
+            <div className={createStyles.warningMessage}>
+              {selectedCandidate.statusLabel}. Branches with an open PR, no semantic changes, or no
+              commits ahead of the base cannot create another PR.
+            </div>
+          ) : null}
+
+          <div className={createStyles.rule} />
+
+          <div className={createStyles.formFields}>
+            <label>
+              <span>Title</span>
+              <input
+                aria-label="Title"
+                onChange={(event) => update({ title: event.target.value })}
+                value={form.title}
+              />
+            </label>
+            <label>
+              <span>Description</span>
+              <textarea
+                aria-label="Description"
+                onChange={(event) => update({ description: event.target.value })}
+                value={form.description}
+              />
+            </label>
+            <div className={createStyles.authorRow}>
+              <span>Author</span>
+              <div className={createStyles.authorIdentity}>
+                <b>YO</b>
+                <span>YOps (you)</span>
+              </div>
+            </div>
+            {error ? <div className={createStyles.warningMessage}>{error}</div> : null}
+          </div>
+
+          <div className={createStyles.rule} />
+
+          <section className={createStyles.preview} id="change-preview">
+            <h2>Change preview</h2>
+            <p>
+              {selectedCandidate
+                ? `Showing key changes from ${selectedCandidate.branch} to ${selectedCandidate.baseBranch}.`
+                : 'Select a source branch to preview the structured comparison.'}
+            </p>
+            {fieldPreview.loading ? (
+              <p className={createStyles.inlineMessage}>Loading field changes…</p>
+            ) : null}
+            {fieldPreview.error ? (
+              <p className={createStyles.inlineMessage}>{fieldPreview.error}</p>
+            ) : null}
+            <div className={createStyles.previewList}>
+              {fieldPreview.changes && !fieldPreview.error ? (
+                <>
+                  <div className={createStyles.previewHeading}>
+                    <ChevronDown aria-hidden="true" />
+                    <strong>Changed nodes</strong>
+                    <span>{fieldPreview.changes.length} field changes</span>
+                  </div>
+                  {fieldPreview.changes.map((change) => (
+                    <div className={createStyles.fieldChange} key={change.id}>
+                      <span className={createStyles.changeIcon}>
+                        <PencilLine aria-hidden="true" />
+                      </span>
+                      <code title={change.path}>{change.path.replaceAll('/', '.')}</code>
+                      <span className={createStyles.fieldValues}>
+                        {change.kind !== 'added' ? (
+                          <del title={change.beforeValue}>{change.beforeValue}</del>
+                        ) : null}
+                        {change.kind !== 'removed' ? (
+                          <ins title={change.afterValue}>{change.afterValue}</ins>
+                        ) : null}
+                      </span>
+                    </div>
+                  ))}
+                  {!fieldPreview.changes.length ? (
+                    <p className={createStyles.previewEmpty}>
+                      No field changes between these revisions.
+                    </p>
+                  ) : null}
+                </>
+              ) : previewRows.length > 0 ? (
+                previewRows.map((row) => (
+                  <div className={createStyles.previewRow} key={row.label}>
+                    <PhCube aria-hidden="true" className={createStyles.cubeIcon} size={24} />
+                    <span className={createStyles.previewLabel}>{row.label}</span>
+                    <ChangeKindBadge kind={row.kind} />
+                    <span className={createStyles.previewValue}>{row.value}</span>
+                  </div>
+                ))
+              ) : (
+                <div className={createStyles.previewEmpty}>
+                  No structured comparison is ready yet.
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+
+        <aside className={createStyles.sidebar}>
+          <div className={createStyles.readyCard}>
+            <h2>Ready to open</h2>
+            <p>Review the details below and create the pull request.</p>
+
+            <div className={createStyles.metaList}>
+              <div className={createStyles.branchMeta}>
+                <span>Source</span>
+                <PhGitBranch aria-hidden="true" />
+                <b title={form.sourceBranch}>{form.sourceBranch || '—'}</b>
+                <code>
+                  <span className={createStyles.srOnly}>Source commit</span>
+                  {compareCommitLabel(selectedCandidate?.headCommitId)}
+                </code>
+              </div>
+              <div className={createStyles.branchMeta}>
+                <span>Base</span>
+                <PhGitBranch aria-hidden="true" />
+                <b title={form.targetBranch}>{form.targetBranch || '—'}</b>
+                <code>
+                  <span className={createStyles.srOnly}>Base commit</span>
+                  {compareCommitLabel(selectedCandidate?.baseCommitId)}
+                </code>
+              </div>
+            </div>
+
+            <div className={createStyles.cardSection}>
+              <h3>Changes</h3>
+              <div className={createStyles.changesRow}>
+                <span>
+                  <PhFileText aria-hidden="true" size={22} />
+                  {changedNodeCount} nodes changed
+                </span>
+                <button onClick={scrollToChangePreview} type="button">
+                  View files
+                </button>
+              </div>
+            </div>
+
+            <div className={createStyles.cardSection}>
+              <h3>Checks run after opening</h3>
+              <div className={createStyles.checkRow}>
+                <PhCircleDashed aria-hidden="true" size={22} />
+                <div>
+                  <span>Schema validation</span>
+                  <small>Will run on the pull request</small>
+                </div>
+                <span
+                  className={createStyles.infoIcon}
+                  title="Schema and merge readiness checks run after the pull request is opened."
+                >
+                  <PhInfo aria-hidden="true" size={20} />
+                </span>
+              </div>
+            </div>
+
             <button
-              className={createStyles.changedPathsLink}
-              onClick={scrollToChangePreview}
+              className={createStyles.createButton}
+              data-variant="commit"
+              disabled={!canCreate || creating}
+              onClick={onCreate}
               type="button"
             >
-              <PhFileText aria-hidden="true" size={18} />
-              {changedNodeCount} changed paths
+              {creating ? (
+                <RefreshCw aria-hidden="true" className="animate-spin" size={20} />
+              ) : (
+                <PhGitPullRequest aria-hidden="true" size={20} />
+              )}
+              {creating ? 'Creating...' : 'Create pull request'}
             </button>
-          ) : null}
-        </div>
 
-        {compareLoading ? (
-          <div className={createStyles.inlineMessage}>Loading branch comparisons...</div>
-        ) : null}
-        {!compareLoading && candidates.length === 0 ? (
-          <div className={createStyles.inlineMessage}>
-            No other committed branches can be compared with this base.
-          </div>
-        ) : null}
-        {selectedCandidate && !canCreate && !compareLoading ? (
-          <div className={createStyles.warningMessage}>
-            {selectedCandidate.statusLabel}. Branches with an open PR, no semantic changes, or no
-            commits ahead of the base cannot create another PR.
-          </div>
-        ) : null}
-
-        <div className={createStyles.rule} />
-
-        <div className={createStyles.formFields}>
-          <label>
-            <span>Title</span>
-            <input
-              aria-label="Title"
-              onChange={(event) => update({ title: event.target.value })}
-              value={form.title}
-            />
-          </label>
-          <label>
-            <span>Description</span>
-            <textarea
-              aria-label="Description"
-              onChange={(event) => update({ description: event.target.value })}
-              value={form.description}
-            />
-          </label>
-          <div className={createStyles.authorRow}>
-            <span>Author</span>
-            <button type="button">
-              <b>YO</b>
-              <span>YOps (you)</span>
-              <PhCaretDown aria-hidden="true" size={14} />
+            <button className={createStyles.openLink} onClick={onBack} type="button">
+              <PhArrowRight aria-hidden="true" size={15} />
+              Opens in Pull requests
             </button>
           </div>
-          {error ? <div className={createStyles.warningMessage}>{error}</div> : null}
-        </div>
-
-        <div className={createStyles.rule} />
-
-        <section className={createStyles.preview} id="change-preview">
-          <h2>Change preview</h2>
-          <p>
-            {selectedCandidate
-              ? `Showing key changes from ${selectedCandidate.branch} to ${selectedCandidate.baseBranch}.`
-              : 'Select a source branch to preview the structured comparison.'}
-          </p>
-          <div className={createStyles.previewList}>
-            {previewRows.length > 0 ? (
-              previewRows.map((row) => (
-                <button className={createStyles.previewRow} key={row.label} type="button">
-                  <PhCube aria-hidden="true" className={createStyles.cubeIcon} size={24} />
-                  <span className={createStyles.previewLabel}>{row.label}</span>
-                  <ChangeKindBadge kind={row.kind} />
-                  <span className={createStyles.previewValue}>{row.value}</span>
-                  <PhCaretRight aria-hidden="true" className={createStyles.rowCaret} size={18} />
-                </button>
-              ))
-            ) : (
-              <div className={createStyles.previewEmpty}>
-                No structured comparison is ready yet.
-              </div>
-            )}
-          </div>
-        </section>
-      </main>
-
-      <aside className={createStyles.sidebar}>
-        <div className={createStyles.readyCard}>
-          <h2>Ready to open</h2>
-          <p>Review the details below and create the pull request.</p>
-
-          <div className={createStyles.metaList}>
-            <CreateMetaRow
-              icon={<PhGitBranch aria-hidden="true" size={18} />}
-              label="Source branch"
-              value={(selectedCandidate?.branch ?? form.sourceBranch) || '—'}
-            />
-            <CreateMetaRow
-              icon={<PhGitCommit aria-hidden="true" size={18} />}
-              label="Source commit"
-              value={compareCommitLabel(selectedCandidate?.headCommitId)}
-              valueClassName={createStyles.monoValue}
-            />
-            <CreateMetaRow
-              icon={<PhGitBranch aria-hidden="true" size={18} />}
-              label="Base branch"
-              value={(selectedCandidate?.baseBranch ?? form.targetBranch) || '—'}
-            />
-            <CreateMetaRow
-              icon={<PhGitCommit aria-hidden="true" size={18} />}
-              label="Base commit"
-              value={
-                selectedCandidate?.baseCommitId
-                  ? compareCommitLabel(selectedCandidate.baseCommitId)
-                  : 'No commit'
-              }
-              valueClassName={createStyles.monoValue}
-            />
-          </div>
-
-          <div className={createStyles.cardSection}>
-            <h3>Changes</h3>
-            <div className={createStyles.changesRow}>
-              <span>
-                <PhFileText aria-hidden="true" size={22} />
-                {changedNodeCount} paths changed
-              </span>
-              <button onClick={scrollToChangePreview} type="button">
-                View files
-              </button>
-            </div>
-          </div>
-
-          <div className={createStyles.cardSection}>
-            <h3>Checks run after opening</h3>
-            <div className={createStyles.checkRow}>
-              <PhCircleDashed aria-hidden="true" size={22} />
-              <div>
-                <span>Schema validation</span>
-                <small>Will run on the pull request</small>
-              </div>
-              <span
-                className={createStyles.infoIcon}
-                title="Schema and merge readiness checks run after the pull request is opened."
-              >
-                <PhInfo aria-hidden="true" size={20} />
-              </span>
-            </div>
-          </div>
-
-          <button
-            className={createStyles.createButton}
-            data-variant="commit"
-            disabled={!canCreate || creating}
-            onClick={onCreate}
-            type="button"
-          >
-            {creating ? (
-              <RefreshCw aria-hidden="true" className="animate-spin" size={20} />
-            ) : (
-              <PhGitPullRequest aria-hidden="true" size={20} />
-            )}
-            {creating ? 'Creating...' : 'Create pull request'}
-          </button>
-
-          <button className={createStyles.openLink} onClick={onBack} type="button">
-            <PhArrowRight aria-hidden="true" size={15} />
-            Opens in Pull requests
-          </button>
-        </div>
-      </aside>
+        </aside>
+      </div>
     </section>
   );
 }
@@ -1741,26 +1786,6 @@ function CreateBranchSelect({
         ))}
       </SelectContent>
     </Select>
-  );
-}
-
-function CreateMetaRow({
-  icon,
-  label,
-  value,
-  valueClassName,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  valueClassName?: string;
-}) {
-  return (
-    <div className={createStyles.metaRow}>
-      <div className={createStyles.metaIcon}>{icon}</div>
-      <div className={createStyles.metaLabel}>{label}</div>
-      <div className={cn(createStyles.metaValue, valueClassName)}>{value}</div>
-    </div>
   );
 }
 
@@ -2352,13 +2377,11 @@ function StructuredDiffPanel({
               <tr>
                 <th>Path</th>
                 <th>
-                  Main
-                  <br />
+                  {pullRequest.targetBranch}
                   <code>@ {shortHash(pullRequest.targetBaseCommitId)}</code>
                 </th>
                 <th>
-                  Feature / {pullRequest.sourceBranch}
-                  <br />
+                  {pullRequest.sourceBranch}
                   <code>@ {shortHash(pullRequest.sourceCommitId)}</code>
                 </th>
                 <th>Merged result</th>
@@ -2380,19 +2403,33 @@ function StructuredDiffPanel({
                       style={{ paddingLeft: row.depth * 22 }}
                     >
                       {row.type === 'object' ? (
-                        <>
-                          <PhCaretDown aria-hidden="true" />
-                          <PhCube aria-hidden="true" className={detailStyles.cube} />
-                        </>
+                        <PhCaretDown aria-hidden="true" />
                       ) : (
-                        <PhFileText aria-hidden="true" className={detailStyles.file} />
+                        <span style={{ width: 14, flex: 'none' }} />
                       )}
+                      <span className={detailStyles.typeIcon} data-type={row.type}>
+                        {row.type === 'object'
+                          ? '{ }'
+                          : row.type === 'number'
+                            ? '123'
+                            : row.type === 'boolean'
+                              ? 'T/F'
+                              : 'abc'}
+                      </span>
                       <b>{row.key}</b>
                       <em>{row.type}</em>
                     </span>
                   </td>
-                  <td title={row.main}>{row.main}</td>
-                  <td title={row.feature}>{row.feature}</td>
+                  <td title={row.main}>
+                    {row.type !== 'object' && (
+                      <span className={detailStyles.treeValue}>{row.main}</span>
+                    )}
+                  </td>
+                  <td title={row.feature}>
+                    {row.type !== 'object' && (
+                      <span className={detailStyles.treeValue}>{row.feature}</span>
+                    )}
+                  </td>
                   <td title={row.merged}>
                     {row.status === 'merged' ? (
                       <PhCheckCircle
@@ -2404,7 +2441,9 @@ function StructuredDiffPanel({
                     {row.status === 'conflict' ? (
                       <PhTilde aria-hidden="true" className={detailStyles.warnIcon} weight="bold" />
                     ) : null}
-                    <span>{row.merged}</span>
+                    {row.type !== 'object' && (
+                      <span className={detailStyles.treeValue}>{row.merged}</span>
+                    )}
                   </td>
                 </tr>
               ))}

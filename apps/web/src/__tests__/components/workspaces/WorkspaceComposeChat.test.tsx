@@ -123,8 +123,12 @@ describe('WorkspaceComposeChat', () => {
       />
     );
 
-    expect(await screen.findByText(/Preparing/)).toBeInTheDocument();
-    expect(screen.getByText('structured')).toBeInTheDocument();
+    // Streaming animation splits words into spans; assert the rendered message text.
+    const message = await screen.findByText(
+      (_, element) =>
+        element?.tagName === 'P' && element.textContent === 'Preparing structured source material'
+    );
+    expect(message).toHaveTextContent('Preparing structured source material');
     expect(screen.getByText('Searching workspace evidence')).toBeInTheDocument();
   });
 });
