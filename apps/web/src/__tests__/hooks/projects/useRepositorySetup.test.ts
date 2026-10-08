@@ -2,6 +2,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { useRepositorySetup } from '@/hooks/projects/useRepositorySetup';
+import { useProjectStore } from '@/store/projectStore';
 
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock('@/infrastructure/materials', () => ({ uploadDocumentMaterial: mocks.upl
 vi.mock('@/queries/workspaces', () => ({ saveWorkspaceDraft: mocks.save }));
 beforeEach(() => {
   vi.clearAllMocks();
+  useProjectStore.getState().setProjects([]);
   mocks.create.mockResolvedValue({ project_id: 'p', name: 'Test' });
   mocks.update.mockResolvedValue({});
   mocks.upload.mockResolvedValue({
@@ -76,4 +78,16 @@ it('resumes after a conversation failure without creating another repository or 
   expect(mocks.upload).toHaveBeenCalledTimes(1);
   expect(mocks.save).toHaveBeenCalledTimes(1);
   expect(result.current.error).toBeNull();
+  expect(useProjectStore.getState().projects.filter((project) => project.id === 'p')).toHaveLength(
+    1
+  );
+});
+it('adds the new repository to an already loaded owner project list', async () => {
+  useProjectStore.getState().setProjectScope('team');
+  useProjectStore.getState().setProjects([]);
+  const { result } = renderHook(() => useRepositorySetup());
+  await act(async () => {
+    await result.current.create(input);
+  });
+  expect(useProjectStore.getState().projects.map((project) => project.id)).toEqual(['p']);
 });

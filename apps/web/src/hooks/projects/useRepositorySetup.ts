@@ -6,6 +6,7 @@ import { API_V1, fetchWithTimeout, handleResponse } from '@/infrastructure/core'
 import { type Material, uploadDocumentMaterial } from '@/infrastructure/materials';
 import { changeProjectVisibility, updateProject } from '@/infrastructure/projects';
 import { saveWorkspaceDraft } from '@/queries/workspaces';
+import { apiProjectToSummary, useProjectStore } from '@/store/projectStore';
 import type { Project } from '@/types/api';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
@@ -50,6 +51,9 @@ export function useRepositorySetup() {
       );
       setStarted(true);
       const id = state.project.project_id;
+      const store = useProjectStore.getState();
+      if (!store.projects.some((project) => project.id === id))
+        store.addToProjects(apiProjectToSummary(state.project));
       await updateProject(id, {
         default_provider: config.provider || null,
         default_model: config.model || null,
