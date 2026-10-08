@@ -19,6 +19,7 @@ import {
 } from '@t3x-dev/storage';
 import { canonicalizeProtocolValue } from '@t3x-dev/transition';
 import { resolveProposalGenerationSources } from '../proposal-generation';
+import { workspaceSemanticSchemaLayout } from '../semantic-schema-layout';
 import { readWorkspaceAuthoringCandidates, workspaceAuthoringState } from '../workspace-authoring';
 import { authoringManifestDigest } from '../workspace-authoring-generation';
 import { resolveWorkspaceTransitionContext } from '../workspace-transition';
@@ -83,6 +84,7 @@ export function renderAssistantContext(
       canonicalName: prepared.schema.canonicalName,
       version: prepared.schema.version,
       resource: prepared.schema.resource,
+      layout: prepared.schema.layout,
       retrieve: 'readSchema',
     });
   if (prepared.candidates)
@@ -257,6 +259,7 @@ export async function prepareAssistantContext(
             resolvedSchema.schema
           ),
           value: resolvedSchema.schema,
+          layout: workspaceSemanticSchemaLayout(workspace.workspace, resolvedSchema.schema),
         }
       : undefined;
   const candidates = await readWorkspaceAuthoringCandidates(db, {

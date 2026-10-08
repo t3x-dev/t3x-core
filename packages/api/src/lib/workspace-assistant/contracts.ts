@@ -2,6 +2,7 @@ import type { DraftActionLedger, DraftDocument } from '@t3x-dev/application';
 import type { LLMPrompt } from '@t3x-dev/core';
 import type { InferenceScope } from '../inference';
 import type { ProposalGenerationSourceInput } from '../proposal-generation';
+import type { SemanticSchemaLayout } from '../semantic-schema-layout';
 import type { WorkspaceAuthoringBasis } from '../workspace-authoring';
 
 /** Attention is not a write constraint or a filter on canonical replay. */
@@ -38,6 +39,7 @@ export interface PreparedAssistantContext {
     version: string | null;
     resource: { uri: string; digest: string; mediaType: string };
     value: unknown;
+    layout: SemanticSchemaLayout;
   };
   candidates?: {
     pendingCandidates: Array<{

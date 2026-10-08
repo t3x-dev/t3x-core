@@ -245,20 +245,24 @@ describe('governed Proposal generation', () => {
     expect(left.view.transitionId).toBe(right.view.transitionId);
     expect(generate).toHaveBeenCalledTimes(1);
     expect(generate.mock.calls[0]?.[0].prompt).toContain(
-      'create one change group\nper independently stated requirement'
+      'create one change group per\nindependently stated item'
     );
     expect(generate.mock.calls[0]?.[0].prompt).toContain(
-      'must become its own schema-valid collection member or tree node'
+      'A standalone item must\nbecome its own collection item'
     );
     expect(generate.mock.calls[0]?.[0].prompt).toContain(
-      "a root node's slots are on that root node"
+      '"content/trees" holds exactly that one tree and nothing else'
     );
     expect(generate.mock.calls[0]?.[0].prompt).toContain(
       'paths into the semantic tree MUST start with "content/trees/"'
     );
     expect(generate.mock.calls[0]?.[0].prompt).toContain(
-      'add each new requirement with one append operation'
+      'add each new collection item with one append operation'
     );
+    expect(generate.mock.calls[0]?.[0].prompt).not.toMatch(/\[key=prd\]/);
+    const schemaLayout = generate.mock.calls[0]?.[0].schemaLayout;
+    expect(schemaLayout?.rootPath).toBe(`content/trees/[key=${schemaLayout?.rootKey}]`);
+    expect(schemaLayout?.nodes.length).toBeGreaterThan(0);
     expect(generate.mock.calls[0]?.[0].prompt).toContain(
       '"append" is the operation name beside "set"'
     );

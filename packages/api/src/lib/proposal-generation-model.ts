@@ -2,6 +2,7 @@ import {
   applyNativeYOps,
   buildTargetedReaskPrompt,
   type LLMPrompt,
+  type LLMProvider,
   LLMProviderError,
   mapProviderErrorToExtractionFailure,
   NativeYOpSchema,
@@ -15,6 +16,12 @@ import {
   type ProposalGenerationRequest,
 } from './proposal-generation';
 import { resolveProviderAndModel } from './provider-resolver';
+import {
+  newSemanticLayoutIssues,
+  type SemanticSchemaLayout,
+  type SemanticSchemaLayoutNode,
+  type SemanticSchemaLayoutSlot,
+} from './semantic-schema-layout';
 
 function statedClaimHasExactSupport(
   claim: ProposalGenerationDraftV1['intent'],
@@ -55,9 +62,33 @@ function explicitCardFields(instruction: string): { title: string; content: stri
   return title && content && !/[，,；;]/u.test(content) ? { title, content } : null;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * The slot of an appended collection item that should carry explicitly requested card content:
+ * an unfilled free-text slot of that item's schema node, preferring required ones.
+ */
+function explicitContentSlot(
+  node: SemanticSchemaLayoutNode,
+  slots: Record<string, unknown>,
+  titleSlot: string
+): SemanticSchemaLayoutSlot | undefined {
+  const candidates = node.slots.filter(
+    (slot) =>
+      slot.key !== titleSlot &&
+      !(slot.key in slots) &&
+      !slot.enum &&
+      (slot.type === undefined || slot.type === 'string' || slot.type === 'array')
+  );
+  return candidates.find((slot) => slot.required) ?? candidates[0];
+}
+
 function completeExplicitCardContent(
   draft: ProposalGenerationDraftV1,
-  instruction: string
+  instruction: string,
+  layout: SemanticSchemaLayout
 ): ProposalGenerationDraftV1 {
   const requested = explicitCardFields(instruction);
   if (
@@ -65,37 +96,33 @@ function completeExplicitCardContent(
     JSON.stringify(draft.changes.flatMap((change) => change.operations)).includes(requested.content)
   )
     return draft;
+  const collections = new Map(
+    layout.nodes.filter((node) => node.repeated).map((node) => [`${node.path}/children`, node])
+  );
   return {
     ...draft,
     changes: draft.changes.map((change) => ({
       ...change,
       operations: change.operations.map((operation) => {
-        if (!operation || typeof operation !== 'object' || Array.isArray(operation))
-          return operation;
-        const append = 'append' in operation ? operation.append : null;
-        if (!append || typeof append !== 'object' || Array.isArray(append)) return operation;
-        const path = 'path' in append ? append.path : null;
-        const node = 'value' in append ? append.value : null;
-        if (
-          typeof path !== 'string' ||
-          !path.endsWith('/[key=requirements]/children') ||
-          !node ||
-          typeof node !== 'object' ||
-          Array.isArray(node)
-        )
-          return operation;
-        const slots = 'slots' in node ? node.slots : null;
-        if (!slots || typeof slots !== 'object' || Array.isArray(slots)) return operation;
-        if (!('title' in slots) || slots.title !== requested.title) return operation;
+        const append = isRecord(operation) ? operation.append : null;
+        if (!isRecord(append) || typeof append.path !== 'string') return operation;
+        const collection = collections.get(append.path);
+        const item = append.value;
+        if (!collection || !isRecord(item) || !isRecord(item.slots)) return operation;
+        const slots = item.slots;
+        const titleSlot = Object.keys(slots).find((key) => slots[key] === requested.title);
+        if (!titleSlot) return operation;
+        const contentSlot = explicitContentSlot(collection, slots, titleSlot);
+        if (!contentSlot) return operation;
         return {
           append: {
             ...append,
             value: {
-              ...node,
+              ...item,
               slots: {
                 ...slots,
-                priority: 'priority' in slots ? slots.priority : 'should',
-                acceptance: [requested.content],
+                [contentSlot.key]:
+                  contentSlot.type === 'array' ? [requested.content] : requested.content,
               },
             },
           },
@@ -118,6 +145,15 @@ export async function defaultProposalGenerationModel(input: {
     unavailableMessage: 'No configured Proposal generation provider is available',
   });
   if (!resolved.ok) throw new ProposalGenerationProviderError(resolved.message);
+  return createProposalGenerationModel(resolved);
+}
+
+/** Proposal generation over an already resolved provider: structured draft, trial apply, bounded re-ask. */
+export function createProposalGenerationModel(resolved: {
+  provider: Partial<LLMProvider>;
+  providerId: string;
+  model: string;
+}): ProposalGenerationModel {
   const provider = resolved.provider;
   if (!('generateStructured' in provider) || typeof provider.generateStructured !== 'function') {
     throw new ProposalGenerationProviderError(
@@ -139,6 +175,7 @@ export async function defaultProposalGenerationModel(input: {
               base: generation.base,
               ...(generation.authoring ? { authoring: generation.authoring } : {}),
               yschema: generation.yschema.value,
+              schemaLayout: generation.schemaLayout,
               sources: generation.sources.map((source, sourceIndex) => ({
                 sourceIndex,
                 resource: source.resource,
@@ -163,7 +200,8 @@ export async function defaultProposalGenerationModel(input: {
           });
           const draft = completeExplicitCardContent(
             normalizeGeneratedClaims(result.data, generation.sources),
-            generation.instruction
+            generation.instruction,
+            generation.schemaLayout
           );
           if (generation.authoring) {
             const operations = NativeYOpSchema.array().safeParse(
@@ -191,6 +229,27 @@ export async function defaultProposalGenerationModel(input: {
                         },
                       ]
                     : operations.error.issues,
+                }
+              );
+            }
+            const layoutIssues = newSemanticLayoutIssues(
+              generation.authoring.current,
+              applied.doc,
+              generation.yschema.value,
+              generation.schemaLayout.rootKey
+            );
+            if (layoutIssues.length > 0) {
+              throw new LLMProviderError(
+                resolved.providerId,
+                undefined,
+                'Generated operations place content outside the schema layout',
+                'SCHEMA_MISMATCH',
+                {
+                  jsonText: JSON.stringify(draft),
+                  issues: layoutIssues.map((issue) => ({
+                    path: ['changes', 'operations'],
+                    message: `${issue.code} at ${issue.path}: ${issue.message} Fix the operations so the result follows schemaLayout.`,
+                  })),
                 }
               );
             }
