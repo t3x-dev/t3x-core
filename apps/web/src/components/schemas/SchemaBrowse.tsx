@@ -191,14 +191,16 @@ export function SchemaBrowse({
               ))}
             </div>
           </div>
-          catalog.loading ? <output className={s.feedback}>Loading schemas…</output> :
-          nullcatalog.error ? (
-          <div className={s.feedback} role="alert">
-            {catalog.error}
-            <button onClick={catalog.retry}>Retry</button>
-          </div>
-          ) : null!catalog.loading && !catalog.error && !visibleItems.length ? (
-          <div className={s.feedback}>No schemas match these filters.</div>) : null
+          {catalog.loading ? <output className={s.feedback}>Loading schemas…</output> : null}
+          {catalog.error ? (
+            <div className={s.feedback} role="alert">
+              {catalog.error}
+              <button onClick={catalog.retry}>Retry</button>
+            </div>
+          ) : null}
+          {!catalog.loading && !catalog.error && !visibleItems.length ? (
+            <div className={s.feedback}>No schemas match these filters.</div>
+          ) : null}
           <div className={`${s.grid} ${layout === 'list' ? s.listView : ''}`}>
             {visibleItems.map((item) => (
               <SchemaCard
@@ -208,11 +210,15 @@ export function SchemaBrowse({
               />
             ))}
           </div>
-          catalog.data?.has_more ? (
-          <button className={s.loadMore} disabled={catalog.morePending} onClick={catalog.loadMore}>
-            {catalog.morePending ? 'Loading…' : 'Load more'}
-          </button>
-          ) : null
+          {catalog.data?.has_more ? (
+            <button
+              className={s.loadMore}
+              disabled={catalog.morePending}
+              onClick={catalog.loadMore}
+            >
+              {catalog.morePending ? 'Loading…' : 'Load more'}
+            </button>
+          ) : null}
         </section>
       </div>
     </div>
