@@ -5,7 +5,6 @@ import { type AssistantEvent, runAssistantProvider } from './adapters/provider-t
 import { createAssistantCapabilities } from './capabilities';
 import { assertAssistantContextCurrent, prepareAssistantContext } from './context';
 import type { AssistantContextInput, AssistantInference } from './contracts';
-import { isExplicitWorkspaceChangeRequest } from './policy';
 
 export async function chatWithWorkspace(input: {
   db: AnyDB;
@@ -45,12 +44,6 @@ export async function chatWithWorkspace(input: {
     disclosure: prepared.disclosure,
   });
   const capabilities = createAssistantCapabilities({ ...input, prepared });
-  const latestUserTurn = prepared.turns.at(-1);
-  const shouldGenerateProposal =
-    Boolean(input.proposal) &&
-    !input.exactEdit &&
-    latestUserTurn?.role === 'user' &&
-    isExplicitWorkspaceChangeRequest(latestUserTurn.content);
   const prompt = structuredClone(prepared.prompt);
   if (!input.proposal && !input.exactEdit) {
     prompt.messages.unshift({
@@ -63,9 +56,6 @@ export async function chatWithWorkspace(input: {
     ...input,
     prompt,
     capabilities,
-    initialToolCall: shouldGenerateProposal
-      ? { name: 'requestProposal', input: { instruction: latestUserTurn.content } }
-      : undefined,
     assertCurrent: () =>
       assertAssistantContextCurrent(input.db, prepared, () => input.authorize('read')),
   });

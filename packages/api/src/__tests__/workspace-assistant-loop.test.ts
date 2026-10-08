@@ -108,29 +108,44 @@ describe('metered Assistant loop', () => {
     expect(events).toContainEqual({ type: 'text', content: 'value is 25' });
     expect(events.at(-1)).toEqual({ type: 'done', reason: 'completed' });
   });
-  it('executes an explicitly requested proposal before the assistant response', async () => {
+  it('runs requestProposal only when the model chooses it', async () => {
     const { input, events } = fixture();
     const execute = vi.fn(async () => ({ status: 'candidate', transitionId: 'transition:1' }));
-    const generateWithTools = vi.fn(async () => ({
-      tool_calls: [],
-      stop_reason: 'end_turn' as const,
-      usage,
-      _rawAssistantContent: [{ type: 'text' as const, text: 'Candidate generated.' }],
-    }));
+    const streamFromPrompt = vi.fn();
+    const generateWithTools = vi
+      .fn()
+      .mockResolvedValueOnce({
+        tool_calls: [
+          {
+            id: 'call_1',
+            name: 'requestProposal',
+            input: { instruction: 'change replicas from 4 to 10' },
+          },
+        ],
+        stop_reason: 'tool_use',
+        usage,
+      })
+      .mockResolvedValueOnce({
+        tool_calls: [],
+        stop_reason: 'end_turn',
+        usage,
+        _rawAssistantContent: [{ type: 'text', text: 'Candidate generated.' }],
+      });
     await runAssistantProvider({
       ...input,
-      provider: { id: 'test', generateWithTools } as unknown as LLMProvider,
+      prompt: {
+        system: 'test',
+        messages: [{ role: 'user', content: 'change replicas from 4 to 10' }],
+      },
+      provider: { id: 'test', generateWithTools, streamFromPrompt } as unknown as LLMProvider,
       capabilities: {
         requestProposal: {
           definition: { name: 'requestProposal', description: 'proposal', input_schema: {} },
           execute,
         },
       },
-      initialToolCall: {
-        name: 'requestProposal',
-        input: { instruction: 'change replicas from 4 to 10' },
-      },
     });
+    expect(streamFromPrompt).not.toHaveBeenCalled();
     expect(execute).toHaveBeenCalledWith(
       { instruction: 'change replicas from 4 to 10' },
       expect.stringMatching(/^assistant:[a-f0-9]{64}$/)
@@ -143,46 +158,30 @@ describe('metered Assistant loop', () => {
         result: { status: 'candidate', transitionId: 'transition:1' },
       })
     );
-    expect(generateWithTools).toHaveBeenCalledOnce();
+    expect(generateWithTools).toHaveBeenCalledTimes(2);
   });
-  it('streams the response after a server-required proposal operation', async () => {
+  it('does not run requestProposal when the model answers without a tool call', async () => {
     const { input, events } = fixture();
-    const execute = vi.fn(async () => ({ status: 'candidate', transitionId: 'transition:1' }));
-    const generateWithTools = vi.fn();
-    const streamFromPrompt = vi.fn(async function* () {
-      yield { type: 'text' as const, text: 'Candidate ' };
-      yield { type: 'text' as const, text: 'generated.' };
-      yield { type: 'done' as const, usage };
-    });
+    const execute = vi.fn();
+    const generateWithTools = vi.fn(async () => ({
+      tool_calls: [],
+      stop_reason: 'end_turn' as const,
+      usage,
+      _rawAssistantContent: [{ type: 'text' as const, text: 'Which card should change?' }],
+    }));
     await runAssistantProvider({
       ...input,
-      provider: {
-        id: 'test',
-        generateWithTools,
-        streamFromPrompt,
-      } as unknown as LLMProvider,
+      prompt: { system: 'test', messages: [{ role: 'user', content: '生成一张新卡片' }] },
+      provider: { id: 'test', generateWithTools } as unknown as LLMProvider,
       capabilities: {
         requestProposal: {
           definition: { name: 'requestProposal', description: 'proposal', input_schema: {} },
           execute,
         },
       },
-      initialToolCall: {
-        name: 'requestProposal',
-        input: { instruction: 'change replicas from 4 to 10' },
-      },
     });
-    expect(execute).toHaveBeenCalledOnce();
-    expect(generateWithTools).not.toHaveBeenCalled();
-    expect(streamFromPrompt).toHaveBeenCalledOnce();
-    expect(events.map((event) => event.type)).toEqual([
-      'capabilities',
-      'operation',
-      'operation',
-      'text',
-      'text',
-      'done',
-    ]);
+    expect(execute).not.toHaveBeenCalled();
+    expect(events.at(-1)).toEqual({ type: 'done', reason: 'completed' });
   });
   it('rejects arbitrary code tools and stops before a stale continuation', async () => {
     const { input } = fixture();
