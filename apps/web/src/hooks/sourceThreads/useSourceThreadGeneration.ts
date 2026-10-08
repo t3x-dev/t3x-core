@@ -355,7 +355,13 @@ export function useSourceThreadGeneration({
         if (!turn?.turn_hash) return;
         const savedMessage = savedTurnMessage(turn, role, content);
         history.setMessages((prev) => {
-          const next = prev.map((msg) => (msg.id === localMessageId ? savedMessage : msg));
+          const next = prev.map((msg) =>
+            msg.id === localMessageId
+              ? msg.images
+                ? { ...savedMessage, images: msg.images }
+                : savedMessage
+              : msg
+          );
           history.messagesRef.current = next;
           return next;
         });
@@ -365,10 +371,19 @@ export function useSourceThreadGeneration({
         id: `msg-${Date.now()}`,
         role: 'user' as const,
         content: userMessage,
+        ...(images?.length
+          ? {
+              images: images.map((img) => ({
+                id: img.id,
+                src: `data:${img.mediaType};base64,${img.base64}`,
+              })),
+            }
+          : {}),
       };
       history.setMessages((prev) => [...prev, newUserMessage]);
 
-      if (workspaceAssistant) {
+      // Image turns use ordinary chat, which never completes Workspace Assistant activity.
+      if (workspaceAssistant && !images?.length) {
         setWorkspaceActivity({ turnId: newUserMessage.id, phase: 'saving', operations: [] });
       }
 
@@ -438,7 +453,11 @@ export function useSourceThreadGeneration({
         const currentConversationId = convId;
         stableConversationId = currentConversationId;
         if (isTemporaryMode) {
-          useTemporaryChatsStore.getState().addMessage(currentConversationId, newUserMessage);
+          useTemporaryChatsStore.getState().addMessage(currentConversationId, {
+            id: newUserMessage.id,
+            role: newUserMessage.role,
+            content: newUserMessage.content,
+          });
           applyGeneratedTitle(currentConversationId, initialTitleForGeneratedTitle);
         } else {
           const userTurn = await saveTurnWithRetry(() =>

@@ -22,6 +22,13 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   rings?: Record<string, unknown> | null;
+  /** Session-only previews of images sent with this turn; saved turns store text only. */
+  images?: ChatMessageImage[];
+}
+
+export interface ChatMessageImage {
+  id: string;
+  src: string;
 }
 
 export interface UseChatHistoryReturn {

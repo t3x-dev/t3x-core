@@ -213,6 +213,24 @@
 .discussion .actions {
   margin-top: 2px;
 }
+.messageImages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.discussionMessage[data-author="user"] .messageImages {
+  justify-content: flex-end;
+  max-width: 78%;
+}
+.messageImage {
+  width: 120px;
+  height: 120px;
+  border: 1px solid var(--stroke-default);
+  border-radius: 10px;
+  object-fit: cover;
+  background: var(--surface-app);
+}
 @media (max-width: 720px) {
   .content {
     padding: 22px 16px;

@@ -121,12 +121,15 @@ export function ComposeAuthoringAssistant({
     createConversation: onCreateConversation,
   });
   const messages = useMemo(() => {
-    const persisted = chat.messages.map((message) => ({
-      author: message.role === 'user' ? 'You' : 'Assistant',
-      content: message.content,
-      id: message.id,
-      role: message.role,
-    }));
+    const persisted: WorkspaceComposeReviewController['chat']['messages'] = chat.messages.map(
+      (message) => ({
+        author: message.role === 'user' ? 'You' : 'Assistant',
+        content: message.content,
+        id: message.id,
+        role: message.role,
+        ...(message.images?.length ? { images: message.images } : {}),
+      })
+    );
     if (chat.streamingContent.trim())
       persisted.push({
         author: 'Assistant',

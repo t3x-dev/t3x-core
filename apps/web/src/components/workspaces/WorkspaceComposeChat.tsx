@@ -258,6 +258,22 @@ function ComposeChatMessage({
   variant: 'default' | 'discussion';
 }) {
   const isUser = message.role === 'user';
+  const images =
+    isUser && message.images?.length ? (
+      <div className={styles.messageImages}>
+        {message.images.map((image) => (
+          <Image
+            alt="Attached image"
+            className={styles.messageImage}
+            height={120}
+            key={image.id}
+            src={image.src}
+            unoptimized
+            width={120}
+          />
+        ))}
+      </div>
+    ) : null;
 
   if (variant === 'discussion') {
     const Avatar = isUser ? UserRound : Bot;
@@ -280,6 +296,7 @@ function ComposeChatMessage({
           ) : null}
         </div>
         {children}
+        {images}
         {isUser || message.content.trim() ? (
           <div className={styles.discussionBubble}>
             {isUser ? (
@@ -310,6 +327,7 @@ function ComposeChatMessage({
           <div className={styles.messageHeader}>
             <strong>You</strong>
           </div>
+          {images}
           <p className={styles.userText}>{message.content}</p>
         </div>
       </div>
