@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ComposeAuthoringAssistant } from '@/components/workspaces/ComposeAuthoringAssistant';
 
 const mocks = vi.hoisted(() => ({ send: vi.fn(), generation: vi.fn() }));
@@ -55,5 +55,58 @@ describe('ComposeAuthoringAssistant first message', () => {
     expect(mocks.send).toHaveBeenCalledTimes(1);
     fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
     expect(mocks.send).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('ComposeAuthoringAssistant proposal mode', () => {
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  function renderAssistant(workspaceId: string) {
+    return render(
+      <ComposeAuthoringAssistant
+        projectId="project-1"
+        context={{ workspaceId, workspaceRevision: 1, sourceMaterialIds: [] }}
+        onCreateConversation={vi.fn(async () => 'conversation-1')}
+        onPublishCandidate={vi.fn()}
+      />
+    );
+  }
+
+  it('defaults to guided and sends the selected mode with the assistant context', () => {
+    renderAssistant('workspace-1');
+
+    expect(screen.getByRole('combobox', { name: 'Proposal mode' })).toHaveValue('guided');
+    expect(mocks.generation).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        workspaceAssistant: expect.objectContaining({ posture: 'guided' }),
+      })
+    );
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Proposal mode' }), {
+      target: { value: 'source_only' },
+    });
+
+    expect(mocks.generation).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        workspaceAssistant: expect.objectContaining({ posture: 'source_only' }),
+      })
+    );
+  });
+
+  it('remembers the mode per Workspace', async () => {
+    const first = renderAssistant('workspace-1');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Proposal mode' }), {
+      target: { value: 'recommend' },
+    });
+    first.unmount();
+
+    const again = renderAssistant('workspace-1');
+    expect(await screen.findByRole('combobox', { name: 'Proposal mode' })).toHaveValue('recommend');
+    again.unmount();
+
+    renderAssistant('workspace-2');
+    expect(screen.getByRole('combobox', { name: 'Proposal mode' })).toHaveValue('guided');
   });
 });

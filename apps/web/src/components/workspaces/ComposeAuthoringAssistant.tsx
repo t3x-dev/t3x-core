@@ -16,10 +16,13 @@ import { GenerationModelSelector } from '@/components/generation/GenerationModel
 import { providerSupports } from '@/domain/providerCapabilities';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
 import { useSourceThreadGeneration } from '@/hooks/sourceThreads/useSourceThreadGeneration';
+import { useComposeProposalPosture } from '@/hooks/workspaces/useComposeProposalPosture';
 import type { WorkspaceAssistantContext } from '@/hooks/workspaces/useWorkspaceAuthoring';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import { useChatSessionStore } from '@/store/chatSessionStore';
 import type { AttachedImage } from '@/types/generation';
+import type { WorkspaceProposalPosture } from '@/types/workspaces';
+import { PROPOSAL_POSTURE_OPTIONS, proposalPostureOption } from './ProposalPostureSelector';
 import type { AssistantActivityRecord, AssistantPublication } from './WorkspaceAssistantActivity';
 import { WorkspaceComposeChat } from './WorkspaceComposeChat';
 import styles from './WorkspaceComposeSurface.module.css';
@@ -63,6 +66,7 @@ export function ComposeAuthoringAssistant({
   const thinkingEnabled = useChatSessionStore((state) => state.thinkingEnabled);
   const setThinking = useChatSessionStore((state) => state.setThinking);
   const supportsThinking = providerSupports(model.selectedProvider ?? '', 'thinking');
+  const { posture, setPosture } = useComposeProposalPosture(context.workspaceId);
 
   useEffect(() => {
     if (composeDefaultApplied.current || model.loading || !model.isSelectionReady) return;
@@ -111,6 +115,7 @@ export function ComposeAuthoringAssistant({
     workspaceAssistant: {
       ...context,
       allowProposal: true,
+      posture,
       onCandidate: (transitionId, turnId) => {
         setPublicationError(null);
         setPendingCandidate(transitionId);
@@ -310,6 +315,22 @@ export function ComposeAuthoringAssistant({
               supportsThinking={supportsThinking}
               thinkingEnabled={thinkingEnabled}
             />
+            <select
+              aria-label="Proposal mode"
+              className={styles.postureSelect}
+              disabled={chat.isLoading}
+              onChange={(event) =>
+                setPosture(event.currentTarget.value as WorkspaceProposalPosture)
+              }
+              title={proposalPostureOption(posture).title}
+              value={posture}
+            >
+              {PROPOSAL_POSTURE_OPTIONS.map((option) => (
+                <option key={option.value} title={option.description} value={option.value}>
+                  {option.shortLabel}
+                </option>
+              ))}
+            </select>
             <button
               aria-label={chat.isStreaming ? 'Stop generating' : 'Send message'}
               className={styles.send}
