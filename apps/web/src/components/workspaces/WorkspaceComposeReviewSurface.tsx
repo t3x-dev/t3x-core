@@ -61,7 +61,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { OutputTargetsTab } from '@/components/workspaces/OutputTargetsTab';
-import { SourceArtifactRoleEditor } from '@/components/workspaces/SourcesTab';
+import { SourceArtifactRoleEditor } from '@/components/workspaces/SourceArtifactRoleEditor';
 import { SourceTransitionTab } from '@/components/workspaces/SourceTransitionTab';
 import { WorkspaceContentEditor } from '@/components/workspaces/WorkspaceContentEditor';
 import type { WorkspaceYOpsFlowView } from '@/components/workspaces/YOpsDraftTab';

@@ -1,6 +1,5 @@
 import { useCallback } from 'react';
 import { createBranch } from '@/infrastructure/branches';
-import { extractWorkspaceCandidate, sendWorkspaceYOpsDraft } from '@/infrastructure/workspaceFlow';
 import { fetchProjectWorkspaces, saveWorkspaceDraft } from '@/queries/workspaces';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
@@ -20,14 +19,6 @@ export function useWorkspaceFlow() {
     (projectId: string) => fetchProjectWorkspaces(projectId),
     []
   );
-  const extractCandidate = useCallback((candidate: WorkspaceCandidate) => {
-    return extractWorkspaceCandidate(candidate);
-  }, []);
-
-  const sendToYOps = useCallback((candidate: WorkspaceCandidate) => {
-    return sendWorkspaceYOpsDraft(candidate);
-  }, []);
-
   const saveDraft = useCallback((candidate: WorkspaceCandidate) => {
     return saveWorkspaceDraft(candidate.projectId, candidate.id, candidate);
   }, []);
@@ -58,7 +49,7 @@ export function useWorkspaceFlow() {
     []
   );
 
-  return { extractCandidate, refreshWorkspaces, saveDraft, sendToYOps, startNextIteration };
+  return { refreshWorkspaces, saveDraft, startNextIteration };
 }
 
 function buildNextWorkspaceIteration(
@@ -81,13 +72,13 @@ function buildNextWorkspaceIteration(
     updatedAt: new Date().toISOString(),
     sourceBundle: candidate.sourceBundle.filter((source) => source.type !== 'chat'),
     schemaCandidate: {
-      summary: 'Collect new source evidence, then generate the next candidate proposal.',
+      summary: 'Collect new source evidence, then ask the Workspace assistant to propose changes.',
       fields: [],
     },
     schemaReview: {
       verdict: 'needs_review',
       summary: 'This iteration starts from the committed baseline and needs new evidence.',
-      gaps: ['Generate a candidate proposal for this iteration.'],
+      gaps: ['Propose changes for this iteration.'],
     },
     yopsDraft: {
       ...candidate.yopsDraft,

@@ -23,12 +23,9 @@ import { type WorkspaceTabId, WorkspaceTabs } from './WorkspaceTabs';
 type WorkspaceWorkbenchViewState = 'ready' | 'loading' | 'error';
 
 interface WorkspaceFlowState {
-  candidateId?: string;
   yopsDraftId?: string;
   commitHash?: string;
   continuationBusy?: boolean;
-  extracting?: boolean;
-  sendingToYOps?: boolean;
   proposalPosture?: WorkspaceProposalPosture;
   proposalGeneration?: WorkspaceProposalGenerationView;
   proposalGenerationBusy?: boolean;
@@ -74,12 +71,9 @@ export function WorkspaceWorkbench({
   const [workspaceOverrides, setWorkspaceOverrides] = useState<Record<string, WorkspaceCandidate>>(
     {}
   );
-  const pins = usePinsStore((state) => state.pins);
   const {
-    extractCandidate,
     refreshWorkspaces,
     saveDraft: saveWorkspaceDraft,
-    sendToYOps,
     startNextIteration,
   } = useWorkspaceFlow();
   const proposalGeneration = useWorkspaceProposalGeneration();
@@ -137,32 +131,6 @@ export function WorkspaceWorkbench({
     }));
   };
 
-  const handleExtractCandidate = async (_options: WorkspacePreparationOptions = {}) => {
-    if (!selectedWorkspace) return;
-
-    updateSelectedFlow({ error: undefined, extracting: true });
-    try {
-      const result = await extractCandidate(selectWorkspaceSourceBundle(selectedWorkspace, pins));
-      setWorkspaceOverrides((current) => ({
-        ...current,
-        [result.workspace.id]: result.workspace,
-      }));
-      updateSelectedFlow({
-        candidateId: result.candidate_id,
-        commitHash: undefined,
-        error: undefined,
-        extracting: false,
-        validationGapCount: undefined,
-      });
-      setActiveWorkflowTab('ops');
-    } catch (err) {
-      updateSelectedFlow({
-        error: err instanceof Error ? err.message : 'Candidate extraction failed.',
-        extracting: false,
-      });
-    }
-  };
-
   const handleSourceArtifactChange = (artifact: WorkspaceSourceArtifact | undefined) => {
     if (!selectedWorkspace) return;
     setWorkspaceOverrides((current) => ({
@@ -173,38 +141,6 @@ export function WorkspaceWorkbench({
       },
     }));
     updateSelectedFlow({ commitHash: undefined, error: undefined });
-  };
-
-  const handleSendToYOps = async () => {
-    if (!selectedWorkspace) return;
-
-    updateSelectedFlow({ error: undefined, sendingToYOps: true });
-    try {
-      const result = await sendToYOps(selectedWorkspace);
-      const hasOperations = hasYOpsOperations(result.workspace);
-      setWorkspaceOverrides((current) => ({
-        ...current,
-        [result.workspace.id]: result.workspace,
-      }));
-      updateSelectedFlow({
-        candidateId: result.candidate_id,
-        commitHash: undefined,
-        error: hasOperations
-          ? undefined
-          : 'No YOps operations were generated. Add source evidence, regenerate the candidate proposal, then send it to YOps.',
-        sendingToYOps: false,
-        validationGapCount: undefined,
-        yopsDraftId: hasOperations
-          ? (result.yops_draft_id ?? result.workspace.yopsDraft.id)
-          : undefined,
-      });
-      setActiveWorkflowTab(hasOperations ? 'validation' : 'ops');
-    } catch (err) {
-      updateSelectedFlow({
-        error: err instanceof Error ? err.message : 'YOps proposal generation failed.',
-        sendingToYOps: false,
-      });
-    }
   };
 
   const handleProposalPostureChange = (posture: WorkspaceProposalPosture) => {
@@ -332,7 +268,6 @@ export function WorkspaceWorkbench({
       }));
       updateSelectedFlow(
         {
-          candidateId: undefined,
           commitHash: undefined,
           continuationBusy: false,
           error: undefined,
@@ -456,109 +391,31 @@ export function WorkspaceWorkbench({
     }
   };
 
-  const runPrepareDraft = async (workspace: WorkspaceCandidate) => {
-    let prepared = selectWorkspaceSourceBundle(workspace, usePinsStore.getState().pins);
-    let candidateId: string | undefined;
+  const handlePrepareDraft = async (
+    workspace: WorkspaceCandidate,
+    _options: WorkspacePreparationOptions
+  ): Promise<WorkspaceCandidate> => {
+    const prepared = selectWorkspaceSourceBundle(workspace, usePinsStore.getState().pins);
     if (prepared.yopsDraft.operations.length === 0) {
-      const extracted = await extractCandidate(prepared);
-      prepared = extracted.workspace;
-      candidateId = extracted.candidate_id;
+      const message =
+        'No structured changes yet. Ask the Workspace assistant to propose changes, then open Review.';
+      updateSelectedFlow({ error: message }, workspace.id);
+      throw new Error(message);
     }
-
-    let yopsDraftId: string | undefined;
-    if (prepared.yopsDraft.operations.length === 0) {
-      updateSelectedFlow({ extracting: false, sendingToYOps: true }, workspace.id);
-      const yops = await sendToYOps(prepared);
-      prepared = yops.workspace;
-      candidateId = yops.candidate_id;
-      yopsDraftId = yops.yops_draft_id ?? yops.workspace.yopsDraft.id;
-    }
-
-    if (prepared.yopsDraft.operations.length === 0) {
-      throw new Error(
-        'No YOps operations were generated. Include at least one source turn or material, then retry.'
-      );
-    }
-
     setWorkspaceOverrides((current) => ({
       ...current,
       [prepared.id]: prepared,
     }));
     updateSelectedFlow(
       {
-        candidateId,
         commitHash: undefined,
         error: undefined,
-        extracting: false,
-        sendingToYOps: false,
         validationGapCount: undefined,
-        yopsDraftId: yopsDraftId ?? prepared.yopsDraft.id,
+        yopsDraftId: prepared.yopsDraft.id,
       },
       prepared.id
     );
     return prepared;
-  };
-
-  const handlePrepareDraft = async (
-    workspace: WorkspaceCandidate,
-    _options: WorkspacePreparationOptions
-  ): Promise<WorkspaceCandidate> => {
-    updateSelectedFlow(
-      {
-        commitHash: undefined,
-        error: undefined,
-        extracting: workspace.yopsDraft.operations.length === 0,
-        sendingToYOps: false,
-        validationGapCount: undefined,
-      },
-      workspace.id
-    );
-
-    try {
-      return await runPrepareDraft(workspace);
-    } catch (err) {
-      if (isWorkspaceRevisionConflict(err)) {
-        const remote = await loadRemoteWorkspace(workspace);
-        dropWorkspaceOverride(workspace.id);
-        if (remote) {
-          try {
-            updateSelectedFlow(
-              {
-                commitHash: undefined,
-                error: undefined,
-                extracting: remote.yopsDraft.operations.length === 0,
-                sendingToYOps: false,
-                validationGapCount: undefined,
-              },
-              workspace.id
-            );
-            return await runPrepareDraft(remote);
-          } catch (retryErr) {
-            updateSelectedFlow(
-              {
-                error:
-                  retryErr instanceof Error
-                    ? retryErr.message
-                    : 'Workspace draft preparation failed.',
-                extracting: false,
-                sendingToYOps: false,
-              },
-              workspace.id
-            );
-            throw retryErr;
-          }
-        }
-      }
-      updateSelectedFlow(
-        {
-          error: err instanceof Error ? err.message : 'Workspace draft preparation failed.',
-          extracting: false,
-          sendingToYOps: false,
-        },
-        workspace.id
-      );
-      throw err;
-    }
   };
 
   const handleApplyAfterRefresh = async (
@@ -613,10 +470,8 @@ export function WorkspaceWorkbench({
             candidate={selectedWorkspaceWithFlow}
             candidates={availableCandidates}
             flowState={selectedFlow}
-            onExtractCandidate={handleExtractCandidate}
             onGenerateProposal={handleGenerateProposal}
             onContinueFromCommit={handleContinueFromCommit}
-            onSendToYOps={handleSendToYOps}
             onProposalAction={handleProposalAction}
             onProposalPostureChange={handleProposalPostureChange}
             onVerifyProposal={handleVerifyProposal}
@@ -647,12 +502,10 @@ function WorkspaceDetail({
   candidates,
   flowState,
   onApplyAfterRefresh,
-  onExtractCandidate,
   onGenerateProposal,
   onContinueFromCommit,
   onProposalAction,
   onProposalPostureChange,
-  onSendToYOps,
   onSourceMaterialUploaded,
   onSourceArtifactChange,
   onDraftCommand,
@@ -673,7 +526,6 @@ function WorkspaceDetail({
   candidates: WorkspaceCandidate[];
   flowState?: WorkspaceFlowState;
   onApplyAfterRefresh: (workspace: WorkspaceCandidate) => Promise<WorkspaceCandidate>;
-  onExtractCandidate: (options?: WorkspacePreparationOptions) => void;
   onGenerateProposal: (options?: WorkspacePreparationOptions) => void;
   onContinueFromCommit: (
     commitHash: string,
@@ -682,7 +534,6 @@ function WorkspaceDetail({
   ) => Promise<void>;
   onProposalAction: (action: ProposalGenerationAction) => void;
   onProposalPostureChange: (posture: WorkspaceProposalPosture) => void;
-  onSendToYOps: () => void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onSourceArtifactChange?: (artifact: WorkspaceSourceArtifact | undefined) => void;
   onDraftCommand: (
@@ -717,8 +568,6 @@ function WorkspaceDetail({
           branchOptions={branchOptions}
           candidate={candidate}
           scenarioOptions={candidates}
-          candidateExtracted={Boolean(flowState?.candidateId)}
-          extractingCandidate={Boolean(flowState?.extracting)}
           flowError={flowState?.error}
           continuationBusy={Boolean(flowState?.continuationBusy)}
           onSourceMaterialUploaded={onSourceMaterialUploaded}
@@ -729,11 +578,9 @@ function WorkspaceDetail({
           onScenarioSelect={onScenarioSelect}
           onWorkspaceBranchChange={onWorkspaceBranchChange}
           onContinueFromCommit={onContinueFromCommit}
-          onExtractCandidate={onExtractCandidate}
           onGenerateProposal={onGenerateProposal}
           onProposalAction={onProposalAction}
           onProposalPostureChange={onProposalPostureChange}
-          onSendToYOps={onSendToYOps}
           onVerifyProposal={onVerifyProposal}
           onYOpsScriptSave={onYOpsScriptSave}
           onYOpsApplied={onYOpsApplied}
@@ -741,20 +588,14 @@ function WorkspaceDetail({
           onViewCommitInState={onViewCommitInState}
           onWorkspacesRefresh={onWorkspacesRefresh}
           onWorkflowTabChange={onWorkflowTabChange}
-          sendingToYOps={Boolean(flowState?.sendingToYOps)}
           proposalReviewState={flowState?.proposalReviewState}
           proposalGeneration={flowState?.proposalGeneration}
           proposalGenerationBusy={Boolean(flowState?.proposalGenerationBusy)}
           proposalPosture={flowState?.proposalPosture ?? 'guided'}
-          yopsDraftSent={Boolean(flowState?.yopsDraftId) && hasYOpsOperations(candidate)}
         />
       </div>
     </section>
   );
-}
-
-function hasYOpsOperations(candidate: WorkspaceCandidate | null | undefined): boolean {
-  return Boolean(candidate?.yopsDraft.operations.length);
 }
 
 function selectWorkspaceSourceBundle(

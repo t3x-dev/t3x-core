@@ -1754,13 +1754,6 @@
     {
       "source": "workspaces.openapi.ts",
       "method": "POST",
-      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/extract-candidate",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "workspaces.openapi.ts",
-      "method": "POST",
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/transition/decide",
       "policy": "project",
       "rationale": "Project ownership or project-scoped resource boundary."
@@ -1769,13 +1762,6 @@
       "source": "workspaces.openapi.ts",
       "method": "POST",
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/transition/review",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "workspaces.openapi.ts",
-      "method": "POST",
-      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/yops-draft",
       "policy": "project",
       "rationale": "Project ownership or project-scoped resource boundary."
     },

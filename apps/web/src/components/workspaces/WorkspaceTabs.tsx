@@ -23,9 +23,7 @@ export interface WorkspaceTabsProps {
   activeTab: WorkspaceTabId;
   branchOptions?: string[];
   candidate: WorkspaceCandidate;
-  candidateExtracted?: boolean;
   continuationBusy?: boolean;
-  extractingCandidate?: boolean;
   flowError?: string;
   onApplyAfterRefresh?: (workspace: WorkspaceCandidate) => Promise<WorkspaceCandidate>;
   onContinueFromCommit?: (
@@ -37,7 +35,6 @@ export interface WorkspaceTabsProps {
     workspace: WorkspaceCandidate,
     command: WorkspaceDraftCommandName
   ) => Promise<WorkspaceCandidate>;
-  onExtractCandidate?: (options?: WorkspacePreparationOptions) => Promise<void> | void;
   onGenerateProposal?: (options?: WorkspacePreparationOptions) => Promise<void> | void;
   onPrepareDraft?: (
     workspace: WorkspaceCandidate,
@@ -51,7 +48,6 @@ export interface WorkspaceTabsProps {
   onProposalPostureChange?: (posture: WorkspaceProposalPosture) => void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onSourceArtifactChange?: (artifact: WorkspaceSourceArtifact | undefined) => void;
-  onSendToYOps?: () => Promise<void> | void;
   onVerifyProposal?: () => Promise<void> | void;
   onYOpsApplied?: (remainingSchemaGapCount: number) => void;
   onYOpsCommitted?: (commitHash: string, branch: string, workspace: WorkspaceCandidate) => void;
@@ -60,13 +56,11 @@ export interface WorkspaceTabsProps {
   onWorkspacesRefresh?: (workspace?: WorkspaceCandidate) => Promise<void> | void;
   onWorkflowTabChange?: (tab: WorkspaceTabId) => void;
   onWorkspaceBranchChange?: (branch: string) => Promise<void> | void;
-  sendingToYOps?: boolean;
   proposalGeneration?: WorkspaceProposalGenerationView;
   proposalGenerationBusy?: boolean;
   proposalPosture?: WorkspaceProposalPosture;
   proposalReviewState?: ProposalGenerationReviewState;
   scenarioOptions?: WorkspaceCandidate[];
-  yopsDraftSent?: boolean;
 }
 
 export function WorkspaceTabs(props: WorkspaceTabsProps) {

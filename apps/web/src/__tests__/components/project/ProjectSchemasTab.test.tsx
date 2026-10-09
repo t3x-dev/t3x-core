@@ -19,7 +19,6 @@ vi.mock('@/components/schemas/SchemaCatalogExperience', () => ({
 
 const refreshWorkspaces = vi.fn();
 const saveDraft = vi.fn();
-const extractCandidate = vi.fn();
 const refreshPublishedVersions = vi.fn();
 let workspaces: WorkspaceCandidate[] = [];
 let publishedVersions: PublishedSchemaVersionManifest[] = [];
@@ -36,7 +35,7 @@ vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
   }),
 }));
 vi.mock('@/hooks/workspaces/useWorkspaceFlow', () => ({
-  useWorkspaceFlow: () => ({ extractCandidate, saveDraft }),
+  useWorkspaceFlow: () => ({ saveDraft }),
 }));
 vi.mock('@/hooks/schemas/useProjectYSchemaVersions', () => ({
   useProjectYSchemaVersions: () => ({
@@ -78,7 +77,6 @@ beforeEach(() => {
   refreshWorkspaces.mockReset().mockResolvedValue(undefined);
   refreshPublishedVersions.mockReset().mockResolvedValue([]);
   saveDraft.mockReset();
-  extractCandidate.mockReset();
   useProjectWorkspaceSchemaBindingsStore.setState({ bindingsByProjectId: {} });
 });
 
@@ -158,19 +156,11 @@ describe('ProjectSchemasTab', () => {
     expect(screen.getByText('No Schemas match this search or status.')).toBeInTheDocument();
   });
 
-  it('saves a stale binding before regenerating the current Workspace candidate', async () => {
+  it('saves a stale binding for the current Workspace', async () => {
     workspaces = [workspace];
     saveDraft.mockImplementation(async (candidate: WorkspaceCandidate) => ({
       candidate_id: candidate.id,
       workspace: { ...candidate, revision: 2 },
-    }));
-    extractCandidate.mockImplementation(async (candidate: WorkspaceCandidate) => ({
-      candidate_id: candidate.id,
-      workspace: {
-        ...candidate,
-        revision: 3,
-        schemaCandidate: { summary: 'Regenerated', fields: [] },
-      },
     }));
     render(<ProjectSchemasTab projectId="proj_test" />);
 
@@ -191,11 +181,10 @@ describe('ProjectSchemasTab', () => {
     );
     expect(staleWorkspace.schemaReview.verdict).toBe('needs_review');
     expect(staleWorkspace.yopsDraft.operations).toEqual([]);
-    await waitFor(() => expect(extractCandidate).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText(/candidate was regenerated/)).toBeInTheDocument();
+    expect(await screen.findByText(/Main workspace now uses Prompt Schema v1\./)).toBeInTheDocument();
   });
 
-  it('applies a published project Blueprint and regenerates the Workspace candidate', async () => {
+  it('applies a published project Blueprint to the Workspace', async () => {
     workspaces = [workspace];
     publishedVersions = [
       {
@@ -221,14 +210,6 @@ describe('ProjectSchemasTab', () => {
       candidate_id: candidate.id,
       workspace: { ...candidate, revision: 2 },
     }));
-    extractCandidate.mockImplementation(async (candidate: WorkspaceCandidate) => ({
-      candidate_id: candidate.id,
-      workspace: {
-        ...candidate,
-        revision: 3,
-        schemaCandidate: { summary: 'Regenerated from Blueprint', fields: [] },
-      },
-    }));
     render(<ProjectSchemasTab projectId="proj_test" />);
 
     fireEvent.click(screen.getByRole('button', { name: 'My Schemas' }));
@@ -246,24 +227,22 @@ describe('ProjectSchemasTab', () => {
         mode: 'pinned',
       },
     ]);
-    await waitFor(() => expect(extractCandidate).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText(/candidate was regenerated/)).toBeInTheDocument();
+    expect(await screen.findByText(/now uses Product Schema 1\.0\.0\./)).toBeInTheDocument();
   });
 
-  it('keeps the persisted stale Prompt binding recoverable when regeneration fails', async () => {
+  it('persists the stale Prompt binding and refreshes the Workspace list', async () => {
     workspaces = [workspace];
     saveDraft.mockImplementation(async (candidate: WorkspaceCandidate) => ({
       candidate_id: candidate.id,
       workspace: { ...candidate, revision: 2 },
     }));
-    extractCandidate.mockRejectedValue(new Error('Prompt source could not be regenerated'));
     render(<ProjectSchemasTab projectId="proj_test" />);
 
     fireEvent.click(screen.getByRole('button', { name: /Prompt Schema/ }));
     fireEvent.click(screen.getByRole('radio', { name: /v1 Published/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply to Main workspace' }));
 
-    expect(await screen.findByText(/regeneration failed/)).toBeInTheDocument();
+    expect(await screen.findByText(/now uses Prompt Schema v1\./)).toBeInTheDocument();
     const savedWorkspace = saveDraft.mock.calls[0][0] as WorkspaceCandidate;
     expect(savedWorkspace.schemaBindings).toEqual([
       {

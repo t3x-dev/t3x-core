@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceWorkbench } from '@/components/workspaces/WorkspaceWorkbench';
 import {
@@ -11,10 +11,8 @@ import {
 import type { WorkspaceCandidate, WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 
 const mocks = vi.hoisted(() => ({
-  extractCandidate: vi.fn(),
   refreshWorkspaces: vi.fn(),
   saveDraft: vi.fn(),
-  sendToYOps: vi.fn(),
   startNextIteration: vi.fn(),
   onSelectedWorkspaceChange: vi.fn(),
   onViewCommitInState: vi.fn(),
@@ -47,10 +45,8 @@ vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
 
 vi.mock('@/hooks/workspaces/useWorkspaceFlow', () => ({
   useWorkspaceFlow: () => ({
-    extractCandidate: mocks.extractCandidate,
     refreshWorkspaces: mocks.refreshWorkspaces,
     saveDraft: mocks.saveDraft,
-    sendToYOps: mocks.sendToYOps,
     startNextIteration: mocks.startNextIteration,
   }),
 }));
@@ -190,15 +186,6 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     mockComparison({});
     mocks.chatMessages.length = 0;
     mocks.refreshWorkspaces.mockResolvedValue([]);
-    mocks.extractCandidate.mockImplementation(async (candidate: WorkspaceCandidate) => ({
-      candidate_id: `candidate:${candidate.id}`,
-      workspace: candidate,
-    }));
-    mocks.sendToYOps.mockImplementation(async (candidate: WorkspaceCandidate) => ({
-      candidate_id: `candidate:${candidate.id}`,
-      workspace: candidate,
-      yops_draft_id: candidate.yopsDraft.id,
-    }));
     mocks.saveDraft.mockImplementation(async (candidate: WorkspaceCandidate, command?: string) => ({
       candidate_id: `candidate:${candidate.id}`,
       command,
@@ -397,9 +384,7 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Review full draft' }));
 
-    await waitFor(() => expect(mocks.extractCandidate).toHaveBeenCalledOnce());
-    await waitFor(() => expect(mocks.sendToYOps).toHaveBeenCalledOnce());
-    expect(await screen.findByRole('alert')).toHaveTextContent('No YOps operations were generated');
+    expect(await screen.findByRole('alert')).toHaveTextContent('No structured changes yet');
     expect(screen.getByRole('button', { name: 'Render' })).toHaveAttribute('aria-current', 'page');
   });
 

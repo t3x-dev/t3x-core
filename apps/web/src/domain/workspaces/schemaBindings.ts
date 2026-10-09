@@ -141,13 +141,13 @@ export function rebindWorkspaceCandidate(
     updatedAt,
     schemaBindings: replaceCurrentWorkspaceBinding(candidate.schemaBindings, binding),
     schemaCandidate: {
-      summary: `Schema binding changed to ${schemaLabel}. Regenerate the candidate from its sources.`,
+      summary: `Schema binding changed to ${schemaLabel}. Ask the Workspace assistant to propose changes.`,
       fields: [],
     },
     schemaReview: {
       verdict: 'needs_review',
       summary: `The previous candidate was produced under a different Schema and is now stale.`,
-      gaps: [`Regenerate the candidate against ${schemaLabel}.`],
+      gaps: [`Propose changes against ${schemaLabel}.`],
     },
     yopsDraft: {
       ...candidate.yopsDraft,
