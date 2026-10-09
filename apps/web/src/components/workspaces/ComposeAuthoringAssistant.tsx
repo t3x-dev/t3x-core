@@ -7,7 +7,15 @@ import type {
 } from '@t3x-dev/api-client';
 import { AlertTriangle, ArrowUp, FileText, Square, X } from 'lucide-react';
 import NextImage from 'next/image';
-import { type ClipboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type ClipboardEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   clipboardDocumentFiles,
   clipboardImageFiles,
@@ -43,6 +51,7 @@ export function ComposeAuthoringAssistant({
   activityCards,
   prefill,
   onPrefillApplied,
+  sourcesControl,
 }: {
   projectId: string;
   conversationId?: string;
@@ -57,6 +66,7 @@ export function ComposeAuthoringAssistant({
   activityCards?: Record<string, WorkspaceAuthoringCard[]>;
   prefill?: string | null;
   onPrefillApplied?: () => void;
+  sourcesControl?: ReactNode;
 }) {
   const [conversationId, setConversationId] = useState(initialConversationId);
   const [pendingCandidate, setPendingCandidate] = useState<string | null>(
@@ -354,6 +364,7 @@ export function ComposeAuthoringAssistant({
           </div>
         ) : null}
         <div className={styles.discussionComposerFooter}>
+          {sourcesControl}
           <div className={styles.composerSubmit}>
             <GenerationModelSelector
               onModelChange={model.handleModelChange}

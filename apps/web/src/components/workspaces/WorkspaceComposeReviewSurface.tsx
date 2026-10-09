@@ -59,6 +59,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { OutputTargetsTab } from '@/components/workspaces/OutputTargetsTab';
 import { SourceArtifactRoleEditor } from '@/components/workspaces/SourcesTab';
 import { SourceTransitionTab } from '@/components/workspaces/SourceTransitionTab';
@@ -594,7 +595,6 @@ function ComposeSurface({
         onModeChange={onModeChange}
       />
       <SourceToolbar
-        candidate={candidate}
         proposedChangeCount={
           activity.view
             ? changeScope === 'all'
@@ -771,6 +771,9 @@ function ComposeSurface({
               projectId={candidate.projectId}
               prefill={controller.assistantPrefill}
               onPrefillApplied={controller.clearAssistantPrefill}
+              sourcesControl={
+                <WorkspaceSourcesMenu candidate={candidate} controller={controller} />
+              }
             />
           ) : (
             <p className={composeStyles.activityStatus} role={activity.error ? 'alert' : 'status'}>
@@ -818,28 +821,17 @@ function ComposeActivityBootstrap({
   );
 }
 
-function SourceToolbar({
-  proposedChangeCount,
+function WorkspaceSourcesMenu({
   candidate,
-  changeScope,
   controller,
-  onChangeScope,
-  onDiscuss,
 }: {
-  proposedChangeCount: number;
   candidate: WorkspaceCandidate;
-  changeScope: 'latest' | 'all';
   controller: WorkspaceComposeReviewController;
-  onChangeScope: (scope: 'latest' | 'all') => void;
-  onDiscuss: () => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const primaryMaterial = controller.materialSources[0];
-  const primarySource = primaryMaterial
-    ? candidate.sourceBundle.find(
-        (item) => item.id === primaryMaterial.id || item.materialId === primaryMaterial.materialId
-      )
-    : undefined;
+  const included = controller.materialSources.filter((material) => material.included);
+  const tokenEstimate = (materialId: string) =>
+    candidate.sourceBundle.find((item) => item.materialId === materialId)?.tokenEstimate;
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -847,6 +839,82 @@ function SourceToolbar({
     if (file) void controller.uploadFile(file);
   };
 
+  return (
+    <>
+      <input
+        accept={DOCUMENT_SOURCE_ACCEPTED_TYPES}
+        aria-label="Upload source material"
+        className="hidden"
+        onChange={handleFileChange}
+        ref={fileInputRef}
+        type="file"
+      />
+      <DropdownMenu>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <button
+                aria-label={`Workspace sources (${included.length} included)`}
+                className={composeStyles.sourcesButton}
+                disabled={controller.sourceBusy}
+                type="button"
+              >
+                <Plus aria-hidden="true" />
+                {included.length > 0 ? <small>{included.length}</small> : null}
+              </button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={6}>
+            {included.length > 0 ? (
+              <ul className={composeStyles.sourcesTooltip}>
+                {included.map((material) => (
+                  <li key={material.id}>{material.title}</li>
+                ))}
+              </ul>
+            ) : (
+              'No sources included. Click to add one.'
+            )}
+          </TooltipContent>
+        </Tooltip>
+        <DropdownMenuContent align="start" className={composeStyles.sourceMaterialMenu} side="top">
+          <DropdownMenuLabel>Workspace sources</DropdownMenuLabel>
+          {controller.materialSources.map((material) => {
+            const tokens = tokenEstimate(material.materialId);
+            return (
+              <DropdownMenuCheckboxItem
+                checked={material.included}
+                disabled={controller.sourceBusy}
+                key={material.id}
+                onCheckedChange={() => void controller.toggleMaterialSource(material.materialId)}
+              >
+                <span className={composeStyles.sourceMaterialName}>{material.title}</span>
+                {tokens ? <small>{tokens} tokens</small> : null}
+              </DropdownMenuCheckboxItem>
+            );
+          })}
+          {controller.materialSources.length > 0 ? <DropdownMenuSeparator /> : null}
+          <DropdownMenuItem onSelect={() => fileInputRef.current?.click()}>
+            <FileUp aria-hidden="true" className="size-4" /> Add source
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
+  );
+}
+
+function SourceToolbar({
+  proposedChangeCount,
+  changeScope,
+  controller,
+  onChangeScope,
+  onDiscuss,
+}: {
+  proposedChangeCount: number;
+  changeScope: 'latest' | 'all';
+  controller: WorkspaceComposeReviewController;
+  onChangeScope: (scope: 'latest' | 'all') => void;
+  onDiscuss: () => void;
+}) {
   const addManually = () => {
     onDiscuss();
     requestAnimationFrame(() =>
@@ -860,68 +928,6 @@ function SourceToolbar({
         <h2 className="sr-only">Proposed changes</h2>
         <span className="sr-only">{proposedChangeCount} changes</span>
         <h3 className="sr-only">Sources</h3>
-        <div className={composeStyles.sourceChips}>
-          {primaryMaterial ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  aria-label={`Open ${controller.materialSources.length} workspace source${controller.materialSources.length === 1 ? '' : 's'}`}
-                  className={composeStyles.materialChip}
-                  disabled={controller.sourceBusy}
-                  title={controller.materialSources.map((material) => material.title).join(', ')}
-                  type="button"
-                >
-                  <FileText aria-hidden="true" />
-                  <span>{primaryMaterial.title}</span>
-                  {controller.materialSources.length > 1 ? (
-                    <small>+{controller.materialSources.length - 1}</small>
-                  ) : primarySource?.tokenEstimate ? (
-                    <small>{primarySource.tokenEstimate} tokens</small>
-                  ) : null}
-                  <ChevronDown aria-hidden="true" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className={composeStyles.sourceMaterialMenu}>
-                <DropdownMenuLabel>Workspace sources</DropdownMenuLabel>
-                {controller.materialSources.map((material) => {
-                  const source = candidate.sourceBundle.find(
-                    (item) => item.id === material.id || item.materialId === material.materialId
-                  );
-                  return (
-                    <DropdownMenuCheckboxItem
-                      checked={material.included}
-                      disabled={controller.sourceBusy}
-                      key={material.id}
-                      onCheckedChange={() =>
-                        void controller.toggleMaterialSource(material.materialId)
-                      }
-                    >
-                      <span className={composeStyles.sourceMaterialName}>{material.title}</span>
-                      {source?.tokenEstimate ? <small>{source.tokenEstimate} tokens</small> : null}
-                    </DropdownMenuCheckboxItem>
-                  );
-                })}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => fileInputRef.current?.click()}>
-                  <FileUp aria-hidden="true" /> Add source
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
-          <input
-            accept={DOCUMENT_SOURCE_ACCEPTED_TYPES}
-            aria-label="Upload source material"
-            className="hidden"
-            onChange={handleFileChange}
-            ref={fileInputRef}
-            type="file"
-          />
-          {!primaryMaterial ? (
-            <button onClick={() => fileInputRef.current?.click()} type="button">
-              <FileUp aria-hidden="true" /> Add source
-            </button>
-          ) : null}
-        </div>
         <div className={composeStyles.composeToolbarActions}>
           <button className={composeStyles.addManually} onClick={addManually} type="button">
             <Plus aria-hidden="true" /> Add manually

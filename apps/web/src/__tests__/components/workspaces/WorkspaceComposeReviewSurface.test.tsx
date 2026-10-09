@@ -296,8 +296,11 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
     expect(composer).toContainElement(modelSelector);
     expect(composer).toContainElement(send);
-    const addSource = screen.getByRole('button', { name: 'Add source' });
-    expect(addSource.querySelector('.lucide-file-up')).toBeInTheDocument();
+    const sources = screen.getByRole('button', { name: 'Workspace sources (0 included)' });
+    expect(composer).toContainElement(sources);
+    expect(sources.compareDocumentPosition(modelSelector) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
     fireEvent.change(screen.getByLabelText('Upload source material'), {
       target: { files: [new File(['exact source'], 'source.txt', { type: 'text/plain' })] },
     });
@@ -391,6 +394,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.queryByRole('button', { name: /Generate changes/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Enable Draft activity/ }));
     expect(bootstrapMocks.value.start).toHaveBeenCalledOnce();
+    expect(screen.queryByLabelText('Upload source material')).not.toBeInTheDocument();
   });
 
   it('wires artifact, changed-node, and evidence controls to real review interactions', async () => {
