@@ -13,7 +13,12 @@ import {
 } from '@t3x-dev/storage';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { verifyTransition } from '../lib/transition-control-plane';
-import { commitTransition, decideTransition } from '../lib/transition-control-plane/lifecycle';
+import { UNPROTECTED_REF_POLICY } from '../lib/transition-control-plane/applicable-policy';
+import {
+  commitTransition,
+  decideTransition,
+  TransitionReviewStaleError,
+} from '../lib/transition-control-plane/lifecycle';
 import { materializeTransitionProposal } from '../lib/transition-control-plane/materialize';
 import {
   buildAuthoringEffect,
@@ -25,6 +30,7 @@ import {
   workspaceAuthoringState,
 } from '../lib/workspace-authoring';
 import { prepareWorkspaceAuthoringReview } from '../lib/workspace-authoring-review';
+import { decideWorkspaceTransition } from '../lib/workspace-transition';
 import { setupTestDB } from './setup';
 
 describe('durable Draft authoring commands', () => {
@@ -349,5 +355,68 @@ describe('durable Draft authoring commands', () => {
         })
       ).commitDigest
     ).toBe(committed.commitDigest);
+  });
+  it('lets a human commit a Draft on an unprotected ref while machine actors still need a rule', async () => {
+    const init = await initialize('unprotected');
+    const saved = await publishWorkspaceAuthoringAction(setup.db, {
+      projectId,
+      workspaceId: 'unprotected',
+      actionId: 'edit',
+      actor,
+      channel: 'manual',
+      expectedRevision: 0,
+      expectedWorkspaceRevision: init.draft.revision,
+      expectedRefHead: null,
+      operations: [{ set: { path: 'prd', value: { audience: 'operators' } } }],
+    });
+    const reviewed = await prepareWorkspaceAuthoringReview({
+      db: setup.db,
+      projectId,
+      workspaceId: 'unprotected',
+      requestId: 'unprotected-review',
+      actor,
+      expectedRevision: 1,
+      expectedWorkspaceRevision: saved.draft.revision,
+      expectedRefHead: null,
+    });
+    const precondition = reviewed.view.precondition;
+    expect(precondition.policyDigest).toBe(UNPROTECTED_REF_POLICY.resource.digest);
+    await expect(
+      decideTransition({
+        db: setup.db,
+        projectId,
+        transitionId: reviewed.view.transitionId,
+        requestId: 'agent-decide',
+        actor: { kind: 'agent', id: 'agent:test' },
+        outcome: 'accepted',
+        precondition,
+      })
+    ).rejects.toBeInstanceOf(TransitionReviewStaleError);
+
+    const decide = (outcome: 'accepted' | 'overridden', decisionReason?: string) =>
+      decideWorkspaceTransition(setup.db, {
+        projectId,
+        workspaceId: 'unprotected',
+        transitionId: reviewed.view.transitionId,
+        actor,
+        policyBinding: null,
+        outcome,
+        ...(decisionReason === undefined ? {} : { decisionReason }),
+        precondition: {
+          workspaceRevision: precondition.workspaceRevision,
+          refHead: precondition.refHead,
+          effectDigest: precondition.effectDigest,
+          proposalDigest: precondition.proposalDigest,
+          statementDigests: [...precondition.statementDigests],
+          policyDigest: precondition.policyDigest!,
+        },
+      });
+    await expect(decide('accepted')).rejects.toMatchObject({
+      failures: [expect.objectContaining({ code: 'VALIDATION_FAILED', overrideable: true })],
+    });
+    const decided = await decide('overridden', 'Ship the partial PRD');
+    expect(decided.commit).toBeDefined();
+    const retained = await findWorkspaceDraft(setup.db, projectId, 'unprotected');
+    expect(retained?.status).toBe('committed');
   });
 });

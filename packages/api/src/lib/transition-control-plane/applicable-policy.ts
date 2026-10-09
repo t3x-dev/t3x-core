@@ -63,6 +63,73 @@ export const PROPOSAL_POSTURE_VERIFIER_ENVIRONMENT = Object.freeze(
   )
 );
 
+const TRANSITION_REPLAY_ACTOR = Object.freeze({
+  kind: 'service' as const,
+  id: 'service:t3x-transition-replay',
+});
+const TRANSITION_REPLAY_TOOL = Object.freeze({ name: '@t3x-dev/transition/replay', version: '1' });
+const ANY_CLAIM = Object.freeze({
+  allowedModes: ['authored', 'inferred', 'stated', 'unspecified'],
+  minimumEvidence: 0,
+  humanConfirmation: 'not_required',
+});
+
+/**
+ * Policy for a ref with no protection rule: any human may decide, including the
+ * proposer; Replay stays load-bearing and failed validation needs an override.
+ */
+export const UNPROTECTED_REF_POLICY = Object.freeze(
+  createAcceptancePolicyResource({
+    uri: 't3x://policies/unprotected-ref/v1',
+    policy: {
+      schema: 't3x.dev/acceptance-policy/v1',
+      version: 1,
+      authorization: {
+        decide: { actors: { mode: 'any' } },
+        override: { actors: { mode: 'any' } },
+        allowSelfApproval: true,
+      },
+      claims: { intent: ANY_CLAIM, rationale: ANY_CLAIM },
+      checks: {
+        replay: {
+          issuers: { mode: 'one_of', values: [TRANSITION_REPLAY_ACTOR] },
+          tools: { mode: 'one_of', values: [TRANSITION_REPLAY_TOOL] },
+          environments: { mode: 'one_of', values: [{ mode: 'unspecified' }] },
+        },
+        validation: {
+          requirement: 'optional',
+          issuers: { mode: 'any' },
+          tools: { mode: 'any' },
+          environments: { mode: 'any' },
+          profiles: { mode: 'any' },
+          schemas: { mode: 'any' },
+          contexts: { mode: 'any' },
+        },
+        humanConfirmation: { issuers: { mode: 'any' } },
+      },
+      override: {
+        allowClaimFailures: false,
+        allowFailedValidation: true,
+        allowMissingHumanConfirmation: false,
+        allowMissingValidation: true,
+      },
+    },
+  })
+) as Pick<TransitionPolicyBinding, 'policy' | 'resource'>;
+
+/**
+ * Select the ref policy an actor is governed by. Humans fall back to the
+ * unprotected policy; agent and service actors still require an explicit
+ * binding, and an unknown caller sees only explicit bindings.
+ */
+export function refPolicyForActor<T extends Pick<TransitionPolicyBinding, 'policy' | 'resource'>>(
+  binding: T | null,
+  actor: { kind: 'human' | 'agent' | 'service' } | undefined
+): T | Pick<TransitionPolicyBinding, 'policy' | 'resource'> | null {
+  if (binding !== null) return binding;
+  return actor?.kind === 'human' ? UNPROTECTED_REF_POLICY : null;
+}
+
 export class GenerationPolicyIncompatibleError extends Error {
   readonly code = 'GENERATION_POLICY_INCOMPATIBLE';
 

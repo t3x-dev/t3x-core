@@ -63,6 +63,7 @@ import {
 import { assertWorkspaceAuthoringReview } from '../workspace-authoring';
 import {
   assertGenerationDecisionActor,
+  refPolicyForActor,
   resolveApplicableTransitionPolicy,
 } from './applicable-policy';
 import { inspectTransition, type TransitionControlPlaneView } from './index';
@@ -281,11 +282,12 @@ export async function decideTransition(input: {
       if (
         locked.membershipFound &&
         input.authoritySelection === undefined &&
-        !locked.policyBindingFound
+        !locked.policyBindingFound &&
+        input.actor.kind !== 'human'
       ) {
-        // Default repository authority requires an explicit binding. The
-        // project-parent lock keeps this observed absence sealed until the
-        // transaction finishes.
+        // Machine actors require an explicit binding; humans fall back to the
+        // unprotected policy. The project-parent lock keeps this observed
+        // absence sealed until the transaction finishes.
         throw new TransitionReviewStaleError();
       }
       const facts = await resolveReviewFacts(
@@ -297,9 +299,10 @@ export async function decideTransition(input: {
       const selected =
         input.authoritySelection === undefined
           ? (() => {
-              if (facts.refPolicyBinding === null) throw new TransitionReviewStaleError();
+              const refPolicyBinding = refPolicyForActor(facts.refPolicyBinding, input.actor);
+              if (refPolicyBinding === null) throw new TransitionReviewStaleError();
               const applicablePolicy = resolveApplicableTransitionPolicy({
-                refPolicyBinding: facts.refPolicyBinding,
+                refPolicyBinding,
                 requestKind: facts.graph.membership.requestKind,
                 preparationFacts:
                   facts.graph.preparation === null
@@ -660,12 +663,13 @@ export async function commitTransition(input: {
       ? null
       : (JSON.parse(graph.preparation.canonicalJson) as ProtocolValue);
   const isGeneratedProposal = isGeneratedProposalPreparation(preparationFacts);
-  if (refPolicyBinding === null && isGeneratedProposal) throw new TransitionReviewStaleError();
+  const governingPolicy = refPolicyForActor(refPolicyBinding, input.actor);
+  if (governingPolicy === null && isGeneratedProposal) throw new TransitionReviewStaleError();
   const applicablePolicy =
-    refPolicyBinding === null
+    governingPolicy === null
       ? null
       : resolveApplicableTransitionPolicy({
-          refPolicyBinding,
+          refPolicyBinding: governingPolicy,
           requestKind: graph.membership.requestKind,
           preparationFacts,
         });

@@ -48,7 +48,7 @@ import {
   buildWorkspaceYOpsProposal,
   WorkspaceTransitionReviewStaleError,
 } from '../workspace-transition';
-import { resolveApplicableTransitionPolicy } from './applicable-policy';
+import { refPolicyForActor, resolveApplicableTransitionPolicy } from './applicable-policy';
 import { canonicalTransitionRequest, materializeTransitionProposal } from './materialize';
 
 type ActorRef = TransitionActorRef;
@@ -229,8 +229,11 @@ export async function inspectTransition(input: {
   const ports: TransitionInspectionPorts<ProposalGenerationReviewProjection> = {
     resolveTransitionProposalGraph: ({ projectId, transitionId }) =>
       resolveTransitionProposalGraph(input.db, projectId, transitionId),
-    getTransitionPolicyBinding: ({ projectId, refName }) =>
-      getTransitionPolicyBinding(input.db, projectId, refName),
+    getTransitionPolicyBinding: async ({ projectId, refName }) =>
+      refPolicyForActor(
+        await getTransitionPolicyBinding(input.db, projectId, refName),
+        input.actor
+      ),
     resolveApplicableTransitionPolicy: ({ refPolicyBinding, requestKind, preparationFacts }) =>
       resolveApplicableTransitionPolicy({
         refPolicyBinding,
