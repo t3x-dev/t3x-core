@@ -12,7 +12,8 @@ import {
   RotateCcw,
   Sparkles,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   activityChannelLabel,
   type ComposeActivitySelection,
@@ -25,6 +26,10 @@ import {
 } from '@/domain/composePresentation';
 import { authoringSemanticContent } from '@/domain/workspaces/authoringReview';
 import { composeDraftFields } from '@/domain/workspaces/composeDraftFields';
+import {
+  composeCardsAtPath,
+  composeDraftValueAtPath,
+} from '@/domain/workspaces/composeDraftChanges';
 import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import { ComposeDraftValueEditor, isSimpleDraftValue } from './ComposeDraftValueEditor';
 import styles from './ComposeFieldDetails.module.css';
@@ -33,10 +38,10 @@ function actorLabel(id: string) {
   return id === 'human:local-user' ? 'You' : composeActorLabel(id);
 }
 
-function valueLabel(value: unknown) {
+function valueLabel(value: unknown, formatted = false) {
   if (value === undefined) return 'Absent';
   if (typeof value === 'string') return value || 'Empty text';
-  return JSON.stringify(value);
+  return JSON.stringify(value, null, formatted ? 2 : undefined);
 }
 
 function valueType(value: unknown) {
@@ -45,10 +50,106 @@ function valueType(value: unknown) {
   return Array.isArray(value) ? 'array' : typeof value;
 }
 
-function ValueDelta({ before, after }: { before: unknown; after: unknown }) {
+function ExpandableText({
+  text,
+  expandedText,
+  label,
+  className = '',
+  compact = false,
+}: {
+  text: string;
+  expandedText?: string;
+  label: string;
+  className?: string;
+  compact?: boolean;
+}) {
+  const id = useId();
+  const content = useRef<HTMLDivElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+
+  useEffect(() => setExpanded(false), [text]);
+  useEffect(() => {
+    const element = content.current;
+    if (!element || expanded) return;
+    const measure = () =>
+      setOverflows(
+        element.scrollHeight > element.clientHeight + 1 ||
+          element.scrollWidth > element.clientWidth + 1
+      );
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(element);
+    return () => observer?.disconnect();
+  }, [expanded, text]);
+
+  return (
+    <div
+      className={`${styles.expandable} ${className}`}
+      role="region"
+      aria-label={label}
+      data-expanded={expanded}
+      data-compact={compact}
+    >
+      <div className={styles.valueText} id={id} ref={content}>
+        {expanded ? (expandedText ?? text) : text}
+      </div>
+      {overflows || expanded ? (
+        <button
+          className={styles.expandButton}
+          type="button"
+          aria-controls={id}
+          aria-expanded={expanded}
+          aria-label={`${expanded ? 'Show less' : 'Show more'}: ${label}`}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function ValueDelta({
+  before,
+  after,
+  expandable = false,
+}: {
+  before: unknown;
+  after: unknown;
+  expandable?: boolean;
+}) {
   const beforeText = valueLabel(before);
   const afterText = valueLabel(after);
-  if (beforeText === afterText) return <span className={styles.unchanged}>{afterText}</span>;
+  if (expandable) {
+    if (beforeText === afterText)
+      return <ExpandableText text={afterText} label="Unchanged value" compact />;
+    return (
+      <div className={styles.expandedDelta}>
+        <ExpandableText
+          text={beforeText}
+          expandedText={valueLabel(before, true)}
+          label="Before selected change"
+          className={styles.beforeValue}
+          compact
+        />
+        <ArrowRight aria-hidden="true" />
+        <ExpandableText
+          text={afterText}
+          expandedText={valueLabel(after, true)}
+          label="After selected change"
+          className={styles.afterValue}
+          compact
+        />
+      </div>
+    );
+  }
+  if (beforeText === afterText)
+    return (
+      <span className={styles.unchanged} title={afterText}>
+        {afterText}
+      </span>
+    );
   return (
     <span className={styles.delta}>
       <del title={beforeText}>{beforeText}</del>
@@ -113,7 +214,7 @@ function DraftStructure({
                 title={field.path}
               >
                 <span>{field.label}</span>
-                <code>
+                <code title={valueLabel(field.value)}>
                   {field.value !== null && typeof field.value === 'object'
                     ? valueType(field.value)
                     : valueLabel(field.value)}
@@ -170,10 +271,10 @@ export function ComposeNodeHistoryPanel({
   const selectedPath = selection?.operation.path;
 
   useEffect(() => {
-    setEditing(false);
+    setEditing(Boolean(selection?.meta.editRequest));
     setSaveError(null);
     setCopyNotice(null);
-  }, [nodeId, selectedPath, selection?.meta.actionId]);
+  }, [nodeId, selectedPath, selection?.meta.actionId, selection?.meta.editRequest]);
   useEffect(() => {
     if (nodeId) void activity.inspectNode(nodeId, selection?.meta.actionId);
   }, [
@@ -196,30 +297,33 @@ export function ComposeNodeHistoryPanel({
   // and typed values instead of substituting an unrelated container's current value.
   const derivedEntries = activity.actions
     .flatMap((action) =>
-      expandComposeActivityCards(activity.cards[action.actionId] ?? [])
-        .filter((card) => card.path === selectedPath)
-        .map((card) => ({
-          actionId: action.actionId,
-          sequence: action.sequence,
-          revision: action.afterRevision,
-          channel: action.channel,
-          actor: action.actor,
-          publishedAt: action.publishedAt,
-          ownerNodeId: card.nodeId,
-          beforePath: card.beforePath,
-          afterPath: card.afterPath,
-          before: card.before,
-          after: card.after,
-          isSelected: action.actionId === selection.meta.actionId,
-        }))
+      composeCardsAtPath(
+        expandComposeActivityCards(activity.cards[action.actionId] ?? []),
+        selectedPath!
+      ).map((card) => ({
+        actionId: action.actionId,
+        sequence: action.sequence,
+        revision: action.afterRevision,
+        channel: action.channel,
+        actor: action.actor,
+        publishedAt: action.publishedAt,
+        ownerNodeId: card.nodeId,
+        beforePath: card.beforePath,
+        afterPath: card.afterPath,
+        before: card.before,
+        after: card.after,
+        isSelected: action.actionId === selection.meta.actionId,
+      }))
     )
     .sort((left, right) => right.sequence - left.sequence);
-  const netCard = activity.view?.netDiff.find(
-    (card) =>
-      card.path === selectedPath ||
-      card.beforePath === selectedPath ||
-      card.afterPath === selectedPath
-  );
+  const netCard =
+    composeCardsAtPath(activity.view?.netDiff ?? [], selectedPath!)[0] ??
+    activity.view?.netDiff.find(
+      (card) =>
+        card.path === selectedPath ||
+        card.beforePath === selectedPath ||
+        card.afterPath === selectedPath
+    );
   const matchedNode =
     activity.node &&
     (activity.node.path === selectedPath ||
@@ -229,7 +333,12 @@ export function ComposeNodeHistoryPanel({
         )))
       ? activity.node
       : null;
-  const current = netCard ? netCard.after : derivedEntries[0]?.after;
+  const current =
+    activity.view?.current !== undefined && selectedPath
+      ? composeDraftValueAtPath(activity.view.current, selectedPath)
+      : netCard
+        ? netCard.after
+        : derivedEntries[0]?.after;
   const node =
     matchedNode ??
     (derivedEntries.length || netCard
@@ -280,9 +389,10 @@ export function ComposeNodeHistoryPanel({
   const selectedChannel = selectedAction?.channel ?? selection.meta.channel;
   const selectedTime = selectedAction?.publishedAt ?? selection.meta.timestamp;
   const selectedCard = selectedAction
-    ? expandComposeActivityCards(activity.cards[selectedAction.actionId] ?? []).find(
-        (card) => card.path === selectedPath
-      )
+    ? composeCardsAtPath(
+        expandComposeActivityCards(activity.cards[selectedAction.actionId] ?? []),
+        selectedPath!
+      )[0]
     : undefined;
   const comparison =
     selection.meta.comparison === 'draft'
@@ -305,6 +415,18 @@ export function ComposeNodeHistoryPanel({
     node.state === 'present' &&
     isSimpleDraftValue(node.current) &&
     !activity.nodeError;
+  const editOpen = editing && canEdit;
+  const editDisabledReason = saving
+    ? 'Wait for the current change to finish saving.'
+    : !path
+      ? 'This value has no field path available for editing.'
+      : activity.nodeError || node.state === 'unknown'
+        ? 'The current value could not be loaded. Try again before editing.'
+        : node.state !== 'present'
+          ? 'This value is no longer present in the current Draft.'
+          : !isSimpleDraftValue(node.current)
+            ? 'Objects and arrays cannot be edited here. Select a text, number, or boolean field, or use Ask AI.'
+            : undefined;
   const copyPath = async () => {
     if (!path) return;
     try {
@@ -357,13 +479,13 @@ export function ComposeNodeHistoryPanel({
           <span>Current Draft value</span>
           <span>{node.state === 'unknown' ? 'unknown' : valueType(node.current)}</span>
         </div>
-        <div
-          className={styles.currentValue}
-          role="region"
-          aria-label="Current Draft value"
-          data-structured={!isSimpleDraftValue(node.current)}
-        >
-          {node.state === 'unknown' ? 'Unavailable' : valueLabel(node.current)}
+        <div className={styles.currentValue} data-type={valueType(node.current)}>
+          <ExpandableText
+            key={path}
+            text={node.state === 'unknown' ? 'Unavailable' : valueLabel(node.current)}
+            expandedText={node.state === 'unknown' ? 'Unavailable' : valueLabel(node.current, true)}
+            label="Current Draft value"
+          />
         </div>
         <div className={styles.selectedDelta}>
           <span>
@@ -377,21 +499,41 @@ export function ComposeNodeHistoryPanel({
           {matchesBase ? (
             <span>Matches Base · no change</span>
           ) : (
-            <ValueDelta before={comparison.before} after={comparison.after} />
+            <ValueDelta
+              key={`${path}:${selection.meta.actionId ?? 'draft'}`}
+              before={comparison.before}
+              after={comparison.after}
+              expandable
+            />
           )}
         </div>
-        {!editing ? (
+        {!editOpen ? (
           <div className={styles.actions}>
-            <button
-              type="button"
-              disabled={saving || !canEdit}
-              onClick={() => {
-                setSaveError(null);
-                setEditing(true);
-              }}
-            >
-              <Pencil aria-hidden="true" /> Edit
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  className={styles.editTrigger}
+                  tabIndex={editDisabledReason ? 0 : undefined}
+                  aria-label={editDisabledReason ? 'Edit unavailable' : undefined}
+                >
+                  <button
+                    type="button"
+                    disabled={saving || !canEdit}
+                    onClick={() => {
+                      setSaveError(null);
+                      setEditing(true);
+                    }}
+                  >
+                    <Pencil aria-hidden="true" /> Edit
+                  </button>
+                </span>
+              </TooltipTrigger>
+              {editDisabledReason ? (
+                <TooltipContent side="top" align="start" sideOffset={6} className="max-w-72">
+                  {editDisabledReason}
+                </TooltipContent>
+              ) : null}
+            </Tooltip>
             <button className={styles.ask} type="button" disabled={saving} onClick={onDiscuss}>
               <Sparkles aria-hidden="true" /> Ask AI
             </button>
@@ -399,7 +541,7 @@ export function ComposeNodeHistoryPanel({
         ) : null}
       </div>
       <div className={styles.body}>
-        {editing && path ? (
+        {editOpen && path ? (
           <ComposeDraftValueEditor
             key={path}
             activity={activity}
@@ -426,7 +568,11 @@ export function ComposeNodeHistoryPanel({
         {!editing && selectedReason ? (
           <section className={styles.reason}>
             <h3>Reason for this action</h3>
-            <p>{selectedReason}</p>
+            <ExpandableText
+              text={selectedReason}
+              label="Reason for this action"
+              className={styles.reasonText}
+            />
             <span>
               {selectedActor ? actorLabel(selectedActor) + ' / ' : ''}
               {activityChannelLabel(selectedChannel)}
@@ -473,7 +619,12 @@ export function ComposeNodeHistoryPanel({
             {historyCursor === null && node.entries.length > 0 && !historyLoading ? (
               <div className={styles.initialValue}>
                 <span>Before this workspace</span>
-                <strong>{valueLabel(node.entries.at(-1)?.before)}</strong>
+                <ExpandableText
+                  text={valueLabel(node.entries.at(-1)?.before)}
+                  expandedText={valueLabel(node.entries.at(-1)?.before, true)}
+                  label="Before this workspace"
+                  compact
+                />
               </div>
             ) : null}
             {historyLoading ? (

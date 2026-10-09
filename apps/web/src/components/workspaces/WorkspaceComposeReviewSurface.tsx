@@ -59,6 +59,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { OutputTargetsTab } from '@/components/workspaces/OutputTargetsTab';
+import { ComposeDraftChangeRow } from '@/components/workspaces/ComposeDraftChangeRow';
 import { SourceArtifactRoleEditor } from '@/components/workspaces/SourcesTab';
 import { SourceTransitionTab } from '@/components/workspaces/SourceTransitionTab';
 import { WorkspaceContentEditor } from '@/components/workspaces/WorkspaceContentEditor';
@@ -100,6 +101,7 @@ import {
   authoringVisibleCards,
   buildAuthoringReviewProjection,
 } from '@/domain/workspaces/authoringReview';
+import { composeDraftChangeCards } from '@/domain/workspaces/composeDraftChanges';
 import {
   DEFAULT_WORKSPACE_SCHEMA_CHOICE_ID,
   listWorkspaceSchemaChoices,
@@ -621,7 +623,7 @@ function ComposeSurface({
         proposedChangeCount={
           activity.view
             ? changeScope === 'all'
-              ? activity.view.netDiff.length
+              ? composeDraftChangeCards(activity.view.netDiff).length
               : groupComposeActivity(activity.actions).reduce(
                   (count, event) => count + composeEventCards(event, activity.cards).length,
                   0
@@ -1075,16 +1077,18 @@ function ProposedDraftPanel({
   onStepChange: (step: number) => void;
 }) {
   const operations = candidate.yopsDraft.operations;
+  const editRequest = useRef(0);
   useEffect(() => {
     if (!activity.view) return;
     if (changeScope === 'all') {
       if (activitySelection?.meta.comparison === 'draft') return;
+      const changes = composeDraftChangeCards(activity.view.netDiff);
       const card =
-        activity.view.netDiff.find(
+        changes.find(
           (item) =>
             item.nodeId === activitySelection?.operation.id &&
             item.path === activitySelection.operation.path
-        ) ?? activity.view.netDiff[0];
+        ) ?? changes[0];
       if (card)
         onActivitySelect(
           {
@@ -1140,6 +1144,26 @@ function ProposedDraftPanel({
     const stamp = meta?.timestamp ?? candidate.updatedAt;
     const field = composeFieldPresentation(candidate, operation);
     const FieldIcon = field.icon;
+    if (meta?.comparison === 'draft') {
+      return (
+        <ComposeDraftChangeRow
+          key={`${operation.id}:${operation.path}`}
+          operation={operation}
+          Icon={FieldIcon}
+          selected={selected}
+          onSelect={() => selectChange()}
+          onEdit={() =>
+            onActivitySelect(
+              {
+                operation,
+                meta: { ...meta, editRequest: ++editRequest.current },
+              },
+              'history'
+            )
+          }
+        />
+      );
+    }
     const operationSource =
       meta && !operation.sourceRefs?.length
         ? undefined
@@ -1159,9 +1183,7 @@ function ProposedDraftPanel({
     const cardTitle =
       composeNodeTitle(afterValue) ??
       composeNodeTitle(beforeValue) ??
-      (meta?.comparison === 'draft' && field.label === 'Requirement' && afterValue !== undefined
-        ? valueLabels.after
-        : composePathLabel(operation.path, operation.id));
+      composePathLabel(operation.path, operation.id);
     const cardReason = operation.reason ?? operation.summary;
     const showReason =
       cardReason !== `Change ${operation.path}` &&

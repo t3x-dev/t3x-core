@@ -1,9 +1,12 @@
 .panel {
   display: flex;
   flex: 1;
+  min-width: 0;
   min-height: 0;
   flex-direction: column;
+  overflow-y: auto;
   color: var(--text-primary);
+  scrollbar-width: thin;
 }
 .panel svg {
   width: 14px;
@@ -18,6 +21,7 @@
   cursor: not-allowed;
 }
 .panel button:focus-visible,
+.editTrigger:focus-visible,
 .disclosure > summary:focus-visible {
   outline: 2px solid var(--accent-commit);
   outline-offset: 2px;
@@ -85,30 +89,91 @@
   font: 10px var(--font-mono);
 }
 .currentValue {
-  max-height: 112px;
-  overflow: auto;
   border-radius: var(--radius-md);
   background: var(--surface-app);
   margin-bottom: 12px;
   padding: 12px;
+  font-size: 14px;
+  line-height: 1.65;
+}
+.currentValue[data-type="number"],
+.currentValue[data-type="boolean"] {
   font-size: 23px;
   font-weight: 500;
   line-height: 1.4;
+}
+.currentValue[data-type="object"],
+.currentValue[data-type="array"] {
+  font: 12px / 1.7 var(--font-mono);
+}
+.expandable {
+  min-width: 0;
+  max-width: 100%;
+}
+.valueText {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
-.currentValue[data-structured="true"] {
-  font: 12px / 1.7 var(--font-mono);
+.expandable[data-compact="true"] .valueText {
+  display: block;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.expandable[data-expanded="true"] .valueText {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  white-space: pre-wrap;
+}
+.expandButton {
+  display: block;
+  margin-top: 4px;
+  padding: 4px 0;
+  color: var(--accent-commit);
+  font: 11px / 1.5 var(--font-inter), sans-serif;
+}
+.expandButton:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .selectedDelta {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
+  min-width: 0;
+  flex-direction: column;
+  align-items: stretch;
   gap: 8px;
   margin-bottom: 16px;
   color: var(--text-tertiary);
   font-size: 10px;
+}
+.expandedDelta {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) 14px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.expandedDelta > svg {
+  margin-top: 6px;
+}
+.beforeValue,
+.afterValue {
+  border-radius: var(--radius-sm);
+  padding: 4px 6px;
+}
+.beforeValue {
+  background: var(--diff-removed-bg);
+  color: var(--diff-removed-text);
+}
+.afterValue {
+  background: var(--diff-added-bg);
+  color: var(--diff-added-text);
 }
 .delta {
   display: inline-flex;
@@ -121,13 +186,12 @@
 .delta del,
 .delta ins {
   min-width: 0;
-  max-height: 64px;
-  overflow: auto;
+  overflow: hidden;
   border-radius: var(--radius-sm);
   padding: 3px 6px;
   text-decoration: none;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .delta del {
   background: var(--diff-removed-bg);
@@ -138,13 +202,26 @@
   color: var(--diff-added-text);
 }
 .unchanged {
-  overflow-wrap: anywhere;
+  min-width: 0;
+  overflow: hidden;
   color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .actions {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+.editTrigger {
+  display: inline-flex;
+  border-radius: var(--radius-md);
+}
+.editTrigger[tabindex="0"] {
+  cursor: not-allowed;
+}
+.editTrigger button:disabled {
+  pointer-events: none;
 }
 .actions button,
 .textButton {
@@ -170,11 +247,9 @@
   color: var(--accent-conversation);
 }
 .body {
-  flex: 1;
+  flex: none;
   min-height: 0;
-  overflow-y: auto;
   padding: 0 20px;
-  scrollbar-width: thin;
 }
 .reason {
   border-top: 1px solid var(--stroke-divider);
@@ -185,7 +260,7 @@
   font-size: 13px;
   font-weight: 600;
 }
-.reason p {
+.reasonText {
   margin: 8px 0;
   color: var(--text-secondary);
   font-size: 13px;
@@ -264,8 +339,12 @@
   margin-top: 4px;
   color: var(--text-tertiary);
   font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.historyRow .delta {
+.historyRow .delta,
+.historyRow .unchanged {
   max-width: 60%;
   font-size: 10px;
 }
@@ -277,10 +356,8 @@
   color: var(--text-tertiary);
   font-size: 10px;
 }
-.initialValue strong {
+.initialValue .expandable {
   max-width: 60%;
-  overflow-wrap: anywhere;
-  font-weight: 400;
 }
 .textButton {
   color: var(--text-secondary);
@@ -364,6 +441,7 @@
   flex: none;
   align-items: center;
   gap: 8px;
+  margin-top: auto;
   border-top: 1px solid var(--stroke-divider);
   background: var(--surface-panel);
   padding: 12px 20px;

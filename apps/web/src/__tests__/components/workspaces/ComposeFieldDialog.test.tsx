@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import * as yaml from 'js-yaml';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ComposeFieldDialog } from '@/components/workspaces/ComposeFieldDialog';
 import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 
@@ -24,6 +25,8 @@ function draftActivity() {
 }
 
 describe('Compose field editing', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
   it('requires a reason and publishes a typed change through the existing Draft action', async () => {
     const activity = draftActivity();
     render(
@@ -96,11 +99,20 @@ describe('Compose field editing', () => {
     expect(activity.publish).not.toHaveBeenCalled();
   });
 
-  it('opens a read-only YAML view of the real draft without writing it', () => {
+  it('preserves and copies the complete Draft YAML through syntax highlighting without writing it', async () => {
     const activity = draftActivity();
+    const current = {
+      allocation: 20,
+      enabled: false,
+      empty: null,
+      message: '<script>hello</script>\n第二行: "quoted"\n',
+      regions: ['a:b', 'true'],
+    };
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
     render(
       <ComposeFieldDialog
-        activity={activity}
+        activity={{ ...activity, view: { ...activity.view!, current } }}
         initialView="yaml"
         title="Release"
         onClose={vi.fn()}
@@ -110,6 +122,12 @@ describe('Compose field editing', () => {
     expect(screen.getByRole('region', { name: 'Current Draft YAML' })).toHaveTextContent(
       'allocation: 20'
     );
+    const source = screen.getByLabelText('YAML source');
+    expect(yaml.load(source.textContent ?? '')).toEqual(current);
+    expect(source.querySelector('script')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy YAML' }));
+    await waitFor(() => expect(screen.getByText('YAML copied.')).toBeInTheDocument());
+    expect(writeText).toHaveBeenCalledWith(source.textContent);
     expect(screen.queryByRole('button', { name: 'Save change' })).not.toBeInTheDocument();
     expect(activity.publish).not.toHaveBeenCalled();
   });

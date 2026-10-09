@@ -13,6 +13,7 @@ import {
 } from '@/domain/composeActivity';
 import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
 import { saveProjectWorkspace } from '@/infrastructure/workspaces';
+import { composeCardsAtPath } from '@/domain/workspaces/composeDraftChanges';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
 /** Compose-owned adapter over the immutable Draft authoring command and projection APIs. */
@@ -178,9 +179,13 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
           (item) => item.nodeId === nodeId
         );
         const card = path
-          ? (nodeCards.find(
+          ? (composeCardsAtPath(result.selected.cards, path).find(
+              (item) => item.nodeId === nodeId
+            ) ??
+            nodeCards.find(
               (item) => item.path === path || item.beforePath === path || item.afterPath === path
-            ) ?? (nodeCards.length === 1 ? nodeCards[0] : undefined))
+            ) ??
+            (nodeCards.length === 1 ? nodeCards[0] : undefined))
           : result.selected.cards.find((item) => item.nodeId === nodeId);
         if (!card) return null;
         setCards((current) => ({ ...current, [actionId]: result.selected!.cards }));

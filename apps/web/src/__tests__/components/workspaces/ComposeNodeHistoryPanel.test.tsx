@@ -171,6 +171,51 @@ describe('Compose field Details', () => {
     expect(screen.getByLabelText('New value')).toHaveAttribute('type', 'number');
   });
 
+  it('edits the selected field from an All changes row without replacing its containing object', async () => {
+    const activity = activityFixture();
+    const parent = { nodeId: 'rollout', path: 'rollout' };
+    activity.view!.netDiff = [
+      {
+        ...parent,
+        before: { allocation: 20, enabled: true },
+        after: { allocation: 30, enabled: true },
+      },
+    ];
+    activity.cards = {
+      a1: [{ ...parent, before: { allocation: 20 }, after: { allocation: 25 } }],
+      a2: [{ ...parent, before: { allocation: 25 }, after: { allocation: 30 } }],
+    };
+    activity.node = {
+      ...parent,
+      state: 'present',
+      current: { allocation: 30, enabled: true },
+      entries: [],
+    };
+    render(
+      <ComposeNodeHistoryPanel
+        activity={activity}
+        selection={{
+          operation: { ...selection.operation, id: 'rollout' },
+          meta: { eventId: 'all', comparison: 'draft', editRequest: 1 },
+        }}
+        onOpenAction={vi.fn()}
+        onDiscuss={vi.fn()}
+        onOpenStructure={vi.fn()}
+      />
+    );
+    expect(screen.getByLabelText('New value')).toHaveValue(30);
+    fireEvent.change(screen.getByLabelText('New value'), { target: { value: '35' } });
+    fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'Expand after checks' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save change' }));
+    await waitFor(() =>
+      expect(activity.publish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operations: [{ set: { path: 'rollout/allocation', value: 35 } }],
+        })
+      )
+    );
+  });
+
   it('shows real YAML and opens the existing full view without changing the draft', () => {
     const activity = activityFixture();
     const onOpenStructure = vi.fn();
