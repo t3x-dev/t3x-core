@@ -161,7 +161,11 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
   );
 
   const selectActionNode = useCallback(
-    async (actionId: string, nodeId: string): Promise<ComposeActivitySelection | null> => {
+    async (
+      actionId: string,
+      nodeId: string,
+      path?: string
+    ): Promise<ComposeActivitySelection | null> => {
       if (!enabled) return null;
       try {
         const result = await getSharedApiClient().workspaces.authoring.read(
@@ -170,7 +174,14 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
           { action_id: actionId, node_id: nodeId }
         );
         if (!result.selected) return null;
-        const card = result.selected.cards.find((item) => item.nodeId === nodeId);
+        const nodeCards = expandComposeActivityCards(result.selected.cards).filter(
+          (item) => item.nodeId === nodeId
+        );
+        const card = path
+          ? (nodeCards.find(
+              (item) => item.path === path || item.beforePath === path || item.afterPath === path
+            ) ?? (nodeCards.length === 1 ? nodeCards[0] : undefined))
+          : result.selected.cards.find((item) => item.nodeId === nodeId);
         if (!card) return null;
         setCards((current) => ({ ...current, [actionId]: result.selected!.cards }));
         setNode(result.node);

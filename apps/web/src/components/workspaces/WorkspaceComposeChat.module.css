@@ -269,29 +269,55 @@
   }
 }
 
-/* Compose panel reference conversation. */
+/* Compose conversation: calm reading, with the input anchored below the transcript. */
+.discussionWelcome {
+  justify-content: flex-start;
+  margin-block: 0 24px;
+  min-height: 0;
+  padding-block: 12px 16px;
+  gap: 16px;
+}
+.welcomeTitle {
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+.discussion {
+  background: var(--surface-panel);
+}
+.discussionContent {
+  padding: 24px 20px;
+  gap: 24px;
+}
 .discussionMessage[data-author="user"] {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  margin-left: 22px;
 }
 .discussionMessage[data-author="user"] .discussionMessageHeader {
-  height: 0;
-  overflow: hidden;
+  color: var(--text-tertiary);
+}
+.discussionMessage[data-author="user"] .discussionAvatar {
+  display: none;
 }
 .discussionMessage[data-author="user"] .discussionBubble {
-  max-width: 78%;
-  border-radius: 16px 16px 4px 16px;
-  background: var(--text-primary);
-  color: var(--surface-card);
-  padding: 9px 14px;
-  font-size: 13.5px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+  background: var(--surface-app);
+  padding: 12px 14px;
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 .discussionMessage[data-author="assistant"] .discussionAvatar {
-  border-radius: 8px;
+  border-radius: var(--radius-md);
+  background: var(--accent-conversation-soft);
+  color: var(--accent-conversation);
 }
 .discussionMessage[data-author="assistant"] .discussionBubble {
-  margin-left: 34px;
-  font-size: 13.5px;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.75;
+  margin-left: 0;
+}
+.discussionMessage[data-author="user"] .messageImages {
+  justify-content: flex-start;
+  max-width: 100%;
 }

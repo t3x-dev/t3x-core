@@ -278,11 +278,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
 
     expect(screen.getByRole('tab', { name: 'Compose' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Sources' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Node history' })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
+    expect(screen.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('button', { name: 'Review complete draft' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
     expect(sourceGenerationMocks.options?.workspaceAssistant?.allowProposal).toBe(true);
@@ -308,11 +304,11 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     const allChanges = screen.getByRole('tab', { name: 'All changes' });
     const latestAction = screen.getByRole('tab', { name: 'Latest' });
     expect(latestAction).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('heading', { name: 'Sources' }).closest('section')).toContainElement(
-      screen.getByRole('tablist', { name: 'Change scope' })
-    );
     expect(
-      screen.getByRole('button', { name: 'Add manually' }).compareDocumentPosition(latestAction) &
+      screen.getByRole('heading', { name: 'Proposed changes' }).closest('section')
+    ).toContainElement(screen.getByRole('tablist', { name: 'Change scope' }));
+    expect(
+      latestAction.compareDocumentPosition(screen.getByRole('button', { name: 'New change' })) &
         Node.DOCUMENT_POSITION_FOLLOWING
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(screen.getByRole('heading', { name: 'Proposed changes' })).toBeVisible();
@@ -368,7 +364,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
   });
 
-  it('enables Draft activity from the chat panel', () => {
+  it('shows preparation in Chat without an activation or generation button', () => {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     const controller = {
       busyAction: null,
@@ -392,8 +388,8 @@ describe('WorkspaceComposeReviewSurface composer', () => {
 
     expect(screen.queryByRole('button', { name: 'Send message' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Generate changes/ })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Enable Draft activity/ }));
-    expect(bootstrapMocks.value.start).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('button', { name: /Enable Draft activity/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Preparing your draft…')).toBeInTheDocument();
     expect(screen.queryByLabelText('Upload source material')).not.toBeInTheDocument();
   });
 

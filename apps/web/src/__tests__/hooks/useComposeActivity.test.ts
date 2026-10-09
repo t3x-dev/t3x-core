@@ -44,3 +44,57 @@ it('retains the visible projection during revision refreshes and resets on works
   expect(result.current.view).toBeNull();
   unmount();
 });
+
+it('keeps the selected field path when a historical action expands into several fields', async () => {
+  read.mockReset();
+  const action = {
+    actionId: 'a1',
+    sequence: 1,
+    beforeRevision: 0,
+    afterRevision: 1,
+    channel: 'import',
+    actor: { id: 'human:local-user', kind: 'human' },
+    publishedAt: '2026-10-09T11:00:00Z',
+    operations: [],
+    reason: 'Imported draft',
+  };
+  const card = {
+    nodeId: 'content-node',
+    path: 'content',
+    after: {
+      trees: [
+        {
+          key: 'prd',
+          slots: { title: 'Release' },
+          children: [{ key: 'requirement', slots: { title: 'Approval' }, children: [] }],
+        },
+      ],
+      relations: [],
+    },
+  };
+  read.mockResolvedValue({
+    actions: [action],
+    netDiff: [card],
+    selected: { action, cards: [card] },
+    nextBeforeSequence: null,
+    workspaceRevision: 1,
+    compositionRevision: 1,
+    node: null,
+  });
+  const candidate = { id: 'ws-a', projectId: 'p', revision: 1 } as WorkspaceCandidate;
+  const { result, unmount } = renderHook(() => useComposeActivity(candidate, true));
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  await act(async () => {
+    const selected = await result.current.selectActionNode(
+      'a1',
+      'content-node',
+      'content/trees/[key=prd]/slots/title'
+    );
+    expect(selected?.operation).toMatchObject({
+      id: 'content-node',
+      path: 'content/trees/[key=prd]/slots/title',
+      afterValue: 'Release',
+    });
+  });
+  unmount();
+});

@@ -141,7 +141,7 @@ export function WorkspaceComposeChat({
           <ConversationEmptyState
             className={cn(
               'my-auto min-h-[260px] items-start gap-5 px-0 py-10 text-left',
-              variant === 'discussion' && 'justify-start'
+              variant === 'discussion' && styles.discussionWelcome
             )}
           >
             <span className="flex size-10 items-center justify-center rounded-xl border border-[var(--stroke-divider)] bg-[var(--surface-app)]">
@@ -152,8 +152,16 @@ export function WorkspaceComposeChat({
               )}
             </span>
             <div>
-              <h2 className="text-2xl font-semibold tracking-tight">
-                {variant === 'discussion' ? 'Think it through.' : 'What would you like to change?'}
+              <h2
+                className={
+                  variant === 'discussion'
+                    ? styles.welcomeTitle
+                    : 'text-2xl font-semibold tracking-tight'
+                }
+              >
+                {variant === 'discussion'
+                  ? 'Work through it together.'
+                  : 'What would you like to change?'}
               </h2>
               {variant === 'discussion' ? (
                 <p className="mt-2 max-w-[32rem] text-[13px] leading-5 text-[var(--text-secondary)]">

@@ -1,0 +1,172 @@
+.dialog {
+  display: flex;
+  width: min(850px, calc(100vw - 32px));
+  max-width: min(850px, calc(100vw - 32px));
+  max-height: 85dvh;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
+  border-color: var(--stroke-default);
+  border-radius: var(--radius-xl);
+  background: var(--surface-panel);
+  padding: 24px;
+  color: var(--text-primary);
+}
+.header {
+  display: grid;
+  gap: 8px;
+  padding-right: 24px;
+}
+.header > p {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.header > h2 {
+  font-size: 20px;
+}
+.tabs {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}
+.tabs button,
+.footer button,
+.yaml > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  padding: 0 12px;
+  background: var(--surface-panel);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.tabs button[aria-pressed="true"] {
+  background: var(--accent-commit-soft);
+  color: var(--accent-commit);
+  border-color: var(--accent-commit);
+}
+.dialog button:focus-visible {
+  outline: 2px solid var(--accent-commit);
+  outline-offset: 2px;
+}
+.dialog button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.dialog svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.body {
+  min-height: 0;
+  overflow: auto;
+  font-size: 13px;
+}
+.tree {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tree li {
+  min-width: 0;
+}
+.tree button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  min-height: 42px;
+  border-bottom: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  text-align: left;
+}
+.tree button:hover {
+  background: var(--surface-app);
+}
+.tree button > span {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.tree code {
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.tree button > svg {
+  color: var(--text-tertiary);
+}
+.group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 12px 8px;
+}
+.group strong {
+  overflow-wrap: anywhere;
+}
+.group small {
+  color: var(--text-tertiary);
+}
+.editor {
+  max-width: 600px;
+  margin: 0 auto;
+}
+.editor > h3 {
+  font-size: 16px;
+  font-weight: 600;
+}
+.editor > code {
+  display: block;
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.editor > p {
+  overflow-wrap: anywhere;
+}
+.yaml pre {
+  margin-top: 12px;
+  padding: 16px;
+  overflow: auto;
+  background: var(--editor-bg);
+  font: 12px / 1.7 var(--font-mono);
+}
+.yaml output {
+  margin-left: 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.footer {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--stroke-divider);
+  padding-top: 16px;
+}
+.footer output {
+  flex: 1;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+@media (max-width: 760px) {
+  .dialog {
+    padding: 20px;
+  }
+  .tree button {
+    gap: 8px;
+    padding-inline: 8px;
+  }
+}
