@@ -1,14 +1,18 @@
 'use client';
 
+import type { TransitionViewV1 } from '@t3x-dev/core';
 import { ArrowLeft, Loader2, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { fieldChangeCount } from '@/domain/workspaces/changeFields';
+import { useReviewedFieldChanges } from '@/hooks/workspaces/useReviewedFieldChanges';
 import { useWorkspaceReviewSnapshot } from '@/hooks/workspaces/useWorkspaceReviewSnapshot';
-import { TransitionDecisionControls } from './TransitionDecisionControls';
-import { TransitionReviewPanel } from './TransitionReviewPanel';
+import { ChangeDecisionPanel } from './ChangeDecisionPanel';
+import { ChangeReviewChanges } from './ChangeReviewChanges';
+import { TransitionAuditDetails } from './TransitionReviewPanel';
 
 export function WorkspaceChangeReviewPage({
   projectId,
@@ -30,6 +34,12 @@ export function WorkspaceChangeReviewPage({
   );
   const projection = state.data?.change_projection ?? null;
   const snapshot = state.data?.snapshot ?? null;
+  const view = snapshot?.transition?.mode === 'transition' ? snapshot.transition : null;
+  const fieldGroups = useReviewedFieldChanges(
+    normalizedProjectId,
+    normalizedWorkspaceId,
+    view ? snapshot?.review.precondition.workspaceRevision : undefined
+  );
   const commit = snapshot?.objects?.commit?.digest;
   const branch = snapshot?.review.precondition.refName;
   const workspaceHref = workspaceReviewHref(normalizedProjectId, normalizedWorkspaceId, branch);
@@ -63,7 +73,6 @@ export function WorkspaceChangeReviewPage({
                 {commit ? 'Saved change' : 'Review Workspace change'}
               </h1>
               <Badge variant="commit-subtle">Immutable snapshot</Badge>
-              {projection ? <Badge variant="outline">{projection.status}</Badge> : null}
             </div>
             <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
               {commit
@@ -107,25 +116,98 @@ export function WorkspaceChangeReviewPage({
           </section>
         ) : null}
 
-        <TransitionReviewPanel
-          changeProjection={projection}
-          error={null}
-          loading={state.loading}
-          reviewSnapshot={snapshot}
-          view={snapshot?.transition ?? null}
-        />
-
-        {snapshot?.transition ? (
-          <TransitionDecisionControls
-            busy={state.deciding}
-            onDecide={(outcome, reason) => void decide(outcome, reason)}
-            onOverrideReasonChange={setOverrideReason}
-            overrideReason={overrideReason}
-            view={snapshot.transition}
-          />
+        {view ? (
+          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-[auto_auto_1fr]">
+            <div className="min-w-0 lg:col-start-1">
+              <ChangeSummary
+                branch={branch ?? null}
+                fieldCount={fieldGroups ? fieldChangeCount(fieldGroups) : null}
+                title={fieldGroups?.[0]?.label ?? null}
+                view={view}
+              />
+            </div>
+            <div className="lg:sticky lg:top-4 lg:col-start-2 lg:row-span-3 lg:row-start-1">
+              <ChangeDecisionPanel
+                branch={branch ?? null}
+                busy={state.deciding}
+                onDecide={(outcome, reason) => void decide(outcome, reason)}
+                onOverrideReasonChange={setOverrideReason}
+                overrideReason={overrideReason}
+                view={view}
+              />
+            </div>
+            <div className="min-w-0 lg:col-start-1">
+              <ChangeReviewChanges groups={fieldGroups} operations={view.change.operations} />
+            </div>
+            <TransitionAuditDetails
+              changeProjection={projection}
+              className="min-w-0 rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3 lg:col-start-1"
+              reviewSnapshot={snapshot}
+              view={view}
+            />
+          </div>
+        ) : state.loading ? (
+          <section
+            aria-label="Loading change review"
+            className="flex min-h-28 items-center justify-center rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] text-sm text-[var(--text-secondary)]"
+          >
+            <Loader2 aria-hidden="true" className="mr-2 size-4 animate-spin" />
+            Loading change review
+          </section>
         ) : null}
       </div>
     </main>
+  );
+}
+
+function ChangeSummary({
+  branch,
+  fieldCount,
+  title,
+  view,
+}: {
+  branch: string | null;
+  fieldCount: number | null;
+  title: string | null;
+  view: TransitionViewV1;
+}) {
+  const operationCount = view.change.operations.length;
+  const claims = [
+    { label: 'Purpose', claim: view.claims.intent },
+    { label: 'Reason', claim: view.claims.rationale },
+  ].flatMap(({ label, claim }) =>
+    claim.mode !== 'unspecified' && claim.value ? [{ label, value: claim.value }] : []
+  );
+  return (
+    <section
+      aria-label="Change summary"
+      className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3"
+    >
+      {title ? (
+        <h2 className="text-lg font-semibold leading-7 text-[var(--text-primary)]">{title}</h2>
+      ) : null}
+      <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
+        {fieldCount !== null ? `${fieldCount} ${fieldCount === 1 ? 'field' : 'fields'} · ` : ''}
+        {operationCount} {operationCount === 1 ? 'operation' : 'operations'}
+        {branch ? (
+          <>
+            {' '}
+            into{' '}
+            <span className="font-mono font-semibold text-[var(--text-primary)]">{branch}</span>
+          </>
+        ) : null}
+      </p>
+      {claims.length > 0 ? (
+        <dl className="mt-3 grid gap-2 border-t border-[var(--stroke-divider)] pt-3 text-xs sm:grid-cols-[80px_minmax(0,1fr)]">
+          {claims.map(({ label, value }) => (
+            <div className="contents" key={label}>
+              <dt className="font-semibold text-[var(--text-tertiary)]">{label}</dt>
+              <dd className="leading-5 text-[var(--text-primary)]">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+    </section>
   );
 }
 

@@ -4,6 +4,7 @@ import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceChangeReviewPage } from '@/components/workspaces/WorkspaceChangeReviewPage';
+import { useReviewedFieldChanges } from '@/hooks/workspaces/useReviewedFieldChanges';
 import { useWorkspaceReviewSnapshot } from '@/hooks/workspaces/useWorkspaceReviewSnapshot';
 
 const replace = vi.hoisted(() => vi.fn());
@@ -13,8 +14,20 @@ vi.mock('@/hooks/workspaces/useWorkspaceReviewSnapshot', () => ({
   useWorkspaceReviewSnapshot: vi.fn(),
 }));
 
+vi.mock('@/hooks/workspaces/useReviewedFieldChanges', () => ({
+  useReviewedFieldChanges: vi.fn(() => [
+    {
+      id: 'release',
+      label: 'Reduce device log volume',
+      breadcrumb: null,
+      kind: 'changed',
+      fields: [{ name: 'Title', before: null, after: 'Reduce device log volume', kind: 'added' }],
+    },
+  ]),
+}));
+
 vi.mock('@/components/workspaces/TransitionReviewPanel', () => ({
-  TransitionReviewPanel: ({
+  TransitionAuditDetails: ({
     changeProjection,
     reviewSnapshot,
   }: {
@@ -27,14 +40,18 @@ vi.mock('@/components/workspaces/TransitionReviewPanel', () => ({
   ),
 }));
 
-vi.mock('@/components/workspaces/TransitionDecisionControls', () => ({
-  TransitionDecisionControls: ({
+vi.mock('@/components/workspaces/ChangeReviewChanges', () => ({
+  ChangeReviewChanges: () => <section aria-label="Changes" />,
+}));
+
+vi.mock('@/components/workspaces/ChangeDecisionPanel', () => ({
+  ChangeDecisionPanel: ({
     onDecide,
   }: {
-    onDecide: (outcome: 'accepted' | 'overridden' | 'rejected') => void;
+    onDecide: (outcome: 'accepted' | 'overridden' | 'rejected', reason?: string) => void;
   }) => (
     <button onClick={() => onDecide('accepted')} type="button">
-      Approve and save
+      Approve and commit
     </button>
   ),
 }));
@@ -58,8 +75,15 @@ function snapshotResponse() {
       projectId: 'proj_1',
       workspaceId: 'workspace_prd_handoff',
       transitionId: `trn_${'1'.repeat(32)}`,
-      review: { precondition: { refName: 'feature/release' } },
-      transition: { mode: 'transition' },
+      review: { precondition: { refName: 'feature/release', workspaceRevision: 3 } },
+      transition: {
+        mode: 'transition',
+        change: { operations: [{ op: 'set' }, { op: 'set' }] },
+        claims: {
+          intent: { mode: 'authored', value: 'Cut log noise' },
+          rationale: { mode: 'unspecified' },
+        },
+      },
     },
     change_projection: {
       schema: 't3x.application/change-projection/v1',
@@ -115,7 +139,12 @@ describe('WorkspaceChangeReviewPage', () => {
     expect(screen.getByRole('region', { name: 'Snapshot panel' })).toHaveTextContent(
       'rvs_88888888888888888888888888888888'
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Approve and save' }));
+    const summary = screen.getByRole('region', { name: 'Change summary' });
+    expect(summary).toHaveTextContent('Reduce device log volume');
+    expect(summary).toHaveTextContent('1 field · 2 operations into feature/release');
+    expect(summary).toHaveTextContent('Cut log noise');
+    expect(useReviewedFieldChanges).toHaveBeenCalledWith('proj_1', 'workspace_prd_handoff', 3);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and commit' }));
     expect(decide).toHaveBeenCalledWith('accepted', undefined);
     expect(useWorkspaceReviewSnapshot).toHaveBeenCalledWith(
       'proj_1',
