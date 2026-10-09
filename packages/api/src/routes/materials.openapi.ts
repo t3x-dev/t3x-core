@@ -5,8 +5,9 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { estimateTokens, type Material } from '@t3x-dev/core';
+import { type CreateMaterialInput, estimateTokens, type Material, sha256 } from '@t3x-dev/core';
 import {
+  type AnyDB,
   archiveMaterial,
   createMaterial,
   findMaterialById,
@@ -24,6 +25,22 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const MAX_MATERIAL_TEXT_CHARS = 20_000;
 const EXCERPT_CHARS = 600;
 const SEGMENT_MAX_CHARS = 1200;
+const IMAGE_TOKEN_ESTIMATE = 1600;
+const IMAGE_SIGNATURES: Array<{ mimeType: string; matches: (bytes: Buffer) => boolean }> = [
+  {
+    mimeType: 'image/png',
+    matches: (b) =>
+      b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+  },
+  { mimeType: 'image/jpeg', matches: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
+  { mimeType: 'image/gif', matches: (b) => b.subarray(0, 6).toString('latin1').startsWith('GIF8') },
+  {
+    mimeType: 'image/webp',
+    matches: (b) =>
+      b.subarray(0, 4).toString('latin1') === 'RIFF' &&
+      b.subarray(8, 12).toString('latin1') === 'WEBP',
+  },
+];
 
 export const materialsRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
@@ -32,7 +49,7 @@ export const materialsRoutes = new OpenAPIHono({
 const MaterialResponseSchema = z.object({
   id: z.string(),
   project_id: z.string(),
-  source_type: z.enum(['document', 'url', 'platform']),
+  source_type: z.enum(['document', 'url', 'platform', 'image']),
   title: z.string(),
   filename: z.string().nullable(),
   mime_type: z.string().nullable(),
@@ -100,7 +117,7 @@ materialsRoutes.openapi(listMaterialsRoute, async (c) => {
   const materials = await findMaterialsByProject(db, projectId, { limit: 500 });
   return c.json({
     success: true as const,
-    data: materials.map(toMaterialResponse),
+    data: materials.filter((material) => material.source_type !== 'image').map(toMaterialResponse),
   });
 });
 
@@ -228,9 +245,9 @@ const uploadDocumentMaterialRoute = createRoute({
   method: 'post',
   path: '/v1/projects/{projectId}/materials/document',
   tags: ['Materials'],
-  summary: 'Upload a document as a source material',
+  summary: 'Upload a document or image as a source material',
   description:
-    'Upload and store a PDF, DOCX, Markdown, HTML, text, XLSX, or CSV file as a raw material. Chat materials are limited to 5MB files and 20,000 parsed text characters.',
+    'Upload and store a PDF, DOCX, Markdown, HTML, text, XLSX, or CSV file as a raw material, or a PNG, JPEG, GIF, or WebP image as a chat attachment. Chat materials are limited to 5MB files and 20,000 parsed text characters. Image materials are omitted from the material list.',
   request: {
     params: z.object({
       projectId: z.string(),
@@ -298,6 +315,26 @@ materialsRoutes.openapi(uploadDocumentMaterialRoute, async (c) => {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
+    const imageMimeType = IMAGE_SIGNATURES.find((signature) => signature.matches(buffer))?.mimeType;
+    if (imageMimeType) {
+      const data = buffer.toString('base64');
+      const material = await storeMaterial(db, {
+        project_id: projectId,
+        source_type: 'image',
+        title: file.name,
+        filename: file.name,
+        mime_type: imageMimeType,
+        content_text: data,
+        content_hash: sha256(data),
+        metadata: { byte_length: buffer.length },
+        token_estimate: IMAGE_TOKEN_ESTIMATE,
+      });
+      return c.json({ success: true as const, data: toMaterialResponse(material) });
+    }
+    if (file.type.startsWith('image/')) {
+      throw new Error('Unsupported image. Use PNG, JPEG, GIF, or WebP.');
+    }
+
     const parsed = await parseDocument(buffer, file.name, file.type);
     const parsedTextLength = parsed.raw_text.trim().length;
     if (parsedTextLength === 0) {
@@ -308,24 +345,10 @@ materialsRoutes.openapi(uploadDocumentMaterialRoute, async (c) => {
         'Parsed text is too long for chat context. This file produced more than 20,000 characters.'
       );
     }
-    const title = parsed.metadata.title ?? file.name;
-    const existing = await findMaterialByProjectHash(db, projectId, parsed.metadata.content_hash);
-    if (existing) {
-      const restored =
-        typeof existing.archived_at === 'string'
-          ? await restoreArchivedMaterial(db, existing.id)
-          : existing;
-
-      return c.json({
-        success: true as const,
-        data: toMaterialResponse(restored ?? existing),
-      });
-    }
-
-    const material = await createMaterial(db, {
+    const material = await storeMaterial(db, {
       project_id: projectId,
       source_type: 'document',
-      title,
+      title: parsed.metadata.title ?? file.name,
       filename: file.name,
       mime_type: file.type || undefined,
       content_text: parsed.raw_text,
@@ -352,6 +375,16 @@ materialsRoutes.openapi(uploadDocumentMaterialRoute, async (c) => {
   }
 });
 
+async function storeMaterial(db: AnyDB, input: CreateMaterialInput): Promise<Material> {
+  const existing = await findMaterialByProjectHash(db, input.project_id, input.content_hash);
+  if (!existing) return createMaterial(db, input);
+  const restored =
+    typeof existing.archived_at === 'string'
+      ? await restoreArchivedMaterial(db, existing.id)
+      : null;
+  return restored ?? existing;
+}
+
 function toMaterialResponse(material: Material) {
   const title = material.title ?? material.filename ?? material.id;
   return {
@@ -362,7 +395,7 @@ function toMaterialResponse(material: Material) {
     filename: material.filename ?? null,
     mime_type: material.mime_type ?? null,
     content_hash: material.content_hash,
-    content_excerpt: excerpt(material.content_text),
+    content_excerpt: material.source_type === 'image' ? '' : excerpt(material.content_text),
     token_estimate: material.token_estimate,
     metadata: material.metadata,
     created_at: material.created_at,
@@ -386,6 +419,7 @@ function toMaterialDetailResponse(material: Material) {
 }
 
 function segmentMaterialText(material: Material) {
+  if (material.source_type === 'image') return [];
   const text = material.content_text.trim();
   if (!text) return [];
 

@@ -2,9 +2,13 @@ import type { LLMProviderError } from '../../llm/types';
 import { createExtractionFailure } from './failures';
 import { normalizeExtractionText } from './normalization';
 
+export type OpenAIChatContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
 export interface OpenAIChatMessage {
   role: string;
-  content: string;
+  content: string | OpenAIChatContentPart[];
 }
 
 export interface OpenAIChatCompletionBodyInput {

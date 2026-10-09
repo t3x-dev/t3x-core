@@ -5,6 +5,7 @@ import {
   Bot,
   Check,
   Copy,
+  FileText,
   Loader2,
   Search,
   Sparkles,
@@ -20,6 +21,8 @@ import {
   ConversationScrollButton,
 } from '@/components/ai-elements/conversation';
 import { MessageAction, MessageActions, MessageResponse } from '@/components/ai-elements/message';
+import type { ChatMessageImage } from '@/hooks/conversations/useChatHistory';
+import { useMaterialImageSrc } from '@/hooks/materials/useMaterialImageSrc';
 import type { WorkspaceAssistantActivity as AssistantActivity } from '@/hooks/sourceThreads/useSourceThreadGeneration';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import { cn } from '@/utils/cn';
@@ -242,6 +245,21 @@ export function WorkspaceComposeChat({
   );
 }
 
+function MessageImage({ image }: { image: ChatMessageImage }) {
+  const src = useMaterialImageSrc(image);
+  if (!src) return <span aria-hidden="true" className={styles.messageImage} />;
+  return (
+    <Image
+      alt="Attached image"
+      className={styles.messageImage}
+      height={120}
+      src={src}
+      unoptimized
+      width={120}
+    />
+  );
+}
+
 function ComposeChatMessage({
   message,
   isStreaming,
@@ -259,18 +277,16 @@ function ComposeChatMessage({
 }) {
   const isUser = message.role === 'user';
   const images =
-    isUser && message.images?.length ? (
+    isUser && (message.images?.length || message.files?.length) ? (
       <div className={styles.messageImages}>
-        {message.images.map((image) => (
-          <Image
-            alt="Attached image"
-            className={styles.messageImage}
-            height={120}
-            key={image.id}
-            src={image.src}
-            unoptimized
-            width={120}
-          />
+        {message.images?.map((image) => (
+          <MessageImage image={image} key={image.id} />
+        ))}
+        {message.files?.map((file) => (
+          <span className={styles.messageFile} key={file.id} title={file.name}>
+            <FileText aria-hidden="true" />
+            <span>{file.name}</span>
+          </span>
         ))}
       </div>
     ) : null;

@@ -10,7 +10,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { attachmentsFromContentBlocks } from '@/domain/conversations/turnAttachments';
 import { isSourceThreadRequestAborted, sourceThreadApi } from '@/infrastructure/sourceThreads';
+import type { Turn } from '@/infrastructure/types';
 import { getTemporaryChat, isTemporaryChatId } from '@/store/temporaryChatsStore';
 
 const CHAT_PAGE_SIZE = 100;
@@ -22,13 +24,57 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   rings?: Record<string, unknown> | null;
-  /** Session-only previews of images sent with this turn; saved turns store text only. */
   images?: ChatMessageImage[];
+  files?: ChatMessageFile[];
 }
 
+/** `src` is a session preview; saved attachments carry their material and load on demand. */
 export interface ChatMessageImage {
   id: string;
-  src: string;
+  src?: string;
+  material?: { projectId: string; materialId: string };
+}
+
+export interface ChatMessageFile {
+  id: string;
+  name: string;
+  mimeType: string;
+}
+
+export function attachmentMessageParts(
+  projectId: string,
+  contentBlocks: unknown[] | null | undefined
+): Pick<ChatMessage, 'images' | 'files'> {
+  const attachments = attachmentsFromContentBlocks(projectId, contentBlocks);
+  const images = attachments
+    .filter((attachment) => attachment.kind === 'image')
+    .map((attachment) => ({
+      id: attachment.materialId,
+      material: { projectId, materialId: attachment.materialId },
+    }));
+  const files = attachments
+    .filter((attachment) => attachment.kind === 'file')
+    .map((attachment) => ({
+      id: attachment.materialId,
+      name: attachment.title,
+      mimeType: attachment.mimeType,
+    }));
+  return {
+    ...(images.length ? { images } : {}),
+    ...(files.length ? { files } : {}),
+  };
+}
+
+function turnMessage(projectId: string, turn: Turn): ChatMessage {
+  return {
+    id: turn.turn_hash,
+    projectId: turn.project_id,
+    conversationId: turn.conversation_id,
+    role: turn.role as 'user' | 'assistant',
+    content: turn.content,
+    rings: turn.rings,
+    ...(turn.role === 'user' ? attachmentMessageParts(projectId, turn.content_blocks) : {}),
+  };
 }
 
 export interface UseChatHistoryReturn {
@@ -124,14 +170,7 @@ export function useChatHistory(
         if (abortController.signal.aborted) return;
         const loaded = response.turns
           .filter((turn) => turn.role === 'user' || turn.role === 'assistant')
-          .map((turn) => ({
-            id: turn.turn_hash,
-            projectId: turn.project_id,
-            conversationId: turn.conversation_id,
-            role: turn.role as 'user' | 'assistant',
-            content: turn.content,
-            rings: turn.rings,
-          }))
+          .map((turn) => turnMessage(projectId, turn))
           .reverse();
         setMessages(loaded);
         setHasMore(response.turns.length >= CHAT_PAGE_SIZE);
@@ -181,14 +220,7 @@ export function useChatHistory(
       }
       const olderMessages = response.turns
         .filter((turn) => turn.role === 'user' || turn.role === 'assistant')
-        .map((turn) => ({
-          id: turn.turn_hash,
-          projectId: turn.project_id,
-          conversationId: turn.conversation_id,
-          role: turn.role as 'user' | 'assistant',
-          content: turn.content,
-          rings: turn.rings,
-        }))
+        .map((turn) => turnMessage(projectId, turn))
         .reverse();
       setMessages((prev) => [...olderMessages, ...prev]);
       setOffset((prev) => prev + response.turns.length);

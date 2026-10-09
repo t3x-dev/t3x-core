@@ -9,8 +9,10 @@
 import type { ZodType } from 'zod';
 import {
   buildOpenAIChatCompletionBody,
+  type OpenAIChatMessage,
   supportsOpenAIReasoningEffort,
 } from '../../extractors/v2/providerAdapters';
+import { imageDataUrl, textAndImageParts } from '../../llm/content';
 import {
   type ContentBlock,
   type LLMBasicGenerateOptions,
@@ -78,6 +80,35 @@ interface OpenAIResponsesOutputItem {
   [key: string]: unknown;
 }
 
+function toOpenAIChatMessages(prompt: LLMPrompt): OpenAIChatMessage[] {
+  const messages: OpenAIChatMessage[] = [];
+  if (prompt.system) messages.push({ role: 'system', content: prompt.system });
+  for (const message of prompt.messages) {
+    const parts = textAndImageParts(message.content);
+    if (parts === null) {
+      messages.push({ role: message.role, content: JSON.stringify(message.content) });
+    } else if (parts.every((part) => part.type === 'text')) {
+      messages.push({
+        role: message.role,
+        content:
+          typeof message.content === 'string'
+            ? message.content
+            : parts.map((part) => (part.type === 'text' ? part.text : '')).join(''),
+      });
+    } else {
+      messages.push({
+        role: message.role,
+        content: parts.map((part) =>
+          part.type === 'text'
+            ? { type: 'text' as const, text: part.text }
+            : { type: 'image_url' as const, image_url: { url: imageDataUrl(part) } }
+        ),
+      });
+    }
+  }
+  return messages;
+}
+
 /** The assistant loop records Claude-shaped blocks. Responses continuation uses function_call items. */
 function toOpenAIResponsesInput(prompt: LLMPrompt): OpenAIResponsesInputItem[] {
   const items: OpenAIResponsesInputItem[] = [];
@@ -88,13 +119,28 @@ function toOpenAIResponsesInput(prompt: LLMPrompt): OpenAIResponsesInputItem[] {
     }
     const produced = items.length;
     let text = '';
+    let images: string[] = [];
     const flushText = () => {
-      if (text) items.push({ role: message.role, content: text });
+      if (images.length > 0) {
+        items.push({
+          role: message.role,
+          content: [
+            ...(text ? [{ type: 'input_text', text }] : []),
+            ...images.map((url) => ({ type: 'input_image', image_url: url })),
+          ],
+        });
+      } else if (text) {
+        items.push({ role: message.role, content: text });
+      }
       text = '';
+      images = [];
     };
     for (const block of message.content) {
+      const media = textAndImageParts([block])?.[0];
       if (block.type === 'text' && typeof block.text === 'string') {
         text += block.text;
+      } else if (media?.type === 'image' && message.role === 'user') {
+        images.push(imageDataUrl(media));
       } else if (block.type === 'tool_use') {
         flushText();
         items.push({
@@ -237,16 +283,7 @@ export class OpenAIProvider implements LLMProvider {
     const maxTokens = options.maxTokens ?? 2048;
     const url = `${this.baseUrl}/chat/completions`;
 
-    const messages: Array<{ role: string; content: string }> = [];
-    if (prompt.system) {
-      messages.push({ role: 'system', content: prompt.system });
-    }
-    for (const msg of prompt.messages) {
-      messages.push({
-        role: msg.role,
-        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
-      });
-    }
+    const messages = toOpenAIChatMessages(prompt);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000);
@@ -320,15 +357,7 @@ export class OpenAIProvider implements LLMProvider {
     const temperature = options.temperature ?? 0.3;
     const maxTokens = options.maxTokens ?? 2048;
     const url = `${this.baseUrl}/chat/completions`;
-    const messages: Array<{ role: string; content: string }> = [];
-    if (prompt.system) messages.push({ role: 'system', content: prompt.system });
-    for (const message of prompt.messages) {
-      messages.push({
-        role: message.role,
-        content:
-          typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
-      });
-    }
+    const messages = toOpenAIChatMessages(prompt);
 
     const controller = new AbortController();
     const abort = () => controller.abort(signal?.reason);
@@ -445,16 +474,7 @@ export class OpenAIProvider implements LLMProvider {
     const jsonSchema = toOpenAIStructuredSchema(schema);
     const url = `${this.baseUrl}/chat/completions`;
 
-    const messages: Array<{ role: string; content: string }> = [];
-    if (prompt.system) {
-      messages.push({ role: 'system', content: prompt.system });
-    }
-    for (const msg of prompt.messages) {
-      messages.push({
-        role: msg.role,
-        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
-      });
-    }
+    const messages = toOpenAIChatMessages(prompt);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000);

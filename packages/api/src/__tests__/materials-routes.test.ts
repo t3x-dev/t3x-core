@@ -126,6 +126,55 @@ describe('Materials Routes', () => {
     );
   });
 
+  it('stores a pasted image as a non-text material hidden from the material list', async () => {
+    const png = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.from('fake-png-body'),
+    ]);
+    const form = new FormData();
+    form.append('file', new File([png], 'pasted.png', { type: 'image/png' }));
+
+    const uploadRes = await app.request(`/v1/projects/${testProjectId}/materials/document`, {
+      method: 'POST',
+      body: form,
+    });
+    expect(uploadRes.status).toBe(200);
+    const uploaded: ApiResponse = await uploadRes.json();
+    expect(uploaded.data).toEqual(
+      expect.objectContaining({
+        source_type: 'image',
+        mime_type: 'image/png',
+        content_excerpt: '',
+      })
+    );
+
+    const listed: ApiResponse = await (
+      await app.request(`/v1/projects/${testProjectId}/materials`)
+    ).json();
+    expect(listed.data).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: uploaded.data.id })])
+    );
+
+    const detail: ApiResponse = await (
+      await app.request(`/v1/projects/${testProjectId}/materials/${uploaded.data.id}`)
+    ).json();
+    expect(detail.data.content_text).toBe(png.toString('base64'));
+    expect(detail.data.segment_count).toBe(0);
+  });
+
+  it('rejects image types the providers cannot read', async () => {
+    const form = new FormData();
+    form.append('file', new File(['<svg/>'], 'icon.svg', { type: 'image/svg+xml' }));
+
+    const uploadRes = await app.request(`/v1/projects/${testProjectId}/materials/document`, {
+      method: 'POST',
+      body: form,
+    });
+    expect(uploadRes.status).toBe(400);
+    const uploaded: ApiResponse = await uploadRes.json();
+    expect(uploaded.error.message).toBe('Unsupported image. Use PNG, JPEG, GIF, or WebP.');
+  });
+
   it('rejects document material files larger than 5MB', async () => {
     const form = new FormData();
     form.append(

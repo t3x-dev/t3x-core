@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { LLMPrompt, LLMProvider } from '@t3x-dev/core';
+import { type LLMPrompt, type LLMProvider, promptTextLength } from '@t3x-dev/core';
 import { executeMeteredInference } from '../../inference';
 import type { AssistantCapabilities } from '../capabilities';
 import type { AssistantInference } from '../contracts';
@@ -48,7 +48,7 @@ export async function runAssistantProvider(input: {
       return;
     }
     await input.assertCurrent();
-    if (JSON.stringify(prompt).length > 128_000)
+    if (promptTextLength(prompt) > 128_000)
       throw new TypeError('Assistant continuation exceeds context budget');
     if (canStreamPlainResponse) {
       await executeMeteredInference({

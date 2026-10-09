@@ -1512,6 +1512,47 @@
   width: 10px;
   height: 10px;
 }
+.filePreviewItem {
+  position: relative;
+  display: inline-flex;
+  max-width: 220px;
+  height: 32px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--stroke-default);
+  border-radius: 8px;
+  background: var(--surface-app);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.filePreviewItem > svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.filePreviewItem > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.filePreviewItem button {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--text-primary);
+  color: var(--surface-card);
+}
+.filePreviewItem button svg {
+  width: 10px;
+  height: 10px;
+}
 .discussionComposerFooter {
   display: flex;
   justify-content: space-between;

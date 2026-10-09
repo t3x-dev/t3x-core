@@ -228,6 +228,7 @@ export function createAssistantCapabilities(input: {
           sourceMaterialIds: prepared.sources.flatMap((source) =>
             source.materialId ? [source.materialId] : []
           ),
+          imageMaterialIds: prepared.images.map((image) => image.materialId),
         };
         const generated = await generateTransitionProposal({
           db: input.db,

@@ -1,7 +1,10 @@
 import type { DraftActionLedger, DraftDocument } from '@t3x-dev/application';
 import type { LLMPrompt } from '@t3x-dev/core';
 import type { InferenceScope } from '../inference';
-import type { ProposalGenerationSourceInput } from '../proposal-generation';
+import type {
+  ProposalGenerationImageInput,
+  ProposalGenerationSourceInput,
+} from '../proposal-generation';
 import type { SemanticSchemaLayout } from '../semantic-schema-layout';
 import type { WorkspaceAuthoringBasis } from '../workspace-authoring';
 
@@ -23,6 +26,7 @@ export interface AssistantTurn {
   hash: string;
   role: 'user' | 'assistant';
   content: string;
+  imageMaterialIds?: string[];
 }
 /** Server-only preparation. Never serialize this object as a prompt. */
 export interface PreparedAssistantContext {
@@ -33,7 +37,10 @@ export interface PreparedAssistantContext {
   ledger: DraftActionLedger;
   current: DraftDocument;
   manifestDigest: string;
+  /** Sources include documents attached to user turns in the window. */
   sources: ProposalGenerationSourceInput[];
+  /** Most recent turn-attached images, oldest first; context only, never evidence. */
+  images: ProposalGenerationImageInput[];
   schema?: {
     canonicalName: string;
     version: string | null;

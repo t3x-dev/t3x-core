@@ -1,15 +1,27 @@
+import { DOCUMENT_SOURCE_ACCEPTED_TYPES } from '@/components/import/documentAcceptTypes';
 import type { AttachedImage } from '@/types/generation';
 
 const ACCEPTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+const ACCEPTED_DOCUMENT_TYPES = new Set(DOCUMENT_SOURCE_ACCEPTED_TYPES.split(','));
 
-export function clipboardImageFiles(data: DataTransfer | null): File[] {
+function clipboardFiles(data: DataTransfer | null): File[] {
   if (!data) return [];
   const fromItems = Array.from(data.items)
     .filter((item) => item.kind === 'file')
     .map((item) => item.getAsFile())
     .filter((file): file is File => file !== null);
-  const files = fromItems.length > 0 ? fromItems : Array.from(data.files);
-  return files.filter((file) => ACCEPTED_IMAGE_TYPES.has(file.type));
+  return fromItems.length > 0 ? fromItems : Array.from(data.files);
+}
+
+export function clipboardImageFiles(data: DataTransfer | null): File[] {
+  return clipboardFiles(data).filter((file) => ACCEPTED_IMAGE_TYPES.has(file.type));
+}
+
+export function clipboardDocumentFiles(data: DataTransfer | null): File[] {
+  return clipboardFiles(data).filter((file) => {
+    const extension = `.${file.name.toLowerCase().split('.').pop() ?? ''}`;
+    return ACCEPTED_DOCUMENT_TYPES.has(file.type) || ACCEPTED_DOCUMENT_TYPES.has(extension);
+  });
 }
 
 export async function fileToAttachedImage(file: File): Promise<AttachedImage> {

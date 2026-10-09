@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { promptImageBlock, promptTextLength } from '../../llm/content';
 import { ClaudeProvider } from '../../providers/llm/claude';
 import { GeminiProvider } from '../../providers/llm/gemini';
 import { OpenAIProvider } from '../../providers/llm/openai';
@@ -101,5 +102,45 @@ describe('provider prompt streaming', () => {
       { type: 'text', text: 'lo' },
       { type: 'done', usage: { inputTokens: 3, outputTokens: 2 } },
     ]);
+  });
+});
+
+describe('provider prompt images', () => {
+  const imagePrompt = {
+    messages: [
+      {
+        role: 'user' as const,
+        content: [{ type: 'text', text: 'What is this?' }, promptImageBlock('image/png', 'AAAA')],
+      },
+    ],
+  };
+
+  it('maps image blocks to OpenAI chat image_url parts', async () => {
+    mockFetch.mockResolvedValue(response(['data: [DONE]\n\n']));
+    await collect(new OpenAIProvider({ apiKey: 'test' }).streamFromPrompt(imagePrompt, {}));
+    const body = JSON.parse(mockFetch.mock.calls[0]?.[1].body);
+    expect(body.messages[0].content).toEqual([
+      { type: 'text', text: 'What is this?' },
+      { type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } },
+    ]);
+  });
+
+  it('maps image blocks to Gemini inlineData parts', async () => {
+    mockFetch.mockResolvedValue(response([]));
+    await collect(new GeminiProvider({ apiKey: 'test' }).streamFromPrompt(imagePrompt, {}));
+    const body = JSON.parse(mockFetch.mock.calls[0]?.[1].body);
+    expect(body.contents[0].parts).toEqual([
+      { text: 'What is this?' },
+      { inlineData: { mimeType: 'image/png', data: 'AAAA' } },
+    ]);
+  });
+
+  it('measures prompt size without inline image bytes', () => {
+    const large = {
+      messages: [
+        { role: 'user' as const, content: [promptImageBlock('image/png', 'A'.repeat(10_000))] },
+      ],
+    };
+    expect(promptTextLength(large)).toBeLessThan(100);
   });
 });

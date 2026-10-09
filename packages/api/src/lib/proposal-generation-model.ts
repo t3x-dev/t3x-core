@@ -8,6 +8,7 @@ import {
   NativeYOpSchema,
   ProposalGenerationDraftSchema,
   type ProposalGenerationDraftV1,
+  promptImageBlock,
 } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import {
@@ -164,29 +165,42 @@ export function createProposalGenerationModel(resolved: {
     provider: resolved.providerId,
     model: resolved.model,
     async generate(generation) {
+      const images = generation.images;
+      const data = JSON.stringify({
+        profile: generation.profile,
+        context: generation.context,
+        base: generation.base,
+        ...(generation.authoring ? { authoring: generation.authoring } : {}),
+        yschema: generation.yschema.value,
+        schemaLayout: generation.schemaLayout,
+        sources: generation.sources.map((source, sourceIndex) => ({
+          sourceIndex,
+          resource: source.resource,
+          title: source.title,
+          content: source.content,
+        })),
+        instruction: generation.instruction,
+        ...(generation.conversationTranscript
+          ? { conversation: generation.conversationTranscript }
+          : {}),
+      });
       const basePrompt: LLMPrompt = {
         system: generation.prompt,
         messages: [
           {
             role: 'user',
-            content: JSON.stringify({
-              profile: generation.profile,
-              context: generation.context,
-              base: generation.base,
-              ...(generation.authoring ? { authoring: generation.authoring } : {}),
-              yschema: generation.yschema.value,
-              schemaLayout: generation.schemaLayout,
-              sources: generation.sources.map((source, sourceIndex) => ({
-                sourceIndex,
-                resource: source.resource,
-                title: source.title,
-                content: source.content,
-              })),
-              instruction: generation.instruction,
-              ...(generation.conversationTranscript
-                ? { conversation: generation.conversationTranscript }
-                : {}),
-            }),
+            content: images?.items.length
+              ? [
+                  { type: 'text', text: data },
+                  ...images.items.flatMap((image, index) => [
+                    {
+                      type: 'text',
+                      text: `Image memory ${images.memoryIndexOffset + index}: ${image.title ?? image.materialId}`,
+                    },
+                    promptImageBlock(image.resource.mediaType, image.data),
+                  ]),
+                ]
+              : data,
           },
         ],
       };

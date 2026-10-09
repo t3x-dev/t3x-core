@@ -326,6 +326,64 @@ describe('governed Proposal generation', () => {
     );
   });
 
+  it('passes attached images as memories but never as quotable Sources', async () => {
+    const data = await fixture('Image memory');
+    const image = await createMaterial(db, {
+      project_id: data.projectId,
+      source_type: 'image',
+      title: 'whiteboard.png',
+      mime_type: 'image/png',
+      content_text: 'iVBORw0KGgo=',
+      content_hash: 'test:image-memory',
+    });
+    const generate = vi.fn(async () => ({
+      draft: draft(),
+      usage: { inputTokens: 11, outputTokens: 7 },
+    }));
+    const request = {
+      workspaceId: data.workspaceId,
+      posture: 'guided' as const,
+      instruction: 'Use the whiteboard photo.',
+      sourceMaterialIds: [data.material.id],
+      imageMaterialIds: [image.id],
+    };
+
+    await generateTransitionProposal({
+      db,
+      projectId: data.projectId,
+      requestId: 'generation:image',
+      requester: { kind: 'human', id: 'user:image' },
+      request,
+      resolveModel: async () => model(generate),
+      inference: inference(data.projectId),
+    });
+
+    const input = generate.mock.calls[0]?.[0];
+    expect(input?.sources.map((source) => source.materialId)).toEqual([data.material.id]);
+    expect(input?.context.memories.at(-1)).toEqual(
+      expect.objectContaining({
+        uri: expect.stringContaining(`/materials/${image.id}`),
+        mediaType: 'image/png',
+      })
+    );
+    expect(input?.images).toEqual({
+      memoryIndexOffset: input!.context.memories.length - 1,
+      items: [expect.objectContaining({ materialId: image.id, data: 'iVBORw0KGgo=' })],
+    });
+
+    await expect(
+      generateTransitionProposal({
+        db,
+        projectId: data.projectId,
+        requestId: 'generation:image-as-source',
+        requester: { kind: 'human', id: 'user:image' },
+        request: { ...request, sourceMaterialIds: [image.id], imageMaterialIds: [] },
+        resolveModel: async () => model(generate),
+        inference: inference(data.projectId),
+      })
+    ).rejects.toThrow('is not quotable text and cannot be a Source');
+  });
+
   it('aligns drifted provider drafts so guided conversation summaries can compile', async () => {
     const data = await fixture('Aligned conversation draft');
     const generate = vi.fn(async () => ({

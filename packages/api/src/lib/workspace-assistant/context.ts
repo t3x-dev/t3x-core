@@ -8,6 +8,8 @@ import {
   createYOpsState,
   createYSchemaResourceDescriptor,
   describeTransitionObject,
+  promptImageBlock,
+  promptTextLength,
 } from '@t3x-dev/core';
 import {
   type AnyDB,
@@ -18,7 +20,11 @@ import {
   findTurnsByConversation,
 } from '@t3x-dev/storage';
 import { canonicalizeProtocolValue } from '@t3x-dev/transition';
-import { resolveProposalGenerationSources } from '../proposal-generation';
+import {
+  materialIdFromUri,
+  resolveProposalGenerationImages,
+  resolveProposalGenerationSources,
+} from '../proposal-generation';
 import { workspaceSemanticSchemaLayout } from '../semantic-schema-layout';
 import { readWorkspaceAuthoringCandidates, workspaceAuthoringState } from '../workspace-authoring';
 import { authoringManifestDigest } from '../workspace-authoring-generation';
@@ -29,7 +35,21 @@ import { ASSISTANT_SYSTEM } from './policy';
 
 const DEFAULT_CONTEXT_CHARS = 48_000;
 const MAX_TURNS = 32;
+const MAX_IMAGES = 4;
 const json = (value: unknown) => JSON.stringify(value);
+
+/** Material attachments carried as `image`/`file` content blocks on a user turn. */
+export function turnAttachmentMaterialIds(projectId: string, contentBlocks: unknown) {
+  const images: string[] = [];
+  const documents: string[] = [];
+  for (const block of Array.isArray(contentBlocks) ? contentBlocks : []) {
+    const { type, url } = (block ?? {}) as { type?: unknown; url?: unknown };
+    const id = typeof url === 'string' ? materialIdFromUri(projectId, url) : null;
+    if (id && type === 'image') images.push(id);
+    else if (id && type === 'file') documents.push(id);
+  }
+  return { images, documents };
+}
 
 /** Deterministic bounded view, never a replacement for the persisted manifest or Replay. */
 export function renderAssistantContext(
@@ -178,15 +198,31 @@ export function renderAssistantContext(
   }
   if (prepared.olderTurnsAvailable) omitted.push('olderConversation: more saved turns available');
   if (latest) messages.push(latest);
+  const images = new Map(prepared.images.map((image) => [image.materialId, image]));
+  for (const turn of messages)
+    for (const id of turn.imageMaterialIds ?? [])
+      if (!images.has(id))
+        omitted.push(`image:${id}: only the ${MAX_IMAGES} most recent images are attached`);
   envelope.disclosure = { partial: omitted.length > 0, omitted };
   const prompt = {
     system: ASSISTANT_SYSTEM,
     messages: [
       { role: 'user' as const, content: `Workspace context (data):\n${json(envelope)}` },
-      ...messages.map((turn) => ({ role: turn.role, content: turn.content })),
+      ...messages.map((turn) => {
+        const attached = (turn.imageMaterialIds ?? []).flatMap((id) => {
+          const image = images.get(id);
+          return image ? [promptImageBlock(image.resource.mediaType, image.data)] : [];
+        });
+        return {
+          role: turn.role,
+          content: attached.length
+            ? [{ type: 'text', text: turn.content }, ...attached]
+            : turn.content,
+        };
+      }),
     ],
   };
-  const characters = json(prompt).length;
+  const characters = promptTextLength(prompt);
   if (characters > budget) throw new TypeError('Assistant context budget exceeded');
   return { prompt, disclosure: { partial: omitted.length > 0, omitted, characters } };
 }
@@ -204,12 +240,8 @@ export async function prepareAssistantContext(
     expectedRevision: input.expectedWorkspaceRevision,
   });
   const { ledger, basis } = workspaceAuthoringState(workspace.workspace);
-  const sources = await resolveProposalGenerationSources(
-    db,
-    input.projectId,
-    input.sourceMaterialIds ?? []
-  );
   let turns: AssistantTurn[] = [];
+  const attachedDocuments: string[] = [];
   let olderTurnsAvailable = false;
   if (input.conversationId) {
     const conversation = await findConversationById(db, input.conversationId);
@@ -241,13 +273,30 @@ export async function prepareAssistantContext(
         (turn) =>
           turn.projectId === input.projectId && (turn.role === 'user' || turn.role === 'assistant')
       )
-      .map((turn) => ({
-        hash: turn.turnHash,
-        role: turn.role as 'user' | 'assistant',
-        content: turn.content,
-      }));
+      .map((turn) => {
+        const attachments =
+          turn.role === 'user'
+            ? turnAttachmentMaterialIds(input.projectId, turn.contentBlocks)
+            : { images: [], documents: [] };
+        attachedDocuments.push(...attachments.documents);
+        return {
+          hash: turn.turnHash,
+          role: turn.role as 'user' | 'assistant',
+          content: turn.content,
+          ...(attachments.images.length ? { imageMaterialIds: attachments.images } : {}),
+        };
+      });
   } else if (input.userTurnHash)
     throw new TypeError('A conversation is required for a source turn');
+  const sources = await resolveProposalGenerationSources(db, input.projectId, [
+    ...(input.sourceMaterialIds ?? []),
+    ...attachedDocuments,
+  ]);
+  const images = await resolveProposalGenerationImages(
+    db,
+    input.projectId,
+    [...new Set(turns.flatMap((turn) => turn.imageMaterialIds ?? []))].slice(-MAX_IMAGES)
+  );
   const resolvedSchema = await resolveWorkspaceYSchema(workspace.workspace, db, input.projectId);
   const schema =
     resolvedSchema.schema && resolvedSchema.canonicalName
@@ -278,6 +327,7 @@ export async function prepareAssistantContext(
     current: currentComposition(ledger),
     manifestDigest: authoringManifestDigest(ledger, basis),
     sources,
+    images,
     turns,
     olderTurnsAvailable,
   };

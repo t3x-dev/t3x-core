@@ -58,6 +58,31 @@ describe('ComposeAuthoringAssistant first message', () => {
   });
 });
 
+describe('ComposeAuthoringAssistant attachments', () => {
+  it('sends pasted documents with the message and clears the chips', () => {
+    mocks.send.mockClear();
+    render(
+      <ComposeAuthoringAssistant
+        projectId="project-1"
+        context={{ workspaceId: 'workspace-1', workspaceRevision: 1, sourceMaterialIds: [] }}
+        onCreateConversation={vi.fn(async () => 'conversation-1')}
+        onPublishCandidate={vi.fn()}
+      />
+    );
+    const pdf = new File(['%PDF-1.7'], 'plan.pdf', { type: 'application/pdf' });
+    const legacy = new File(['x'], 'old.doc', { type: 'application/msword' });
+    fireEvent.paste(screen.getByRole('textbox'), {
+      clipboardData: { items: [], files: [pdf, legacy], getData: () => '' },
+    });
+
+    expect(screen.getByText('plan.pdf')).toBeInTheDocument();
+    expect(screen.queryByText('old.doc')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+    expect(mocks.send).toHaveBeenCalledWith('天气为晴天', { files: [pdf] });
+    expect(screen.queryByText('plan.pdf')).not.toBeInTheDocument();
+  });
+});
+
 describe('ComposeAuthoringAssistant proposal mode', () => {
   afterEach(() => {
     localStorage.clear();

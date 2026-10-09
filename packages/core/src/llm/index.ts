@@ -10,6 +10,15 @@ export {
   MODEL_CATALOG,
   normalizeModelId,
 } from './catalog';
+export {
+  imageDataUrl,
+  isPromptImageBlock,
+  type PromptImageBlock,
+  type PromptPart,
+  promptImageBlock,
+  promptTextLength,
+  textAndImageParts,
+} from './content';
 export { normalizeLLMOutput } from './normalizer';
 export { createProviderForModel } from './providerFactory';
 export {

@@ -428,7 +428,8 @@ export interface ContextSource {
 // Material (Imported Source Object)
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type MaterialSourceType = 'document' | 'url' | 'platform';
+/** `image` materials store base64 bytes in `content_text`; they are never quotable text. */
+export type MaterialSourceType = 'document' | 'url' | 'platform' | 'image';
 
 /**
  * A raw source material that can be pinned as PinType "import".

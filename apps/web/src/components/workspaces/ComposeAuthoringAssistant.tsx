@@ -5,14 +5,16 @@ import type {
   WorkspaceAuthoringCard,
   WorkspaceAuthoringOutcome,
 } from '@t3x-dev/api-client';
-import { AlertTriangle, ArrowUp, Square, X } from 'lucide-react';
+import { AlertTriangle, ArrowUp, FileText, Square, X } from 'lucide-react';
 import NextImage from 'next/image';
 import { type ClipboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  clipboardDocumentFiles,
   clipboardImageFiles,
   fileToAttachedImage,
 } from '@/components/generation/attachedImageFile';
 import { GenerationModelSelector } from '@/components/generation/GenerationModelSelector';
+import { unsupportedChatMaterialSourceMessage } from '@/components/import/documentAcceptTypes';
 import { providerSupports } from '@/domain/providerCapabilities';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
 import { useSourceThreadGeneration } from '@/hooks/sourceThreads/useSourceThreadGeneration';
@@ -58,6 +60,7 @@ export function ComposeAuthoringAssistant({
   const [localError, setLocalError] = useState<string | null>(null);
   const [published, setPublished] = useState<AssistantPublication | null>(null);
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const publication = useRef<{ transitionId: string; requestId: string; turnId?: string } | null>(
     null
   );
@@ -133,6 +136,7 @@ export function ComposeAuthoringAssistant({
         id: message.id,
         role: message.role,
         ...(message.images?.length ? { images: message.images } : {}),
+        ...(message.files?.length ? { files: message.files } : {}),
       })
     );
     if (chat.streamingContent.trim())
@@ -207,7 +211,7 @@ export function ComposeAuthoringAssistant({
     chat.isLoading ||
     model.loading ||
     !model.isSelectionReady ||
-    (!chat.input.trim() && attachedImages.length === 0);
+    (!chat.input.trim() && attachedImages.length === 0 && attachedFiles.length === 0);
 
   const publish = async () => {
     if (!pendingCandidate) return;
@@ -223,10 +227,17 @@ export function ComposeAuthoringAssistant({
   };
 
   const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
-    const files = clipboardImageFiles(event.clipboardData);
-    if (!files.length) return;
+    const imageFiles = clipboardImageFiles(event.clipboardData);
+    const documentFiles = clipboardDocumentFiles(event.clipboardData);
+    if (!imageFiles.length && !documentFiles.length) return;
     if (!event.clipboardData.getData('text/plain')) event.preventDefault();
-    void Promise.all(files.map(fileToAttachedImage)).then((images) => {
+    const rejected = documentFiles
+      .map((file) => unsupportedChatMaterialSourceMessage(file))
+      .find(Boolean);
+    setLocalError(rejected ?? null);
+    const accepted = documentFiles.filter((file) => !unsupportedChatMaterialSourceMessage(file));
+    if (accepted.length) setAttachedFiles((current) => [...current, ...accepted]);
+    void Promise.all(imageFiles.map(fileToAttachedImage)).then((images) => {
       setAttachedImages((current) => [...current, ...images]);
     });
   };
@@ -235,9 +246,16 @@ export function ComposeAuthoringAssistant({
     if (chat.isStreaming || sendDisabled) return;
     const text = chat.input.trim();
     const images = attachedImages;
-    chat.sendMessage(text || 'Attached image', images.length ? { images } : undefined);
+    const files = attachedFiles;
+    chat.sendMessage(
+      text || (images.length ? 'Attached image' : 'Attached file'),
+      images.length || files.length
+        ? { ...(images.length ? { images } : {}), ...(files.length ? { files } : {}) }
+        : undefined
+    );
     for (const image of images) URL.revokeObjectURL(image.preview);
     setAttachedImages([]);
+    setAttachedFiles([]);
   };
 
   return (
@@ -297,6 +315,25 @@ export function ComposeAuthoringAssistant({
                 <button
                   aria-label="Remove image"
                   onClick={() => removeImage(image.id)}
+                  type="button"
+                >
+                  <X aria-hidden="true" />
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : null}
+        {attachedFiles.length > 0 ? (
+          <div className={styles.imagePreview}>
+            {attachedFiles.map((file, index) => (
+              <span className={styles.filePreviewItem} key={`${file.name}-${index}`}>
+                <FileText aria-hidden="true" />
+                <span>{file.name}</span>
+                <button
+                  aria-label={`Remove ${file.name}`}
+                  onClick={() =>
+                    setAttachedFiles((current) => current.filter((_, at) => at !== index))
+                  }
                   type="button"
                 >
                   <X aria-hidden="true" />

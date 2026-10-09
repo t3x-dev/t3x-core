@@ -19,7 +19,7 @@ import {
   rebindWorkspaceCandidate,
   workspaceSchemaBindingsEqual,
 } from '@/domain/workspaces/schemaBindings';
-import type { ChatMessageImage } from '@/hooks/conversations/useChatHistory';
+import type { ChatMessageFile, ChatMessageImage } from '@/hooks/conversations/useChatHistory';
 import { useMaterialUpload } from '@/hooks/materials/useMaterialUpload';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
@@ -61,6 +61,7 @@ export interface WorkspaceComposeReviewMessage {
   id: string;
   role: 'assistant' | 'user';
   images?: ChatMessageImage[];
+  files?: ChatMessageFile[];
 }
 
 export interface WorkspaceReviewSessionState {
@@ -256,6 +257,7 @@ export function useWorkspaceComposeReviewController({
       id: message.id,
       role: message.role,
       ...('images' in message && message.images?.length ? { images: message.images } : {}),
+      ...('files' in message && message.files?.length ? { files: message.files } : {}),
     }));
     if (chat.streamingContent.trim()) {
       persisted.push({

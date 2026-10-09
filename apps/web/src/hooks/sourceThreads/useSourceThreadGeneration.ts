@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  attachedImageFile,
+  attachmentContentBlocks,
+  type TurnAttachment,
+} from '@/domain/conversations/turnAttachments';
+import {
   deriveConversationTitleFromMessage,
   isPlaceholderConversationTitle,
   MAX_CONVERSATION_TITLE_LENGTH,
@@ -16,6 +21,7 @@ import {
   type GenerationMessage,
   generationApi,
 } from '@/infrastructure/generation';
+import { uploadDocumentMaterial } from '@/infrastructure/materials';
 import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
 import type { SourceChatDraftReplyResponse } from '@/infrastructure/sourceChatDraftReplies';
 import { sourceThreadApi } from '@/infrastructure/sourceThreads';
@@ -39,6 +45,8 @@ interface SendMessageOptions {
   historyOverride?: Array<{ role: string; content: string }>;
   skipMemoryFetch?: boolean;
   images?: AttachedImage[];
+  /** Workspace Assistant only: stored as Source materials on the user turn. */
+  files?: File[];
   fixtureAssistantResponse?: string;
 }
 
@@ -265,6 +273,7 @@ export function useSourceThreadGeneration({
 
       // Build content for API (may include image blocks)
       const images = options?.images;
+      const files = workspaceAssistant ? options?.files : undefined;
       let apiContent: string | GenerationContentBlock[];
       if (images?.length) {
         apiContent = [
@@ -357,9 +366,11 @@ export function useSourceThreadGeneration({
         history.setMessages((prev) => {
           const next = prev.map((msg) =>
             msg.id === localMessageId
-              ? msg.images
-                ? { ...savedMessage, images: msg.images }
-                : savedMessage
+              ? {
+                  ...savedMessage,
+                  ...(msg.images ? { images: msg.images } : {}),
+                  ...(msg.files ? { files: msg.files } : {}),
+                }
               : msg
           );
           history.messagesRef.current = next;
@@ -379,11 +390,19 @@ export function useSourceThreadGeneration({
               })),
             }
           : {}),
+        ...(files?.length
+          ? {
+              files: files.map((file, index) => ({
+                id: `${file.name}-${index}`,
+                name: file.name,
+                mimeType: file.type,
+              })),
+            }
+          : {}),
       };
       history.setMessages((prev) => [...prev, newUserMessage]);
 
-      // Image turns use ordinary chat, which never completes Workspace Assistant activity.
-      if (workspaceAssistant && !images?.length) {
+      if (workspaceAssistant) {
         setWorkspaceActivity({ turnId: newUserMessage.id, phase: 'saving', operations: [] });
       }
 
@@ -460,8 +479,36 @@ export function useSourceThreadGeneration({
           });
           applyGeneratedTitle(currentConversationId, initialTitleForGeneratedTitle);
         } else {
+          const attachments: TurnAttachment[] = [];
+          if (workspaceAssistant) {
+            const uploads = [
+              ...(images ?? []).map((image) => ({
+                kind: 'image' as const,
+                file: attachedImageFile(image),
+              })),
+              ...(files ?? []).map((file) => ({ kind: 'file' as const, file })),
+            ];
+            for (const upload of uploads) {
+              const material = await uploadDocumentMaterial(projectId, upload.file);
+              attachments.push({
+                materialId: material.id,
+                kind: upload.kind,
+                title: upload.file.name,
+                mimeType: material.mime_type ?? upload.file.type,
+              });
+            }
+          }
           const userTurn = await saveTurnWithRetry(() =>
-            sourceThreadApi.appendTurn(projectId, currentConversationId, 'user', userMessage)
+            attachments.length
+              ? sourceThreadApi.appendTurn(
+                  projectId,
+                  currentConversationId,
+                  'user',
+                  userMessage,
+                  undefined,
+                  { content_blocks: attachmentContentBlocks(projectId, userMessage, attachments) }
+                )
+              : sourceThreadApi.appendTurn(projectId, currentConversationId, 'user', userMessage)
           );
           savedUserTurnHash = userTurn.turn_hash;
           mirrorSavedTurn(currentConversationId, userTurn, 'user', userMessage);
@@ -526,7 +573,7 @@ export function useSourceThreadGeneration({
           return;
         }
 
-        if (!isTemporaryMode && workspaceAssistant && savedUserTurnHash && !images?.length) {
+        if (!isTemporaryMode && workspaceAssistant && savedUserTurnHash) {
           // Creating the bound conversation saves the source bundle and advances the Draft revision.
           let assistantContext = workspaceAssistant;
           if (!hasExistingConversation && createConversation) {
