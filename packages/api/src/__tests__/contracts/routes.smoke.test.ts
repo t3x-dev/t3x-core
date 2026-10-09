@@ -175,21 +175,15 @@ describe('Critical Routes Smoke Tests', () => {
       }
     });
 
-    it('mounts both generation routes before provider work', async () => {
+    it('mounts the generation route before provider work', async () => {
       const invalidBody = JSON.stringify({});
       const nonStreaming = await app.request('/v1/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: invalidBody,
       });
-      const streaming = await app.request('/v1/chat/stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: invalidBody,
-      });
 
       expect(nonStreaming.status).toBe(400);
-      expect(streaming.status).toBe(400);
     });
   });
 

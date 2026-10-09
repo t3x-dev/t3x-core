@@ -1213,38 +1213,6 @@ describe('T3xClient', () => {
       expect(await client.generation.providers()).toEqual(catalog);
       expect(await client.listChatProviders()).toEqual(catalog);
     });
-
-    it('streams typed Generation events without exposing the legacy Chat UI', async () => {
-      const encoder = new TextEncoder();
-      const body = new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(encoder.encode('data: {"type":"token","content":"Hi"}\n\n'));
-          controller.enqueue(encoder.encode('data: {"type":"done","model":"gpt-5"}\n\n'));
-          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-          controller.close();
-        },
-      });
-      const fn = vi.fn(() =>
-        Promise.resolve(new Response(body, { status: 200, statusText: 'OK' }))
-      ) as unknown as typeof fetch;
-      const client = createTestClient(fn);
-
-      const events = [];
-      for await (const event of client.generation.stream({
-        messages: [{ role: 'user', content: 'Hello' }],
-      })) {
-        events.push(event);
-      }
-
-      expect(events).toEqual([
-        { type: 'token', content: 'Hi' },
-        { type: 'done', model: 'gpt-5' },
-      ]);
-      expect(fn).toHaveBeenCalledWith(
-        'http://localhost:8000/v1/chat/stream',
-        expect.objectContaining({ method: 'POST' })
-      );
-    });
   });
 
   // =========================================================================

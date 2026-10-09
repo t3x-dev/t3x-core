@@ -15,12 +15,7 @@ import { syncSavedTurnIntoWorkspace } from '@/hooks/conversations/syncSavedTurnI
 import { type ChatMessage, useChatHistory } from '@/hooks/conversations/useChatHistory';
 import { useChatStreamState } from '@/hooks/conversations/useChatStreamState';
 import { useChatWarnings } from '@/hooks/conversations/useChatWarnings';
-import {
-  type GenerationCitation,
-  type GenerationContentBlock,
-  type GenerationMessage,
-  generationApi,
-} from '@/infrastructure/generation';
+import { type GenerationCitation, generationApi } from '@/infrastructure/generation';
 import { uploadDocumentMaterial } from '@/infrastructure/materials';
 import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
 import type { SourceChatDraftReplyResponse } from '@/infrastructure/sourceChatDraftReplies';
@@ -212,15 +207,6 @@ function assistantStreamStatusRings(
   };
 }
 
-function buildMemorySystemMessage(memoryContext: string): GenerationMessage | null {
-  const content = memoryContext.trim();
-  if (!content) return null;
-  return {
-    role: 'system',
-    content,
-  };
-}
-
 /**
  * Repository-facing Source Thread generation capability. It composes
  * persisted history, generation stream state, and warnings while keeping
@@ -258,8 +244,6 @@ export function useSourceThreadGeneration({
     conversationIdRef.current = conversationId;
   }, [conversationId]);
 
-  const webSearchEnabled = useChatSessionStore((s) => s.webSearchEnabled);
-  const thinkingEnabled = useChatSessionStore((s) => s.thinkingEnabled);
   const reasoningEffort = useChatSessionStore((s) => s.reasoningEffort);
   const contextMode = useChatSessionStore((s) => s.contextMode);
   const fastEnabled = useChatSessionStore((s) => s.fastEnabled);
@@ -271,25 +255,8 @@ export function useSourceThreadGeneration({
 
       const userMessage = rawMessage.trim();
 
-      // Build content for API (may include image blocks)
       const images = options?.images;
       const files = workspaceAssistant ? options?.files : undefined;
-      let apiContent: string | GenerationContentBlock[];
-      if (images?.length) {
-        apiContent = [
-          ...images.map((img) => ({
-            type: 'image' as const,
-            source: {
-              type: 'base64' as const,
-              media_type: img.mediaType,
-              data: img.base64,
-            },
-          })),
-          { type: 'text' as const, text: userMessage },
-        ];
-      } else {
-        apiContent = userMessage;
-      }
 
       history.setInput('');
       warnings.setError(null);
@@ -526,28 +493,8 @@ export function useSourceThreadGeneration({
           }
         }
 
-        let memoryContext = '';
-        if (!isTemporaryMode && !workspaceAssistant && !options?.skipMemoryFetch) {
-          try {
-            const ctx = await sourceThreadApi.memory(currentConversationId);
-            if (ctx.text) memoryContext = ctx.text;
-          } catch {
-            // Memory fetch failed — proceed without context.
-          }
-        }
-
-        const systemMessage = buildMemorySystemMessage(memoryContext);
-        const messages: GenerationMessage[] = [
-          ...(systemMessage ? [systemMessage] : []),
-          ...previousMessages,
-          { role: 'user' as const, content: apiContent },
-        ];
-
         let fullResponse = '';
-        let addedFinalMessage = false;
         let localAssistantMessageId: string | null = null;
-        let streamCompleted = false;
-        let streamFailed = false;
         stream.tokenBufferRef.current = '';
 
         if (fixtureAssistantResponse) {
@@ -769,7 +716,6 @@ export function useSourceThreadGeneration({
               },
             ]);
             stream.setStreamingContent('');
-            addedFinalMessage = true;
             await saveAssistantResponse(
               fullResponse,
               localAssistantMessageId,
@@ -779,119 +725,10 @@ export function useSourceThreadGeneration({
           }
           warnings.setError('Model returned no content. Try again or check the provider key.');
           stream.setStreamingContent('');
-          addedFinalMessage = true;
           return;
         }
 
-        const flushBuffer = () => {
-          if (stream.tokenBufferRef.current) {
-            stream.setStreamingContent(stream.tokenBufferRef.current);
-          }
-          stream.rafIdRef.current = null;
-        };
-
-        const controller = new AbortController();
-        stream.abortControllerRef.current = controller;
-
-        for await (const event of generationApi.stream(
-          { messages, provider, model, web_search: webSearchEnabled, thinking: thinkingEnabled },
-          { signal: controller.signal }
-        )) {
-          if (event.type === 'token' && event.content) {
-            stream.setSearchQuery(null);
-            stream.setIsThinking(false);
-            fullResponse += event.content;
-            stream.tokenBufferRef.current = fullResponse;
-            if (stream.rafIdRef.current === null) {
-              stream.rafIdRef.current = requestAnimationFrame(flushBuffer);
-            }
-          } else if (event.type === 'thinking') {
-            stream.setIsThinking(true);
-            stream.setThinkingContent((prev) => prev + (event.content ?? ''));
-          } else if (event.type === 'searching') {
-            stream.setSearchQuery(event.query ?? null);
-          } else if (event.type === 'done') {
-            streamCompleted = true;
-            stream.setSearchQuery(null);
-            if (event.citations?.length) {
-              stream.setCitations(event.citations);
-            }
-            if (stream.rafIdRef.current !== null) {
-              cancelAnimationFrame(stream.rafIdRef.current);
-              stream.rafIdRef.current = null;
-            }
-            if (event.content) fullResponse = event.content;
-            // Skip the assistant append entirely when the upstream produced
-            // no visible tokens (provider blip, safety block, etc.). Adding
-            // an empty `{role: 'assistant', content: ''}` to the local
-            // history poisons every subsequent /chat/stream call — the
-            // server validator rejects empty content with "messages[N]:
-            // content must be non-empty" and chat stalls.
-            if (!addedFinalMessage && fullResponse.trim().length > 0) {
-              localAssistantMessageId = `msg-${Date.now()}-assistant`;
-              history.setMessages((prev) => [
-                ...prev,
-                {
-                  id: localAssistantMessageId!,
-                  role: 'assistant' as const,
-                  content: fullResponse,
-                },
-              ]);
-              if (isTemporaryMode) {
-                useTemporaryChatsStore.getState().addMessage(currentConversationId, {
-                  id: localAssistantMessageId,
-                  role: 'assistant',
-                  content: fullResponse,
-                });
-              }
-              stream.setStreamingContent('');
-              addedFinalMessage = true;
-            } else if (!addedFinalMessage) {
-              // Failed quietly — surface a hint instead of poisoning history.
-              warnings.setError('Model returned no content. Try again or check the provider key.');
-              stream.setStreamingContent('');
-              addedFinalMessage = true;
-            }
-          } else if (event.type === 'error') {
-            streamFailed = true;
-            warnings.setError(formatUserFacingError(event.message, 'Chat request failed.'));
-          }
-        }
-
-        if (fullResponse && !addedFinalMessage) {
-          localAssistantMessageId = `msg-${Date.now()}-assistant`;
-          history.setMessages((prev) => [
-            ...prev,
-            {
-              id: localAssistantMessageId!,
-              role: 'assistant' as const,
-              content: fullResponse,
-            },
-          ]);
-          if (isTemporaryMode && stableConversationId) {
-            useTemporaryChatsStore.getState().addMessage(stableConversationId, {
-              id: localAssistantMessageId,
-              role: 'assistant',
-              content: fullResponse,
-            });
-          }
-          stream.setStreamingContent('');
-          if (!streamCompleted && !streamFailed) {
-            warnings.showWarning(
-              'Assistant stream ended before completion — partial response preserved.'
-            );
-          }
-        }
-
-        if (!isTemporaryMode) {
-          await saveAssistantResponse(
-            fullResponse,
-            localAssistantMessageId,
-            streamCompleted
-              ? undefined
-              : assistantStreamStatusRings(streamFailed ? 'stream_error' : 'stream_eof')
-          );
-        }
+        throw new Error('Workspace assistant context is required to send a message.');
       } catch (err) {
         if (workspaceAssistant)
           setWorkspaceActivity((current) => (current ? { ...current, phase: 'error' } : current));
@@ -947,8 +784,6 @@ export function useSourceThreadGeneration({
       onConversationReady,
       createConversation,
       onTurnsSaved,
-      webSearchEnabled,
-      thinkingEnabled,
       reasoningEffort,
       contextMode,
       fastEnabled,

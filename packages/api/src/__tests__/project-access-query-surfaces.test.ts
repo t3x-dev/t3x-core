@@ -177,7 +177,7 @@ describe('project ownership on query and generation surfaces', () => {
     await expectForbidden(await app.request(`${base}/document`, { method: 'POST' }));
   });
 
-  it('blocks non-streaming and streaming chat before provider resolution', async () => {
+  it('blocks chat before provider resolution', async () => {
     const app = createAuthenticatedApp('user_owner');
     const body = JSON.stringify({
       project_id: otherProjectId,
@@ -186,13 +186,6 @@ describe('project ownership on query and generation surfaces', () => {
 
     await expectForbidden(
       await app.request('/v1/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body,
-      })
-    );
-    await expectForbidden(
-      await app.request('/v1/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body,

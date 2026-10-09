@@ -128,13 +128,6 @@
       "rationale": "Project ownership or project-scoped resource boundary."
     },
     {
-      "source": "chat.openapi.ts",
-      "method": "POST",
-      "path": "/v1/chat/stream",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
       "source": "check.openapi.ts",
       "method": "POST",
       "path": "/v1/check",
