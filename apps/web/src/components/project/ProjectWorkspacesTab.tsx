@@ -119,7 +119,8 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
       projectId={projectId}
       selectedWorkspaceId={selectedWorkspaceId}
       viewState={
-        projectWorkspaces.loading || (Boolean(branch) && branchesLoading)
+        (projectWorkspaces.loading && projectWorkspaces.workspaces.length === 0) ||
+        (Boolean(branch) && branchesLoading && branches.length === 0)
           ? 'loading'
           : navigationError
             ? 'error'

@@ -248,20 +248,21 @@ export function useWorkspaceComposeReviewController({
 
   const addMaterial = useCallback(
     async (material: Material) => {
-      await pinsCrud.add(candidate.projectId, 'import', material.id);
-      if (
-        !usePinsStore
+      const isIncluded = () =>
+        usePinsStore
           .getState()
-          .pins.some((pin) => pin.type === 'import' && pin.ref_id === material.id)
-      ) {
-        throw new Error('Uploaded material could not be included.');
-      }
+          .pins.some((pin) => pin.type === 'import' && pin.ref_id === material.id);
+      if (!isIncluded()) await pinsCrud.add(candidate.projectId, 'import', material.id);
+      if (!isIncluded()) throw new Error('Uploaded material could not be included.');
       const source = materialToSourceBundleItem(material);
-      const nextCandidate = invalidateWorkspaceProposal({
+      const withSource = {
         ...workingCandidate,
         sourceBundle: upsertSource(workingCandidate.sourceBundle, source.id, source),
-      });
-      await persistCandidate(nextCandidate, 'source.add');
+      };
+      await persistCandidate(
+        workingCandidate.authoringLedger ? withSource : invalidateWorkspaceProposal(withSource),
+        'source.add'
+      );
       await onSourceMaterialUploaded?.();
       setNotice(`${material.title} added as source evidence.`);
     },
@@ -287,7 +288,8 @@ export function useWorkspaceComposeReviewController({
             existing ? 'Material could not be excluded.' : 'Material could not be included.'
           );
         }
-        await persistCandidate(invalidateWorkspaceProposal(workingCandidate), 'source.include');
+        if (!workingCandidate.authoringLedger)
+          await persistCandidate(invalidateWorkspaceProposal(workingCandidate), 'source.include');
         setNotice(included ? 'Material included as source evidence.' : 'Material excluded.');
       } catch (error) {
         setLocalError(formatUserFacingError(error, 'Material source update failed.'));
