@@ -58,7 +58,6 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
     [workspaceCandidates, schemaBindings]
   );
   const requestedWorkspaceId = searchParams.get('workspace')?.trim() || null;
-  const sourceConversationId = searchParams.get('sourceConversation')?.trim() || undefined;
   const branchWorkspace = branch ? selectWorkspaceForBranch(candidates, branch, branchHead) : null;
   const requestedCandidate = candidates.find((candidate) => candidate.id === requestedWorkspaceId);
   const selectedCandidate = requestedWorkspaceId
@@ -119,7 +118,6 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
       errorMessage={navigationError ?? undefined}
       projectId={projectId}
       selectedWorkspaceId={selectedWorkspaceId}
-      sourceConversationId={sourceConversationId}
       viewState={
         projectWorkspaces.loading || (Boolean(branch) && branchesLoading)
           ? 'loading'

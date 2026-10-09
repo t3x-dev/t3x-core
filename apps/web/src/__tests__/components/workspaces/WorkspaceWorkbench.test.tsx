@@ -237,30 +237,7 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     expect(screen.getByRole('combobox', { name: 'Workspace scenario' })).toHaveValue(release.id);
   });
 
-  it('keeps Compose chat on the regular generation lane and renders stored replies verbatim', () => {
-    const storedReply = [
-      'Source draft',
-      '',
-      'Summary: 1 captured item, 0 boundaries, 1 confirmation item.',
-      '',
-      'Needs confirmation',
-      '- Confirm the target environment.',
-    ].join('\n');
-    mocks.chatMessages.push({
-      content: storedReply,
-      id: 'sha256:assistant_turn',
-      rings: {
-        source_chat_draft: {
-          display: {
-            captured: ['Target environment: production'],
-            excluded: [],
-            needs_confirmation: ['Confirm the target environment.'],
-          },
-        },
-      },
-      role: 'assistant',
-    });
-
+  it('offers Draft activity instead of a separate discussion chat', () => {
     render(
       <WorkspaceWorkbench
         candidates={[workspace('workspace_main', 'Main workspace')]}
@@ -268,18 +245,10 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
       />
     );
 
-    expect(mocks.sourceThreadGenerationOptions).toHaveBeenCalledWith(
-      expect.objectContaining({
-        onConversationReady: expect.any(Function),
-      })
-    );
-    expect(mocks.sourceThreadGenerationOptions).toHaveBeenCalledWith(
-      expect.not.objectContaining({ sourceDraftReply: expect.anything() })
-    );
-    expect(mocks.saveDraft).not.toHaveBeenCalled();
-    expect(screen.getByRole('log')).toHaveTextContent('Source draft');
-    expect(screen.getByRole('log')).toHaveTextContent('Confirm the target environment.');
-    expect(screen.queryByText(/I saved this as proposal source/)).not.toBeInTheDocument();
+    expect(mocks.sourceThreadGenerationOptions).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /Enable Draft activity/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Generate changes/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Switch to discuss/ })).not.toBeInTheDocument();
   });
 
   it('renders structured changes in Compose and lets Review nodes select their evidence', async () => {

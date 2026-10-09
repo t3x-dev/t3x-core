@@ -9,7 +9,6 @@ import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import { useWorkspaceProposalGeneration } from '@/hooks/workspaces/useWorkspaceProposalGeneration';
 import { usePinsStore } from '@/store/pinsStore';
 import type {
-  SourceBundleItem,
   WorkspaceCandidate,
   WorkspaceProposalGenerationView,
   WorkspaceProposalPosture,
@@ -27,8 +26,6 @@ interface WorkspaceFlowState {
   candidateId?: string;
   yopsDraftId?: string;
   commitHash?: string;
-  sourceConversationId?: string;
-  sourceParentCommitHash?: string;
   continuationBusy?: boolean;
   extracting?: boolean;
   sendingToYOps?: boolean;
@@ -47,7 +44,6 @@ interface WorkspaceWorkbenchProps {
   viewState?: WorkspaceWorkbenchViewState;
   errorMessage?: string;
   selectedWorkspaceId?: string | null;
-  sourceConversationId?: string;
   onSelectedWorkspaceChange?: (workspaceId: string) => void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
@@ -66,7 +62,6 @@ export function WorkspaceWorkbench({
   onWorkspaceBranchChange,
   projectId,
   selectedWorkspaceId,
-  sourceConversationId,
   viewState = 'ready',
 }: WorkspaceWorkbenchProps) {
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<WorkspaceTabId>('chat');
@@ -141,43 +136,6 @@ export function WorkspaceWorkbench({
       },
     }));
   };
-
-  const handleChatSourceEvidenceChange = useCallback(
-    (sourceId: string, source: SourceBundleItem | null) => {
-      if (!baseSelectedWorkspace) return;
-
-      setWorkspaceOverrides((current) => {
-        const existingOverride = current[baseSelectedWorkspace.id];
-        const currentWorkspace = existingOverride
-          ? mergeWorkspaceOverride(baseSelectedWorkspace, existingOverride)
-          : baseSelectedWorkspace;
-        const sourceBundle = upsertWorkspaceSourceBundle(
-          currentWorkspace.sourceBundle,
-          sourceId,
-          source
-        );
-
-        if (sourceBundlesEqual(currentWorkspace.sourceBundle, sourceBundle)) return current;
-
-        const removedSource = source
-          ? null
-          : currentWorkspace.sourceBundle.find((item) => item.id === sourceId);
-        const nextWorkspace =
-          removedSource?.type === 'chat'
-            ? resetWorkspaceProposalAfterSourceChange(currentWorkspace, sourceBundle)
-            : {
-                ...(existingOverride ?? baseSelectedWorkspace),
-                sourceBundle,
-              };
-
-        return {
-          ...current,
-          [baseSelectedWorkspace.id]: nextWorkspace,
-        };
-      });
-    },
-    [baseSelectedWorkspace]
-  );
 
   const handleExtractCandidate = async (_options: WorkspacePreparationOptions = {}) => {
     if (!selectedWorkspace) return;
@@ -378,8 +336,6 @@ export function WorkspaceWorkbench({
           commitHash: undefined,
           continuationBusy: false,
           error: undefined,
-          sourceConversationId: result.conversationId,
-          sourceParentCommitHash: commitHash,
           validationGapCount: undefined,
           yopsDraftId: undefined,
         },
@@ -657,10 +613,8 @@ export function WorkspaceWorkbench({
             candidate={selectedWorkspaceWithFlow}
             candidates={availableCandidates}
             flowState={selectedFlow}
-            initialSourceConversationId={sourceConversationId}
             onExtractCandidate={handleExtractCandidate}
             onGenerateProposal={handleGenerateProposal}
-            onChatSourceEvidenceChange={handleChatSourceEvidenceChange}
             onContinueFromCommit={handleContinueFromCommit}
             onSendToYOps={handleSendToYOps}
             onProposalAction={handleProposalAction}
@@ -692,11 +646,9 @@ function WorkspaceDetail({
   candidate,
   candidates,
   flowState,
-  initialSourceConversationId,
   onApplyAfterRefresh,
   onExtractCandidate,
   onGenerateProposal,
-  onChatSourceEvidenceChange,
   onContinueFromCommit,
   onProposalAction,
   onProposalPostureChange,
@@ -720,11 +672,9 @@ function WorkspaceDetail({
   candidate: WorkspaceCandidate | null;
   candidates: WorkspaceCandidate[];
   flowState?: WorkspaceFlowState;
-  initialSourceConversationId?: string;
   onApplyAfterRefresh: (workspace: WorkspaceCandidate) => Promise<WorkspaceCandidate>;
   onExtractCandidate: (options?: WorkspacePreparationOptions) => void;
   onGenerateProposal: (options?: WorkspacePreparationOptions) => void;
-  onChatSourceEvidenceChange?: (sourceId: string, source: SourceBundleItem | null) => void;
   onContinueFromCommit: (
     commitHash: string,
     targetBranch: string,
@@ -771,10 +721,6 @@ function WorkspaceDetail({
           extractingCandidate={Boolean(flowState?.extracting)}
           flowError={flowState?.error}
           continuationBusy={Boolean(flowState?.continuationBusy)}
-          sourceConversationId={flowState?.sourceConversationId ?? initialSourceConversationId}
-          sourceParentCommitHash={
-            flowState?.sourceParentCommitHash ?? getWorkspaceSourceParentCommitHash(candidate)
-          }
           onSourceMaterialUploaded={onSourceMaterialUploaded}
           onSourceArtifactChange={onSourceArtifactChange}
           onDraftCommand={onDraftCommand}
@@ -782,7 +728,6 @@ function WorkspaceDetail({
           onPrepareDraft={onPrepareDraft}
           onScenarioSelect={onScenarioSelect}
           onWorkspaceBranchChange={onWorkspaceBranchChange}
-          onChatSourceEvidenceChange={onChatSourceEvidenceChange}
           onContinueFromCommit={onContinueFromCommit}
           onExtractCandidate={onExtractCandidate}
           onGenerateProposal={onGenerateProposal}
@@ -810,72 +755,6 @@ function WorkspaceDetail({
 
 function hasYOpsOperations(candidate: WorkspaceCandidate | null | undefined): boolean {
   return Boolean(candidate?.yopsDraft.operations.length);
-}
-
-function getWorkspaceSourceParentCommitHash(candidate: WorkspaceCandidate): string | undefined {
-  if (candidate.status !== 'draft') return undefined;
-  return candidate.baseCommitHash ?? undefined;
-}
-
-function upsertWorkspaceSourceBundle(
-  sourceBundle: SourceBundleItem[],
-  sourceId: string,
-  source: SourceBundleItem | null
-): SourceBundleItem[] {
-  const existingIndex = sourceBundle.findIndex((item) => item.id === sourceId);
-  if (!source) {
-    return existingIndex < 0
-      ? sourceBundle
-      : sourceBundle.filter((_, index) => index !== existingIndex);
-  }
-
-  if (existingIndex >= 0) {
-    return sourceBundle.map((item, index) => (index === existingIndex ? source : item));
-  }
-
-  const firstMaterialIndex = sourceBundle.findIndex((item) => Boolean(item.materialId));
-  if (firstMaterialIndex < 0) return [...sourceBundle, source];
-
-  return [
-    ...sourceBundle.slice(0, firstMaterialIndex),
-    source,
-    ...sourceBundle.slice(firstMaterialIndex),
-  ];
-}
-
-function resetWorkspaceProposalAfterSourceChange(
-  workspace: WorkspaceCandidate,
-  sourceBundle: SourceBundleItem[]
-): WorkspaceCandidate {
-  const {
-    commitOverride: _commitOverride,
-    lastCommitHash: _lastCommitHash,
-    ...editableWorkspace
-  } = workspace;
-
-  return {
-    ...editableWorkspace,
-    sourceBundle,
-    status: 'draft',
-    schemaCandidate: {
-      summary: 'Source evidence changed. Generate a new candidate proposal.',
-      fields: [],
-    },
-    schemaReview: {
-      verdict: 'needs_review',
-      summary: 'The candidate proposal must be regenerated after its source evidence changed.',
-      gaps: ['Generate a candidate proposal from the current source evidence.'],
-    },
-    yopsDraft: {
-      id: workspace.yopsDraft.id,
-      operations: [],
-    },
-  };
-}
-
-function sourceBundlesEqual(left: SourceBundleItem[], right: SourceBundleItem[]): boolean {
-  if (left.length !== right.length) return false;
-  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function selectWorkspaceSourceBundle(

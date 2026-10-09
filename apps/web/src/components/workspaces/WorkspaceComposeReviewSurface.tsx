@@ -8,7 +8,6 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
-  ArrowUp,
   Bot,
   Box as BoxIcon,
   Check,
@@ -16,7 +15,6 @@ import {
   ChevronDown,
   ChevronRight,
   CircleDot,
-  ClipboardPaste,
   Clock3,
   Code2,
   Copy,
@@ -28,7 +26,6 @@ import {
   GitBranch,
   Globe2,
   Hash,
-  Layers,
   ListTree,
   MessageSquare,
   Minus,
@@ -41,21 +38,14 @@ import {
   Settings,
   Share2,
   Sparkles,
-  Square,
   Type,
   UserRound,
   X,
 } from 'lucide-react';
-import NextImage from 'next/image';
 import NextLink from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import type { ChangeEvent, ClipboardEvent, CSSProperties, KeyboardEvent } from 'react';
+import type { ChangeEvent, CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  clipboardImageFiles,
-  fileToAttachedImage,
-} from '@/components/generation/attachedImageFile';
-import { GenerationModelSelector } from '@/components/generation/GenerationModelSelector';
 import { DOCUMENT_SOURCE_ACCEPTED_TYPES } from '@/components/import/documentAcceptTypes';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
 import navigationStyles from '@/components/project/StateNavigationControls.module.css';
@@ -72,7 +62,6 @@ import {
 import { OutputTargetsTab } from '@/components/workspaces/OutputTargetsTab';
 import { SourceArtifactRoleEditor } from '@/components/workspaces/SourcesTab';
 import { SourceTransitionTab } from '@/components/workspaces/SourceTransitionTab';
-import { WorkspaceComposeChat } from '@/components/workspaces/WorkspaceComposeChat';
 import { WorkspaceContentEditor } from '@/components/workspaces/WorkspaceContentEditor';
 import type { WorkspaceYOpsFlowView } from '@/components/workspaces/YOpsDraftTab';
 import { getSchemaRegistryPreview } from '@/data/schemaReleases';
@@ -123,7 +112,6 @@ import { useWorkspaceAuthoringBootstrap } from '@/hooks/workspaces/useWorkspaceA
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import { useWorkspaceReviewHistory } from '@/hooks/workspaces/useWorkspaceReviewHistory';
 import { validateWorkspaceCandidateYOps } from '@/hooks/workspaces/useWorkspaceYOps';
-import type { AttachedImage } from '@/types/generation';
 import type {
   SourceBundleItem,
   WorkspaceCandidate,
@@ -515,16 +503,8 @@ function ComposeSurface({
   onBranchChange?: (branch: string) => Promise<void> | void;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
 }) {
-  const [draftEditing, setDraftEditing] = useState(true);
-  const editingEnabled = activity.enabled && draftEditing;
-  const toggleEditing = async () => {
-    if (editingEnabled) {
-      setDraftEditing(false);
-      setSidePanel('chat');
-      return;
-    }
+  const enableActivity = async () => {
     if (await authoringBootstrap.start()) {
-      setDraftEditing(true);
       setSidePanel('chat');
       setDiscussionOpen(true);
     }
@@ -564,11 +544,8 @@ function ComposeSurface({
   }, [activity.enabled, candidate.id]);
   useEffect(() => {
     setActivitySelection(null);
-    setDraftEditing(true);
     setCurrentStep(0);
   }, [candidate.id]);
-  const operation =
-    activitySelection?.operation ?? candidate.yopsDraft.operations[currentStep] ?? null;
   const selectStep = (step: number) => {
     setActivitySelection(null);
     setCurrentStep(step);
@@ -617,6 +594,7 @@ function ComposeSurface({
         onModeChange={onModeChange}
       />
       <SourceToolbar
+        candidate={candidate}
         proposedChangeCount={
           activity.view
             ? changeScope === 'all'
@@ -627,10 +605,6 @@ function ComposeSurface({
                 )
             : candidate.yopsDraft.operations.length
         }
-        authoringBootstrap={authoringBootstrap}
-        authoringEnabled={editingEnabled}
-        onToggleEditing={toggleEditing}
-        candidate={candidate}
         changeScope={changeScope}
         controller={controller}
         onChangeScope={setChangeScope}
@@ -729,7 +703,7 @@ function ComposeSurface({
       {discussionOpen ? (
         <aside aria-label="Discuss change" className={composeStyles.discussionSidebar}>
           <header className={composeStyles.discussionHeader}>
-            {editingEnabled ? (
+            {activity.enabled ? (
               <div
                 className={composeStyles.discussionTabs}
                 role="tablist"
@@ -755,7 +729,7 @@ function ComposeSurface({
             ) : (
               <>
                 <MessageSquare aria-hidden="true" />
-                <h2>Discuss change</h2>
+                <h2>Chat</h2>
               </>
             )}
             <button
@@ -768,14 +742,15 @@ function ComposeSurface({
               <PanelRight aria-hidden="true" strokeWidth={1.5} />
             </button>
           </header>
-          {editingEnabled && sidePanel === 'history' ? (
+          {!activity.enabled ? (
+            <ComposeActivityBootstrap bootstrap={authoringBootstrap} onEnable={enableActivity} />
+          ) : sidePanel === 'history' ? (
             <ComposeNodeHistoryPanel
               activity={activity}
               selection={activitySelection}
               onOpenAction={openHistoryAction}
             />
-          ) : null}
-          {editingEnabled && activity.view && sidePanel === 'chat' ? (
+          ) : activity.view ? (
             <ComposeAuthoringAssistant
               context={{
                 workspaceId: candidate.id,
@@ -794,419 +769,57 @@ function ComposeSurface({
               activityActions={activity.actions}
               activityCards={activity.cards}
               projectId={candidate.projectId}
+              prefill={controller.assistantPrefill}
+              onPrefillApplied={controller.clearAssistantPrefill}
             />
-          ) : sidePanel === 'chat' ? (
-            <>
-              <WorkspaceComposeChat
-                chat={controller.chat}
-                variant="discussion"
-                discussionAction={
-                  operation ? (
-                    <button
-                      className={composeStyles.inspectDiscussion}
-                      disabled={controller.isBusy}
-                      onClick={() => void prepareAndOpenReview(controller, onModeChange)}
-                      type="button"
-                    >
-                      <ListTree aria-hidden="true" /> Inspect this change
-                    </button>
-                  ) : undefined
-                }
-              />
-              <ComposerBar controller={controller} variant="discussion" />
-            </>
-          ) : null}
+          ) : (
+            <p className={composeStyles.activityStatus} role={activity.error ? 'alert' : 'status'}>
+              {activity.error ?? 'Loading Draft activity…'}
+            </p>
+          )}
         </aside>
       ) : null}
     </div>
   );
 }
 
-function ComposerBar({
-  controller,
-  variant = 'default',
+function ComposeActivityBootstrap({
+  bootstrap,
+  onEnable,
 }: {
-  controller: WorkspaceComposeReviewController;
-  variant?: 'default' | 'discussion';
+  bootstrap: ReturnType<typeof useWorkspaceAuthoringBootstrap>;
+  onEnable: () => Promise<void>;
 }) {
-  const [sourceMenuOpen, setSourceMenuOpen] = useState(false);
-  const [sourceForm, setSourceForm] = useState<'paste' | 'url' | null>(null);
-  const [sourceTitle, setSourceTitle] = useState('');
-  const [sourceValue, setSourceValue] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
-  const sendDisabled =
-    controller.chat.isLoading ||
-    controller.model.loading ||
-    !controller.model.ready ||
-    (!controller.chat.input.trim() && attachedImages.length === 0);
-
-  useEffect(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    textarea.style.height = 'auto';
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 128)}px`;
-  }, [controller.chat.input]);
-
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.[0];
-    event.currentTarget.value = '';
-    if (file) void controller.uploadFile(file);
-    setSourceMenuOpen(false);
-  };
-
-  const submitSourceForm = async () => {
-    const imported = await controller.addPaste(sourceTitle, sourceValue);
-    if (!imported) return;
-    setSourceForm(null);
-    setSourceMenuOpen(false);
-    setSourceTitle('');
-    setSourceValue('');
-  };
-
-  const removeImage = (id: string) => {
-    setAttachedImages((current) => {
-      const removed = current.find((image) => image.id === id);
-      if (removed) URL.revokeObjectURL(removed.preview);
-      return current.filter((image) => image.id !== id);
-    });
-  };
-
-  const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
-    const files = clipboardImageFiles(event.clipboardData);
-    if (!files.length) return;
-    if (!event.clipboardData.getData('text/plain')) event.preventDefault();
-    void Promise.all(files.map(fileToAttachedImage)).then((images) => {
-      setAttachedImages((current) => [...current, ...images]);
-    });
-  };
-
-  const sendComposer = () => {
-    if (controller.chat.isLoading || controller.chat.isStreaming || sendDisabled) return;
-    const images = attachedImages;
-    controller.chat.send(images.length ? images : undefined);
-    for (const image of images) URL.revokeObjectURL(image.preview);
-    setAttachedImages([]);
-  };
-
-  const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
-    event.preventDefault();
-    sendComposer();
-  };
-
-  const imagePreview =
-    attachedImages.length > 0 ? (
-      <div className={composeStyles.imagePreview}>
-        {attachedImages.map((image) => (
-          <span className={composeStyles.imagePreviewItem} key={image.id}>
-            <NextImage alt="" height={48} src={image.preview} unoptimized width={48} />
-            <button aria-label="Remove image" onClick={() => removeImage(image.id)} type="button">
-              <X aria-hidden="true" />
-            </button>
-          </span>
-        ))}
-      </div>
-    ) : null;
-
-  if (variant === 'discussion') {
-    return (
-      <div className={composeStyles.discussionComposerWrap}>
-        {controller.error || controller.chat.warning || controller.notice ? (
-          <div
-            className={composeStyles.composerNotice}
-            role={controller.error ? 'alert' : 'status'}
-          >
-            {controller.error ?? controller.chat.warning ?? controller.notice}
-            {controller.hasCollaborationConflict ? (
-              <button
-                disabled={controller.isBusy}
-                onClick={() => void controller.resolveCollaborationConflict()}
-                type="button"
-              >
-                Refresh and apply mine
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-        <fieldset className={composeStyles.discussionComposer} aria-label="Message composer">
-          <textarea
-            aria-label="Workspace instruction"
-            disabled={controller.chat.isLoading}
-            onChange={(event) => controller.chat.setInput(event.target.value)}
-            onKeyDown={handleComposerKeyDown}
-            onPaste={handlePaste}
-            placeholder="Ask about this change…"
-            ref={textareaRef}
-            rows={3}
-            value={controller.chat.input}
-          />
-          {imagePreview}
-          <div className={composeStyles.discussionComposerFooter}>
-            <GenerationModelSelector
-              onModelChange={controller.model.change}
-              onThinkingChange={controller.model.setThinking}
-              selectedModel={controller.model.selectedModel}
-              selectedProvider={controller.model.selectedProvider}
-              supportsThinking={controller.model.supportsThinking}
-              thinkingEnabled={controller.model.thinkingEnabled}
-            />
-            <button
-              aria-label={controller.chat.isStreaming ? 'Stop generating' : 'Send message'}
-              className={composeStyles.send}
-              disabled={!controller.chat.isStreaming && sendDisabled}
-              onClick={controller.chat.isStreaming ? controller.chat.stop : sendComposer}
-              type="button"
-            >
-              {controller.chat.isStreaming ? (
-                <Square aria-hidden="true" className="size-4 fill-current text-current" />
-              ) : (
-                <ArrowUp aria-hidden="true" className="size-4" />
-              )}
-            </button>
-          </div>
-        </fieldset>
-      </div>
-    );
-  }
-
+  const importing = bootstrap.importSnapshot !== undefined;
   return (
-    <div className={composeStyles.composerWrap}>
+    <div className={composeStyles.activityBootstrap}>
+      <p>
+        {importing
+          ? 'Import the current Draft snapshot to enable activity. Existing changes will be preserved.'
+          : 'Enable Draft activity to chat with the Workspace assistant. It reads the Draft, schema and sources, and can propose changes.'}
+      </p>
       <div>
-        {controller.error || controller.chat.warning || controller.notice ? (
-          <div
-            className={cn(
-              'mb-2 flex flex-wrap items-center gap-2 px-1 py-1 text-xs',
-              controller.error
-                ? 'border-[var(--status-error)]/30 bg-[var(--status-error-muted)] text-[var(--status-error)]'
-                : 'text-[var(--text-tertiary)]'
-            )}
-            role={controller.error ? 'alert' : 'status'}
-          >
-            {controller.error ??
-              controller.chat.warning ??
-              (controller.notice === 'Immutable review prepared from the current draft.' ? (
-                <>
-                  <CheckCircle2 aria-hidden="true" className="size-3.5" />
-                  Review ready
-                </>
-              ) : (
-                controller.notice
-              ))}
-            {controller.hasCollaborationConflict ? (
-              <button
-                className="ml-3 rounded-md border border-current px-2 py-1 font-semibold"
-                disabled={controller.isBusy}
-                onClick={() => void controller.resolveCollaborationConflict()}
-                type="button"
-              >
-                Refresh and apply mine
-              </button>
-            ) : null}
-          </div>
+        <button disabled={bootstrap.busy} onClick={() => void onEnable()} type="button">
+          <Play aria-hidden="true" />
+          {bootstrap.busy
+            ? 'Enabling Draft activity…'
+            : importing
+              ? 'Confirm import and enable'
+              : 'Enable Draft activity'}
+        </button>
+        {importing ? (
+          <button disabled={bootstrap.busy} onClick={bootstrap.cancel} type="button">
+            Cancel import
+          </button>
         ) : null}
-        <div className={cn(composeStyles.composer, 'relative')}>
-          <input
-            accept={DOCUMENT_SOURCE_ACCEPTED_TYPES}
-            aria-label="Upload source material"
-            className="hidden"
-            onChange={handleFileChange}
-            ref={fileInputRef}
-            type="file"
-          />
-          <textarea
-            aria-label="Workspace instruction"
-            className=""
-            disabled={controller.chat.isLoading}
-            onChange={(event) => controller.chat.setInput(event.target.value)}
-            onKeyDown={handleComposerKeyDown}
-            onPaste={handlePaste}
-            placeholder="Ask T3X anything about your workspace…"
-            ref={textareaRef}
-            rows={1}
-            value={controller.chat.input}
-          />
-          {imagePreview}
-          <div className={composeStyles.composerTools}>
-            <div className="relative flex shrink-0 items-center gap-2 text-[var(--text-tertiary)]">
-              <button
-                aria-expanded={sourceMenuOpen}
-                aria-haspopup="menu"
-                aria-label="Add source"
-                title="Add source"
-                className={composeStyles.addButton}
-                onClick={() => setSourceMenuOpen((open) => !open)}
-                type="button"
-              >
-                <Plus aria-hidden="true" className="size-4" />
-                <span className="sr-only">Add source</span>
-              </button>
-              {controller.materialSources.find((source) => source.included) ? (
-                <span className={composeStyles.sourceChip}>
-                  <FileText aria-hidden="true" className="size-4" />
-                  <span>{controller.materialSources.find((source) => source.included)?.title}</span>
-                </span>
-              ) : null}
-              {sourceMenuOpen ? (
-                <div
-                  className="absolute bottom-[calc(100%+8px)] left-0 z-30 min-w-64 rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-elevated)] p-2 shadow-[var(--fx-shadow-lg)]"
-                  role="menu"
-                >
-                  {sourceForm ? (
-                    <div className="grid gap-2">
-                      <input
-                        aria-label="Source title"
-                        className="h-8 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
-                        onChange={(event) => setSourceTitle(event.target.value)}
-                        placeholder="Optional title"
-                        value={sourceTitle}
-                      />
-                      {sourceForm === 'url' ? (
-                        <input
-                          aria-label="Source URL"
-                          className="h-8 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
-                          onChange={(event) => setSourceValue(event.target.value)}
-                          placeholder="https://example.com/source"
-                          type="url"
-                          value={sourceValue}
-                        />
-                      ) : (
-                        <textarea
-                          aria-label="Pasted source text"
-                          className="min-h-24 resize-y rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
-                          onChange={(event) => setSourceValue(event.target.value)}
-                          placeholder="Paste exact source text"
-                          value={sourceValue}
-                        />
-                      )}
-                      <div className="flex justify-end gap-2">
-                        <button
-                          className="h-8 rounded-md border border-[var(--stroke-default)] px-3 text-xs text-[var(--text-secondary)]"
-                          onClick={() => setSourceForm(null)}
-                          type="button"
-                        >
-                          Back
-                        </button>
-                        <button
-                          className="h-8 rounded-md bg-[var(--accent-commit)] px-3 text-xs font-semibold text-[var(--on-accent)]"
-                          disabled={!sourceValue.trim() || controller.sourceBusy}
-                          onClick={() => void submitSourceForm()}
-                          type="button"
-                        >
-                          {controller.sourceBusy ? 'Adding…' : 'Add source'}
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid gap-1">
-                      <SourceMenuButton
-                        icon={FileUp}
-                        label="Upload file"
-                        onClick={() => fileInputRef.current?.click()}
-                      />
-                      <SourceMenuButton
-                        icon={ClipboardPaste}
-                        label="Paste text"
-                        onClick={() => setSourceForm('paste')}
-                      />
-
-                      {controller.materialSources.length > 0 ? (
-                        <div className="mt-1 border-t border-[var(--stroke-divider)] pt-2">
-                          <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
-                            Project materials
-                          </p>
-                          {controller.materialSources.map((source) => (
-                            <button
-                              aria-pressed={source.included}
-                              className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-app)]"
-                              key={source.id}
-                              onClick={() =>
-                                void controller.toggleMaterialSource(source.materialId)
-                              }
-                              type="button"
-                            >
-                              <FileCode2 aria-hidden="true" className="size-4 shrink-0" />
-                              <span className="min-w-0 flex-1 truncate">{source.title}</span>
-                              <span className="text-[10px] font-semibold text-[var(--accent-commit)]">
-                                {source.included ? 'Included' : 'Include'}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  )}
-                </div>
-              ) : null}
-            </div>
-            <div className={composeStyles.modelSend}>
-              <GenerationModelSelector
-                onModelChange={controller.model.change}
-                onThinkingChange={controller.model.setThinking}
-                selectedModel={controller.model.selectedModel}
-                selectedProvider={controller.model.selectedProvider}
-                supportsThinking={controller.model.supportsThinking}
-                thinkingEnabled={controller.model.thinkingEnabled}
-              />
-              <button
-                aria-label={controller.chat.isStreaming ? 'Stop generating' : 'Send message'}
-                className={composeStyles.send}
-                disabled={!controller.chat.isStreaming && sendDisabled}
-                onClick={controller.chat.isStreaming ? controller.chat.stop : sendComposer}
-                type="button"
-              >
-                {controller.chat.isStreaming ? (
-                  <Square aria-hidden="true" className="size-4 fill-current text-current" />
-                ) : (
-                  <ArrowUp aria-hidden="true" className="size-4" />
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-        <div className={composeStyles.composerHints}>
-          <span className="inline-flex min-w-0 items-center gap-1.5">
-            <GitBranch className="size-3" aria-hidden="true" />
-            <span className="truncate">{controller.candidate.targetBranch}</span>
-          </span>
-          <span>
-            <kbd className="font-sans">Enter</kbd> to send ·{' '}
-            <kbd className="font-sans">Shift Enter</kbd> for a new line
-          </span>
-        </div>
       </div>
+      {bootstrap.error ? <p role="alert">{bootstrap.error}</p> : null}
     </div>
-  );
-}
-
-function SourceMenuButton({
-  icon: Icon,
-  label,
-  onClick,
-}: {
-  icon: LucideIcon;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-app)] hover:text-[var(--text-primary)]"
-      onClick={onClick}
-      role="menuitem"
-      type="button"
-    >
-      <Icon aria-hidden="true" className="size-4" />
-      {label}
-    </button>
   );
 }
 
 function SourceToolbar({
   proposedChangeCount,
-  authoringBootstrap,
-  onToggleEditing,
-  authoringEnabled,
   candidate,
   changeScope,
   controller,
@@ -1214,9 +827,6 @@ function SourceToolbar({
   onDiscuss,
 }: {
   proposedChangeCount: number;
-  authoringBootstrap: ReturnType<typeof useWorkspaceAuthoringBootstrap>;
-  onToggleEditing: () => Promise<void>;
-  authoringEnabled: boolean;
   candidate: WorkspaceCandidate;
   changeScope: 'latest' | 'all';
   controller: WorkspaceComposeReviewController;
@@ -1237,23 +847,8 @@ function SourceToolbar({
     if (file) void controller.uploadFile(file);
   };
 
-  const generateChanges = () => {
-    if (!authoringEnabled) {
-      void controller.generateChanges();
-      return;
-    }
-    onDiscuss();
-    requestAnimationFrame(() =>
-      document.querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')?.focus()
-    );
-  };
-
   const addManually = () => {
     onDiscuss();
-    if (!authoringEnabled)
-      controller.chat.setInput(
-        'Add a structured change while preserving the selected source evidence.'
-      );
     requestAnimationFrame(() =>
       document.querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')?.focus()
     );
@@ -1328,37 +923,9 @@ function SourceToolbar({
           ) : null}
         </div>
         <div className={composeStyles.composeToolbarActions}>
-          <button
-            className={cn(composeStyles.addManually, composeStyles.editingMode)}
-            disabled={authoringBootstrap.busy || controller.isBusy || controller.chat.isLoading}
-            onClick={() => void onToggleEditing()}
-            title="Switch between discussion only and Draft editing; existing history is preserved"
-            type="button"
-          >
-            <Play aria-hidden="true" />
-            {authoringEnabled
-              ? 'Draft editing · Switch to discuss'
-              : authoringBootstrap.busy
-                ? 'Enabling Draft activity…'
-                : authoringBootstrap.importSnapshot !== undefined
-                  ? 'Confirm import and enable'
-                  : 'Enable Draft activity'}
-          </button>
           <button className={composeStyles.addManually} onClick={addManually} type="button">
             <Plus aria-hidden="true" /> Add manually
           </button>
-          <div className={composeStyles.generateControls}>
-            <span>
-              From sources <ChevronDown aria-hidden="true" />
-            </span>
-            <button
-              disabled={!authoringEnabled && controller.isBusy}
-              onClick={generateChanges}
-              type="button"
-            >
-              <Layers aria-hidden="true" /> Generate changes
-            </button>
-          </div>
           <div className={composeStyles.changeScope} role="tablist" aria-label="Change scope">
             <button
               aria-selected={changeScope === 'latest'}
@@ -1379,25 +946,26 @@ function SourceToolbar({
           </div>
         </div>
       </div>
-      {authoringBootstrap.importSnapshot !== undefined && !authoringEnabled ? (
+      {controller.error || controller.notice ? (
         <div
-          className="flex items-center gap-2 text-xs text-[var(--text-secondary)]"
-          aria-live="polite"
+          className={cn(
+            'flex items-center gap-2 text-xs',
+            controller.error ? 'text-[var(--status-error)]' : 'text-[var(--text-secondary)]'
+          )}
+          role={controller.error ? 'alert' : 'status'}
         >
-          Import the current Draft snapshot to enable activity. Existing changes will be preserved.
-          <button
-            className={composeStyles.addManually}
-            onClick={authoringBootstrap.cancel}
-            type="button"
-          >
-            Cancel import
-          </button>
+          {controller.error ?? controller.notice}
+          {controller.hasCollaborationConflict ? (
+            <button
+              className={composeStyles.addManually}
+              disabled={controller.isBusy}
+              onClick={() => void controller.resolveCollaborationConflict()}
+              type="button"
+            >
+              Refresh and apply mine
+            </button>
+          ) : null}
         </div>
-      ) : null}
-      {authoringBootstrap.error ? (
-        <p className="text-xs text-[var(--status-error)]" role="alert">
-          {authoringBootstrap.error}
-        </p>
       ) : null}
     </section>
   );
@@ -1565,10 +1133,9 @@ function ProposedDraftPanel({
             onClick={(event) => {
               event.stopPropagation();
               selectChange('chat');
-              if (!activity.enabled)
-                controller.chat.setInput(
-                  `Revise “${cardTitle}” while preserving its source evidence.`
-                );
+              controller.prefillAssistant(
+                `Revise “${cardTitle}” while preserving its source evidence.`
+              );
               document
                 .querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')
                 ?.focus();
@@ -2219,7 +1786,7 @@ function WorkspaceRenderedReview({
     }
   };
   const revise = () => {
-    controller.chat.setInput(`Revise ${selectedRow?.path ?? 'prd'}: `);
+    controller.prefillAssistant(`Revise ${selectedRow?.path ?? 'prd'}: `);
     onModeChange('compose');
   };
 
@@ -3264,7 +2831,7 @@ function WorkspaceReviewChangeReviewPanel({
   const beforeValue = workspaceReviewBeforeValue(row);
   const resultValue = workspaceReviewResultValue(row);
   const revise = () => {
-    controller.chat.setInput(`Revise ${row.path}: `);
+    controller.prefillAssistant(`Revise ${row.path}: `);
     onEditInCompose();
   };
   const copyPath = () => {
@@ -4046,14 +3613,6 @@ function findWorkspaceReviewOperation(
 function aggregateWorkspaceReviewValue(values: Array<string | undefined>): string | undefined {
   const unique = Array.from(new Set(values.map((value) => value?.trim()).filter(Boolean)));
   return unique.length === 1 ? unique[0] : undefined;
-}
-
-async function prepareAndOpenReview(
-  controller: WorkspaceComposeReviewController,
-  onModeChange: (mode: WorkspaceSurfaceMode) => void
-) {
-  onModeChange('review');
-  await controller.prepareReview();
 }
 
 function reviewSectionRows(value: unknown): Array<[string, string]> {

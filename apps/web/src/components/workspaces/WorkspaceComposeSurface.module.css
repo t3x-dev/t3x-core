@@ -165,81 +165,7 @@
   height: 2px;
   background: var(--accent-commit);
 }
-.composerWrap {
-  flex: none;
-  padding: 8px 20px 24px 28px;
-  background: var(--surface-panel);
-}
-.composer {
-  max-width: none;
-  border: 1px solid var(--stroke-default);
-  border-radius: 6px;
-  background: var(--surface-card);
-  padding: 12px 14px 10px;
-  box-shadow: none;
-}
-.composer:focus-within {
-  border-color: var(--accent-commit);
-  box-shadow: 0 0 0 1px var(--accent-commit-soft);
-}
-.composer textarea {
-  width: 100%;
-  min-height: 30px;
-  max-height: 96px;
-  resize: none;
-  background: transparent;
-  font-size: 13px;
-  line-height: 20px;
-  color: var(--text-primary);
-  outline: none;
-}
-.composer textarea::placeholder {
-  color: var(--text-tertiary);
-}
-.composerTools {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-top: 5px;
-}
-.addButton {
-  display: inline-flex;
-  width: 32px;
-  height: 32px;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: var(--surface-app);
-  color: var(--text-secondary);
-}
-.sourceChip {
-  display: inline-flex;
-  min-width: 0;
-  max-width: 270px;
-  height: 30px;
-  align-items: center;
-  gap: 7px;
-  border-radius: 5px;
-  background: var(--surface-app);
-  padding: 0 10px;
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-.sourceChip svg {
-  color: var(--source);
-}
-.sourceChip span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.modelSend {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
+
 .send {
   display: inline-flex;
   width: 44px;
@@ -253,9 +179,7 @@
 .send:disabled {
   opacity: 0.35;
 }
-.composerHints {
-  display: none;
-}
+
 .panel {
   display: flex;
   height: 100%;
@@ -457,9 +381,6 @@
   }
   .surface {
     flex-direction: column;
-  }
-  .composerWrap {
-    padding: 8px 12px 12px;
   }
 }
 
@@ -745,79 +666,7 @@
   align-items: start;
   gap: 12px;
 }
-.sourceChips,
-.generateControls {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 12px;
-}
-.sourceChips {
-  flex: 1 1 auto;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-.generateControls {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  margin-left: auto;
-}
-.materialChip,
-.sourceChips > button,
-.generateControls > span,
-.generateControls > button {
-  display: inline-flex;
-  min-height: 28px;
-  flex: none;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid var(--stroke-default);
-  border-radius: 3px;
-  background: var(--surface-card);
-  padding: 0 8px;
-  font-size: 9px;
-  color: var(--text-primary);
-}
-.materialChip {
-  min-width: 0;
-  max-width: 260px;
-}
-.materialChip > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.materialChip small {
-  flex: none;
-  color: var(--text-tertiary);
-}
-.sourceChips > button[aria-pressed="false"] {
-  background: #f8f9fc;
-  color: var(--text-tertiary);
-  border-style: dashed;
-}
-.materialChip svg,
-.sourceChips button svg,
-.generateControls button svg {
-  flex: none;
-  width: 13px;
-  height: 13px;
-  color: var(--compose-icon);
-}
-.generateControls > span {
-  min-width: 170px;
-  justify-content: space-between;
-}
-.generateControls > span svg {
-  width: 11px;
-  height: 11px;
-  color: var(--text-secondary);
-}
-.generateControls > button {
-  border-color: #e5e2fa;
-  background: var(--accent-commit-soft);
-  color: var(--accent-commit);
-}
+
 .inlineSourceForm {
   position: absolute;
   z-index: 20;
@@ -1377,12 +1226,7 @@
 .discussionClose {
   margin-left: auto;
 }
-.discussionComposerWrap {
-  flex: none;
-  min-width: 0;
-  padding: 0;
-  background: var(--surface-panel);
-}
+
 .authoringAssistant {
   display: flex;
   min-width: 0;
@@ -1446,6 +1290,52 @@
   padding: 8px 20px;
   font-size: 10px;
   line-height: 16px;
+  color: var(--status-error);
+}
+.activityStatus {
+  padding: 20px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.activityBootstrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-secondary);
+}
+.activityBootstrap > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.activityBootstrap button {
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--stroke-default);
+  border-radius: 5px;
+  background: var(--surface-card);
+  padding: 0 12px;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+.activityBootstrap button:first-child {
+  border-color: var(--accent-commit);
+  background: var(--accent-commit);
+  color: var(--on-accent);
+}
+.activityBootstrap button:disabled {
+  opacity: 0.6;
+}
+.activityBootstrap button svg {
+  width: 14px;
+  height: 14px;
+}
+.activityBootstrap [role="alert"] {
   color: var(--status-error);
 }
 .discussionComposer {
@@ -1571,6 +1461,154 @@
   width: 100%;
   justify-content: space-between;
 }
+.sourcesButton {
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 28px;
+  min-width: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: 8px;
+  background: var(--surface-card);
+  padding: 0 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.sourcesButton:hover,
+.sourcesButton:focus-visible,
+.sourcesButton[data-state="open"] {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+.sourcesButton svg {
+  width: 14px;
+  height: 14px;
+}
+.sourcesButton small {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+}
+.sourcesTooltip {
+  display: grid;
+  max-width: 240px;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sourcesTooltip li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sourceChips {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+.sourceChips {
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.materialChip,
+.sourceChips > button {
+  display: inline-flex;
+  min-height: 28px;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--stroke-default);
+  border-radius: 3px;
+  background: var(--surface-card);
+  padding: 0 8px;
+  font-size: 9px;
+  color: var(--text-primary);
+}
+.materialChip {
+  min-width: 0;
+  max-width: 260px;
+}
+.materialChip > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.materialChip small {
+  flex: none;
+  color: var(--text-tertiary);
+}
+.sourceChips > button[aria-pressed="false"] {
+  background: #f8f9fc;
+  color: var(--text-tertiary);
+  border-style: dashed;
+}
+.materialChip svg,
+.sourceChips button svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  color: var(--compose-icon);
+}
+.materialChip,
+.sourceChips > button {
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+.materialChip small {
+  font-size: 14px;
+  color: #a5b4fc;
+}
+.materialChip[aria-pressed="true"] {
+  border-color: #c7d2fe;
+  color: #4f46ff;
+}
+.sourceChips {
+  gap: 7px;
+}
+.sourceChips {
+  flex-wrap: nowrap;
+  overflow: visible;
+  scrollbar-width: none;
+}
+.materialChip,
+.sourceChips > button {
+  min-height: 30px;
+  border-radius: 4px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+.materialChip {
+  width: 128px;
+  max-width: 128px;
+}
+.materialChip > span {
+  min-width: 0;
+  flex: 1;
+}
+.materialChip small {
+  flex: none;
+  font-size: 11px;
+}
+.materialChip svg:last-child {
+  width: 11px;
+  height: 11px;
+  color: var(--text-tertiary);
+}
+.composeBoard .sourceChips {
+  order: 3;
+}
+.composeBoard .sourceChips {
+  order: -2;
+  flex-shrink: 0;
+  margin-right: auto;
+}
 .postureSelect {
   height: 28px;
   margin-right: auto;
@@ -1608,28 +1646,7 @@
   height: 30px;
   border-radius: 8px;
 }
-.composerNotice {
-  padding: 8px 12px;
-  font-size: 10px;
-  color: var(--text-secondary);
-}
-.inspectDiscussion {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  align-self: flex-start;
-  min-height: 34px;
-  border: 0;
-  border-radius: 6px;
-  padding: 0 12px;
-  background: var(--accent-commit-soft);
-  color: var(--accent-commit);
-  font-size: 13px;
-}
-.inspectDiscussion svg {
-  width: 13px;
-  height: 13px;
-}
+
 .nodeHistory {
   min-height: 0;
   flex: 1;
@@ -1968,9 +1985,6 @@
   .actionList {
     grid-template-columns: minmax(0, 1fr);
   }
-  .generateControls {
-    margin-left: 0;
-  }
 }
 @media (max-width: 760px) {
   .sourcesToolbar {
@@ -2010,9 +2024,6 @@
     margin-left: 0;
     width: 100%;
   }
-  .sourceChips {
-    flex-basis: 100%;
-  }
 }
 @media (max-height: 620px) and (min-width: 761px) {
   .composeMain {
@@ -2046,33 +2057,7 @@
   font-weight: 700;
   color: var(--text-primary);
 }
-.materialChip,
-.sourceChips > button,
-.generateControls > span,
-.generateControls > button {
-  min-height: 38px;
-  padding: 0 12px;
-  border-radius: 4px;
-  font-size: 14px;
-}
-.materialChip small {
-  font-size: 14px;
-  color: #a5b4fc;
-}
-.materialChip[aria-pressed="true"] {
-  border-color: #c7d2fe;
-  color: #4f46ff;
-}
-.generateControls > button {
-  border: 0;
-  padding-inline: 16px;
-  font-weight: 600;
-  background: var(--accent-commit-soft);
-}
-.generateControls > button svg {
-  width: 16px;
-  height: 16px;
-}
+
 .actionNumber,
 .current .actionNumber {
   width: 28px;
@@ -2089,9 +2074,6 @@
   }
   .schemaLabel {
     white-space: normal;
-  }
-  .generateControls {
-    justify-content: flex-start;
   }
 }
 @media (max-width: 760px) {
@@ -2270,45 +2252,7 @@
   justify-content: flex-end;
   gap: 10px;
 }
-.sourceChips,
-.generateControls {
-  gap: 7px;
-}
-.sourceChips {
-  flex-wrap: nowrap;
-  overflow: visible;
-  scrollbar-width: none;
-}
-.generateControls {
-  flex-wrap: nowrap;
-  margin-left: 0;
-}
-.materialChip,
-.sourceChips > button,
-.generateControls > span,
-.generateControls > button {
-  min-height: 30px;
-  border-radius: 4px;
-  padding: 0 9px;
-  font-size: 12px;
-}
-.materialChip {
-  width: 128px;
-  max-width: 128px;
-}
-.materialChip > span {
-  min-width: 0;
-  flex: 1;
-}
-.materialChip small {
-  flex: none;
-  font-size: 11px;
-}
-.materialChip svg:last-child {
-  width: 11px;
-  height: 11px;
-  color: var(--text-tertiary);
-}
+
 .sourceMaterialMenu {
   width: 280px;
   max-height: 280px;
@@ -2327,17 +2271,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.generateControls > span {
-  min-width: 108px;
-}
-.generateControls > button {
-  padding-inline: 11px;
-  font-weight: 550;
-}
-.generateControls > button svg {
-  width: 13px;
-  height: 13px;
-}
+
 .changeFilters {
   display: flex;
   min-width: 0;
@@ -2880,15 +2814,11 @@
   font-size: 12px;
   font-weight: 600;
 }
-.composeBoard .sourceChips {
-  order: 3;
-}
+
 .composeBoard .composeToolbarActions {
   display: contents;
 }
-.composeBoard .composeToolbarActions > .addManually,
-.composeBoard .generateControls > span,
-.composeBoard .generateControls > button {
+.composeBoard .composeToolbarActions > .addManually {
   height: 32px;
   border: 0;
   border-radius: 8px;
@@ -2898,26 +2828,7 @@
   font-weight: 500;
   color: var(--text-secondary);
 }
-.composeBoard .composeToolbarActions > .editingMode {
-  background: var(--accent-pending-soft);
-  color: var(--accent-pending);
-}
-.editingMode > svg {
-  width: 6px;
-  height: 6px;
-  fill: currentColor;
-}
-.composeBoard .generateControls > span {
-  min-width: 0;
-}
-.composeBoard .generateControls > button {
-  background: var(--accent-commit);
-  color: var(--on-accent);
-  box-shadow: var(--fx-shadow-sm);
-}
-.composeBoard .generateControls > button svg {
-  color: inherit;
-}
+
 .composeBoard .changeScope {
   order: 2;
   margin-right: auto;
@@ -3148,14 +3059,8 @@
   order: -3;
   margin-right: 0;
 }
-.composeBoard .sourceChips {
-  order: -2;
-  flex-shrink: 0;
-  margin-right: auto;
-}
-.composeBoard .editingMode,
-.composeBoard .addManually,
-.composeBoard .generateControls {
+
+.composeBoard .addManually {
   flex-shrink: 0;
   white-space: nowrap;
 }

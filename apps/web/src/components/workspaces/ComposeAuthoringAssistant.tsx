@@ -20,13 +20,16 @@ import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
 import { useSourceThreadGeneration } from '@/hooks/sourceThreads/useSourceThreadGeneration';
 import { useComposeProposalPosture } from '@/hooks/workspaces/useComposeProposalPosture';
 import type { WorkspaceAssistantContext } from '@/hooks/workspaces/useWorkspaceAuthoring';
-import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import { useChatSessionStore } from '@/store/chatSessionStore';
 import type { AttachedImage } from '@/types/generation';
 import type { WorkspaceProposalPosture } from '@/types/workspaces';
 import { PROPOSAL_POSTURE_OPTIONS, proposalPostureOption } from './ProposalPostureSelector';
 import type { AssistantActivityRecord, AssistantPublication } from './WorkspaceAssistantActivity';
-import { WorkspaceComposeChat } from './WorkspaceComposeChat';
+import {
+  WorkspaceComposeChat,
+  type WorkspaceComposeChatState,
+  type WorkspaceComposeMessage,
+} from './WorkspaceComposeChat';
 import styles from './WorkspaceComposeSurface.module.css';
 
 export function ComposeAuthoringAssistant({
@@ -38,6 +41,8 @@ export function ComposeAuthoringAssistant({
   initialPendingCandidate,
   activityActions,
   activityCards,
+  prefill,
+  onPrefillApplied,
 }: {
   projectId: string;
   conversationId?: string;
@@ -50,6 +55,8 @@ export function ComposeAuthoringAssistant({
   initialPendingCandidate?: string;
   activityActions?: WorkspaceAuthoringAction[];
   activityCards?: Record<string, WorkspaceAuthoringCard[]>;
+  prefill?: string | null;
+  onPrefillApplied?: () => void;
 }) {
   const [conversationId, setConversationId] = useState(initialConversationId);
   const [pendingCandidate, setPendingCandidate] = useState<string | null>(
@@ -128,17 +135,21 @@ export function ComposeAuthoringAssistant({
     onConversationCreated: setConversationId,
     createConversation: onCreateConversation,
   });
+  const { setInput } = chat;
+  useEffect(() => {
+    if (!prefill) return;
+    setInput(prefill);
+    onPrefillApplied?.();
+  }, [prefill, onPrefillApplied, setInput]);
   const messages = useMemo(() => {
-    const persisted: WorkspaceComposeReviewController['chat']['messages'] = chat.messages.map(
-      (message) => ({
-        author: message.role === 'user' ? 'You' : 'Assistant',
-        content: message.content,
-        id: message.id,
-        role: message.role,
-        ...(message.images?.length ? { images: message.images } : {}),
-        ...(message.files?.length ? { files: message.files } : {}),
-      })
-    );
+    const persisted: WorkspaceComposeMessage[] = chat.messages.map((message) => ({
+      author: message.role === 'user' ? 'You' : 'Assistant',
+      content: message.content,
+      id: message.id,
+      role: message.role,
+      ...(message.images?.length ? { images: message.images } : {}),
+      ...(message.files?.length ? { files: message.files } : {}),
+    }));
     if (chat.streamingContent.trim())
       persisted.push({
         author: 'Assistant',
@@ -148,7 +159,7 @@ export function ComposeAuthoringAssistant({
       });
     return persisted;
   }, [chat.messages, chat.streamingContent, conversationId, projectId]);
-  const chatView: WorkspaceComposeReviewController['chat'] = {
+  const chatView: WorkspaceComposeChatState = {
     error: chat.error,
     input: chat.input,
     isLoading: chat.isLoading,

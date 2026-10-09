@@ -4,7 +4,6 @@ import {
   type WorkspacePreparationOptions,
 } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import type {
-  SourceBundleItem,
   WorkspaceCandidate,
   WorkspaceProposalGenerationView,
   WorkspaceProposalPosture,
@@ -28,7 +27,6 @@ export interface WorkspaceTabsProps {
   continuationBusy?: boolean;
   extractingCandidate?: boolean;
   flowError?: string;
-  onChatSourceEvidenceChange?: (sourceId: string, source: SourceBundleItem | null) => void;
   onApplyAfterRefresh?: (workspace: WorkspaceCandidate) => Promise<WorkspaceCandidate>;
   onContinueFromCommit?: (
     commitHash: string,
@@ -68,8 +66,6 @@ export interface WorkspaceTabsProps {
   proposalPosture?: WorkspaceProposalPosture;
   proposalReviewState?: ProposalGenerationReviewState;
   scenarioOptions?: WorkspaceCandidate[];
-  sourceConversationId?: string;
-  sourceParentCommitHash?: string;
   yopsDraftSent?: boolean;
 }
 
@@ -79,7 +75,6 @@ export function WorkspaceTabs(props: WorkspaceTabsProps) {
     candidate: props.candidate,
     flowError: props.flowError,
     onApplyAfterRefresh: props.onApplyAfterRefresh,
-    onChatSourceEvidenceChange: props.onChatSourceEvidenceChange,
     onDraftCommand: props.onDraftCommand,
     onPrepareDraft: props.onPrepareDraft,
     onScenarioArchive: props.onScenarioArchive,
@@ -89,8 +84,6 @@ export function WorkspaceTabs(props: WorkspaceTabsProps) {
     onSourceMaterialUploaded: props.onSourceMaterialUploaded,
     onViewCommitInState: props.onViewCommitInState,
     onYOpsCommitted: props.onYOpsCommitted,
-    sourceConversationId: props.sourceConversationId,
-    sourceParentCommitHash: props.sourceParentCommitHash,
     scenarioOptions: props.scenarioOptions,
   });
 

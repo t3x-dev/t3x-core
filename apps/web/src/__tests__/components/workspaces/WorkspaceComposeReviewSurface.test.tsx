@@ -233,6 +233,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         nextBeforeSequence: null,
       },
     };
+    const uploadFile = vi.fn().mockResolvedValue(true);
     const controller = {
       busyAction: null,
       candidate,
@@ -262,6 +263,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       notice: null,
       scenarios: { options: [], selectedId: candidate.id },
       sourceBusy: false,
+      uploadFile,
     } as unknown as WorkspaceComposeReviewController;
     const branchChange = vi.fn();
     render(
@@ -275,7 +277,6 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
 
-    const addSource = screen.getByRole('button', { name: 'Add source' });
     expect(screen.getByRole('tab', { name: 'Compose' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Sources' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Node history' })).toHaveAttribute(
@@ -295,6 +296,12 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
     expect(composer).toContainElement(modelSelector);
     expect(composer).toContainElement(send);
+    const addSource = screen.getByRole('button', { name: 'Add source' });
+    expect(addSource.querySelector('.lucide-file-up')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Upload source material'), {
+      target: { files: [new File(['exact source'], 'source.txt', { type: 'text/plain' })] },
+    });
+    expect(uploadFile).toHaveBeenCalledWith(expect.objectContaining({ name: 'source.txt' }));
     const allChanges = screen.getByRole('tab', { name: 'All changes' });
     const latestAction = screen.getByRole('tab', { name: 'Latest' });
     expect(latestAction).toHaveAttribute('aria-selected', 'true');
@@ -320,8 +327,6 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.queryByRole('button', { name: 'Add attachment' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Workspace workflow tabs')).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: 'Workspace scenario' })).not.toBeInTheDocument();
-    expect(addSource.querySelector('.lucide-file-up')).toBeInTheDocument();
-    expect(addSource.querySelector('.lucide-database')).not.toBeInTheDocument();
     const branchSwitcher = screen.getByRole('button', { name: /Switch branches\/tags/ });
     expect(branchSwitcher).toHaveTextContent('main');
     fireEvent.click(branchSwitcher);
@@ -360,42 +365,18 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
   });
 
-  it('routes composer send and file input to the controller', () => {
+  it('enables Draft activity from the chat panel', () => {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
-    const send = vi.fn();
-    const generateChanges = vi.fn().mockResolvedValue(true);
-    const uploadFile = vi.fn().mockResolvedValue(true);
     const controller = {
       busyAction: null,
       candidate,
-      chat: {
-        error: null,
-        input: 'Prepare the reviewed change.',
-        isLoading: false,
-        isStreaming: false,
-        messages: [],
-        send,
-        setInput: vi.fn(),
-        stop: vi.fn(),
-        warning: null,
-      },
       error: null,
-      generateChanges,
       hasCollaborationConflict: false,
       isBusy: false,
       materialSources: [],
-      model: {
-        availabilityError: null,
-        change: vi.fn(),
-        loading: false,
-        ready: true,
-        selectedModel: 'gpt-5.4-mini',
-        selectedProvider: 'openai',
-      },
       notice: null,
       scenarios: { options: [], selectedId: candidate.id },
       sourceBusy: false,
-      uploadFile,
     } as unknown as WorkspaceComposeReviewController;
     render(
       <WorkspaceComposeReviewSurface
@@ -406,24 +387,10 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
-    expect(send).toHaveBeenCalledOnce();
-
-    const enable = screen.getByRole('button', { name: 'Enable Draft activity' });
-    expect(
-      enable.compareDocumentPosition(screen.getByRole('button', { name: 'Add manually' })) &
-        Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
-    fireEvent.click(enable);
+    expect(screen.queryByRole('button', { name: 'Send message' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Generate changes/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Enable Draft activity/ }));
     expect(bootstrapMocks.value.start).toHaveBeenCalledOnce();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Generate changes' }));
-    expect(generateChanges).toHaveBeenCalledOnce();
-
-    fireEvent.change(screen.getByLabelText('Upload source material'), {
-      target: { files: [new File(['exact source'], 'source.txt', { type: 'text/plain' })] },
-    });
-    expect(uploadFile).toHaveBeenCalledWith(expect.objectContaining({ name: 'source.txt' }));
   });
 
   it('wires artifact, changed-node, and evidence controls to real review interactions', async () => {

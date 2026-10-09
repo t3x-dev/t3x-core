@@ -21,10 +21,12 @@ import {
   ConversationScrollButton,
 } from '@/components/ai-elements/conversation';
 import { MessageAction, MessageActions, MessageResponse } from '@/components/ai-elements/message';
-import type { ChatMessageImage } from '@/hooks/conversations/useChatHistory';
+import type { ChatMessageFile, ChatMessageImage } from '@/hooks/conversations/useChatHistory';
 import { useMaterialImageSrc } from '@/hooks/materials/useMaterialImageSrc';
-import type { WorkspaceAssistantActivity as AssistantActivity } from '@/hooks/sourceThreads/useSourceThreadGeneration';
-import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
+import type {
+  WorkspaceAssistantActivity as AssistantActivity,
+  useSourceThreadGeneration,
+} from '@/hooks/sourceThreads/useSourceThreadGeneration';
 import { cn } from '@/utils/cn';
 import {
   type AssistantActivityRecord,
@@ -33,7 +35,33 @@ import {
 } from './WorkspaceAssistantActivity';
 import styles from './WorkspaceComposeChat.module.css';
 
-type WorkspaceComposeChatState = WorkspaceComposeReviewController['chat'];
+export interface WorkspaceComposeMessage {
+  author: string;
+  content: string;
+  id: string;
+  role: 'assistant' | 'user';
+  images?: ChatMessageImage[];
+  files?: ChatMessageFile[];
+}
+
+type SourceThreadGeneration = ReturnType<typeof useSourceThreadGeneration>;
+
+export interface WorkspaceComposeChatState {
+  error: string | null;
+  input: string;
+  isLoading: boolean;
+  isStreaming: boolean;
+  citations: SourceThreadGeneration['citations'];
+  isThinking: boolean;
+  messages: WorkspaceComposeMessage[];
+  searchQuery: SourceThreadGeneration['searchQuery'];
+  send: () => void;
+  setInput: (value: string) => void;
+  stop: () => void;
+  thinkingContent: string;
+  warning: SourceThreadGeneration['warning'];
+}
+
 type WorkspaceComposeCitation = NonNullable<WorkspaceComposeChatState['citations']>[number];
 
 const STREAM_ANIMATION = {
@@ -59,7 +87,6 @@ function discussionText(content: string) {
 interface WorkspaceComposeChatProps {
   chat: WorkspaceComposeChatState;
   variant?: 'default' | 'discussion';
-  discussionAction?: ReactNode;
   assistantActivity?: AssistantActivity | null;
   assistantPublication?: AssistantPublication | null;
   assistantPublishing?: boolean;
@@ -69,7 +96,6 @@ interface WorkspaceComposeChatProps {
 export function WorkspaceComposeChat({
   chat,
   variant = 'default',
-  discussionAction,
   assistantActivity,
   assistantPublication,
   assistantPublishing = false,
@@ -238,7 +264,6 @@ export function WorkspaceComposeChat({
         {!chat.isStreaming && citations.length > 0 && latestAssistantId ? (
           <CitationList citations={citations} />
         ) : null}
-        {discussionAction}
       </ConversationContent>
       <ConversationScrollButton aria-label="Scroll to latest message" />
     </Conversation>

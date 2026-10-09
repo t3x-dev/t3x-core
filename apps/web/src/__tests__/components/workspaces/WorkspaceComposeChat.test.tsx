@@ -3,10 +3,12 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { WorkspaceComposeChat } from '@/components/workspaces/WorkspaceComposeChat';
-import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
+import {
+  WorkspaceComposeChat,
+  type WorkspaceComposeChatState,
+} from '@/components/workspaces/WorkspaceComposeChat';
 
-type ComposeChatState = WorkspaceComposeReviewController['chat'];
+type ComposeChatState = WorkspaceComposeChatState;
 
 function chatState(overrides: Partial<ComposeChatState> = {}): ComposeChatState {
   return {
@@ -32,7 +34,6 @@ describe('WorkspaceComposeChat', () => {
     render(
       <WorkspaceComposeChat
         variant="discussion"
-        discussionAction={<button type="button">Inspect this change</button>}
         chat={chatState({
           messages: Array.from({ length: 5 }, (_, index) => ({
             author: 'You',
@@ -46,7 +47,6 @@ describe('WorkspaceComposeChat', () => {
     for (let index = 0; index < 5; index++) {
       expect(screen.getByText(`Evidence message ${index}`)).toBeInTheDocument();
     }
-    expect(screen.getByRole('button', { name: 'Inspect this change' })).toBeInTheDocument();
   });
 
   it('fills a starting prompt without sending or changing workspace data', () => {

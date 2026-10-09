@@ -1,5 +1,4 @@
 import { useCallback } from 'react';
-import { createConversation } from '@/commands/conversations';
 import { createBranch } from '@/infrastructure/branches';
 import { extractWorkspaceCandidate, sendWorkspaceYOpsDraft } from '@/infrastructure/workspaceFlow';
 import { fetchProjectWorkspaces, saveWorkspaceDraft } from '@/queries/workspaces';
@@ -13,7 +12,6 @@ interface StartWorkspaceIterationOptions {
 }
 
 interface StartWorkspaceIterationResult {
-  conversationId?: string;
   workspace: WorkspaceCandidate;
 }
 
@@ -55,23 +53,7 @@ export function useWorkspaceFlow() {
       }
 
       const saved = await saveWorkspaceDraft(candidate.projectId, workspaceId, nextWorkspace);
-
-      try {
-        const conversation = await createConversation(
-          candidate.projectId,
-          `${candidate.title} source chat`,
-          parentCommitHash,
-          undefined,
-          {
-            target_branch: targetBranch,
-            workspace_id: workspaceId,
-          }
-        );
-        return { conversationId: conversation.conversation_id, workspace: saved.workspace };
-      } catch {
-        // The Source chat can lazily create this conversation on the first message.
-        return { workspace: saved.workspace };
-      }
+      return { workspace: saved.workspace };
     },
     []
   );

@@ -6,24 +6,18 @@ import type {
 import type { TransitionViewV1 } from '@t3x-dev/core';
 import * as yaml from 'js-yaml';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { updateConversationContextPins } from '@/commands/conversations';
 import { formatUserFacingError } from '@/domain/format/errors';
-import { providerSupports } from '@/domain/providerCapabilities';
 import {
   authoringDeterministicValidation,
   authoringReviewDocuments,
 } from '@/domain/workspaces/authoringReview';
-import { includedImportPinIds } from '@/domain/workspaces/includedImportPinIds';
 import {
   DEFAULT_WORKSPACE_SCHEMA_BINDING,
   rebindWorkspaceCandidate,
   workspaceSchemaBindingsEqual,
 } from '@/domain/workspaces/schemaBindings';
-import type { ChatMessageFile, ChatMessageImage } from '@/hooks/conversations/useChatHistory';
 import { useMaterialUpload } from '@/hooks/materials/useMaterialUpload';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
-import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
-import { useSourceThreadGeneration } from '@/hooks/sourceThreads/useSourceThreadGeneration';
 import { validateWorkspaceCandidateYOps } from '@/hooks/workspaces/useWorkspaceYOps';
 import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
 import type {
@@ -32,14 +26,11 @@ import type {
   WorkspaceTransitionPrecondition,
 } from '@/infrastructure/workspaces';
 import { decideWorkspaceTransition, reviewWorkspaceTransition } from '@/queries/workspaces';
-import { useChatSessionStore } from '@/store/chatSessionStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectWorkspaceSchemaBindingsStore } from '@/store/projectWorkspaceSchemaBindingsStore';
 import type { Material } from '@/types/api';
-import type { AttachedImage } from '@/types/generation';
 import type {
   SourceBundleItem,
-  SourceConversationTurn,
   WorkspaceCandidate,
   WorkspaceSchemaBinding,
   WorkspaceSourceArtifact,
@@ -55,15 +46,6 @@ export interface WorkspacePreparationOptions {
 type WorkspaceDraftCommand = string;
 export type WorkspaceDraftCommandName = WorkspaceDraftCommand;
 
-export interface WorkspaceComposeReviewMessage {
-  author: string;
-  content: string;
-  id: string;
-  role: 'assistant' | 'user';
-  images?: ChatMessageImage[];
-  files?: ChatMessageFile[];
-}
-
 export interface WorkspaceReviewSessionState {
   changeProjection: ChangeProjectionV1 | null;
   content: WorkspaceTransitionContent | null;
@@ -78,7 +60,6 @@ export interface WorkspaceComposeReviewControllerOptions {
   candidate: WorkspaceCandidate;
   flowError?: string;
   onApplyAfterRefresh?: (workspace: WorkspaceCandidate) => Promise<WorkspaceCandidate>;
-  onChatSourceEvidenceChange?: (sourceId: string, source: SourceBundleItem | null) => void;
   onDraftCommand?: (
     workspace: WorkspaceCandidate,
     command: WorkspaceDraftCommand
@@ -94,8 +75,6 @@ export interface WorkspaceComposeReviewControllerOptions {
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
   onYOpsCommitted?: (commitHash: string, branch: string, workspace: WorkspaceCandidate) => void;
-  sourceConversationId?: string;
-  sourceParentCommitHash?: string;
   scenarioOptions?: WorkspaceCandidate[];
 }
 
@@ -113,7 +92,6 @@ export function useWorkspaceComposeReviewController({
   candidate,
   flowError,
   onApplyAfterRefresh,
-  onChatSourceEvidenceChange,
   onDraftCommand,
   onPrepareDraft,
   onScenarioArchive,
@@ -123,36 +101,22 @@ export function useWorkspaceComposeReviewController({
   onSourceMaterialUploaded,
   onViewCommitInState,
   onYOpsCommitted,
-  sourceConversationId: sourceConversationIdProp,
-  sourceParentCommitHash,
   scenarioOptions = [],
 }: WorkspaceComposeReviewControllerOptions) {
   const [workingCandidate, setWorkingCandidate] = useState(candidate);
-  const [sourceConversationId, setSourceConversationId] = useState(
-    sourceConversationIdProp ?? findSourceConversationId(candidate)
-  );
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [review, setReview] = useState<WorkspaceReviewSessionState>(EMPTY_REVIEW);
   const [decisionReason, setDecisionReason] = useState('');
   const [hasCollaborationConflict, setHasCollaborationConflict] = useState(false);
+  const [assistantPrefill, setAssistantPrefill] = useState<string | null>(null);
   const reviewGenerationRef = useRef(0);
   const activeCandidateIdRef = useRef(candidate.id);
-  const sourceConversationIdRef = useRef(sourceConversationId);
-
-  const modelSelection = useChatModelSelection({});
-  const thinkingEnabled = useChatSessionStore((state) => state.thinkingEnabled);
-  const setThinking = useChatSessionStore((state) => state.setThinking);
-  const supportsThinking = providerSupports(modelSelection.selectedProvider ?? '', 'thinking');
   const materialUpload = useMaterialUpload();
   const pinsCrud = usePinsCrud();
   const { fetch: refreshPins } = pinsCrud;
   const pins = usePinsStore((state) => state.pins);
-
-  useEffect(() => {
-    if (!supportsThinking && thinkingEnabled) setThinking(false);
-  }, [supportsThinking, thinkingEnabled, setThinking]);
 
   useEffect(() => {
     const candidateChanged = activeCandidateIdRef.current !== candidate.id;
@@ -160,12 +124,12 @@ export function useWorkspaceComposeReviewController({
     if (candidateChanged) {
       reviewGenerationRef.current += 1;
       setWorkingCandidate(candidate);
-      setSourceConversationId(sourceConversationIdProp ?? findSourceConversationId(candidate));
       setReview(EMPTY_REVIEW);
       setDecisionReason('');
       setHasCollaborationConflict(false);
       setLocalError(null);
       setNotice(null);
+      setAssistantPrefill(null);
       return;
     }
     setWorkingCandidate((current) =>
@@ -173,64 +137,11 @@ export function useWorkspaceComposeReviewController({
         ? candidate
         : current
     );
-  }, [candidate, sourceConversationIdProp]);
-
-  useEffect(() => {
-    if (sourceConversationIdProp) setSourceConversationId(sourceConversationIdProp);
-  }, [sourceConversationIdProp]);
-
-  useEffect(() => {
-    sourceConversationIdRef.current = sourceConversationId;
-  }, [sourceConversationId]);
+  }, [candidate]);
 
   useEffect(() => {
     void refreshPins(candidate.projectId);
   }, [candidate.projectId, refreshPins]);
-
-  const syncImportPinsToConversation = useCallback(async (conversationId: string) => {
-    await updateConversationContextPins(
-      conversationId,
-      includedImportPinIds(usePinsStore.getState().pins)
-    );
-  }, []);
-
-  const syncImportPinsIfConversationReady = useCallback(async () => {
-    const conversationId = sourceConversationIdRef.current;
-    if (!conversationId) return;
-    try {
-      await syncImportPinsToConversation(conversationId);
-    } catch {
-      // The next send retries through onConversationReady.
-    }
-  }, [syncImportPinsToConversation]);
-
-  const chat = useSourceThreadGeneration({
-    projectId: candidate.projectId,
-    conversationId: sourceConversationId,
-    title: `${candidate.title} source chat`,
-    provider: modelSelection.selectedProvider ?? undefined,
-    model: modelSelection.selectedModel ?? undefined,
-    parentCommitHash: sourceParentCommitHash,
-    onConversationCreated: setSourceConversationId,
-    onConversationReady: syncImportPinsToConversation,
-  });
-
-  const rawMessages = useMemo(() => {
-    if (chat.messages.length > 0) return chat.messages;
-    const source = workingCandidate.sourceBundle.find(
-      (item) =>
-        item.type === 'chat' &&
-        (!sourceConversationId || item.conversationId === sourceConversationId)
-    );
-    return (source?.previewTurns ?? []).map((turn) => ({
-      id: turn.id,
-      role: turn.role,
-      content: turn.content,
-      conversationId: turn.conversationId,
-      projectId: turn.projectId,
-      rings: turn.rings,
-    }));
-  }, [chat.messages, sourceConversationId, workingCandidate.sourceBundle]);
 
   const materialSources = useMemo(
     () =>
@@ -244,31 +155,6 @@ export function useWorkspaceComposeReviewController({
         })),
     [pins, workingCandidate.sourceBundle]
   );
-
-  const persistedSourceTurns = useMemo(
-    () => rawMessages.filter((message) => isPersistedTurnId(message.id)).map(messageToSourceTurn),
-    [rawMessages]
-  );
-
-  const messages = useMemo<WorkspaceComposeReviewMessage[]>(() => {
-    const persisted: WorkspaceComposeReviewMessage[] = rawMessages.map((message) => ({
-      author: message.role === 'user' ? 'You' : 'Assistant',
-      content: message.content,
-      id: message.id,
-      role: message.role,
-      ...('images' in message && message.images?.length ? { images: message.images } : {}),
-      ...('files' in message && message.files?.length ? { files: message.files } : {}),
-    }));
-    if (chat.streamingContent.trim()) {
-      persisted.push({
-        author: 'Assistant',
-        content: chat.streamingContent,
-        id: `${sourceConversationId ?? candidate.id}:streaming`,
-        role: 'assistant',
-      });
-    }
-    return persisted;
-  }, [candidate.id, chat.streamingContent, rawMessages, sourceConversationId]);
 
   const persistCandidate = useCallback(
     async (nextCandidate: WorkspaceCandidate, command: WorkspaceDraftCommand) => {
@@ -360,42 +246,6 @@ export function useWorkspaceComposeReviewController({
     [busyAction]
   );
 
-  const chatSourceSyncInFlightRef = useRef<{
-    promise: Promise<WorkspaceCandidate>;
-    signature: string;
-  } | null>(null);
-
-  const syncChatSource = useCallback(
-    async (turns: readonly SourceConversationTurn[]) => {
-      const sourceId = getSourceChatSourceId(workingCandidate.id, sourceConversationId);
-      const source = buildChatSourceBundle(
-        sourceId,
-        workingCandidate.title,
-        sourceConversationId,
-        turns
-      );
-      const existingSource = findChatSource(workingCandidate.sourceBundle, sourceId);
-      if (chatSourceMatches(existingSource, source)) return workingCandidate;
-      const signature = chatSourceSignature(source);
-      if (chatSourceSyncInFlightRef.current?.signature === signature) {
-        return chatSourceSyncInFlightRef.current.promise;
-      }
-      onChatSourceEvidenceChange?.(sourceId, source);
-      const nextCandidate = invalidateWorkspaceProposal({
-        ...workingCandidate,
-        sourceBundle: upsertSource(workingCandidate.sourceBundle, sourceId, source),
-      });
-      const promise = persistCandidate(nextCandidate, 'source.include').finally(() => {
-        if (chatSourceSyncInFlightRef.current?.signature === signature) {
-          chatSourceSyncInFlightRef.current = null;
-        }
-      });
-      chatSourceSyncInFlightRef.current = { promise, signature };
-      return promise;
-    },
-    [onChatSourceEvidenceChange, persistCandidate, sourceConversationId, workingCandidate]
-  );
-
   const addMaterial = useCallback(
     async (material: Material) => {
       await pinsCrud.add(candidate.projectId, 'import', material.id);
@@ -413,17 +263,9 @@ export function useWorkspaceComposeReviewController({
       });
       await persistCandidate(nextCandidate, 'source.add');
       await onSourceMaterialUploaded?.();
-      await syncImportPinsIfConversationReady();
       setNotice(`${material.title} added as source evidence.`);
     },
-    [
-      candidate.projectId,
-      onSourceMaterialUploaded,
-      persistCandidate,
-      pinsCrud,
-      syncImportPinsIfConversationReady,
-      workingCandidate,
-    ]
+    [candidate.projectId, onSourceMaterialUploaded, persistCandidate, pinsCrud, workingCandidate]
   );
 
   const toggleMaterialSource = useCallback(
@@ -446,7 +288,6 @@ export function useWorkspaceComposeReviewController({
           );
         }
         await persistCandidate(invalidateWorkspaceProposal(workingCandidate), 'source.include');
-        await syncImportPinsIfConversationReady();
         setNotice(included ? 'Material included as source evidence.' : 'Material excluded.');
       } catch (error) {
         setLocalError(formatUserFacingError(error, 'Material source update failed.'));
@@ -454,14 +295,7 @@ export function useWorkspaceComposeReviewController({
         setBusyAction(null);
       }
     },
-    [
-      busyAction,
-      candidate.projectId,
-      persistCandidate,
-      pinsCrud,
-      syncImportPinsIfConversationReady,
-      workingCandidate,
-    ]
+    [busyAction, candidate.projectId, persistCandidate, pinsCrud, workingCandidate]
   );
 
   const uploadFile = useCallback(
@@ -485,67 +319,6 @@ export function useWorkspaceComposeReviewController({
     },
     [addMaterial, candidate.projectId, materialUpload]
   );
-
-  const addPaste = useCallback(
-    async (title: string, text: string) => {
-      const content = text.trim();
-      if (!content) return false;
-      const safeTitle = title.trim() || 'Pasted source note';
-      const slug =
-        safeTitle
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-+|-+$/g, '')
-          .slice(0, 48) || 'pasted-source-note';
-      return uploadFile(new File([content], `${slug}.txt`, { type: 'text/plain' }));
-    },
-    [uploadFile]
-  );
-
-  const generateChanges = useCallback(async () => {
-    if (!onPrepareDraft || busyAction) return false;
-    const generation = reviewGenerationRef.current + 1;
-    reviewGenerationRef.current = generation;
-    setBusyAction('draft.generate');
-    setLocalError(null);
-    setNotice('Generating structured changes from the selected source evidence…');
-    setReview(EMPTY_REVIEW);
-    try {
-      const sourceSyncedCandidate =
-        persistedSourceTurns.length > 0
-          ? await syncChatSource(persistedSourceTurns)
-          : workingCandidate;
-      const prepared = await onPrepareDraft(sourceSyncedCandidate, {
-        instruction: chat.input.trim() || undefined,
-        provider: modelSelection.selectedProvider ?? undefined,
-        model: modelSelection.selectedModel ?? undefined,
-      });
-      if (generation !== reviewGenerationRef.current) return false;
-      setWorkingCandidate(prepared);
-      setNotice(
-        prepared.yopsDraft.operations.length > 0
-          ? `${prepared.yopsDraft.operations.length} structured changes generated.`
-          : 'No structured changes were generated. Add source evidence and try again.'
-      );
-      return prepared.yopsDraft.operations.length > 0;
-    } catch (error) {
-      if (generation !== reviewGenerationRef.current) return false;
-      setLocalError(formatUserFacingError(error, 'Change generation failed.'));
-      setNotice(null);
-      return false;
-    } finally {
-      setBusyAction(null);
-    }
-  }, [
-    busyAction,
-    chat.input,
-    modelSelection.selectedModel,
-    modelSelection.selectedProvider,
-    onPrepareDraft,
-    persistedSourceTurns,
-    syncChatSource,
-    workingCandidate,
-  ]);
 
   const prepareReview = useCallback(async () => {
     if (busyAction) return false;
@@ -610,15 +383,7 @@ export function useWorkspaceComposeReviewController({
       if (!onPrepareDraft) {
         throw new Error('Prepare the current Compose draft before Review.');
       }
-      const sourceSyncedCandidate =
-        persistedSourceTurns.length > 0
-          ? await syncChatSource(persistedSourceTurns)
-          : workingCandidate;
-      const prepared = await onPrepareDraft(sourceSyncedCandidate, {
-        instruction: chat.input.trim() || undefined,
-        provider: modelSelection.selectedProvider ?? undefined,
-        model: modelSelection.selectedModel ?? undefined,
-      });
+      const prepared = await onPrepareDraft(workingCandidate, {});
       if (generation !== reviewGenerationRef.current) return false;
       setWorkingCandidate(prepared);
       if (prepared.yopsDraft.operations.length === 0) {
@@ -667,17 +432,7 @@ export function useWorkspaceComposeReviewController({
     } finally {
       setBusyAction(null);
     }
-  }, [
-    busyAction,
-    chat.input,
-    modelSelection.selectedModel,
-    modelSelection.selectedProvider,
-    onPrepareDraft,
-    persistCandidate,
-    persistedSourceTurns,
-    syncChatSource,
-    workingCandidate,
-  ]);
+  }, [busyAction, onPrepareDraft, persistCandidate, workingCandidate]);
 
   const decide = useCallback(
     async (outcome: WorkspaceTransitionOutcome, reason?: string) => {
@@ -790,50 +545,21 @@ export function useWorkspaceComposeReviewController({
   );
 
   return {
-    addPaste,
     bindSchema,
     busyAction,
+    assistantPrefill,
     candidate: workingCandidate,
-    chat: {
-      error: chat.error,
-      input: chat.input,
-      isLoading: chat.isLoading,
-      isStreaming: chat.isStreaming,
-      citations: chat.citations,
-      isThinking: chat.isThinking,
-      messages,
-      searchQuery: chat.searchQuery,
-      send: (images?: AttachedImage[]) => {
-        const text = chat.input.trim();
-        if (!text && !images?.length) return;
-        chat.sendMessage(text || 'Attached image', images?.length ? { images } : undefined);
-      },
-      setInput: chat.setInput,
-      stop: chat.stopGenerating,
-      thinkingContent: chat.thinkingContent,
-      warning: chat.warning,
-    },
+    clearAssistantPrefill: () => setAssistantPrefill(null),
     copyReceipt,
     ensureSaved,
     decide,
     decisionReason,
-    error: localError ?? flowError ?? chat.error,
-    generateChanges,
+    error: localError ?? flowError,
     hasCollaborationConflict,
     isBusy: Boolean(busyAction),
-    model: {
-      availabilityError: modelSelection.availabilityError,
-      change: modelSelection.handleModelChange,
-      loading: modelSelection.loading,
-      ready: modelSelection.isSelectionReady,
-      selectedModel: modelSelection.selectedModel ?? '',
-      selectedProvider: modelSelection.selectedProvider ?? '',
-      setThinking,
-      supportsThinking,
-      thinkingEnabled,
-    },
     materialSources,
     notice,
+    prefillAssistant: (text: string) => setAssistantPrefill(text),
     prepareReview,
     renderedYaml,
     review,
@@ -876,110 +602,6 @@ export function useWorkspaceComposeReviewController({
 export type WorkspaceComposeReviewController = ReturnType<
   typeof useWorkspaceComposeReviewController
 >;
-
-function findSourceConversationId(candidate: WorkspaceCandidate): string | undefined {
-  return candidate.sourceBundle.find(
-    (source) => source.type === 'chat' && Boolean(source.conversationId)
-  )?.conversationId;
-}
-
-function isPersistedTurnId(id: string): boolean {
-  return Boolean(id) && !id.startsWith('msg-') && !id.endsWith(':streaming');
-}
-
-function messageToSourceTurn(message: {
-  id: string;
-  role: 'assistant' | 'user';
-  content: string;
-  conversationId?: string;
-  projectId?: string;
-  rings?: Record<string, unknown> | null;
-}): SourceConversationTurn {
-  return {
-    id: message.id,
-    role: message.role,
-    author: message.role === 'user' ? 'You' : 'Assistant',
-    content: message.content,
-    conversationId: message.conversationId,
-    projectId: message.projectId,
-    pinnable: true,
-    ...(message.rings ? { rings: message.rings } : {}),
-  };
-}
-
-function getSourceChatSourceId(candidateId: string, conversationId?: string): string {
-  return `source_chat:${conversationId ?? candidateId}`;
-}
-
-function buildChatSourceBundle(
-  sourceId: string,
-  candidateTitle: string,
-  conversationId: string | undefined,
-  turns: readonly SourceConversationTurn[]
-): SourceBundleItem | null {
-  if (turns.length === 0) return null;
-  return {
-    id: sourceId,
-    type: 'chat',
-    title: `${candidateTitle} source chat`,
-    ...(conversationId ? { conversationId } : {}),
-    previewTurns: [...turns],
-  };
-}
-
-function findChatSource(sourceBundle: SourceBundleItem[], sourceId: string) {
-  return sourceBundle.find((source) => source.id === sourceId && source.type === 'chat');
-}
-
-function chatSourceMatches(
-  existing: SourceBundleItem | undefined,
-  source: SourceBundleItem | null
-) {
-  if (!source) return existing === undefined;
-  if (!existing) return false;
-  if (existing.title !== source.title || existing.conversationId !== source.conversationId) {
-    return false;
-  }
-  return sourceTurnsMatch(existing.previewTurns ?? [], source.previewTurns ?? []);
-}
-
-function sourceTurnsMatch(
-  previousTurns: readonly SourceConversationTurn[],
-  nextTurns: readonly SourceConversationTurn[]
-) {
-  if (previousTurns.length !== nextTurns.length) return false;
-  return previousTurns.every((turn, index) => {
-    const next = nextTurns[index];
-    return (
-      next !== undefined &&
-      turn.id === next.id &&
-      turn.role === next.role &&
-      turn.author === next.author &&
-      turn.content === next.content &&
-      turn.conversationId === next.conversationId &&
-      turn.projectId === next.projectId &&
-      JSON.stringify(turn.rings ?? null) === JSON.stringify(next.rings ?? null)
-    );
-  });
-}
-
-function chatSourceSignature(source: SourceBundleItem | null): string {
-  if (!source) return 'chat:none';
-  return JSON.stringify({
-    id: source.id,
-    title: source.title,
-    conversationId: source.conversationId ?? null,
-    turns: source.previewTurns?.map((turn) => ({
-      id: turn.id,
-      role: turn.role,
-      author: turn.author,
-      content: turn.content,
-      conversationId: turn.conversationId ?? null,
-      projectId: turn.projectId ?? null,
-      rings: turn.rings ?? null,
-    })),
-  });
-}
 
 function materialToSourceBundleItem(material: Material): SourceBundleItem {
   const filename = material.filename?.toLowerCase() ?? '';
