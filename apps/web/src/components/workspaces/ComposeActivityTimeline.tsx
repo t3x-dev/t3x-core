@@ -25,12 +25,12 @@ import {
   composeTextDiff,
   composeValueChangeLabels,
 } from '@/domain/composePresentation';
-import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import { composeDraftChangeCards } from '@/domain/workspaces/composeDraftChanges';
+import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import type { WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 import styles from './ComposeActivityTimeline.module.css';
-import composeStyles from './WorkspaceComposeSurface.module.css';
 import draftStyles from './ComposeDraftChanges.module.css';
+import composeStyles from './WorkspaceComposeSurface.module.css';
 
 const changeMarkers = {
   added: { Icon: Plus, label: 'Added fields' },

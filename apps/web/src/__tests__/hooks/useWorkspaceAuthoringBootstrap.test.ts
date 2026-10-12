@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { createElement, StrictMode, type ReactNode } from 'react';
+import { createElement, type ReactNode, StrictMode } from 'react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
 import { useWorkspaceAuthoringBootstrap } from '@/hooks/workspaces/useWorkspaceAuthoringBootstrap';

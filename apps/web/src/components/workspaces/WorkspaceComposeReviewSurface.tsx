@@ -58,8 +58,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { OutputTargetsTab } from '@/components/workspaces/OutputTargetsTab';
 import { ComposeDraftChangeRow } from '@/components/workspaces/ComposeDraftChangeRow';
+import { OutputTargetsTab } from '@/components/workspaces/OutputTargetsTab';
 import { SourceArtifactRoleEditor } from '@/components/workspaces/SourcesTab';
 import { SourceTransitionTab } from '@/components/workspaces/SourceTransitionTab';
 import { WorkspaceContentEditor } from '@/components/workspaces/WorkspaceContentEditor';

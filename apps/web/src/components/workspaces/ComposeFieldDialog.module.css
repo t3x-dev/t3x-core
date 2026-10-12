@@ -27,6 +27,9 @@
 .tabs {
   display: flex;
   flex: none;
+  min-width: 0;
+  margin: 0;
+  border: 0;
   align-self: center;
   width: fit-content;
   max-width: 100%;
@@ -85,6 +88,9 @@
 .body[data-view="yaml"] {
   display: flex;
   overflow: hidden;
+}
+.body > output {
+  display: block;
 }
 .tree {
   max-width: 650px;

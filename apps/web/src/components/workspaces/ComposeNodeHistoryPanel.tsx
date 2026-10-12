@@ -25,11 +25,11 @@ import {
   composePathLabel,
 } from '@/domain/composePresentation';
 import { authoringSemanticContent } from '@/domain/workspaces/authoringReview';
-import { composeDraftFields } from '@/domain/workspaces/composeDraftFields';
 import {
   composeCardsAtPath,
   composeDraftValueAtPath,
 } from '@/domain/workspaces/composeDraftChanges';
+import { composeDraftFields } from '@/domain/workspaces/composeDraftFields';
 import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import { ComposeDraftValueEditor, isSimpleDraftValue } from './ComposeDraftValueEditor';
 import styles from './ComposeFieldDetails.module.css';
@@ -84,9 +84,8 @@ function ExpandableText({
   }, [expanded, text]);
 
   return (
-    <div
+    <section
       className={`${styles.expandable} ${className}`}
-      role="region"
       aria-label={label}
       data-expanded={expanded}
       data-compact={compact}
@@ -106,7 +105,7 @@ function ExpandableText({
           {expanded ? 'Show less' : 'Show more'}
         </button>
       ) : null}
-    </div>
+    </section>
   );
 }
 
@@ -192,7 +191,7 @@ function DraftStructure({
   };
   return (
     <div className={styles.structure}>
-      <div className={styles.segment} role="group" aria-label="Details structure view">
+      <fieldset className={styles.segment} aria-label="Details structure view">
         <button
           type="button"
           aria-pressed={view === 'structure'}
@@ -203,7 +202,7 @@ function DraftStructure({
         <button type="button" aria-pressed={view === 'yaml'} onClick={() => setView('yaml')}>
           <Code2 aria-hidden="true" /> YAML
         </button>
-      </div>
+      </fieldset>
       {view === 'structure' ? (
         fields.length ? (
           <ul className={styles.tree} aria-label="Current Draft structure">
@@ -560,11 +559,7 @@ export function ComposeNodeHistoryPanel({
             {saveError ?? activity.nodeError}
           </p>
         ) : null}
-        {activity.notice ? (
-          <p className={styles.helper} role="status">
-            {activity.notice}
-          </p>
-        ) : null}
+        {activity.notice ? <output className={styles.helper}>{activity.notice}</output> : null}
         {!editing && selectedReason ? (
           <section className={styles.reason}>
             <h3>Reason for this action</h3>
@@ -627,11 +622,7 @@ export function ComposeNodeHistoryPanel({
                 />
               </div>
             ) : null}
-            {historyLoading ? (
-              <p className={styles.helper} role="status">
-                Loading history…
-              </p>
-            ) : null}
+            {historyLoading ? <output className={styles.helper}>Loading history…</output> : null}
             {historyCursor !== null ? (
               <button
                 className={styles.textButton}

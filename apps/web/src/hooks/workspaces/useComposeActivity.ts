@@ -11,9 +11,9 @@ import {
   expandComposeActivityCards,
   groupComposeActivity,
 } from '@/domain/composeActivity';
+import { composeCardsAtPath } from '@/domain/workspaces/composeDraftChanges';
 import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
 import { saveProjectWorkspace } from '@/infrastructure/workspaces';
-import { composeCardsAtPath } from '@/domain/workspaces/composeDraftChanges';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
 /** Compose-owned adapter over the immutable Draft authoring command and projection APIs. */

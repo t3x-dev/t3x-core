@@ -9,8 +9,8 @@ import {
 } from '@/domain/composePresentation';
 import { authoringSemanticPath } from '@/domain/workspaces/authoringReview';
 import type { WorkspaceYOpsDraftOperation } from '@/types/workspaces';
-import { isSimpleDraftValue } from './ComposeDraftValueEditor';
 import styles from './ComposeDraftChanges.module.css';
+import { isSimpleDraftValue } from './ComposeDraftValueEditor';
 
 function valueLabel(value: unknown) {
   if (value === undefined) return 'Not present';

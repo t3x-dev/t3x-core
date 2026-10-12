@@ -128,7 +128,7 @@ export function ComposeFieldDialog({
             reviewed and committed.
           </DialogDescription>
         </header>
-        <div className={styles.tabs} role="group" aria-label="Draft structure view">
+        <fieldset className={styles.tabs} aria-label="Draft structure view">
           <button
             type="button"
             aria-pressed={view === 'structure'}
@@ -145,10 +145,10 @@ export function ComposeFieldDialog({
           >
             <Code2 aria-hidden="true" /> YAML
           </button>
-        </div>
+        </fieldset>
         <div className={styles.body} data-view={view}>
           {document === undefined ? (
-            <p role="status">{activity.error ?? 'Loading current Draft…'}</p>
+            <output>{activity.error ?? 'Loading current Draft…'}</output>
           ) : view === 'yaml' ? (
             <section aria-label="Current Draft YAML" className={styles.yaml}>
               <header className={styles.yamlHeading}>
@@ -164,6 +164,7 @@ export function ComposeFieldDialog({
                 </div>
               </header>
               {copyNotice ? <output className={styles.copyNotice}>{copyNotice}</output> : null}
+              {/* biome-ignore lint/a11y/noNoninteractiveTabindex: This independently scrolling YAML pane must remain reachable for keyboard scrolling. */}
               <pre tabIndex={0} aria-label="YAML source">
                 <code>{highlightedYaml}</code>
               </pre>
