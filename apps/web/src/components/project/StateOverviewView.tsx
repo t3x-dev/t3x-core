@@ -74,7 +74,8 @@ export function StateOverviewView({
   workspaceHref?: string;
   commits?: ApiCommit[];
   projectId: string;
-  commitDigest: string;
+  /** `null` renders the repository before its first commit. */
+  commitDigest: string | null;
   projectName: string;
   projectDescription?: string;
   projectOwner?: string;
@@ -94,15 +95,16 @@ export function StateOverviewView({
   const [readmeHeadings, setReadmeHeadings] = useState<string[]>([]);
   const readmeRef = useRef<HTMLDivElement>(null);
 
-  if (headerOnly && (loading || error || !data)) return null;
-  if (loading)
+  const empty = !commitDigest;
+  if (headerOnly && !empty && (loading || error || !data)) return null;
+  if (!empty && loading)
     return (
       <div className={styles.feedback}>
         {navigation}
         <output>Loading Overview…</output>
       </div>
     );
-  if (error || !data)
+  if (!empty && (error || !data))
     return (
       <div className={styles.feedback} role="alert">
         {navigation}
@@ -114,18 +116,18 @@ export function StateOverviewView({
       </div>
     );
 
-  const author = data.author?.document;
+  const author = data?.author?.document;
   const resources = author?.resources ?? [];
   const avatar = resources.find((resource) => resource.path === author?.avatarPath);
-  const value = data.render.model.value;
-  const semantic = data.reading?.kind === 'semantic-content' ? data.reading.value : null;
+  const value = data?.render.model.value;
+  const semantic = data?.reading?.kind === 'semantic-content' ? data.reading.value : null;
   const items = semantic
     ? semantic.trees.map((tree, index) => ({
         key: String(index),
         label: tree.key,
         pointer: `/content/trees/${index}`,
       }))
-    : data.summary.items.map((item) => ({ ...item, label: item.key }));
+    : (data?.summary.items ?? []).map((item) => ({ ...item, label: item.key }));
   const sections: [string, unknown][] = semantic
     ? semantic.trees
         .flatMap((tree) =>
@@ -308,93 +310,116 @@ export function StateOverviewView({
               <div className={styles.cardTitle}>
                 <GitCommit aria-hidden="true" />
                 <strong>State</strong>
-                <span className={styles.committed}>Committed</span>
-                <button
-                  type="button"
-                  aria-label={expanded ? 'Restore split view' : 'Expand rendered State'}
-                  className={styles.expandButton}
-                  onClick={() => setExpanded(!expanded)}
-                >
-                  {expanded ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
-                  {expanded ? 'Restore' : 'Expand'}
-                </button>
-              </div>
-              <div className={styles.stateContent}>
-                <div className={styles.stateMeta}>
-                  <span>
-                    <GitCommit aria-hidden="true" />
-                    <code>{commitDigest.replace(/^sha256:/, '').slice(0, 7)}</code>
-                  </span>
-                  <span className={styles.schemaPill}>{shownSchema}</span>
-                </div>
-                {expanded && items.length > 0 ? (
-                  <nav aria-label="State sections" className={styles.contents}>
-                    {items.map((item) => (
-                      <button
-                        key={item.pointer}
-                        type="button"
-                        onClick={() => setSelected(item.key)}
-                      >
-                        {displayName(item.label || '(empty key)')}
-                        <ChevronRight aria-hidden="true" />
-                      </button>
-                    ))}
-                  </nav>
-                ) : null}
-                {expanded ? (
-                  <div className={styles.fullRender}>
-                    {reader && selected === null ? (
-                      reader(true, () => setExpanded(true))
-                    ) : (
-                      <StateScrollArea
-                        id="overview-render-content"
-                        label="Rendered committed content"
-                        className="min-h-0 flex-1"
-                        viewportClassName="p-4"
-                      >
-                        {semantic ? (
-                          <>
-                            <BackButton selected={selected} onBack={() => setSelected(null)} />
-                            <StateSemanticReader
-                              trees={
-                                selected === null
-                                  ? semantic.trees
-                                  : [semantic.trees[Number(selected)]]
-                              }
-                            />
-                          </>
-                        ) : selected !== null &&
-                          value !== null &&
-                          typeof value === 'object' &&
-                          Object.hasOwn(value, selected) ? (
-                          <>
-                            <BackButton selected={selected} onBack={() => setSelected(null)} />
-                            <StateValueReader
-                              value={(value as Record<string, unknown>)[selected]}
-                            />
-                          </>
-                        ) : (
-                          <StateValueReader value={value} />
-                        )}
-                      </StateScrollArea>
-                    )}
-                  </div>
+                {empty ? (
+                  <span>No commits yet</span>
                 ) : (
-                  <GenericStateSummary sections={sections} value={value} />
+                  <>
+                    <span className={styles.committed}>Committed</span>
+                    <button
+                      type="button"
+                      aria-label={expanded ? 'Restore split view' : 'Expand rendered State'}
+                      className={styles.expandButton}
+                      onClick={() => setExpanded(!expanded)}
+                    >
+                      {expanded ? (
+                        <Minimize2 aria-hidden="true" />
+                      ) : (
+                        <Maximize2 aria-hidden="true" />
+                      )}
+                      {expanded ? 'Restore' : 'Expand'}
+                    </button>
+                  </>
                 )}
-                {!expanded ? (
-                  <p className={styles.recordNote}>
-                    <ShieldCheck aria-hidden="true" />
-                    This is a read-only view of committed state. To change it, propose a change.
-                  </p>
-                ) : null}
-                {!expanded && onViewStructure ? (
-                  <button type="button" onClick={onViewStructure} className={styles.viewLink}>
-                    <Code2 aria-hidden="true" />
-                    View structure <span>→</span>
-                  </button>
-                ) : null}
               </div>
+              {empty ? (
+                <>
+                  <p>
+                    This branch has no committed state yet. Create the first change in a Workspace.
+                  </p>
+                  {workspaceHref ? (
+                    <Link className={styles.primary} href={workspaceHref}>
+                      Propose change
+                    </Link>
+                  ) : null}
+                </>
+              ) : (
+                <div className={styles.stateContent}>
+                  <div className={styles.stateMeta}>
+                    <span>
+                      <GitCommit aria-hidden="true" />
+                      <code>{commitDigest?.replace(/^sha256:/, '').slice(0, 7)}</code>
+                    </span>
+                    <span className={styles.schemaPill}>{shownSchema}</span>
+                  </div>
+                  {expanded && items.length > 0 ? (
+                    <nav aria-label="State sections" className={styles.contents}>
+                      {items.map((item) => (
+                        <button
+                          key={item.pointer}
+                          type="button"
+                          onClick={() => setSelected(item.key)}
+                        >
+                          {displayName(item.label || '(empty key)')}
+                          <ChevronRight aria-hidden="true" />
+                        </button>
+                      ))}
+                    </nav>
+                  ) : null}
+                  {expanded ? (
+                    <div className={styles.fullRender}>
+                      {reader && selected === null ? (
+                        reader(true, () => setExpanded(true))
+                      ) : (
+                        <StateScrollArea
+                          id="overview-render-content"
+                          label="Rendered committed content"
+                          className="min-h-0 flex-1"
+                          viewportClassName="p-4"
+                        >
+                          {semantic ? (
+                            <>
+                              <BackButton selected={selected} onBack={() => setSelected(null)} />
+                              <StateSemanticReader
+                                trees={
+                                  selected === null
+                                    ? semantic.trees
+                                    : [semantic.trees[Number(selected)]]
+                                }
+                              />
+                            </>
+                          ) : selected !== null &&
+                            value !== null &&
+                            typeof value === 'object' &&
+                            Object.hasOwn(value, selected) ? (
+                            <>
+                              <BackButton selected={selected} onBack={() => setSelected(null)} />
+                              <StateValueReader
+                                value={(value as Record<string, unknown>)[selected]}
+                              />
+                            </>
+                          ) : (
+                            <StateValueReader value={value} />
+                          )}
+                        </StateScrollArea>
+                      )}
+                    </div>
+                  ) : (
+                    <GenericStateSummary sections={sections} value={value} />
+                  )}
+                  {!expanded ? (
+                    <p className={styles.recordNote}>
+                      <ShieldCheck aria-hidden="true" />
+                      This is a read-only view of committed state. To change it, propose a change.
+                    </p>
+                  ) : null}
+                  {!expanded && onViewStructure ? (
+                    <button type="button" onClick={onViewStructure} className={styles.viewLink}>
+                      <Code2 aria-hidden="true" />
+                      View structure <span>→</span>
+                    </button>
+                  ) : null}
+                </div>
+              )}
             </section>
 
             {!expanded && recentCommits.length ? (
@@ -659,74 +684,4 @@ function BackButton({ selected, onBack }: { selected: string | null; onBack: () 
       ← All sections
     </button>
   ) : null;
-}
-
-/** Temporary presentation-only README for repositories without a first commit. */
-export function EmptyStateOverview({ workspaceHref }: { workspaceHref: string }) {
-  return (
-    <div className={styles.root}>
-      <div className={styles.page}>
-        <div className={styles.columns}>
-          <section className={styles.readmeCard}>
-            <div className={styles.readmeBody}>
-              <ReleaseControlReadme />
-            </div>
-          </section>
-          <aside className={styles.sideColumn}>
-            <section className={styles.stateCard}>
-              <div className={styles.cardTitle}>
-                <strong>State</strong>
-                <span>No commits yet</span>
-              </div>
-              <p>This README is a default template. Create your first change in a Workspace.</p>
-              <Link className={styles.primary} href={workspaceHref}>
-                Propose change
-              </Link>
-            </section>
-          </aside>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Temporary introduction accompanying the default README before the first commit. */
-export function EmptyStateProjectHeader() {
-  return (
-    <div className={styles.sharedHeader}>
-      <div className={styles.page}>
-        <header className={styles.projectHeader}>
-          <div className={styles.avatarFallback}>
-            <Box aria-hidden="true" />
-          </div>
-          <div className={styles.projectIdentity}>
-            <div className={styles.titleLine}>
-              <h1>Release Control</h1>
-              <span className={styles.visibility}>
-                <LockKeyhole aria-hidden="true" />
-                Private
-              </span>
-            </div>
-            <p className={styles.owner}>
-              <span className={styles.publisher}>Y</span>
-              <strong>You</strong>
-              <i />
-              t3x/prd
-              <i />
-              <span>Updated Sep 9</span>
-            </p>
-            <p className={styles.description}>
-              Stage a release, gather evidence at each step, and ship with a record of who approved
-              what.
-            </p>
-            <div className={styles.tags}>
-              <span>release-management</span>
-              <span>structured-state</span>
-              <span>collaboration</span>
-            </div>
-          </div>
-        </header>
-      </div>
-    </div>
-  );
 }

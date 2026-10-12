@@ -4,51 +4,58 @@ import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectBranchRulesSettings } from '@/components/project/settings/ProjectBranchRulesSettings';
+import type { Branch } from '@/infrastructure/types';
 
 const mocks = vi.hoisted(() => ({
   listBranches: vi.fn(),
-  getBranchRule: vi.fn(),
-  setBranchRule: vi.fn(),
+  updateBranchRules: vi.fn(),
   toastSuccess: vi.fn(),
 }));
 
-vi.mock('@/infrastructure/branches', () => ({ listBranches: mocks.listBranches }));
-vi.mock('@/infrastructure/branchRules', () => ({
-  getBranchRule: mocks.getBranchRule,
-  setBranchRule: mocks.setBranchRule,
+vi.mock('@/infrastructure/branches', () => ({
+  listBranches: mocks.listBranches,
+  updateBranchRules: mocks.updateBranchRules,
 }));
 vi.mock('sonner', () => ({ toast: { success: mocks.toastSuccess } }));
+
+function branch(name: string, rules?: Branch['rules']): Branch {
+  return {
+    branch_id: `b-${name}`,
+    name,
+    is_current: name === 'main',
+    ...(rules ? { rules } : {}),
+    created_at: '',
+    updated_at: '',
+  };
+}
 
 describe('ProjectBranchRulesSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.listBranches.mockResolvedValue({
       branches: [
-        { branch_id: 'b2', name: 'release', is_current: false, created_at: '' },
-        { branch_id: 'b1', name: 'main', is_current: true, created_at: '' },
+        branch('release', {
+          commit: { require_independent_review: true, source: 'custom' },
+        }),
+        branch('main'),
       ],
       limit: 50,
       offset: 0,
     });
-    mocks.getBranchRule.mockImplementation(async (_projectId: string, refName: string) => ({
-      ref_name: refName,
-      require_independent_review: refName === 'release',
-      source: refName === 'release' ? 'custom' : 'default',
-    }));
   });
 
   it('defaults to main and lists every branch in the picker', async () => {
     render(<ProjectBranchRulesSettings projectId="project-1" />);
 
-    const branch = await screen.findByRole('combobox', { name: 'Branch' });
-    expect(branch).toHaveValue('main');
+    const picker = await screen.findByRole('combobox', { name: 'Branch' });
+    expect(picker).toHaveValue('main');
     expect(
-      Array.from(branch.querySelectorAll('option')).map((option) => option.textContent)
+      Array.from(picker.querySelectorAll('option')).map((option) => option.textContent)
     ).toEqual(['release', 'main']);
     expect(screen.getByRole('combobox', { name: 'Commit rule' })).toHaveValue('direct');
   });
 
-  it('shows the rule of the branch picked in the dropdown', async () => {
+  it('shows the rules carried by the branch picked in the dropdown', async () => {
     render(<ProjectBranchRulesSettings projectId="project-1" />);
 
     fireEvent.change(await screen.findByRole('combobox', { name: 'Branch' }), {
@@ -59,24 +66,24 @@ describe('ProjectBranchRulesSettings', () => {
     expect(screen.getByText(/Custom policy/)).toBeVisible();
   });
 
-  it('saves the rule for the selected branch', async () => {
-    mocks.setBranchRule.mockResolvedValue({
-      ref_name: 'main',
-      require_independent_review: true,
-      source: 'preset',
-    });
+  it('saves the commit rule onto the selected branch', async () => {
+    mocks.updateBranchRules.mockResolvedValue(
+      branch('main', { commit: { require_independent_review: true, source: 'preset' } })
+    );
     render(<ProjectBranchRulesSettings projectId="project-1" />);
 
     const rule = await screen.findByRole('combobox', { name: 'Commit rule' });
     fireEvent.change(rule, { target: { value: 'review' } });
 
     await waitFor(() => expect(rule).toHaveValue('review'));
-    expect(mocks.setBranchRule).toHaveBeenCalledWith('project-1', 'main', true);
-    expect(mocks.toastSuccess).toHaveBeenCalledWith('Branch rule for main updated');
+    expect(mocks.updateBranchRules).toHaveBeenCalledWith('project-1', 'main', {
+      commit: { require_independent_review: true },
+    });
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('Branch rules for main updated');
   });
 
   it('keeps the saved rule and shows the error when saving fails', async () => {
-    mocks.setBranchRule.mockRejectedValue(new Error('Policy administration requires a human'));
+    mocks.updateBranchRules.mockRejectedValue(new Error('Branch rules require a human principal'));
     render(<ProjectBranchRulesSettings projectId="project-1" />);
 
     const rule = await screen.findByRole('combobox', { name: 'Commit rule' });

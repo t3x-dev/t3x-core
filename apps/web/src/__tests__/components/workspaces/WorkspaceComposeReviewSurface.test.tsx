@@ -1173,4 +1173,135 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       within(screen.getByRole('table')).getByTitle('prd/requirements/weather/title')
     ).toBeInTheDocument();
   });
+
+  it('shows the inherited branch State in Review before any change is made', async () => {
+    const candidate = {
+      ...getProjectWorkspaceStarterCandidate('proj_1'),
+      targetBranch: 'dev4',
+      schemaBindings: getWorkspacePreviewCandidates('proj_1')[0]!.schemaBindings,
+    };
+    const inherited = {
+      domain: 't3x.dev/semantic-content',
+      version: 1,
+      content: {
+        trees: [
+          {
+            key: 'prd',
+            slots: {},
+            children: [
+              {
+                key: 'requirements',
+                slots: {},
+                children: [{ key: 'weather', slots: { title: '天气为晴天' }, children: [] }],
+              },
+            ],
+          },
+        ],
+        relations: [],
+      },
+    };
+    activityMocks.value = {
+      enabled: true,
+      loading: false,
+      error: null,
+      actions: [],
+      cards: {},
+      cursor: null,
+      node: null,
+      nodeLoading: false,
+      nodeError: null,
+      nodeCursor: null,
+      notice: null,
+      newActivity: null,
+      compositionRevision: 0,
+      workspaceRevision: 1,
+      basis: { refName: 'dev4', refHead: 'sha256:main', baseDigest: 'main' },
+      refresh: vi.fn(),
+      loadOlder: vi.fn(),
+      loadLatest: vi.fn(),
+      inspectNode: vi.fn(),
+      selectActionNode: vi.fn(),
+      loadOlderNode: vi.fn(),
+      publish: vi.fn(),
+      publishCandidate: vi.fn(),
+      createAssistantConversation: vi.fn(),
+      view: {
+        schema: 't3x.application/workspace-authoring-view/v1',
+        projectionVersion: 1,
+        workspaceRevision: 1,
+        compositionRevision: 0,
+        basis: { refName: 'dev4', refHead: 'sha256:main', baseDigest: 'main' },
+        actions: [],
+        selected: null,
+        netDiff: [],
+        node: null,
+        nextBeforeSequence: null,
+        base: inherited,
+        current: inherited,
+      },
+    } as unknown as ReturnType<typeof useComposeActivity>;
+    const controller = {
+      busyAction: null,
+      candidate,
+      chat: {
+        error: null,
+        input: '',
+        isLoading: false,
+        isStreaming: false,
+        messages: [],
+        send: vi.fn(),
+        setInput: vi.fn(),
+        stop: vi.fn(),
+        warning: null,
+      },
+      error: null,
+      hasCollaborationConflict: false,
+      isBusy: false,
+      materialSources: [],
+      model: {
+        availabilityError: null,
+        change: vi.fn(),
+        loading: false,
+        ready: true,
+        selectedModel: 'gpt-5.4-mini',
+        selectedProvider: 'openai',
+      },
+      notice: null,
+      prepareReview: vi.fn(),
+      renderedYaml: '',
+      review: {
+        changeProjection: null,
+        commands: null,
+        content: null,
+        deterministicValidation: null,
+        precondition: null,
+        reviewSnapshot: null,
+        transitionId: null,
+        view: null,
+      },
+      scenarios: { options: [], selectedId: candidate.id },
+      sourceBusy: false,
+    } as unknown as WorkspaceComposeReviewController;
+
+    render(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="review"
+        onModeChange={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Structure diff' }));
+    expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
+    expect(screen.queryByText('No structured changes are prepared yet')).not.toBeInTheDocument();
+    expect(screen.getByText('0 added')).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('table')).getByTitle('prd/requirements/weather')
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rendered YAML' }));
+    expect(screen.queryByText('No structured changes are prepared yet')).not.toBeInTheDocument();
+    expect(screen.getAllByText(/天气为晴天/).length).toBeGreaterThan(0);
+  });
 });

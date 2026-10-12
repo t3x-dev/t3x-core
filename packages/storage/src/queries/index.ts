@@ -557,6 +557,7 @@ export {
   type BindTransitionPolicyInput,
   bindTransitionPolicy,
   getTransitionPolicyBinding,
+  listTransitionPolicyBindings,
   type TransitionPolicyBinding,
   TransitionPolicyBindingIntegrityError,
   TransitionPolicyResourceConflictError,

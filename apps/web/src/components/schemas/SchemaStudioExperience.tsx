@@ -240,6 +240,9 @@ export function SchemaStudioExperience({
                 projectBranches.branchHeads[branch] ?? null
               );
               await saveDraft(starter);
+            } catch (error) {
+              // Another surface created this branch's workspace first; the refresh below picks it up.
+              if ((error as { code?: unknown } | null)?.code !== 'CONFLICT') throw error;
             } finally {
               ensuringBranches.current.delete(branch);
             }

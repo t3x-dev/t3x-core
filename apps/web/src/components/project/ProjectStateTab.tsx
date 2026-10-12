@@ -36,11 +36,7 @@ import { StateNodeHistoryPanel } from '@/components/history/StateNodeHistoryPane
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
 import { StateCodeView } from '@/components/project/StateCodeView';
-import {
-  EmptyStateOverview,
-  EmptyStateProjectHeader,
-  StateOverviewView,
-} from '@/components/project/StateOverviewView';
+import { StateOverviewView } from '@/components/project/StateOverviewView';
 import { StatePrdReader } from '@/components/project/StatePrdReader';
 import { StatePromptReader } from '@/components/project/StatePromptReader';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
@@ -608,11 +604,11 @@ export function ProjectStateTab({
         <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-white">
           {activeView !== 'canvas' ? (
             <>
-              {headCommit && !snapshot.loading && !snapshot.primaryError ? (
+              {!snapshot.loading && !snapshot.primaryError ? (
                 <StateOverviewView
                   headerOnly
                   projectId={projectId}
-                  commitDigest={headCommit.hash}
+                  commitDigest={headCommit?.hash ?? null}
                   projectName={projectName}
                   projectDescription={projectDescription}
                   projectOwner={projectOwner}
@@ -622,8 +618,6 @@ export function ProjectStateTab({
                   commits={snapshot.commits}
                   onViewStructure={() => updateActiveView('structure')}
                 />
-              ) : !headCommit && !snapshot.loading && !snapshot.primaryError ? (
-                <EmptyStateProjectHeader />
               ) : null}
               <StateInspectionToolbar
                 projectName={projectName}
@@ -677,7 +671,19 @@ export function ProjectStateTab({
               ) : null}
               {!snapshot.primaryError && !snapshot.loading && !headCommit ? (
                 activeView === 'overview' ? (
-                  <EmptyStateOverview workspaceHref={workspaceHref} />
+                  <StateOverviewView
+                    hideHeader
+                    navigation={null}
+                    workspaceHref={workspaceHref}
+                    projectId={projectId}
+                    commitDigest={null}
+                    projectName={projectName}
+                    projectDescription={projectDescription}
+                    projectOwner={projectOwner}
+                    projectVisibility={projectVisibility}
+                    schemaName={schemaName}
+                    schemaHref={schemaHref}
+                  />
                 ) : (
                   <StateEmpty
                     message="Start in a Workspace, review your changes, and create the first commit."
@@ -842,105 +848,53 @@ function StateInspectionToolbar({
   onViewChange: (view: ProjectSnapshotView) => void;
   workspaceHref: string;
 }) {
-  if (headCommit)
-    return (
-      <div className={`${inspectionStyles.surface} ${inspectionStyles.toolbar}`}>
-        {activeView !== 'overview' ? (
-          <h2 className="sr-only">{headCommit.message || 'Committed state'}</h2>
-        ) : null}
-        <div className={inspectionStyles.sub2}>
-          <div className={overviewStyles.toolbar} style={{ margin: 0, minHeight: 32 }}>
-            <div
-              className={cn(overviewStyles.viewTabs, navigationStyles.segments)}
-              role="tablist"
-              aria-label="State views"
-            >
-              {SNAPSHOT_VIEWS.map((view) => {
-                const Icon = view.id === 'overview' ? Eye : view.icon;
-                return (
-                  <button
-                    key={view.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={view.id === activeView}
-                    onClick={() => onViewChange(view.id)}
-                  >
-                    <Icon aria-hidden="true" />
-                    {view.label}
-                  </button>
-                );
-              })}
-            </div>
-            <StateBranchControls
-              branch={branch}
-              branchOptions={branchOptions}
-              headCommitHash={headCommitHash}
-              onBranchChange={onBranchChange}
-              onCreateBranch={onCreateBranch}
-              showCreate={false}
-            />
-          </div>
-          <div className={overviewStyles.actions}>
-            <Link href={historyHref}>
-              <History />
-              History
-            </Link>
-            <Link href={workspaceHref} className={overviewStyles.primary}>
-              <Pencil />
-              Propose change
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
   return (
-    <div className="flex min-h-[45px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] bg-white px-8 py-1">
-      <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-        <StateBranchControls
-          branch={branch}
-          branchOptions={branchOptions}
-          headCommitHash={headCommitHash}
-          onBranchChange={onBranchChange}
-          onCreateBranch={onCreateBranch}
-          showCreate={false}
-        />
-        <SegmentedControl
-          ariaLabel="State views"
-          className="h-[34px]"
-          itemClassName="min-w-[104px]"
-          items={SNAPSHOT_VIEWS.map((view) => ({
-            icon: view.icon,
-            label: view.label,
-            value: view.id,
-          }))}
-          onValueChange={onViewChange}
-          value={activeView}
-        />
-      </div>
-
-      <div className="flex shrink-0 items-center gap-2">
-        <Button
-          asChild
-          className="h-[34px] rounded-[5px] px-3 text-xs text-[var(--text-primary)]"
-          size="sm"
-          variant="canvas-outline"
-        >
+    <div className={`${inspectionStyles.surface} ${inspectionStyles.toolbar}`}>
+      {headCommit && activeView !== 'overview' ? (
+        <h2 className="sr-only">{headCommit.message || 'Committed state'}</h2>
+      ) : null}
+      <div className={inspectionStyles.sub2}>
+        <div className={overviewStyles.toolbar} style={{ margin: 0, minHeight: 32 }}>
+          <div
+            className={cn(overviewStyles.viewTabs, navigationStyles.segments)}
+            role="tablist"
+            aria-label="State views"
+          >
+            {SNAPSHOT_VIEWS.map((view) => {
+              const Icon = view.id === 'overview' ? Eye : view.icon;
+              return (
+                <button
+                  key={view.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={view.id === activeView}
+                  onClick={() => onViewChange(view.id)}
+                >
+                  <Icon aria-hidden="true" />
+                  {view.label}
+                </button>
+              );
+            })}
+          </div>
+          <StateBranchControls
+            branch={branch}
+            branchOptions={branchOptions}
+            headCommitHash={headCommitHash}
+            onBranchChange={onBranchChange}
+            onCreateBranch={onCreateBranch}
+            showCreate={false}
+          />
+        </div>
+        <div className={overviewStyles.actions}>
           <Link href={historyHref}>
-            <History aria-hidden="true" className="size-4" />
+            <History />
             History
           </Link>
-        </Button>
-        <Button
-          asChild
-          className="h-[34px] rounded-[5px] bg-[var(--accent-commit)] px-3 text-xs !text-[var(--on-accent)]"
-          size="sm"
-          variant="commit"
-        >
-          <Link href={workspaceHref}>
-            <Play aria-hidden="true" className="size-4" />
+          <Link href={workspaceHref} className={overviewStyles.primary}>
+            <Pencil />
             Propose change
           </Link>
-        </Button>
+        </div>
       </div>
     </div>
   );

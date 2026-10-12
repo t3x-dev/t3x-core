@@ -32,19 +32,21 @@ vi.mock('@/hooks/workspaces/useCommitTransitionView', () => ({
 }));
 
 vi.mock('@/components/project/StateOverviewView', () => ({
-  EmptyStateProjectHeader: () => <header>Release Control default introduction</header>,
-  EmptyStateOverview: () => <section>No commits yet</section>,
   StateOverviewView: ({
+    commitDigest,
     reader,
     schemaHref,
     headerOnly,
   }: {
+    commitDigest: string | null;
     reader?: (expanded: boolean, expand: () => void) => import('react').ReactNode;
     schemaHref?: string;
     headerOnly?: boolean;
   }) =>
     headerOnly ? (
-      <header aria-label="State project header" />
+      <header aria-label="State project header" data-empty={commitDigest === null || undefined} />
+    ) : commitDigest === null ? (
+      <section aria-label="Overview">No commits yet</section>
     ) : (
       <section aria-label="Overview">
         {schemaHref ? <a href={schemaHref}>View schemas</a> : null}
@@ -1192,7 +1194,10 @@ describe('ProjectStateTab', () => {
     renderStateTab();
 
     await screen.findByText('No commit on this branch');
-    expect(screen.getByText('Release Control default introduction')).toBeInTheDocument();
+    expect(screen.getByRole('banner', { name: 'State project header' })).toHaveAttribute(
+      'data-empty',
+      'true'
+    );
     expect(screen.getByRole('tablist', { name: 'State views' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Propose change' })).toHaveAttribute(
       'href',

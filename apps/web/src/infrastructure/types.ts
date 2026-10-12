@@ -99,8 +99,21 @@ export interface Branch {
   head_commit_hash?: string | null;
   description?: string | null;
   is_current: boolean;
+  rules?: BranchRules;
   created_at: string;
   updated_at: string;
+}
+
+/** Per-branch rules. Each key is one rule kind; more kinds are added alongside `commit`. */
+export interface BranchRules {
+  commit: {
+    require_independent_review: boolean;
+    source: 'default' | 'preset' | 'custom';
+  };
+}
+
+export interface BranchRulesUpdate {
+  commit?: { require_independent_review: boolean };
 }
 
 // ============================================================================

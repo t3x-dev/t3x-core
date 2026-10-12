@@ -1841,7 +1841,8 @@ function ReviewSurface({
                     </button>
                   )}
                 </div>
-              ) : structureModel.rows.length > 0 && operations.length > 0 ? (
+              ) : structureModel.rows.length > 0 &&
+                (operations.length > 0 || structureModel.hasReplayContent) ? (
                 <WorkspaceReviewStructureView
                   activeRowId={activeStructureRow?.id ?? null}
                   candidate={candidate}

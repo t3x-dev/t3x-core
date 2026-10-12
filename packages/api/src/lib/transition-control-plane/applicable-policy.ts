@@ -149,6 +149,30 @@ export const INDEPENDENT_REVIEW_REF_POLICY = Object.freeze(
   })
 ) as Pick<TransitionPolicyBinding, 'policy' | 'resource'>;
 
+/** Per-branch rules derived from the ref policy binding; new rule kinds add keys here. */
+export interface BranchRules {
+  commit: {
+    requireIndependentReview: boolean;
+    source: 'default' | 'preset' | 'custom';
+  };
+}
+
+export function branchRulesFromBinding(
+  binding: Pick<TransitionPolicyBinding, 'policy' | 'resource'> | null
+): BranchRules {
+  return {
+    commit: {
+      requireIndependentReview: binding !== null && !binding.policy.authorization.allowSelfApproval,
+      source:
+        binding === null
+          ? 'default'
+          : binding.resource.digest === INDEPENDENT_REVIEW_REF_POLICY.resource.digest
+            ? 'preset'
+            : 'custom',
+    },
+  };
+}
+
 export type BranchRuleChange =
   | { action: 'keep' }
   | { action: 'unbind' }

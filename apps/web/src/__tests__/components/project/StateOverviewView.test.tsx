@@ -2,11 +2,7 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
-import {
-  EmptyStateOverview,
-  EmptyStateProjectHeader,
-  StateOverviewView,
-} from '@/components/project/StateOverviewView';
+import { StateOverviewView } from '@/components/project/StateOverviewView';
 
 const overview = vi.hoisted(() => vi.fn());
 vi.mock('@/hooks/commits/useStateOverview', () => ({ useStateOverview: overview }));
@@ -105,23 +101,37 @@ it('uses actual metadata and committed values for the release layout and handles
   );
 });
 
-it('shows the default README for empty repositories without inventing committed state', () => {
-  render(<EmptyStateOverview workspaceHref="/project/empty?tab=workspaces" />);
+it('renders an empty repository with its own metadata and no committed state', () => {
+  overview.mockReturnValue({ data: undefined, loading: false });
+  render(
+    <StateOverviewView
+      {...props}
+      commitDigest={null}
+      projectName="ew"
+      projectOwner="t3x-dev"
+      projectVisibility="private"
+      schemaName="t3x/state"
+      workspaceHref="/project/empty?tab=workspaces"
+    />
+  );
+  expect(overview).toHaveBeenCalledWith('p', null);
+  expect(screen.getByRole('heading', { name: 'ew' })).toBeVisible();
+  expect(screen.queryByText('Release Control')).toBeNull();
+  expect(screen.queryByText('Updated Sep 9')).toBeNull();
+  expect(screen.queryByText('release-management')).toBeNull();
+  expect(screen.getAllByText('t3x-dev').length).toBeGreaterThan(0);
   expect(screen.getByText('Release with evidence')).toBeVisible();
   expect(screen.getByText('No commits yet')).toBeVisible();
-  expect(screen.getByRole('link', { name: 'Propose change' })).toHaveAttribute(
+  expect(screen.queryByText('Committed')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Expand rendered State' })).toBeNull();
+  expect(screen.getAllByRole('link', { name: 'Propose change' })[0]).toHaveAttribute(
     'href',
     '/project/empty?tab=workspaces'
   );
-  expect(screen.queryByText('Committed')).not.toBeInTheDocument();
 });
 
-it('renders the default project introduction without loading commit data', () => {
-  overview.mockReturnValue({ data: null, loading: false });
-  render(<EmptyStateProjectHeader />);
-  expect(screen.getByRole('heading', { name: 'Release Control' })).toBeVisible();
-  expect(screen.getByText('Updated Sep 9')).toBeVisible();
-  expect(screen.getByText('release-management')).toBeVisible();
-  expect(screen.getByText('structured-state')).toBeVisible();
-  expect(screen.getByText('collaboration')).toBeVisible();
+it('renders the empty repository header instead of hiding it', () => {
+  overview.mockReturnValue({ data: undefined, loading: false });
+  render(<StateOverviewView {...props} commitDigest={null} headerOnly projectName="ew" />);
+  expect(screen.getByRole('heading', { name: 'ew' })).toBeVisible();
 });
