@@ -266,6 +266,9 @@ describe('governed Proposal generation', () => {
     expect(generate.mock.calls[0]?.[0].prompt).toContain(
       '"append" is the operation name beside "set"'
     );
+    expect(generate.mock.calls[0]?.[0].prompt).toContain(
+      'Mark the whole group inferred and give basisPointers'
+    );
     expect(left.view.precondition.policyDigest).not.toBeNull();
     const graph = await resolveTransitionProposalGraph(db, data.projectId, left.view.transitionId);
     expect(graph.membership.actor).toEqual(PROPOSAL_GENERATOR_ACTOR);

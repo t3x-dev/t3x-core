@@ -245,6 +245,7 @@ export function WorkspaceWorkbench({
     }));
     updateSelectedFlow({ commitHash });
     setActiveWorkflowTab('commit');
+    void onWorkspacesRefresh?.();
   };
 
   const handleContinueFromCommit = async (

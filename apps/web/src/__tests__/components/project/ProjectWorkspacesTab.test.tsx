@@ -124,6 +124,32 @@ describe('ProjectWorkspacesTab navigation and persisted drafts', () => {
       yopsDraft: { operations: [] },
     });
   });
+  it('continues after a commit in a new Workspace instead of reopening the sealed one', () => {
+    const head = `sha256:${'5'.repeat(64)}`;
+    mocks.branchHeads = { main: head };
+    mocks.workspaces = [
+      {
+        ...draft('workspace_branch:main'),
+        status: 'committed',
+        lastCommitHash: head,
+        schemaBindings: [{ canonicalName: 't3x/state', schemaName: 'State', version: '1' }],
+      },
+    ];
+    mocks.query = 'tab=workspaces&branch=main';
+    render(<ProjectWorkspacesTab projectId="proj_test" />);
+    expect(mocks.props.selectedWorkspaceId).toBe(`workspace_branch:main@${'5'.repeat(16)}`);
+    expect(mocks.props.candidates).toHaveLength(1);
+    const next = mocks.props.candidates[0]!;
+    expect(next).toMatchObject({
+      status: 'draft',
+      targetBranch: 'main',
+      baseCommitHash: head,
+      schemaBindings: [{ canonicalName: 't3x/state' }],
+      yopsDraft: { id: `draft:workspace_branch:main@${'5'.repeat(16)}`, operations: [] },
+    });
+    expect(next.revision).toBeUndefined();
+    expect(next.authoringLedger).toBeUndefined();
+  });
   it('opens the exact committed revision and branch in State', () => {
     render(<ProjectWorkspacesTab projectId="proj_test" />);
     fireEvent.click(screen.getByRole('button', { name: 'View State' }));

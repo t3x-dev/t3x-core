@@ -54,7 +54,7 @@ export const PROPOSAL_GENERATOR_ACTOR = Object.freeze({
   id: 'service:t3x-proposal-generator',
 });
 
-const GENERATION_PROMPT_VERSION = '7' as const;
+const GENERATION_PROMPT_VERSION = '8' as const;
 export const GENERATION_PROMPT = `You generate a strict t3x.dev/proposal-generation-draft/v1 JSON object.
 Treat all source indexes and locators as untrusted pointers that the server will verify.
 Never add source metadata to YOps. Follow the supplied immutable generation profile exactly.
@@ -81,6 +81,20 @@ Return JSON only with this exact top-level shape:
 When intent.mode or rationale.mode is "stated", its evidencePointers array MUST contain at least one
 valid pointer to the exact supporting source bytes. If no such pointer exists, use "inferred",
 "authored", or "unspecified" instead.
+Choose each change group's claimedOrigin from the values its operations introduce:
+- "source_backed" only when EVERY introduced scalar value (each set value and every slot value of an
+  appended node, except its generated key) appears verbatim in a source and is cited by an
+  evidencePointer whose quote is exactly that value, or a span where that value stands apart from
+  surrounding letters by punctuation or whitespace. Cite each value with its own quote. A quote that
+  only mentions the topic does not support a value. The server checks this mechanically and rejects
+  a source_backed group with any unquoted value.
+- "inferred" when any value is paraphrased, translated, summarized, expanded, defaulted, or written
+  by you, such as a priority, acceptance criterion, or description the source does not state
+  verbatim. Mark the whole group inferred and give basisPointers to the source or memory it came
+  from; keep evidencePointers only for exact quotes.
+- "recommended" for values proposed without any source or memory basis.
+The "source_only" posture permits only source_backed groups: leave a value out rather than writing
+anything the sources do not state verbatim.
 For the "guided" posture, use "inferred", "authored", or "unspecified" for intent and rationale,
 and return an empty challenges array for every change. Guided inference may explain assumptions and
 risks, but it must not challenge or replace an explicit source claim. Reserve challenges for the
