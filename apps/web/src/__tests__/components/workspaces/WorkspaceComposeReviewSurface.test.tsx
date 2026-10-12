@@ -368,6 +368,139 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
   });
 
+  it('stages manual cards locally and saves the selected subset as one P', async () => {
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    Object.assign(candidate, { authoringLedger: { actions: [] } });
+    const action = {
+      actionId: 'a1',
+      sequence: 1,
+      channel: 'manual' as const,
+      actor: { id: 'Maya', kind: 'human' as const },
+      publishedAt: '2026-09-21T11:53:00Z',
+      beforeRevision: 0,
+      afterRevision: 1,
+      operations: [],
+    };
+    const cards = [{ nodeId: 'allocation', path: 'rollout/allocation', before: 20, after: 25 }];
+    const publish = vi.fn().mockResolvedValue({ kind: 'published' });
+    activityMocks.value = {
+      enabled: true,
+      loading: false,
+      error: null,
+      actions: [action],
+      cards: { a1: cards },
+      cursor: null,
+      node: null,
+      nodeLoading: false,
+      nodeError: null,
+      nodeCursor: null,
+      notice: null,
+      newActivity: null,
+      compositionRevision: 1,
+      workspaceRevision: 1,
+      basis: { refName: 'main', refHead: null, baseDigest: 'base' },
+      refresh: vi.fn(),
+      loadOlder: vi.fn(),
+      loadLatest: vi.fn(),
+      inspectNode: vi.fn(),
+      selectActionNode: vi.fn(),
+      loadOlderNode: vi.fn(),
+      publish,
+      publishCandidate: vi.fn(),
+      createAssistantConversation: vi.fn(),
+      view: {
+        schema: 't3x.application/workspace-authoring-view/v1',
+        projectionVersion: 1,
+        workspaceRevision: 1,
+        compositionRevision: 1,
+        basis: { refName: 'main', refHead: null, baseDigest: 'base' },
+        actions: [action],
+        selected: { action, cards },
+        current: { rollout: { allocation: 25, channel: 'stable' } },
+        netDiff: cards,
+        node: null,
+        nextBeforeSequence: null,
+      },
+    };
+    render(
+      <WorkspaceComposeReviewSurface
+        branchOptions={['main']}
+        candidate={candidate}
+        controller={
+          {
+            busyAction: null,
+            candidate,
+            error: null,
+            hasCollaborationConflict: false,
+            isBusy: false,
+            materialSources: [],
+            notice: null,
+          } as unknown as WorkspaceComposeReviewController
+        }
+        mode="compose"
+        onModeChange={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Allocation' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Allocation' }));
+    fireEvent.change(screen.getByLabelText('New value for Allocation'), {
+      target: { value: '30' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(publish).not.toHaveBeenCalled();
+    expect(screen.getByText('Ungrouped manual cards')).toBeInTheDocument();
+    expect(
+      screen.getByRole('checkbox', { name: 'Include Allocation in the next P' })
+    ).toBeChecked();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add manually' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Current structure' });
+    expect(within(dialog).getByText('allocation')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add inside rollout' }));
+    fireEvent.change(within(dialog).getByLabelText('New name'), {
+      target: { value: 'regions' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('What to add'), {
+      target: { value: 'field' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('New value'), {
+      target: { value: 'us' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Apply' }));
+    await waitFor(() => expect(within(dialog).getByText('regions')).toBeInTheDocument());
+    expect(publish).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getAllByRole('button', { name: 'Close' })[0]!);
+    await waitFor(() =>
+      expect(screen.getByRole('checkbox', { name: 'Include Regions in the next P' })).toBeChecked()
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
+    expect(sourceGenerationMocks.options?.workspaceAssistant?.allowProposal).toBe(false);
+    expect(
+      screen.getByText(
+        'Save every ungrouped manual card as a P before asking the assistant to add cards.'
+      )
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Node history' }));
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Include Regions in the next P' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save selected as P (1)' }));
+    await waitFor(() =>
+      expect(publish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operations: [{ set: { path: 'rollout/allocation', value: 30 } }],
+        })
+      )
+    );
+    expect(
+      screen.getByRole('checkbox', { name: 'Include Regions in the next P' })
+    ).not.toBeChecked();
+    expect(
+      screen.queryByRole('checkbox', { name: 'Include Allocation in the next P' })
+    ).not.toBeInTheDocument();
+  });
+
   it('enables Draft activity from the chat panel', () => {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     const controller = {

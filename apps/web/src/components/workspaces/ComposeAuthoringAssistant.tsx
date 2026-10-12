@@ -52,6 +52,8 @@ export function ComposeAuthoringAssistant({
   prefill,
   onPrefillApplied,
   sourcesControl,
+  allowProposal = true,
+  proposalBlockedHint,
 }: {
   projectId: string;
   conversationId?: string;
@@ -67,6 +69,8 @@ export function ComposeAuthoringAssistant({
   prefill?: string | null;
   onPrefillApplied?: () => void;
   sourcesControl?: ReactNode;
+  allowProposal?: boolean;
+  proposalBlockedHint?: string;
 }) {
   const [conversationId, setConversationId] = useState(initialConversationId);
   const [pendingCandidate, setPendingCandidate] = useState<string | null>(
@@ -134,9 +138,10 @@ export function ComposeAuthoringAssistant({
     model: model.selectedModel ?? undefined,
     workspaceAssistant: {
       ...context,
-      allowProposal: true,
+      allowProposal,
       posture,
       onCandidate: (transitionId, turnId) => {
+        if (!allowProposal) return;
         setPublicationError(null);
         setPendingCandidate(transitionId);
         void publishTransition(transitionId, turnId);
@@ -304,6 +309,9 @@ export function ComposeAuthoringAssistant({
             {publishing ? 'Publishing…' : 'Retry publication'}
           </button>
         </section>
+      ) : null}
+      {!allowProposal && proposalBlockedHint ? (
+        <output className={styles.authoringAssistantHint}>{proposalBlockedHint}</output>
       ) : null}
       {publicationError || localError || chat.error || chat.warning ? (
         <p

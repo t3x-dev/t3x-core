@@ -134,4 +134,27 @@ describe('ComposeAuthoringAssistant proposal mode', () => {
     renderAssistant('workspace-2');
     expect(screen.getByRole('combobox', { name: 'Proposal mode' })).toHaveValue('guided');
   });
+
+  it('blocks card generation and shows a hint while ungrouped manual cards remain', () => {
+    render(
+      <ComposeAuthoringAssistant
+        allowProposal={false}
+        projectId="project-1"
+        context={{ workspaceId: 'workspace-1', workspaceRevision: 1, sourceMaterialIds: [] }}
+        onCreateConversation={vi.fn(async () => 'conversation-1')}
+        onPublishCandidate={vi.fn()}
+        proposalBlockedHint="Save every ungrouped manual card as a P before asking the assistant to add cards."
+      />
+    );
+    expect(mocks.generation).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        workspaceAssistant: expect.objectContaining({ allowProposal: false }),
+      })
+    );
+    expect(
+      screen.getByText(
+        'Save every ungrouped manual card as a P before asking the assistant to add cards.'
+      )
+    ).toBeInTheDocument();
+  });
 });

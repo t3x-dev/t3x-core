@@ -167,4 +167,53 @@ describe('ComposeActivityTimeline', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Load older events' }));
     expect(activity.loadOlder).toHaveBeenCalledOnce();
   });
+  it('keeps ungrouped manual cards in Latest and saves the selected subset as one P', () => {
+    const onToggle = vi.fn();
+    const onSaveSelected = vi.fn();
+    render(
+      <ComposeActivityTimeline
+        activity={fixture()}
+        scope="latest"
+        renderCard={renderCard}
+        fallback={null}
+        updatedAt="2026-09-21"
+        staging={{
+          items: [
+            {
+              id: 'staged-1',
+              operation: { set: { path: 'rollout/allocation', value: 30 } },
+              card: { nodeId: 'staged-a', path: 'rollout/allocation', before: 25, after: 30 },
+              reason: 'set rollout/allocation',
+              selected: true,
+              createdAt: '2026-09-21T12:00:00Z',
+            },
+            {
+              id: 'staged-2',
+              operation: { set: { path: 'rollout/regions', value: 'us' } },
+              card: { nodeId: 'staged-b', path: 'rollout/regions', after: 'us' },
+              reason: 'set rollout/regions',
+              selected: false,
+              createdAt: '2026-09-21T12:01:00Z',
+            },
+          ],
+          onToggle,
+          onSaveSelected,
+        }}
+      />
+    );
+    expect(screen.getByText('Ungrouped manual cards')).toBeInTheDocument();
+    expect(screen.getAllByText('Latest')).toHaveLength(1);
+    expect(
+      screen.getByRole('checkbox', { name: 'Include Allocation in the next P' })
+    ).toBeChecked();
+    expect(
+      screen.getByRole('checkbox', { name: 'Include Regions in the next P' })
+    ).not.toBeChecked();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Include Regions in the next P' }));
+    expect(onToggle).toHaveBeenCalledWith('staged-2');
+    fireEvent.click(screen.getByRole('button', { name: 'Save selected as P (1)' }));
+    expect(onSaveSelected).toHaveBeenCalledOnce();
+    expect(screen.getByTestId('card-staged-a')).toBeInTheDocument();
+    expect(screen.getByTestId('card-staged-b')).toBeInTheDocument();
+  });
 });

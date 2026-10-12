@@ -25,49 +25,20 @@ export interface ComposeActivitySelection {
   meta: ComposeActivityMeta;
 }
 
-/** Presentation grouping, not a new persisted session or a rewrite of the action ledger. */
+/** One published action is one P. Ungrouped manual cards stay in the Latest tray. */
 export function groupComposeActivity(actions: readonly WorkspaceAuthoringAction[]) {
   const ordered = [...new Map(actions.map((a) => [a.actionId, a])).values()].sort(
     (a, b) => a.sequence - b.sequence
   );
-  const events: ComposeActivityEvent[] = [];
-  for (const action of ordered) {
-    const event = events.at(-1);
-    const previous = event?.actions.at(-1);
-    const gap = previous ? Date.parse(action.publishedAt) - Date.parse(previous.publishedAt) : 0;
-    const contiguous =
-      previous &&
-      action.sequence === previous.sequence + 1 &&
-      action.beforeRevision === previous.afterRevision;
-    const sameActor =
-      previous &&
-      action.actor.id === previous.actor.id &&
-      action.actor.kind === previous.actor.kind &&
-      action.actor.delegator?.id === previous.actor.delegator?.id &&
-      action.actor.delegator?.kind === previous.actor.delegator?.kind;
-    if (
-      event &&
-      contiguous &&
-      sameActor &&
-      previous?.channel === 'manual' &&
-      action.channel === 'manual' &&
-      Number.isFinite(gap) &&
-      gap >= 0 &&
-      gap < 30 * 60000
-    ) {
-      event.actions.push(action);
-      event.endedAt = action.publishedAt;
-    } else {
-      events.push({
-        id: action.actionId,
-        actions: [action],
-        startedAt: action.publishedAt,
-        endedAt: action.publishedAt,
-        idleBeforeMs: contiguous && Number.isFinite(gap) && gap >= 30 * 60000 ? gap : 0,
-      });
-    }
-  }
-  return events.reverse();
+  return ordered
+    .map((action) => ({
+      id: action.actionId,
+      actions: [action],
+      startedAt: action.publishedAt,
+      endedAt: action.publishedAt,
+      idleBeforeMs: 0,
+    }))
+    .reverse();
 }
 
 export function composeEventCards(

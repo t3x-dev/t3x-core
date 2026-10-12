@@ -49,6 +49,7 @@
     "@t3x-dev/core": "workspace:*",
     "@t3x-dev/storage": "workspace:*",
     "@t3x-dev/transition": "workspace:*",
+    "@t3x-dev/yops": "workspace:*",
     "@xyflow/react": "^12.10.0",
     "ai": "^7.0.93",
     "class-variance-authority": "^0.7.1",

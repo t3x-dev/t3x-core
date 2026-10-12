@@ -844,6 +844,37 @@
   place-items: center;
   color: var(--text-primary);
 }
+.cardEdit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.cardEdit input {
+  min-width: 0;
+  height: 28px;
+  flex: 1 1 160px;
+  border: 1px solid var(--stroke-default);
+  border-radius: 4px;
+  padding: 0 8px;
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.cardEdit button {
+  height: 28px;
+  border-radius: 4px;
+  padding: 0 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+.cardEdit button[type='submit'],
+.cardEdit button:first-of-type {
+  background: var(--text-primary);
+  color: var(--surface-card);
+}
 .actionTop > button:not(.actionHeading) svg {
   width: 14px;
   height: 14px;
@@ -1291,6 +1322,14 @@
   font-size: 10px;
   line-height: 16px;
   color: var(--status-error);
+}
+.authoringAssistantHint {
+  flex: none;
+  padding: 8px 20px;
+  background: var(--accent-pending-soft);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
 }
 .activityStatus {
   padding: 20px;

@@ -25,6 +25,11 @@ import {
   composeTextDiff,
   composeValueChangeLabels,
 } from '@/domain/composePresentation';
+import {
+  MANUAL_STAGING_EVENT_ID,
+  type ManualStagingControls,
+  stagedActivityOperation,
+} from '@/domain/workspaces/manualStaging';
 import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import type { WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 import styles from './ComposeActivityTimeline.module.css';
@@ -93,6 +98,7 @@ export function ComposeActivityTimeline({
   renderCard,
   fallback,
   updatedAt,
+  staging,
 }: {
   activity: ReturnType<typeof useComposeActivity>;
   filter?: ComposeChangeFilter;
@@ -100,6 +106,7 @@ export function ComposeActivityTimeline({
   renderCard: (operation: WorkspaceYOpsDraftOperation, meta: ComposeActivityMeta) => ReactNode;
   fallback: ReactNode;
   updatedAt: string;
+  staging?: ManualStagingControls;
 }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   if (!activity.enabled)
@@ -169,9 +176,97 @@ export function ComposeActivityTimeline({
       cards: composeEventCards(event, activity.cards).filter((card) => matchesFilter(card, filter)),
     }))
     .filter(({ cards }) => cards.length > 0);
+  const stagedItems = staging?.items ?? [];
+  const showStaging = stagedItems.length > 0;
+  const stagingEndedAt = stagedItems.at(-1)?.createdAt ?? updatedAt;
+  const selectedCount = stagedItems.filter((item) => item.selected).length;
+  const stagingKind = activityChangeKind(stagedItems.map((item) => item.card));
+  const StagingIcon = changeMarkers[stagingKind].Icon;
   return (
     <section className={styles.timeline} aria-label="Change activity timeline">
-      {!visibleEvents.length ? <p className={styles.message}>No matching changes.</p> : null}
+      {!visibleEvents.length && !showStaging ? (
+        <p className={styles.message}>No matching changes.</p>
+      ) : null}
+      {showStaging ? (
+        <>
+          <p className={styles.date} title={day(stagingEndedAt)}>
+            <span data-compact={dayLabel(stagingEndedAt).length > 9 || undefined}>
+              {dayLabel(stagingEndedAt)}
+            </span>
+          </p>
+          <section
+            className={styles.event}
+            data-latest="true"
+            aria-label="Event: Ungrouped manual cards"
+          >
+            <time className={styles.eventTime} dateTime={stagingEndedAt}>
+              {time(stagingEndedAt)}
+            </time>
+            <span
+              className={styles.icon}
+              data-kind={stagingKind}
+              data-latest="true"
+              role="img"
+              aria-label={changeMarkers[stagingKind].label}
+              title={changeMarkers[stagingKind].label}
+            >
+              <StagingIcon size={13} aria-hidden="true" />
+            </span>
+            <div className={styles.eventBody}>
+              <div className={styles.heading}>
+                <span className={styles.titleLine}>
+                  <strong title="Ungrouped manual cards">Ungrouped manual cards</strong>
+                  <span className={styles.latestBadge}>Latest</span>
+                </span>
+                <span className={styles.meta}>
+                  {stagedItems.length === 1
+                    ? '1 card · select which cards to save as one P'
+                    : `${stagedItems.length} cards · select which cards to save as one P`}
+                </span>
+              </div>
+              <div className={composeStyles.actionList}>
+                {stagedItems.map((item) => {
+                  const cardLabel =
+                    composeNodeTitle(item.card.after) ??
+                    composeNodeTitle(item.card.before) ??
+                    composePathLabel(item.card.path, item.card.nodeId);
+                  return (
+                    <div className={styles.stagingCard} key={item.id}>
+                      <input
+                        aria-label={`Include ${cardLabel} in the next P`}
+                        checked={item.selected}
+                        onChange={() => staging?.onToggle(item.id)}
+                        type="checkbox"
+                      />
+                      {renderCard(stagedActivityOperation(item), {
+                        eventId: MANUAL_STAGING_EVENT_ID,
+                        actor: 'You',
+                        channel: 'manual',
+                        timestamp: item.createdAt,
+                        comparison: 'event',
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className={styles.stagingActions}>
+                <button
+                  disabled={Boolean(staging?.pending) || selectedCount === 0}
+                  onClick={() => staging?.onSaveSelected()}
+                  type="button"
+                >
+                  {staging?.pending
+                    ? 'Saving…'
+                    : selectedCount
+                      ? `Save selected as P (${selectedCount})`
+                      : 'Save selected as P'}
+                </button>
+                {staging?.error ? <p role="alert">{staging.error}</p> : null}
+              </div>
+            </div>
+          </section>
+        </>
+      ) : null}
       {visibleEvents.map(({ event, cards: eventCards }, index) => {
         const latest = event.actions.at(-1)!;
         const open = expanded[event.id] ?? false;
@@ -185,9 +280,16 @@ export function ComposeActivityTimeline({
             : latest.reason || `${activityChannelLabel(latest.channel)} changes`;
         const actor =
           latest.actor.id === 'human:local-user' ? 'You' : composeActorLabel(latest.actor.id);
+        const isLatest = !showStaging && index === 0;
+        const previousDay =
+          index === 0
+            ? showStaging
+              ? day(stagingEndedAt)
+              : null
+            : day(visibleEvents[index - 1]!.event.endedAt);
         return (
           <Fragment key={event.id}>
-            {index === 0 || day(event.endedAt) !== day(visibleEvents[index - 1].event.endedAt) ? (
+            {previousDay === null || day(event.endedAt) !== previousDay ? (
               <p className={styles.date} title={day(event.endedAt)}>
                 <span data-compact={dayLabel(event.endedAt).length > 9 || undefined}>
                   {dayLabel(event.endedAt)}
@@ -196,7 +298,7 @@ export function ComposeActivityTimeline({
             ) : null}
             <section
               className={styles.event}
-              data-latest={index === 0}
+              data-latest={isLatest || undefined}
               aria-label={`Event: ${title}`}
             >
               <time className={styles.eventTime} dateTime={event.endedAt}>
@@ -208,7 +310,7 @@ export function ComposeActivityTimeline({
               <span
                 className={styles.icon}
                 data-kind={kind}
-                data-latest={index === 0}
+                data-latest={isLatest || undefined}
                 role="img"
                 aria-label={label}
                 title={label}
@@ -228,7 +330,7 @@ export function ComposeActivityTimeline({
                       <span className={styles.proposalId}>
                         P-{String(latest.sequence).padStart(2, '0')}
                       </span>
-                      {index === 0 ? <span className={styles.latestBadge}>Latest</span> : null}
+                      {isLatest ? <span className={styles.latestBadge}>Latest</span> : null}
                     </span>
                   </span>
                   <span className={styles.author} title={actor}>

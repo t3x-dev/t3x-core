@@ -449,6 +449,42 @@
 .preview {
   margin-left: 0;
 }
+.stagingCard {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+}
+.stagingCard > input {
+  margin-top: 16px;
+  accent-color: var(--accent-commit);
+}
+.stagingActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.stagingActions button {
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  border-radius: 8px;
+  background: var(--accent-commit);
+  padding: 0 12px;
+  color: var(--on-accent);
+  font-size: 12px;
+  font-weight: 650;
+}
+.stagingActions button:disabled {
+  opacity: 0.5;
+}
+.stagingActions p {
+  margin: 0;
+  color: var(--status-error);
+  font-size: 12px;
+}
 @media (max-width: 900px) {
   .timeline {
     --timeline-gutter: 42px;

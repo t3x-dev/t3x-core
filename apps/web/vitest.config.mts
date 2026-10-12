@@ -44,6 +44,7 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, './src'),
       '@t3x-dev/core': resolve(__dirname, '../../packages/core/src/index.ts'),
+      '@t3x-dev/yops': resolve(__dirname, '../../packages/yops/src/index.ts'),
     },
   },
 });

@@ -38,6 +38,7 @@ import {
   Settings,
   Share2,
   Sparkles,
+  Trash2,
   Type,
   UserRound,
   X,
@@ -60,6 +61,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { CurrentDraftStructureDialog } from '@/components/workspaces/CurrentDraftStructureDialog';
 import { OutputTargetsTab } from '@/components/workspaces/OutputTargetsTab';
 import { SourceArtifactRoleEditor } from '@/components/workspaces/SourceArtifactRoleEditor';
 import { SourceTransitionTab } from '@/components/workspaces/SourceTransitionTab';
@@ -102,6 +104,27 @@ import {
   authoringVisibleCards,
   buildAuthoringReviewProjection,
 } from '@/domain/workspaces/authoringReview';
+import {
+  type DraftYOp,
+  deleteDraftOp,
+  draftOpReason,
+  editDraftOp,
+  formatDraftValue,
+  nextAuthoringRequestId,
+  parseDraftValue,
+} from '@/domain/workspaces/draftStructure';
+import {
+  MANUAL_STAGING_EVENT_ID,
+  type ManualStagingControls,
+  previewStagedCurrent,
+  remainingStagedItems,
+  type StagedManualCard,
+  selectedStagedItems,
+  stageDraftOps,
+  stagedActivityOperation,
+  stagedManualReason,
+  UNGROUPED_MANUAL_HINT,
+} from '@/domain/workspaces/manualStaging';
 import {
   DEFAULT_WORKSPACE_SCHEMA_CHOICE_ID,
   listWorkspaceSchemaChoices,
@@ -540,12 +563,91 @@ function ComposeSurface({
   );
   const [changeScope, setChangeScope] = useState<'latest' | 'all'>('latest');
   const [activitySelection, setActivitySelection] = useState<ComposeActivitySelection | null>(null);
+  const [structureOpen, setStructureOpen] = useState(false);
+  const [structurePending, setStructurePending] = useState(false);
+  const [structureError, setStructureError] = useState<string | null>(null);
+  const [staged, setStaged] = useState<StagedManualCard[]>([]);
+  const publishedCurrent = activity.view?.current;
+  const workingCurrent = useMemo(() => {
+    if (publishedCurrent === undefined) return undefined;
+    try {
+      return previewStagedCurrent(publishedCurrent, staged);
+    } catch {
+      return publishedCurrent;
+    }
+  }, [publishedCurrent, staged]);
+  const stageManualOps = useCallback(
+    async (operations: DraftYOp[], reason: string) => {
+      if (workingCurrent === undefined) {
+        setStructureError('Draft activity is not ready');
+        return false;
+      }
+      setStructureError(null);
+      try {
+        const next = stageDraftOps(workingCurrent, operations, reason);
+        setStaged((current) => [...current, ...next.items]);
+        return true;
+      } catch (cause) {
+        setStructureError(cause instanceof Error ? cause.message : 'Could not apply this change.');
+        return false;
+      }
+    },
+    [workingCurrent]
+  );
+  const toggleStaged = useCallback((id: string) => {
+    setStaged((current) =>
+      current.map((item) => (item.id === id ? { ...item, selected: !item.selected } : item))
+    );
+  }, []);
+  const saveSelectedAsP = useCallback(async () => {
+    const selected = selectedStagedItems(staged);
+    if (!selected.length) {
+      setStructureError('Select at least one ungrouped card to save as a P.');
+      return;
+    }
+    setStructurePending(true);
+    setStructureError(null);
+    try {
+      await activity.publish({
+        request_id: nextAuthoringRequestId(),
+        operations: selected.map((item) => item.operation),
+        reason: stagedManualReason(selected),
+      });
+      setStaged(remainingStagedItems(staged));
+    } catch (cause) {
+      setStructureError(
+        cause instanceof Error ? cause.message : 'Could not save the selected cards as a P.'
+      );
+    } finally {
+      setStructurePending(false);
+    }
+  }, [activity, staged]);
+  const stagingControls = useMemo(
+    () => ({
+      items: staged,
+      pending: structurePending,
+      error: structureError,
+      onToggle: toggleStaged,
+      onSaveSelected: () => void saveSelectedAsP(),
+    }),
+    [staged, structurePending, structureError, toggleStaged, saveSelectedAsP]
+  );
+  const openStructure = async () => {
+    if (!activity.enabled) {
+      const started = await authoringBootstrap.start();
+      if (!started) return;
+    }
+    setStructureError(null);
+    setStructureOpen(true);
+  };
   useEffect(() => {
     if (activity.enabled) setSidePanel('history');
   }, [activity.enabled, candidate.id]);
   useEffect(() => {
     setActivitySelection(null);
     setCurrentStep(0);
+    setStaged([]);
+    setStructureError(null);
   }, [candidate.id]);
   const selectStep = (step: number) => {
     setActivitySelection(null);
@@ -597,21 +699,19 @@ function ComposeSurface({
       <SourceToolbar
         proposedChangeCount={
           activity.view
-            ? changeScope === 'all'
-              ? activity.view.netDiff.length
-              : groupComposeActivity(activity.actions).reduce(
-                  (count, event) => count + composeEventCards(event, activity.cards).length,
-                  0
-                )
+            ? (changeScope === 'all'
+                ? activity.view.netDiff.length
+                : groupComposeActivity(activity.actions).reduce(
+                    (count, event) => count + composeEventCards(event, activity.cards).length,
+                    0
+                  )) + staged.length
             : candidate.yopsDraft.operations.length
         }
         changeScope={changeScope}
         controller={controller}
         onChangeScope={setChangeScope}
-        onDiscuss={() => {
-          setSidePanel('chat');
-          setDiscussionOpen(true);
-        }}
+        onAddManually={() => void openStructure()}
+        publishError={structureError}
       />
 
       {discussionOpen && (
@@ -696,9 +796,21 @@ function ComposeSurface({
           changeScope={changeScope}
           controller={controller}
           currentStep={currentStep}
+          onPublish={stageManualOps}
           onStepChange={selectStep}
+          pending={structurePending}
+          staging={stagingControls}
+          workingCurrent={workingCurrent}
         />
       </main>
+      <CurrentDraftStructureDialog
+        current={workingCurrent ?? activity.view?.current}
+        error={structureError}
+        onClose={() => setStructureOpen(false)}
+        onPublish={stageManualOps}
+        open={structureOpen}
+        pending={structurePending || !activity.view}
+      />
 
       {discussionOpen ? (
         <aside aria-label="Discuss change" className={composeStyles.discussionSidebar}>
@@ -752,6 +864,7 @@ function ComposeSurface({
             />
           ) : activity.view ? (
             <ComposeAuthoringAssistant
+              allowProposal={staged.length === 0}
               context={{
                 workspaceId: candidate.id,
                 workspaceRevision: activity.view.workspaceRevision,
@@ -771,6 +884,7 @@ function ComposeSurface({
               projectId={candidate.projectId}
               prefill={controller.assistantPrefill}
               onPrefillApplied={controller.clearAssistantPrefill}
+              proposalBlockedHint={staged.length ? UNGROUPED_MANUAL_HINT : undefined}
               sourcesControl={
                 <WorkspaceSourcesMenu candidate={candidate} controller={controller} />
               }
@@ -906,22 +1020,17 @@ function SourceToolbar({
   proposedChangeCount,
   changeScope,
   controller,
+  onAddManually,
   onChangeScope,
-  onDiscuss,
+  publishError,
 }: {
   proposedChangeCount: number;
   changeScope: 'latest' | 'all';
   controller: WorkspaceComposeReviewController;
+  onAddManually: () => void;
   onChangeScope: (scope: 'latest' | 'all') => void;
-  onDiscuss: () => void;
+  publishError?: string | null;
 }) {
-  const addManually = () => {
-    onDiscuss();
-    requestAnimationFrame(() =>
-      document.querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')?.focus()
-    );
-  };
-
   return (
     <section className={composeStyles.sourcesSection}>
       <div className={composeStyles.sourcesHeading}>
@@ -929,7 +1038,7 @@ function SourceToolbar({
         <span className="sr-only">{proposedChangeCount} changes</span>
         <h3 className="sr-only">Sources</h3>
         <div className={composeStyles.composeToolbarActions}>
-          <button className={composeStyles.addManually} onClick={addManually} type="button">
+          <button className={composeStyles.addManually} onClick={onAddManually} type="button">
             <Plus aria-hidden="true" /> Add manually
           </button>
           <div className={composeStyles.changeScope} role="tablist" aria-label="Change scope">
@@ -952,15 +1061,17 @@ function SourceToolbar({
           </div>
         </div>
       </div>
-      {controller.error || controller.notice ? (
+      {controller.error || controller.notice || publishError ? (
         <div
           className={cn(
             'flex items-center gap-2 text-xs',
-            controller.error ? 'text-[var(--status-error)]' : 'text-[var(--text-secondary)]'
+            controller.error || publishError
+              ? 'text-[var(--status-error)]'
+              : 'text-[var(--text-secondary)]'
           )}
-          role={controller.error ? 'alert' : 'status'}
+          role={controller.error || publishError ? 'alert' : 'status'}
         >
-          {controller.error ?? controller.notice}
+          {publishError ?? controller.error ?? controller.notice}
           {controller.hasCollaborationConflict ? (
             <button
               className={composeStyles.addManually}
@@ -986,7 +1097,11 @@ function ProposedDraftPanel({
   changeScope,
   controller,
   currentStep,
+  onPublish,
   onStepChange,
+  pending = false,
+  staging,
+  workingCurrent,
 }: {
   activity: ReturnType<typeof useComposeActivity>;
   activitySelection: ComposeActivitySelection | null;
@@ -996,7 +1111,11 @@ function ProposedDraftPanel({
   changeScope: 'latest' | 'all';
   controller: WorkspaceComposeReviewController;
   currentStep: number;
+  onPublish: (operations: DraftYOp[], reason: string) => Promise<boolean>;
   onStepChange: (step: number) => void;
+  pending?: boolean;
+  staging?: ManualStagingControls;
+  workingCurrent?: unknown;
 }) {
   const operations = candidate.yopsDraft.operations;
   useEffect(() => {
@@ -1016,7 +1135,40 @@ function ProposedDraftPanel({
         });
       return;
     }
-    if (activitySelection?.meta.comparison === 'event') return;
+    const stagingSelected =
+      activitySelection?.meta.eventId === MANUAL_STAGING_EVENT_ID &&
+      Boolean(
+        staging?.items.some(
+          (item) =>
+            item.card.nodeId === activitySelection.operation.id &&
+            item.card.path === activitySelection.operation.path
+        )
+      );
+    if (staging?.items.length) {
+      if (stagingSelected) return;
+      if (
+        activitySelection?.meta.comparison === 'event' &&
+        activitySelection.meta.eventId !== MANUAL_STAGING_EVENT_ID
+      )
+        return;
+      const item = staging.items[0]!;
+      onActivitySelect({
+        operation: stagedActivityOperation(item),
+        meta: {
+          eventId: MANUAL_STAGING_EVENT_ID,
+          actor: 'You',
+          channel: 'manual',
+          timestamp: item.createdAt,
+          comparison: 'event',
+        },
+      });
+      return;
+    }
+    if (
+      activitySelection?.meta.comparison === 'event' &&
+      activitySelection.meta.eventId !== MANUAL_STAGING_EVENT_ID
+    )
+      return;
     const event = groupComposeActivity(activity.actions)[0];
     if (!event) return;
     const card = composeEventCards(event, activity.cards)[0];
@@ -1042,7 +1194,23 @@ function ProposedDraftPanel({
     activitySelection,
     onActivitySelect,
     changeScope,
+    staging?.items,
   ]);
+  const [editingPath, setEditingPath] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState('');
+  const [confirmDeletePath, setConfirmDeletePath] = useState<string | null>(null);
+  const applyCardEdit = async (path: string) => {
+    const op = editDraftOp(
+      path,
+      parseDraftValue(editingValue),
+      workingCurrent ?? activity.view?.current
+    );
+    if (await onPublish([op], draftOpReason(op))) setEditingPath(null);
+  };
+  const applyCardDelete = async (path: string) => {
+    const op = deleteDraftOp(path);
+    if (await onPublish([op], draftOpReason(op))) setConfirmDeletePath(null);
+  };
   const renderChangeCard = (
     operation: WorkspaceYOpsDraftOperation,
     index: number,
@@ -1135,22 +1303,68 @@ function ProposedDraftPanel({
             <MessageSquare aria-hidden="true" />
           </button>
           <button
-            aria-label={`Revise ${cardTitle}`}
+            aria-label={`Edit ${cardTitle}`}
+            disabled={pending || !operation.path}
             onClick={(event) => {
               event.stopPropagation();
-              selectChange('chat');
-              controller.prefillAssistant(
-                `Revise “${cardTitle}” while preserving its source evidence.`
-              );
-              document
-                .querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')
-                ?.focus();
+              setConfirmDeletePath(null);
+              setEditingPath(operation.path);
+              setEditingValue(formatDraftValue(afterValue ?? beforeValue));
             }}
             type="button"
           >
             <Pencil aria-hidden="true" />
           </button>
+          <button
+            aria-label={`Delete ${cardTitle}`}
+            disabled={pending || !operation.path}
+            onClick={(event) => {
+              event.stopPropagation();
+              setEditingPath(null);
+              setConfirmDeletePath(operation.path);
+            }}
+            type="button"
+          >
+            <Trash2 aria-hidden="true" />
+          </button>
         </div>
+        {editingPath === operation.path ? (
+          <form
+            className={composeStyles.cardEdit}
+            onClick={(event) => event.stopPropagation()}
+            onSubmit={(event) => {
+              event.preventDefault();
+              void applyCardEdit(operation.path);
+            }}
+          >
+            <input
+              aria-label={`New value for ${cardTitle}`}
+              onChange={(event) => setEditingValue(event.target.value)}
+              value={editingValue}
+            />
+            <button disabled={pending} type="submit">
+              Save
+            </button>
+            <button onClick={() => setEditingPath(null)} type="button">
+              Cancel
+            </button>
+          </form>
+        ) : null}
+        {confirmDeletePath === operation.path ? (
+          <div className={composeStyles.cardEdit} onClick={(event) => event.stopPropagation()}>
+            <span>Delete this field from the current draft?</span>
+            <button
+              disabled={pending}
+              onClick={() => void applyCardDelete(operation.path)}
+              type="button"
+            >
+              Delete
+            </button>
+            <button onClick={() => setConfirmDeletePath(null)} type="button">
+              Cancel
+            </button>
+          </div>
+        ) : null}
         <div className={composeStyles.collapsedDetail}>
           {beforeValue === undefined && afterValue !== undefined ? (
             <div className={composeStyles.addedValue}>
@@ -1250,6 +1464,7 @@ function ProposedDraftPanel({
         activity={activity}
         filter={changeFilter}
         scope={changeScope}
+        staging={staging}
         updatedAt={candidate.updatedAt}
         renderCard={(operation, meta) => renderChangeCard(operation, -1, meta)}
         fallback={

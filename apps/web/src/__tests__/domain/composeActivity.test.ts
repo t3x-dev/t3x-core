@@ -41,19 +41,19 @@ describe('Compose event grouping', () => {
     expect(activityChangeKind([])).toBe('recorded');
     expect(activityChangeKind([base])).toBe('recorded');
   });
-  it('keeps two hours of continuous edits in one event without a total-duration cutoff', () => {
+  it('keeps each published action as its own P', () => {
     const actions = Array.from({ length: 7 }, (_, i) => action(i + 1, i * 20));
     const events = groupComposeActivity(actions.toReversed());
-    expect(events).toHaveLength(1);
-    expect(events[0].actions).toHaveLength(7);
-    expect(events[0].startedAt).toBe(actions[0].publishedAt);
-    expect(events[0].endedAt).toBe(actions[6].publishedAt);
+    expect(events).toHaveLength(7);
+    expect(events.every((event) => event.actions.length === 1)).toBe(true);
+    expect(events[0].id).toBe('action-7');
+    expect(events[6].id).toBe('action-1');
   });
 
-  it('starts a new event at exactly 30 minutes of inactivity', () => {
+  it('does not fold later manuals into the previous P', () => {
     const events = groupComposeActivity([action(1, 0), action(2, 29), action(3, 59)]);
-    expect(events.map((event) => event.actions.length)).toEqual([1, 2]);
-    expect(events[0].idleBeforeMs).toBe(30 * 60000);
+    expect(events.map((event) => event.actions.length)).toEqual([1, 1, 1]);
+    expect(events.every((event) => event.idleBeforeMs === 0)).toBe(true);
   });
 
   it('splits manual edits around MCP and AI, even for the same actor', () => {
@@ -86,7 +86,15 @@ describe('Compose event grouping', () => {
   });
 
   it('merges later node edits into expanded bootstrap cards without losing siblings', () => {
-    const events = groupComposeActivity([action(1, 0), action(2, 17)]);
+    const events = [
+      {
+        id: 'action-1',
+        actions: [action(1, 0), action(2, 17)],
+        startedAt: action(1, 0).publishedAt,
+        endedAt: action(2, 17).publishedAt,
+        idleBeforeMs: 0,
+      },
+    ];
     const temperature = {
       key: 'temperature',
       slots: { title: 'Temperature', acceptance: ['Below 20'] },
@@ -137,7 +145,13 @@ describe('Compose event grouping', () => {
   });
 
   it('compares the first before to the final after by stable node identity, retaining net-zero history', () => {
-    const event = groupComposeActivity([action(1, 0), action(2, 1)])[0];
+    const event = {
+      id: 'action-1',
+      actions: [action(1, 0), action(2, 1)],
+      startedAt: action(1, 0).publishedAt,
+      endedAt: action(2, 1).publishedAt,
+      idleBeforeMs: 0,
+    };
     const cards: Record<string, WorkspaceAuthoringCard[]> = {
       'action-1': [{ nodeId: 'allocation', path: 'rollout/allocation', before: 10, after: 20 }],
       'action-2': [{ nodeId: 'allocation', path: 'rollout/renamed', before: 20, after: 10 }],
