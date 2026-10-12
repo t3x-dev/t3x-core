@@ -502,7 +502,8 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('shows preparation in Chat without an activation or generation button', () => {
+  it('waits in Chat until the user enables Draft activity', () => {
+    bootstrapMocks.value.start.mockClear();
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     const controller = {
       busyAction: null,
@@ -526,9 +527,10 @@ describe('WorkspaceComposeReviewSurface composer', () => {
 
     expect(screen.queryByRole('button', { name: 'Send message' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Generate changes/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Enable Draft activity/ })).not.toBeInTheDocument();
-    expect(screen.getByText('Preparing your draft…')).toBeInTheDocument();
     expect(screen.queryByLabelText('Upload source material')).not.toBeInTheDocument();
+    expect(bootstrapMocks.value.start).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /Enable Draft activity/ }));
+    expect(bootstrapMocks.value.start).toHaveBeenCalledOnce();
   });
 
   it('wires artifact, changed-node, and evidence controls to real review interactions', async () => {

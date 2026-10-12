@@ -40,7 +40,7 @@ vi.mock('@/hooks/workspaces/useWorkspaceYOps', () => ({
 vi.mock('@/hooks/workspaces/useWorkspaceAuthoringBootstrap', () => ({
   useWorkspaceAuthoringBootstrap: () => ({
     active: false,
-    busy: true,
+    busy: false,
     error: null,
     importSnapshot: undefined,
     start: vi.fn(),
@@ -246,7 +246,7 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     expect(screen.getByTitle(release.title)).toBeVisible();
   });
 
-  it('prepares Chat without a separate activation or generation button', () => {
+  it('waits for the user to enable Draft activity before preparing Chat', () => {
     render(
       <WorkspaceWorkbench
         candidates={[workspace('workspace_main', 'Main workspace')]}
@@ -255,8 +255,8 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     );
 
     expect(mocks.sourceThreadGenerationOptions).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: /Enable Draft activity/ })).not.toBeInTheDocument();
-    expect(screen.getByText('Preparing your draft…')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Enable Draft activity/ })).toBeEnabled();
+    expect(screen.queryByText('Preparing your draft…')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Generate changes/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Switch to discuss/ })).not.toBeInTheDocument();
   });

@@ -31,6 +31,7 @@ import {
   PanelRight,
   Pencil,
   Percent,
+  Play,
   Plus,
   RefreshCw,
   Settings,
@@ -216,8 +217,7 @@ export function WorkspaceComposeReviewSurface({
   );
   const authoringBootstrap = useWorkspaceAuthoringBootstrap(
     controller.candidate,
-    controller.ensureSaved,
-    mode === 'compose'
+    controller.ensureSaved
   );
   // Compose publication and Review must observe the same current Draft projection.
   const activity = useComposeActivity(controller.candidate, authoringBootstrap.active);
@@ -959,43 +959,24 @@ function ComposeDraftPreparation({
   onPrepare: () => Promise<void>;
 }) {
   const importing = bootstrap.importSnapshot !== undefined;
-  const [paused, setPaused] = useState(false);
-  const prepare = () => {
-    setPaused(false);
-    void onPrepare();
-  };
   return (
     <div className={composeStyles.activityBootstrap}>
       <p>
         {importing
           ? 'Import the existing draft to continue in Chat. Your current changes will be preserved.'
-          : bootstrap.error
-            ? 'The draft could not be prepared.'
-            : paused
-              ? 'Draft import paused. Continue when you are ready.'
-              : 'Preparing your draft…'}
+          : 'Enable Draft activity to chat with the Workspace assistant. It reads the Draft, schema and sources, and can propose changes.'}
       </p>
       <div>
-        {importing || bootstrap.error || paused ? (
-          <button disabled={bootstrap.busy} onClick={prepare} type="button">
-            {bootstrap.busy
-              ? 'Preparing…'
-              : importing
-                ? 'Import draft and continue'
-                : paused
-                  ? 'Continue'
-                  : 'Retry'}
-          </button>
-        ) : null}
+        <button disabled={bootstrap.busy} onClick={() => void onPrepare()} type="button">
+          <Play aria-hidden="true" />
+          {bootstrap.busy
+            ? 'Enabling Draft activity…'
+            : importing
+              ? 'Import draft and continue'
+              : 'Enable Draft activity'}
+        </button>
         {importing ? (
-          <button
-            disabled={bootstrap.busy}
-            onClick={() => {
-              bootstrap.cancel();
-              setPaused(true);
-            }}
-            type="button"
-          >
+          <button disabled={bootstrap.busy} onClick={bootstrap.cancel} type="button">
             Cancel import
           </button>
         ) : null}
