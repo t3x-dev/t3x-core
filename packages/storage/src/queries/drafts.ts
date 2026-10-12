@@ -740,3 +740,54 @@ export async function sealWorkspaceAuthoring(
   if (!saved) throw new ConflictError(input.draft.id, input.draft.revision);
   return rowToDraft(saved);
 }
+
+/** Used only inside the authorized canonical Commit transaction, after graph persistence.
+ * The retired ledger stays frozen in the Commit preparation; the Workspace keeps a reference to it
+ * and continues on a fresh ledger pinned at the new head.
+ */
+export async function renewWorkspaceAuthoring(
+  db: AnyDB,
+  input: { draft: Draft; commitDigest: string; workspace: Record<string, unknown> }
+): Promise<Draft> {
+  const previous = input.draft.workspace_state ?? {};
+  const before = Array.isArray(previous.authoringHistory) ? previous.authoringHistory : [];
+  const after = Array.isArray(input.workspace.authoringHistory)
+    ? input.workspace.authoringHistory
+    : [];
+  const ledger = input.workspace.authoringLedger as AuthoringLedgerStorage | undefined;
+  const basis = input.workspace.authoringBasis as { refHead?: unknown } | undefined;
+  const retired = after.at(-1) as { commitDigest?: unknown; basis?: unknown } | undefined;
+  if (
+    !previous.authoringLedger ||
+    after.length !== before.length + 1 ||
+    !isDeepStrictEqual(before, after.slice(0, before.length)) ||
+    retired?.commitDigest !== input.commitDigest ||
+    !isDeepStrictEqual(retired.basis, previous.authoringBasis) ||
+    !ledger ||
+    !Array.isArray(ledger.actions) ||
+    ledger.actions.length !== 0 ||
+    ledger.compositionRevision !== 0 ||
+    basis?.refHead !== input.commitDigest
+  )
+    throw new DraftAuthoringConflictError('Commit must retire the frozen authoring manifest');
+  const [saved] = await db
+    .update(drafts)
+    .set({
+      workspaceStateJson: input.workspace,
+      parentCommitHash: input.commitDigest,
+      committedAs: input.commitDigest,
+      revision: input.draft.revision + 1,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(drafts.id, input.draft.id),
+        eq(drafts.projectId, input.draft.project_id),
+        eq(drafts.revision, input.draft.revision),
+        eq(drafts.status, 'editing')
+      )
+    )
+    .returning();
+  if (!saved) throw new ConflictError(input.draft.id, input.draft.revision);
+  return rowToDraft(saved);
+}

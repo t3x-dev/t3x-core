@@ -339,9 +339,40 @@ describe('durable Draft authoring commands', () => {
     });
     const graph = await resolveTransitionProposalGraph(setup.db, projectId, id);
     expect(JSON.parse(graph.preparation!.canonicalJson)).toEqual(frozen);
-    const retained = await findWorkspaceDraft(setup.db, projectId, 'review');
-    expect(retained?.status).toBe('committed');
-    expect(retained?.workspace_state?.authoringLedger).toEqual(frozen.ledger);
+    const renewed = await findWorkspaceDraft(setup.db, projectId, 'review');
+    expect(renewed?.status).toBe('editing');
+    expect(renewed?.workspace_state?.authoringHistory).toEqual([
+      expect.objectContaining({
+        commitDigest: committed.commitDigest,
+        preparationDigest: graph.preparation!.digest,
+        compositionRevision: frozen.ledger.compositionRevision,
+        basis: frozen.basis,
+      }),
+    ]);
+    expect(renewed?.workspace_state?.authoringLedger).toMatchObject({
+      base: { x: 1, y: 2 },
+      compositionRevision: 0,
+      actions: [],
+    });
+    expect(renewed?.workspace_state?.authoringBasis).toMatchObject({
+      refName: 'review',
+      refHead: committed.commitDigest,
+    });
+    const next = await publishWorkspaceAuthoringAction(setup.db, {
+      projectId,
+      workspaceId: 'review',
+      actionId: 'after-commit',
+      actor,
+      channel: 'manual',
+      expectedRevision: 0,
+      expectedWorkspaceRevision: renewed!.revision,
+      expectedRefHead: committed.commitDigest,
+      operations: [{ set: { path: 'z', value: 3 } }],
+    });
+    expect(next.value.kind).toBe('published');
+    expect(
+      buildAuthoringPreparation(next.draft.workspace_state!).ledger.actions.map((a) => a.actionId)
+    ).toEqual(['after-commit']);
     expect(
       (
         await commitTransition({
@@ -416,7 +447,11 @@ describe('durable Draft authoring commands', () => {
     });
     const decided = await decide('overridden', 'Ship the partial PRD');
     expect(decided.commit).toBeDefined();
-    const retained = await findWorkspaceDraft(setup.db, projectId, 'unprotected');
-    expect(retained?.status).toBe('committed');
+    const renewed = await findWorkspaceDraft(setup.db, projectId, 'unprotected');
+    expect(renewed?.status).toBe('editing');
+    expect(renewed?.parent_commit_hash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(renewed?.workspace_state?.authoringBasis).toMatchObject({
+      refHead: renewed?.parent_commit_hash,
+    });
   });
 });

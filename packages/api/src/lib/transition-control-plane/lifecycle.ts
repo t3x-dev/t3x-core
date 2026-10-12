@@ -46,8 +46,8 @@ import {
   recordRepositoryDecision,
   recordRepositoryDecisionAuthorization,
   recordTransitionCommandReceipt,
+  renewWorkspaceAuthoring,
   resolveTransitionProposalGraph,
-  sealWorkspaceAuthoring,
   TransitionCommandConflictError,
   TransitionHeadConflictError,
   type TransitionPolicyBinding,
@@ -60,7 +60,10 @@ import {
   type ProtocolValue,
   type StringClaim,
 } from '@t3x-dev/transition';
-import { assertWorkspaceAuthoringReview } from '../workspace-authoring';
+import {
+  assertWorkspaceAuthoringReview,
+  renewWorkspaceAuthoringState,
+} from '../workspace-authoring';
 import {
   assertGenerationDecisionActor,
   refPolicyForActor,
@@ -755,10 +758,19 @@ export async function commitTransition(input: {
               committedAt,
             });
       const draft = currentWorkspace.workspace_state?.authoringLedger
-        ? await sealWorkspaceAuthoring(tx, {
+        ? await renewWorkspaceAuthoring(tx, {
             draft: currentWorkspace,
             commitDigest,
-            workspace: nextWorkspace,
+            workspace: renewWorkspaceAuthoringState(
+              { ...nextWorkspace, status: 'draft' },
+              {
+                commitDigest,
+                committedAt,
+                transitionId: input.transitionId,
+                preparationDigest: graph.preparation?.digest ?? null,
+                result: graph.result,
+              }
+            ),
           })
         : await upsertWorkspaceDraft(
             tx,

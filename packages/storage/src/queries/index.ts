@@ -154,6 +154,7 @@ export {
   listWorkspaceDrafts,
   NotFoundError,
   promoteDraft,
+  renewWorkspaceAuthoring,
   sealWorkspaceAuthoring,
   transactWorkspaceAuthoring,
   type UpdateDraftInput,

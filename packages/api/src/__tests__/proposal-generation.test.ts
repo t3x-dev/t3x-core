@@ -747,6 +747,16 @@ it('generates incrementally over saved manual edits, then publishes one verified
   });
   expect(committed.commitDigest).toMatch(/^sha256:/);
   expect((await publishWorkspaceGeneration(input)).value.kind).toBe('reused');
+  await expect(
+    publishWorkspaceGeneration({ ...input, requestId: 'publish-again' })
+  ).rejects.toThrow('committed Draft round');
+  const renewed = await readWorkspaceAuthoring(db, {
+    projectId: data.projectId,
+    workspaceId: data.workspaceId,
+  });
+  expect(renewed.basis.refHead).toBe(committed.commitDigest);
+  expect(renewed.base).toEqual({ manual: 'keep', prd: { audience: 'enterprise operators' } });
+  expect(renewed.actions).toEqual([]);
 });
 
 it('allows structurally valid Draft edits despite semantic findings and retains them for Review', async () => {
