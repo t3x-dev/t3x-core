@@ -85,10 +85,6 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
     [router, searchParams]
   );
 
-  const refreshWorkspacesAndBranches = useCallback(async () => {
-    await Promise.all([projectWorkspaces.refresh(), refreshBranches()]);
-  }, [projectWorkspaces.refresh, refreshBranches]);
-
   const handleWorkspaceBranchChange = useCallback(
     async (nextBranch: string) => {
       await Promise.all([projectWorkspaces.refresh(), refreshBranches()]);
@@ -133,7 +129,7 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
       onSelectedWorkspaceChange={branch ? undefined : handleWorkspaceSelect}
       onSourceMaterialUploaded={projectMaterials.refresh}
       onViewCommitInState={handleViewCommitInState}
-      onWorkspacesRefresh={refreshWorkspacesAndBranches}
+      onWorkspacesRefresh={projectWorkspaces.refresh}
       onWorkspaceBranchChange={handleWorkspaceBranchChange}
     />
   );
@@ -155,39 +151,39 @@ function mergePersistedWorkspaceCandidates(
   const openWorkspace = branchCandidates.find((candidate) => candidate.status !== 'committed');
   if (openWorkspace) return mergedCandidates;
 
-  const latestCommittedWorkspace = branchCandidates
-    .filter((candidate) => candidate.status === 'committed')
-    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0];
-  if (latestCommittedWorkspace && starterCandidate.baseCommitHash) {
-    return [
-      ...mergedCandidates,
-      buildNextWorkspaceAtBranchHead(
-        starterCandidate,
-        latestCommittedWorkspace,
-        starterCandidate.baseCommitHash
-      ),
-    ];
+  const currentCommittedWorkspace = branchCandidates.find(
+    (candidate) =>
+      candidate.status === 'committed' &&
+      candidate.lastCommitHash === starterCandidate.baseCommitHash
+  );
+  if (currentCommittedWorkspace) return mergedCandidates;
+
+  const previousCommittedWorkspace = branchCandidates.find(
+    (candidate) => candidate.status === 'committed'
+  );
+  if (previousCommittedWorkspace && starterCandidate.baseCommitHash) {
+    const nextWorkspace = buildNextWorkspaceAtBranchHead(
+      starterCandidate,
+      previousCommittedWorkspace
+    );
+    return mergedCandidates.map((candidate) =>
+      candidate.id === previousCommittedWorkspace.id ? nextWorkspace : candidate
+    );
   }
 
   return [...mergedCandidates, starterCandidate];
 }
 
-/** A committed Workspace keeps its sealed authoring history, so the next round needs its own ID. */
-function nextIterationWorkspaceId(branch: string, headCommitHash: string) {
-  return `workspace_branch:${encodeURIComponent(branch)}@${headCommitHash
-    .replace(/^sha256:/, '')
-    .slice(0, 16)}`;
-}
-
 function buildNextWorkspaceAtBranchHead(
   starterCandidate: WorkspaceCandidate,
-  previousCommittedWorkspace: WorkspaceCandidate,
-  headCommitHash: string
+  previousCommittedWorkspace: WorkspaceCandidate
 ): WorkspaceCandidate {
-  const id = nextIterationWorkspaceId(starterCandidate.targetBranch, headCommitHash);
   return {
     ...starterCandidate,
-    id,
+    id: previousCommittedWorkspace.id,
+    ...(previousCommittedWorkspace.revision === undefined
+      ? {}
+      : { revision: previousCommittedWorkspace.revision }),
     outputTargets:
       previousCommittedWorkspace.outputTargets.length > 0
         ? previousCommittedWorkspace.outputTargets
@@ -200,7 +196,7 @@ function buildNextWorkspaceAtBranchHead(
       previousCommittedWorkspace.sourceBundle.filter((source) => source.type !== 'chat')
     ),
     yopsDraft: {
-      id: `draft:${id}`,
+      id: previousCommittedWorkspace.yopsDraft.id,
       operations: [],
     },
   };
