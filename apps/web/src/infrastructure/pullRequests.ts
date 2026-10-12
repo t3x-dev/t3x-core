@@ -99,6 +99,7 @@ export interface ApiProjectPullRequestCompareCandidate {
   description: string;
   head_commit_id: string;
   base_commit_id: string | null;
+  merge_base_commit_id?: string | null;
   updated_at: string;
   ahead_by: number;
   behind_by: number;

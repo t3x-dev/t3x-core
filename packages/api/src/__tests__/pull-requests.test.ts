@@ -321,6 +321,37 @@ describe('Pull request routes', () => {
     ]);
   });
 
+  it('measures a diverged branch from the merge base so target-only work is not removed', async () => {
+    const fixture = await createBranchFixture();
+    const movedTarget = await createRepositoryCommit({
+      projectId: fixture.projectId,
+      branch: 'main',
+      content: {
+        trees: [
+          { key: 'product', slots: { version: 1 }, children: [] },
+          { key: 'pricing', slots: { tier: 'pro' }, children: [] },
+        ],
+        relations: [],
+      },
+      message: 'main-only update',
+    });
+    const response = await app.request(
+      `/v1/projects/${fixture.projectId}/pull-requests/compare?base=main`
+    );
+    const data = (await response.json()) as ApiResponse;
+    expect(data.data.compare_branches).toEqual([
+      expect.objectContaining({
+        head_commit_id: fixture.source.hash,
+        base_commit_id: movedTarget.hash,
+        merge_base_commit_id: fixture.target.hash,
+        ahead_by: 1,
+        behind_by: 1,
+        changed_nodes: 1,
+        status: 'ready',
+      }),
+    ]);
+  });
+
   it('keeps the main branch head before listing pull request comparisons', async () => {
     const project = await insertProject(mockDB, testData.project({ name: 'Main PR project' }));
     await insertBranch(mockDB, { projectId: project.projectId, name: 'main' });

@@ -24,6 +24,13 @@ vi.mock('@/hooks/projects/useProjectPullRequestsApi', () => ({
   useProjectPullRequestsApi: () => pullRequestApi,
 }));
 
+const changePreview = vi.hoisted(() =>
+  vi.fn(() => ({ changes: undefined, error: null, loading: false }))
+);
+vi.mock('@/hooks/projects/usePullRequestChangePreview', () => ({
+  usePullRequestChangePreview: changePreview,
+}));
+
 import { ProjectReviewsTab } from '@/components/project/ProjectReviewsTab';
 
 const realCompareCandidate = {
@@ -167,6 +174,28 @@ describe('ProjectReviewsTab', () => {
     expect(screen.getByRole('button', { name: 'Create pull request' })).toHaveAttribute(
       'data-variant',
       'commit'
+    );
+  });
+
+  it('previews a diverged branch from its merge base, not the moved target head', async () => {
+    pullRequestApi.fetchCompareCandidates.mockResolvedValue({
+      base_branches: ['main'],
+      compare_branches: [
+        {
+          ...realCompareCandidate,
+          merge_base_commit_id: 'sha256:fork-point',
+          behind_by: 1,
+        },
+      ],
+    });
+    render(<ProjectReviewsTab projectId="proj_real" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
+    expect(await screen.findByDisplayValue('Real feature')).toBeInTheDocument();
+    expect(changePreview).toHaveBeenLastCalledWith(
+      'proj_real',
+      'sha256:source-preview',
+      'sha256:fork-point'
     );
   });
 

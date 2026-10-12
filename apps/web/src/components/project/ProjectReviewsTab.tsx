@@ -124,6 +124,7 @@ interface PullRequestCompareCandidate {
   description: string;
   headCommitId: string;
   baseCommitId: string | null;
+  mergeBaseCommitId?: string | null;
   updatedAt: string;
   aheadBy: number;
   behindBy: number;
@@ -145,6 +146,7 @@ interface ApiProjectPullRequestCompareCandidate {
   description: string;
   head_commit_id: string;
   base_commit_id: string | null;
+  merge_base_commit_id?: string | null;
   updated_at: string;
   ahead_by: number;
   behind_by: number;
@@ -465,6 +467,7 @@ function toCompareCandidate(
     aheadBy: api.ahead_by,
     baseBranch: api.base_branch,
     baseCommitId: api.base_commit_id,
+    mergeBaseCommitId: api.merge_base_commit_id ?? null,
     behindBy: api.behind_by,
     branch: api.branch,
     changedNodes: api.changed_nodes,
@@ -1446,7 +1449,7 @@ function PullRequestCreateView({
   const fieldPreview = usePullRequestChangePreview(
     projectId,
     selectedCandidate?.headCommitId,
-    selectedCandidate?.baseCommitId
+    selectedCandidate?.mergeBaseCommitId ?? selectedCandidate?.baseCommitId
   );
   const update = (patch: Partial<typeof form>) => onChange({ ...form, ...patch });
   const sourceOptions =
