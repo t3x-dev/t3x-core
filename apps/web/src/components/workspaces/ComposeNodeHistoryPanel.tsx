@@ -31,6 +31,7 @@ import {
 } from '@/domain/workspaces/composeDraftChanges';
 import { composeDraftFields } from '@/domain/workspaces/composeDraftFields';
 import type { DraftYOp } from '@/domain/workspaces/draftStructure';
+import { MANUAL_STAGING_EVENT_ID } from '@/domain/workspaces/manualStaging';
 import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import { ComposeDraftValueEditor, isSimpleDraftValue } from './ComposeDraftValueEditor';
 import styles from './ComposeFieldDetails.module.css';
@@ -271,6 +272,8 @@ export function ComposeNodeHistoryPanel({
   const [copyNotice, setCopyNotice] = useState<string | null>(null);
   const nodeId = selection?.operation.id;
   const selectedPath = selection?.operation.path;
+  const isStaged = selection?.meta.eventId === MANUAL_STAGING_EVENT_ID;
+  const nodeError = isStaged ? null : activity.nodeError;
 
   useEffect(() => {
     setEditing(Boolean(selection?.meta.editRequest));
@@ -278,13 +281,14 @@ export function ComposeNodeHistoryPanel({
     setCopyNotice(null);
   }, [nodeId, selectedPath, selection?.meta.actionId, selection?.meta.editRequest]);
   useEffect(() => {
-    if (nodeId) void activity.inspectNode(nodeId, selection?.meta.actionId);
+    if (nodeId && !isStaged) void activity.inspectNode(nodeId, selection?.meta.actionId);
   }, [
     activity.inspectNode,
     nodeId,
     selectedPath,
     selection?.meta.actionId,
     activity.compositionRevision,
+    isStaged,
   ]);
 
   if (!selection)
@@ -327,6 +331,7 @@ export function ComposeNodeHistoryPanel({
         card.afterPath === selectedPath
     );
   const matchedNode =
+    !isStaged &&
     activity.node &&
     (activity.node.path === selectedPath ||
       (activity.node.nodeId === nodeId &&
@@ -343,7 +348,7 @@ export function ComposeNodeHistoryPanel({
         : derivedEntries[0]?.after;
   const node =
     matchedNode ??
-    (derivedEntries.length || netCard
+    (isStaged || derivedEntries.length || netCard
       ? {
           nodeId: selection.operation.id,
           path: selection.operation.path,
@@ -355,14 +360,14 @@ export function ComposeNodeHistoryPanel({
 
   if (!node)
     return (
-      <div className={styles.empty} role={activity.nodeError ? 'alert' : 'status'}>
+      <div className={styles.empty} role={nodeError ? 'alert' : 'status'}>
         <p>
-          {activity.nodeError ??
+          {nodeError ??
             (activity.nodeLoading
               ? 'Loading field details…'
               : 'Details are not available for this field.')}
         </p>
-        {activity.nodeError ? (
+        {nodeError ? (
           <button
             type="button"
             onClick={() =>
@@ -413,22 +418,25 @@ export function ComposeNodeHistoryPanel({
     ? activity.nodeLoading
     : activity.loading || activity.nodeLoading;
   const canEdit =
+    !isStaged &&
     Boolean(path) &&
     node.state === 'present' &&
     isSimpleDraftValue(node.current) &&
-    !activity.nodeError;
+    !nodeError;
   const editOpen = editing && canEdit;
   const editDisabledReason = saving
     ? 'Wait for the current change to finish saving.'
-    : !path
-      ? 'This value has no field path available for editing.'
-      : activity.nodeError || node.state === 'unknown'
-        ? 'The current value could not be loaded. Try again before editing.'
-        : node.state !== 'present'
-          ? 'This value is no longer present in the current Draft.'
-          : !isSimpleDraftValue(node.current)
-            ? 'Objects and arrays cannot be edited here. Select a text, number, or boolean field, or use Ask AI.'
-            : undefined;
+    : isStaged
+      ? 'Save this change as a P before editing it again.'
+      : !path
+        ? 'This value has no field path available for editing.'
+        : nodeError || node.state === 'unknown'
+          ? 'The current value could not be loaded. Try again before editing.'
+          : node.state !== 'present'
+            ? 'This value is no longer present in the current Draft.'
+            : !isSimpleDraftValue(node.current)
+              ? 'Objects and arrays cannot be edited here. Select a text, number, or boolean field, or use Ask AI.'
+              : undefined;
   const copyPath = async () => {
     if (!path) return;
     try {
@@ -491,12 +499,14 @@ export function ComposeNodeHistoryPanel({
         </div>
         <div className={styles.selectedDelta}>
           <span>
-            {selection.meta.comparison === 'draft'
-              ? 'Whole draft · Base → r' + (activity.compositionRevision ?? '—')
-              : 'Selected action' +
-                (selectedAction || selectedEntry
-                  ? ' · A' + (selectedAction?.sequence ?? selectedEntry?.sequence)
-                  : '')}
+            {isStaged
+              ? 'Unsaved change · not yet applied to Draft'
+              : selection.meta.comparison === 'draft'
+                ? 'Whole draft · Base → r' + (activity.compositionRevision ?? '—')
+                : 'Selected action' +
+                  (selectedAction || selectedEntry
+                    ? ' · A' + (selectedAction?.sequence ?? selectedEntry?.sequence)
+                    : '')}
           </span>
           {matchesBase ? (
             <span>Matches Base · no change</span>
@@ -558,9 +568,9 @@ export function ComposeNodeHistoryPanel({
             }}
           />
         ) : null}
-        {saveError || activity.nodeError ? (
+        {saveError || nodeError ? (
           <p className={styles.error} role="alert">
-            {saveError ?? activity.nodeError}
+            {saveError ?? nodeError}
           </p>
         ) : null}
         {activity.notice ? <output className={styles.helper}>{activity.notice}</output> : null}
@@ -647,7 +657,7 @@ export function ComposeNodeHistoryPanel({
             <button
               className={styles.textButton}
               type="button"
-              disabled={saving || editing || !latest || !path || Boolean(activity.nodeError)}
+              disabled={isStaged || saving || editing || !latest || !path || Boolean(nodeError)}
               onClick={() => void revertLatest()}
             >
               <RotateCcw aria-hidden="true" /> Revert latest change

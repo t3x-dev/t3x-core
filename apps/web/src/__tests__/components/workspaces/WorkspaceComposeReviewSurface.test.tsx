@@ -155,11 +155,6 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => navigationMocks.searchParams,
 }));
 
-function openNewChangeItem(name: string) {
-  fireEvent.keyDown(screen.getByRole('button', { name: 'New change' }), { key: 'Enter' });
-  fireEvent.click(screen.getByRole('menuitem', { name }));
-}
-
 describe('WorkspaceComposeReviewSurface composer', () => {
   beforeEach(() => {
     snapshotMocks.list.mockReset().mockResolvedValue({ snapshots: [] });
@@ -178,7 +173,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     navigationMocks.searchParams = new URLSearchParams();
   });
 
-  it('keeps the original Compose surface and composer even when an authoring ledger exists', async () => {
+  it('selects list rows directly and keeps Details or Chat permanently visible', async () => {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     // Ledger presence must not silently replace the established Compose interface.
     Object.assign(candidate, { authoringLedger: { actions: [] } });
@@ -283,9 +278,16 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
 
     expect(screen.getByRole('tab', { name: 'Compose' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('tablist', { name: 'Change context' })).not.toBeInTheDocument();
+    const discussion = screen.getByRole('complementary', { name: 'Discuss change' });
+    expect(within(discussion).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
+    expect(within(discussion).getByTitle(candidate.title)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
     expect(screen.queryByRole('button', { name: 'Review complete draft' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Chat', exact: true }));
     expect(sourceGenerationMocks.options?.workspaceAssistant?.allowProposal).toBe(true);
     expect(screen.queryByText('Generate a proposal from change requests')).not.toBeInTheDocument();
     expect(screen.queryByText('Proposal ready')).not.toBeInTheDocument();
@@ -317,12 +319,31 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         Node.DOCUMENT_POSITION_FOLLOWING
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(screen.getByRole('heading', { name: 'Proposed changes' })).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Expand Approval' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Discuss Approval' }));
-    expect(screen.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('button', { name: 'Expand Approval' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete Approval' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect Approval: rollout/approval' }));
+    expect(within(discussion).getByRole('heading', { name: 'Details' })).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Inspect Approval: rollout/approval' })
+    ).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(discussion).getByRole('button', { name: 'Ask AI' }));
+    expect(screen.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
     expect(screen.queryByRole('heading', { name: 'Event evidence' })).not.toBeInTheDocument();
     fireEvent.click(allChanges);
     expect(allChanges).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect Approval: rollout/approval' }));
+    expect(within(discussion).getByRole('heading', { name: 'Details' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    );
+    fireEvent.click(within(discussion).getByRole('button', { name: 'Ask AI' }));
+    expect(within(discussion).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Chat', exact: true }));
+    expect(within(discussion).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
     expect(screen.queryByText('Before event')).not.toBeInTheDocument();
     fireEvent.click(latestAction);
     expect(latestAction).toHaveAttribute('aria-selected', 'true');
@@ -345,11 +366,10 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       Node.DOCUMENT_POSITION_FOLLOWING
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Close discussion' }));
-    expect(screen.queryByRole('complementary', { name: 'Discuss change' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Show discussion' }));
-    expect(screen.getByRole('complementary', { name: 'Discuss change' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
+    expect(screen.queryByRole('button', { name: 'Close discussion' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show discussion' })).not.toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Discuss change' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Chat', exact: true }));
     vi.stubGlobal('crypto', {
       ...globalThis.crypto,
       randomUUID: vi.fn(() => 'request-1'),
@@ -443,19 +463,25 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Expand Allocation' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Allocation' }));
-    fireEvent.change(screen.getByLabelText('New value for Allocation'), {
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect Allocation: rollout/allocation' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit', exact: true }));
+    fireEvent.change(screen.getByLabelText('New value'), {
       target: { value: '30' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.change(screen.getByLabelText('Reason'), {
+      target: { value: 'Adjust pilot allocation' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save change' }));
     expect(publish).not.toHaveBeenCalled();
-    expect(screen.getByText('Ungrouped manual cards')).toBeInTheDocument();
+    expect(screen.getByText('Ungrouped manual changes')).toBeInTheDocument();
     expect(
       screen.getByRole('checkbox', { name: 'Include Allocation in the next P' })
     ).toBeChecked();
 
-    openNewChangeItem('Add manually');
+    fireEvent.keyDown(screen.getByRole('button', { name: 'New change' }), { key: 'Enter' });
+    expect(screen.queryByRole('menuitem', { name: 'Add manually' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Edit a field' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit structure' }));
     const dialog = await screen.findByRole('dialog', { name: 'Current structure' });
     expect(within(dialog).getByText('allocation')).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add inside rollout' }));
@@ -476,14 +502,19 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       expect(screen.getByRole('checkbox', { name: 'Include Regions in the next P' })).toBeChecked()
     );
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
+    const inspectNode = activityMocks.value.inspectNode;
+    vi.mocked(inspectNode).mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect Regions: rollout/regions' }));
+    expect(screen.getByText('Unsaved change · not yet applied to Draft')).toBeVisible();
+    expect(screen.getByLabelText('Selected field details')).toHaveTextContent('us');
+    expect(inspectNode).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Chat', exact: true }));
     expect(sourceGenerationMocks.options?.workspaceAssistant?.allowProposal).toBe(false);
     expect(
       screen.getByText(
-        'Save every ungrouped manual card as a P before asking the assistant to add cards.'
+        'Save every ungrouped manual change as a P before asking the assistant to add changes.'
       )
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Details' }));
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Include Regions in the next P' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save selected as P (1)' }));
@@ -639,7 +670,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(
       screen.queryByRole('navigation', { name: 'Workspace navigation' })
     ).not.toBeInTheDocument();
-    const inspectWithoutHistory = screen.getByRole('button', { name: 'Inspect Outcome' });
+    const inspectWithoutHistory = screen.getByRole('button', { name: /^Inspect Outcome:/ });
     expect(inspectWithoutHistory).toBeDisabled();
     fireEvent.click(inspectWithoutHistory);
     expect(prepareReview).not.toHaveBeenCalled();

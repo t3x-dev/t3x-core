@@ -1,14 +1,6 @@
 import type { WorkspaceAuthoringCard } from '@t3x-dev/api-client';
-import {
-  CheckCircle2,
-  ChevronDown,
-  GitCompareArrows,
-  History,
-  Minus,
-  Pencil,
-  Plus,
-} from 'lucide-react';
-import { Fragment, type ReactNode, useState } from 'react';
+import { GitCompareArrows, History, Minus, Pencil, Plus } from 'lucide-react';
+import { Fragment, type ReactNode } from 'react';
 import {
   activityChangeKind,
   activityChannelLabel,
@@ -19,11 +11,8 @@ import {
 } from '@/domain/composeActivity';
 import {
   composeActorLabel,
-  composeNodeContent,
   composeNodeTitle,
   composePathLabel,
-  composeTextDiff,
-  composeValueChangeLabels,
 } from '@/domain/composePresentation';
 import { composeDraftChangeCards } from '@/domain/workspaces/composeDraftChanges';
 import {
@@ -35,7 +24,6 @@ import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import type { WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 import styles from './ComposeActivityTimeline.module.css';
 import draftStyles from './ComposeDraftChanges.module.css';
-import composeStyles from './WorkspaceComposeSurface.module.css';
 
 const changeMarkers = {
   added: { Icon: Plus, label: 'Added fields' },
@@ -74,30 +62,11 @@ function matchesFilter(card: WorkspaceAuthoringCard, filter: ComposeChangeFilter
   return kind === 'removed';
 }
 
-function ValueChange({ before, after, kind }: { before: string; after: string; kind: string }) {
-  if (kind === 'added') return <ins title={after}>{after}</ins>;
-  if (kind === 'removed') return <del title={before}>{before}</del>;
-  if (before === after) return <span title={after}>{after}</span>;
-  return (
-    <span title={`${before} → ${after}`}>
-      {composeTextDiff(before, after).map((part, index) =>
-        part.kind === 'removed' ? (
-          <del key={index}>{part.text}</del>
-        ) : part.kind === 'added' ? (
-          <ins key={index}>{part.text}</ins>
-        ) : (
-          part.text
-        )
-      )}
-    </span>
-  );
-}
-
 export function ComposeActivityTimeline({
   activity,
   filter = 'all',
   scope,
-  renderCard,
+  renderRow,
   fallback,
   updatedAt,
   staging,
@@ -105,12 +74,11 @@ export function ComposeActivityTimeline({
   activity: ReturnType<typeof useComposeActivity>;
   filter?: ComposeChangeFilter;
   scope: 'latest' | 'all';
-  renderCard: (operation: WorkspaceYOpsDraftOperation, meta: ComposeActivityMeta) => ReactNode;
+  renderRow: (operation: WorkspaceYOpsDraftOperation, meta: ComposeActivityMeta) => ReactNode;
   fallback: ReactNode;
   updatedAt: string;
   staging?: ManualStagingControls;
 }) {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   if (!activity.enabled)
     return scope === 'all' ? (
       fallback
@@ -173,7 +141,7 @@ export function ComposeActivityTimeline({
         </header>
         <ul className={draftStyles.list}>
           {changes.map((card) =>
-            renderCard(activityOperation(card), { eventId: 'all', comparison: 'draft' })
+            renderRow(activityOperation(card), { eventId: 'all', comparison: 'draft' })
           )}
         </ul>
         {!changes.length ? (
@@ -212,7 +180,7 @@ export function ComposeActivityTimeline({
           <section
             className={styles.event}
             data-latest="true"
-            aria-label="Event: Ungrouped manual cards"
+            aria-label="Event: Ungrouped manual changes"
           >
             <time className={styles.eventTime} dateTime={stagingEndedAt}>
               {time(stagingEndedAt)}
@@ -230,30 +198,30 @@ export function ComposeActivityTimeline({
             <div className={styles.eventBody}>
               <div className={styles.heading}>
                 <span className={styles.titleLine}>
-                  <strong title="Ungrouped manual cards">Ungrouped manual cards</strong>
+                  <strong title="Ungrouped manual changes">Ungrouped manual changes</strong>
                   <span className={styles.latestBadge}>Latest</span>
                 </span>
                 <span className={styles.meta}>
                   {stagedItems.length === 1
-                    ? '1 card · select which cards to save as one P'
-                    : `${stagedItems.length} cards · select which cards to save as one P`}
+                    ? '1 change · select changes to save as one P'
+                    : `${stagedItems.length} changes · select changes to save as one P`}
                 </span>
               </div>
-              <div className={composeStyles.actionList}>
+              <div className={styles.preview}>
                 {stagedItems.map((item) => {
                   const cardLabel =
                     composeNodeTitle(item.card.after) ??
                     composeNodeTitle(item.card.before) ??
                     composePathLabel(item.card.path, item.card.nodeId);
                   return (
-                    <div className={styles.stagingCard} key={item.id}>
+                    <div className={styles.stagingRow} key={item.id}>
                       <input
                         aria-label={`Include ${cardLabel} in the next P`}
                         checked={item.selected}
                         onChange={() => staging?.onToggle(item.id)}
                         type="checkbox"
                       />
-                      {renderCard(stagedActivityOperation(item), {
+                      {renderRow(stagedActivityOperation(item), {
                         eventId: MANUAL_STAGING_EVENT_ID,
                         actor: 'You',
                         channel: 'manual',
@@ -284,8 +252,6 @@ export function ComposeActivityTimeline({
       ) : null}
       {visibleEvents.map(({ event, cards: eventCards }, index) => {
         const latest = event.actions.at(-1)!;
-        const open = expanded[event.id] ?? false;
-        const toggle = () => setExpanded((current) => ({ ...current, [event.id]: !open }));
         // Keep the event node consistent with the concrete rows the user can inspect.
         const kind = activityChangeKind(eventCards);
         const { Icon, label } = changeMarkers[kind];
@@ -333,12 +299,7 @@ export function ComposeActivityTimeline({
                 <Icon size={13} aria-hidden="true" />
               </span>
               <div className={styles.eventBody}>
-                <button
-                  className={styles.eventToggle}
-                  onClick={toggle}
-                  aria-expanded={open}
-                  type="button"
-                >
+                <div className={styles.eventHeader}>
                   <span className={styles.heading}>
                     <span className={styles.titleLine}>
                       <strong title={title}>{title}</strong>
@@ -354,62 +315,22 @@ export function ComposeActivityTimeline({
                     </span>
                     {actor}
                   </span>
-                  <ChevronDown aria-hidden="true" className={styles.disclosure} />
-                </button>
-                {open ? (
-                  <div className={composeStyles.actionList}>
-                    {eventCards.map((card) => {
-                      const lastTouch = event.actions.findLast((action) =>
-                        activity.cards[action.actionId]?.some((item) => item.nodeId === card.nodeId)
-                      )!;
-                      return renderCard(activityOperation(card, lastTouch.reason), {
-                        eventId: event.id,
-                        actionId: lastTouch.actionId,
-                        actor:
-                          lastTouch.actor.id === 'human:local-user' ? 'You' : lastTouch.actor.id,
-                        channel: lastTouch.channel,
-                        timestamp: lastTouch.publishedAt,
-                        comparison: 'event',
-                      });
-                    })}
-                  </div>
-                ) : (
-                  <div className={styles.preview}>
-                    {eventCards.map((card) => {
-                      const cardLabel =
-                        composeNodeTitle(card.after) ??
-                        composeNodeTitle(card.before) ??
-                        composePathLabel(card.path, card.nodeId);
-                      const cardKind = activityChangeKind([card]);
-                      const { before, after } =
-                        cardKind === 'added' && composeNodeTitle(card.after)
-                          ? {
-                              before: 'Absent',
-                              after: composeNodeContent(card.after) ?? 'No content recorded',
-                            }
-                          : composeValueChangeLabels(card.before, card.after);
-                      return (
-                        <button
-                          type="button"
-                          onClick={toggle}
-                          key={`${card.nodeId}:${card.path}`}
-                          aria-label={`Expand ${cardLabel}`}
-                        >
-                          <span className={styles.changeMark} data-kind={cardKind}>
-                            {cardKind === 'added' ? '+' : cardKind === 'removed' ? '−' : '~'}
-                          </span>
-                          <span className={styles.cardLabel} title={cardLabel}>
-                            {cardLabel}
-                          </span>
-                          <span className={styles.valueSummary}>
-                            <ValueChange before={before} after={after} kind={cardKind} />
-                          </span>
-                          <CheckCircle2 aria-label="Applied to Draft" className={styles.verified} />
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                </div>
+                <div className={styles.preview}>
+                  {eventCards.map((card) => {
+                    const lastTouch = event.actions.findLast((action) =>
+                      activity.cards[action.actionId]?.some((item) => item.nodeId === card.nodeId)
+                    )!;
+                    return renderRow(activityOperation(card, lastTouch.reason), {
+                      eventId: event.id,
+                      actionId: lastTouch.actionId,
+                      actor: lastTouch.actor.id === 'human:local-user' ? 'You' : lastTouch.actor.id,
+                      channel: lastTouch.channel,
+                      timestamp: lastTouch.publishedAt,
+                      comparison: 'event',
+                    });
+                  })}
+                </div>
               </div>
             </section>
           </Fragment>

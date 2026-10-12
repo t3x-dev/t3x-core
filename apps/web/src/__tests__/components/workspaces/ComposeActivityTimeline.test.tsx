@@ -81,35 +81,34 @@ function fixture(): ReturnType<typeof useComposeActivity> {
 }
 
 describe('ComposeActivityTimeline', () => {
-  const renderCard = (
+  const renderRow = (
     operation: { id: string; beforeValue?: unknown; afterValue?: unknown },
     meta: { eventId: string; comparison: string }
   ) => (
-    <div key={`${meta.eventId}:${operation.id}`} data-testid={`card-${operation.id}`}>
+    <div key={`${meta.eventId}:${operation.id}`} data-testid={`row-${operation.id}`}>
       {meta.comparison}: {String(operation.beforeValue)} → {String(operation.afterValue)}
     </div>
   );
-  it('summarizes events without idle durations and expands an older row', () => {
+  it('keeps event rows visible without expandable cards', () => {
     render(
       <ComposeActivityTimeline
         activity={fixture()}
         scope="latest"
-        renderCard={renderCard}
+        renderRow={renderRow}
         fallback={<div>legacy</div>}
         updatedAt="2026-09-21"
       />
     );
-    expect(screen.queryByTestId('card-n3')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('card-n2')).not.toBeInTheDocument();
+    expect(screen.getByTestId('row-n3')).toHaveTextContent('event: 25 → 30');
+    expect(screen.getByTestId('row-n2')).toHaveTextContent('event: 20 → 25');
     expect(screen.queryByText(/idle/i)).not.toBeInTheDocument();
     expect(screen.queryByText('MCP')).not.toBeInTheDocument();
     expect(screen.getByText(/Sep 21/)).toHaveAttribute('data-compact', 'true');
     expect(screen.getAllByRole('img', { name: 'Modified fields' })).toHaveLength(4);
     expect(document.querySelector('.lucide-circle')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /Adjust pilot allocation/ }));
-    expect(screen.getByTestId('card-n2')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Adjust pilot allocation/ }));
-    expect(screen.queryByTestId('card-n2')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Adjust pilot allocation/ })
+    ).not.toBeInTheDocument();
     expect(screen.queryByText('legacy')).not.toBeInTheDocument();
   });
   it('shows Base-to-current values in All draft changes instead of the last event delta', () => {
@@ -117,25 +116,25 @@ describe('ComposeActivityTimeline', () => {
       <ComposeActivityTimeline
         activity={fixture()}
         scope="all"
-        renderCard={renderCard}
+        renderRow={renderRow}
         fallback={null}
         updatedAt="2026-09-21"
       />
     );
-    expect(screen.getByTestId('card-net')).toHaveTextContent('draft: 10 → 30');
+    expect(screen.getByTestId('row-net')).toHaveTextContent('draft: 10 → 30');
     expect(screen.queryByLabelText('Change activity timeline')).not.toBeInTheDocument();
   });
-  it('keeps legacy cards without claiming historic actors, channels or idle gaps', () => {
+  it('keeps fallback rows without claiming historic actors, channels or idle gaps', () => {
     render(
       <ComposeActivityTimeline
         activity={{ ...fixture(), enabled: false }}
         scope="latest"
-        renderCard={renderCard}
-        fallback={<div>Existing proposal cards</div>}
+        renderRow={renderRow}
+        fallback={<div>Existing proposal rows</div>}
         updatedAt="2026-09-21"
       />
     );
-    expect(screen.getByText('Existing proposal cards')).toBeInTheDocument();
+    expect(screen.getByText('Existing proposal rows')).toBeInTheDocument();
     expect(
       screen.getByText('Earlier event history is not available for this draft.')
     ).toBeInTheDocument();
@@ -148,7 +147,7 @@ describe('ComposeActivityTimeline', () => {
       <ComposeActivityTimeline
         activity={{ ...activity, error: 'Cannot load activity' }}
         scope="latest"
-        renderCard={renderCard}
+        renderRow={renderRow}
         fallback={null}
         updatedAt="2026-09-21"
       />
@@ -159,7 +158,7 @@ describe('ComposeActivityTimeline', () => {
       <ComposeActivityTimeline
         activity={{ ...activity, cursor: 4 }}
         scope="latest"
-        renderCard={renderCard}
+        renderRow={renderRow}
         fallback={null}
         updatedAt="2026-09-21"
       />
@@ -167,14 +166,14 @@ describe('ComposeActivityTimeline', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Load older events' }));
     expect(activity.loadOlder).toHaveBeenCalledOnce();
   });
-  it('keeps ungrouped manual cards in Latest and saves the selected subset as one P', () => {
+  it('keeps ungrouped manual changes in Latest and saves the selected subset as one P', () => {
     const onToggle = vi.fn();
     const onSaveSelected = vi.fn();
     render(
       <ComposeActivityTimeline
         activity={fixture()}
         scope="latest"
-        renderCard={renderCard}
+        renderRow={renderRow}
         fallback={null}
         updatedAt="2026-09-21"
         staging={{
@@ -201,7 +200,7 @@ describe('ComposeActivityTimeline', () => {
         }}
       />
     );
-    expect(screen.getByText('Ungrouped manual cards')).toBeInTheDocument();
+    expect(screen.getByText('Ungrouped manual changes')).toBeInTheDocument();
     expect(screen.getAllByText('Latest')).toHaveLength(1);
     expect(
       screen.getByRole('checkbox', { name: 'Include Allocation in the next P' })
@@ -213,7 +212,7 @@ describe('ComposeActivityTimeline', () => {
     expect(onToggle).toHaveBeenCalledWith('staged-2');
     fireEvent.click(screen.getByRole('button', { name: 'Save selected as P (1)' }));
     expect(onSaveSelected).toHaveBeenCalledOnce();
-    expect(screen.getByTestId('card-staged-a')).toBeInTheDocument();
-    expect(screen.getByTestId('card-staged-b')).toBeInTheDocument();
+    expect(screen.getByTestId('row-staged-a')).toBeInTheDocument();
+    expect(screen.getByTestId('row-staged-b')).toBeInTheDocument();
   });
 });

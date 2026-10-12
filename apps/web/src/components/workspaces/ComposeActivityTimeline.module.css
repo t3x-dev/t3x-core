@@ -108,7 +108,7 @@
   grid-column: 3;
   padding: 6px 0 4px 10px;
 }
-.eventToggle {
+.eventHeader {
   display: flex;
   width: 100%;
   min-width: 0;
@@ -117,12 +117,10 @@
   gap: 10px;
   text-align: left;
 }
-.eventToggle:focus-visible,
-.preview button:focus-visible {
+.changeRow:focus-visible {
   outline: none;
 }
-.eventToggle:focus-visible .titleLine > strong,
-.preview button:focus-visible .cardLabel {
+.changeRow:focus-visible .cardLabel {
   color: var(--accent-commit);
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -230,22 +228,11 @@
   font-size: 9px;
   font-weight: 650;
 }
-.disclosure {
-  width: 14px;
-  height: 14px;
-  flex: none;
-  margin-left: 4px;
-  color: var(--text-tertiary);
-  transition: transform 120ms ease;
-}
-.eventToggle[aria-expanded="true"] .disclosure {
-  transform: rotate(180deg);
-}
 .preview {
   min-width: 0;
   margin: 4px 0 0 -10px;
 }
-.preview button {
+.changeRow {
   display: grid;
   width: 100%;
   min-width: 0;
@@ -262,14 +249,8 @@
   color: var(--text-primary);
   font-size: 13px;
 }
-.preview button:hover {
+.changeRow:hover {
   background: var(--hover-bg);
-}
-.event[data-latest="true"] .preview button:first-child {
-  background: var(--surface-card);
-}
-.event[data-latest="true"] .preview button:first-child .cardLabel {
-  color: var(--text-secondary);
 }
 .changeMark {
   display: grid;
@@ -367,7 +348,7 @@
   .date > span {
     font-size: 10px;
   }
-  .preview button {
+  .changeRow {
     grid-template-columns: 18px minmax(90px, 150px) minmax(0, 1fr) 16px;
     gap: 8px;
   }
@@ -393,7 +374,7 @@
   .date::after {
     display: none;
   }
-  .preview button {
+  .changeRow {
     grid-template-columns: 18px minmax(0, 0.7fr) minmax(0, 1.3fr) 16px;
   }
   .meta > span:last-child {
@@ -449,13 +430,13 @@
 .preview {
   margin-left: 0;
 }
-.stagingCard {
+.stagingRow {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr);
   align-items: start;
   gap: 8px;
 }
-.stagingCard > input {
+.stagingRow > input {
   margin-top: 16px;
   accent-color: var(--accent-commit);
 }
@@ -515,7 +496,7 @@
 .event {
   margin-bottom: 16px;
 }
-.preview button {
+.changeRow {
   min-height: 38px;
   height: auto;
   box-shadow: none;
@@ -534,4 +515,26 @@
   .eventBody {
     padding: 10px 8px 12px;
   }
+}
+
+.preview {
+  display: grid;
+  gap: 4px;
+}
+.changeRow[aria-pressed="true"] {
+  border-color: var(--accent-commit);
+  background: var(--accent-commit-soft);
+}
+.changeRow:focus-visible {
+  outline: 2px solid var(--accent-commit);
+  outline-offset: 2px;
+}
+.changeRow:disabled {
+  cursor: default;
+}
+.stagingRow {
+  align-items: center;
+}
+.stagingRow > input {
+  margin-top: 0;
 }

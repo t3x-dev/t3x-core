@@ -141,4 +141,4 @@ export function stagedActivityOperation(item: StagedManualCard): WorkspaceYOpsDr
 }
 
 export const UNGROUPED_MANUAL_HINT =
-  'Save every ungrouped manual card as a P before asking the assistant to add cards.';
+  'Save every ungrouped manual change as a P before asking the assistant to add changes.';

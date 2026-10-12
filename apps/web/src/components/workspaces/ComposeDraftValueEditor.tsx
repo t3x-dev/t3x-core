@@ -27,7 +27,7 @@ export function ComposeDraftValueEditor({
   onCancel: () => void;
   onSaved: (result: Pick<WorkspaceAuthoringOutcome, 'kind'>) => void | Promise<void>;
   onBusyChange?: (busy: boolean) => void;
-  /** Stages the edit as an ungrouped manual card instead of publishing an action. */
+  /** Stages the edit as an ungrouped manual change instead of publishing an action. */
   onSubmit?: (operations: DraftYOp[], reason: string) => Promise<boolean>;
 }) {
   const id = useId();
@@ -142,7 +142,7 @@ export function ComposeDraftValueEditor({
       </label>
       <p>
         {onSubmit
-          ? 'Saving adds an ungrouped card to Latest. Save it as a P from the timeline.'
+          ? 'Saving adds an ungrouped change to Latest. Save it as a P from the timeline.'
           : 'Saving appends a new Action. Earlier values and authors remain unchanged.'}
       </p>
       {stale ? (
