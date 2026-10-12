@@ -126,9 +126,7 @@ function explainReason(
       return {
         code: reason.code,
         title: 'Needs another reviewer',
-        detail: generated
-          ? 'You proposed this AI-generated change. Someone other than the proposer must approve it.'
-          : 'The branch rule does not let the proposer approve their own change.',
+        detail: 'This branch requires review by someone other than the proposer.',
       };
     case 'RUNNER_FAILED':
       return {

@@ -117,6 +117,84 @@ export const UNPROTECTED_REF_POLICY = Object.freeze(
   })
 ) as Pick<TransitionPolicyBinding, 'policy' | 'resource'>;
 
+const WORKSPACE_REPLAY_ACTOR = Object.freeze({
+  kind: 'service' as const,
+  id: 'service:t3x-workspace-replay',
+});
+const WORKSPACE_REPLAY_TOOL = Object.freeze({ name: '@t3x-dev/core/yops-replay', version: '1' });
+
+/**
+ * Branch rule preset: the unprotected policy, except the proposer may not
+ * approve their own change. Replay trusts both the repository and the Workspace
+ * replay issuers so Workspace review keeps working once the ref is bound.
+ */
+export const INDEPENDENT_REVIEW_REF_POLICY = Object.freeze(
+  createAcceptancePolicyResource({
+    uri: 't3x://policies/independent-review-ref/v1',
+    policy: {
+      ...structuredClone(UNPROTECTED_REF_POLICY.policy),
+      authorization: {
+        ...structuredClone(UNPROTECTED_REF_POLICY.policy.authorization),
+        allowSelfApproval: false,
+      },
+      checks: {
+        ...structuredClone(UNPROTECTED_REF_POLICY.policy.checks),
+        replay: {
+          issuers: { mode: 'one_of', values: [TRANSITION_REPLAY_ACTOR, WORKSPACE_REPLAY_ACTOR] },
+          tools: { mode: 'one_of', values: [WORKSPACE_REPLAY_TOOL, TRANSITION_REPLAY_TOOL] },
+          environments: { mode: 'one_of', values: [{ mode: 'unspecified' }] },
+        },
+      },
+    },
+  })
+) as Pick<TransitionPolicyBinding, 'policy' | 'resource'>;
+
+export type BranchRuleChange =
+  | { action: 'keep' }
+  | { action: 'unbind' }
+  | { action: 'bind'; uri: string; policy: AcceptancePolicy };
+
+/**
+ * Plan the binding change for a branch rule. Custom bindings keep every other
+ * rule and only flip self-approval; the preset is unbound when review is lifted.
+ */
+export function planBranchRuleChange(input: {
+  refName: string;
+  binding: Pick<TransitionPolicyBinding, 'policy' | 'resource'> | null;
+  requireIndependentReview: boolean;
+}): BranchRuleChange {
+  const { binding, requireIndependentReview } = input;
+  if (binding === null) {
+    return requireIndependentReview
+      ? {
+          action: 'bind',
+          uri: INDEPENDENT_REVIEW_REF_POLICY.resource.uri,
+          policy: INDEPENDENT_REVIEW_REF_POLICY.policy,
+        }
+      : { action: 'keep' };
+  }
+  if (binding.policy.authorization.allowSelfApproval === !requireIndependentReview) {
+    return { action: 'keep' };
+  }
+  if (
+    !requireIndependentReview &&
+    binding.resource.digest === INDEPENDENT_REVIEW_REF_POLICY.resource.digest
+  ) {
+    return { action: 'unbind' };
+  }
+  return {
+    action: 'bind',
+    uri: `t3x://policies/branch-rule/v1/${encodeURIComponent(input.refName)}`,
+    policy: {
+      ...structuredClone(binding.policy),
+      authorization: {
+        ...structuredClone(binding.policy.authorization),
+        allowSelfApproval: !requireIndependentReview,
+      },
+    },
+  };
+}
+
 /**
  * Select the ref policy an actor is governed by. Humans fall back to the
  * unprotected policy; agent and service actors still require an explicit
@@ -225,10 +303,6 @@ function generationOverlayPolicy(refPolicy: AcceptancePolicy): AcceptancePolicy 
   }
   return {
     ...structuredClone(refPolicy),
-    authorization: {
-      ...structuredClone(refPolicy.authorization),
-      allowSelfApproval: false,
-    },
     checks: {
       ...structuredClone(refPolicy.checks),
       runner: {

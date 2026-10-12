@@ -31,6 +31,7 @@ import { Suspense, useCallback, useEffect, useState } from 'react';
 import { AutopilotSettings } from '@/components/autopilot/AutopilotSettings';
 import { ProjectCollaborationPanel } from '@/components/project/ProjectCollaborationPanel';
 import { ProjectVisibilitySettings } from '@/components/project/ProjectVisibilitySettings';
+import { ProjectBranchRulesSettings } from '@/components/project/settings/ProjectBranchRulesSettings';
 import { ProjectDangerZone } from '@/components/project/settings/ProjectDangerZone';
 import { ProjectExportSettings } from '@/components/project/settings/ProjectExportSettings';
 import { ProjectGeneralSettings } from '@/components/project/settings/ProjectGeneralSettings';
@@ -425,6 +426,7 @@ function ProjectSettingsPageContent() {
 
         <ProjectVisibilitySettings projectId={projectId} />
         <ProjectCollaborationPanel projectId={projectId} />
+        <ProjectBranchRulesSettings projectId={projectId} />
 
         <SettingsSection
           action={

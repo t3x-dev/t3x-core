@@ -3,6 +3,7 @@
 import {
   Bot,
   Eye,
+  GitBranch,
   Info,
   type LucideIcon,
   PackageOpen,
@@ -24,6 +25,7 @@ export const PROJECT_SETTINGS_GROUPS: Array<{
       { id: 'general', label: 'General', icon: Info },
       { id: 'visibility', label: 'Visibility', icon: Eye },
       { id: 'access', label: 'Access', icon: Users },
+      { id: 'branch-rules', label: 'Branch rules', icon: GitBranch },
     ],
   },
   {

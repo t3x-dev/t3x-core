@@ -12,9 +12,15 @@ import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
 import { deriveTrustedTransitionPrincipal } from '../lib/transition-authority';
+import {
+  INDEPENDENT_REVIEW_REF_POLICY,
+  planBranchRuleChange,
+} from '../lib/transition-control-plane/applicable-policy';
 import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
+  BranchRuleRequest,
+  BranchRuleResponse,
   TransitionPolicyBindingQuery,
   TransitionPolicyBindingRequest,
   TransitionPolicyBindingResponse,
@@ -203,6 +209,112 @@ transitionPolicyBindingRoutes.openapi(deleteRoute, async (c) => {
       return errorResponse(c, 'NOT_FOUND', `No AcceptancePolicy is bound to ref ${ref_name}`);
     }
     return c.json({ success: true as const, data: { removed: true } }, 200);
+  } catch (error) {
+    return policyError(c, error);
+  }
+});
+
+function wireBranchRule(
+  refName: string,
+  binding: Awaited<ReturnType<typeof getTransitionPolicyBinding>>
+) {
+  return {
+    ref_name: refName,
+    require_independent_review: binding !== null && !binding.policy.authorization.allowSelfApproval,
+    source:
+      binding === null
+        ? ('default' as const)
+        : binding.resource.digest === INDEPENDENT_REVIEW_REF_POLICY.resource.digest
+          ? ('preset' as const)
+          : ('custom' as const),
+  };
+}
+
+const branchRuleResponses = {
+  200: {
+    description: 'Branch rule',
+    content: { 'application/json': { schema: SuccessResponseSchema(BranchRuleResponse) } },
+  },
+  400: {
+    description: 'Invalid branch rule',
+    content: { 'application/json': { schema: ErrorResponseSchema } },
+  },
+  403: {
+    description: 'Forbidden',
+    content: { 'application/json': { schema: ErrorResponseSchema } },
+  },
+  404: {
+    description: 'Project not found',
+    content: { 'application/json': { schema: ErrorResponseSchema } },
+  },
+};
+
+const getBranchRuleRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/branch-rule',
+  tags: ['Transition'],
+  summary: 'Read whether a branch requires review by someone other than the proposer',
+  request: { params: projectParams, query: TransitionPolicyBindingQuery },
+  responses: branchRuleResponses,
+});
+
+transitionPolicyBindingRoutes.openapi(getBranchRuleRoute, async (c) => {
+  const denied = requireHumanAdministrator(c);
+  if (denied) return denied;
+  const { projectId } = c.req.valid('param');
+  const { ref_name } = c.req.valid('query');
+  try {
+    const db = await getDB();
+    const access = await assertProjectAccess(c, db, projectId);
+    if (access instanceof Response) return access;
+    const binding = await getTransitionPolicyBinding(db, projectId, ref_name);
+    return c.json({ success: true as const, data: wireBranchRule(ref_name, binding) }, 200);
+  } catch (error) {
+    return policyError(c, error);
+  }
+});
+
+const putBranchRuleRoute = createRoute({
+  method: 'put',
+  path: '/v1/projects/{projectId}/branch-rule',
+  tags: ['Transition'],
+  summary: 'Allow direct commits or require review by someone other than the proposer',
+  request: {
+    params: projectParams,
+    body: { content: { 'application/json': { schema: BranchRuleRequest } } },
+  },
+  responses: branchRuleResponses,
+});
+
+transitionPolicyBindingRoutes.openapi(putBranchRuleRoute, async (c) => {
+  const denied = requireHumanAdministrator(c);
+  if (denied) return denied;
+  const { projectId } = c.req.valid('param');
+  const body = c.req.valid('json');
+  try {
+    const db = await getDB();
+    const access = await assertProjectAccess(c, db, projectId);
+    if (access instanceof Response) return access;
+    const current = await getTransitionPolicyBinding(db, projectId, body.ref_name);
+    const change = planBranchRuleChange({
+      refName: body.ref_name,
+      binding: current,
+      requireIndependentReview: body.require_independent_review,
+    });
+    let binding = current;
+    if (change.action === 'unbind') {
+      await unbindTransitionPolicy(db, projectId, body.ref_name);
+      binding = null;
+    } else if (change.action === 'bind') {
+      binding = await bindTransitionPolicy(db, {
+        projectId,
+        refName: body.ref_name,
+        uri: change.uri,
+        policy: change.policy,
+        actor: deriveTrustedTransitionPrincipal(authenticatedApiKey(c)).actor,
+      });
+    }
+    return c.json({ success: true as const, data: wireBranchRule(body.ref_name, binding) }, 200);
   } catch (error) {
     return policyError(c, error);
   }

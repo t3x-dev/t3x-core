@@ -29,3 +29,19 @@ export const TransitionPolicyBindingResponse = z
   .openapi('TransitionPolicyBindingResponse');
 
 export const TransitionPolicyBindingQuery = z.object({ ref_name: z.string().min(1) }).strict();
+
+export const BranchRuleRequest = z
+  .object({
+    ref_name: z.string().min(1),
+    require_independent_review: z.boolean(),
+  })
+  .strict()
+  .openapi('BranchRuleRequest');
+
+export const BranchRuleResponse = z
+  .object({
+    ref_name: z.string(),
+    require_independent_review: z.boolean(),
+    source: z.enum(['default', 'preset', 'custom']),
+  })
+  .openapi('BranchRuleResponse');
