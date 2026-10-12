@@ -155,6 +155,11 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => navigationMocks.searchParams,
 }));
 
+function openNewChangeItem(name: string) {
+  fireEvent.keyDown(screen.getByRole('button', { name: 'New change' }), { key: 'Enter' });
+  fireEvent.click(screen.getByRole('menuitem', { name }));
+}
+
 describe('WorkspaceComposeReviewSurface composer', () => {
   beforeEach(() => {
     snapshotMocks.list.mockReset().mockResolvedValue({ snapshots: [] });
@@ -278,11 +283,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
 
     expect(screen.getByRole('tab', { name: 'Compose' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Sources' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Node history' })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
+    expect(screen.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('button', { name: 'Review complete draft' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
     expect(sourceGenerationMocks.options?.workspaceAssistant?.allowProposal).toBe(true);
@@ -308,11 +309,11 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     const allChanges = screen.getByRole('tab', { name: 'All changes' });
     const latestAction = screen.getByRole('tab', { name: 'Latest' });
     expect(latestAction).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('heading', { name: 'Sources' }).closest('section')).toContainElement(
-      screen.getByRole('tablist', { name: 'Change scope' })
-    );
     expect(
-      screen.getByRole('button', { name: 'Add manually' }).compareDocumentPosition(latestAction) &
+      screen.getByRole('heading', { name: 'Proposed changes' }).closest('section')
+    ).toContainElement(screen.getByRole('tablist', { name: 'Change scope' }));
+    expect(
+      latestAction.compareDocumentPosition(screen.getByRole('button', { name: 'New change' })) &
         Node.DOCUMENT_POSITION_FOLLOWING
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(screen.getByRole('heading', { name: 'Proposed changes' })).toBeVisible();
@@ -454,7 +455,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       screen.getByRole('checkbox', { name: 'Include Allocation in the next P' })
     ).toBeChecked();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add manually' }));
+    openNewChangeItem('Add manually');
     const dialog = await screen.findByRole('dialog', { name: 'Current structure' });
     expect(within(dialog).getByText('allocation')).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add inside rollout' }));
@@ -482,7 +483,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         'Save every ungrouped manual card as a P before asking the assistant to add cards.'
       )
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Node history' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Details' }));
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Include Regions in the next P' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save selected as P (1)' }));
@@ -501,7 +502,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('enables Draft activity from the chat panel', () => {
+  it('shows preparation in Chat without an activation or generation button', () => {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     const controller = {
       busyAction: null,
@@ -525,8 +526,8 @@ describe('WorkspaceComposeReviewSurface composer', () => {
 
     expect(screen.queryByRole('button', { name: 'Send message' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Generate changes/ })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Enable Draft activity/ }));
-    expect(bootstrapMocks.value.start).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('button', { name: /Enable Draft activity/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Preparing your draft…')).toBeInTheDocument();
     expect(screen.queryByLabelText('Upload source material')).not.toBeInTheDocument();
   });
 

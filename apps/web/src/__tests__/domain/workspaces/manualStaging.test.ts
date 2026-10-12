@@ -58,4 +58,20 @@ describe('manualStaging', () => {
       after: 'stable',
     });
   });
+
+  it('reads before and after values through index and match paths', () => {
+    const document = {
+      content: {
+        trees: [{ key: 'candidate', slots: { priority: 'mu' }, children: [] }],
+      },
+    };
+    const [byIndex] = stageDraftOps(document, [
+      { set: { path: 'content/trees/[0]/slots/priority', value: 'must' } },
+    ]).items;
+    expect(byIndex?.card).toMatchObject({ before: 'mu', after: 'must' });
+    const [byKey] = stageDraftOps(document, [
+      { set: { path: 'content/trees/[key=candidate]/slots/priority', value: 'should' } },
+    ]).items;
+    expect(byKey?.card).toMatchObject({ before: 'mu', after: 'should' });
+  });
 });

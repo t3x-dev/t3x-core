@@ -1,0 +1,297 @@
+.dialog {
+  display: flex;
+  width: min(850px, calc(100vw - 32px));
+  max-width: min(850px, calc(100vw - 32px));
+  max-height: 85dvh;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
+  border-color: var(--stroke-default);
+  border-radius: var(--radius-xl);
+  background: var(--surface-panel);
+  padding: 24px;
+  color: var(--text-primary);
+}
+.header {
+  display: grid;
+  gap: 8px;
+  padding-right: 24px;
+}
+.header > p {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.header > h2 {
+  font-size: 20px;
+}
+.tabs {
+  display: flex;
+  flex: none;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  align-self: center;
+  width: fit-content;
+  max-width: 100%;
+  gap: 2px;
+  border-radius: var(--radius-md);
+  background: var(--surface-app);
+  padding: 3px;
+}
+.tabs button,
+.footer button,
+.yamlHeading button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  padding: 0 12px;
+  background: var(--surface-panel);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.tabs button {
+  border-color: transparent;
+  background: transparent;
+}
+.tabs button[aria-pressed="true"] {
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  border-color: var(--stroke-default);
+}
+.dialog button:focus-visible,
+.yaml pre:focus-visible {
+  outline: 2px solid var(--accent-commit);
+  outline-offset: 2px;
+}
+.dialog button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.tabs button > svg,
+.footer button > svg,
+.yamlHeading svg,
+.fieldIcon > svg,
+.editIcon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.body {
+  min-height: 0;
+  overflow: auto;
+  padding: 3px;
+  font-size: 13px;
+}
+.body[data-view="yaml"] {
+  display: flex;
+  overflow: hidden;
+}
+.body > output {
+  display: block;
+}
+.tree {
+  max-width: 650px;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+}
+.tree li {
+  min-width: 0;
+}
+.tree button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  min-height: 42px;
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  text-align: left;
+}
+.tree button:hover,
+.yamlHeading button:hover,
+.footer button:hover:not(:disabled) {
+  background: var(--surface-app);
+}
+.fieldLabel {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fieldIcon,
+.groupIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-app);
+  color: var(--text-secondary);
+}
+.groupIcon {
+  background: var(--accent-commit-soft);
+  color: var(--accent-commit);
+}
+.groupIcon > svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+.tree code {
+  min-width: 0;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.editIcon {
+  color: var(--text-tertiary);
+}
+.group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 12px 6px;
+}
+.group strong {
+  font-weight: 500;
+}
+.group small {
+  flex: none;
+  color: var(--text-tertiary);
+  font: 11px var(--font-mono);
+}
+.editor {
+  max-width: 600px;
+  margin: 0 auto;
+}
+.editor > h3 {
+  font-size: 16px;
+  font-weight: 600;
+}
+.editor > code {
+  display: block;
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.editor > p {
+  overflow-wrap: anywhere;
+}
+.yaml {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  max-width: 650px;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--editor-bg);
+}
+.yamlHeading {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--stroke-divider);
+  background: var(--surface-app);
+  padding: 8px 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.yamlHeading > span,
+.yamlHeading > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.yamlHeading small {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.yamlHeading button {
+  min-height: 28px;
+  padding: 0 8px;
+}
+.yaml pre {
+  min-height: 0;
+  margin: 0;
+  padding: 16px 20px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 2;
+  color: var(--text-secondary);
+  font: 13px / 1.9 var(--font-mono);
+}
+.yaml pre:focus-visible {
+  outline-offset: -2px;
+}
+.yaml pre::selection,
+.yaml pre ::selection {
+  background: var(--accent-commit-soft);
+}
+.copyNotice {
+  flex: none;
+  border-bottom: 1px solid var(--stroke-divider);
+  padding: 8px 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.yamlKey {
+  color: var(--yaml-key);
+}
+.yamlString {
+  color: var(--yaml-string);
+}
+.yamlNumber {
+  color: var(--yaml-number);
+}
+.yamlLiteral {
+  color: var(--yaml-ref);
+}
+.yamlComment {
+  color: var(--yaml-comment);
+}
+.yamlPunctuation {
+  color: var(--yaml-punctuation);
+}
+.footer {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--stroke-divider);
+  padding-top: 16px;
+}
+.footer output {
+  flex: 1;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+@media (max-width: 760px) {
+  .dialog {
+    padding: 20px;
+  }
+  .tree button {
+    gap: 8px;
+    padding-inline: 8px;
+  }
+}

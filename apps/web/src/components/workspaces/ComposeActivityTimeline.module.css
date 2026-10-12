@@ -502,3 +502,36 @@
     padding-left: 10px;
   }
 }
+
+/* Keep event grouping and real revisions while matching the Compose reference density. */
+.event[data-latest="true"] .eventBody {
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-lg);
+  background: var(--accent-commit-soft);
+}
+.eventBody {
+  padding: 12px 12px 16px;
+}
+.event {
+  margin-bottom: 16px;
+}
+.preview button {
+  min-height: 38px;
+  height: auto;
+  box-shadow: none;
+  border-color: var(--stroke-divider);
+  border-radius: var(--radius-md);
+  grid-template-columns: 18px minmax(80px, 0.85fr) minmax(0, 1.15fr) 16px;
+  padding-block: 8px;
+}
+.titleLine > strong {
+  font-size: 13px;
+}
+.author {
+  max-width: 140px;
+}
+@media (max-width: 760px) {
+  .eventBody {
+    padding: 10px 8px 12px;
+  }
+}

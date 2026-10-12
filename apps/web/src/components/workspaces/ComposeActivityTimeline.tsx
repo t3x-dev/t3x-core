@@ -25,6 +25,7 @@ import {
   composeTextDiff,
   composeValueChangeLabels,
 } from '@/domain/composePresentation';
+import { composeDraftChangeCards } from '@/domain/workspaces/composeDraftChanges';
 import {
   MANUAL_STAGING_EVENT_ID,
   type ManualStagingControls,
@@ -33,6 +34,7 @@ import {
 import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import type { WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 import styles from './ComposeActivityTimeline.module.css';
+import draftStyles from './ComposeDraftChanges.module.css';
 import composeStyles from './WorkspaceComposeSurface.module.css';
 
 const changeMarkers = {
@@ -156,19 +158,32 @@ export function ComposeActivityTimeline({
         </button>
       </div>
     );
-  if (scope === 'all')
+  if (scope === 'all') {
+    const changes = composeDraftChangeCards(activity.view?.netDiff ?? []).filter((card) =>
+      matchesFilter(card, filter)
+    );
     return (
-      <div className={composeStyles.actionList}>
-        {activity.view?.netDiff
-          .filter((card) => matchesFilter(card, filter))
-          .map((card) =>
+      <section className={draftStyles.panel} aria-label="All draft changes">
+        <header className={draftStyles.header}>
+          <div>
+            <h2>All draft changes</h2>
+            <p>The combined result of every saved action.</p>
+          </div>
+          <span>Base → Draft r{activity.compositionRevision ?? '—'}</span>
+        </header>
+        <ul className={draftStyles.list}>
+          {changes.map((card) =>
             renderCard(activityOperation(card), { eventId: 'all', comparison: 'draft' })
           )}
-        {!activity.view?.netDiff.filter((card) => matchesFilter(card, filter)).length ? (
-          <p className={styles.message}>Current draft matches Base. Event history is retained.</p>
+        </ul>
+        {!changes.length ? (
+          <p className={draftStyles.empty}>
+            Current draft matches Base. Event history is retained.
+          </p>
         ) : null}
-      </div>
+      </section>
     );
+  }
   const events = groupComposeActivity(activity.actions);
   const visibleEvents = events
     .map((event) => ({

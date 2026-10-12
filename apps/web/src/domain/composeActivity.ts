@@ -19,6 +19,7 @@ export interface ComposeActivityMeta {
   channel?: WorkspaceAuthoringAction['channel'];
   timestamp?: string;
   comparison: 'event' | 'draft';
+  editRequest?: number;
 }
 export interface ComposeActivitySelection {
   operation: WorkspaceYOpsDraftOperation;

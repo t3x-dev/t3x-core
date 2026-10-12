@@ -15,7 +15,6 @@ import {
   ChevronDown,
   ChevronRight,
   CircleDot,
-  Clock3,
   Code2,
   Copy,
   ExternalLink,
@@ -32,7 +31,6 @@ import {
   PanelRight,
   Pencil,
   Percent,
-  Play,
   Plus,
   RefreshCw,
   Settings,
@@ -61,6 +59,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ComposeDraftChangeRow } from '@/components/workspaces/ComposeDraftChangeRow';
 import { CurrentDraftStructureDialog } from '@/components/workspaces/CurrentDraftStructureDialog';
 import { OutputTargetsTab } from '@/components/workspaces/OutputTargetsTab';
 import { SourceArtifactRoleEditor } from '@/components/workspaces/SourceArtifactRoleEditor';
@@ -104,6 +103,7 @@ import {
   authoringVisibleCards,
   buildAuthoringReviewProjection,
 } from '@/domain/workspaces/authoringReview';
+import { composeDraftChangeCards } from '@/domain/workspaces/composeDraftChanges';
 import {
   type DraftYOp,
   deleteDraftOp,
@@ -146,6 +146,7 @@ import type { WorkspaceYOpsValue } from '@/types/workspaceYops';
 import { cn } from '@/utils/cn';
 import { ComposeActivityTimeline } from './ComposeActivityTimeline';
 import { ComposeAuthoringAssistant } from './ComposeAuthoringAssistant';
+import { ComposeFieldDialog } from './ComposeFieldDialog';
 import { ComposeNodeHistoryPanel } from './ComposeNodeHistoryPanel';
 import composeStyles from './WorkspaceComposeSurface.module.css';
 import checksStyles from './WorkspaceReviewChecks.module.css';
@@ -215,7 +216,8 @@ export function WorkspaceComposeReviewSurface({
   );
   const authoringBootstrap = useWorkspaceAuthoringBootstrap(
     controller.candidate,
-    controller.ensureSaved
+    controller.ensureSaved,
+    mode === 'compose'
   );
   // Compose publication and Review must observe the same current Draft projection.
   const activity = useComposeActivity(controller.candidate, authoringBootstrap.active);
@@ -375,6 +377,8 @@ function WorkspaceStageHeader({
   mode,
   onBranchChange,
   onModeChange,
+  onOpenChat,
+  chatOpen,
 }: {
   branchOptions: string[];
   candidate: WorkspaceCandidate;
@@ -382,6 +386,8 @@ function WorkspaceStageHeader({
   mode: WorkspaceSurfaceMode;
   onBranchChange?: (branch: string) => Promise<void> | void;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
+  onOpenChat?: () => void;
+  chatOpen?: boolean;
 }) {
   const selectedBranch = candidate.targetBranch || 'main';
   const availableBranches = Array.from(
@@ -428,6 +434,16 @@ function WorkspaceStageHeader({
       <div className={stageHeaderStyles.meta}>
         {controller ? (
           <WorkspaceSchemaSelect candidate={candidate} controller={controller} />
+        ) : null}
+        {onOpenChat ? (
+          <button
+            className={stageHeaderStyles.chatToggle}
+            type="button"
+            aria-pressed={chatOpen}
+            onClick={onOpenChat}
+          >
+            <MessageSquare aria-hidden="true" /> Chat
+          </button>
         ) : null}
       </div>
     </header>
@@ -533,6 +549,7 @@ function ComposeSurface({
       setDiscussionOpen(true);
     }
   };
+  const [fieldDialog, setFieldDialog] = useState<'structure' | 'yaml' | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [discussionOpen, setDiscussionOpen] = useState(true);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -558,9 +575,7 @@ function ComposeSurface({
     }
   };
 
-  const [sidePanel, setSidePanel] = useState<'history' | 'chat'>(
-    candidate.authoringLedger ? 'history' : 'chat'
-  );
+  const [sidePanel, setSidePanel] = useState<'history' | 'chat'>('chat');
   const [changeScope, setChangeScope] = useState<'latest' | 'all'>('latest');
   const [activitySelection, setActivitySelection] = useState<ComposeActivitySelection | null>(null);
   const [structureOpen, setStructureOpen] = useState(false);
@@ -641,13 +656,12 @@ function ComposeSurface({
     setStructureOpen(true);
   };
   useEffect(() => {
-    if (activity.enabled) setSidePanel('history');
-  }, [activity.enabled, candidate.id]);
-  useEffect(() => {
     setActivitySelection(null);
     setCurrentStep(0);
     setStaged([]);
     setStructureError(null);
+    setFieldDialog(null);
+    setSidePanel('chat');
   }, [candidate.id]);
   const selectStep = (step: number) => {
     setActivitySelection(null);
@@ -656,16 +670,18 @@ function ComposeSurface({
     setDiscussionOpen(true);
   };
   const selectActivity = useCallback(
-    (selection: ComposeActivitySelection, panel: 'history' | 'chat' = 'history') => {
+    (selection: ComposeActivitySelection, panel: 'history' | 'chat' | 'preserve' = 'history') => {
       setActivitySelection(selection);
-      setSidePanel(panel);
-      setDiscussionOpen(true);
+      if (panel !== 'preserve') {
+        setSidePanel(panel);
+        setDiscussionOpen(true);
+      }
     },
     []
   );
   const openHistoryAction = useCallback(
-    (actionId: string, nodeId: string) => {
-      void activity.selectActionNode(actionId, nodeId).then((selection) => {
+    (actionId: string, nodeId: string, path?: string) => {
+      void activity.selectActionNode(actionId, nodeId, path).then((selection) => {
         if (!selection) return;
         setChangeScope('latest');
         selectActivity(selection, 'history');
@@ -680,6 +696,10 @@ function ComposeSurface({
   const sourceMaterialIds = candidate.sourceBundle.flatMap((source) =>
     source.materialId ? [source.materialId] : []
   );
+  const openChat = () => {
+    setSidePanel('chat');
+    setDiscussionOpen(true);
+  };
 
   return (
     <div
@@ -695,12 +715,17 @@ function ComposeSurface({
         mode="compose"
         onBranchChange={onBranchChange}
         onModeChange={onModeChange}
+        onOpenChat={() => {
+          if (discussionOpen && sidePanel === 'chat') setSidePanel('history');
+          else openChat();
+        }}
+        chatOpen={discussionOpen && sidePanel === 'chat'}
       />
       <SourceToolbar
         proposedChangeCount={
           activity.view
             ? (changeScope === 'all'
-                ? activity.view.netDiff.length
+                ? composeDraftChangeCards(activity.view.netDiff).length
                 : groupComposeActivity(activity.actions).reduce(
                     (count, event) => count + composeEventCards(event, activity.cards).length,
                     0
@@ -712,6 +737,9 @@ function ComposeSurface({
         onChangeScope={setChangeScope}
         onAddManually={() => void openStructure()}
         publishError={structureError}
+        onDiscuss={openChat}
+        onEditField={setFieldDialog}
+        canEdit={Boolean(activity.view?.current !== undefined)}
       />
 
       {discussionOpen && (
@@ -827,7 +855,7 @@ function ComposeSurface({
                   role="tab"
                   type="button"
                 >
-                  <Clock3 aria-hidden="true" /> Node history
+                  <ListTree aria-hidden="true" /> Details
                 </button>
                 <button
                   aria-selected={sidePanel === 'chat'}
@@ -855,12 +883,19 @@ function ComposeSurface({
             </button>
           </header>
           {!activity.enabled ? (
-            <ComposeActivityBootstrap bootstrap={authoringBootstrap} onEnable={enableActivity} />
+            <ComposeDraftPreparation
+              key={candidate.id}
+              bootstrap={authoringBootstrap}
+              onPrepare={enableActivity}
+            />
           ) : sidePanel === 'history' ? (
             <ComposeNodeHistoryPanel
               activity={activity}
               selection={activitySelection}
               onOpenAction={openHistoryAction}
+              onDiscuss={openChat}
+              onOpenStructure={setFieldDialog}
+              onSubmit={stageManualOps}
             />
           ) : activity.view ? (
             <ComposeAuthoringAssistant
@@ -888,6 +923,7 @@ function ComposeSurface({
               sourcesControl={
                 <WorkspaceSourcesMenu candidate={candidate} controller={controller} />
               }
+              contextLabel={`${candidate.title} · Draft r${activity.compositionRevision ?? 0}`}
             />
           ) : (
             <p className={composeStyles.activityStatus} role={activity.error ? 'alert' : 'status'}>
@@ -896,36 +932,70 @@ function ComposeSurface({
           )}
         </aside>
       ) : null}
+      {fieldDialog ? (
+        <ComposeFieldDialog
+          key={`${candidate.id}:${fieldDialog}`}
+          activity={activity}
+          title={candidate.title}
+          initialView={fieldDialog}
+          current={workingCurrent}
+          onSubmit={stageManualOps}
+          onClose={() => setFieldDialog(null)}
+          onDiscuss={() => {
+            setFieldDialog(null);
+            openChat();
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
-function ComposeActivityBootstrap({
+function ComposeDraftPreparation({
   bootstrap,
-  onEnable,
+  onPrepare,
 }: {
   bootstrap: ReturnType<typeof useWorkspaceAuthoringBootstrap>;
-  onEnable: () => Promise<void>;
+  onPrepare: () => Promise<void>;
 }) {
   const importing = bootstrap.importSnapshot !== undefined;
+  const [paused, setPaused] = useState(false);
+  const prepare = () => {
+    setPaused(false);
+    void onPrepare();
+  };
   return (
     <div className={composeStyles.activityBootstrap}>
       <p>
         {importing
-          ? 'Import the current Draft snapshot to enable activity. Existing changes will be preserved.'
-          : 'Enable Draft activity to chat with the Workspace assistant. It reads the Draft, schema and sources, and can propose changes.'}
+          ? 'Import the existing draft to continue in Chat. Your current changes will be preserved.'
+          : bootstrap.error
+            ? 'The draft could not be prepared.'
+            : paused
+              ? 'Draft import paused. Continue when you are ready.'
+              : 'Preparing your draft…'}
       </p>
       <div>
-        <button disabled={bootstrap.busy} onClick={() => void onEnable()} type="button">
-          <Play aria-hidden="true" />
-          {bootstrap.busy
-            ? 'Enabling Draft activity…'
-            : importing
-              ? 'Confirm import and enable'
-              : 'Enable Draft activity'}
-        </button>
+        {importing || bootstrap.error || paused ? (
+          <button disabled={bootstrap.busy} onClick={prepare} type="button">
+            {bootstrap.busy
+              ? 'Preparing…'
+              : importing
+                ? 'Import draft and continue'
+                : paused
+                  ? 'Continue'
+                  : 'Retry'}
+          </button>
+        ) : null}
         {importing ? (
-          <button disabled={bootstrap.busy} onClick={bootstrap.cancel} type="button">
+          <button
+            disabled={bootstrap.busy}
+            onClick={() => {
+              bootstrap.cancel();
+              setPaused(true);
+            }}
+            type="button"
+          >
             Cancel import
           </button>
         ) : null}
@@ -1023,6 +1093,9 @@ function SourceToolbar({
   onAddManually,
   onChangeScope,
   publishError,
+  onDiscuss,
+  onEditField,
+  canEdit,
 }: {
   proposedChangeCount: number;
   changeScope: 'latest' | 'all';
@@ -1030,17 +1103,16 @@ function SourceToolbar({
   onAddManually: () => void;
   onChangeScope: (scope: 'latest' | 'all') => void;
   publishError?: string | null;
+  onDiscuss: () => void;
+  onEditField: (view: 'structure' | 'yaml') => void;
+  canEdit: boolean;
 }) {
   return (
     <section className={composeStyles.sourcesSection}>
       <div className={composeStyles.sourcesHeading}>
         <h2 className="sr-only">Proposed changes</h2>
         <span className="sr-only">{proposedChangeCount} changes</span>
-        <h3 className="sr-only">Sources</h3>
         <div className={composeStyles.composeToolbarActions}>
-          <button className={composeStyles.addManually} onClick={onAddManually} type="button">
-            <Plus aria-hidden="true" /> Add manually
-          </button>
           <div className={composeStyles.changeScope} role="tablist" aria-label="Change scope">
             <button
               aria-selected={changeScope === 'latest'}
@@ -1059,6 +1131,28 @@ function SourceToolbar({
               All changes
             </button>
           </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className={composeStyles.newChange} type="button">
+                <Plus aria-hidden="true" /> New change <ChevronDown aria-hidden="true" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem onSelect={onAddManually}>
+                <ListTree aria-hidden="true" /> Add manually
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={!canEdit} onSelect={() => onEditField('structure')}>
+                <Pencil aria-hidden="true" /> Edit a field
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={!canEdit} onSelect={() => onEditField('yaml')}>
+                <Code2 aria-hidden="true" /> Open YAML
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={onDiscuss}>
+                <MessageSquare aria-hidden="true" /> Describe it in Chat
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
       {controller.error || controller.notice || publishError ? (
@@ -1105,7 +1199,10 @@ function ProposedDraftPanel({
 }: {
   activity: ReturnType<typeof useComposeActivity>;
   activitySelection: ComposeActivitySelection | null;
-  onActivitySelect: (selection: ComposeActivitySelection, panel?: 'history' | 'chat') => void;
+  onActivitySelect: (
+    selection: ComposeActivitySelection,
+    panel?: 'history' | 'chat' | 'preserve'
+  ) => void;
   candidate: WorkspaceCandidate;
   changeFilter: ComposeChangeFilter;
   changeScope: 'latest' | 'all';
@@ -1118,21 +1215,26 @@ function ProposedDraftPanel({
   workingCurrent?: unknown;
 }) {
   const operations = candidate.yopsDraft.operations;
+  const editRequest = useRef(0);
   useEffect(() => {
     if (!activity.view) return;
     if (changeScope === 'all') {
       if (activitySelection?.meta.comparison === 'draft') return;
+      const changes = composeDraftChangeCards(activity.view.netDiff);
       const card =
-        activity.view.netDiff.find(
+        changes.find(
           (item) =>
             item.nodeId === activitySelection?.operation.id &&
             item.path === activitySelection.operation.path
-        ) ?? activity.view.netDiff[0];
+        ) ?? changes[0];
       if (card)
-        onActivitySelect({
-          operation: activityOperation(card),
-          meta: { eventId: 'all', comparison: 'draft' },
-        });
+        onActivitySelect(
+          {
+            operation: activityOperation(card),
+            meta: { eventId: 'all', comparison: 'draft' },
+          },
+          'preserve'
+        );
       return;
     }
     const stagingSelected =
@@ -1176,17 +1278,20 @@ function ProposedDraftPanel({
     const action = event.actions.findLast((entry) =>
       activity.cards[entry.actionId]?.some((item) => item.nodeId === card.nodeId)
     )!;
-    onActivitySelect({
-      operation: activityOperation(card, action.reason),
-      meta: {
-        eventId: event.id,
-        actionId: action.actionId,
-        actor: action.actor.id === 'human:local-user' ? 'You' : action.actor.id,
-        channel: action.channel,
-        timestamp: action.publishedAt,
-        comparison: 'event',
+    onActivitySelect(
+      {
+        operation: activityOperation(card, action.reason),
+        meta: {
+          eventId: event.id,
+          actionId: action.actionId,
+          actor: action.actor.id === 'human:local-user' ? 'You' : action.actor.id,
+          channel: action.channel,
+          timestamp: action.publishedAt,
+          comparison: 'event',
+        },
       },
-    });
+      'preserve'
+    );
   }, [
     activity.view,
     activity.actions,
@@ -1226,6 +1331,26 @@ function ProposedDraftPanel({
     const stamp = meta?.timestamp ?? candidate.updatedAt;
     const field = composeFieldPresentation(candidate, operation);
     const FieldIcon = field.icon;
+    if (meta?.comparison === 'draft') {
+      return (
+        <ComposeDraftChangeRow
+          key={`${operation.id}:${operation.path}`}
+          operation={operation}
+          Icon={FieldIcon}
+          selected={selected}
+          onSelect={() => selectChange()}
+          onEdit={() =>
+            onActivitySelect(
+              {
+                operation,
+                meta: { ...meta, editRequest: ++editRequest.current },
+              },
+              'history'
+            )
+          }
+        />
+      );
+    }
     const operationSource =
       meta && !operation.sourceRefs?.length
         ? undefined
@@ -1245,9 +1370,7 @@ function ProposedDraftPanel({
     const cardTitle =
       composeNodeTitle(afterValue) ??
       composeNodeTitle(beforeValue) ??
-      (meta?.comparison === 'draft' && field.label === 'Requirement' && afterValue !== undefined
-        ? valueLabels.after
-        : composePathLabel(operation.path, operation.id));
+      composePathLabel(operation.path, operation.id);
     const cardReason = operation.reason ?? operation.summary;
     const showReason =
       cardReason !== `Change ${operation.path}` &&
@@ -1446,7 +1569,7 @@ function ProposedDraftPanel({
                 event.stopPropagation();
                 selectChange();
               }}
-              title={meta ? 'View this node history' : 'Enable Draft activity to view node history'}
+              title={meta ? 'View this node history' : 'Draft history is being prepared'}
               type="button"
             >
               <ListTree aria-hidden="true" />
@@ -1474,7 +1597,7 @@ function ProposedDraftPanel({
             ) : (
               <section className={composeStyles.actionCard}>
                 <p className="text-xs leading-5 text-[var(--text-secondary)]">
-                  Add source evidence, then generate structured actions.
+                  Add context in Chat, then describe the change you want to make.
                 </p>
               </section>
             )}

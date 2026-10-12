@@ -1,5 +1,5 @@
 import type { WorkspaceAuthoringCard } from '@t3x-dev/api-client';
-import { applyYOps, type YOp, type YValue } from '@t3x-dev/yops';
+import { applyYOps, resolvePath, type YOp, type YValue } from '@t3x-dev/yops';
 import { activityOperation } from '@/domain/composeActivity';
 import type { WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 import {
@@ -8,7 +8,6 @@ import {
   joinDraftPath,
   lastDraftPathSegment,
   parentDraftPath,
-  walkDraftStructure,
 } from './draftStructure';
 
 export interface StagedManualCard {
@@ -39,7 +38,7 @@ export function applyDraftOpsToCurrent(current: unknown, operations: readonly Dr
 }
 
 export function draftValueAt(current: unknown, path: string): unknown {
-  return walkDraftStructure(current).find((node) => node.path === path)?.value;
+  return current === undefined ? undefined : resolvePath(current as YValue, path);
 }
 
 export function draftOpFocus(operation: DraftYOp): { path: string; afterPath?: string } {
@@ -112,15 +111,15 @@ export function stageDraftOps(
   return { current: next, items };
 }
 
-export function previewStagedCurrent(
-  published: unknown,
+export function previewStagedCurrent<T>(
+  published: T,
   items: readonly Pick<StagedManualCard, 'operation'>[]
-): unknown {
+): T {
   return items.length
-    ? applyDraftOpsToCurrent(
+    ? (applyDraftOpsToCurrent(
         published,
         items.map((item) => item.operation)
-      )
+      ) as T)
     : published;
 }
 

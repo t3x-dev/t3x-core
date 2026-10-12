@@ -11,6 +11,7 @@ import {
 import type { WorkspaceCandidate, WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 
 const mocks = vi.hoisted(() => ({
+  readAuthoring: vi.fn(),
   refreshWorkspaces: vi.fn(),
   saveDraft: vi.fn(),
   startNextIteration: vi.fn(),
@@ -26,8 +27,25 @@ const mocks = vi.hoisted(() => ({
   validateComparison: vi.fn(),
 }));
 
+vi.mock('@/infrastructure/sharedApiClient', () => ({
+  getSharedApiClient: () => ({
+    workspaces: { authoring: { read: mocks.readAuthoring } },
+  }),
+}));
+
 vi.mock('@/hooks/workspaces/useWorkspaceYOps', () => ({
   validateWorkspaceCandidateYOps: mocks.validateComparison,
+}));
+
+vi.mock('@/hooks/workspaces/useWorkspaceAuthoringBootstrap', () => ({
+  useWorkspaceAuthoringBootstrap: () => ({
+    active: false,
+    busy: true,
+    error: null,
+    importSnapshot: undefined,
+    start: vi.fn(),
+    cancel: vi.fn(),
+  }),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -182,6 +200,7 @@ function mockComparison(summary: Record<string, string>, title?: string) {
 describe('WorkspaceWorkbench Compose/Review integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.readAuthoring.mockRejectedValue(new Error('This draft has no authoring ledger.'));
     mocks.validateComparison.mockReset();
     mockComparison({});
     mocks.chatMessages.length = 0;
@@ -221,10 +240,13 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
       />
     );
 
-    expect(screen.getByRole('combobox', { name: 'Workspace scenario' })).toHaveValue(release.id);
+    expect(screen.getByRole('region', { name: 'Workspace detail' })).toHaveAccessibleDescription(
+      release.title
+    );
+    expect(screen.getByTitle(release.title)).toBeVisible();
   });
 
-  it('offers Draft activity instead of a separate discussion chat', () => {
+  it('prepares Chat without a separate activation or generation button', () => {
     render(
       <WorkspaceWorkbench
         candidates={[workspace('workspace_main', 'Main workspace')]}
@@ -233,7 +255,8 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     );
 
     expect(mocks.sourceThreadGenerationOptions).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: /Enable Draft activity/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Enable Draft activity/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Preparing your draft…')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Generate changes/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Switch to discuss/ })).not.toBeInTheDocument();
   });
@@ -246,12 +269,10 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     ]);
     render(<WorkspaceWorkbench candidates={[candidate]} projectId="proj_1" />);
 
-    expect(screen.getAllByRole('button', { name: /prd\/summary\/outcome/ }).length).toBeGreaterThan(
-      0
-    );
-    expect(
-      screen.getAllByRole('button', { name: /prd\/requirements\/canary\/title/ }).length
-    ).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Discuss Outcome' })).toBeInTheDocument();
+    expect(screen.getByText('Auditable rollouts')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Discuss Title' })).toBeInTheDocument();
+    expect(screen.getByText('Canary rollout')).toBeVisible();
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
 
     expect(screen.getByLabelText('Rendered result')).toBeInTheDocument();
@@ -272,7 +293,7 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     expect(screen.getAllByText('material:brief').length).toBeGreaterThan(0);
   });
 
-  it('switches scenarios through the new sidebar selector and updates the URL owner', () => {
+  it('updates the Compose context when the navigation owner selects another workspace', () => {
     const baseline = workspace('workspace_main', 'Main workspace', [
       operation('op_outcome', 'prd/summary/outcome', 'Baseline'),
     ]);
@@ -296,11 +317,11 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
       />
     );
 
-    fireEvent.change(screen.getByRole('combobox', { name: 'Workspace scenario' }), {
-      target: { value: scenario.id },
-    });
-
-    expect(mocks.onSelectedWorkspaceChange).toHaveBeenCalledWith(scenario.id);
+    expect(screen.getByRole('region', { name: 'Workspace detail' })).toHaveAccessibleDescription(
+      baseline.title
+    );
+    expect(screen.getByText('Baseline')).toBeVisible();
+    expect(screen.queryByText('Reduced risk')).not.toBeInTheDocument();
     rerender(
       <WorkspaceWorkbench
         candidates={[baseline, scenario]}
@@ -309,7 +330,12 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
         selectedWorkspaceId={scenario.id}
       />
     );
-    expect(screen.getByRole('combobox', { name: 'Workspace scenario' })).toHaveValue(scenario.id);
+    expect(screen.getByRole('region', { name: 'Workspace detail' })).toHaveAccessibleDescription(
+      scenario.title
+    );
+    expect(screen.getByText('Reduced risk')).toBeVisible();
+    expect(screen.queryByText('Baseline')).not.toBeInTheDocument();
+    expect(mocks.onSelectedWorkspaceChange).not.toHaveBeenCalled();
   });
 
   it('renders the selected workspace changes in Review without the retired compare control', async () => {
@@ -338,7 +364,9 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
       />
     );
 
-    expect(screen.getByRole('combobox', { name: 'Workspace scenario' })).toHaveValue(baseline.id);
+    expect(screen.getByRole('region', { name: 'Workspace detail' })).toHaveAccessibleDescription(
+      baseline.title
+    );
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
 
     expect(screen.queryByRole('combobox', { name: 'Compare scenario' })).not.toBeInTheDocument();
@@ -366,6 +394,7 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     );
 
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Structure diff' }));
     fireEvent.click(screen.getByRole('button', { name: 'View in State' }));
 
     expect(mocks.onViewCommitInState).toHaveBeenCalledWith(
@@ -382,10 +411,13 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Review full draft' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare review' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No structured changes yet');
     expect(screen.getByRole('button', { name: 'Render' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'Commit changes' })).toBeDisabled();
+    expect(mocks.saveDraft).not.toHaveBeenCalled();
   });
 
   it('renders loading, error, and no-candidate states explicitly', () => {

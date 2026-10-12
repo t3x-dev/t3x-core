@@ -5,7 +5,7 @@ import type {
   WorkspaceAuthoringCard,
   WorkspaceAuthoringOutcome,
 } from '@t3x-dev/api-client';
-import { AlertTriangle, ArrowUp, FileText, Square, X } from 'lucide-react';
+import { AlertTriangle, ArrowUp, FileText, Layers, Square, X } from 'lucide-react';
 import NextImage from 'next/image';
 import {
   type ClipboardEvent,
@@ -54,6 +54,7 @@ export function ComposeAuthoringAssistant({
   sourcesControl,
   allowProposal = true,
   proposalBlockedHint,
+  contextLabel,
 }: {
   projectId: string;
   conversationId?: string;
@@ -71,6 +72,7 @@ export function ComposeAuthoringAssistant({
   sourcesControl?: ReactNode;
   allowProposal?: boolean;
   proposalBlockedHint?: string;
+  contextLabel?: string;
 }) {
   const [conversationId, setConversationId] = useState(initialConversationId);
   const [pendingCandidate, setPendingCandidate] = useState<string | null>(
@@ -322,6 +324,12 @@ export function ComposeAuthoringAssistant({
         </p>
       ) : null}
       <fieldset className={styles.discussionComposer} aria-label="Message composer">
+        {contextLabel ? (
+          <div className={styles.chatContext}>
+            <Layers aria-hidden="true" /> <span title={contextLabel}>{contextLabel}</span>
+            {context.selectedNodeId ? <small>Selected field</small> : null}
+          </div>
+        ) : null}
         <textarea
           aria-label="Workspace instruction"
           disabled={chat.isLoading}
