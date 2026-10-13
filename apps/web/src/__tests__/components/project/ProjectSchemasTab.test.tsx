@@ -19,13 +19,38 @@ vi.mock('@/components/schemas/SchemaCatalogExperience', () => ({
 
 const refreshWorkspaces = vi.fn();
 const saveDraft = vi.fn();
-const extractCandidate = vi.fn();
 const refreshPublishedVersions = vi.fn();
 let workspaces: WorkspaceCandidate[] = [];
 let publishedVersions: PublishedSchemaVersionManifest[] = [];
 const PROMPT_SCHEMA_HASH =
   'sha256:1d05f6c4ae0aeef34f15714e166377e4fd4c08644c885a2ddc7c2e50bf39f930';
 const BLUEPRINT_SCHEMA_HASH = `sha256:${'b'.repeat(64)}`;
+
+function publishedSchemaFixtures(): PublishedSchemaVersionManifest[] {
+  return (['prd', 'skill', 'prompt'] as const).map((family) => ({
+    apiVersion: 't3x.dev/yschema-blueprint/v1',
+    canonicalName: `t3x/${family}`,
+    version: 'v1',
+    family,
+    title: `${family === 'prd' ? 'PRD' : family === 'skill' ? 'Skill' : 'Prompt'} Schema`,
+    description: `Published ${family} contract.`,
+    status: 'published',
+    source: 'team',
+    schema: {
+      yschema: '0.1',
+      name: `t3x/${family}`,
+      version: 'v1',
+      strict: false,
+      nodes: { [family]: { required: true, repeated: false } },
+    },
+    registry: {
+      schemaHash:
+        family === 'prompt'
+          ? PROMPT_SCHEMA_HASH
+          : `sha256:${(family === 'prd' ? 'a' : 'c').repeat(64)}`,
+    },
+  }));
+}
 
 vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
   useProjectWorkspaces: () => ({
@@ -36,7 +61,7 @@ vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
   }),
 }));
 vi.mock('@/hooks/workspaces/useWorkspaceFlow', () => ({
-  useWorkspaceFlow: () => ({ extractCandidate, saveDraft }),
+  useWorkspaceFlow: () => ({ saveDraft }),
 }));
 vi.mock('@/hooks/schemas/useProjectYSchemaVersions', () => ({
   useProjectYSchemaVersions: () => ({
@@ -74,28 +99,10 @@ const workspace: WorkspaceCandidate = {
 beforeEach(() => {
   schemaRouteQuery = '';
   workspaces = [];
-  publishedVersions = ['prd', 'skill', 'prompt'].map((family) => ({
-    apiVersion: 't3x.dev/yschema-blueprint/v1',
-    canonicalName: `t3x/${family}`,
-    version: 'v1',
-    family: 'open',
-    title: `${family === 'prd' ? 'PRD' : family[0].toUpperCase() + family.slice(1)} Schema`,
-    description: 'Published test schema',
-    status: 'published',
-    source: 'team',
-    schema: {
-      yschema: '0.1',
-      name: `t3x/${family}`,
-      version: 'v1',
-      strict: false,
-      nodes: { [family]: { required: true, repeated: false } },
-    },
-    registry: { schemaHash: family === 'prompt' ? PROMPT_SCHEMA_HASH : BLUEPRINT_SCHEMA_HASH },
-  }));
+  publishedVersions = publishedSchemaFixtures();
   refreshWorkspaces.mockReset().mockResolvedValue(undefined);
   refreshPublishedVersions.mockReset().mockResolvedValue([]);
   saveDraft.mockReset();
-  extractCandidate.mockReset();
   useProjectWorkspaceSchemaBindingsStore.setState({ bindingsByProjectId: {} });
 });
 
@@ -106,7 +113,7 @@ describe('ProjectSchemasTab', () => {
     render(<ProjectSchemasTab projectId="proj_test" />);
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'Workspace missing was not found on this branch'
+      'Workspace missing was not found on this branch in this project'
     );
     fireEvent.click(screen.getByRole('button', { name: /Prompt Schema/ }));
     fireEvent.click(screen.getByRole('radio', { name: /v1 Published/i }));
@@ -137,7 +144,7 @@ describe('ProjectSchemasTab', () => {
     expect(screen.queryByRole('button', { name: 'Apply to Main workspace' })).toBeNull();
     expect(saveDraft).not.toHaveBeenCalled();
   });
-  it('renders the multi-family schema version browser from fixtures', () => {
+  it('renders the multi-family browser from published project versions', () => {
     render(<ProjectSchemasTab projectId="proj_test" />);
 
     expect(screen.getByRole('heading', { name: 'Schemas' })).toBeInTheDocument();
@@ -166,27 +173,34 @@ describe('ProjectSchemasTab', () => {
     );
   });
 
-  it('does not fabricate schemas when the project has no published versions', () => {
+  it('keeps published project Schemas out of the Official scope', () => {
+    render(<ProjectSchemasTab projectId="proj_test" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'My Schemas' }));
+    expect(screen.getByRole('button', { name: /PRD Schema/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Official' }));
+
+    expect(screen.queryByRole('button', { name: /PRD Schema/ })).not.toBeInTheDocument();
+    expect(screen.getByText('No Schemas match this search or status.')).toBeInTheDocument();
+  });
+
+  it('does not populate an empty project with built-in Schema versions', () => {
     publishedVersions = [];
     render(<ProjectSchemasTab projectId="proj_test" />);
 
-    expect(screen.queryByRole('button', { name: /PRD Schema/ })).not.toBeInTheDocument();
     expect(screen.getByText(/No project schema versions are published yet/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /PRD Schema/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Skill Schema/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Prompt Schema/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   });
 
-  it('saves a stale binding before regenerating the current Workspace candidate', async () => {
+  it('saves a stale binding for the current Workspace', async () => {
     workspaces = [workspace];
     saveDraft.mockImplementation(async (candidate: WorkspaceCandidate) => ({
       candidate_id: candidate.id,
       workspace: { ...candidate, revision: 2 },
-    }));
-    extractCandidate.mockImplementation(async (candidate: WorkspaceCandidate) => ({
-      candidate_id: candidate.id,
-      workspace: {
-        ...candidate,
-        revision: 3,
-        schemaCandidate: { summary: 'Regenerated', fields: [] },
-      },
     }));
     render(<ProjectSchemasTab projectId="proj_test" />);
 
@@ -207,11 +221,12 @@ describe('ProjectSchemasTab', () => {
     );
     expect(staleWorkspace.schemaReview.verdict).toBe('needs_review');
     expect(staleWorkspace.yopsDraft.operations).toEqual([]);
-    await waitFor(() => expect(extractCandidate).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText(/candidate was regenerated/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Main workspace now uses Prompt Schema v1\./)
+    ).toBeInTheDocument();
   });
 
-  it('applies a published project Blueprint and regenerates the Workspace candidate', async () => {
+  it('applies a published project Blueprint to the Workspace', async () => {
     workspaces = [workspace];
     publishedVersions = [
       {
@@ -237,16 +252,9 @@ describe('ProjectSchemasTab', () => {
       candidate_id: candidate.id,
       workspace: { ...candidate, revision: 2 },
     }));
-    extractCandidate.mockImplementation(async (candidate: WorkspaceCandidate) => ({
-      candidate_id: candidate.id,
-      workspace: {
-        ...candidate,
-        revision: 3,
-        schemaCandidate: { summary: 'Regenerated from Blueprint', fields: [] },
-      },
-    }));
     render(<ProjectSchemasTab projectId="proj_test" />);
 
+    fireEvent.click(screen.getByRole('button', { name: 'My Schemas' }));
     fireEvent.click(screen.getByRole('button', { name: /Product Schema/ }));
     fireEvent.click(screen.getByRole('radio', { name: /1.0.0 Published/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply to Main workspace' }));
@@ -261,24 +269,22 @@ describe('ProjectSchemasTab', () => {
         mode: 'pinned',
       },
     ]);
-    await waitFor(() => expect(extractCandidate).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText(/candidate was regenerated/)).toBeInTheDocument();
+    expect(await screen.findByText(/now uses Product Schema 1\.0\.0\./)).toBeInTheDocument();
   });
 
-  it('keeps the persisted stale Prompt binding recoverable when regeneration fails', async () => {
+  it('persists the stale Prompt binding and refreshes the Workspace list', async () => {
     workspaces = [workspace];
     saveDraft.mockImplementation(async (candidate: WorkspaceCandidate) => ({
       candidate_id: candidate.id,
       workspace: { ...candidate, revision: 2 },
     }));
-    extractCandidate.mockRejectedValue(new Error('Prompt source could not be regenerated'));
     render(<ProjectSchemasTab projectId="proj_test" />);
 
     fireEvent.click(screen.getByRole('button', { name: /Prompt Schema/ }));
     fireEvent.click(screen.getByRole('radio', { name: /v1 Published/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply to Main workspace' }));
 
-    expect(await screen.findByText(/regeneration failed/)).toBeInTheDocument();
+    expect(await screen.findByText(/now uses Prompt Schema v1\./)).toBeInTheDocument();
     const savedWorkspace = saveDraft.mock.calls[0][0] as WorkspaceCandidate;
     expect(savedWorkspace.schemaBindings).toEqual([
       {

@@ -24,6 +24,13 @@ vi.mock('@/hooks/projects/useProjectPullRequestsApi', () => ({
   useProjectPullRequestsApi: () => pullRequestApi,
 }));
 
+const changePreview = vi.hoisted(() =>
+  vi.fn(() => ({ changes: undefined, error: null, loading: false }))
+);
+vi.mock('@/hooks/projects/usePullRequestChangePreview', () => ({
+  usePullRequestChangePreview: changePreview,
+}));
+
 import { ProjectReviewsTab } from '@/components/project/ProjectReviewsTab';
 
 const realCompareCandidate = {
@@ -167,6 +174,28 @@ describe('ProjectReviewsTab', () => {
     expect(screen.getByRole('button', { name: 'Create pull request' })).toHaveAttribute(
       'data-variant',
       'commit'
+    );
+  });
+
+  it('previews a diverged branch from its merge base, not the moved target head', async () => {
+    pullRequestApi.fetchCompareCandidates.mockResolvedValue({
+      base_branches: ['main'],
+      compare_branches: [
+        {
+          ...realCompareCandidate,
+          merge_base_commit_id: 'sha256:fork-point',
+          behind_by: 1,
+        },
+      ],
+    });
+    render(<ProjectReviewsTab projectId="proj_real" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
+    expect(await screen.findByDisplayValue('Real feature')).toBeInTheDocument();
+    expect(changePreview).toHaveBeenLastCalledWith(
+      'proj_real',
+      'sha256:source-preview',
+      'sha256:fork-point'
     );
   });
 
@@ -336,7 +365,7 @@ describe('ProjectReviewsTab', () => {
       'feature/prd-audience'
     );
     expect(
-      await screen.findByText('No other committed branches can be compared with this base.')
+      screen.getByText('No other committed branches can be compared with this base.')
     ).toBeInTheDocument();
   });
 
@@ -449,6 +478,15 @@ describe('ProjectReviewsTab', () => {
 
     expect(screen.getByText('Resolution saved. Merge is ready.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Merge PR' })).toBeEnabled();
+    expect(screen.queryByRole('checkbox', { name: 'Use feature' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit merged value' }));
+    expect(screen.getByRole('checkbox', { name: 'Use feature' })).toBeChecked();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Keep main' }));
+    expect(screen.getByRole('button', { name: 'Merge PR' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Edit merged value' })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Keep main' })).not.toBeInTheDocument();
   });
 
   it('writes the selected side onto the merge draft before merging a project PR', async () => {

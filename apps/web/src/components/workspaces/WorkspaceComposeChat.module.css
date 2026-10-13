@@ -213,6 +213,47 @@
 .discussion .actions {
   margin-top: 2px;
 }
+.messageImages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.discussionMessage[data-author="user"] .messageImages {
+  justify-content: flex-end;
+  max-width: 78%;
+}
+.messageImage {
+  width: 120px;
+  height: 120px;
+  border: 1px solid var(--stroke-default);
+  border-radius: 10px;
+  object-fit: cover;
+  background: var(--surface-app);
+}
+.messageFile {
+  display: inline-flex;
+  max-width: 240px;
+  height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--stroke-default);
+  border-radius: 10px;
+  background: var(--surface-app);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.messageFile > svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.messageFile > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 @media (max-width: 720px) {
   .content {
     padding: 22px 16px;
@@ -226,4 +267,57 @@
     width: 32px;
     height: 32px;
   }
+}
+
+/* Compose conversation: calm reading, with the input anchored below the transcript. */
+.discussionWelcome {
+  justify-content: flex-start;
+  margin-block: 0 24px;
+  min-height: 0;
+  padding-block: 12px 16px;
+  gap: 16px;
+}
+.welcomeTitle {
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+.discussion {
+  background: var(--surface-panel);
+}
+.discussionContent {
+  padding: 24px 20px;
+  gap: 24px;
+}
+.discussionMessage[data-author="user"] {
+  margin-left: 22px;
+}
+.discussionMessage[data-author="user"] .discussionMessageHeader {
+  color: var(--text-tertiary);
+}
+.discussionMessage[data-author="user"] .discussionAvatar {
+  display: none;
+}
+.discussionMessage[data-author="user"] .discussionBubble {
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+  background: var(--surface-app);
+  padding: 12px 14px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.discussionMessage[data-author="assistant"] .discussionAvatar {
+  border-radius: var(--radius-md);
+  background: var(--accent-conversation-soft);
+  color: var(--accent-conversation);
+}
+.discussionMessage[data-author="assistant"] .discussionBubble {
+  font-size: 13px;
+  line-height: 1.75;
+  margin-left: 0;
+}
+.discussionMessage[data-author="user"] .messageImages {
+  justify-content: flex-start;
+  max-width: 100%;
 }

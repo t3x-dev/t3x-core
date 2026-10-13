@@ -91,8 +91,6 @@ import type {
   GenerationProviderCatalog,
   GenerationRequest,
   GenerationResponse,
-  GenerationStreamEvent,
-  GenerationStreamOptions,
   HealthResponse,
   ImportUrlInput,
   ImportUrlPreviewResult,
@@ -196,7 +194,6 @@ export class T3xClient {
     this.fetchFn = config.fetch ?? fetch;
     this.generation = Object.freeze<GenerationCapability>({
       complete: (input) => this.generate(input),
-      stream: (input, options) => this.streamGeneration(input, options),
       providers: () => this.listGenerationProviders(),
     });
     this.sourceThreads = Object.freeze<SourceThreadCapability>({
@@ -1042,64 +1039,6 @@ export class T3xClient {
 
   async listGenerationProviders(): Promise<GenerationProviderCatalog> {
     return this.request<GenerationProviderCatalog>('GET', '/v1/chat/providers');
-  }
-
-  async *streamGeneration(
-    input: GenerationRequest,
-    options?: GenerationStreamOptions
-  ): AsyncGenerator<GenerationStreamEvent, void, unknown> {
-    const response = await this.fetchFn(`${this.baseUrl}/v1/chat/stream`, {
-      method: 'POST',
-      headers: this.headers,
-      body: JSON.stringify(input),
-      signal: options?.signal,
-    });
-
-    if (!response.ok) {
-      const data = (await response.json().catch(() => null)) as ApiErrorResponse | null;
-      const error = data?.success === false ? data.error : null;
-      throw new T3xApiError(
-        error?.code ?? 'GENERATION_FAILED',
-        error?.message || response.statusText || 'Generation stream failed',
-        response.status,
-        error?.details
-      );
-    }
-    if (response.body === null) {
-      throw new T3xApiError(
-        'GENERATION_STREAM_UNAVAILABLE',
-        'Generation stream response has no body',
-        response.status
-      );
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const records = buffer.split(/\r?\n\r?\n/);
-        buffer = records.pop() ?? '';
-        for (const record of records) {
-          const data = record
-            .split(/\r?\n/)
-            .filter((line) => line.startsWith('data:'))
-            .map((line) => line.slice(5).trim())
-            .join('\n');
-          if (data.length === 0 || data === '[DONE]') continue;
-          try {
-            yield JSON.parse(data) as GenerationStreamEvent;
-          } catch {
-            // Ignore malformed upstream records. The server owns event validation.
-          }
-        }
-      }
-    } finally {
-      reader.releaseLock();
-    }
   }
 
   /** @deprecated Use generation.complete() or generate(). */

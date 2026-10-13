@@ -173,6 +173,98 @@ export const ProposalGenerationDraftSchema = z
     }
   });
 
+/**
+ * OpenAI/Gemini/Claude structured output cannot accept `z.custom` ProtocolValue
+ * nodes: every schema property must have a JSON Schema `type`. Keep
+ * {@link ProposalGenerationDraftSchema} for compile/verify, and use this
+ * typed subset only as the provider response_format.
+ */
+const structuredJsonScalarSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+
+const structuredLocatorSchema = z
+  .object({
+    scheme: nonEmptyString,
+    value: z
+      .object({
+        quote: nonEmptyString,
+        occurrence: z.number().int().nonnegative(),
+      })
+      .strict(),
+  })
+  .strict();
+
+const structuredEvidencePointerSchema = z
+  .object({
+    sourceIndex: z.number().int().nonnegative(),
+    locator: structuredLocatorSchema,
+  })
+  .strict();
+
+const structuredAttributedClaimSchema = z
+  .object({
+    mode: z.enum(['stated', 'inferred', 'authored']),
+    value: nonEmptyString,
+    evidencePointers: z.array(structuredEvidencePointerSchema).max(64),
+  })
+  .strict();
+
+const structuredClaimSchema = z.union([
+  z.object({ mode: z.literal('unspecified') }).strict(),
+  structuredAttributedClaimSchema,
+]);
+
+const structuredOperationSchema = z.union([
+  z
+    .object({
+      set: z.object({ path: nonEmptyString, value: structuredJsonScalarSchema }).strict(),
+    })
+    .strict(),
+  z
+    .object({
+      define: z.object({ path: nonEmptyString }).strict(),
+    })
+    .strict(),
+]);
+
+const structuredChallengeSchema = z
+  .object({
+    path: nonEmptyString,
+    priorValue: structuredJsonScalarSchema,
+    priorEvidencePointers: z.array(structuredEvidencePointerSchema).max(64),
+    reason: nonEmptyString.max(4_096),
+    impactPaths: z.array(nonEmptyString).max(256),
+  })
+  .strict();
+
+export const ProposalGenerationDraftStructuredSchema = z
+  .object({
+    schema: z.literal(PROPOSAL_GENERATION_DRAFT_SCHEMA),
+    version: z.literal(1),
+    posture: z.enum(PROPOSAL_GENERATION_POSTURES),
+    intent: structuredClaimSchema,
+    rationale: structuredClaimSchema,
+    changes: z
+      .array(
+        z
+          .object({
+            id: nonEmptyString.max(256),
+            operations: z.array(structuredOperationSchema).min(1).max(1_000),
+            claimedOrigin: z.enum(['source_backed', 'inferred', 'recommended']),
+            evidencePointers: z.array(structuredEvidencePointerSchema).max(64),
+            basisPointers: z.array(DraftBasisPointerSchema).max(64),
+            assumptions: z.array(nonEmptyString.max(4_096)).max(128),
+            reason: nonEmptyString.max(4_096),
+            challenges: z.array(structuredChallengeSchema).max(128),
+          })
+          .strict()
+      )
+      .min(1)
+      .max(200),
+    alternatives: z.array(structuredJsonScalarSchema).max(20),
+    warnings: z.array(nonEmptyString.max(4_096)).max(256),
+  })
+  .strict();
+
 export type DraftEvidencePointer = z.infer<typeof DraftEvidencePointerSchema>;
 export type DraftBasisPointer = z.infer<typeof DraftBasisPointerSchema>;
 export type ProposalGenerationDraftClaim = z.infer<typeof ProposalGenerationDraftClaimSchema>;

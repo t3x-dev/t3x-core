@@ -1,25 +1,19 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import type { Node } from '@xyflow/react';
 import { describe, expect, it, vi } from 'vitest';
 import { buildWorkspaceHandoffPath, NodeModal } from '@/components/canvas/NodeModal';
 import type { CanvasNodeData } from '@/types/nodes';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+const push = vi.fn();
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
 
 vi.mock('@/store/canvasStore', () => ({
   useCanvasStore: (selector: (state: { projectId: string }) => unknown) =>
     selector({ projectId: 'proj_test' }),
 }));
-
-vi.mock('@/components/canvas/NodeModal/ConversationView', async () => {
-  const React = await import('react');
-  return {
-    ConversationView: () => React.createElement('div', { 'data-testid': 'conversation-view' }),
-  };
-});
 
 function committedNode(): Node<CanvasNodeData> {
   return {
@@ -68,16 +62,19 @@ describe('NodeModal', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('keeps a committed node source conversation available', () => {
-    render(
+  it('opens the Workspace for a node conversation instead of an embedded chat', () => {
+    const onClose = vi.fn();
+    const { container } = render(
       <NodeModal
         node={committedNode()}
-        onClose={vi.fn()}
+        onClose={onClose}
         onUpdate={vi.fn()}
         viewMode="conversation"
       />
     );
 
-    expect(screen.getByTestId('conversation-view')).toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
+    expect(push).toHaveBeenCalledWith('/project/proj_test?branch=main&tab=workspaces');
+    expect(onClose).toHaveBeenCalledOnce();
   });
 });

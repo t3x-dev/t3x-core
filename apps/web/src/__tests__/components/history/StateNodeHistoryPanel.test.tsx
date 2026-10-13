@@ -97,8 +97,7 @@ describe('State node history', () => {
     const head = commit('head', 'middle', 'New value');
     loadCommit.mockImplementation(async (hash: string) => (hash === 'middle' ? unchanged : root));
     render(<CommitHistoryDiffView commit={head} parentCommit={unchanged} onBack={vi.fn()} />);
-    fireEvent.click(screen.getByRole('tab', { name: 'Structure diff' }));
-    const tree = screen.getByRole('region', { name: 'Workspace structure rows' });
+    const tree = screen.getByRole('region', { name: 'State rows' });
     fireEvent.click(within(tree).getByText('outcome'));
     const treeBefore = tree.innerHTML;
     expect(loadCommit).not.toHaveBeenCalled();
@@ -198,8 +197,7 @@ describe('State node history', () => {
     const head = commit('head', 'root', 'New');
     loadCommit.mockReturnValueOnce(pending).mockResolvedValue(root);
     render(<CommitHistoryDiffView commit={head} parentCommit={root} onBack={vi.fn()} />);
-    fireEvent.click(screen.getByRole('tab', { name: 'Structure diff' }));
-    const tree = screen.getByRole('region', { name: 'Workspace structure rows' });
+    const tree = screen.getByRole('region', { name: 'State rows' });
     fireEvent.click(within(tree).getByText('outcome'));
     fireEvent.click(screen.getByRole('button', { name: 'View node history' }));
     fireEvent.click(within(tree).getByText('title'));

@@ -181,8 +181,18 @@ export class ClaudeProvider implements LLMProvider {
         },
         body: JSON.stringify({
           model: options.model,
-          max_tokens: maxTokens,
-          temperature,
+          max_tokens:
+            options.reasoningEffort && options.reasoningEffort !== 'low'
+              ? Math.max(maxTokens, 8192)
+              : maxTokens,
+          ...(options.reasoningEffort && options.reasoningEffort !== 'low'
+            ? {
+                thinking: {
+                  type: 'enabled',
+                  budget_tokens: options.reasoningEffort === 'high' ? 4096 : 2048,
+                },
+              }
+            : { temperature }),
           ...(prompt.system && { system: prompt.system }),
           messages: prompt.messages,
           ...(options.stopSequences && { stop_sequences: options.stopSequences }),
@@ -258,8 +268,18 @@ export class ClaudeProvider implements LLMProvider {
         },
         body: JSON.stringify({
           model: options.model,
-          max_tokens: maxTokens,
-          temperature,
+          max_tokens:
+            options.reasoningEffort && options.reasoningEffort !== 'low'
+              ? Math.max(maxTokens, 8192)
+              : maxTokens,
+          ...(options.reasoningEffort && options.reasoningEffort !== 'low'
+            ? {
+                thinking: {
+                  type: 'enabled',
+                  budget_tokens: options.reasoningEffort === 'high' ? 4096 : 2048,
+                },
+              }
+            : { temperature }),
           stream: true,
           ...(prompt.system && { system: prompt.system }),
           messages: prompt.messages,
@@ -528,8 +548,18 @@ export class ClaudeProvider implements LLMProvider {
         },
         body: JSON.stringify({
           model: options.model,
-          max_tokens: maxTokens,
-          temperature,
+          max_tokens:
+            options.reasoningEffort && options.reasoningEffort !== 'low'
+              ? Math.max(maxTokens, 8192)
+              : maxTokens,
+          ...(options.reasoningEffort && options.reasoningEffort !== 'low'
+            ? {
+                thinking: {
+                  type: 'enabled',
+                  budget_tokens: options.reasoningEffort === 'high' ? 4096 : 2048,
+                },
+              }
+            : { temperature }),
           ...(prompt.system && { system: prompt.system }),
           messages: prompt.messages,
           tools: tools.map((t) => ({

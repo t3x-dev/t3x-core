@@ -165,6 +165,7 @@ const PullRequestCompareCandidateSchema = z.object({
   description: z.string(),
   head_commit_id: z.string(),
   base_commit_id: z.string().nullable(),
+  merge_base_commit_id: z.string().nullable(),
   updated_at: z.string(),
   ahead_by: z.number().int().nonnegative(),
   behind_by: z.number().int().nonnegative(),
@@ -331,21 +332,45 @@ async function commitDistances(
   sourceHash: string,
   targetHash: string
 ) {
-  if (sourceHash === targetHash) return { ahead: 0, behind: 0 };
+  if (sourceHash === targetHash) return { ahead: 0, behind: 0, mergeBase: sourceHash };
   const [sourceAncestors, targetAncestors] = await Promise.all([
     collectAncestorDistances(db, projectId, sourceHash),
     collectAncestorDistances(db, projectId, targetHash),
   ]);
-  let best: { ahead: number; behind: number; total: number } | null = null;
+  let best: { hash: string; ahead: number; behind: number; total: number } | null = null;
   for (const [hash, ahead] of sourceAncestors) {
     const behind = targetAncestors.get(hash);
     if (behind === undefined) continue;
     const total = ahead + behind;
-    if (!best || total < best.total) best = { ahead, behind, total };
+    // Same ordering as the Repository merge so the preview and the merge share one base.
+    if (
+      !best ||
+      total < best.total ||
+      (total === best.total &&
+        (Math.max(ahead, behind) < Math.max(best.ahead, best.behind) ||
+          (Math.max(ahead, behind) === Math.max(best.ahead, best.behind) &&
+            hash.localeCompare(best.hash) < 0)))
+    )
+      best = { hash, ahead, behind, total };
   }
   return best
-    ? { ahead: best.ahead, behind: best.behind }
-    : { ahead: sourceAncestors.size, behind: targetAncestors.size };
+    ? { ahead: best.ahead, behind: best.behind, mergeBase: best.hash }
+    : { ahead: sourceAncestors.size, behind: targetAncestors.size, mergeBase: null };
+}
+
+/** A branch's changes are measured from the merge base, so target-only work never reads as removed. */
+async function summarizeBranchChanges(
+  db: AnyDB,
+  projectId: string,
+  sourceCommit: RepositoryCommitView,
+  targetCommit: RepositoryCommitView,
+  mergeBase: string | null
+) {
+  const baseCommit =
+    mergeBase === null || mergeBase === targetCommit.hash
+      ? targetCommit
+      : await loadRepositoryCommit(db, projectId, mergeBase);
+  return summarizeCommitChanges(sourceCommit, baseCommit ?? targetCommit);
 }
 
 async function buildCompareCandidates(
@@ -398,6 +423,7 @@ async function buildCompareCandidates(
             `Review ${branch.name} before merging into ${baseBranch.name}.`,
           head_commit_id: branch.headCommitHash,
           base_commit_id: baseBranch.headCommitHash,
+          merge_base_commit_id: baseBranch.headCommitHash,
           updated_at: branch.updatedAt.toISOString(),
           ahead_by: 0,
           behind_by: 0,
@@ -424,9 +450,16 @@ async function buildCompareCandidates(
         : {
             ahead: (await collectAncestorDistances(db, projectId, sourceCommit.hash)).size,
             behind: 0,
+            mergeBase: null,
           };
       const { changedNodes, hasChanges: hasSemanticChanges } = targetCommit
-        ? summarizeCommitChanges(sourceCommit, targetCommit)
+        ? await summarizeBranchChanges(
+            db,
+            projectId,
+            sourceCommit,
+            targetCommit,
+            distances.mergeBase
+          )
         : summarizeCommitChanges(sourceCommit, {
             ...sourceCommit,
             content: { trees: [], relations: [] },
@@ -449,6 +482,7 @@ async function buildCompareCandidates(
           `Review ${branch.name} before merging into ${baseBranch.name}.`,
         head_commit_id: sourceCommit.hash,
         base_commit_id: targetCommit?.hash ?? null,
+        merge_base_commit_id: distances.mergeBase,
         updated_at: branch.updatedAt.toISOString(),
         ahead_by: distances.ahead,
         behind_by: distances.behind,
@@ -722,7 +756,13 @@ pullRequestRoutes.openapi(createPullRequestRoute, async (c) => {
     );
   }
   const distances = await commitDistances(db, projectId, sourceCommit.hash, targetCommit.hash);
-  const { changedNodes, hasChanges } = summarizeCommitChanges(sourceCommit, targetCommit);
+  const { changedNodes, hasChanges } = await summarizeBranchChanges(
+    db,
+    projectId,
+    sourceCommit,
+    targetCommit,
+    distances.mergeBase
+  );
   if (distances.ahead === 0 || !hasChanges) {
     return c.json(
       errorBody(

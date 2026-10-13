@@ -1,0 +1,282 @@
+.page {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 24px 120px;
+}
+.heading {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+  padding: 40px 0 26px;
+}
+.heading h1 {
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.heading p {
+  margin-top: 8px;
+  max-width: 520px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-tertiary);
+}
+.heading > button {
+  margin-left: auto;
+  flex: none;
+  font-size: 13px;
+  color: var(--accent-commit);
+}
+.section {
+  margin-bottom: 18px;
+}
+.sectionHeading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 44px;
+  padding: 0 4px;
+  text-align: left;
+}
+.sectionHeading > span {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent-commit-soft);
+  color: var(--accent-commit);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.sectionHeading h2 {
+  font-size: 16px;
+  font-weight: 650;
+}
+.sectionHeading small {
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+.sectionHeading svg {
+  margin-left: auto;
+  width: 16px;
+  height: 16px;
+  color: var(--text-tertiary);
+}
+.sectionHeading[aria-expanded="false"] svg {
+  transform: rotate(-90deg);
+}
+.panel {
+  margin-top: 4px;
+  padding: 8px 20px;
+  border-radius: 16px;
+  background: #f7f8fa;
+}
+.field {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 24px;
+  padding: 16px 0;
+  align-items: start;
+}
+.field + .field {
+  padding-top: 6px;
+}
+.field > label,
+.field > span {
+  padding-top: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.field small {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+}
+.field input,
+.field textarea,
+.readonly {
+  min-height: 42px;
+  border-radius: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--stroke-divider);
+  background: var(--surface-panel);
+  font-size: 14px;
+  box-shadow: var(--fx-shadow-sm);
+}
+.field textarea {
+  height: 42px;
+  min-height: 42px;
+}
+.readonly {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hint {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+.hint code {
+  margin-left: 6px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+}
+.settingsLink {
+  padding-top: 10px;
+}
+.settingsLink a {
+  font-size: 13px;
+  color: var(--accent-commit);
+}
+.setup {
+  display: grid;
+  gap: 10px;
+  padding: 12px 0;
+}
+.setup label {
+  padding: 12px;
+  border-radius: 10px;
+}
+.setup label span span {
+  font-size: 13px;
+}
+.footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  background: var(--surface-panel);
+  border-top: 1px solid var(--stroke-divider);
+  box-shadow: 0 -8px 24px rgba(15, 18, 30, 0.04);
+}
+.footer > div {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: 800px;
+  min-height: 72px;
+  margin: 0 auto;
+  padding: 12px 24px;
+}
+.footer button,
+.footer a {
+  height: 42px;
+  border-radius: 10px;
+}
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.status svg {
+  color: var(--status-success);
+}
+.pending {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #f0a04b;
+  border-radius: 50%;
+}
+.destination {
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-size: 12.5px;
+}
+.error {
+  color: var(--status-error);
+  font-size: 13px;
+}
+@media (max-width: 600px) {
+  .field {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .heading {
+    align-items: flex-start;
+  }
+  .heading h1 {
+    font-size: 24px;
+  }
+  .footer > div {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .destination {
+    display: none;
+  }
+  .status {
+    margin-right: auto;
+  }
+}
+.field select {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: 10px;
+  background: var(--surface-panel);
+  font-size: 14px;
+}
+.connection {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.connection select {
+  flex: 1;
+}
+.testStatus {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+.upload {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 42px;
+}
+.upload > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  color: var(--text-tertiary);
+}
+.upload label {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: 10px;
+  background: var(--surface-panel);
+  white-space: nowrap;
+  font-size: 13px;
+  cursor: pointer;
+}
+.upload input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.upload button {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}

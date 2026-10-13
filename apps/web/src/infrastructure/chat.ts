@@ -2,7 +2,7 @@
  * Chat/LLM integration API
  */
 
-import { API_V1, ApiError, fetchWithTimeout, handleResponse, injectAuthHeaders } from './core';
+import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
 export interface ContentBlock {
   type: 'text' | 'image';
@@ -42,16 +42,6 @@ export interface ChatResponse {
     output_tokens?: number;
   };
   finish_reason?: string;
-}
-
-export interface ChatStreamEvent {
-  type: 'token' | 'done' | 'error' | 'searching' | 'thinking';
-  content?: string;
-  model?: string;
-  message?: string;
-  usage?: { input_tokens?: number; output_tokens?: number };
-  query?: string;
-  citations?: Citation[];
 }
 
 export function splitSseFrames(
@@ -103,87 +93,4 @@ export async function chat(request: ChatRequest): Promise<ChatResponse> {
     120000
   ); // 2 minute timeout for LLM
   return handleResponse<ChatResponse>(res);
-}
-
-/**
- * Streaming chat - returns async generator for SSE events
- */
-export async function* chatStream(
-  request: ChatRequest,
-  options?: { signal?: AbortSignal }
-): AsyncGenerator<ChatStreamEvent, void, unknown> {
-  const headers = await injectAuthHeaders(new Headers({ 'Content-Type': 'application/json' }));
-  const res = await fetch(`${API_V1}/chat/stream`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(request),
-    signal: options?.signal,
-  });
-
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({
-      error: {
-        code: 'CHAT_ERROR',
-        message: `Server returned HTTP ${res.status} with non-JSON body`,
-      },
-    }));
-    throw new ApiError(
-      errorData.error?.code || 'CHAT_ERROR',
-      errorData.error?.message || `Chat failed: HTTP ${res.status}`
-    );
-  }
-
-  const reader = res.body?.getReader();
-  if (!reader) {
-    throw new ApiError('CHAT_ERROR', 'No response body');
-  }
-
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-
-      const { frames, remaining } = splitSseFrames(buffer);
-      buffer = remaining;
-
-      for (const frame of frames) {
-        const dataStr = frameData(frame);
-        if (!dataStr) continue;
-        if (dataStr === '[DONE]') continue;
-
-        try {
-          const event = JSON.parse(dataStr) as ChatStreamEvent;
-          yield event;
-        } catch {
-          if (process.env.NODE_ENV !== 'production') {
-            console.warn('Failed to parse SSE event:', dataStr.slice(0, 120));
-          }
-        }
-      }
-    }
-
-    buffer += decoder.decode();
-    const { frames } = splitSseFrames(buffer, true);
-    for (const frame of frames) {
-      const dataStr = frameData(frame);
-      if (!dataStr) continue;
-      if (dataStr === '[DONE]') continue;
-
-      try {
-        const event = JSON.parse(dataStr) as ChatStreamEvent;
-        yield event;
-      } catch {
-        if (process.env.NODE_ENV !== 'production') {
-          console.warn('Failed to parse SSE event:', dataStr.slice(0, 120));
-        }
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
 }

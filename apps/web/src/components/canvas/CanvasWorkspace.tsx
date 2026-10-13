@@ -139,10 +139,6 @@ function CanvasWorkspaceInner({
     onNodesChange,
     onEdgesChange,
     onConnect,
-    saveConversationConstraints,
-    getPendingCommitEffectiveConstraints,
-    updatePendingCommitConstraintOverrides,
-    hasDownstreamPendingCommits,
     openNodeId,
     modalViewMode,
     openNodeModal,
@@ -399,27 +395,6 @@ function CanvasWorkspaceInner({
       closeNodeModal();
     }
   }, [closeNodeModal, modalNode, modalViewMode]);
-
-  // Get effective constraints for pending commit nodes
-  const effectiveConstraints = useMemo(() => {
-    if (
-      !openNodeId ||
-      !modalNode ||
-      modalNode.data.kind !== 'unit' ||
-      modalNode.data.commitStatus !== 'staging'
-    ) {
-      return undefined;
-    }
-    return getPendingCommitEffectiveConstraints(openNodeId);
-  }, [openNodeId, modalNode, getPendingCommitEffectiveConstraints]);
-
-  // Check if conversation is locked (has downstream pending commits)
-  const isConversationLocked = useMemo(() => {
-    if (!openNodeId || !modalNode || modalNode.data.kind !== 'unit') {
-      return false;
-    }
-    return hasDownstreamPendingCommits(openNodeId);
-  }, [openNodeId, modalNode, hasDownstreamPendingCommits]);
 
   const selectedUnitNode = useMemo<CanvasUnitNode | null>(() => {
     const actionNode = actionPanel
@@ -714,18 +689,6 @@ function CanvasWorkspaceInner({
             onClose={closeNodeModal}
             onUpdate={(patch) => updateNode(modalNode.id, patch)}
             viewMode={modalViewMode || 'commit'}
-            onSaveConstraints={
-              modalNode.data.kind === 'unit'
-                ? (constraints) => saveConversationConstraints(modalNode.id, constraints)
-                : undefined
-            }
-            effectiveConstraints={effectiveConstraints}
-            onUpdateConstraintOverrides={
-              modalNode.data.kind === 'unit' && modalNode.data.commitStatus === 'staging'
-                ? (overrides) => updatePendingCommitConstraintOverrides(modalNode.id, overrides)
-                : undefined
-            }
-            isConversationLocked={isConversationLocked}
           />
         )}
       <MergePanel />

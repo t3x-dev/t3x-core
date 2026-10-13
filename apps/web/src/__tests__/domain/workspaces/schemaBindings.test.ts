@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { getSchemaRegistryPreview } from '@/data/schemaReleases';
 import {
   applyProjectWorkspaceSchemaBindings,
+  DEFAULT_WORKSPACE_SCHEMA_CHOICE_ID,
+  isDefaultWorkspaceSchemaBinding,
+  listWorkspaceSchemaChoices,
   mergeProjectWorkspaceSchemaBindings,
   rebindWorkspaceCandidate,
   schemaReleaseToWorkspaceBinding,
@@ -54,6 +57,18 @@ const candidates: WorkspaceCandidate[] = [
 ];
 
 describe('workspace schema bindings', () => {
+  it('keeps an explicit default choice when no Schema is selected', () => {
+    const choices = listWorkspaceSchemaChoices(
+      registry.families.flatMap((family) => family.releases)
+    );
+    expect(choices[0]).toMatchObject({
+      id: DEFAULT_WORKSPACE_SCHEMA_CHOICE_ID,
+      label: 'Default · PRD Schema v2',
+    });
+    expect(isDefaultWorkspaceSchemaBinding(choices[0]?.binding)).toBe(true);
+    expect(choices.some((choice) => choice.binding.canonicalName === 't3x/prompt')).toBe(true);
+  });
+
   it('converts a schema release into a workspace binding', () => {
     expect(schemaReleaseToWorkspaceBinding(release, 'pinned')).toEqual({
       canonicalName: 't3x/prompt',

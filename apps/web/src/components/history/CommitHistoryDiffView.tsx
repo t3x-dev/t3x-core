@@ -21,7 +21,6 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { StateExportButton } from '@/components/shared/StateExportButton';
 import {
   buildWorkspaceReviewStructureRows,
   WorkspaceReviewStructureTree,
@@ -32,7 +31,6 @@ import { shortHash } from '@/domain/format/formatters';
 import { buildCanonicalStateYaml, buildStatePointRows } from '@/domain/project/stateViewModel';
 import type { ApiCommit } from '@/types/api';
 import styles from './CommitHistoryDiffView.module.css';
-import { StateNodeHistoryPanel } from './StateNodeHistoryPanel';
 
 const EMPTY_CONTENT: ApiCommit['content'] = { relations: [], trees: [] };
 
@@ -149,9 +147,6 @@ export function CommitHistoryDiffView({
     [baseline, commit.content]
   );
   const [mode, setMode] = useState<ViewMode>('yaml');
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [inspectedPath, setInspectedPath] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(changes[0]?.id ?? null);
   const [step, setStep] = useState<number | null>(changes.length ? 1 : null);
   const [playing, setPlaying] = useState(changes.length > 1);
@@ -237,7 +232,6 @@ export function CommitHistoryDiffView({
           </div>
         </div>
         <div className={styles.headerAside}>
-          <StateExportButton projectId={commit.project_id} commitDigest={commit.hash} />
           <div className={styles.revisionCompare}>
             <span>
               Parent <code>{parentDigest}</code>
@@ -254,193 +248,154 @@ export function CommitHistoryDiffView({
 
       <main className={styles.main}>
         <aside className={styles.sidebar} aria-label="History change walkthrough">
-          {historyOpen && (inspectedPath || selected?.path) ? (
-            <StateNodeHistoryPanel
-              commit={commit}
-              path={inspectedPath || selected!.path}
-              name={(inspectedPath || selected!.path).split('/').at(-1) ?? 'Node'}
-              onBack={() => setHistoryOpen(false)}
-            />
-          ) : (
-            <>
-              <button
-                type="button"
-                disabled={!inspectedPath && !selected}
-                onClick={() => {
-                  setPlaying(false);
-                  setHistoryOpen(true);
-                }}
-              >
-                View node history
+          <section className={styles.card}>
+            <header className={styles.cardHeader}>
+              <h2>Selected Change</h2>
+              <button type="button" aria-label="Copy selected path" onClick={copyPath}>
+                <Copy />
               </button>
-              <section className={styles.card}>
-                <header className={styles.cardHeader}>
-                  <h2>Selected Change</h2>
-                  <button type="button" aria-label="Copy selected path" onClick={copyPath}>
-                    <Copy />
-                  </button>
-                </header>
-                {selected ? (
-                  <>
-                    <code className={styles.path}>{humanPath(selected.path)}</code>
-                    <span className={styles.kind} data-kind={selected.kind}>
-                      {selected.kind === 'added' ? (
-                        <Plus />
-                      ) : selected.kind === 'removed' ? (
-                        <Minus />
-                      ) : (
-                        <CircleDotDashed />
-                      )}
-                      {selected.kind[0].toUpperCase() + selected.kind.slice(1)}
-                    </span>
-                    <div className={styles.values}>
-                      {selected.kind !== 'added' && (
-                        <div>
-                          <b>Before</b>
-                          <pre data-side="before">{selected.beforeValue}</pre>
-                        </div>
-                      )}
-                      {selected.kind !== 'removed' && (
-                        <div>
-                          <b>After</b>
-                          <pre data-side="after">{selected.afterValue}</pre>
-                        </div>
-                      )}
+            </header>
+            {selected ? (
+              <>
+                <code className={styles.path}>{humanPath(selected.path)}</code>
+                <span className={styles.kind} data-kind={selected.kind}>
+                  {selected.kind === 'added' ? (
+                    <Plus />
+                  ) : selected.kind === 'removed' ? (
+                    <Minus />
+                  ) : (
+                    <CircleDotDashed />
+                  )}
+                  {selected.kind[0].toUpperCase() + selected.kind.slice(1)}
+                </span>
+                <div className={styles.values}>
+                  {selected.kind !== 'added' && (
+                    <div>
+                      <b>Before</b>
+                      <pre data-side="before">{selected.beforeValue}</pre>
                     </div>
-                  </>
-                ) : (
-                  <p className={styles.empty}>No state changes in this commit.</p>
-                )}
-              </section>
+                  )}
+                  {selected.kind !== 'removed' && (
+                    <div>
+                      <b>After</b>
+                      <pre data-side="after">{selected.afterValue}</pre>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className={styles.empty}>No state changes in this commit.</p>
+            )}
+          </section>
 
-              <section className={styles.card}>
-                <div className={styles.detailBlock}>
-                  <h3>
-                    <MessageSquareText /> Why
-                  </h3>
-                  <p className={styles.reason}>
-                    <strong>Commit message:</strong>{' '}
-                    {commit.message || 'No commit message recorded.'}
-                  </p>
-                  <em>No field-level rationale recorded.</em>
-                </div>
-                <div className={styles.detailBlock}>
-                  <h3>
-                    <Link2 /> Source
-                  </h3>
-                  <p className={styles.source}>No linked source</p>
-                </div>
-              </section>
+          <section className={styles.card}>
+            <div className={styles.detailBlock}>
+              <h3>
+                <MessageSquareText /> Why
+              </h3>
+              <p className={styles.reason}>
+                <strong>Commit message:</strong> {commit.message || 'No commit message recorded.'}
+              </p>
+              <em>No field-level rationale recorded.</em>
+            </div>
+            <div className={styles.detailBlock}>
+              <h3>
+                <Link2 /> Source
+              </h3>
+              <p className={styles.source}>No linked source</p>
+            </div>
+          </section>
 
-              <section className={styles.sequence} aria-label="Change walkthrough controls">
-                <header>
-                  <strong>Review Sequence</strong>
-                  <span>
-                    {Math.min(selectedIndex + 1, changes.length)} of {changes.length}
-                  </span>
-                </header>
-                <div className={styles.transportRow}>
-                  <div className={styles.transport}>
-                    <button
-                      type="button"
-                      aria-label="Previous change"
-                      disabled={!changes.length || selectedIndex === 0}
-                      onClick={() => {
-                        setPlaying(false);
-                        setSelectedId(changes[selectedIndex - 1]?.id ?? null);
-                      }}
-                    >
-                      <ChevronLeft />
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.play}
-                      aria-label={
-                        playing
-                          ? 'Pause walkthrough'
-                          : visibleCount >= changes.length
-                            ? 'Replay again'
-                            : 'Resume walkthrough'
-                      }
-                      disabled={!changes.length}
-                      onClick={() => {
-                        if (playing) setPlaying(false);
-                        else {
-                          if (visibleCount >= changes.length) {
-                            setStep(0);
-                            setSelectedId(changes[0]?.id ?? null);
-                          }
-                          setPlaying(true);
-                        }
-                      }}
-                    >
-                      {playing ? (
-                        <Pause />
-                      ) : visibleCount >= changes.length ? (
-                        <RotateCcw />
-                      ) : (
-                        <Play />
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Next change"
-                      disabled={!changes.length || visibleCount >= changes.length}
-                      onClick={() => moveTo(visibleCount + 1)}
-                    >
-                      <ChevronRight />
-                    </button>
-                  </div>
-                  <div className={styles.segments} aria-hidden="true">
-                    {changes.map((change, index) => (
-                      <i
-                        key={change.id}
-                        data-active={index <= selectedIndex ? 'true' : undefined}
-                      />
-                    ))}
-                  </div>
-                </div>
-                <input
-                  className={styles.range}
-                  type="range"
-                  min={0}
-                  max={changes.length}
-                  value={visibleCount}
-                  aria-label="Walkthrough progress"
-                  aria-valuetext={`${visibleCount} of ${changes.length} changes shown`}
-                  onChange={(event) => moveTo(Number(event.target.value))}
-                />
+          <section className={styles.sequence} aria-label="Change walkthrough controls">
+            <header>
+              <strong>Review Sequence</strong>
+              <span>
+                {Math.min(selectedIndex + 1, changes.length)} of {changes.length}
+              </span>
+            </header>
+            <div className={styles.transportRow}>
+              <div className={styles.transport}>
                 <button
                   type="button"
-                  className={styles.fullDiff}
+                  aria-label="Previous change"
+                  disabled={!changes.length || selectedIndex === 0}
                   onClick={() => {
-                    setStep(null);
                     setPlaying(false);
+                    setSelectedId(changes[selectedIndex - 1]?.id ?? null);
                   }}
                 >
-                  Show full diff
+                  <ChevronLeft />
                 </button>
-                <Link
-                  className={styles.workspaceButton}
-                  href={`/project/${encodeURIComponent(commit.project_id)}`}
+                <button
+                  type="button"
+                  className={styles.play}
+                  aria-label={
+                    playing
+                      ? 'Pause walkthrough'
+                      : visibleCount >= changes.length
+                        ? 'Replay again'
+                        : 'Resume walkthrough'
+                  }
+                  disabled={!changes.length}
+                  onClick={() => {
+                    if (playing) setPlaying(false);
+                    else {
+                      if (visibleCount >= changes.length) {
+                        setStep(0);
+                        setSelectedId(changes[0]?.id ?? null);
+                      }
+                      setPlaying(true);
+                    }
+                  }}
                 >
-                  <SquareArrowOutUpRight /> Open in Workspace Editor
-                </Link>
-              </section>
-            </>
-          )}
+                  {playing ? <Pause /> : visibleCount >= changes.length ? <RotateCcw /> : <Play />}
+                </button>
+                <button
+                  type="button"
+                  aria-label="Next change"
+                  disabled={!changes.length || visibleCount >= changes.length}
+                  onClick={() => moveTo(visibleCount + 1)}
+                >
+                  <ChevronRight />
+                </button>
+              </div>
+              <div className={styles.segments} aria-hidden="true">
+                {changes.map((change, index) => (
+                  <i key={change.id} data-active={index <= selectedIndex ? 'true' : undefined} />
+                ))}
+              </div>
+            </div>
+            <input
+              className={styles.range}
+              type="range"
+              min={0}
+              max={changes.length}
+              value={visibleCount}
+              aria-label="Walkthrough progress"
+              aria-valuetext={`${visibleCount} of ${changes.length} changes shown`}
+              onChange={(event) => moveTo(Number(event.target.value))}
+            />
+            <button
+              type="button"
+              className={styles.fullDiff}
+              onClick={() => {
+                setStep(null);
+                setPlaying(false);
+              }}
+            >
+              Show full diff
+            </button>
+            <Link
+              className={styles.workspaceButton}
+              href={`/project/${encodeURIComponent(commit.project_id)}`}
+            >
+              <SquareArrowOutUpRight /> Open in Workspace Editor
+            </Link>
+          </section>
         </aside>
 
         <section className={styles.diffPanel}>
           <header className={styles.diffToolbar}>
-            {mode === 'structure' ? (
-              <input
-                aria-label="Search historical state"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search state"
-              />
-            ) : null}
             <div className={styles.tabs} role="tablist" aria-label="Diff format">
               <button
                 role="tab"
@@ -497,17 +452,11 @@ export function CommitHistoryDiffView({
           ) : (
             <div className={styles.structureMode}>
               <WorkspaceReviewStructureTree
-                query={query}
-                activeRowId={
-                  structureRows.find((row) => row.path === (inspectedPath ?? selected?.path))?.id ??
-                  null
-                }
+                activeRowId={structureRows.find((row) => row.path === selected?.path)?.id ?? null}
                 modifiedLabel={absoluteDate(commit.committed_at)}
                 onSelectRow={(rowId) => {
                   const path = structureRows.find((row) => row.id === rowId)?.path;
                   if (!path) return;
-                  setPlaying(false);
-                  setInspectedPath(path);
                   const change =
                     changes.find((candidate) => candidate.path === path) ??
                     changes.find((candidate) => candidate.path.startsWith(`${path}/`));

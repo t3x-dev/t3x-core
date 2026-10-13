@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { FeedbackTab } from '@/components/feedback/FeedbackTab';
 
 const mocks = vi.hoisted(() => ({
@@ -27,13 +27,6 @@ vi.mock('@/components/feedback/FeedbackByTypeTable', () => ({
 }));
 
 describe('FeedbackTab', () => {
-  const originalScrollIntoView = Element.prototype.scrollIntoView;
-  beforeAll(() => {
-    Element.prototype.scrollIntoView = vi.fn();
-  });
-  afterAll(() => {
-    Element.prototype.scrollIntoView = originalScrollIntoView;
-  });
   it('renders available stats without requesting the missing cosine buckets endpoint', async () => {
     mocks.loadProjects.mockResolvedValue({ projects: [{ project_id: 'p', name: 'Project' }] });
     mocks.loadStats.mockResolvedValue({ overall: {}, by_inference_type: {} });

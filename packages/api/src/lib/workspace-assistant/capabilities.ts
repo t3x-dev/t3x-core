@@ -224,10 +224,11 @@ export function createAssistantCapabilities(input: {
           requestedModel: proposal.requestedModel,
           // "Generate a proposal from this message" authorizes the current user turn.
           // Earlier chat remains readable context, but must not silently become mutation evidence.
-          sourceTurnHashes: prepared.input.userTurnHash ? [prepared.input.userTurnHash] : [],
+          sourceTurnHashes: [prepared.input.userTurnHash],
           sourceMaterialIds: prepared.sources.flatMap((source) =>
             source.materialId ? [source.materialId] : []
           ),
+          imageMaterialIds: prepared.images.map((image) => image.materialId),
         };
         const generated = await generateTransitionProposal({
           db: input.db,

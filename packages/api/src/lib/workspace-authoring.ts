@@ -15,6 +15,7 @@ import {
   type PublishDraftActionResult,
   parseDraftActionLedger,
   publishDraftAction,
+  replayToRevision,
   selectedActionView,
 } from '@t3x-dev/application';
 import { createYOpsEffect, createYOpsState, describeTransitionObject } from '@t3x-dev/core';
@@ -135,21 +136,9 @@ export async function initializeWorkspaceAuthoring(
     if (head.head !== input.expectedRefHead)
       throw new DraftAuthoringConflictError('Ref head changed');
     const base = head.format === 'empty' ? createYOpsState({}) : head.state;
-    // Exact-source workspaces use a different codec and review lifecycle. A YOps
-    // ledger must not hide their editor or silently replace their document basis.
-    if (workspace.sourceArtifact)
-      throw new DraftAuthoringConflictError(
-        'Exact-source Workspaces must continue through source Review; Draft activity does not support this format'
-      );
     const operations = (workspace.yopsDraft as { operations?: unknown[] } | undefined)?.operations;
-    const extractionOperations = (
-      workspace.extractionProposal as { operations?: unknown[] } | undefined
-    )?.operations;
     const hasLegacyEdits = Boolean(
-      operations?.length ||
-        extractionOperations?.length ||
-        draft.nodes?.length ||
-        draft.semantic_points?.length
+      operations?.length || draft.nodes?.length || draft.semantic_points?.length
     );
     const oldBase = workspace.baseCommitHash ?? draft.parent_commit_hash;
     if (oldBase != null && oldBase !== head.head && input.legacyDocument === undefined)
@@ -324,7 +313,13 @@ export async function readWorkspaceAuthoring(
       };
     }),
     nextBeforeSequence: actions.length === limit ? actions.at(-1)!.sequence : null,
-    selected,
+    selected: selected
+      ? {
+          ...selected,
+          before: replayToRevision(ledger, selected.action.beforeRevision),
+          after: replayToRevision(ledger, selected.action.afterRevision),
+        }
+      : null,
     base: ledger.base,
     current: currentComposition(ledger),
     netDiff: netDiffCards(ledger),
@@ -386,6 +381,77 @@ export function buildAuthoringPreparation(workspace: Record<string, unknown>) {
     ledger,
     basis,
     bindings: buildAuthoringEffect(ledger).bindings,
+  };
+}
+
+export interface WorkspaceAuthoringHistoryEntry {
+  schema: 't3x.application/workspace-authoring-history-entry/v1';
+  commitDigest: string;
+  committedAt: string;
+  transitionId: string;
+  preparationDigest: string | null;
+  compositionRevision: number;
+  basis: WorkspaceAuthoringBasis;
+}
+
+/** Recover the frozen ledger of a committed round whose basis matches, from its Commit preparation. */
+export async function findRetiredAuthoringLedger(
+  db: AnyDB,
+  workspace: Record<string, unknown>,
+  basis: unknown
+): Promise<DraftActionLedger | null> {
+  const history = Array.isArray(workspace.authoringHistory)
+    ? (workspace.authoringHistory as WorkspaceAuthoringHistoryEntry[])
+    : [];
+  const canonicalBasis = canonicalizeProtocolValue(JSON.parse(JSON.stringify(basis ?? null)));
+  const entry = history.find(
+    (item) => canonicalizeProtocolValue(JSON.parse(JSON.stringify(item.basis))) === canonicalBasis
+  );
+  if (!entry) return null;
+  const preparation = await getTransitionProposalPreparation(db, entry.transitionId);
+  if (!preparation || preparation.digest !== entry.preparationDigest)
+    throw new DraftAuthoringConflictError('Committed authoring manifest is unavailable');
+  return parseDraftActionLedger(JSON.parse(preparation.canonicalJson).ledger);
+}
+
+/** Retire the committed ledger by reference and pin a fresh one at the new Commit result. */
+export function renewWorkspaceAuthoringState(
+  workspace: Record<string, unknown>,
+  input: {
+    commitDigest: string;
+    committedAt: string;
+    transitionId: string;
+    preparationDigest: string | null;
+    result: ReturnType<typeof createYOpsState>;
+  }
+): Record<string, unknown> {
+  const { ledger, basis } = workspaceAuthoringState(workspace);
+  const history = Array.isArray(workspace.authoringHistory) ? workspace.authoringHistory : [];
+  const entry: WorkspaceAuthoringHistoryEntry = {
+    schema: 't3x.application/workspace-authoring-history-entry/v1',
+    commitDigest: input.commitDigest,
+    committedAt: input.committedAt,
+    transitionId: input.transitionId,
+    preparationDigest: input.preparationDigest,
+    compositionRevision: ledger.compositionRevision,
+    basis,
+  };
+  const nextBasis: WorkspaceAuthoringBasis = {
+    schema: 't3x.application/workspace-authoring-basis/v1',
+    refName: basis.refName,
+    refHead: input.commitDigest,
+    baseDigest: describeTransitionObject(input.result).digest,
+    initialization: {
+      requestId: `commit:${input.commitDigest}`,
+      facts: canonicalizeProtocolValue({ renewedFrom: input.commitDigest }),
+    },
+  };
+  return {
+    ...workspace,
+    authoringHistory: [...history, entry],
+    authoringLedger: createDraftActionLedger(input.result.value as DraftDocument),
+    authoringBasis: nextBasis,
+    baseCommitHash: input.commitDigest,
   };
 }
 

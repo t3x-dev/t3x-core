@@ -13,7 +13,12 @@ import {
 } from '@t3x-dev/storage';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { verifyTransition } from '../lib/transition-control-plane';
-import { commitTransition, decideTransition } from '../lib/transition-control-plane/lifecycle';
+import { UNPROTECTED_REF_POLICY } from '../lib/transition-control-plane/applicable-policy';
+import {
+  commitTransition,
+  decideTransition,
+  TransitionReviewStaleError,
+} from '../lib/transition-control-plane/lifecycle';
 import { materializeTransitionProposal } from '../lib/transition-control-plane/materialize';
 import {
   buildAuthoringEffect,
@@ -25,6 +30,7 @@ import {
   workspaceAuthoringState,
 } from '../lib/workspace-authoring';
 import { prepareWorkspaceAuthoringReview } from '../lib/workspace-authoring-review';
+import { decideWorkspaceTransition } from '../lib/workspace-transition';
 import { setupTestDB } from './setup';
 
 describe('durable Draft authoring commands', () => {
@@ -85,63 +91,6 @@ describe('durable Draft authoring commands', () => {
     await ensureWorkspaceAuthoringSchema(setup.db, { ...input, expectedRevision: revision });
     expect((await findWorkspaceDraft(setup.db, projectId, 'unbound'))?.revision).toBe(revision);
   });
-
-  it('requires explicit import for extraction-only legacy edits', async () => {
-    const draft = await upsertWorkspaceDraft(setup.db, {
-      project_id: projectId,
-      workspace_id: 'extraction-only',
-      title: 'Legacy extraction',
-      target_branch: 'main',
-      workspace_state: {
-        extractionProposal: { operations: [{ set: { path: 'title', value: 'Keep me' } }] },
-      },
-    });
-    const input = {
-      projectId,
-      workspaceId: 'extraction-only',
-      expectedWorkspaceRevision: draft.revision,
-      expectedRefHead: null,
-      actionId: 'import-extraction',
-      actor,
-    };
-    await expect(initializeWorkspaceAuthoring(setup.db, input)).rejects.toThrow(
-      'explicit legacy document import'
-    );
-    const unchanged = await findWorkspaceDraft(setup.db, projectId, input.workspaceId);
-    expect(unchanged?.revision).toBe(draft.revision);
-    expect(unchanged?.workspace_state?.authoringLedger).toBeUndefined();
-    const imported = await initializeWorkspaceAuthoring(setup.db, {
-      ...input,
-      legacyDocument: { title: 'Keep me' },
-    });
-    expect(currentComposition(imported.value.ledger)).toEqual({ title: 'Keep me' });
-  });
-
-  it('does not migrate exact-source Workspaces into the YOps editor', async () => {
-    await insertBranch(setup.db, { projectId, name: 'exact-source' });
-    const draft = await upsertWorkspaceDraft(setup.db, {
-      project_id: projectId,
-      workspace_id: 'exact-source',
-      title: 'Source',
-      target_branch: 'exact-source',
-      workspace_state: { sourceArtifact: { format: 't3x.dev/workspace-source-artifact/v1' } },
-    });
-    await expect(
-      initializeWorkspaceAuthoring(setup.db, {
-        projectId,
-        workspaceId: 'exact-source',
-        expectedWorkspaceRevision: draft.revision,
-        expectedRefHead: null,
-        actionId: 'import-source',
-        actor,
-        legacyDocument: {},
-      })
-    ).rejects.toThrow('Exact-source Workspaces');
-    const unchanged = await findWorkspaceDraft(setup.db, projectId, 'exact-source');
-    expect(unchanged?.revision).toBe(draft.revision);
-    expect(unchanged?.workspace_state?.authoringLedger).toBeUndefined();
-  });
-
   it('persists a multi-node action, recovers a lost response, and reconstructs immutable views', async () => {
     const init = await initialize('durable');
     const command = {
@@ -390,9 +339,40 @@ describe('durable Draft authoring commands', () => {
     });
     const graph = await resolveTransitionProposalGraph(setup.db, projectId, id);
     expect(JSON.parse(graph.preparation!.canonicalJson)).toEqual(frozen);
-    const retained = await findWorkspaceDraft(setup.db, projectId, 'review');
-    expect(retained?.status).toBe('committed');
-    expect(retained?.workspace_state?.authoringLedger).toEqual(frozen.ledger);
+    const renewed = await findWorkspaceDraft(setup.db, projectId, 'review');
+    expect(renewed?.status).toBe('editing');
+    expect(renewed?.workspace_state?.authoringHistory).toEqual([
+      expect.objectContaining({
+        commitDigest: committed.commitDigest,
+        preparationDigest: graph.preparation!.digest,
+        compositionRevision: frozen.ledger.compositionRevision,
+        basis: frozen.basis,
+      }),
+    ]);
+    expect(renewed?.workspace_state?.authoringLedger).toMatchObject({
+      base: { x: 1, y: 2 },
+      compositionRevision: 0,
+      actions: [],
+    });
+    expect(renewed?.workspace_state?.authoringBasis).toMatchObject({
+      refName: 'review',
+      refHead: committed.commitDigest,
+    });
+    const next = await publishWorkspaceAuthoringAction(setup.db, {
+      projectId,
+      workspaceId: 'review',
+      actionId: 'after-commit',
+      actor,
+      channel: 'manual',
+      expectedRevision: 0,
+      expectedWorkspaceRevision: renewed!.revision,
+      expectedRefHead: committed.commitDigest,
+      operations: [{ set: { path: 'z', value: 3 } }],
+    });
+    expect(next.value.kind).toBe('published');
+    expect(
+      buildAuthoringPreparation(next.draft.workspace_state!).ledger.actions.map((a) => a.actionId)
+    ).toEqual(['after-commit']);
     expect(
       (
         await commitTransition({
@@ -406,5 +386,72 @@ describe('durable Draft authoring commands', () => {
         })
       ).commitDigest
     ).toBe(committed.commitDigest);
+  });
+  it('lets a human commit a Draft on an unprotected ref while machine actors still need a rule', async () => {
+    const init = await initialize('unprotected');
+    const saved = await publishWorkspaceAuthoringAction(setup.db, {
+      projectId,
+      workspaceId: 'unprotected',
+      actionId: 'edit',
+      actor,
+      channel: 'manual',
+      expectedRevision: 0,
+      expectedWorkspaceRevision: init.draft.revision,
+      expectedRefHead: null,
+      operations: [{ set: { path: 'prd', value: { audience: 'operators' } } }],
+    });
+    const reviewed = await prepareWorkspaceAuthoringReview({
+      db: setup.db,
+      projectId,
+      workspaceId: 'unprotected',
+      requestId: 'unprotected-review',
+      actor,
+      expectedRevision: 1,
+      expectedWorkspaceRevision: saved.draft.revision,
+      expectedRefHead: null,
+    });
+    const precondition = reviewed.view.precondition;
+    expect(precondition.policyDigest).toBe(UNPROTECTED_REF_POLICY.resource.digest);
+    await expect(
+      decideTransition({
+        db: setup.db,
+        projectId,
+        transitionId: reviewed.view.transitionId,
+        requestId: 'agent-decide',
+        actor: { kind: 'agent', id: 'agent:test' },
+        outcome: 'accepted',
+        precondition,
+      })
+    ).rejects.toBeInstanceOf(TransitionReviewStaleError);
+
+    const decide = (outcome: 'accepted' | 'overridden', decisionReason?: string) =>
+      decideWorkspaceTransition(setup.db, {
+        projectId,
+        workspaceId: 'unprotected',
+        transitionId: reviewed.view.transitionId,
+        actor,
+        policyBinding: null,
+        outcome,
+        ...(decisionReason === undefined ? {} : { decisionReason }),
+        precondition: {
+          workspaceRevision: precondition.workspaceRevision,
+          refHead: precondition.refHead,
+          effectDigest: precondition.effectDigest,
+          proposalDigest: precondition.proposalDigest,
+          statementDigests: [...precondition.statementDigests],
+          policyDigest: precondition.policyDigest!,
+        },
+      });
+    await expect(decide('accepted')).rejects.toMatchObject({
+      failures: [expect.objectContaining({ code: 'VALIDATION_FAILED', overrideable: true })],
+    });
+    const decided = await decide('overridden', 'Ship the partial PRD');
+    expect(decided.commit).toBeDefined();
+    const renewed = await findWorkspaceDraft(setup.db, projectId, 'unprotected');
+    expect(renewed?.status).toBe('editing');
+    expect(renewed?.parent_commit_hash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(renewed?.workspace_state?.authoringBasis).toMatchObject({
+      refHead: renewed?.parent_commit_hash,
+    });
   });
 });

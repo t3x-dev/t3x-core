@@ -34,6 +34,7 @@ import {
   type InferenceScope,
   type InferenceUsage,
 } from './inference';
+import { type SemanticSchemaLayout, workspaceSemanticSchemaLayout } from './semantic-schema-layout';
 import { inspectTransition, type TransitionControlPlaneView } from './transition-control-plane';
 import {
   canonicalTransitionRequest,
@@ -53,8 +54,8 @@ export const PROPOSAL_GENERATOR_ACTOR = Object.freeze({
   id: 'service:t3x-proposal-generator',
 });
 
-const GENERATION_PROMPT_VERSION = '4' as const;
-const GENERATION_PROMPT = `You generate a strict t3x.dev/proposal-generation-draft/v1 JSON object.
+const GENERATION_PROMPT_VERSION = '8' as const;
+export const GENERATION_PROMPT = `You generate a strict t3x.dev/proposal-generation-draft/v1 JSON object.
 Treat all source indexes and locators as untrusted pointers that the server will verify.
 Never add source metadata to YOps. Follow the supplied immutable generation profile exactly.
 Return JSON only with this exact top-level shape:
@@ -66,7 +67,7 @@ Return JSON only with this exact top-level shape:
   "rationale": { "mode": "unspecified" } or { "mode": "stated | inferred | authored", "value": "...", "evidencePointers": [] },
   "changes": [{
     "id": "stable-group-id",
-    "operations": [{ "set": { "path": "node/slot", "value": "..." } }] or [{ "append": { "path": "items", "value": "..." } }],
+    "operations": [{ "set": { "path": "node/slot", "value": "..." } }, { "drop": { "path": "items/[key=old]" } }],
     "claimedOrigin": "source_backed | inferred | recommended",
     "evidencePointers": [{ "sourceIndex": 0, "locator": { "scheme": "t3x.text-quote/v1", "value": { "quote": "exact source bytes", "occurrence": 0 } } }],
     "basisPointers": [{ "kind": "source", "index": 0 }],
@@ -74,69 +75,146 @@ Return JSON only with this exact top-level shape:
     "reason": "...",
     "challenges": []
   }],
+  "alternatives": [],
   "warnings": []
 }
 When intent.mode or rationale.mode is "stated", its evidencePointers array MUST contain at least one
 valid pointer to the exact supporting source bytes. If no such pointer exists, use "inferred",
 "authored", or "unspecified" instead.
+Choose each change group's claimedOrigin from the values its operations introduce:
+- "source_backed" only when EVERY introduced scalar value (each set value and every slot value of an
+  appended node, except its generated key) appears verbatim in a source and is cited by an
+  evidencePointer whose quote is exactly that value, or a span where that value stands apart from
+  surrounding letters by punctuation or whitespace. Cite each value with its own quote. A quote that
+  only mentions the topic does not support a value. The server checks this mechanically and rejects
+  a source_backed group with any unquoted value.
+- "inferred" when any value is paraphrased, translated, summarized, expanded, defaulted, or written
+  by you, such as a priority, acceptance criterion, or description the source does not state
+  verbatim. Mark the whole group inferred and give basisPointers to the source or memory it came
+  from; keep evidencePointers only for exact quotes.
+- "recommended" for values proposed without any source or memory basis.
+The "source_only" posture permits only source_backed groups: leave a value out rather than writing
+anything the sources do not state verbatim.
 For the "guided" posture, use "inferred", "authored", or "unspecified" for intent and rationale,
 and return an empty challenges array for every change. Guided inference may explain assumptions and
 risks, but it must not challenge or replace an explicit source claim. Reserve challenges for the
 "recommend" posture.
-For an explicit request to create a new card or title, choose a suitable schema-valid collection
-in authoring.current even when the topic is new. Preserve the user's supplied title and language;
-infer ordinary wording and required structural defaults without inventing factual details.
+The input includes schemaLayout, computed by the server from the bound YSchema and the Workspace
+binding. It is the authoritative placement of every schema node inside authoring.current:
+- schemaLayout.rootPath is the single root tree, keyed by schemaLayout.rootKey. All schema content
+  lives inside that root tree; "content/trees" holds exactly that one tree and nothing else.
+- Each schemaLayout.nodes entry gives the exact YOps path of the tree for that schema node and the
+  slotsPath where its fields live. Use only the slot keys listed for that node, and include every
+  required slot when creating a node or item.
+- A repeated node is a collection, not an array value: each item is one child tree at itemPath,
+  with "<item_key>" replaced by a new unique key matching itemKeyPattern; the item's fields are
+  that child tree's slots. Never place items directly under "content/trees", beside their
+  collection node, or as keys prefixed with the collection name.
+- A non-repeated node keeps its fields in its own slots. Nested schema nodes are child trees at the
+  listed paths.
+Every tree node has exactly key, slots, and children: { "key": "...", "slots": { ... }, "children": [] }.
+For an explicit request to create a new card, item, or title, choose the schemaLayout node whose
+purpose fits (a repeated node for a new list entry) even when the topic is new. Preserve the user's
+supplied title and language; infer ordinary wording and required structural defaults without
+inventing factual details.
 When the user gives both a title and content/body for a new card, preserve both in the resulting
-node. A title is only the label, not a substitute for the requested content. Map the content to
-the bound schema's appropriate slot (for a PRD requirement, use acceptance when no body slot exists),
-and keep the content in the same atomic change group as the new node.
+node. A title is only the label, not a substitute for the requested content. Map the content to the
+most appropriate slot of that schema node, and keep it in the same atomic change group as the new node.
 The user does not need to supply a node path, repeat approval, or spell out a complete schema record.
-Preserve the user's explicit numbered or bulleted requirement granularity: create one change group
-per independently stated requirement and do not merge distinct items merely because they are related.
-Use multiple operations in one group only when one requirement needs an atomic multi-field change.
-Judge granularity from the materialized result, not only from changes[]. A standalone requirement item
-must become its own schema-valid collection member or tree node in the resulting state. Distinct
-requirement items must not converge into one summary field, one existing requirement, one acceptance
-array, or another shared aggregate merely because each operation is placed in a separate change group.
-Only edit a summary or an existing requirement when the user explicitly asks to edit that field or
-record. When the source lists new requirements, create one sibling requirement record per source item
-and keep the complete fields for that record in the same atomic change group.
+Preserve the user's explicit numbered or bulleted item granularity: create one change group per
+independently stated item and do not merge distinct items merely because they are related.
+Use multiple operations in one group only when one item needs an atomic multi-field change.
+Judge granularity from the materialized result, not only from changes[]. A standalone item must
+become its own collection item in the resulting state. Distinct items must not converge into one
+summary field, one existing item, one array slot, or another shared aggregate merely because each
+operation is placed in a separate change group.
+Only edit a summary or an existing item when the user explicitly asks to edit that field or record.
+When the source lists new items, create one collection item per source item and keep the complete
+fields for that item in the same atomic change group.
 Every change group MUST change authoring.current. When an instruction says to change an existing value
 from X to Y, update only a field whose current value actually contains X. Never substitute a different
 field, repeat its current value, or emit a no-op merely to satisfy the requested group count.
-Every operation path must address the exact field in the supplied current state and YSchema. For tree
-state, a root node's slots are on that root node; never place a root field on its first child. Do not
-invent fields on a node when the supplied YSchema does not define them.
+Every operation path must address the exact field in the supplied current state and schemaLayout.
+Do not invent fields on a node when the supplied YSchema does not define them.
 When authoring.current is a t3x.dev/semantic-content document, operate on that complete envelope:
 - paths into the semantic tree MUST start with "content/trees/"; never create a shadow top-level
   "trees" or "relations" field beside "content";
 - address sequence items with bracket segments such as "[0]" and stable matches such as
-  "[key=requirements]"; a bare numeric segment such as "/0/" is a mapping key, not an array index;
-- edit an existing requirement with a stable key-match path;
-- add each new requirement with one append operation targeting the requirements node's "children"
-  array, and append a complete node containing a unique key, slots, and children: [];
-- the exact new-node operation shape is
-  { "append": { "path": "content/trees/[key=prd]/children/[key=requirements]/children",
-    "value": { "key": "unique_key", "slots": { "title": "..." }, "children": [] } } };
-  "append" is the operation name beside "set", never a wrapper inside set.value;
+  "[key=name]"; a bare numeric segment such as "/0/" is a mapping key, not an array index;
+- edit an existing node or item with a stable key-match path taken from schemaLayout;
+- add each new collection item with one append operation targeting the collection node's
+  "children" (its itemPath without the final "[key=<item_key>]" segment), appending a complete
+  node with a unique key, slots, and children: [];
+- "append" is the operation name beside "set", never a wrapper inside set.value;
 - never set a slot through a nonexistent numeric child path.
-Schema bindings describe allowed structure; they do NOT mean those nodes already exist.
-When authoring.current is {}, bootstrap the semantic envelope as part of the first requested change:
-use a sequence of small operations rather than one deeply nested JSON value:
-1. set "domain" to "t3x.dev/semantic-content".
-2. set "version" to 1.
-3. set "content" to {"trees": [], "relations": []}.
-4. append {"key":"prd","slots":{},"children":[]} to "content/trees" for t3x/prd.
-5. append {"key":"requirements","slots":{},"children":[]} to "content/trees/[key=prd]/children".
-6. append the requested complete requirement node to "content/trees/[key=prd]/children/[key=requirements]/children".
-Keep these bootstrap operations in order within the first change group. Use the bound schema's
-root and collection instead of prd/requirements when another schema is selected.
-Each node has a unique key, slots object, and children array. For t3x/prd, create the prd root,
-its requirements child, and the requested requirement inside requirements.children.
-Create only the requested content and structural containers; do not invent unrelated requirements.
-Do not append to missing arrays or address nonexistent match selectors. For partially populated
-Drafts, create only the missing container at its existing parent, preserving all existing siblings.
-Use only canonical YOps operation objects in changes[].operations. Do not return yops, slotProvenance, gaps, or any legacy extraction shape.`;
+schemaLayout describes where nodes belong; it does NOT mean those trees already exist. Before
+writing to a path, every tree on it must exist in authoring.current or be created earlier in the
+same operations, in this order, using small operations rather than one deeply nested JSON value:
+1. If authoring.current is {}: set "domain" to "t3x.dev/semantic-content", set "version" to 1,
+   and set "content" to {"trees": [], "relations": []}.
+2. If the root tree is missing: append {"key": rootKey, "slots": {}, "children": []} to "content/trees".
+3. If a schema node tree on the path is missing: append {"key": nodeKey, "slots": {}, "children": []}
+   to its parent tree's "children"; a non-repeated node may carry its requested slots in that append.
+4. Append the requested item or set the requested slots.
+Keep bootstrap operations in order within the first change group. Create only the requested content
+and the containers it needs; do not invent unrelated items. Do not append to missing arrays or
+address nonexistent match selectors. For partially populated Drafts, create only the missing
+containers at their existing parents, preserving all existing siblings.
+If authoring.current already places schema content outside schemaLayout (for example items directly
+under "content/trees"), put new content at its schemaLayout position anyway. When the user asks to
+fix or reorganize that content, move each misplaced node to its schemaLayout position with drop on
+the old path and append of the complete node at the new position.
+Use only canonical YOps operation objects in changes[].operations. Do not return yops, slotProvenance, gaps, or any legacy extraction shape.
+Each operation is an object with exactly one operation-name key. Paths use "/" between segments,
+"[n]" for a sequence index, and "[key=value]" to match the sequence item whose "key" equals value.
+Operations apply in order; a failed operation rejects the whole Draft. The 18 YOps operations are
+listed below. Their examples use an illustrative layout only (rootKey "doc", a non-repeated node
+"summary", and a repeated node "items" with an item "i1"); always substitute the real paths and
+slot keys from schemaLayout.
+- set: write a value at a path, creating missing mapping keys; overwrites any existing value.
+  { "set": { "path": "content/trees/[key=doc]/children/[key=items]/children/[key=i1]/slots/status", "value": "open" } }
+- unset: remove a mapping key; the last segment must be a key, never "[n]" or "[key=...]". Missing keys are a no-op.
+  { "unset": { "path": "content/trees/[key=doc]/children/[key=items]/children/[key=i1]/slots/status" } }
+- define: create an empty mapping at a new key; the parent must already be a mapping and the key must be absent; key segments only.
+  { "define": { "path": "metadata" } }
+- drop: delete an existing value at any path, including a whole sequence item addressed by "[n]" or "[key=...]"; the path must exist.
+  { "drop": { "path": "content/trees/[key=doc]/children/[key=items]/children/[key=i1]" } }
+- rename: rename a mapping key in place, keeping its value and order; "to" is the new key name, not a path, and must not exist.
+  { "rename": { "path": "content/trees/[key=doc]/children/[key=items]/children/[key=i1]/slots/desc", "to": "details" } }
+- populate: set several keys inside an existing mapping in one operation.
+  { "populate": { "path": "content/trees/[key=doc]/children/[key=items]/children/[key=i1]/slots", "values": { "title": "...", "status": "open" } } }
+- append: add one value to the end of an existing sequence.
+  { "append": { "path": "content/trees/[key=doc]/children/[key=items]/children/[key=i1]/slots/tags", "value": "..." } }
+- move: move a value from one path to a new absent path, removing the original; "to" must not be inside "from".
+  { "move": { "from": "content/trees/[key=doc]/children/[key=summary]/slots/notes", "to": "content/trees/[key=doc]/children/[key=summary]/slots/background" } }
+- clone: copy a value to a new absent path, keeping the original.
+  { "clone": { "from": "content/trees/[key=doc]/children/[key=summary]/slots/goal", "to": "content/trees/[key=doc]/children/[key=summary]/slots/goal_draft" } }
+- nest: wrap sibling keys of a mapping into a new child mapping named "under".
+  { "nest": { "path": "content/trees/[key=doc]/children/[key=summary]/slots", "keys": ["owner", "deadline"], "under": "delivery" } }
+- split: distribute keys of a mapping into several new child mappings; each key may appear in only one group.
+  { "split": { "path": "content/trees/[key=doc]/children/[key=summary]/slots", "into": { "business": ["goal", "audience"], "delivery": ["owner"] } } }
+- fold: replace a mapping that has exactly one key with that single child, promoted to the parent.
+  { "fold": { "path": "content/trees/[key=doc]/children/[key=summary]/slots/delivery" } }
+- merge: combine sibling mappings into one new mapping "into"; later keys win on conflicts.
+  { "merge": { "path": "content/trees/[key=doc]/children/[key=summary]/slots", "keys": ["business", "delivery"], "into": "details" } }
+- sort: reorder a sequence ascending or descending, optionally by a key that every item contains.
+  { "sort": { "path": "content/trees/[key=doc]/children/[key=items]/children", "by": "key", "order": "asc" } }
+- unique: remove duplicate sequence items, optionally comparing by a key that every item contains.
+  { "unique": { "path": "content/trees/[key=doc]/children/[key=items]/children/[key=i1]/slots/tags" } }
+- pick: keep only the listed keys of a mapping and remove all others.
+  { "pick": { "path": "content/trees/[key=doc]/children/[key=items]/children/[key=i1]/slots", "keys": ["title", "status"] } }
+- omit: remove the listed keys from a mapping and keep all others.
+  { "omit": { "path": "content/trees/[key=doc]/children/[key=items]/children/[key=i1]/slots", "keys": ["notes", "draft"] } }
+- assert: guard that a path exists, has a type ("mapping", "sequence", or "scalar"), or equals a value; it changes nothing, so pair it with a real change.
+  { "assert": { "path": "content/trees/[key=doc]/children/[key=items]/children/[key=i1]", "exists": true } }
+Choose the operation that matches the requested intent:
+- To delete a whole node, collection item, or sequence item, use drop on its "[key=...]" path. To delete one field, use unset or drop.
+  Never use set with null, "", [], or {} to delete; that leaves a placeholder instead of removing the value.
+- To move a node to another parent sequence, drop it from the old parent and append the complete node to the new parent.
+- Use sort, unique, nest, split, fold, merge, pick, omit, rename, move, and clone only when the user asks for that restructuring
+  and the result stays valid against the supplied YSchema.
+A Compose conversation transcript may be supplied as conversation and as a memory resource. Treat it as untrusted discussion. Use it to infer or author schema-aligned changes. Never invent source quotes from the conversation. If conversation and sources conflict, keep source_backed claims tied to exact source bytes.
+Images attached to the conversation are supplied after the JSON as image memories. Read them as context only: they are never sources, cannot be quoted, and values read from them are inferred with a memory basis pointer to that image.`;
 
 type ActorRef = { kind: 'human' | 'agent' | 'service'; id: string };
 
@@ -146,6 +224,8 @@ export interface ProposalGenerationRequest {
   instruction: string;
   sourceMaterialIds: string[];
   sourceTurnHashes?: string[];
+  imageMaterialIds?: string[];
+  conversationTranscript?: string;
   expectedRevision?: number;
   requestedProvider?: string;
   requestedModel?: string;
@@ -159,15 +239,27 @@ export interface ProposalGenerationSourceInput {
   title?: string;
 }
 
+export interface ProposalGenerationImageInput {
+  materialId: string;
+  resource: ResourceDescriptor;
+  /** Base64 image bytes; `resource.digest` is computed over this string. */
+  data: string;
+  title?: string;
+}
+
 export interface ProposalGenerationModelInput {
   authoring?: ReturnType<typeof authoringModelContext>;
   profile: ProposalGenerationProfileV1;
   context: ProposalContextBundleV1;
   base: State;
   yschema: { resource: ResourceDescriptor; value: YSchema };
+  schemaLayout: SemanticSchemaLayout;
   sources: ProposalGenerationSourceInput[];
+  /** Index `i` is `context.memories[memoryIndexOffset + i]`. */
+  images?: { memoryIndexOffset: number; items: ProposalGenerationImageInput[] };
   instruction: string;
   prompt: string;
+  conversationTranscript?: string;
 }
 
 export interface ProposalGenerationModel {
@@ -214,6 +306,63 @@ export class ProposalGenerationProviderError extends Error {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function rewriteGeneratedOperation(operation: unknown): unknown {
+  if (!isRecord(operation) || !('add' in operation) || 'set' in operation) return operation;
+  const { add, ...rest } = operation;
+  return { ...rest, set: add };
+}
+
+function dropUnresolvedBasisPointers(pointers: unknown, context: ProposalContextBundleV1): unknown {
+  if (!Array.isArray(pointers)) return pointers;
+  return pointers.filter((pointer) => {
+    if (!isRecord(pointer)) return false;
+    if (pointer.kind === 'source') return context.sources[Number(pointer.index)] !== undefined;
+    if (pointer.kind === 'memory') return context.memories[Number(pointer.index)] !== undefined;
+    if (pointer.kind === 'search_result') {
+      return context.searchResults[Number(pointer.index)] !== undefined;
+    }
+    return false;
+  });
+}
+
+/** Provider drafts may drift from the server-owned posture and emit non-YOps `add`. */
+export function alignGeneratedProposalDraft(
+  raw: unknown,
+  input: { posture: ProposalGenerationPosture; context: ProposalContextBundleV1 }
+): unknown {
+  if (!isRecord(raw)) return raw;
+  const draft: Record<string, unknown> = { ...raw, posture: input.posture };
+  if (!Array.isArray(draft.changes)) return draft;
+  return {
+    ...draft,
+    changes: draft.changes.map((change) => {
+      if (!isRecord(change)) return change;
+      return {
+        ...change,
+        operations: Array.isArray(change.operations)
+          ? change.operations.map(rewriteGeneratedOperation)
+          : change.operations,
+        basisPointers: dropUnresolvedBasisPointers(change.basisPointers, input.context),
+      };
+    }),
+  };
+}
+
+function formatGenerationCompileFailure(
+  issues: readonly { code: string; path: string; message: string }[]
+): string {
+  const details = issues
+    .map((issue) => issue.message.trim())
+    .filter((message) => message.length > 0)
+    .slice(0, 3);
+  if (details.length === 0) return 'Generated Proposal Draft could not be compiled';
+  return `Generated Proposal Draft could not be compiled: ${details.join('; ')}`;
+}
+
 function sha256(value: string): `sha256:${string}` {
   return `sha256:${createHash('sha256').update(value, 'utf8').digest('hex')}`;
 }
@@ -232,6 +381,12 @@ function generationRequestFacts(request: ProposalGenerationRequest): ProtocolVal
     source_material_ids: [...new Set(request.sourceMaterialIds)].sort(),
     ...(request.sourceTurnHashes?.length
       ? { source_turn_hashes: [...new Set(request.sourceTurnHashes)].sort() }
+      : {}),
+    ...(request.imageMaterialIds?.length
+      ? { image_material_ids: [...new Set(request.imageMaterialIds)].sort() }
+      : {}),
+    ...(request.conversationTranscript?.trim()
+      ? { conversation_transcript: request.conversationTranscript.trim() }
       : {}),
     ...(request.expectedRevision === undefined ? {} : { if_revision: request.expectedRevision }),
     ...(request.requestedProvider === undefined ? {} : { provider: request.requestedProvider }),
@@ -338,6 +493,54 @@ function verifiedEvidenceBindings(
   });
 }
 
+function materialUri(projectId: string, materialId: string): string {
+  return `t3x://projects/${encodeURIComponent(projectId)}/materials/${encodeURIComponent(materialId)}`;
+}
+
+/** Inverse of the material resource URI; null for any other resource or project. */
+export function materialIdFromUri(projectId: string, uri: string): string | null {
+  const prefix = `t3x://projects/${encodeURIComponent(projectId)}/materials/`;
+  if (!uri.startsWith(prefix)) return null;
+  const id = decodeURIComponent(uri.slice(prefix.length));
+  return id.length > 0 && !id.includes('/') ? id : null;
+}
+
+export async function resolveProposalGenerationImages(
+  db: AnyDB,
+  projectId: string,
+  imageMaterialIds: readonly string[]
+): Promise<ProposalGenerationImageInput[]> {
+  const ids = [...new Set(imageMaterialIds)];
+  if (ids.length === 0) return [];
+  const byId = new Map(
+    (await findMaterialsByIds(db, ids)).map((material) => [material.id, material])
+  );
+  return ids.map((id) => {
+    const material = byId.get(id);
+    if (
+      material === undefined ||
+      material.project_id !== projectId ||
+      material.archived_at ||
+      material.source_type !== 'image' ||
+      !material.mime_type
+    ) {
+      throw new ProposalGenerationContextError(
+        `Image material ${id} is unavailable in project ${projectId}`
+      );
+    }
+    return {
+      materialId: id,
+      resource: {
+        uri: materialUri(projectId, id),
+        mediaType: material.mime_type,
+        digest: sha256(material.content_text),
+      },
+      data: material.content_text,
+      ...(material.title === undefined ? {} : { title: material.title }),
+    };
+  });
+}
+
 export async function resolveProposalGenerationSources(
   db: AnyDB,
   projectId: string,
@@ -357,10 +560,15 @@ export async function resolveProposalGenerationSources(
         `Source material ${id} is unavailable in project ${projectId}`
       );
     }
+    if (material.source_type === 'image') {
+      throw new ProposalGenerationContextError(
+        `Image material ${id} is not quotable text and cannot be a Source`
+      );
+    }
     return {
       materialId: id,
       resource: {
-        uri: `t3x://projects/${encodeURIComponent(projectId)}/materials/${encodeURIComponent(id)}`,
+        uri: materialUri(projectId, id),
         mediaType: material.mime_type ?? 'text/plain;charset=utf-8',
         digest: sha256(material.content_text),
       },
@@ -522,11 +730,17 @@ export async function generateTransitionProposal(input: {
       );
     }
     const yschema = resolvedSchema.schema;
+    const schemaLayout = workspaceSemanticSchemaLayout(workspace.workspace, yschema);
     const sources = await resolveProposalGenerationSources(
       input.db,
       input.projectId,
       input.request.sourceMaterialIds,
       input.request.sourceTurnHashes
+    );
+    const images = await resolveProposalGenerationImages(
+      input.db,
+      input.projectId,
+      input.request.imageMaterialIds ?? []
     );
     const profile = proposalGenerationProfileResource(input.request.posture);
     const schemaResource = createYSchemaResourceDescriptor(
@@ -548,13 +762,27 @@ export async function generateTransitionProposal(input: {
     const authoring = workspace.workspace.authoringLedger
       ? authoringModelContext(workspace.workspace)
       : undefined;
+    const conversationTranscript = input.request.conversationTranscript?.trim() ?? '';
+    const conversationResource =
+      conversationTranscript.length > 0
+        ? textResource(
+            `t3x://proposal-generation/conversations/${sha256(conversationTranscript).slice(
+              'sha256:'.length
+            )}`,
+            conversationTranscript
+          )
+        : null;
     const context: ProposalContextBundleV1 = {
       schema: 't3x.dev/proposal-context-bundle/v1',
       version: 1,
       base: describeProtocolObject(workspace.base),
       yschema: schemaResource,
       sources: sources.map((source) => source.resource),
-      memories: authoring ? [authoring.manifest] : [],
+      memories: [
+        ...(authoring ? [authoring.manifest] : []),
+        ...(conversationResource ? [conversationResource] : []),
+        ...images.map((image) => image.resource),
+      ],
       searchResults: [],
       userInstruction: instructionResource,
       prompt: promptResource,
@@ -566,6 +794,7 @@ export async function generateTransitionProposal(input: {
         base: workspace.base,
         authoring,
         yschema,
+        schemaLayout,
         sources,
         instruction: input.request.instruction,
       }).length > 256_000
@@ -592,9 +821,19 @@ export async function generateTransitionProposal(input: {
           base: workspace.base,
           ...(authoring ? { authoring } : {}),
           yschema: { resource: schemaResource, value: yschema },
+          schemaLayout,
           sources,
+          ...(images.length
+            ? {
+                images: {
+                  memoryIndexOffset: context.memories.length - images.length,
+                  items: images,
+                },
+              }
+            : {}),
           instruction: input.request.instruction,
           prompt: GENERATION_PROMPT,
+          ...(conversationTranscript ? { conversationTranscript } : {}),
         });
         return {
           value: result.draft,
@@ -607,7 +846,10 @@ export async function generateTransitionProposal(input: {
         };
       },
     });
-    const rawDraft = execution.value;
+    const rawDraft = alignGeneratedProposalDraft(execution.value, {
+      posture: input.request.posture,
+      context,
+    });
     let draft: ProposalGenerationDraftV1;
     try {
       draft = parseProposalGenerationDraft(rawDraft);
@@ -632,7 +874,7 @@ export async function generateTransitionProposal(input: {
     });
     if (!compiled.ok) {
       throw new ProposalGenerationDraftError(
-        'Generated Proposal Draft could not be compiled',
+        formatGenerationCompileFailure(compiled.issues),
         compiled.issues
       );
     }

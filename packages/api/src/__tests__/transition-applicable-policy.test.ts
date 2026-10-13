@@ -178,9 +178,7 @@ describe('resolveApplicableTransitionPolicy', () => {
     expect(applicable.refPolicyResource).toEqual(ref.resource);
     expect(applicable.resource.digest).not.toBe(ref.resource.digest);
     expect(applicable.resource.uri).toContain('/guided');
-    expect(applicable.policy.authorization.decide).toEqual(ref.policy.authorization.decide);
-    expect(applicable.policy.authorization.override).toEqual(ref.policy.authorization.override);
-    expect(applicable.policy.authorization.allowSelfApproval).toBe(false);
+    expect(applicable.policy.authorization).toEqual(ref.policy.authorization);
     expect(applicable.policy.claims).toEqual(ref.policy.claims);
     expect(applicable.policy.checks.replay).toEqual(ref.policy.checks.replay);
     expect(applicable.policy.checks.validation).toEqual(ref.policy.checks.validation);
@@ -221,8 +219,22 @@ describe('resolveApplicableTransitionPolicy', () => {
     expect(retry.resource).toEqual(first.resource);
     expect(postureChange.resource.digest).toBe(first.resource.digest);
     expect(postureChange.resource.uri).not.toBe(first.resource.uri);
-    expect(refChange.resource.digest).toBe(first.resource.digest);
+    expect(refChange.resource.digest).not.toBe(first.resource.digest);
     expect(refChange.resource.uri).not.toBe(first.resource.uri);
+  });
+
+  it.each([
+    true,
+    false,
+  ] as const)('inherits allowSelfApproval=%s from the ref policy for generated Proposals', (allowSelfApproval) => {
+    const applicable = resolveApplicableTransitionPolicy({
+      refPolicyBinding: refPolicyBinding({ allowSelfApproval }),
+      requestKind: 'structured_yops',
+      preparationFacts: preparation() as unknown as ProtocolValue,
+    });
+
+    expect(applicable.mode).toBe('generation_overlay');
+    expect(applicable.policy.authorization.allowSelfApproval).toBe(allowSelfApproval);
   });
 
   it.each([

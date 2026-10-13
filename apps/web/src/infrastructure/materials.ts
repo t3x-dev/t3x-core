@@ -7,7 +7,7 @@ import { API_V1, fetchWithTimeout, handleResponse } from './core';
 export interface Material {
   id: string;
   project_id: string;
-  source_type: 'document' | 'url' | 'platform';
+  source_type: 'document' | 'url' | 'platform' | 'image';
   title: string;
   filename: string | null;
   mime_type: string | null;

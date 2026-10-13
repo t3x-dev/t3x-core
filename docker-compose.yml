@@ -111,9 +111,6 @@ services:
       # Users register via built-in username/password at /login
       - AUTH_DISABLED=${AUTH_DISABLED:-false}
       - NEXT_PUBLIC_AUTH_DISABLED=${AUTH_DISABLED:-false}
-      # API keys for chat functionality (chat/stream is handled by WebUI's API route)
-      - ANTHROPIC_API_KEY
-      - OPENAI_API_KEY
     depends_on:
       postgres:
         condition: service_healthy

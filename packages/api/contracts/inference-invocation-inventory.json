@@ -14,7 +14,7 @@
     "packages/core/src/providers/embedding",
     "packages/core/src/providers/llm"
   ],
-  "totalObservedCalls": 31,
+  "totalObservedCalls": 27,
   "sources": [
     {
       "file": "packages/api/src/lib/proposal-generation.ts",
@@ -44,9 +44,9 @@
       "file": "packages/api/src/routes/chat.openapi.ts",
       "feature": "generation-chat",
       "status": "migrated",
-      "coveredCount": 7,
-      "observedCount": 7,
-      "note": "Non-streaming and provider-specific streaming transports share the execution lifecycle."
+      "coveredCount": 3,
+      "observedCount": 3,
+      "note": "Non-streaming provider transports share the execution lifecycle."
     },
     {
       "file": "packages/core/src/extractors/v2/compress.ts",
