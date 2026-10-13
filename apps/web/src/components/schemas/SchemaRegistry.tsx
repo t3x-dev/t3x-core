@@ -441,7 +441,9 @@ function SchemaRegistryHeader({
         variant={registryView === 'versions' ? 'commit' : 'canvas-outline'}
       >
         {registryView === 'versions' ? <FilePlus2 /> : <ArrowLeft />}
-        {registryView === 'versions' ? 'Compose with modules' : 'Back to Schema library'}
+        <span>
+          {registryView === 'versions' ? 'Compose with modules' : 'Back to Schema library'}
+        </span>
       </Button>
     </header>
   );
