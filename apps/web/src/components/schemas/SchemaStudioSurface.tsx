@@ -485,7 +485,7 @@ export function StudioEmptyCanvas({
             <path
               d="M96 36 C 130 36, 130 76, 164 76"
               fill="none"
-              stroke="#cdd1da"
+              stroke="var(--stroke-default)"
               strokeWidth="1.5"
               strokeDasharray="3 4"
             />

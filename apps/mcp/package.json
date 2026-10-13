@@ -40,7 +40,7 @@
     "postpack": "node ../../tools/restore-package-json.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "@t3x-dev/api": "workspace:*",
     "@t3x-dev/mcp-lib": "workspace:*",
     "drizzle-orm": "^0.45.2",

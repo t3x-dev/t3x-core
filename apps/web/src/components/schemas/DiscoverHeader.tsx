@@ -64,9 +64,9 @@ export function DiscoverHeader({
       <div className={cx('r1 nw')}>
         <Link className={cx('brand')} href="/" aria-label="Back to projects">
           <svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26">
-            <rect width="26" height="26" rx="7" fill="#111318" />
+            <rect width="26" height="26" rx="7" fill="var(--text-primary)" />
             <path d="M7 8.5h12M13 8.5v10" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" />
-            <circle cx="19" cy="17.5" r="2.2" fill="#6b8aff" />
+            <circle cx="19" cy="17.5" r="2.2" fill="var(--accent-conversation)" />
           </svg>
           <span className={cx('wm')}>T3X</span>
         </Link>
@@ -89,7 +89,7 @@ export function DiscoverHeader({
               /
             </span>
             <Link href={repoPath || '/'} className={cx('ctx')} style={{ fontWeight: 550 }}>
-              {projectName}
+              <h1>{projectName}</h1>
               <ReferenceIcon name="updown" size={13} className={cx('tx3')} />
             </Link>
           </>

@@ -107,7 +107,7 @@ export function SchemaCatalogExperience({
     <SchemaToolbarContext.Provider value={toolbarTarget}>
       <section
         className={cn(
-          `${shared.surface} min-w-0 bg-white text-[var(--text-primary)]`,
+          `${shared.surface} min-w-0 bg-[var(--surface-card)] text-[var(--text-primary)]`,
           (view === 'browse' || view === 'studio' || view === 'release') &&
             'flex h-full min-h-0 flex-col overflow-hidden'
         )}
@@ -125,7 +125,7 @@ export function SchemaCatalogExperience({
             <input
               name="q"
               type="search"
-              aria-label="Search definitions"
+              aria-label="Search projects and schemas"
               placeholder="Search projects and schemas…"
               value={query}
               onChange={(event) => setQuery(event.target.value)}

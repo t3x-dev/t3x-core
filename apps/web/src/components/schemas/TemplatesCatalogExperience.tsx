@@ -63,7 +63,7 @@ export function TemplatesCatalogExperience() {
   const [queryText, setQueryText] = useState(params.get('q') ?? '');
   const navigation = <SchemaViewNavigation value={view} onChange={navigate} />;
   return (
-    <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-white">
+    <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-[var(--surface-card)]">
       <DiscoverHeader />
       <SchemaToolbarContext.Provider value={toolbarTarget}>
         <div className={shared.surface}>

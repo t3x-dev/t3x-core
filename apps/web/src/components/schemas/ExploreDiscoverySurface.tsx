@@ -290,7 +290,7 @@ export function ExploreDiscoverySurface({
               </div>
               <span className={cx('ver')}>v1.0</span>
               <div className={cx('au')}>
-                <i className={cx('a')} style={{ background: '#3b82f6' }}>
+                <i className={cx('a')} style={{ background: 'var(--accent-commit)' }}>
                   N
                 </i>
                 northwind
@@ -311,7 +311,7 @@ export function ExploreDiscoverySurface({
               </div>
               <span className={cx('ver')}>v1.4</span>
               <div className={cx('au')}>
-                <i className={cx('a')} style={{ background: '#e5484d' }}>
+                <i className={cx('a')} style={{ background: 'var(--status-error)' }}>
                   S
                 </i>
                 sre-guild
@@ -334,7 +334,7 @@ export function ExploreDiscoverySurface({
               </div>
               <span className={cx('ver')}>v2.0</span>
               <div className={cx('au')}>
-                <i className={cx('a')} style={{ background: '#0d9488' }}>
+                <i className={cx('a')} style={{ background: 'var(--accent-leaf)' }}>
                   T
                 </i>
                 t3x-dev
@@ -355,7 +355,7 @@ export function ExploreDiscoverySurface({
               </div>
               <span className={cx('ver')}>v1.1</span>
               <div className={cx('au')}>
-                <i className={cx('a')} style={{ background: '#475569' }}>
+                <i className={cx('a')} style={{ background: 'var(--text-secondary)' }}>
                   S
                 </i>
                 sre-guild
@@ -376,7 +376,7 @@ export function ExploreDiscoverySurface({
               </div>
               <span className={cx('ver')}>v1.3</span>
               <div className={cx('au')}>
-                <i className={cx('a')} style={{ background: '#d69e2e' }}>
+                <i className={cx('a')} style={{ background: 'var(--accent-branch)' }}>
                   O
                 </i>
                 orbit-labs
@@ -397,7 +397,7 @@ export function ExploreDiscoverySurface({
               </div>
               <span className={cx('ver')}>v0.8</span>
               <div className={cx('au')}>
-                <i className={cx('a')} style={{ background: '#d6409f' }}>
+                <i className={cx('a')} style={{ background: 'var(--accent-conversation)' }}>
                   L
                 </i>
                 lumen
@@ -418,7 +418,7 @@ export function ExploreDiscoverySurface({
               </div>
               <span className={cx('ver')}>v1.0</span>
               <div className={cx('au')}>
-                <i className={cx('a')} style={{ background: '#7c5cf0' }}>
+                <i className={cx('a')} style={{ background: 'var(--accent-extract)' }}>
                   L
                 </i>
                 lumen
@@ -439,7 +439,7 @@ export function ExploreDiscoverySurface({
               </div>
               <span className={cx('ver')}>v1.2</span>
               <div className={cx('au')}>
-                <i className={cx('a')} style={{ background: '#22a05a' }}>
+                <i className={cx('a')} style={{ background: 'var(--status-success)' }}>
                   G
                 </i>
                 greenfield

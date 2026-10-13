@@ -289,7 +289,7 @@ function UsageChart({
             <polyline
               points={points.join(' ')}
               fill="none"
-              stroke="#2563eb"
+              stroke="var(--accent-commit)"
               strokeWidth="2.5"
               strokeLinejoin="round"
               vectorEffect="non-scaling-stroke"
@@ -302,8 +302,8 @@ function UsageChart({
                   cx={cx}
                   cy={cy}
                   r="3.5"
-                  fill="#2563eb"
-                  stroke="#fff"
+                  fill="var(--accent-commit)"
+                  stroke="var(--surface-card)"
                   strokeWidth="1.5"
                   vectorEffect="non-scaling-stroke"
                 />
@@ -401,15 +401,15 @@ function ModelMark({ model }: { model: string }) {
       <svg className={styles.modelMark} viewBox="0 0 40 40" aria-hidden="true">
         <path
           d="M20 2C20 11.94 28.06 20 38 20C28.06 20 20 28.06 20 38C20 28.06 11.94 20 2 20C11.94 20 20 11.94 20 2Z"
-          fill="#ff7a59"
+          fill="var(--accent-pending)"
         />
         <path
           d="M11 11C11 15.97 15.03 20 20 20C15.03 20 11 24.03 11 29C11 24.03 6.97 20 2 20C6.97 20 11 15.97 11 11Z"
-          fill="#ff7a59"
+          fill="var(--accent-pending)"
         />
         <path
           d="M29 11C29 15.97 33.03 20 38 20C33.03 20 29 24.03 29 29C29 24.03 24.97 20 20 20C24.97 20 29 15.97 29 11Z"
-          fill="#ff7a59"
+          fill="var(--accent-pending)"
         />
       </svg>
     );

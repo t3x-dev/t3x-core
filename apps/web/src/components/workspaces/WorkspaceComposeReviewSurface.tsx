@@ -261,7 +261,7 @@ export function WorkspaceComposeReviewSurface({
   return (
     <div
       className={cn(
-        'flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-white text-[var(--text-primary)]',
+        'flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-card)] text-[var(--text-primary)]',
         composeStyles.workspaceTheme
       )}
     >
@@ -339,7 +339,7 @@ function WorkspaceSchemaSelect({
   return (
     <select
       aria-label="Workspace schema"
-      className="min-w-0 max-w-52 truncate rounded border border-[var(--stroke-divider)] bg-white px-2 py-1 text-xs text-[var(--text-secondary)]"
+      className="min-w-0 max-w-52 truncate rounded border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-1 text-xs text-[var(--text-secondary)]"
       disabled={controller.isBusy || !controller.bindSchema}
       onChange={(event) => {
         const choice = choices.find((item) => item.id === event.target.value);
@@ -1483,7 +1483,7 @@ function ReviewSurface({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white text-[var(--text-primary)]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-card)] text-[var(--text-primary)]">
       {comparisonScenario ? (
         <div className="shrink-0 border-b border-[var(--stroke-divider)] bg-[var(--status-info-muted)] px-4 py-2 text-[11px] text-[var(--text-secondary)] md:px-6">
           Compared with {comparisonScenario.label}: {comparisonScenario.operationCount} operations ·{' '}
@@ -1505,7 +1505,7 @@ function ReviewSurface({
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <div className="flex min-h-0 flex-1 overflow-hidden">
-            <main className="min-w-0 flex-1 overflow-hidden bg-white">
+            <main className="min-w-0 flex-1 overflow-hidden bg-[var(--surface-card)]">
               {operations.length > 0 && !structureModel.hasReplayContent ? (
                 <div className="p-5 text-[13px] text-[var(--text-secondary)]">
                   <output>
@@ -2624,7 +2624,7 @@ function WorkspaceReviewStructureTableRow({
           style={{
             backgroundImage:
               row.depth > 0 && !reference
-                ? 'repeating-linear-gradient(to right, transparent 0 9px, #e5e7eb 9px 10px, transparent 10px 28px)'
+                ? 'repeating-linear-gradient(to right, transparent 0 9px, var(--stroke-default) 9px 10px, transparent 10px 28px)'
                 : undefined,
             backgroundRepeat: 'no-repeat',
             backgroundSize: `${String(row.depth * (reference ? 20 : 28))}px 100%`,
@@ -3466,12 +3466,12 @@ function _workspaceReviewDiffGutterClass(kind: StructuredDiffKind): string {
 
 function workspaceReviewDiffBadgeClass(kind: StructuredDiffKind): string {
   if (kind === 'added') {
-    return 'border border-[#d1fae5] bg-[#ecfdf5] text-[#047857]';
+    return 'border border-[var(--diff-added-border)] bg-[var(--diff-added-bg)] text-[var(--diff-added-text)]';
   }
   if (kind === 'removed') {
-    return 'border border-[#ffe4e6] bg-[#fff1f2] text-[#be123c]';
+    return 'border border-[var(--diff-removed-border)] bg-[var(--diff-removed-bg)] text-[var(--diff-removed-text)]';
   }
-  return 'border border-[#fef3c7] bg-[#fffbeb] text-[#b45309]';
+  return 'border border-[var(--diff-modified-border)] bg-[var(--diff-modified-bg)] text-[var(--diff-modified-text)]';
 }
 
 function _workspaceReviewDiffTextClass(kind: StructuredDiffKind): string {

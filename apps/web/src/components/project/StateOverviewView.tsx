@@ -523,12 +523,12 @@ function OrbitMark({ className }: { className: string }) {
       <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
         <path
           d="M9 23C4 18 4 14 9 9s9-5 14 0M23 9c5 5 5 9 0 14s-9 5-14 0"
-          stroke="#f97316"
+          stroke="var(--accent-pending)"
           strokeWidth="3"
           strokeLinecap="round"
         />
-        <circle cx="9" cy="23" r="4.5" fill="#f97316" />
-        <circle cx="23" cy="9" r="4.5" fill="#f97316" />
+        <circle cx="9" cy="23" r="4.5" fill="var(--accent-pending)" />
+        <circle cx="23" cy="9" r="4.5" fill="var(--accent-pending)" />
       </svg>
     </div>
   );

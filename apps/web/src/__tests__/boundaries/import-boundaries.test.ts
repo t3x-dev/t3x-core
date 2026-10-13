@@ -145,6 +145,8 @@ describe('L1-L4 import boundaries', () => {
       'app/insights/page.tsx:import @/infrastructure/commits',
       'app/project/[projectId]/page.tsx:import @/queries/project',
       'app/project/[projectId]/page.tsx:import @/queries/yschemaValidation',
+      'app/project/[projectId]/settings/LegacyProjectSettings.tsx:import @/queries/project',
+      'app/project/[projectId]/settings/LegacyProjectSettings.tsx:import @/queries/providers',
       'app/project/[projectId]/settings/page.tsx:import @/queries/providers',
       'app/share/[token]/page.tsx:import @/infrastructure',
     ];

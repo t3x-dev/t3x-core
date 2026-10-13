@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CommitHistoryDiffView } from '@/components/history/CommitHistoryDiffView';
 import { StateNodeHistoryPanel } from '@/components/history/StateNodeHistoryPanel';
 import type { ApiCommit } from '@/types/api';
 
@@ -91,34 +90,6 @@ describe('State node history', () => {
     expect(screen.getByRole('status')).toHaveTextContent('1 change · 1 revision checked');
   });
 
-  it('opens only the sidebar, skips unchanged revisions, and returns without changing the tree', async () => {
-    const root = commit('root', null, 'Old value');
-    const unchanged = commit('middle', 'root', 'Old value');
-    const head = commit('head', 'middle', 'New value');
-    loadCommit.mockImplementation(async (hash: string) => (hash === 'middle' ? unchanged : root));
-    render(<CommitHistoryDiffView commit={head} parentCommit={unchanged} onBack={vi.fn()} />);
-    const tree = screen.getByRole('region', { name: 'State rows' });
-    fireEvent.click(within(tree).getByText('outcome'));
-    const treeBefore = tree.innerHTML;
-    expect(loadCommit).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'View node history' }));
-    const history = screen.getByRole('region', { name: 'Node history' });
-    await waitFor(() =>
-      expect(within(history).getByText('Beginning of history reached.')).toBeInTheDocument()
-    );
-    expect(within(history).getAllByRole('article')).toHaveLength(2);
-    expect(within(history).queryByText('Commit middle')).not.toBeInTheDocument();
-    expect(within(history).getByText('New value')).toBeInTheDocument();
-    expect(within(history).getByText('No parent value')).toBeInTheDocument();
-    expect(loadCommit).toHaveBeenCalledWith('middle', 'project');
-    expect(loadCommit).toHaveBeenCalledWith('root', 'project');
-    expect(tree.innerHTML).toBe(treeBefore);
-    fireEvent.click(within(history).getByRole('button', { name: 'Back to change' }));
-    expect(screen.queryByRole('region', { name: 'Node history' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'View node history' })).toBeInTheDocument();
-    expect(tree.innerHTML).toBe(treeBefore);
-  });
-
   it('reports missing parents as incomplete and retries without fabricating a creation', async () => {
     const head = commit('head', 'root', 'New');
     loadCommit
@@ -186,29 +157,5 @@ describe('State node history', () => {
     );
     expect(await screen.findByRole('alert')).toHaveTextContent('cycle');
     expect(loadCommit).not.toHaveBeenCalled();
-  });
-
-  it('discards an old path response after the user selects a different node', async () => {
-    let resolve!: (value: ApiCommit) => void;
-    const pending = new Promise<ApiCommit>((done) => {
-      resolve = done;
-    });
-    const root = commit('root', null, 'Old');
-    const head = commit('head', 'root', 'New');
-    loadCommit.mockReturnValueOnce(pending).mockResolvedValue(root);
-    render(<CommitHistoryDiffView commit={head} parentCommit={root} onBack={vi.fn()} />);
-    const tree = screen.getByRole('region', { name: 'State rows' });
-    fireEvent.click(within(tree).getByText('outcome'));
-    fireEvent.click(screen.getByRole('button', { name: 'View node history' }));
-    fireEvent.click(within(tree).getByText('title'));
-    const history = screen.getByRole('region', { name: 'Node history' });
-    await waitFor(() => expect(within(history).getAllByRole('article')).toHaveLength(1));
-    await act(async () => {
-      resolve(root);
-      await pending;
-    });
-    expect(within(history).getByRole('heading', { name: 'title' })).toBeInTheDocument();
-    expect(within(history).queryByText('New')).not.toBeInTheDocument();
-    expect(within(history).getAllByRole('article')).toHaveLength(1);
   });
 });

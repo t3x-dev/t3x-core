@@ -586,11 +586,11 @@ export function ProjectStateTab({
       : 'Not checked';
   return (
     <section
-      className="flex h-full min-h-0 flex-col overflow-hidden bg-white"
+      className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--surface-card)]"
       data-state-view={activeView}
     >
       {activeView === 'canvas' ? (
-        <div className="flex min-h-10 shrink-0 flex-wrap items-center border-b border-[var(--stroke-divider)] bg-white px-1">
+        <div className="flex min-h-10 shrink-0 flex-wrap items-center border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-1">
           <StateModeTabs
             activeMode={activeView === 'canvas' ? 'canvas' : 'snapshot'}
             onModeChange={(mode) =>
@@ -601,7 +601,7 @@ export function ProjectStateTab({
       ) : null}
 
       <div className="grid min-h-0 flex-1 overflow-auto min-[1121px]:overflow-hidden">
-        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-white">
+        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--surface-card)]">
           {activeView !== 'canvas' ? (
             <>
               {!snapshot.loading && !snapshot.primaryError ? (
@@ -1447,7 +1447,7 @@ export function StateStructureView({
                           )}
                           title={row.value}
                         >
-                          {row.value === '-' ? '' : row.value || 'empty'}
+                          <StateValueCell row={row} />
                         </td>
                         <td className={inspectionStyles.ty}>{row.type}</td>
                       </tr>
@@ -1456,7 +1456,7 @@ export function StateStructureView({
                 </tbody>
               </table>
               {!visibleRows.length ? (
-                <p className="p-4 text-sm text-gray-500">No matching fields.</p>
+                <p className="p-4 text-sm text-[var(--text-tertiary)]">No matching fields.</p>
               ) : null}
             </section>
             <footer className={inspectionStyles.tnote}>

@@ -426,16 +426,16 @@ export function SchemaStudioExperience({
   return (
     <section
       aria-label="Schema Studio"
-      className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-white"
+      className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-card)]"
     >
       {!workspaces.loading && !workspaces.error && workspaceId && !target ? (
-        <p className="px-6 py-2 text-sm text-red-700" role="alert">
+        <p className="px-6 py-2 text-sm text-[var(--status-error)]" role="alert">
           Workspace {workspaceId} was not found in this project. Select a valid Workspace before
           applying.
         </p>
       ) : null}
       {error ? (
-        <p className="px-6 py-2 text-sm text-red-700" role="alert">
+        <p className="px-6 py-2 text-sm text-[var(--status-error)]" role="alert">
           {error} Review the refreshed selection before trying again.
         </p>
       ) : null}

@@ -128,7 +128,7 @@ describe('Schema catalog journey', () => {
     expect(screen.getByText('Ready to use')).toBeVisible();
     expect(screen.queryByText('Detailed Studio')).not.toBeInTheDocument();
     const search = screen.getByRole('searchbox', {
-      name: 'Search definitions',
+      name: 'Search projects and schemas',
     });
     fireEvent.change(search, {
       target: { value: 'dog care' },

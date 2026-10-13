@@ -104,8 +104,8 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
       <header className={styles.intro}>
         <span className={styles.brandMark} aria-hidden="true">
           <svg aria-hidden="true" width="28" height="28" viewBox="0 0 28 28" fill="none">
-            <circle cx="14" cy="14" r="10" stroke="#f0803c" strokeWidth="2.6" />
-            <circle cx="14" cy="14" r="4.6" stroke="#ff5b4d" strokeWidth="2.6" />
+            <circle cx="14" cy="14" r="10" stroke="var(--accent-pending)" strokeWidth="2.6" />
+            <circle cx="14" cy="14" r="4.6" stroke="var(--status-error)" strokeWidth="2.6" />
           </svg>
         </span>
         <div className={styles.introCopy}>

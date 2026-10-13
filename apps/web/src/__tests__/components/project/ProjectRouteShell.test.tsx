@@ -48,7 +48,9 @@ describe('ProjectRouteShell', () => {
       </ProjectRouteShell>
     );
 
-    expect(screen.getByRole('banner')).toHaveClass('h-24');
+    expect(screen.getByRole('navigation', { name: 'Project views' }).closest('header')).toBe(
+      screen.getByRole('banner')
+    );
     expect(screen.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Project views' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'History' })).toBeInTheDocument();

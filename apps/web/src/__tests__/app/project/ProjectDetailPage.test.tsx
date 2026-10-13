@@ -513,7 +513,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByText('Private')).toBeInTheDocument();
     expect(screen.queryByText('Validation pending')).not.toBeInTheDocument();
     const projectNavigation = screen.getByRole('navigation', { name: 'Project views' });
-    expect(projectNavigation.closest('header')).toHaveClass('h-24');
+    expect(projectNavigation.closest('header')).toBe(screen.getByRole('banner'));
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
@@ -558,7 +558,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     );
     expect(screen.queryByText('PRD audience handoff')).not.toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Think it through.' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Chat' })).toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
@@ -571,7 +571,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByRole('heading', { name: 'Curated schemas' })).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Schema views' })).toBeInTheDocument();
     expect(
-      screen.getByRole('textbox', { name: 'Search projects and schemas' })
+      screen.getByRole('searchbox', { name: 'Search projects and schemas' })
     ).toBeInTheDocument();
     expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   });
