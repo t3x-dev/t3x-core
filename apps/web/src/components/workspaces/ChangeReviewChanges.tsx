@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
+import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { Badge } from '@/components/ui/badge';
 import { composeValueLabel } from '@/domain/composePresentation';
 import {
@@ -23,7 +24,7 @@ export function ChangeReviewChanges({
   return (
     <section
       aria-label="Changes"
-      className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)]"
+      className="overflow-hidden rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)]"
     >
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-4 py-2.5">
         <h2 className="text-sm font-semibold text-[var(--text-primary)]">Changes</h2>
@@ -90,39 +91,41 @@ function FieldGroups({ groups }: { groups: readonly FieldChangeGroup[] }) {
     return <p className="px-4 py-6 text-xs text-[var(--text-secondary)]">No field changes.</p>;
   }
   return (
-    <ol className="divide-y divide-[var(--stroke-divider)]">
-      {groups.map((group) => (
-        <li className="px-4 py-3" key={group.id}>
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h3 className="truncate text-sm font-semibold text-[var(--text-primary)]">
-                {group.label}
-              </h3>
-              {group.breadcrumb ? (
-                <p className="truncate text-[11px] text-[var(--text-tertiary)]">
-                  {group.breadcrumb}
-                </p>
-              ) : null}
-            </div>
-            <Badge variant={KIND_BADGE[group.kind]}>{KIND_LABEL[group.kind]}</Badge>
-          </div>
-          <dl className="mt-2 grid gap-1.5 text-xs">
-            {group.fields.map((field) => (
-              <div
-                className="grid gap-x-3 gap-y-0.5 sm:grid-cols-[112px_minmax(0,1fr)]"
-                key={field.name}
-              >
-                <dt className="font-medium text-[var(--text-tertiary)]">{field.name}</dt>
-                <dd className="min-w-0 leading-5">
-                  {field.kind !== 'added' ? <ValueText removed value={field.before} /> : null}
-                  {field.kind !== 'removed' ? <ValueText value={field.after} /> : null}
-                </dd>
+    <ChangeList label="Field changes">
+      <ol className="divide-y divide-[var(--stroke-divider)]">
+        {groups.map((group) => (
+          <li className="px-4 py-3" key={group.id}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="truncate text-sm font-semibold text-[var(--text-primary)]">
+                  {group.label}
+                </h3>
+                {group.breadcrumb ? (
+                  <p className="truncate text-[11px] text-[var(--text-tertiary)]">
+                    {group.breadcrumb}
+                  </p>
+                ) : null}
               </div>
-            ))}
-          </dl>
-        </li>
-      ))}
-    </ol>
+              <Badge variant={KIND_BADGE[group.kind]}>{KIND_LABEL[group.kind]}</Badge>
+            </div>
+            <dl className="mt-2 grid gap-1.5 text-xs">
+              {group.fields.map((field) => (
+                <div
+                  className="grid gap-x-3 gap-y-0.5 sm:grid-cols-[112px_minmax(0,1fr)]"
+                  key={field.name}
+                >
+                  <dt className="font-medium text-[var(--text-tertiary)]">{field.name}</dt>
+                  <dd className="min-w-0 leading-5">
+                    {field.kind !== 'added' ? <ValueText removed value={field.before} /> : null}
+                    {field.kind !== 'removed' ? <ValueText value={field.after} /> : null}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </li>
+        ))}
+      </ol>
+    </ChangeList>
   );
 }
 
@@ -143,26 +146,44 @@ function ValueText({ removed = false, value }: { removed?: boolean; value: unkno
 }
 
 function OperationList({ operations }: { operations: readonly unknown[] }) {
+  if (operations.length === 0) {
+    return <p className="px-4 py-6 text-xs text-[var(--text-secondary)]">No operations.</p>;
+  }
+
   return (
-    <ol className="divide-y divide-[var(--stroke-divider)]">
-      {operations.map((operation, index) => (
-        <li className="px-4 py-2 text-xs" key={`${operationLabel(operation, index)}-${index}`}>
-          <div className="flex gap-2">
-            <span className="w-6 shrink-0 text-right font-mono text-[var(--text-tertiary)]">
-              {index + 1}
-            </span>
-            <div className="min-w-0">
-              <div className="font-mono font-semibold text-[var(--text-primary)]">
-                {operationLabel(operation, index)}
-              </div>
-              <div className="mt-0.5 line-clamp-2 break-words font-mono text-[11px] text-[var(--text-secondary)]">
-                {operationDetail(operation)}
+    <ChangeList label="Operations">
+      <ol className="divide-y divide-[var(--stroke-divider)]">
+        {operations.map((operation, index) => (
+          <li className="px-4 py-2 text-xs" key={`${operationLabel(operation, index)}-${index}`}>
+            <div className="flex gap-2">
+              <span className="w-6 shrink-0 text-right font-mono text-[var(--text-tertiary)]">
+                {index + 1}
+              </span>
+              <div className="min-w-0">
+                <div className="font-mono font-semibold text-[var(--text-primary)]">
+                  {operationLabel(operation, index)}
+                </div>
+                <div className="mt-0.5 line-clamp-2 break-words font-mono text-[11px] text-[var(--text-secondary)]">
+                  {operationDetail(operation)}
+                </div>
               </div>
             </div>
-          </div>
-        </li>
-      ))}
-    </ol>
+          </li>
+        ))}
+      </ol>
+    </ChangeList>
+  );
+}
+
+function ChangeList({ children, label }: { children: ReactNode; label: string }) {
+  return (
+    <StateScrollArea
+      className="h-[clamp(18rem,calc(100dvh-28rem),40rem)]"
+      label={label}
+      type="always"
+    >
+      {children}
+    </StateScrollArea>
   );
 }
 
