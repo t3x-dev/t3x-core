@@ -108,7 +108,7 @@
   grid-column: 3;
   padding: 6px 0 4px 10px;
 }
-.eventToggle {
+.eventHeader {
   display: flex;
   width: 100%;
   min-width: 0;
@@ -117,12 +117,10 @@
   gap: 10px;
   text-align: left;
 }
-.eventToggle:focus-visible,
-.preview button:focus-visible {
+.changeRow:focus-visible {
   outline: none;
 }
-.eventToggle:focus-visible .titleLine > strong,
-.preview button:focus-visible .cardLabel {
+.changeRow:focus-visible .cardLabel {
   color: var(--accent-commit);
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -230,46 +228,29 @@
   font-size: 9px;
   font-weight: 650;
 }
-.disclosure {
-  width: 14px;
-  height: 14px;
-  flex: none;
-  margin-left: 4px;
-  color: var(--text-tertiary);
-  transition: transform 120ms ease;
-}
-.eventToggle[aria-expanded="true"] .disclosure {
-  transform: rotate(180deg);
-}
 .preview {
   min-width: 0;
   margin: 4px 0 0 -10px;
 }
-.preview button {
+.changeRow {
   display: grid;
   width: 100%;
   min-width: 0;
-  height: 34px;
+  min-height: 34px;
   grid-template-columns: 18px 190px minmax(0, 1fr) 16px;
   align-items: center;
   gap: 12px;
   border: 1px solid var(--stroke-divider);
   border-radius: 4px;
   background: var(--surface-card);
-  padding: 0 12px 0 10px;
+  padding: 7px 12px 7px 10px;
   box-shadow: var(--fx-shadow-md);
   text-align: left;
   color: var(--text-primary);
   font-size: 13px;
 }
-.preview button:hover {
+.changeRow:hover {
   background: var(--hover-bg);
-}
-.event[data-latest="true"] .preview button:first-child {
-  background: var(--surface-card);
-}
-.event[data-latest="true"] .preview button:first-child .cardLabel {
-  color: var(--text-secondary);
 }
 .changeMark {
   display: grid;
@@ -307,6 +288,13 @@
   gap: 5px;
   overflow: hidden;
   white-space: nowrap;
+}
+.valueSummary[data-object="true"] {
+  display: block;
+  white-space: normal;
+}
+.valueSummary[data-object="true"] > span {
+  white-space: normal;
 }
 .valueSummary del,
 .valueSummary ins,
@@ -367,7 +355,7 @@
   .date > span {
     font-size: 10px;
   }
-  .preview button {
+  .changeRow {
     grid-template-columns: 18px minmax(90px, 150px) minmax(0, 1fr) 16px;
     gap: 8px;
   }
@@ -393,7 +381,7 @@
   .date::after {
     display: none;
   }
-  .preview button {
+  .changeRow {
     grid-template-columns: 18px minmax(0, 0.7fr) minmax(0, 1.3fr) 16px;
   }
   .meta > span:last-child {
@@ -449,13 +437,13 @@
 .preview {
   margin-left: 0;
 }
-.stagingCard {
+.stagingRow {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr);
   align-items: start;
   gap: 8px;
 }
-.stagingCard > input {
+.stagingRow > input {
   margin-top: 16px;
   accent-color: var(--accent-commit);
 }
@@ -515,7 +503,7 @@
 .event {
   margin-bottom: 16px;
 }
-.preview button {
+.changeRow {
   min-height: 38px;
   height: auto;
   box-shadow: none;
@@ -533,5 +521,66 @@
 @media (max-width: 760px) {
   .eventBody {
     padding: 10px 8px 12px;
+  }
+}
+
+.preview {
+  display: grid;
+  gap: 4px;
+}
+.changeRow[aria-pressed="true"] {
+  border-color: var(--accent-commit);
+  background: var(--accent-commit-soft);
+}
+.changeRow:focus-visible {
+  outline: 2px solid var(--accent-commit);
+  outline-offset: 2px;
+}
+.changeRow:disabled {
+  cursor: default;
+}
+.stagingRow {
+  align-items: center;
+}
+.stagingRow > input {
+  margin-top: 0;
+}
+.stagingChecks {
+  display: grid;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+.stagingRow[data-multiple="true"] {
+  grid-template-columns: 84px minmax(0, 1fr);
+}
+.stagingChecks label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.stagingChecks input {
+  accent-color: var(--accent-commit);
+}
+.stagingChecks code {
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 1100px) {
+  .changeRow[data-object="true"] {
+    grid-template-columns: 18px minmax(0, 1fr) 16px;
+    row-gap: 6px;
+  }
+  .changeRow[data-object="true"] .cardLabel {
+    grid-column: 2;
+  }
+  .changeRow[data-object="true"] .valueSummary {
+    grid-row: 2;
+    grid-column: 2 / 4;
+  }
+  .changeRow[data-object="true"] .verified {
+    grid-row: 1;
+    grid-column: 3;
   }
 }

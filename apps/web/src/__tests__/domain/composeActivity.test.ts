@@ -132,6 +132,22 @@ describe('Compose event grouping', () => {
     });
   });
 
+  it('keeps collection-order changes in Latest when no child fields changed', () => {
+    const first = { key: 'a', slots: { title: 'A' }, children: [] };
+    const second = { key: 'b', slots: { title: 'B' }, children: [] };
+    const event = groupComposeActivity([action(1, 0)])[0];
+    const source = {
+      nodeId: 'actual-collection',
+      path: 'content/trees',
+      before: [first, second],
+      after: [second, first],
+    };
+    const rows = composeEventCards(event, { 'action-1': [source] });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject(source);
+    expect(rows[0]).toHaveProperty('sourceCards', [source]);
+  });
+
   it('does not bridge actors, missing actions, mismatched revisions or invalid timestamps', () => {
     expect(groupComposeActivity([action(1, 0), action(2, 1, 'manual', 'Alex')])).toHaveLength(2);
     expect(groupComposeActivity([action(1, 0), action(3, 1)])).toHaveLength(2);

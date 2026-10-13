@@ -4,6 +4,10 @@ import type {
   WorkspaceAuthoringCard,
 } from '@t3x-dev/api-client';
 import type { WorkspaceYOpsDraftOperation } from '@/types/workspaces';
+import {
+  type ComposeObjectCard,
+  composeObjectChangeCards,
+} from './workspaces/composeObjectChanges';
 
 export interface ComposeActivityEvent {
   id: string;
@@ -74,6 +78,13 @@ export function composeEventCards(
 }
 
 export function expandComposeActivityCards(cards: readonly WorkspaceAuthoringCard[]) {
+  return composeObjectChangeCards(cards).flatMap((card) =>
+    card.objectChange || card.sourceCards ? [card] : expandComposeActivityCard(card)
+  );
+}
+
+/** Preserve the existing operation projection used by Review and assistant receipts. */
+export function expandAuthoringCards(cards: readonly WorkspaceAuthoringCard[]) {
   return cards.flatMap(expandComposeActivityCard);
 }
 
@@ -184,6 +195,8 @@ export function activityOperation(
     op: card.after === undefined ? 'unset' : 'set',
     beforeValue: card.before,
     afterValue: card.after,
+    objectChange: (card as ComposeObjectCard).objectChange,
+    sourceCards: (card as ComposeObjectCard).sourceCards,
     reason,
     summary: reason ?? `Change ${card.path}`,
   };

@@ -8,9 +8,11 @@ import {
   humanizeComposeIdentifier,
 } from '@/domain/composePresentation';
 import { authoringSemanticPath } from '@/domain/workspaces/authoringReview';
+import { isComposeObject } from '@/domain/workspaces/composeObjectChanges';
 import type { WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 import styles from './ComposeDraftChanges.module.css';
 import { isSimpleDraftValue } from './ComposeDraftValueEditor';
+import { ComposeObjectFieldSummary } from './ComposeObjectFieldSummary';
 
 function valueLabel(value: unknown) {
   if (value === undefined) return 'Not present';
@@ -42,6 +44,7 @@ export function ComposeDraftChangeRow({
   const afterText = valueLabel(after);
   const displayPath = authoringSemanticPath(operation.path) ?? operation.path;
   const canEdit = Boolean(operation.path) && after !== undefined && isSimpleDraftValue(after);
+  const object = isComposeObject(before) || isComposeObject(after);
   const disabledReason = !operation.path
     ? 'This value has no field path available for editing.'
     : after === undefined
@@ -69,15 +72,19 @@ export function ComposeDraftChangeRow({
           </span>
           <code title={operation.path}>{displayPath}</code>
         </span>
-        <span className={styles.values} aria-label="Base to current Draft">
-          <span className={styles.before} data-absent={before === undefined} title={beforeText}>
-            {beforeText}
+        {object ? (
+          <ComposeObjectFieldSummary operation={operation} format={valueLabel} />
+        ) : (
+          <span className={styles.values} aria-label="Base to current Draft">
+            <span className={styles.before} data-absent={before === undefined} title={beforeText}>
+              {beforeText}
+            </span>
+            <ArrowRight aria-hidden="true" />
+            <span className={styles.after} data-absent={after === undefined} title={afterText}>
+              {afterText}
+            </span>
           </span>
-          <ArrowRight aria-hidden="true" />
-          <span className={styles.after} data-absent={after === undefined} title={afterText}>
-            {afterText}
-          </span>
-        </span>
+        )}
       </button>
       <Tooltip>
         <TooltipTrigger asChild>

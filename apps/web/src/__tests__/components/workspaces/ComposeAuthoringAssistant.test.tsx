@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ComposeAuthoringAssistant } from '@/components/workspaces/ComposeAuthoringAssistant';
 
@@ -80,6 +80,45 @@ describe('ComposeAuthoringAssistant attachments', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
     expect(mocks.send).toHaveBeenCalledWith('天气为晴天', { files: [pdf] });
     expect(screen.queryByText('plan.pdf')).not.toBeInTheDocument();
+  });
+});
+
+describe('ComposeAuthoringAssistant publication recovery', () => {
+  it('retains an offscreen publication failure and reuses its request identity on retry', async () => {
+    let rejectPublication!: (error: Error) => void;
+    const publication = new Promise<never>((_resolve, reject) => {
+      rejectPublication = reject;
+    });
+    const publish = vi.fn(() => publication);
+    const props = {
+      projectId: 'project-1',
+      conversationId: 'publication-conversation',
+      context: {
+        workspaceId: 'publication-workspace',
+        workspaceRevision: 1,
+        sourceMaterialIds: [],
+      },
+      onCreateConversation: vi.fn(async () => 'publication-conversation'),
+    };
+    const first = render(<ComposeAuthoringAssistant {...props} onPublishCandidate={publish} />);
+    const generation = mocks.generation.mock.lastCall?.[0] as {
+      workspaceAssistant: { onCandidate: (transitionId: string, turnId: string) => void };
+    };
+    act(() => generation.workspaceAssistant.onCandidate('candidate-1', 'user-turn'));
+    expect(publish).toHaveBeenCalledTimes(1);
+    const identity = publish.mock.calls[0];
+    first.unmount();
+    const retry = vi.fn(async () => ({ kind: 'no_change' as const }));
+    render(<ComposeAuthoringAssistant {...props} onPublishCandidate={retry} />);
+    await act(async () => {
+      rejectPublication(new Error('Publication unavailable'));
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent('Publication unavailable');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Retry publication' }));
+    });
+    expect(retry).toHaveBeenCalledExactlyOnceWith(...identity!);
+    expect(screen.queryByRole('button', { name: 'Retry publication' })).not.toBeInTheDocument();
   });
 });
 

@@ -25,6 +25,11 @@ import { GenerationModelSelector } from '@/components/generation/GenerationModel
 import { unsupportedChatMaterialSourceMessage } from '@/components/import/documentAcceptTypes';
 import { providerSupports } from '@/domain/providerCapabilities';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
+import {
+  useSourceThreadSessionRef,
+  useSourceThreadSessionState,
+  useWorkspaceAssistantSession,
+} from '@/hooks/sourceThreads/sourceThreadSession';
 import { useSourceThreadGeneration } from '@/hooks/sourceThreads/useSourceThreadGeneration';
 import { useComposeProposalPosture } from '@/hooks/workspaces/useComposeProposalPosture';
 import type { WorkspaceAssistantContext } from '@/hooks/workspaces/useWorkspaceAuthoring';
@@ -74,19 +79,40 @@ export function ComposeAuthoringAssistant({
   proposalBlockedHint?: string;
   contextLabel?: string;
 }) {
-  const [conversationId, setConversationId] = useState(initialConversationId);
-  const [pendingCandidate, setPendingCandidate] = useState<string | null>(
+  const session = useWorkspaceAssistantSession(projectId, context.workspaceId);
+  const [conversationId, setConversationId] = useSourceThreadSessionState(
+    session,
+    'compose.conversation',
+    initialConversationId
+  );
+  const [pendingCandidate, setPendingCandidate] = useSourceThreadSessionState<string | null>(
+    session,
+    'compose.pendingCandidate',
     initialPendingCandidate ?? null
   );
-  const [publishing, setPublishing] = useState(false);
-  const [publicationError, setPublicationError] = useState<string | null>(null);
-  const [localError, setLocalError] = useState<string | null>(null);
-  const [published, setPublished] = useState<AssistantPublication | null>(null);
-  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
-  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
-  const publication = useRef<{ transitionId: string; requestId: string; turnId?: string } | null>(
+  const [publishing, setPublishing] = useSourceThreadSessionState(
+    session,
+    'compose.publishing',
+    false
+  );
+  const [publicationError, setPublicationError] = useSourceThreadSessionState<string | null>(
+    session,
+    'compose.publicationError',
     null
   );
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [published, setPublished] = useSourceThreadSessionState<AssistantPublication | null>(
+    session,
+    'compose.published',
+    null
+  );
+  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const publication = useSourceThreadSessionRef<{
+    transitionId: string;
+    requestId: string;
+    turnId?: string;
+  } | null>(session, 'compose.publication', null);
   const composeDefaultApplied = useRef(false);
   const model = useChatModelSelection({});
   const thinkingEnabled = useChatSessionStore((state) => state.thinkingEnabled);
@@ -106,7 +132,10 @@ export function ComposeAuthoringAssistant({
 
   useEffect(() => {
     if (initialPendingCandidate) setPendingCandidate(initialPendingCandidate);
-  }, [initialPendingCandidate]);
+  }, [initialPendingCandidate, setPendingCandidate]);
+  useEffect(() => {
+    if (initialConversationId) setConversationId(initialConversationId);
+  }, [initialConversationId, setConversationId]);
   const publishTransition = useCallback(
     async (transitionId: string, turnId?: string) => {
       const identity =
@@ -131,7 +160,14 @@ export function ComposeAuthoringAssistant({
         setPublishing(false);
       }
     },
-    [onPublishCandidate]
+    [
+      onPublishCandidate,
+      publication,
+      setPublished,
+      setPublishing,
+      setPendingCandidate,
+      setPublicationError,
+    ]
   );
   const chat = useSourceThreadGeneration({
     projectId,

@@ -11,6 +11,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { attachmentsFromContentBlocks } from '@/domain/conversations/turnAttachments';
+import {
+  type SourceThreadSession,
+  sessionValue,
+  useSourceThreadSessionRef,
+  useSourceThreadSessionState,
+} from '@/hooks/sourceThreads/sourceThreadSession';
 import { isSourceThreadRequestAborted, sourceThreadApi } from '@/infrastructure/sourceThreads';
 import type { Turn } from '@/infrastructure/types';
 import { getTemporaryChat, isTemporaryChatId } from '@/store/temporaryChatsStore';
@@ -92,22 +98,37 @@ export interface UseChatHistoryReturn {
 
 export function useChatHistory(
   projectId: string,
-  conversationId: string | undefined
+  conversationId: string | undefined,
+  session?: SourceThreadSession
 ): UseChatHistoryReturn {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState('');
-  const [offset, setOffset] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
+  const [messages, updateMessages] = useSourceThreadSessionState<ChatMessage[]>(
+    session,
+    'history.messages',
+    []
+  );
+  const [input, setInput] = useSourceThreadSessionState(session, 'history.input', '');
+  const [offset, setOffset] = useSourceThreadSessionState(session, 'history.offset', 0);
+  const [hasMore, setHasMore] = useSourceThreadSessionState(session, 'history.hasMore', false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isChatLoading, setIsChatLoading] = useState(false);
 
-  const messagesRef = useRef(messages);
-  const prevConversationIdRef = useRef<string | undefined>(undefined);
+  const messagesRef = useSourceThreadSessionRef(session, 'history.messagesRef', messages);
+  const prevConversationIdRef = useSourceThreadSessionRef<string | undefined>(
+    session,
+    'history.previousConversation',
+    undefined
+  );
   const loadMoreAbortRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
+  const setMessages = useCallback<React.Dispatch<React.SetStateAction<ChatMessage[]>>>(
+    (next) =>
+      updateMessages((previous) => {
+        const updated = typeof next === 'function' ? next(previous) : next;
+        messagesRef.current = updated;
+        return updated;
+      }),
+    [messagesRef, updateMessages]
+  );
 
   // Initial load on conversation switch. If conversationId flipped
   // from undefined -> value while messages exist, we just created the
@@ -119,6 +140,9 @@ export function useChatHistory(
     prevConversationIdRef.current = currentConversationId;
 
     const load = async () => {
+      // The running request owns this history until it finishes. A remount must
+      // not replace its user turn or partial reply with a database snapshot.
+      if (sessionValue<boolean>(session, 'stream.running')) return;
       if (!currentConversationId) {
         setMessages([]);
         setOffset(0);
@@ -152,7 +176,7 @@ export function useChatHistory(
       loadMoreAbortRef.current?.abort();
       loadMoreAbortRef.current = null;
 
-      setMessages([]);
+      if (!session || prevConversationId !== currentConversationId) setMessages([]);
       setOffset(0);
       setHasMore(false);
       setIsChatLoading(true);
@@ -192,7 +216,16 @@ export function useChatHistory(
       abortController.abort();
       loadMoreAbortRef.current?.abort();
     };
-  }, [conversationId, projectId]);
+  }, [
+    conversationId,
+    projectId,
+    session,
+    prevConversationIdRef,
+    messagesRef,
+    setMessages,
+    setOffset,
+    setHasMore,
+  ]);
 
   const loadMore = useCallback(async () => {
     if (!projectId || !conversationId || isLoadingMore || !hasMore) return;

@@ -1,4 +1,5 @@
 import type { TransitionProtocolValue, WorkspaceAuthoringCard } from '@t3x-dev/api-client';
+import { composeObjectChangeCards } from './composeObjectChanges';
 
 type Value = TransitionProtocolValue | undefined;
 
@@ -56,8 +57,12 @@ function unchanged(card: WorkspaceAuthoringCard) {
   return JSON.stringify(card.before) === JSON.stringify(card.after);
 }
 
-/** Display-only projection: new/deleted nodes stay whole; existing objects expose changed fields. */
-export function composeDraftChangeCards(cards: readonly WorkspaceAuthoringCard[]) {
+/** Structural business objects stay together; older generic documents keep their field view. */
+export function composeDraftChangeCards(
+  cards: readonly WorkspaceAuthoringCard[],
+  before?: TransitionProtocolValue,
+  after?: TransitionProtocolValue
+) {
   const visit = (card: WorkspaceAuthoringCard): WorkspaceAuthoringCard[] => {
     if (unchanged(card)) return [];
     if (card.before === undefined || card.after === undefined) return [card];
@@ -74,7 +79,9 @@ export function composeDraftChangeCards(cards: readonly WorkspaceAuthoringCard[]
     }
     return [card];
   };
-  return cards.flatMap(visit);
+  return composeObjectChangeCards(cards, before, after).flatMap((card) =>
+    card.objectChange ? [card] : visit(card)
+  );
 }
 
 function atPath(card: WorkspaceAuthoringCard, path: string): WorkspaceAuthoringCard | undefined {

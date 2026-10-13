@@ -155,11 +155,6 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => navigationMocks.searchParams,
 }));
 
-function openNewChangeItem(name: string) {
-  fireEvent.keyDown(screen.getByRole('button', { name: 'New change' }), { key: 'Enter' });
-  fireEvent.click(screen.getByRole('menuitem', { name }));
-}
-
 describe('WorkspaceComposeReviewSurface composer', () => {
   beforeEach(() => {
     snapshotMocks.list.mockReset().mockResolvedValue({ snapshots: [] });
@@ -178,7 +173,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     navigationMocks.searchParams = new URLSearchParams();
   });
 
-  it('keeps the original Compose surface and composer even when an authoring ledger exists', async () => {
+  it('selects list rows directly and keeps Details or Chat permanently visible', async () => {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     // Ledger presence must not silently replace the established Compose interface.
     Object.assign(candidate, { authoringLedger: { actions: [] } });
@@ -283,9 +278,16 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
 
     expect(screen.getByRole('tab', { name: 'Compose' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('tablist', { name: 'Change context' })).not.toBeInTheDocument();
+    const discussion = screen.getByRole('complementary', { name: 'Discuss change' });
+    expect(within(discussion).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
+    expect(within(discussion).getByTitle(candidate.title)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
     expect(screen.queryByRole('button', { name: 'Review complete draft' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Chat', exact: true }));
     expect(sourceGenerationMocks.options?.workspaceAssistant?.allowProposal).toBe(true);
     expect(screen.queryByText('Generate a proposal from change requests')).not.toBeInTheDocument();
     expect(screen.queryByText('Proposal ready')).not.toBeInTheDocument();
@@ -317,12 +319,31 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         Node.DOCUMENT_POSITION_FOLLOWING
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(screen.getByRole('heading', { name: 'Proposed changes' })).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Expand Approval' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Discuss Approval' }));
-    expect(screen.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('button', { name: 'Expand Approval' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete Approval' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect Approval: rollout/approval' }));
+    expect(within(discussion).getByRole('heading', { name: 'Details' })).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Inspect Approval: rollout/approval' })
+    ).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(discussion).getByRole('button', { name: 'Ask AI' }));
+    expect(screen.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
     expect(screen.queryByRole('heading', { name: 'Event evidence' })).not.toBeInTheDocument();
     fireEvent.click(allChanges);
     expect(allChanges).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect Approval: rollout/approval' }));
+    expect(within(discussion).getByRole('heading', { name: 'Details' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    );
+    fireEvent.click(within(discussion).getByRole('button', { name: 'Ask AI' }));
+    expect(within(discussion).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Chat', exact: true }));
+    expect(within(discussion).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
     expect(screen.queryByText('Before event')).not.toBeInTheDocument();
     fireEvent.click(latestAction);
     expect(latestAction).toHaveAttribute('aria-selected', 'true');
@@ -345,11 +366,10 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       Node.DOCUMENT_POSITION_FOLLOWING
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Close discussion' }));
-    expect(screen.queryByRole('complementary', { name: 'Discuss change' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Show discussion' }));
-    expect(screen.getByRole('complementary', { name: 'Discuss change' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
+    expect(screen.queryByRole('button', { name: 'Close discussion' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show discussion' })).not.toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Discuss change' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Chat', exact: true }));
     vi.stubGlobal('crypto', {
       ...globalThis.crypto,
       randomUUID: vi.fn(() => 'request-1'),
@@ -443,19 +463,25 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Expand Allocation' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Allocation' }));
-    fireEvent.change(screen.getByLabelText('New value for Allocation'), {
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect Allocation: rollout/allocation' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit', exact: true }));
+    fireEvent.change(screen.getByLabelText('New value'), {
       target: { value: '30' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.change(screen.getByLabelText('Reason'), {
+      target: { value: 'Adjust pilot allocation' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save change' }));
     expect(publish).not.toHaveBeenCalled();
-    expect(screen.getByText('Ungrouped manual cards')).toBeInTheDocument();
+    expect(screen.getByText('Ungrouped manual changes')).toBeInTheDocument();
     expect(
       screen.getByRole('checkbox', { name: 'Include Allocation in the next P' })
     ).toBeChecked();
 
-    openNewChangeItem('Add manually');
+    fireEvent.keyDown(screen.getByRole('button', { name: 'New change' }), { key: 'Enter' });
+    expect(screen.queryByRole('menuitem', { name: 'Add manually' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Edit a field' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit structure' }));
     const dialog = await screen.findByRole('dialog', { name: 'Current structure' });
     expect(within(dialog).getByText('allocation')).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add inside rollout' }));
@@ -476,14 +502,19 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       expect(screen.getByRole('checkbox', { name: 'Include Regions in the next P' })).toBeChecked()
     );
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
+    const inspectNode = activityMocks.value.inspectNode;
+    vi.mocked(inspectNode).mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect Regions: rollout/regions' }));
+    expect(screen.getByText('Unsaved change · not yet applied to Draft')).toBeVisible();
+    expect(screen.getByLabelText('Selected field details')).toHaveTextContent('us');
+    expect(inspectNode).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Chat', exact: true }));
     expect(sourceGenerationMocks.options?.workspaceAssistant?.allowProposal).toBe(false);
     expect(
       screen.getByText(
-        'Save every ungrouped manual card as a P before asking the assistant to add cards.'
+        'Save every ungrouped manual change as a P before asking the assistant to add changes.'
       )
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Details' }));
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Include Regions in the next P' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save selected as P (1)' }));
@@ -500,6 +531,125 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(
       screen.queryByRole('checkbox', { name: 'Include Allocation in the next P' })
     ).not.toBeInTheDocument();
+  });
+
+  it('stages object slot edits as one object row and publishes the selected field operations as P', async () => {
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    Object.assign(candidate, { authoringLedger: { actions: [] } });
+    const path = 'tasks/[key=flight]';
+    const before = { key: 'flight', slots: { goal: '开飞机的任务', done: false }, children: [] };
+    const current = { ...before, slots: { ...before.slots, done: true } };
+    const action = {
+      actionId: 'a1',
+      sequence: 1,
+      channel: 'manual',
+      actor: { id: 'Maya', kind: 'human' },
+      publishedAt: '2026-09-21T11:53:00Z',
+      beforeRevision: 0,
+      afterRevision: 1,
+      operations: [],
+      reason: 'Prepare flight',
+    };
+    const cards = [{ nodeId: 'task-id', path, before, after: current }];
+    const publish = vi.fn().mockResolvedValue({ kind: 'published' });
+    activityMocks.value = {
+      enabled: true,
+      loading: false,
+      error: null,
+      actions: [action],
+      cards: { a1: cards },
+      cursor: null,
+      node: null,
+      nodeLoading: false,
+      nodeError: null,
+      nodeCursor: null,
+      notice: null,
+      newActivity: null,
+      compositionRevision: 1,
+      workspaceRevision: 1,
+      basis: { refName: 'main', refHead: null, baseDigest: 'base' },
+      refresh: vi.fn(),
+      loadOlder: vi.fn(),
+      loadLatest: vi.fn(),
+      inspectNode: vi.fn(),
+      selectActionNode: vi.fn(),
+      loadOlderNode: vi.fn(),
+      publish,
+      publishCandidate: vi.fn(),
+      createAssistantConversation: vi.fn(),
+      view: {
+        schema: 't3x.application/workspace-authoring-view/v1',
+        projectionVersion: 1,
+        workspaceRevision: 1,
+        compositionRevision: 1,
+        basis: { refName: 'main', refHead: null, baseDigest: 'base' },
+        actions: [action],
+        selected: { action, cards },
+        base: { tasks: [before] },
+        current: { tasks: [current] },
+        netDiff: cards,
+        node: null,
+        nextBeforeSequence: null,
+      },
+    } as unknown as ReturnType<typeof useComposeActivity>;
+    render(
+      <WorkspaceComposeReviewSurface
+        branchOptions={['main']}
+        candidate={candidate}
+        controller={
+          {
+            busyAction: null,
+            candidate,
+            error: null,
+            hasCollaborationConflict: false,
+            isBusy: false,
+            materialSources: [],
+            notice: null,
+          } as unknown as WorkspaceComposeReviewController
+        }
+        mode="compose"
+        onModeChange={vi.fn()}
+      />
+    );
+    const publishedEvent = screen.getByLabelText('Event: Prepare flight');
+    fireEvent.click(
+      within(publishedEvent).getByRole('button', { name: `Inspect Flight: ${path}` })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit', exact: true }));
+    fireEvent.change(screen.getByLabelText('goal'), { target: { value: '学习飞行' } });
+    fireEvent.change(screen.getByLabelText('done'), { target: { value: 'false' } });
+    fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'Start with training' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save change' }));
+    const ungrouped = await screen.findByLabelText('Event: Ungrouped manual changes');
+    expect(
+      within(ungrouped).getAllByRole('button', { name: `Inspect Flight: ${path}` })
+    ).toHaveLength(1);
+    expect(within(ungrouped).getAllByRole('checkbox')).toHaveLength(2);
+    expect(publish).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Edit', exact: true })).toBeEnabled()
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit', exact: true }));
+    expect(screen.getByRole('textbox', { name: 'goal', exact: true })).toHaveValue('学习飞行');
+    expect(screen.getByRole('combobox', { name: 'done', exact: true })).toHaveValue('false');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    // Saving the unchecked goal later must remain possible without widening the done operation.
+    fireEvent.click(
+      within(ungrouped).getByRole('checkbox', { name: 'Include goal in the next P' })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save selected as P (1)' }));
+    await waitFor(() =>
+      expect(publish).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          operations: [{ set: { path: `${path}/slots/done`, value: false } }],
+          reason: 'Start with training',
+        })
+      )
+    );
+    expect(
+      within(screen.getByLabelText('Event: Ungrouped manual changes')).getByRole('checkbox')
+    ).not.toBeChecked();
+    expect(activityMocks.value.inspectNode).not.toHaveBeenCalled();
   });
 
   it('waits in Chat until the user enables Draft activity', () => {
@@ -639,7 +789,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(
       screen.queryByRole('navigation', { name: 'Workspace navigation' })
     ).not.toBeInTheDocument();
-    const inspectWithoutHistory = screen.getByRole('button', { name: 'Inspect Outcome' });
+    const inspectWithoutHistory = screen.getByRole('button', { name: /^Inspect Outcome:/ });
     expect(inspectWithoutHistory).toBeDisabled();
     fireEvent.click(inspectWithoutHistory);
     expect(prepareReview).not.toHaveBeenCalled();
