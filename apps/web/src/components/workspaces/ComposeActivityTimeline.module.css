@@ -108,7 +108,7 @@
   grid-column: 3;
   padding: 6px 0 4px 10px;
 }
-.eventToggle {
+.eventHeader {
   display: flex;
   width: 100%;
   min-width: 0;
@@ -117,12 +117,10 @@
   gap: 10px;
   text-align: left;
 }
-.eventToggle:focus-visible,
-.preview button:focus-visible {
+.changeRow:focus-visible {
   outline: none;
 }
-.eventToggle:focus-visible .titleLine > strong,
-.preview button:focus-visible .cardLabel {
+.changeRow:focus-visible .cardLabel {
   color: var(--accent-commit);
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -230,22 +228,11 @@
   font-size: 9px;
   font-weight: 650;
 }
-.disclosure {
-  width: 14px;
-  height: 14px;
-  flex: none;
-  margin-left: 4px;
-  color: var(--text-tertiary);
-  transition: transform 120ms ease;
-}
-.eventToggle[aria-expanded="true"] .disclosure {
-  transform: rotate(180deg);
-}
 .preview {
   min-width: 0;
   margin: 4px 0 0 -10px;
 }
-.preview button {
+.changeRow {
   display: grid;
   width: 100%;
   min-width: 0;
@@ -262,14 +249,8 @@
   color: var(--text-primary);
   font-size: 13px;
 }
-.preview button:hover {
+.changeRow:hover {
   background: var(--hover-bg);
-}
-.event[data-latest="true"] .preview button:first-child {
-  background: var(--surface-card);
-}
-.event[data-latest="true"] .preview button:first-child .cardLabel {
-  color: var(--text-secondary);
 }
 .changeMark {
   display: grid;
@@ -367,7 +348,7 @@
   .date > span {
     font-size: 10px;
   }
-  .preview button {
+  .changeRow {
     grid-template-columns: 18px minmax(90px, 150px) minmax(0, 1fr) 16px;
     gap: 8px;
   }
@@ -393,10 +374,125 @@
   .date::after {
     display: none;
   }
-  .preview button {
+  .changeRow {
     grid-template-columns: 18px minmax(0, 0.7fr) minmax(0, 1.3fr) 16px;
   }
   .meta > span:last-child {
     display: none;
   }
+}
+
+/* Panel reference spacing; selection never paints the entire event. */
+.timeline {
+  --timeline-gutter: 66px;
+  padding: 8px 32px 24px 24px;
+}
+.timeline::before {
+  left: calc(24px + var(--timeline-gutter) + var(--timeline-rail) / 2 - 1px);
+}
+.date {
+  height: 34px;
+}
+.date::after {
+  display: none;
+}
+.date > span {
+  grid-column: 2 / 4;
+  justify-content: flex-start;
+  padding-left: 6px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.eventTime {
+  padding-top: 16px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+.icon {
+  width: 30px;
+  height: 30px;
+  margin-top: 10px;
+}
+.icon[data-kind="modified"] {
+  background: var(--accent-pending);
+}
+.icon[data-latest="true"] {
+  box-shadow: 0 0 0 5px var(--surface-panel);
+}
+.eventBody {
+  padding: 8px 0 12px 16px;
+  background: transparent;
+}
+.titleLine > strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.preview {
+  margin-left: 0;
+}
+@media (max-width: 900px) {
+  .timeline {
+    --timeline-gutter: 42px;
+    padding-inline: 16px;
+  }
+  .timeline::before {
+    left: calc(16px + var(--timeline-gutter) + var(--timeline-rail) / 2 - 1px);
+  }
+}
+@media (max-width: 620px) {
+  .timeline {
+    --timeline-gutter: 0px;
+  }
+  .eventBody {
+    padding-left: 10px;
+  }
+}
+
+/* Keep event grouping and real revisions while matching the Compose reference density. */
+.event[data-latest="true"] .eventBody {
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-lg);
+  background: var(--accent-commit-soft);
+}
+.eventBody {
+  padding: 12px 12px 16px;
+}
+.event {
+  margin-bottom: 16px;
+}
+.changeRow {
+  min-height: 38px;
+  height: auto;
+  box-shadow: none;
+  border-color: var(--stroke-divider);
+  border-radius: var(--radius-md);
+  grid-template-columns: 18px minmax(80px, 0.85fr) minmax(0, 1.15fr) 16px;
+  padding-block: 8px;
+}
+.titleLine > strong {
+  font-size: 13px;
+}
+.author {
+  max-width: 140px;
+}
+@media (max-width: 760px) {
+  .eventBody {
+    padding: 10px 8px 12px;
+  }
+}
+
+.preview {
+  display: grid;
+  gap: 4px;
+}
+.changeRow[aria-pressed="true"] {
+  border-color: var(--accent-commit);
+  background: var(--accent-commit-soft);
+}
+.changeRow:focus-visible {
+  outline: 2px solid var(--accent-commit);
+  outline-offset: 2px;
+}
+.changeRow:disabled {
+  cursor: default;
 }

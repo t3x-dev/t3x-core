@@ -1770,6 +1770,7 @@
   font-weight: 650;
 }
 .nodeEditor select,
+.nodeEditor textarea,
 .nodeEditor input {
   width: 100%;
   border: 1px solid var(--stroke-default);
@@ -1782,6 +1783,7 @@
   outline: none;
 }
 .nodeEditor select:focus,
+.nodeEditor textarea:focus,
 .nodeEditor input:focus {
   border-color: var(--accent-commit);
 }
@@ -2720,4 +2722,30 @@
     border-radius: 0;
     box-shadow: none;
   }
+}
+
+/* Chat and Details share one persistent panel location. */
+.composeHeaderMeta .reviewTool {
+  display: inline-flex;
+  width: auto;
+}
+.composeHeaderMeta .chatToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  padding: 0 10px;
+}
+.chatToggle[aria-pressed="true"] {
+  background: var(--accent-commit-soft);
+  color: var(--accent-commit);
+}
+.chatToggle:focus-visible {
+  outline: 2px solid var(--accent-commit);
+  outline-offset: 2px;
+}
+.composeBoard .discussionHeader {
+  min-height: 48px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--stroke-divider);
 }

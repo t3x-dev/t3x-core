@@ -270,17 +270,17 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     return { branchChange, publishCandidate };
   }
 
-  it('keeps the original Compose surface and composer even when an authoring ledger exists', () => {
+  it('keeps the Compose controls and defaults the shared panel to Chat with an authoring ledger', () => {
     const { branchChange } = renderAuthoringComposer();
     const addSource = screen.getByRole('button', { name: 'Add source' });
     expect(screen.getByRole('tab', { name: 'Compose' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Sources' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Node history' })).toHaveAttribute(
-      'aria-selected',
+    expect(screen.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute(
+      'aria-pressed',
       'true'
     );
+    expect(screen.getByRole('heading', { name: 'Chat' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Review complete draft' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
     expect(sourceGenerationMocks.options?.workspaceAssistant?.allowProposal).toBe(true);
     expect(screen.queryByText('Generate a proposal from change requests')).not.toBeInTheDocument();
     expect(screen.queryByText('Proposal ready')).not.toBeInTheDocument();
@@ -321,13 +321,21 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       screen.getByRole('tablist', { name: 'Change scope' })
     );
     expect(
-      screen.getByRole('button', { name: 'Add manually' }).compareDocumentPosition(latestAction) &
+      screen.getByRole('button', { name: 'New change' }).compareDocumentPosition(latestAction) &
         Node.DOCUMENT_POSITION_FOLLOWING
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(screen.getByRole('heading', { name: 'Proposed changes' })).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Expand Approval' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Discuss Approval' }));
-    expect(screen.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByRole('button', { name: /^Inspect Approval:/ }));
+    expect(screen.getByRole('heading', { name: 'Details' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Ask AI' }));
+    expect(screen.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
     expect(screen.queryByRole('heading', { name: 'Event evidence' })).not.toBeInTheDocument();
     fireEvent.click(allChanges);
     expect(allChanges).toHaveAttribute('aria-selected', 'true');
@@ -339,12 +347,10 @@ describe('WorkspaceComposeReviewSurface composer', () => {
 
   it('preserves failed proposal publication and exposes retry after reopening discussion', async () => {
     const { publishCandidate } = renderAuthoringComposer();
-    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Close discussion' }));
-    expect(screen.queryByRole('complementary', { name: 'Discuss change' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Show discussion' }));
-    expect(screen.getByRole('complementary', { name: 'Discuss change' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Chat', exact: true }));
+    expect(screen.getByRole('complementary', { name: 'Change details' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Chat', exact: true }));
+    expect(screen.getByRole('complementary', { name: 'Workspace chat' })).toBeInTheDocument();
     vi.stubGlobal('crypto', {
       ...globalThis.crypto,
       randomUUID: vi.fn(() => 'request-1'),
@@ -416,13 +422,14 @@ describe('WorkspaceComposeReviewSurface composer', () => {
 
     const enable = screen.getByRole('button', { name: 'Enable Draft activity' });
     expect(
-      enable.compareDocumentPosition(screen.getByRole('button', { name: 'Add manually' })) &
+      enable.compareDocumentPosition(screen.getByRole('button', { name: 'New change' })) &
         Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
     fireEvent.click(enable);
     expect(bootstrapMocks.value.start).toHaveBeenCalledOnce();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Generate changes' }));
+    fireEvent.keyDown(screen.getByRole('button', { name: 'New change' }), { key: 'ArrowDown' });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Generate changes from sources' }));
     expect(generateChanges).toHaveBeenCalledOnce();
 
     fireEvent.change(screen.getByLabelText('Upload source material'), {
