@@ -26,6 +26,46 @@ const setCountToOne = { set: { path: 'count', value: 1 } };
 const setCountToTwo = { set: { path: 'count', value: 2 } };
 
 describe('YOps MutationDriver adapter', () => {
+  it('replays adding a root object after earlier edits changed nested field insertion order', () => {
+    const base = createYOpsState({
+      content: {
+        trees: [{ key: 'prd', slots: { title: 'Draft' }, children: [] }],
+        relations: [],
+      },
+    });
+    const created = createYOpsEffect({
+      base,
+      operations: [
+        { set: { path: 'content/trees/[key=prd]/slots/audience', value: 'Team' } },
+        {
+          append: {
+            path: 'content/trees',
+            value: { key: 'new-root', slots: {}, children: [] },
+          },
+        },
+      ],
+    });
+    expect(created.result.value).toEqual({
+      content: {
+        trees: [
+          { key: 'prd', slots: { title: 'Draft', audience: 'Team' }, children: [] },
+          { key: 'new-root', slots: {}, children: [] },
+        ],
+        relations: [],
+      },
+    });
+    // Stored Effects are canonicalized; replay must survive that round trip.
+    const stored = JSON.parse(JSON.stringify(created.effect)) as Effect;
+    expect(
+      replay(
+        base,
+        { driver: stored.driver, operations: stored.operations, inputs: stored.inputs },
+        new Map(),
+        yopsMutationDrivers
+      )
+    ).toEqual(created.result);
+  });
+
   it('pins its versioned native semantics and keeps the ref immutable', () => {
     expect(YOPS_SPEC_DIGEST).toBe(
       'sha256:2856688a25ab990f37019d10c0119a9967a0fb5f469c177d5f3e59ff1e508f37'
