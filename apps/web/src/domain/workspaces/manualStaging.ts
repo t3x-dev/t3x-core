@@ -1,7 +1,8 @@
-import type { WorkspaceAuthoringCard } from '@t3x-dev/api-client';
+import type { TransitionProtocolValue, WorkspaceAuthoringCard } from '@t3x-dev/api-client';
 import { applyYOps, resolvePath, type YOp, type YValue } from '@t3x-dev/yops';
 import { activityOperation } from '@/domain/composeActivity';
 import type { WorkspaceYOpsDraftOperation } from '@/types/workspaces';
+import { type ComposeObjectCard, composeObjectChangeCards } from './composeObjectChanges';
 import {
   type DraftYOp,
   draftOpReason,
@@ -21,6 +22,7 @@ export interface StagedManualCard {
 
 export interface ManualStagingControls {
   items: StagedManualCard[];
+  current?: TransitionProtocolValue;
   pending?: boolean;
   error?: string | null;
   onToggle: (id: string) => void;
@@ -138,6 +140,36 @@ export function stagedManualReason(items: readonly StagedManualCard[]) {
 
 export function stagedActivityOperation(item: StagedManualCard): WorkspaceYOpsDraftOperation {
   return activityOperation(item.card, item.reason);
+}
+
+/** Group display only; the original items remain the units of selection and saving. */
+export function stagedObjectGroups(
+  items: readonly StagedManualCard[],
+  current?: TransitionProtocolValue
+): { card: ComposeObjectCard; items: StagedManualCard[] }[] {
+  let preview: TransitionProtocolValue | undefined;
+  try {
+    preview = current === undefined ? undefined : previewStagedCurrent(current, items);
+  } catch {
+    return items.map((item) => ({ card: item.card, items: [item] }));
+  }
+  const cards = composeObjectChangeCards(
+    items.map((item) => item.card),
+    current,
+    preview,
+    { includeUnchanged: true }
+  );
+  const groups = cards.map((card) => ({
+    card,
+    items: items.filter((item) =>
+      (card.objectChange?.sources ?? card.sourceCards ?? [card]).includes(item.card)
+    ),
+  }));
+  // Even canceled or legacy operations remain selectable and saveable.
+  for (const item of items)
+    if (!groups.some((group) => group.items.includes(item)))
+      groups.push({ card: item.card, items: [item] });
+  return groups;
 }
 
 export const UNGROUPED_MANUAL_HINT =

@@ -236,14 +236,14 @@
   display: grid;
   width: 100%;
   min-width: 0;
-  height: 34px;
+  min-height: 34px;
   grid-template-columns: 18px 190px minmax(0, 1fr) 16px;
   align-items: center;
   gap: 12px;
   border: 1px solid var(--stroke-divider);
   border-radius: 4px;
   background: var(--surface-card);
-  padding: 0 12px 0 10px;
+  padding: 7px 12px 7px 10px;
   box-shadow: var(--fx-shadow-md);
   text-align: left;
   color: var(--text-primary);
@@ -288,6 +288,13 @@
   gap: 5px;
   overflow: hidden;
   white-space: nowrap;
+}
+.valueSummary[data-object="true"] {
+  display: block;
+  white-space: normal;
+}
+.valueSummary[data-object="true"] > span {
+  white-space: normal;
 }
 .valueSummary del,
 .valueSummary ins,
@@ -537,4 +544,43 @@
 }
 .stagingRow > input {
   margin-top: 0;
+}
+.stagingChecks {
+  display: grid;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+.stagingRow[data-multiple="true"] {
+  grid-template-columns: 84px minmax(0, 1fr);
+}
+.stagingChecks label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.stagingChecks input {
+  accent-color: var(--accent-commit);
+}
+.stagingChecks code {
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 1100px) {
+  .changeRow[data-object="true"] {
+    grid-template-columns: 18px minmax(0, 1fr) 16px;
+    row-gap: 6px;
+  }
+  .changeRow[data-object="true"] .cardLabel {
+    grid-column: 2;
+  }
+  .changeRow[data-object="true"] .valueSummary {
+    grid-row: 2;
+    grid-column: 2 / 4;
+  }
+  .changeRow[data-object="true"] .verified {
+    grid-row: 1;
+    grid-column: 3;
+  }
 }

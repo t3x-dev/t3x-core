@@ -5,9 +5,12 @@ import {
   composePathLabel,
   composeTextDiff,
   composeValueChangeLabels,
+  composeValueLabel,
 } from '@/domain/composePresentation';
+import { isComposeObject } from '@/domain/workspaces/composeObjectChanges';
 import type { WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 import styles from './ComposeActivityTimeline.module.css';
+import { ComposeObjectFieldSummary } from './ComposeObjectFieldSummary';
 
 function ValueChange({ before, after, kind }: { before: string; after: string; kind: string }) {
   if (kind === 'added') return <ins title={after}>{after}</ins>;
@@ -28,7 +31,7 @@ function ValueChange({ before, after, kind }: { before: string; after: string; k
   );
 }
 
-/** Keep the existing activity summary while selecting Details directly. */
+/** Keep object ownership while selecting Details directly. */
 export function ComposeActivityChangeRow({
   operation,
   selected,
@@ -59,10 +62,12 @@ export function ComposeActivityChangeRow({
           after: composeNodeContent(operation.afterValue) ?? 'No content recorded',
         }
       : composeValueChangeLabels(operation.beforeValue, operation.afterValue);
+  const object = isComposeObject(operation.beforeValue) || isComposeObject(operation.afterValue);
 
   return (
     <button
       className={styles.changeRow}
+      data-object={object}
       type="button"
       aria-label={`Inspect ${title}: ${operation.path}`}
       aria-pressed={selected}
@@ -80,8 +85,15 @@ export function ComposeActivityChangeRow({
       <span className={styles.cardLabel} title={title}>
         {title}
       </span>
-      <span className={styles.valueSummary}>
-        <ValueChange before={values.before} after={values.after} kind={kind} />
+      <span className={styles.valueSummary} data-object={object}>
+        {object ? (
+          <ComposeObjectFieldSummary
+            operation={operation}
+            format={(value) => composeValueLabel(value, 'Absent')}
+          />
+        ) : (
+          <ValueChange before={values.before} after={values.after} kind={kind} />
+        )}
       </span>
       {applied ? <CheckCircle2 aria-label="Applied to Draft" className={styles.verified} /> : null}
     </button>

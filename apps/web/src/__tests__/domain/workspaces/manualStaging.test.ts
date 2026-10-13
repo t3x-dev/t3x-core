@@ -6,6 +6,7 @@ import {
   selectedStagedItems,
   stageDraftOps,
   stagedManualReason,
+  stagedObjectGroups,
 } from '@/domain/workspaces/manualStaging';
 
 const current = { rollout: { allocation: 25, channel: 'stable' } };
@@ -73,5 +74,53 @@ describe('manualStaging', () => {
       { set: { path: 'content/trees/[key=candidate]/slots/priority', value: 'should' } },
     ]).items;
     expect(byKey?.card).toMatchObject({ before: 'mu', after: 'should' });
+  });
+
+  it('retains mixed ancestor fragments and their shared original operation', () => {
+    const current = {
+      tasks: [{ key: 'plane', slots: { done: false }, children: [] }],
+      metadata: 'old',
+    };
+    const next = {
+      tasks: [{ key: 'plane', slots: { done: true }, children: [] }],
+      metadata: 'new',
+    };
+    const staged = stageDraftOps({ doc: current }, [{ set: { path: 'doc', value: next } }]);
+    const groups = stagedObjectGroups(staged.items, { doc: current });
+    expect(groups.map((group) => group.card.path)).toEqual([
+      'doc/tasks/[key=plane]',
+      'doc/metadata',
+    ]);
+    expect(
+      groups.every((group) => group.items.length === 1 && group.items[0] === staged.items[0])
+    ).toBe(true);
+    expect(selectedStagedItems(staged.items)).toHaveLength(1);
+  });
+
+  it('groups an object without changing its original selection or save units, including net-zero edits', () => {
+    const document = {
+      tasks: [{ key: 'plane', slots: { goal: '开飞机', done: false }, children: [] }],
+    };
+    const operations = [
+      { set: { path: 'tasks/[key=plane]/slots/done', value: true } },
+      { set: { path: 'tasks/[key=plane]/slots/goal', value: '学习开飞机' } },
+    ] as const;
+    const staged = stageDraftOps(document, operations);
+    staged.items[1].selected = false;
+    const groups = stagedObjectGroups(staged.items, document);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].card.path).toBe('tasks/[key=plane]');
+    expect(groups[0].items).toEqual(staged.items);
+    expect(selectedStagedItems(staged.items).map((item) => item.operation)).toEqual([
+      operations[0],
+    ]);
+    const canceled = stageDraftOps(document, [
+      operations[0],
+      { set: { path: operations[0].set.path, value: false } },
+    ]);
+    const canceledGroups = stagedObjectGroups(canceled.items, document);
+    expect(canceledGroups).toHaveLength(1);
+    expect(canceledGroups[0].items).toHaveLength(2);
+    expect(canceledGroups[0].card.before).toEqual(canceledGroups[0].card.after);
   });
 });

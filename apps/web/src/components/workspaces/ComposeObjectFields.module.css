@@ -1,0 +1,61 @@
+.fields {
+  display: grid;
+  min-width: 0;
+  width: 100%;
+  gap: 5px;
+  font-size: 11px;
+  text-align: left;
+}
+.field {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(40px, auto) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px;
+}
+.field > code {
+  max-width: 120px;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font: 10px / 1.6 var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.values {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+}
+.values del,
+.values ins {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  padding: 0 3px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.values del {
+  background: var(--diff-removed-word-bg);
+  color: var(--diff-removed-text);
+}
+.values ins {
+  background: var(--diff-added-word-bg);
+  color: var(--diff-added-text);
+  text-decoration: none;
+}
+.values [data-absent="true"] {
+  flex: 0 1 auto;
+  max-width: 35%;
+  background: transparent;
+  color: var(--text-tertiary);
+  text-decoration: none;
+}
+.values svg {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  color: var(--text-tertiary);
+}

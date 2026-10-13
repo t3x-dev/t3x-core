@@ -3,7 +3,9 @@ import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ComposeNodeHistoryPanel } from '@/components/workspaces/ComposeNodeHistoryPanel';
-import type { ComposeActivitySelection } from '@/domain/composeActivity';
+import { activityOperation, type ComposeActivitySelection } from '@/domain/composeActivity';
+import { composeObjectChangeCards } from '@/domain/workspaces/composeObjectChanges';
+import { MANUAL_STAGING_EVENT_ID } from '@/domain/workspaces/manualStaging';
 import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 
 function activityFixture() {
@@ -234,5 +236,268 @@ describe('Compose field Details', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open full view' }));
     expect(onOpenStructure).toHaveBeenCalledWith('yaml');
     expect(activity.publish).not.toHaveBeenCalled();
+  });
+});
+
+describe('Compose object Details', () => {
+  const path = 'tasks/[key=kaifeiji]';
+  const before = { key: 'kaifeiji', slots: { goal: '开飞机的任务', done: false }, children: [] };
+  const after = { ...before, slots: { goal: '学习开飞机', done: true } };
+  const current = { ...after, slots: { goal: '准备飞行', done: false } };
+  function objectFixture() {
+    const activity = activityFixture();
+    const first = composeObjectChangeCards(
+      [
+        {
+          nodeId: 'goal-id',
+          path: `${path}/slots/goal`,
+          before: before.slots.goal,
+          after: after.slots.goal,
+        },
+        { nodeId: 'done-id', path: `${path}/slots/done`, before: false, after: true },
+      ],
+      { tasks: [before] },
+      { tasks: [after] }
+    );
+    const latest = composeObjectChangeCards(
+      [
+        { nodeId: 'done-id', path: `${path}/slots/done`, before: true, after: false },
+        {
+          nodeId: 'goal-id',
+          path: `${path}/slots/goal`,
+          before: after.slots.goal,
+          after: current.slots.goal,
+        },
+      ],
+      { tasks: [after] },
+      { tasks: [current] }
+    );
+    activity.cards = { a1: first, a2: latest };
+    activity.view!.current = { tasks: [current] };
+    activity.view!.netDiff = composeObjectChangeCards([
+      { nodeId: 'task', path, before, after: current },
+    ]);
+    return {
+      activity,
+      selected: {
+        operation: activityOperation(first[0]),
+        meta: { eventId: 'a1', actionId: 'a1', comparison: 'event' },
+      } as ComposeActivitySelection,
+    };
+  }
+
+  it('shows every selected field, the latest actual object, and history without requesting a fake object ID', () => {
+    const { activity, selected } = objectFixture();
+    const onOpenAction = vi.fn();
+    render(
+      <ComposeNodeHistoryPanel
+        activity={activity}
+        selection={selected}
+        onOpenAction={onOpenAction}
+        onDiscuss={vi.fn()}
+        onOpenStructure={vi.fn()}
+      />
+    );
+    expect(screen.getByLabelText('Selected object details')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Current Draft value' })).toHaveTextContent(
+      '准备飞行'
+    );
+    expect(screen.getByRole('region', { name: 'Field change: goal' })).toHaveTextContent(
+      '开飞机的任务'
+    );
+    expect(screen.getByRole('region', { name: 'Field change: goal' })).toHaveTextContent(
+      '学习开飞机'
+    );
+    expect(screen.getByRole('region', { name: 'Field change: done' })).toHaveTextContent('false');
+    expect(screen.getByRole('region', { name: 'Field change: done' })).toHaveTextContent('true');
+    expect(screen.getByRole('button', { name: 'Edit', exact: true })).toBeEnabled();
+    expect(activity.inspectNode).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText('History'));
+    fireEvent.click(screen.getByRole('button', { name: 'View historical action A2' }));
+    expect(onOpenAction).toHaveBeenCalledWith('a2', 'done-id', path);
+    fireEvent.click(screen.getByText('Full object comparison'));
+    expect(
+      screen.getAllByRole('region', { name: 'Before selected change' }).length
+    ).toBeGreaterThan(2);
+  });
+
+  it('edits the current object slots instead of historical values and stages only changed fields', async () => {
+    const { activity, selected } = objectFixture();
+    const onSubmit = vi.fn().mockResolvedValue(true);
+    render(
+      <ComposeNodeHistoryPanel
+        activity={activity}
+        selection={selected}
+        onSubmit={onSubmit}
+        onOpenAction={vi.fn()}
+        onDiscuss={vi.fn()}
+        onOpenStructure={vi.fn()}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit', exact: true }));
+    expect(screen.getByLabelText('goal')).toHaveValue('准备飞行');
+    expect(screen.getByLabelText('done')).toHaveValue('false');
+    fireEvent.change(screen.getByLabelText('done'), { target: { value: 'true' } });
+    fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'Ready to fly' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save change' }));
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledExactlyOnceWith(
+        [{ set: { path: `${path}/slots/done`, value: true } }],
+        'Ready to fly'
+      )
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { name: 'Edit current value' })).not.toBeInTheDocument()
+    );
+    expect(activity.publish).not.toHaveBeenCalled();
+    expect(activity.inspectNode).not.toHaveBeenCalled();
+  });
+
+  it('edits local pending slot values while keeping published current and historical values separate', () => {
+    const { activity, selected } = objectFixture();
+    render(
+      <ComposeNodeHistoryPanel
+        activity={activity}
+        selection={{ ...selected, meta: { eventId: 'all', comparison: 'draft' } }}
+        workingCurrent={{
+          tasks: [{ ...current, slots: { ...current.slots, goal: 'Pending goal' } }],
+        }}
+        onSubmit={vi.fn()}
+        onOpenAction={vi.fn()}
+        onDiscuss={vi.fn()}
+        onOpenStructure={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('region', { name: 'Current Draft value' })).toHaveTextContent(
+      '准备飞行'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit', exact: true }));
+    expect(screen.getByLabelText('goal')).toHaveValue('Pending goal');
+  });
+
+  it('does not edit deleted objects or invent slots in empty objects', () => {
+    const { activity, selected } = objectFixture();
+    activity.view!.current = { tasks: [] };
+    const props = {
+      activity,
+      selection: selected,
+      onSubmit: vi.fn(),
+      onOpenAction: vi.fn(),
+      onDiscuss: vi.fn(),
+      onOpenStructure: vi.fn(),
+    };
+    const { rerender } = render(<ComposeNodeHistoryPanel {...props} />);
+    expect(screen.getByRole('button', { name: 'Edit', exact: true })).toBeDisabled();
+    rerender(
+      <ComposeNodeHistoryPanel
+        {...props}
+        activity={{
+          ...activity,
+          view: { ...activity.view!, current: { tasks: [{ ...current, slots: {} }] } },
+        }}
+      />
+    );
+    expect(screen.getByRole('button', { name: 'Edit', exact: true })).toBeDisabled();
+    expect(activity.publish).not.toHaveBeenCalled();
+  });
+
+  it('uses Base-to-current field differences and keeps event history when an object returns to Base', () => {
+    const { activity, selected } = objectFixture();
+    activity.view!.current = { tasks: [before] };
+    activity.view!.netDiff = [];
+    render(
+      <ComposeNodeHistoryPanel
+        activity={activity}
+        selection={{ ...selected, meta: { eventId: 'all', comparison: 'draft' } }}
+        onOpenAction={vi.fn()}
+        onDiscuss={vi.fn()}
+        onOpenStructure={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Matches Base · no change')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('History'));
+    expect(screen.getAllByRole('button', { name: /View historical action/ })).toHaveLength(2);
+    expect(screen.getByRole('region', { name: 'Current Draft value' })).toHaveTextContent(
+      '开飞机的任务'
+    );
+  });
+
+  it('reverts the original field paths instead of writing a grouped object', async () => {
+    const { activity, selected } = objectFixture();
+    render(
+      <ComposeNodeHistoryPanel
+        activity={activity}
+        selection={selected}
+        onOpenAction={vi.fn()}
+        onDiscuss={vi.fn()}
+        onOpenStructure={vi.fn()}
+      />
+    );
+    fireEvent.click(screen.getByText('History'));
+    fireEvent.click(screen.getByRole('button', { name: 'Revert latest change' }));
+    await waitFor(() =>
+      expect(activity.publish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operations: [
+            { set: { path: `${path}/slots/done`, value: true } },
+            { set: { path: `${path}/slots/goal`, value: '学习开飞机' } },
+          ],
+        })
+      )
+    );
+    expect(activity.inspectNode).not.toHaveBeenCalled();
+  });
+
+  it('keeps an ancestor-record revert scoped to the selected object, preserving sibling objects', async () => {
+    const { activity, selected } = objectFixture();
+    const sibling = { key: 'other', slots: { goal: 'Other task', done: true }, children: [] };
+    const source = {
+      nodeId: 'actual-collection-id',
+      path: 'tasks',
+      beforePath: 'tasks',
+      afterPath: 'tasks',
+      before: [after, sibling],
+      after: [current, sibling],
+    };
+    activity.cards.a2 = composeObjectChangeCards(
+      [source],
+      { tasks: source.before },
+      { tasks: source.after }
+    );
+    render(
+      <ComposeNodeHistoryPanel
+        activity={activity}
+        selection={selected}
+        onOpenAction={vi.fn()}
+        onDiscuss={vi.fn()}
+        onOpenStructure={vi.fn()}
+      />
+    );
+    fireEvent.click(screen.getByText('History'));
+    fireEvent.click(screen.getByRole('button', { name: 'Revert latest change' }));
+    await waitFor(() =>
+      expect(activity.publish).toHaveBeenCalledWith(
+        expect.objectContaining({ operations: [{ set: { path, value: after } }] })
+      )
+    );
+  });
+
+  it('keeps unsaved preview separate from the published object and never publishes on selection', () => {
+    const { activity, selected } = objectFixture();
+    render(
+      <ComposeNodeHistoryPanel
+        activity={activity}
+        selection={{ ...selected, meta: { eventId: MANUAL_STAGING_EVENT_ID, comparison: 'event' } }}
+        onOpenAction={vi.fn()}
+        onDiscuss={vi.fn()}
+        onOpenStructure={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Unsaved change · not yet applied to Draft')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Current Draft value' })).toHaveTextContent(
+      '准备飞行'
+    );
+    expect(activity.publish).not.toHaveBeenCalled();
+    expect(activity.inspectNode).not.toHaveBeenCalled();
   });
 });

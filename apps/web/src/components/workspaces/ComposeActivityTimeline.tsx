@@ -1,4 +1,5 @@
 import type { WorkspaceAuthoringCard } from '@t3x-dev/api-client';
+import { parsePath } from '@t3x-dev/yops';
 import { GitCompareArrows, History, Minus, Pencil, Plus } from 'lucide-react';
 import { Fragment, type ReactNode } from 'react';
 import {
@@ -18,12 +19,21 @@ import { composeDraftChangeCards } from '@/domain/workspaces/composeDraftChanges
 import {
   MANUAL_STAGING_EVENT_ID,
   type ManualStagingControls,
-  stagedActivityOperation,
+  stagedObjectGroups,
 } from '@/domain/workspaces/manualStaging';
 import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import type { WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 import styles from './ComposeActivityTimeline.module.css';
 import draftStyles from './ComposeDraftChanges.module.css';
+
+function stagedFieldLabel(card: WorkspaceAuthoringCard) {
+  const parts = parsePath(card.path);
+  const parent = parts.at(-2);
+  const field = parts.at(-1);
+  return parent?.type === 'key' && parent.value === 'slots' && field?.type === 'key'
+    ? field.value
+    : composePathLabel(card.path, card.nodeId);
+}
 
 const changeMarkers = {
   added: { Icon: Plus, label: 'Added fields' },
@@ -127,9 +137,11 @@ export function ComposeActivityTimeline({
       </div>
     );
   if (scope === 'all') {
-    const changes = composeDraftChangeCards(activity.view?.netDiff ?? []).filter((card) =>
-      matchesFilter(card, filter)
-    );
+    const changes = composeDraftChangeCards(
+      activity.view?.netDiff ?? [],
+      activity.view?.base,
+      activity.view?.current
+    ).filter((card) => matchesFilter(card, filter));
     return (
       <section className={draftStyles.panel} aria-label="All draft changes">
         <header className={draftStyles.header}>
@@ -160,6 +172,7 @@ export function ComposeActivityTimeline({
     }))
     .filter(({ cards }) => cards.length > 0);
   const stagedItems = staging?.items ?? [];
+  const stagedGroups = stagedObjectGroups(stagedItems, staging?.current);
   const showStaging = stagedItems.length > 0;
   const stagingEndedAt = stagedItems.at(-1)?.createdAt ?? updatedAt;
   const selectedCount = stagedItems.filter((item) => item.selected).length;
@@ -208,20 +221,38 @@ export function ComposeActivityTimeline({
                 </span>
               </div>
               <div className={styles.preview}>
-                {stagedItems.map((item) => {
+                {stagedGroups.map((group) => {
+                  const item = group.items[0]!;
+                  const sharedOperation = group.items.some((source) =>
+                    stagedGroups.some((other) => other !== group && other.items.includes(source))
+                  );
                   const cardLabel =
-                    composeNodeTitle(item.card.after) ??
-                    composeNodeTitle(item.card.before) ??
-                    composePathLabel(item.card.path, item.card.nodeId);
+                    composeNodeTitle(group.card.after) ??
+                    composeNodeTitle(group.card.before) ??
+                    composePathLabel(group.card.path, group.card.nodeId);
                   return (
-                    <div className={styles.stagingRow} key={item.id}>
-                      <input
-                        aria-label={`Include ${cardLabel} in the next P`}
-                        checked={item.selected}
-                        onChange={() => staging?.onToggle(item.id)}
-                        type="checkbox"
-                      />
-                      {renderRow(stagedActivityOperation(item), {
+                    <div
+                      className={styles.stagingRow}
+                      data-multiple={group.items.length > 1 || sharedOperation}
+                      key={`${group.card.path}:${item.id}`}
+                    >
+                      <div className={styles.stagingChecks}>
+                        {group.items.map((source) => (
+                          <label key={source.id} title={source.card.path}>
+                            <input
+                              aria-label={`Include ${group.items.length > 1 || sharedOperation ? stagedFieldLabel(source.card) : cardLabel} in the next P`}
+                              checked={source.selected}
+                              onChange={() => staging?.onToggle(source.id)}
+                              type="checkbox"
+                            />
+                            {group.items.length > 1 || sharedOperation ? (
+                              <code>{stagedFieldLabel(source.card)}</code>
+                            ) : null}
+                          </label>
+                        ))}
+                        {sharedOperation ? <small>Includes other objects</small> : null}
+                      </div>
+                      {renderRow(activityOperation(group.card, item.reason), {
                         eventId: MANUAL_STAGING_EVENT_ID,
                         actor: 'You',
                         channel: 'manual',

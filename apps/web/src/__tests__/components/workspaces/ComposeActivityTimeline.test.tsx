@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import type { WorkspaceAuthoringAction, WorkspaceAuthoringView } from '@t3x-dev/api-client';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { ComposeActivityChangeRow } from '@/components/workspaces/ComposeActivityChangeRow';
 import { ComposeActivityTimeline } from '@/components/workspaces/ComposeActivityTimeline';
+import { stageDraftOps } from '@/domain/workspaces/manualStaging';
 import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 
 function fixture(): ReturnType<typeof useComposeActivity> {
@@ -110,6 +112,58 @@ describe('ComposeActivityTimeline', () => {
       screen.queryByRole('button', { name: /Adjust pilot allocation/ })
     ).not.toBeInTheDocument();
     expect(screen.queryByText('legacy')).not.toBeInTheDocument();
+  });
+
+  it('shows one staged object row with every field and keeps each operation independently selectable', () => {
+    const current = {
+      tasks: [{ key: 'kaifeiji', slots: { goal: '开飞机', done: false }, children: [] }],
+    };
+    const staged = stageDraftOps(current, [
+      { set: { path: 'tasks/[key=kaifeiji]/slots/goal', value: '学习开飞机' } },
+      { set: { path: 'tasks/[key=kaifeiji]/slots/done', value: true } },
+    ]);
+    staged.items[1].selected = false;
+    const onToggle = vi.fn();
+    const onSaveSelected = vi.fn();
+    const onSelect = vi.fn();
+    render(
+      <ComposeActivityTimeline
+        activity={fixture()}
+        scope="latest"
+        updatedAt="2026-09-21"
+        fallback={null}
+        staging={{ items: staged.items, current, onToggle, onSaveSelected }}
+        renderRow={(operation, meta) => (
+          <ComposeActivityChangeRow
+            key={`${meta?.eventId}:${operation.path}`}
+            operation={operation}
+            selected={false}
+            applied={false}
+            onSelect={() => onSelect(operation, meta)}
+          />
+        )}
+      />
+    );
+    const tray = within(screen.getByRole('region', { name: 'Event: Ungrouped manual changes' }));
+    expect(tray.getAllByRole('button', { name: /Inspect Kaifeiji/ })).toHaveLength(1);
+    expect(tray.getByRole('group', { name: '2 changed fields' })).toHaveTextContent('goal:');
+    expect(tray.getByRole('group', { name: '2 changed fields' })).toHaveTextContent('done:NoYes');
+    const checkboxes = tray.getAllByRole('checkbox');
+    expect(checkboxes).toHaveLength(2);
+    expect(checkboxes[0]).toBeChecked();
+    expect(checkboxes[1]).not.toBeChecked();
+    fireEvent.click(checkboxes[1]);
+    expect(onToggle).toHaveBeenCalledWith(staged.items[1].id);
+    fireEvent.click(tray.getByRole('button', { name: 'Save selected as P (1)' }));
+    expect(onSaveSelected).toHaveBeenCalledOnce();
+    fireEvent.click(tray.getByRole('button', { name: /Inspect Kaifeiji/ }));
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: 'tasks/[key=kaifeiji]',
+        objectChange: expect.objectContaining({ sources: staged.items.map((item) => item.card) }),
+      }),
+      expect.objectContaining({ eventId: 'manual-staging' })
+    );
   });
   it('shows Base-to-current values in All draft changes instead of the last event delta', () => {
     render(

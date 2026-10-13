@@ -533,6 +533,125 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('stages object slot edits as one object row and publishes the selected field operations as P', async () => {
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    Object.assign(candidate, { authoringLedger: { actions: [] } });
+    const path = 'tasks/[key=flight]';
+    const before = { key: 'flight', slots: { goal: '开飞机的任务', done: false }, children: [] };
+    const current = { ...before, slots: { ...before.slots, done: true } };
+    const action = {
+      actionId: 'a1',
+      sequence: 1,
+      channel: 'manual',
+      actor: { id: 'Maya', kind: 'human' },
+      publishedAt: '2026-09-21T11:53:00Z',
+      beforeRevision: 0,
+      afterRevision: 1,
+      operations: [],
+      reason: 'Prepare flight',
+    };
+    const cards = [{ nodeId: 'task-id', path, before, after: current }];
+    const publish = vi.fn().mockResolvedValue({ kind: 'published' });
+    activityMocks.value = {
+      enabled: true,
+      loading: false,
+      error: null,
+      actions: [action],
+      cards: { a1: cards },
+      cursor: null,
+      node: null,
+      nodeLoading: false,
+      nodeError: null,
+      nodeCursor: null,
+      notice: null,
+      newActivity: null,
+      compositionRevision: 1,
+      workspaceRevision: 1,
+      basis: { refName: 'main', refHead: null, baseDigest: 'base' },
+      refresh: vi.fn(),
+      loadOlder: vi.fn(),
+      loadLatest: vi.fn(),
+      inspectNode: vi.fn(),
+      selectActionNode: vi.fn(),
+      loadOlderNode: vi.fn(),
+      publish,
+      publishCandidate: vi.fn(),
+      createAssistantConversation: vi.fn(),
+      view: {
+        schema: 't3x.application/workspace-authoring-view/v1',
+        projectionVersion: 1,
+        workspaceRevision: 1,
+        compositionRevision: 1,
+        basis: { refName: 'main', refHead: null, baseDigest: 'base' },
+        actions: [action],
+        selected: { action, cards },
+        base: { tasks: [before] },
+        current: { tasks: [current] },
+        netDiff: cards,
+        node: null,
+        nextBeforeSequence: null,
+      },
+    } as unknown as ReturnType<typeof useComposeActivity>;
+    render(
+      <WorkspaceComposeReviewSurface
+        branchOptions={['main']}
+        candidate={candidate}
+        controller={
+          {
+            busyAction: null,
+            candidate,
+            error: null,
+            hasCollaborationConflict: false,
+            isBusy: false,
+            materialSources: [],
+            notice: null,
+          } as unknown as WorkspaceComposeReviewController
+        }
+        mode="compose"
+        onModeChange={vi.fn()}
+      />
+    );
+    const publishedEvent = screen.getByLabelText('Event: Prepare flight');
+    fireEvent.click(
+      within(publishedEvent).getByRole('button', { name: `Inspect Flight: ${path}` })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit', exact: true }));
+    fireEvent.change(screen.getByLabelText('goal'), { target: { value: '学习飞行' } });
+    fireEvent.change(screen.getByLabelText('done'), { target: { value: 'false' } });
+    fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'Start with training' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save change' }));
+    const ungrouped = await screen.findByLabelText('Event: Ungrouped manual changes');
+    expect(
+      within(ungrouped).getAllByRole('button', { name: `Inspect Flight: ${path}` })
+    ).toHaveLength(1);
+    expect(within(ungrouped).getAllByRole('checkbox')).toHaveLength(2);
+    expect(publish).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Edit', exact: true })).toBeEnabled()
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit', exact: true }));
+    expect(screen.getByRole('textbox', { name: 'goal', exact: true })).toHaveValue('学习飞行');
+    expect(screen.getByRole('combobox', { name: 'done', exact: true })).toHaveValue('false');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    // Saving the unchecked goal later must remain possible without widening the done operation.
+    fireEvent.click(
+      within(ungrouped).getByRole('checkbox', { name: 'Include goal in the next P' })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save selected as P (1)' }));
+    await waitFor(() =>
+      expect(publish).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          operations: [{ set: { path: `${path}/slots/done`, value: false } }],
+          reason: 'Start with training',
+        })
+      )
+    );
+    expect(
+      within(screen.getByLabelText('Event: Ungrouped manual changes')).getByRole('checkbox')
+    ).not.toBeChecked();
+    expect(activityMocks.value.inspectNode).not.toHaveBeenCalled();
+  });
+
   it('waits in Chat until the user enables Draft activity', () => {
     bootstrapMocks.value.start.mockClear();
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');

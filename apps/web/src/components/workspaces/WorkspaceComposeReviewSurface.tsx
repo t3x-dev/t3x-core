@@ -69,6 +69,7 @@ import {
   type ComposeActivityMeta,
   type ComposeActivitySelection,
   composeEventCards,
+  expandAuthoringCards,
   groupComposeActivity,
 } from '@/domain/composeActivity';
 import {
@@ -96,6 +97,7 @@ import {
   buildAuthoringReviewProjection,
 } from '@/domain/workspaces/authoringReview';
 import { composeDraftChangeCards } from '@/domain/workspaces/composeDraftChanges';
+import { composeValuesEqual } from '@/domain/workspaces/composeObjectChanges';
 import { type DraftYOp, nextAuthoringRequestId } from '@/domain/workspaces/draftStructure';
 import {
   MANUAL_STAGING_EVENT_ID,
@@ -105,8 +107,8 @@ import {
   type StagedManualCard,
   selectedStagedItems,
   stageDraftOps,
-  stagedActivityOperation,
   stagedManualReason,
+  stagedObjectGroups,
   UNGROUPED_MANUAL_HINT,
 } from '@/domain/workspaces/manualStaging';
 import {
@@ -620,12 +622,13 @@ function ComposeSurface({
   const stagingControls = useMemo(
     () => ({
       items: staged,
+      current: publishedCurrent,
       pending: structurePending,
       error: structureError,
       onToggle: toggleStaged,
       onSaveSelected: () => void saveSelectedAsP(),
     }),
-    [staged, structurePending, structureError, toggleStaged, saveSelectedAsP]
+    [staged, publishedCurrent, structurePending, structureError, toggleStaged, saveSelectedAsP]
   );
   const openStructure = async (view: 'structure' | 'yaml') => {
     if (!activity.enabled) {
@@ -694,11 +697,15 @@ function ComposeSurface({
         proposedChangeCount={
           activity.view
             ? (changeScope === 'all'
-                ? composeDraftChangeCards(activity.view.netDiff).length
+                ? composeDraftChangeCards(
+                    activity.view.netDiff,
+                    activity.view.base,
+                    activity.view.current
+                  ).length
                 : groupComposeActivity(activity.actions).reduce(
                     (count, event) => count + composeEventCards(event, activity.cards).length,
                     0
-                  )) + staged.length
+                  )) + stagedObjectGroups(staged, publishedCurrent).length
             : candidate.yopsDraft.operations.length
         }
         changeScope={changeScope}
@@ -809,6 +816,7 @@ function ComposeSurface({
             onDiscuss={openChat}
             onOpenStructure={setFieldDialog}
             onSubmit={stageManualOps}
+            workingCurrent={workingCurrent}
           />
         ) : activity.view ? (
           <ComposeAuthoringAssistant
@@ -1096,7 +1104,11 @@ function ProposedDraftPanel({
     if (!activity.view) return;
     if (changeScope === 'all') {
       if (activitySelection?.meta.comparison === 'draft') return;
-      const changes = composeDraftChangeCards(activity.view.netDiff);
+      const changes = composeDraftChangeCards(
+        activity.view.netDiff,
+        activity.view.base,
+        activity.view.current
+      );
       const card =
         changes.find(
           (item) =>
@@ -1118,20 +1130,36 @@ function ProposedDraftPanel({
       Boolean(
         staging?.items.some(
           (item) =>
-            item.card.nodeId === activitySelection.operation.id &&
-            item.card.path === activitySelection.operation.path
+            (
+              activitySelection.operation.objectChange?.sources ??
+              activitySelection.operation.sourceCards
+            )?.includes(item.card) ||
+            (item.card.nodeId === activitySelection.operation.id &&
+              item.card.path === activitySelection.operation.path)
         )
       );
     if (staging?.items.length) {
-      if (stagingSelected) return;
       if (
         activitySelection?.meta.comparison === 'event' &&
         activitySelection.meta.eventId !== MANUAL_STAGING_EVENT_ID
       )
         return;
-      const item = staging.items[0]!;
+      const groups = stagedObjectGroups(staging.items, staging.current);
+      const group =
+        (stagingSelected
+          ? groups.find((entry) => entry.card.path === activitySelection?.operation.path)
+          : undefined) ?? groups[0]!;
+      if (
+        stagingSelected &&
+        composeValuesEqual(activitySelection?.operation.beforeValue, group.card.before) &&
+        composeValuesEqual(activitySelection?.operation.afterValue, group.card.after) &&
+        activitySelection?.operation.objectChange?.sources.length ===
+          group.card.objectChange?.sources.length
+      )
+        return;
+      const item = group.items[0]!;
       onActivitySelect({
-        operation: stagedActivityOperation(item),
+        operation: activityOperation(group.card, item.reason),
         meta: {
           eventId: MANUAL_STAGING_EVENT_ID,
           actor: 'You',
@@ -1176,6 +1204,7 @@ function ProposedDraftPanel({
     onActivitySelect,
     changeScope,
     staging?.items,
+    staging?.current,
   ]);
   const renderChangeRow = (operation: WorkspaceYOpsDraftOperation, meta?: ComposeActivityMeta) => {
     const selected = Boolean(
@@ -1429,7 +1458,7 @@ function ReviewSurface({
   if (pane === 'rendered') {
     return (
       <WorkspaceRenderedReview
-        authoringCards={authoringVisibleCards(activity.view?.netDiff ?? [])}
+        authoringCards={authoringVisibleCards(expandAuthoringCards(activity.view?.netDiff ?? []))}
         authoringPreview={Boolean(authoringReview)}
         candidate={candidate}
         review={comparisonReview}
