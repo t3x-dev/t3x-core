@@ -1,15 +1,27 @@
+import { DOCUMENT_SOURCE_ACCEPTED_TYPES } from '@/components/import/documentAcceptTypes';
 import type { AttachedImage } from '@/types/generation';
 
 const ACCEPTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+const ACCEPTED_DOCUMENT_TYPES = new Set(DOCUMENT_SOURCE_ACCEPTED_TYPES.split(','));
 
-export function clipboardImageFiles(data: DataTransfer | null): File[] {
+function clipboardFiles(data: DataTransfer | null): File[] {
   if (!data) return [];
   const fromItems = Array.from(data.items)
     .filter((item) => item.kind === 'file')
     .map((item) => item.getAsFile())
     .filter((file): file is File => file !== null);
-  const files = fromItems.length > 0 ? fromItems : Array.from(data.files);
-  return files.filter((file) => ACCEPTED_IMAGE_TYPES.has(file.type));
+  return fromItems.length > 0 ? fromItems : Array.from(data.files);
+}
+
+export function clipboardImageFiles(data: DataTransfer | null): File[] {
+  return clipboardFiles(data).filter((file) => ACCEPTED_IMAGE_TYPES.has(file.type));
+}
+
+export function clipboardDocumentFiles(data: DataTransfer | null): File[] {
+  return clipboardFiles(data).filter((file) => {
+    const extension = `.${file.name.toLowerCase().split('.').pop() ?? ''}`;
+    return ACCEPTED_DOCUMENT_TYPES.has(file.type) || ACCEPTED_DOCUMENT_TYPES.has(extension);
+  });
 }
 
 export async function fileToAttachedImage(file: File): Promise<AttachedImage> {
@@ -38,9 +50,7 @@ function readBlob(blob: Blob): Promise<ArrayBuffer> {
 
 function resizeImage(file: File, maxDim: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
-    const imageUrl = URL.createObjectURL(file);
     const img = new Image();
-    const releaseImageUrl = () => URL.revokeObjectURL(imageUrl);
     img.onload = () => {
       const canvas = document.createElement('canvas');
       let { width, height } = img;
@@ -51,27 +61,19 @@ function resizeImage(file: File, maxDim: number): Promise<Blob> {
       }
       canvas.width = width;
       canvas.height = height;
-      const context = canvas.getContext('2d');
-      if (!context) {
-        releaseImageUrl();
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
         reject(new Error('No canvas context'));
         return;
       }
-      context.drawImage(img, 0, 0, width, height);
+      ctx.drawImage(img, 0, 0, width, height);
       canvas.toBlob(
-        (blob) => {
-          releaseImageUrl();
-          if (blob) resolve(blob);
-          else reject(new Error('toBlob failed'));
-        },
+        (blob) => (blob ? resolve(blob) : reject(new Error('toBlob failed'))),
         file.type,
         0.85
       );
     };
-    img.onerror = () => {
-      releaseImageUrl();
-      reject(new Error('Image load failed'));
-    };
-    img.src = imageUrl;
+    img.onerror = () => reject(new Error('Image load failed'));
+    img.src = URL.createObjectURL(file);
   });
 }

@@ -3,10 +3,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const REPOSITORY_NAVIGATION_OWNERS = [
-  'app/chat/[conversationId]/page.tsx',
   'app/project/[projectId]/diff/page.tsx',
   'app/project/[projectId]/merge/[mergeId]/page.tsx',
-  'components/chat/ChatSidebar.tsx',
   'components/diff/DiffPage.tsx',
 ];
 

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { LLMPrompt, LLMProvider } from '@t3x-dev/core';
+import { type LLMPrompt, type LLMProvider, promptTextLength } from '@t3x-dev/core';
 import { executeMeteredInference } from '../../inference';
 import type { AssistantCapabilities } from '../capabilities';
 import type { AssistantInference } from '../contracts';
@@ -21,6 +21,7 @@ export type AssistantEvent =
 export async function runAssistantProvider(input: {
   provider: LLMProvider;
   model: string;
+  reasoningEffort?: 'low' | 'medium' | 'high';
   prompt: LLMPrompt;
   capabilities: AssistantCapabilities;
   inference: AssistantInference;
@@ -29,7 +30,6 @@ export async function runAssistantProvider(input: {
   emit: (event: AssistantEvent) => Promise<void>;
   signal?: AbortSignal;
   maxSteps?: number;
-  initialToolCall?: { name: string; input: unknown };
 }) {
   const hasTools = assistantProviderCapabilities(input.provider).tools;
   await input.emit({
@@ -41,54 +41,14 @@ export async function runAssistantProvider(input: {
   const maxSteps = Math.min(8, Math.max(1, input.maxSteps ?? 5));
   let callIndex = 0;
   const seen = new Set<string>();
-  if (input.initialToolCall) {
-    const capability = Object.hasOwn(input.capabilities, input.initialToolCall.name)
-      ? input.capabilities[input.initialToolCall.name]
-      : undefined;
-    if (!capability)
-      throw new TypeError(`Capability ${input.initialToolCall.name} is not available`);
-    const toolUseId = 'server-required-0';
-    const operationId = `assistant:${createHash('sha256').update(`${input.operationNamespace}:${callIndex++}`).digest('hex')}`;
-    await input.emit({
-      type: 'operation',
-      name: input.initialToolCall.name,
-      operationId,
-      status: 'started',
-    });
-    const result = await capability.execute(input.initialToolCall.input, operationId);
-    await input.emit({
-      type: 'operation',
-      name: input.initialToolCall.name,
-      operationId,
-      status: 'completed',
-      result,
-    });
-    prompt.messages.push({
-      role: 'assistant',
-      content: [
-        {
-          type: 'tool_use',
-          id: toolUseId,
-          name: input.initialToolCall.name,
-          input: input.initialToolCall.input,
-        },
-      ],
-    });
-    prompt.messages.push({
-      role: 'user',
-      content: [{ type: 'tool_result', tool_use_id: toolUseId, content: JSON.stringify(result) }],
-    });
-  }
-  const canStreamPlainResponse =
-    typeof input.provider.streamFromPrompt === 'function' &&
-    (!hasTools || Boolean(input.initialToolCall));
+  const canStreamPlainResponse = typeof input.provider.streamFromPrompt === 'function' && !hasTools;
   for (let step = 0; step < maxSteps; step++) {
     if (input.signal?.aborted) {
       await input.emit({ type: 'done', reason: 'cancelled' });
       return;
     }
     await input.assertCurrent();
-    if (JSON.stringify(prompt).length > 128_000)
+    if (promptTextLength(prompt) > 128_000)
       throw new TypeError('Assistant continuation exceeds context budget');
     if (canStreamPlainResponse) {
       await executeMeteredInference({
@@ -106,7 +66,7 @@ export async function runAssistantProvider(input: {
           let usage = { inputTokens: 0, outputTokens: 0 };
           for await (const event of input.provider.streamFromPrompt!(
             prompt,
-            { model: input.model, maxTokens: 4096 },
+            { model: input.model, maxTokens: 4096, reasoningEffort: input.reasoningEffort },
             input.signal
           )) {
             if (input.signal?.aborted) break;
@@ -141,12 +101,16 @@ export async function runAssistantProvider(input: {
           const result = await input.provider.generateWithTools!(
             prompt,
             Object.values(input.capabilities).map((capability) => capability.definition),
-            { model: input.model, maxTokens: 4096 }
+            { model: input.model, maxTokens: 4096, reasoningEffort: input.reasoningEffort }
           );
           return { value: result, usage: result.usage };
         }
         const result = input.provider.generateFromPrompt
-          ? await input.provider.generateFromPrompt(prompt, { model: input.model, maxTokens: 4096 })
+          ? await input.provider.generateFromPrompt(prompt, {
+              model: input.model,
+              maxTokens: 4096,
+              reasoningEffort: input.reasoningEffort,
+            })
           : await input.provider.generate(JSON.stringify(prompt), { maxTokens: 4096 });
         return {
           value: {

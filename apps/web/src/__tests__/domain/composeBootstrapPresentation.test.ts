@@ -38,6 +38,58 @@ describe('Compose bootstrap presentation', () => {
     expect(JSON.stringify(card)).toBe(original);
   });
 
+  it('keeps root slots in one object row and gives each changed child its own row', () => {
+    const root = {
+      ...content.trees[0],
+      slots: { problem: 'Late alerts', audience: 'Operators', outcome: 'Prompt detection' },
+      children: [
+        {
+          key: 'requirements',
+          slots: {},
+          children: [
+            requirement,
+            {
+              ...requirement,
+              key: 'temperature',
+              slots: { title: 'Temperature', acceptance: ['Below 18'] },
+            },
+          ],
+        },
+        {
+          key: 'monitoring_ready',
+          slots: { title: 'Monitoring ready', sequence: 1 },
+          children: [],
+        },
+      ],
+    };
+    const card = { nodeId: 'root', path: 'content', after: { trees: [root], relations: [] } };
+    const original = JSON.stringify(card);
+    const expanded = expandComposeActivityCards([card]);
+    const paths = [
+      'content/trees/[key=prd]',
+      'content/trees/[key=prd]/children/[key=requirements]/children/[key=req_weather_qingtian]',
+      'content/trees/[key=prd]/children/[key=requirements]/children/[key=temperature]',
+      'content/trees/[key=prd]/children/[key=monitoring_ready]',
+    ];
+    expect(expanded.map((item) => item.path)).toEqual(paths);
+    expect(expanded.map((item) => item.after)).toEqual([
+      root,
+      requirement,
+      root.children[0].children[1],
+      root.children[1],
+    ]);
+    expect(expanded.every((item) => item.nodeId === card.nodeId)).toBe(true);
+    expect(expanded.every((item) => item.before === undefined)).toBe(true);
+    expect(JSON.stringify(card)).toBe(original);
+    const removed = expandComposeActivityCards([
+      { nodeId: 'root', path: 'content', before: card.after },
+    ]);
+    expect(removed.map((item) => item.path)).toEqual(paths);
+    expect(removed.map((item) => item.before)).toEqual(expanded.map((item) => item.after));
+    expect(removed.every((item) => item.after === undefined)).toBe(true);
+    expect(JSON.stringify(card)).toBe(original);
+  });
+
   it('keeps a requirement title separate from its saved content', () => {
     const before = { key: 'temperature', slots: { title: '气温' }, children: [] };
     const after = {
@@ -62,12 +114,28 @@ describe('Compose bootstrap presentation', () => {
     expect(composeNodeTitle(removed[0].before)).toBe('天气为晴天');
   });
 
-  it('keeps content with relation changes visible instead of silently hiding them', () => {
+  it('shows object and relation changes separately without losing either or their source', () => {
     const card = {
       nodeId: 'n',
       path: 'content',
       after: { ...content, relations: [{ from: 'a', to: 'b' }] },
     };
-    expect(expandComposeActivityCards([card])).toEqual([card]);
+    const original = JSON.stringify(card);
+    const expanded = expandComposeActivityCards([card]);
+    expect(expanded).toHaveLength(2);
+    expect(expanded[0]).toMatchObject({
+      nodeId: card.nodeId,
+      path: 'content/trees/[key=prd]/children/[key=requirements]/children/[key=req_weather_qingtian]',
+      after: requirement,
+      objectChange: { sources: [card] },
+    });
+    expect(expanded[1]).toMatchObject({
+      nodeId: card.nodeId,
+      path: 'content/relations',
+      after: card.after.relations,
+      sourceCards: [card],
+    });
+    expect(expanded.every((item) => item.before === undefined)).toBe(true);
+    expect(JSON.stringify(card)).toBe(original);
   });
 });

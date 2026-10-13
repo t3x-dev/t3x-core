@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import inventoryJson from '../../contracts/commit-v1-writer-inventory.json';
@@ -20,19 +20,18 @@ const repositoryRoot = fileURLToPath(new URL('../../../..', import.meta.url));
 const scannedRoots = ['apps', 'packages'];
 
 async function sourceFiles(directory: string): Promise<string[]> {
-  const entries = await readdir(directory);
-  const files: string[] = [];
-  for (const entry of entries) {
-    if (['dist', 'node_modules', '__tests__'].includes(entry)) continue;
-    const absolute = `${directory}/${entry}`;
-    const metadata = await stat(absolute);
-    if (metadata.isDirectory()) {
-      files.push(...(await sourceFiles(absolute)));
-    } else if (/\.(?:ts|tsx)$/.test(entry) && !/\.test\.(?:ts|tsx)$/.test(entry)) {
-      files.push(absolute);
-    }
-  }
-  return files;
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files = await Promise.all(
+    entries.map(async (entry) => {
+      if (['dist', 'node_modules', '__tests__'].includes(entry.name)) return [];
+      const absolute = `${directory}/${entry.name}`;
+      if (entry.isDirectory()) return sourceFiles(absolute);
+      return /\.(?:ts|tsx)$/.test(entry.name) && !/\.test\.(?:ts|tsx)$/.test(entry.name)
+        ? [absolute]
+        : [];
+    })
+  );
+  return files.flat();
 }
 
 function repositoryPath(absolute: string): string {
@@ -55,12 +54,13 @@ describe('CommitV1 writer inventory', () => {
     const files = (
       await Promise.all(scannedRoots.map((root) => sourceFiles(`${repositoryRoot}/${root}`)))
     ).flat();
-    const discovered: string[] = [];
-    for (const file of files) {
-      if (/\bcreateCommit\s*\(/.test(await readFile(file, 'utf8'))) {
-        discovered.push(repositoryPath(file));
-      }
-    }
+    const discovered = (
+      await Promise.all(
+        files.map(async (file) =>
+          /\bcreateCommit\s*\(/.test(await readFile(file, 'utf8')) ? repositoryPath(file) : null
+        )
+      )
+    ).filter((file): file is string => file !== null);
     expect(discovered.sort()).toEqual([]);
   });
 });

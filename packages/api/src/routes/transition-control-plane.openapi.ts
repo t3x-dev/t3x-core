@@ -201,6 +201,7 @@ const ProposalGenerationRequestSchema = z
     instruction: z.string().trim().min(1).max(20_000),
     source_turn_hashes: z.array(z.string().trim().min(1).max(200)).max(64).optional(),
     source_material_ids: z.array(z.string().trim().min(1).max(200)).max(256).default([]),
+    conversation_transcript: z.string().trim().min(1).max(80_000).optional(),
     if_revision: z.number().int().min(1).optional(),
     provider: z.string().trim().min(1).max(100).optional(),
     model: z.string().trim().min(1).max(500).optional(),
@@ -769,6 +770,9 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
         instruction: body.instruction,
         sourceMaterialIds: body.source_material_ids,
         sourceTurnHashes: body.source_turn_hashes,
+        ...(body.conversation_transcript === undefined
+          ? {}
+          : { conversationTranscript: body.conversation_transcript }),
         ...(body.if_revision === undefined ? {} : { expectedRevision: body.if_revision }),
         ...(body.provider === undefined ? {} : { requestedProvider: body.provider }),
         ...(body.model === undefined ? {} : { requestedModel: body.model }),

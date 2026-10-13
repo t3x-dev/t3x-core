@@ -76,16 +76,6 @@
       "removal_gate": "Not scheduled for removal. Decisions must remain bound to an immutable server-authored ReviewSnapshot."
     },
     {
-      "id": "web-chat-source-workspace-handoff",
-      "surface": "webui",
-      "state": "canonical_adapter",
-      "authority": "transition_control_plane",
-      "file": "apps/web/src/components/chat/ChatHeader.tsx",
-      "anchors": ["getProjectIdWorkspacePath(", "sourceConversationId: conversationId"],
-      "replacement": null,
-      "removal_gate": "Retain while Chat captures immutable Source turns; review and mutation must remain in Repository Workspace."
-    },
-    {
       "id": "cli-transition-commands",
       "surface": "cli",
       "state": "canonical",

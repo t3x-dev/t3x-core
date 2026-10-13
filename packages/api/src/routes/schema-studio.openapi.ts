@@ -17,7 +17,7 @@ import {
   saveYSchemaCompositionSnapshot,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
-import { sha256CompositionValue } from '@t3x-dev/yschema';
+import { parseYSchema, sha256CompositionValue } from '@t3x-dev/yschema';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
@@ -366,6 +366,134 @@ schemaStudioRoutes.openapi(applyRoute, async (c) => {
     if (error instanceof StudioError) return errorResponse(c, error.code, error.message);
     if (error instanceof ConflictError)
       return errorResponse(c, 'CONFLICT', 'The Workspace changed. Review it again.');
+    throw error;
+  }
+});
+
+// Initial YAML binding is restricted to an empty Workspace; existing proposals use Studio review.
+const initialSchemaRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/schema-studio/initial-schema',
+  tags: ['YSchema'],
+  request: {
+    params,
+    body: {
+      content: {
+        'application/json': {
+          schema: z
+            .object({
+              workspaceId: z.string().min(1),
+              ifRevision: z.number().int().nonnegative(),
+              filename: z.string().max(255),
+              yaml: z
+                .string()
+                .min(1)
+                .max(5 * 1024 * 1024),
+            })
+            .strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Initial schema bound',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(z.object({ workspaceRevision: z.number() })),
+        },
+      },
+    },
+    ...errors,
+    400: {
+      description: 'Invalid schema',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+schemaStudioRoutes.openapi(initialSchemaRoute, async (c) => {
+  const db = await getDB();
+  const { projectId } = c.req.valid('param');
+  const access = await assertProjectAccess(c, db, projectId, 'project:edit');
+  if (access instanceof Response) return access;
+  const input = c.req.valid('json');
+  let schema;
+  try {
+    schema = parseYSchema(input.yaml);
+  } catch (error) {
+    return errorResponse(
+      c,
+      'INVALID_REQUEST',
+      error instanceof Error ? error.message : 'Invalid YSchema'
+    );
+  }
+  const draft = await findWorkspaceDraft(db, projectId, input.workspaceId);
+  if (!draft?.workspace_state)
+    return errorResponse(c, 'CONFLICT', 'Workspace changed; reload before importing.');
+  const state = draft.workspace_state;
+  const hash = await sha256CompositionValue(schema);
+  const existing = Array.isArray(state.schemaBindings)
+    ? (state.schemaBindings[0] as Record<string, unknown> | undefined)
+    : undefined;
+  if (existing?.compositionId === `uploaded:${hash}`)
+    return c.json({ success: true as const, data: { workspaceRevision: draft.revision } }, 200);
+  if (draft.revision !== input.ifRevision)
+    return errorResponse(c, 'CONFLICT', 'Workspace changed; reload before importing.');
+  const yops = state.yopsDraft as { operations?: unknown[] } | undefined;
+  if (
+    state.baseCommitHash ||
+    state.lastCommitHash ||
+    (yops?.operations?.length ?? 0) > 0 ||
+    (Array.isArray(state.schemaBindings) && state.schemaBindings.length > 0)
+  )
+    return errorResponse(c, 'CONFLICT', 'Initial schema requires an empty, unbound Workspace.');
+  const compositionId = `uploaded:${hash}`;
+  try {
+    const saved = await db.transaction(async (tx) => {
+      await saveYSchemaCompositionSnapshot(tx, {
+        snapshot_id: `uploaded_${projectId}_${hash.slice(7)}`,
+        project_id: projectId,
+        composition_id: compositionId,
+        composition_revision: 1,
+        composition_hash: hash,
+        compiled_schema_hash: hash,
+        compiler_version: 'initial-schema@1',
+        manifest_json: { filename: input.filename },
+        schema_json: { ...schema },
+        render_plan_json: [],
+        origins_json: {},
+      });
+      return upsertWorkspaceDraft(
+        tx,
+        {
+          project_id: projectId,
+          workspace_id: input.workspaceId,
+          title: String(state.title ?? 'Main workspace'),
+          target_branch: String(state.targetBranch ?? 'main'),
+          parent_commit_hash: null,
+          workspace_state: {
+            ...state,
+            schemaBindings: [
+              {
+                rootKey: 'candidate',
+                canonicalName: compositionId,
+                schemaName: input.filename,
+                version: '1',
+                mode: 'pinned',
+                schemaHash: hash,
+                compositionId,
+                compositionRevision: 1,
+                compositionHash: hash,
+              },
+            ],
+          },
+        },
+        input.ifRevision
+      );
+    });
+    return c.json({ success: true as const, data: { workspaceRevision: saved.revision } }, 200);
+  } catch (error) {
+    if (error instanceof ConflictError) return errorResponse(c, 'CONFLICT', error.message);
     throw error;
   }
 });

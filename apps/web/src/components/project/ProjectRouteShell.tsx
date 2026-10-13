@@ -56,7 +56,7 @@ export function ProjectRouteShell({
   // The project index already owns ProjectShell because it also controls the
   // tab content. Nested project routes use this route-level shell so the
   // shared title/navigation header never disappears during navigation.
-  if (!projectId || isProjectIndex(pathname)) return children;
+  if (isProjectIndex(pathname)) return children;
 
   const project = storedProject ??
     fetchedProject ?? {
@@ -70,9 +70,6 @@ export function ProjectRouteShell({
   return (
     <ProjectShell
       activeTab={activeProjectTab(pathname, new URLSearchParams(searchParams.toString()))}
-      branch={searchParams.get('branch')}
-      workspaceId={searchParams.get('workspace')}
-      pullRequestNumber={Number(searchParams.get('pr')) || undefined}
       project={project}
       projectIdNavigation={Boolean(projectId)}
     >

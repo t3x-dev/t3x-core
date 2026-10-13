@@ -227,7 +227,9 @@ export {
   getCanonicalModelId,
   getModelInfo,
   getModelsByProvider,
+  imageDataUrl,
   isGenerationRuntimeProviderId,
+  isPromptImageBlock,
   type LLMBasicGenerateOptions,
   type LLMCallLog,
   type LLMCallLogger,
@@ -244,13 +246,18 @@ export {
   normalizeLocalProviderId,
   normalizeModelId,
   normalizeRuntimeProviderId,
+  type PromptImageBlock,
+  type PromptPart,
   type ProviderName,
   PUBLIC_GENERATION_PROVIDER_IDS,
   PUBLIC_PROVIDER_ID_BY_RUNTIME_PROVIDER,
   PUBLIC_PROVIDER_LABELS,
+  promptImageBlock,
+  promptTextLength,
   publicProviderIdForRuntime,
   runtimeProviderIdForPublic,
   type StructuredResult,
+  textAndImageParts,
 } from './llm';
 // ═══════════════════════════════════════════════════════════════════════════
 // Multimodal content blocks for turns

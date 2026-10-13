@@ -110,22 +110,24 @@ export async function bindTransitionPolicy(
   return result;
 }
 
+const bindingColumns = {
+  projectId: transitionPolicyBindings.projectId,
+  refName: transitionPolicyBindings.refName,
+  policyDigest: transitionPolicyBindings.policyDigest,
+  policyUri: transitionPolicyBindings.policyUri,
+  actorKind: transitionPolicyBindings.actorKind,
+  actorId: transitionPolicyBindings.actorId,
+  updatedAt: transitionPolicyBindings.updatedAt,
+  canonicalJson: transitionPolicyResources.canonicalJson,
+};
+
 export async function getTransitionPolicyBinding(
   db: AnyDB,
   projectId: string,
   refName: string
 ): Promise<TransitionPolicyBinding | null> {
   const [row] = await db
-    .select({
-      projectId: transitionPolicyBindings.projectId,
-      refName: transitionPolicyBindings.refName,
-      policyDigest: transitionPolicyBindings.policyDigest,
-      policyUri: transitionPolicyBindings.policyUri,
-      actorKind: transitionPolicyBindings.actorKind,
-      actorId: transitionPolicyBindings.actorId,
-      updatedAt: transitionPolicyBindings.updatedAt,
-      canonicalJson: transitionPolicyResources.canonicalJson,
-    })
+    .select(bindingColumns)
     .from(transitionPolicyBindings)
     .innerJoin(
       transitionPolicyResources,
@@ -139,7 +141,35 @@ export async function getTransitionPolicyBinding(
     )
     .limit(1);
 
-  if (row === undefined) return null;
+  return row === undefined ? null : verifiedBinding(row);
+}
+
+export async function listTransitionPolicyBindings(
+  db: AnyDB,
+  projectId: string
+): Promise<TransitionPolicyBinding[]> {
+  const rows = await db
+    .select(bindingColumns)
+    .from(transitionPolicyBindings)
+    .innerJoin(
+      transitionPolicyResources,
+      eq(transitionPolicyBindings.policyDigest, transitionPolicyResources.digest)
+    )
+    .where(eq(transitionPolicyBindings.projectId, projectId));
+  return rows.map(verifiedBinding);
+}
+
+function verifiedBinding(row: {
+  projectId: string;
+  refName: string;
+  policyDigest: string;
+  policyUri: string;
+  actorKind: string;
+  actorId: string;
+  updatedAt: Date;
+  canonicalJson: string;
+}): TransitionPolicyBinding {
+  const { projectId, refName } = row;
   if (!['human', 'agent', 'service'].includes(row.actorKind)) {
     throw new TransitionPolicyBindingIntegrityError(projectId, refName);
   }

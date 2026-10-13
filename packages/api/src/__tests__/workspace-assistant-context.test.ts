@@ -5,7 +5,10 @@ import {
 } from '@t3x-dev/application';
 import { createYOpsState, describeTransitionObject } from '@t3x-dev/core';
 import { describe, expect, it } from 'vitest';
-import { renderAssistantContext } from '../lib/workspace-assistant/context';
+import {
+  renderAssistantContext,
+  turnAttachmentMaterialIds,
+} from '../lib/workspace-assistant/context';
 import type { PreparedAssistantContext } from '../lib/workspace-assistant/contracts';
 import { assistantProviderCapabilities } from '../lib/workspace-assistant/policy';
 import { authoringManifestDigest } from '../lib/workspace-authoring-generation';
@@ -62,6 +65,7 @@ function fixture(): Omit<PreparedAssistantContext, 'prompt' | 'disclosure'> {
     current: currentComposition(ledger),
     manifestDigest: authoringManifestDigest(ledger, basis),
     sources: [],
+    images: [],
     turns: [{ hash: 'u', role: 'user', content: 'Explain this change' }],
     olderTurnsAvailable: false,
   };
@@ -110,6 +114,54 @@ describe('Assistant model context', () => {
     expect(result.prompt.messages.at(-1)?.content).toBe('Only discuss; do not propose.');
     expect(prepared.ledger.actions).toHaveLength(3);
     expect(prepared.sources[0].content.length).toBe(35000);
+  });
+  it('keeps Workspace data in the first text message and appends images to their own turn', () => {
+    const prepared = fixture();
+    const image = (id: string) => ({
+      materialId: id,
+      resource: {
+        uri: `t3x://projects/p/materials/${id}`,
+        mediaType: 'image/png',
+        digest: `sha256:${'b'.repeat(64)}`,
+      },
+      data: 'A'.repeat(200_000),
+    });
+    prepared.images = [image('img_new')];
+    prepared.turns = [
+      { hash: 'u1', role: 'user', content: 'Old screenshot', imageMaterialIds: ['img_old'] },
+      { hash: 'a1', role: 'assistant', content: 'Seen.' },
+      { hash: 'u2', role: 'user', content: 'What does this show?', imageMaterialIds: ['img_new'] },
+    ];
+    const result = renderAssistantContext(prepared);
+    const [workspace, ...turns] = result.prompt.messages;
+    expect(typeof workspace.content).toBe('string');
+    expect(workspace.content).not.toContain('AAAA');
+    expect(turns[0].content).toBe('Old screenshot');
+    expect(turns.at(-1)?.content).toEqual([
+      { type: 'text', text: 'What does this show?' },
+      {
+        type: 'image',
+        source: { type: 'base64', media_type: 'image/png', data: 'A'.repeat(200_000) },
+      },
+    ]);
+    expect(result.disclosure.characters).toBeLessThan(48_000);
+    expect(result.disclosure.omitted.some((entry) => entry.startsWith('image:img_old'))).toBe(true);
+  });
+  it('reads only same-project material attachments from turn content blocks', () => {
+    expect(
+      turnAttachmentMaterialIds('p', [
+        { type: 'text', text: 'hi' },
+        { type: 'image', url: 't3x://projects/p/materials/img_1' },
+        {
+          type: 'file',
+          url: 't3x://projects/p/materials/doc_1',
+          filename: 'a.pdf',
+          mime_type: 'application/pdf',
+        },
+        { type: 'image', url: 't3x://projects/other/materials/img_2' },
+        { type: 'image', url: 'https://example.com/a.png' },
+      ])
+    ).toEqual({ images: ['img_1'], documents: ['doc_1'] });
   });
   it('does not invent tool support from provider catalog metadata', () => {
     expect(

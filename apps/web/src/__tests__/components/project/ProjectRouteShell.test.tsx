@@ -48,7 +48,9 @@ describe('ProjectRouteShell', () => {
       </ProjectRouteShell>
     );
 
-    expect(screen.getByRole('banner')).toHaveClass('h-24');
+    expect(screen.getByRole('navigation', { name: 'Project views' }).closest('header')).toBe(
+      screen.getByRole('banner')
+    );
     expect(screen.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Project views' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'History' })).toBeInTheDocument();
@@ -80,28 +82,5 @@ describe('ProjectRouteShell', () => {
       'aria-current',
       'page'
     );
-  });
-  it('preserves branch and workspace context on nested routes', () => {
-    navigation.pathname = '/project/proj_test/changes/ws_1/snap_1';
-    navigation.search = 'branch=feature%2Frelease&workspace=ws_1';
-    render(
-      <ProjectRouteShell projectId="proj_test">
-        <div>Change review</div>
-      </ProjectRouteShell>
-    );
-    expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute(
-      'href',
-      '/project/proj_test?tab=schemas&branch=feature%2Frelease&workspace=ws_1'
-    );
-  });
-  it('leaves global settings outside a fabricated project shell', () => {
-    navigation.pathname = '/settings/profile';
-    render(
-      <ProjectRouteShell projectId="">
-        <div>Profile</div>
-      </ProjectRouteShell>
-    );
-    expect(screen.queryByRole('banner')).not.toBeInTheDocument();
-    expect(screen.getByText('Profile')).toBeInTheDocument();
   });
 });

@@ -538,23 +538,6 @@ export interface GenerationProviderCatalog {
   default: string;
 }
 
-export type GenerationStreamEvent =
-  | { type: 'token'; content: string }
-  | { type: 'thinking'; content: string }
-  | { type: 'searching'; query?: string }
-  | {
-      type: 'done';
-      content?: string;
-      model?: string;
-      usage?: { input_tokens?: number; output_tokens?: number };
-      citations?: Array<{ url: string; title: string }>;
-    }
-  | { type: 'error'; message: string };
-
-export interface GenerationStreamOptions {
-  signal?: AbortSignal;
-}
-
 export interface SourceThreadMemory {
   text: string;
   token_estimate: number;
@@ -577,10 +560,6 @@ export type SourceThreadEvidence = ConversationSourceEvidence;
 
 export interface GenerationCapability {
   complete(input: GenerationRequest): Promise<GenerationResponse>;
-  stream(
-    input: GenerationRequest,
-    options?: GenerationStreamOptions
-  ): AsyncGenerator<GenerationStreamEvent, void, unknown>;
   providers(): Promise<GenerationProviderCatalog>;
 }
 

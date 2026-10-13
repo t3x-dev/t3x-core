@@ -6,9 +6,9 @@
   flex: 1;
   flex-direction: column;
   overflow: hidden;
-  background: #fff;
-  color: #0f172a;
-  font-family: Inter, var(--font-sans), sans-serif;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-family: var(--font-geist-sans), var(--font-sans), sans-serif;
 }
 .breadcrumbBar,
 .titleBar {
@@ -16,8 +16,8 @@
   flex: none;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #e2e8f0;
-  background: #fff;
+  border-bottom: 1px solid var(--stroke-default);
+  background: var(--surface-card);
   padding-right: 24px;
   padding-left: 24px;
 }
@@ -39,7 +39,7 @@
   background: transparent;
   font-size: 14px;
   font-weight: 600;
-  color: #1d4ed8;
+  color: var(--accent-commit);
 }
 .breadcrumbBar button svg {
   width: 18px;
@@ -48,28 +48,28 @@
 .breadcrumbBar > div:first-child > i {
   width: 1px;
   height: 16px;
-  background: #cbd5e1;
+  background: var(--stroke-strong);
 }
 .breadcrumbBar nav {
   gap: 8px;
   font-size: 14px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 .breadcrumbBar nav b {
-  color: #cbd5e1;
+  color: var(--stroke-strong);
 }
 .breadcrumbBar nav strong {
   font-weight: 600;
-  color: #1d4ed8;
+  color: var(--accent-commit);
 }
 .draftBadge {
   gap: 8px;
-  border: 1px solid #e0e7ff;
+  border: 1px solid var(--stroke-default);
   border-radius: 6px;
   padding: 8px 12px;
-  background: #eef2ff;
+  background: var(--accent-commit-soft);
   font-size: 12px;
-  color: #3730a3;
+  color: var(--accent-commit);
 }
 .draftBadge svg {
   width: 16px;
@@ -81,7 +81,7 @@
 }
 .draftBadge code {
   font: 11px var(--font-mono);
-  color: #1d4ed8;
+  color: var(--accent-commit);
 }
 .titleBar {
   min-height: 84px;
@@ -110,13 +110,13 @@
   height: 20px;
   border-radius: 50%;
   padding: 4px;
-  color: #fff;
+  color: var(--surface-card);
 }
 .titleBar > div > i {
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: #1d4ed8;
+  background: var(--accent-commit);
 }
 .passedSummary {
   color: #16a34a;
@@ -131,10 +131,10 @@
   background: #dc2626;
 }
 .pendingSummary {
-  color: #64748b;
+  color: var(--text-secondary);
 }
 .pendingSummary svg {
-  background: #64748b;
+  background: var(--text-secondary);
 }
 .titleBar > button,
 .detailHeading > button,
@@ -143,10 +143,10 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--stroke-default);
   border-radius: 6px;
-  background: #fff;
-  color: #1d4ed8;
+  background: var(--surface-card);
+  color: var(--accent-commit);
   box-shadow: 0 1px 2px rgb(15 23 42 / 5%);
 }
 .titleBar > button {
@@ -172,8 +172,8 @@
 .runHistory {
   min-width: 0;
   overflow-y: auto;
-  border-right: 1px solid #e2e8f0;
-  background: #fff;
+  border-right: 1px solid var(--stroke-default);
+  background: var(--surface-card);
 }
 .projectChecks h2,
 .runHistory h2 {
@@ -192,7 +192,7 @@
   gap: 9px;
   border-left: 4px solid transparent;
   padding: 11px 12px 11px 14px;
-  background: #fff;
+  background: var(--surface-card);
   text-align: left;
 }
 .projectChecks button:hover,
@@ -201,7 +201,7 @@
 }
 .projectChecks button.selectedItem,
 .runHistory button.selectedItem {
-  border-left-color: #2563eb;
+  border-left-color: var(--accent-commit);
   background: #eff6ff;
 }
 .projectChecks button > span:nth-child(2),
@@ -230,15 +230,15 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 11px;
-  color: #1d4ed8;
+  color: var(--accent-commit);
 }
 .noHistory {
   margin: 12px 20px;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid var(--surface-app);
   padding-top: 14px;
   font-size: 11px;
   line-height: 17px;
-  color: #94a3b8;
+  color: var(--text-tertiary);
 }
 .statusMark {
   display: inline-flex;
@@ -247,7 +247,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  color: #fff;
+  color: var(--surface-card);
   box-shadow: 0 1px 2px rgb(15 23 42 / 10%);
 }
 .statusMark svg {
@@ -271,7 +271,7 @@
   background: #dc2626;
 }
 .statusMark.pending {
-  background: #64748b;
+  background: var(--text-secondary);
 }
 .statusBadge {
   border: 1px solid;
@@ -292,9 +292,9 @@
   color: #dc2626;
 }
 .statusBadge.pending {
-  border-color: #e2e8f0;
-  background: #f1f5f9;
-  color: #64748b;
+  border-color: var(--stroke-default);
+  background: var(--surface-app);
+  color: var(--text-secondary);
 }
 .checkDetail {
   display: flex;
@@ -303,7 +303,7 @@
   gap: 24px;
   overflow-y: auto;
   padding: 32px;
-  background: #fff;
+  background: var(--surface-card);
 }
 .detailHeading {
   display: flex;
@@ -339,15 +339,15 @@
   display: grid;
   flex: none;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  border: 1px solid #dbeafe;
+  border: 1px solid var(--accent-commit-soft);
   border-radius: 12px;
   padding: 16px;
-  background: #fff;
+  background: var(--surface-card);
   box-shadow: 0 1px 2px rgb(15 23 42 / 5%);
 }
 .metadataCard > div {
   min-width: 0;
-  border-right: 1px solid #dbeafe;
+  border-right: 1px solid var(--accent-commit-soft);
   padding: 0 20px;
 }
 .metadataCard > div:first-child {
@@ -364,7 +364,7 @@
   font-weight: 500;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #1d4ed8;
+  color: var(--accent-commit);
   opacity: 0.8;
 }
 .metadataCard p {
@@ -374,7 +374,7 @@
   justify-content: space-between;
   gap: 8px;
   font-size: 13px;
-  color: #1d4ed8;
+  color: var(--accent-commit);
 }
 .metadataCard p b {
   overflow: hidden;
@@ -390,15 +390,15 @@
 .detailCard {
   flex: none;
   overflow: hidden;
-  border: 1px solid #dbeafe;
+  border: 1px solid var(--accent-commit-soft);
   border-radius: 12px;
-  background: #fff;
+  background: var(--surface-card);
   box-shadow: 0 1px 2px rgb(15 23 42 / 5%);
 }
 .detailCard > h3,
 .cardTitle {
   min-height: 48px;
-  border-bottom: 1px solid #dbeafe;
+  border-bottom: 1px solid var(--accent-commit-soft);
   padding: 13px 20px;
   font-size: 15px;
   font-weight: 600;
@@ -428,7 +428,7 @@
   height: 24px;
   border-radius: 50%;
   padding: 5px;
-  color: #fff;
+  color: var(--surface-card);
 }
 .validationResult > span.validResult {
   border-color: #dcfce7;
@@ -453,11 +453,11 @@
   margin-left: auto;
   font-size: 14px;
   white-space: nowrap;
-  color: #1d4ed8;
+  color: var(--accent-commit);
 }
 .validationResult p i {
   margin: 0 10px;
-  color: #cbd5e1;
+  color: var(--stroke-strong);
 }
 .validationResult p b {
   color: #1e3a8a;
@@ -480,7 +480,7 @@
   border-radius: 50%;
   padding: 7px;
   background: #f97316;
-  color: #fff;
+  color: var(--surface-card);
 }
 .gapCard strong,
 .gapCard code,
@@ -500,7 +500,7 @@
 }
 .gapCard p {
   font-size: 13px;
-  color: #1d4ed8;
+  color: var(--accent-commit);
 }
 .gapCard button {
   display: inline-flex;
@@ -510,7 +510,7 @@
   background: transparent;
   font-size: 13px;
   font-weight: 600;
-  color: #1d4ed8;
+  color: var(--accent-commit);
 }
 .gapCard button svg {
   width: 17px;
@@ -529,12 +529,12 @@
 }
 .cardTitle h3 code {
   margin-left: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--stroke-default);
   border-radius: 5px;
   padding: 4px 9px;
-  background: #f1f5f9;
+  background: var(--surface-app);
   font: 11px var(--font-mono);
-  color: #64748b;
+  color: var(--text-secondary);
 }
 .cardTitle > div {
   display: flex;
@@ -549,7 +549,7 @@
   padding: 18px 20px;
   background: rgb(248 250 252 / 35%);
   font-size: 13px;
-  color: #1d4ed8;
+  color: var(--accent-commit);
 }
 .definition {
   display: flex;
@@ -557,7 +557,7 @@
   align-items: center;
   gap: 12px;
   margin: 20px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--stroke-default);
   border-radius: 8px;
   padding: 10px 16px;
   background: #f8fafc;
@@ -568,11 +568,11 @@
   color: #1e3a8a;
 }
 .definition b {
-  color: #cbd5e1;
+  color: var(--stroke-strong);
 }
 .definition span {
   font-weight: 600;
-  color: #1d4ed8;
+  color: var(--accent-commit);
 }
 .definition em {
   border: 1px solid #fecaca;
@@ -624,7 +624,7 @@
     flex: none;
     overflow: visible;
     border-right: 0;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid var(--stroke-default);
   }
   .checkDetail {
     overflow: visible;
@@ -647,4 +647,41 @@
     width: 100%;
     margin-left: 0;
   }
+}
+
+/* Match the Compose action controls. */
+.titleBar > button,
+.detailHeading > button,
+.cardTitle button,
+.gapCard button {
+  min-height: 28px;
+  height: 28px;
+  border: 1px solid var(--stroke-strong);
+  border-radius: 6px;
+  padding: 0 10px;
+  gap: 6px;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  box-shadow: var(--fx-shadow-sm);
+  font-size: 11px;
+  font-weight: 550;
+}
+.titleBar button svg,
+.detailHeading button svg,
+.cardTitle button svg,
+.gapCard button svg {
+  width: 13px;
+  height: 13px;
+}
+.titleBar > button:hover:not(:disabled),
+.cardTitle button:hover:not(:disabled) {
+  background: var(--hover-bg);
+}
+.surface button:focus-visible {
+  outline: 2px solid var(--accent-commit);
+  outline-offset: 2px;
+}
+.surface button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }

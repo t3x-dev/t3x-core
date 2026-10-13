@@ -1,3 +1,4 @@
+import moduleStyles from '@/components/schemas/AddModulesDialog.module.css';
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -5,23 +6,23 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { SchemaStudioExperience } from '@/components/schemas/SchemaStudioExperience';
 
 const mocks = vi.hoisted(() => ({
-  data: undefined as unknown,
-  previewError: null as string | null,
   apply: vi.fn(),
+  data: undefined as unknown,
   query: 'candidate=provider',
   branches: [] as string[],
-  branchHeads: {} as Record<string, string | null>,
+  refresh: vi.fn(),
+  push: vi.fn(),
+  saveDraft: vi.fn(),
   workspaces: [] as Array<{
     id: string;
     revision?: number;
-    status: 'draft' | 'committed';
+    status: string;
     targetBranch: string;
     title: string;
   }>,
-  refresh: vi.fn(),
-  saveDraft: vi.fn(),
 }));
 vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mocks.push }),
   useSearchParams: () => new URLSearchParams(mocks.query),
 }));
 vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
@@ -39,45 +40,32 @@ vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
   }),
 }));
 vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
-  useProjectWorkspaces: () => ({
-    error: null,
-    loading: false,
-    workspaces: mocks.workspaces,
-    refresh: mocks.refresh,
-  }),
+  useProjectWorkspaces: () => ({ refresh: mocks.refresh, workspaces: mocks.workspaces }),
 }));
 vi.mock('@/hooks/shared/useBranches', () => ({
   useBranches: () => ({
-    branchHeads: mocks.branchHeads,
+    branchHeads: {},
     branches: mocks.branches,
     loading: false,
     refresh: vi.fn(),
     create: vi.fn(),
   }),
 }));
-vi.mock('@/hooks/workspaces/useWorkspaceFlow', () => ({
-  useWorkspaceFlow: () => ({
-    saveDraft: (...args: unknown[]) => mocks.saveDraft(...args),
-  }),
+vi.mock('@/queries/workspaces', () => ({
+  saveWorkspaceDraft: (...args: unknown[]) => mocks.saveDraft(...args),
 }));
 vi.mock('@/hooks/schemas/useStudioPreview', () => ({
   useApplyStudioSelection: () => mocks.apply,
-  useStudioPreview: () => ({
-    data: mocks.data,
-    error: mocks.previewError,
-    loading: false,
-    refresh: vi.fn(),
-  }),
+  useStudioPreview: () => ({ data: mocks.data, loading: false, refresh: vi.fn() }),
 }));
 beforeEach(() => {
   mocks.query = 'candidate=provider';
-  mocks.previewError = null;
   mocks.apply.mockReset();
+  mocks.push.mockReset();
   mocks.refresh.mockReset();
   mocks.saveDraft.mockReset();
   mocks.saveDraft.mockResolvedValue({});
   mocks.branches = [];
-  mocks.branchHeads = {};
   mocks.workspaces = [];
   mocks.data = {
     samples: [],
@@ -123,42 +111,24 @@ it('keeps a required provider checked and locked while blocking a failed definit
   const composition = screen.getByRole('main', { name: 'Studio composition' });
   const sources = screen.getByRole('complementary', { name: 'Studio sources' });
   expect(composition).toContainElement(controls);
-  expect(sources).toHaveClass('col-start-1', 'row-span-2', 'row-start-1');
-  expect(controls).toHaveClass('col-span-2', 'col-start-2', 'row-start-1');
-  expect(screen.getByRole('region', { name: 'Composed structure' })).toHaveClass(
-    'col-start-2',
-    'row-start-2'
-  );
-  expect(screen.getByRole('complementary', { name: 'Module details' })).toHaveClass(
-    'col-start-3',
-    'row-start-2'
+  expect(composition).toContainElement(sources);
+  expect(composition).toContainElement(screen.getByRole('region', { name: 'Composed structure' }));
+  expect(composition).toContainElement(
+    screen.getByRole('complementary', { name: 'Module details' })
   );
   expect(
     within(controls).getByRole('button', { name: 'Advanced definition workbench' })
   ).toBeVisible();
-  expect(within(controls).getByRole('button', { name: 'Review changes' })).toBeVisible();
-  expect(screen.getByLabelText('Target Workspace').closest('label')).toHaveClass(
-    'h-[34px]',
-    'rounded-[5px]'
-  );
-  expect(screen.getByRole('button', { name: 'Check schema' })).toHaveClass(
-    'h-[34px]',
-    'rounded-[5px]'
-  );
-  expect(screen.getByRole('button', { name: 'Review & apply' })).toHaveClass(
-    'h-[34px]',
-    'rounded-[5px]'
-  );
-  expect(screen.getByRole('button', { name: 'Zoom out' }).parentElement).toHaveClass(
-    'h-[34px]',
-    'rounded-[5px]'
-  );
+  expect(within(controls).getByRole('button', { name: 'Review & apply' })).toBeDisabled();
+  expect(screen.getByLabelText('Target Workspace')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Zoom out' })).toBeVisible();
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).toBeChecked();
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Remove Shared foundation' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Review & apply' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('tab', { name: 'Checks', exact: true }));
   expect(screen.getByText('Missing service capability')).toBeVisible();
-  expect(screen.getByText('Not run')).toBeVisible();
+  expect(screen.getByText('Changes require attention')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }));
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).not.toBeChecked();
   expect(mocks.apply).not.toHaveBeenCalled();
@@ -178,40 +148,34 @@ it('opens the module workbench in a wide viewport-bounded dialog with a scrollab
   );
   fireEvent.click(screen.getByRole('button', { name: 'Advanced definition workbench' }));
   const dialog = screen.getByRole('dialog', { name: 'Add modules' });
-  expect(dialog).toHaveClass(
-    'sm:max-w-[min(1100px,calc(100%-2rem))]',
-    'max-h-[90dvh]',
-    'overflow-hidden'
-  );
-  expect(dialog).not.toHaveClass('sm:max-w-lg');
+  expect(dialog).toHaveClass(moduleStyles.dialog);
   expect(within(dialog).getByText('Module workbench content').parentElement).toHaveClass(
-    'min-h-0',
-    'min-w-0',
-    'overflow-auto'
+    moduleStyles.body
   );
   fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(mocks.apply).not.toHaveBeenCalled();
 });
 
-it('explains why source authority blocks adoption', () => {
-  const reason = 'Importing private structure requires edit authority on its source project.';
-  Object.assign(mocks.data as object, { adoption: { allowed: false, reason } });
+it('selects the only draft workspace once instead of duplicating Main workspace', () => {
+  mocks.workspaces = [
+    {
+      id: 'workspace_branch:main',
+      revision: 1,
+      status: 'draft',
+      targetBranch: 'main',
+      title: 'Main workspace',
+    },
+  ];
   render(<SchemaStudioExperience projectId="p" />);
-  expect(screen.getByRole('alert')).toHaveTextContent(reason);
-  expect(screen.getByRole('button', { name: 'Review & apply' })).toBeDisabled();
-});
-it('shows preview failures when a selected source becomes unavailable', () => {
-  mocks.data = undefined;
-  mocks.previewError = 'Selected source is unavailable';
-  render(<SchemaStudioExperience projectId="p" />);
-  expect(screen.getByRole('alert')).toHaveTextContent('Selected source is unavailable');
-  expect(screen.getByRole('button', { name: 'Review & apply' })).toBeDisabled();
+  const select = screen.getByLabelText('Target Workspace');
+  expect(select.querySelectorAll('option')).toHaveLength(1);
+  expect(select).toHaveValue('workspace_branch:main');
+  expect(select).toHaveTextContent('Main workspace');
 });
 
-it('applies the selected schema to the matching branch workspace', async () => {
+it('applies the selected schema to the main branch workspace', async () => {
   mocks.branches = ['main'];
-  mocks.branchHeads = { main: 'commit-main' };
   mocks.workspaces = [
     {
       id: 'workspace_branch:main',
@@ -234,9 +198,7 @@ it('applies the selected schema to the matching branch workspace', async () => {
     adoption: { allowed: true },
     workspace: { id: 'workspace_branch:main', revision: 3, changes: [] },
   };
-
   render(<SchemaStudioExperience projectId="p" />);
-
   expect(screen.getByLabelText('Target Workspace')).toHaveValue('workspace_branch:main');
   fireEvent.click(screen.getByRole('button', { name: 'Review & apply' }));
   fireEvent.click(screen.getByRole('button', { name: 'Confirm & apply' }));
@@ -247,39 +209,22 @@ it('applies the selected schema to the matching branch workspace', async () => {
     reviewHash: 'review',
   });
   await waitFor(() =>
-    expect(screen.getByRole('status')).toHaveTextContent('Exact definition applied')
+    expect(mocks.push).toHaveBeenCalledWith(
+      '/project/p?branch=main&tab=workspaces&workspace=workspace_branch%3Amain'
+    )
   );
-  expect(mocks.refresh).toHaveBeenCalled();
 });
 
-it('creates the missing Studio workspace for each repository branch', async () => {
-  mocks.branches = ['main', 'feature/schema'];
-  mocks.branchHeads = { main: 'commit-main', 'feature/schema': 'commit-feature' };
+it('saves a main branch workspace when none is persisted', async () => {
+  mocks.branches = ['main'];
   mocks.refresh.mockResolvedValue(undefined);
-
   render(<SchemaStudioExperience projectId="p" />);
-
   expect(screen.getByLabelText('Target Workspace')).toHaveValue('workspace_branch:main');
-  await waitFor(() => expect(mocks.saveDraft).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(mocks.saveDraft).toHaveBeenCalled());
   expect(mocks.saveDraft).toHaveBeenCalledWith(
-    expect.objectContaining({
-      id: 'workspace_branch:main',
-      projectId: 'p',
-      baseCommitHash: 'commit-main',
-      status: 'draft',
-      targetBranch: 'main',
-      title: 'Main workspace',
-    })
-  );
-  expect(mocks.saveDraft).toHaveBeenCalledWith(
-    expect.objectContaining({
-      id: 'workspace_branch:feature%2Fschema',
-      projectId: 'p',
-      baseCommitHash: 'commit-feature',
-      status: 'draft',
-      targetBranch: 'feature/schema',
-      title: 'feature/schema workspace',
-    })
+    'p',
+    'workspace_branch:main',
+    expect.objectContaining({ targetBranch: 'main', title: 'Main workspace', status: 'draft' })
   );
   expect(mocks.refresh).toHaveBeenCalled();
 });

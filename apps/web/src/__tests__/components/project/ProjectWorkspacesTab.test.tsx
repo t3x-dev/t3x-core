@@ -111,11 +111,6 @@ describe('ProjectWorkspacesTab navigation and persisted drafts', () => {
       mocks.props.candidates.find((item: WorkspaceCandidate) => item.id === 'persisted')
     ).toMatchObject({ schemaBindings: [], title: 'persisted' });
   });
-  it('passes the source conversation through to Compose', () => {
-    mocks.query = 'tab=workspaces&sourceConversation=source_42';
-    render(<ProjectWorkspacesTab projectId="proj_test" />);
-    expect(mocks.props.sourceConversationId).toBe('source_42');
-  });
   it('starts the next draft from the advanced main HEAD', () => {
     mocks.branchHeads = { main: 'sha256:advanced' };
     mocks.workspaces = [

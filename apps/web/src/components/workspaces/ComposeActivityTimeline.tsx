@@ -1,14 +1,7 @@
 import type { WorkspaceAuthoringCard } from '@t3x-dev/api-client';
-import {
-  CheckCircle2,
-  ChevronDown,
-  GitCompareArrows,
-  History,
-  Minus,
-  Pencil,
-  Plus,
-} from 'lucide-react';
-import { Fragment, type ReactNode, useState } from 'react';
+import { parsePath } from '@t3x-dev/yops';
+import { GitCompareArrows, History, Minus, Pencil, Plus } from 'lucide-react';
+import { Fragment, type ReactNode } from 'react';
 import {
   activityChangeKind,
   activityChannelLabel,
@@ -19,16 +12,28 @@ import {
 } from '@/domain/composeActivity';
 import {
   composeActorLabel,
-  composeNodeContent,
   composeNodeTitle,
   composePathLabel,
-  composeTextChangeSegments,
-  composeValueChangeLabels,
 } from '@/domain/composePresentation';
+import { composeDraftChangeCards } from '@/domain/workspaces/composeDraftChanges';
+import {
+  MANUAL_STAGING_EVENT_ID,
+  type ManualStagingControls,
+  stagedObjectGroups,
+} from '@/domain/workspaces/manualStaging';
 import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import type { WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 import styles from './ComposeActivityTimeline.module.css';
-import composeStyles from './WorkspaceComposeSurface.module.css';
+import draftStyles from './ComposeDraftChanges.module.css';
+
+function stagedFieldLabel(card: WorkspaceAuthoringCard) {
+  const parts = parsePath(card.path);
+  const parent = parts.at(-2);
+  const field = parts.at(-1);
+  return parent?.type === 'key' && parent.value === 'slots' && field?.type === 'key'
+    ? field.value
+    : composePathLabel(card.path, card.nodeId);
+}
 
 const changeMarkers = {
   added: { Icon: Plus, label: 'Added fields' },
@@ -67,37 +72,23 @@ function matchesFilter(card: WorkspaceAuthoringCard, filter: ComposeChangeFilter
   return kind === 'removed';
 }
 
-function ValueChange({ before, after, kind }: { before: string; after: string; kind: string }) {
-  if (kind === 'added') return <ins title={after}>{after}</ins>;
-  if (kind === 'removed') return <del title={before}>{before}</del>;
-  if (before === after) return <span title={after}>{after}</span>;
-  const change = composeTextChangeSegments(before, after);
-  return (
-    <span title={`${before} → ${after}`}>
-      {change.prefix}
-      {change.before ? <del>{change.before}</del> : null}
-      {change.after ? <ins>{change.after}</ins> : null}
-      {change.suffix}
-    </span>
-  );
-}
-
 export function ComposeActivityTimeline({
   activity,
   filter = 'all',
   scope,
-  renderCard,
+  renderRow,
   fallback,
   updatedAt,
+  staging,
 }: {
   activity: ReturnType<typeof useComposeActivity>;
   filter?: ComposeChangeFilter;
   scope: 'latest' | 'all';
-  renderCard: (operation: WorkspaceYOpsDraftOperation, meta: ComposeActivityMeta) => ReactNode;
+  renderRow: (operation: WorkspaceYOpsDraftOperation, meta: ComposeActivityMeta) => ReactNode;
   fallback: ReactNode;
   updatedAt: string;
+  staging?: ManualStagingControls;
 }) {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   if (!activity.enabled)
     return scope === 'all' ? (
       fallback
@@ -145,19 +136,34 @@ export function ComposeActivityTimeline({
         </button>
       </div>
     );
-  if (scope === 'all')
+  if (scope === 'all') {
+    const changes = composeDraftChangeCards(
+      activity.view?.netDiff ?? [],
+      activity.view?.base,
+      activity.view?.current
+    ).filter((card) => matchesFilter(card, filter));
     return (
-      <div className={composeStyles.actionList}>
-        {activity.view?.netDiff
-          .filter((card) => matchesFilter(card, filter))
-          .map((card) =>
-            renderCard(activityOperation(card), { eventId: 'all', comparison: 'draft' })
+      <section className={draftStyles.panel} aria-label="All draft changes">
+        <header className={draftStyles.header}>
+          <div>
+            <h2>All draft changes</h2>
+            <p>The combined result of every saved action.</p>
+          </div>
+          <span>Base → Draft r{activity.compositionRevision ?? '—'}</span>
+        </header>
+        <ul className={draftStyles.list}>
+          {changes.map((card) =>
+            renderRow(activityOperation(card), { eventId: 'all', comparison: 'draft' })
           )}
-        {!activity.view?.netDiff.filter((card) => matchesFilter(card, filter)).length ? (
-          <p className={styles.message}>Current draft matches Base. Event history is retained.</p>
+        </ul>
+        {!changes.length ? (
+          <p className={draftStyles.empty}>
+            Current draft matches Base. Event history is retained.
+          </p>
         ) : null}
-      </div>
+      </section>
     );
+  }
   const events = groupComposeActivity(activity.actions);
   const visibleEvents = events
     .map((event) => ({
@@ -165,13 +171,118 @@ export function ComposeActivityTimeline({
       cards: composeEventCards(event, activity.cards).filter((card) => matchesFilter(card, filter)),
     }))
     .filter(({ cards }) => cards.length > 0);
+  const stagedItems = staging?.items ?? [];
+  const stagedGroups = stagedObjectGroups(stagedItems, staging?.current);
+  const showStaging = stagedItems.length > 0;
+  const stagingEndedAt = stagedItems.at(-1)?.createdAt ?? updatedAt;
+  const selectedCount = stagedItems.filter((item) => item.selected).length;
+  const stagingKind = activityChangeKind(stagedItems.map((item) => item.card));
+  const StagingIcon = changeMarkers[stagingKind].Icon;
   return (
     <section className={styles.timeline} aria-label="Change activity timeline">
-      {!visibleEvents.length ? <p className={styles.message}>No matching changes.</p> : null}
+      {!visibleEvents.length && !showStaging ? (
+        <p className={styles.message}>No matching changes.</p>
+      ) : null}
+      {showStaging ? (
+        <>
+          <p className={styles.date} title={day(stagingEndedAt)}>
+            <span data-compact={dayLabel(stagingEndedAt).length > 9 || undefined}>
+              {dayLabel(stagingEndedAt)}
+            </span>
+          </p>
+          <section
+            className={styles.event}
+            data-latest="true"
+            aria-label="Event: Ungrouped manual changes"
+          >
+            <time className={styles.eventTime} dateTime={stagingEndedAt}>
+              {time(stagingEndedAt)}
+            </time>
+            <span
+              className={styles.icon}
+              data-kind={stagingKind}
+              data-latest="true"
+              role="img"
+              aria-label={changeMarkers[stagingKind].label}
+              title={changeMarkers[stagingKind].label}
+            >
+              <StagingIcon size={13} aria-hidden="true" />
+            </span>
+            <div className={styles.eventBody}>
+              <div className={styles.heading}>
+                <span className={styles.titleLine}>
+                  <strong title="Ungrouped manual changes">Ungrouped manual changes</strong>
+                  <span className={styles.latestBadge}>Latest</span>
+                </span>
+                <span className={styles.meta}>
+                  {stagedItems.length === 1
+                    ? '1 change · select changes to save as one P'
+                    : `${stagedItems.length} changes · select changes to save as one P`}
+                </span>
+              </div>
+              <div className={styles.preview}>
+                {stagedGroups.map((group) => {
+                  const item = group.items[0]!;
+                  const sharedOperation = group.items.some((source) =>
+                    stagedGroups.some((other) => other !== group && other.items.includes(source))
+                  );
+                  const cardLabel =
+                    composeNodeTitle(group.card.after) ??
+                    composeNodeTitle(group.card.before) ??
+                    composePathLabel(group.card.path, group.card.nodeId);
+                  return (
+                    <div
+                      className={styles.stagingRow}
+                      data-multiple={group.items.length > 1 || sharedOperation}
+                      key={`${group.card.path}:${item.id}`}
+                    >
+                      <div className={styles.stagingChecks}>
+                        {group.items.map((source) => (
+                          <label key={source.id} title={source.card.path}>
+                            <input
+                              aria-label={`Include ${group.items.length > 1 || sharedOperation ? stagedFieldLabel(source.card) : cardLabel} in the next P`}
+                              checked={source.selected}
+                              onChange={() => staging?.onToggle(source.id)}
+                              type="checkbox"
+                            />
+                            {group.items.length > 1 || sharedOperation ? (
+                              <code>{stagedFieldLabel(source.card)}</code>
+                            ) : null}
+                          </label>
+                        ))}
+                        {sharedOperation ? <small>Includes other objects</small> : null}
+                      </div>
+                      {renderRow(activityOperation(group.card, item.reason), {
+                        eventId: MANUAL_STAGING_EVENT_ID,
+                        actor: 'You',
+                        channel: 'manual',
+                        timestamp: item.createdAt,
+                        comparison: 'event',
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className={styles.stagingActions}>
+                <button
+                  disabled={Boolean(staging?.pending) || selectedCount === 0}
+                  onClick={() => staging?.onSaveSelected()}
+                  type="button"
+                >
+                  {staging?.pending
+                    ? 'Saving…'
+                    : selectedCount
+                      ? `Save selected as P (${selectedCount})`
+                      : 'Save selected as P'}
+                </button>
+                {staging?.error ? <p role="alert">{staging.error}</p> : null}
+              </div>
+            </div>
+          </section>
+        </>
+      ) : null}
       {visibleEvents.map(({ event, cards: eventCards }, index) => {
         const latest = event.actions.at(-1)!;
-        const open = expanded[event.id] ?? false;
-        const toggle = () => setExpanded((current) => ({ ...current, [event.id]: !open }));
         // Keep the event node consistent with the concrete rows the user can inspect.
         const kind = activityChangeKind(eventCards);
         const { Icon, label } = changeMarkers[kind];
@@ -181,9 +292,16 @@ export function ComposeActivityTimeline({
             : latest.reason || `${activityChannelLabel(latest.channel)} changes`;
         const actor =
           latest.actor.id === 'human:local-user' ? 'You' : composeActorLabel(latest.actor.id);
+        const isLatest = !showStaging && index === 0;
+        const previousDay =
+          index === 0
+            ? showStaging
+              ? day(stagingEndedAt)
+              : null
+            : day(visibleEvents[index - 1]!.event.endedAt);
         return (
           <Fragment key={event.id}>
-            {index === 0 || day(event.endedAt) !== day(visibleEvents[index - 1].event.endedAt) ? (
+            {previousDay === null || day(event.endedAt) !== previousDay ? (
               <p className={styles.date} title={day(event.endedAt)}>
                 <span data-compact={dayLabel(event.endedAt).length > 9 || undefined}>
                   {dayLabel(event.endedAt)}
@@ -192,7 +310,7 @@ export function ComposeActivityTimeline({
             ) : null}
             <section
               className={styles.event}
-              data-latest={index === 0}
+              data-latest={isLatest || undefined}
               aria-label={`Event: ${title}`}
             >
               <time className={styles.eventTime} dateTime={event.endedAt}>
@@ -204,7 +322,7 @@ export function ComposeActivityTimeline({
               <span
                 className={styles.icon}
                 data-kind={kind}
-                data-latest={index === 0}
+                data-latest={isLatest || undefined}
                 role="img"
                 aria-label={label}
                 title={label}
@@ -212,19 +330,14 @@ export function ComposeActivityTimeline({
                 <Icon size={13} aria-hidden="true" />
               </span>
               <div className={styles.eventBody}>
-                <button
-                  className={styles.eventToggle}
-                  onClick={toggle}
-                  aria-expanded={open}
-                  type="button"
-                >
+                <div className={styles.eventHeader}>
                   <span className={styles.heading}>
                     <span className={styles.titleLine}>
                       <strong title={title}>{title}</strong>
                       <span className={styles.proposalId}>
                         P-{String(latest.sequence).padStart(2, '0')}
                       </span>
-                      {index === 0 ? <span className={styles.latestBadge}>Latest</span> : null}
+                      {isLatest ? <span className={styles.latestBadge}>Latest</span> : null}
                     </span>
                   </span>
                   <span className={styles.author} title={actor}>
@@ -233,62 +346,22 @@ export function ComposeActivityTimeline({
                     </span>
                     {actor}
                   </span>
-                  <ChevronDown aria-hidden="true" className={styles.disclosure} />
-                </button>
-                {open ? (
-                  <div className={composeStyles.actionList}>
-                    {eventCards.map((card) => {
-                      const lastTouch = event.actions.findLast((action) =>
-                        activity.cards[action.actionId]?.some((item) => item.nodeId === card.nodeId)
-                      )!;
-                      return renderCard(activityOperation(card, lastTouch.reason), {
-                        eventId: event.id,
-                        actionId: lastTouch.actionId,
-                        actor:
-                          lastTouch.actor.id === 'human:local-user' ? 'You' : lastTouch.actor.id,
-                        channel: lastTouch.channel,
-                        timestamp: lastTouch.publishedAt,
-                        comparison: 'event',
-                      });
-                    })}
-                  </div>
-                ) : (
-                  <div className={styles.preview}>
-                    {eventCards.map((card) => {
-                      const cardLabel =
-                        composeNodeTitle(card.after) ??
-                        composeNodeTitle(card.before) ??
-                        composePathLabel(card.path, card.nodeId);
-                      const cardKind = activityChangeKind([card]);
-                      const { before, after } =
-                        cardKind === 'added' && composeNodeTitle(card.after)
-                          ? {
-                              before: 'Absent',
-                              after: composeNodeContent(card.after) ?? 'No content recorded',
-                            }
-                          : composeValueChangeLabels(card.before, card.after);
-                      return (
-                        <button
-                          type="button"
-                          onClick={toggle}
-                          key={`${card.nodeId}:${card.path}`}
-                          aria-label={`Expand ${cardLabel}`}
-                        >
-                          <span className={styles.changeMark} data-kind={cardKind}>
-                            {cardKind === 'added' ? '+' : cardKind === 'removed' ? '−' : '~'}
-                          </span>
-                          <span className={styles.cardLabel} title={cardLabel}>
-                            {cardLabel}
-                          </span>
-                          <span className={styles.valueSummary}>
-                            <ValueChange before={before} after={after} kind={cardKind} />
-                          </span>
-                          <CheckCircle2 aria-label="Applied to Draft" className={styles.verified} />
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                </div>
+                <div className={styles.preview}>
+                  {eventCards.map((card) => {
+                    const lastTouch = event.actions.findLast((action) =>
+                      activity.cards[action.actionId]?.some((item) => item.nodeId === card.nodeId)
+                    )!;
+                    return renderRow(activityOperation(card, lastTouch.reason), {
+                      eventId: event.id,
+                      actionId: lastTouch.actionId,
+                      actor: lastTouch.actor.id === 'human:local-user' ? 'You' : lastTouch.actor.id,
+                      channel: lastTouch.channel,
+                      timestamp: lastTouch.publishedAt,
+                      comparison: 'event',
+                    });
+                  })}
+                </div>
               </div>
             </section>
           </Fragment>

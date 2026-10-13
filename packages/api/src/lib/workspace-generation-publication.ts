@@ -4,13 +4,48 @@ import { createYSchemaResourceDescriptor } from '@t3x-dev/core';
 import {
   type AnyDB,
   DraftAuthoringConflictError,
+  findWorkspaceDraft,
   lockMaterialsForAuthoring,
   lockTurnsForAuthoring,
   resolveTransitionProposalGraph,
 } from '@t3x-dev/storage';
-import { publishWorkspaceAuthoringAction, workspaceAuthoringState } from './workspace-authoring';
+import {
+  findRetiredAuthoringLedger,
+  publishWorkspaceAuthoringAction,
+  workspaceAuthoringState,
+} from './workspace-authoring';
 import { resolveWorkspaceGenerationBasis } from './workspace-authoring-generation';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
+
+/** A candidate pinned to a committed round can only replay its original publication. */
+async function resolveRetiredGeneration(
+  input: {
+    db: AnyDB;
+    projectId: string;
+    workspaceId: string;
+    transitionId: string;
+    requestId: string;
+  },
+  preparationJson: string
+) {
+  const draft = await findWorkspaceDraft(input.db, input.projectId, input.workspaceId);
+  if (!draft?.workspace_state) return null;
+  const ledger = await findRetiredAuthoringLedger(
+    input.db,
+    draft.workspace_state,
+    (JSON.parse(preparationJson) as { basis?: unknown }).basis
+  );
+  if (!ledger) return null;
+  const action = ledger.actions.find(
+    (item) =>
+      item.actionId === input.requestId && item.generation?.transitionId === input.transitionId
+  );
+  if (!action)
+    throw new DraftAuthoringConflictError(
+      'Candidate belongs to a committed Draft round; generate it again'
+    );
+  return { draft, value: { kind: 'reused' as const, ledger, action } };
+}
 
 /** Append a candidate to the editable Draft after structural/replay and freshness checks.
  * Semantic posture verification belongs to Review, not the authoring boundary.
@@ -27,6 +62,8 @@ export async function publishWorkspaceGeneration(input: {
   const graph = await resolveTransitionProposalGraph(input.db, input.projectId, input.transitionId);
   if (graph.membership.workspaceId !== input.workspaceId || !graph.preparation)
     throw new DraftAuthoringConflictError('Candidate does not belong to this Workspace');
+  const retired = await resolveRetiredGeneration(input, graph.preparation.canonicalJson);
+  if (retired) return retired;
   const { candidate, draft } = await resolveWorkspaceGenerationBasis(
     input.db,
     input.projectId,

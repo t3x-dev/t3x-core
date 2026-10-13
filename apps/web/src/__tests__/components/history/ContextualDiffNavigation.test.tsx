@@ -67,13 +67,9 @@ describe('Contextual diff navigation', () => {
     expect(state.getByText('3')).toBeInTheDocument();
   });
 
-  it('searches within collapsed ancestors and inspects the matching change', () => {
+  it('selects a changed descendant and inspects its before and after values', () => {
     const state = mount();
-    fireEvent.click(state.getByRole('button', { name: 'Collapse services', exact: true }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search historical state' }), {
-      target: { value: 'services/api/replicas' },
-    });
-    fireEvent.click(state.getByText('replicas'));
+    fireEvent.click(state.getByTitle('services/api/replicas'));
     const inspector = within(
       screen.getByRole('complementary', { name: 'History change walkthrough' })
     );

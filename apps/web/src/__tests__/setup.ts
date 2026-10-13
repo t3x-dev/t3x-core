@@ -22,6 +22,14 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
   };
 }
 
+if (typeof Element !== 'undefined' && typeof Element.prototype.scrollIntoView !== 'function') {
+  Object.defineProperty(Element.prototype, 'scrollIntoView', {
+    configurable: true,
+    value: () => undefined,
+    writable: true,
+  });
+}
+
 function installMemoryLocalStorage(): void {
   const currentStorage = globalThis.localStorage as Storage | undefined;
   if (

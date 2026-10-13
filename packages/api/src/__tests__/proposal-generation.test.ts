@@ -245,22 +245,29 @@ describe('governed Proposal generation', () => {
     expect(left.view.transitionId).toBe(right.view.transitionId);
     expect(generate).toHaveBeenCalledTimes(1);
     expect(generate.mock.calls[0]?.[0].prompt).toContain(
-      'create one change group\nper independently stated requirement'
+      'create one change group per\nindependently stated item'
     );
     expect(generate.mock.calls[0]?.[0].prompt).toContain(
-      'must become its own schema-valid collection member or tree node'
+      'A standalone item must\nbecome its own collection item'
     );
     expect(generate.mock.calls[0]?.[0].prompt).toContain(
-      "a root node's slots are on that root node"
+      '"content/trees" holds exactly that one tree and nothing else'
     );
     expect(generate.mock.calls[0]?.[0].prompt).toContain(
       'paths into the semantic tree MUST start with "content/trees/"'
     );
     expect(generate.mock.calls[0]?.[0].prompt).toContain(
-      'add each new requirement with one append operation'
+      'add each new collection item with one append operation'
     );
+    expect(generate.mock.calls[0]?.[0].prompt).not.toMatch(/\[key=prd\]/);
+    const schemaLayout = generate.mock.calls[0]?.[0].schemaLayout;
+    expect(schemaLayout?.rootPath).toBe(`content/trees/[key=${schemaLayout?.rootKey}]`);
+    expect(schemaLayout?.nodes.length).toBeGreaterThan(0);
     expect(generate.mock.calls[0]?.[0].prompt).toContain(
       '"append" is the operation name beside "set"'
+    );
+    expect(generate.mock.calls[0]?.[0].prompt).toContain(
+      'Mark the whole group inferred and give basisPointers'
     );
     expect(left.view.precondition.policyDigest).not.toBeNull();
     const graph = await resolveTransitionProposalGraph(db, data.projectId, left.view.transitionId);
@@ -287,6 +294,144 @@ describe('governed Proposal generation', () => {
     expect(reused.reused).toBe(true);
     expect(reused.view.transitionId).toBe(left.view.transitionId);
     expect(generate).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes the Compose conversation transcript into the generation model', async () => {
+    const data = await fixture('Conversation memory');
+    const generate = vi.fn(async () => ({
+      draft: draft(),
+      usage: { inputTokens: 11, outputTokens: 7 },
+    }));
+
+    await generateTransitionProposal({
+      db,
+      projectId: data.projectId,
+      requestId: 'generation:conversation',
+      requester: { kind: 'human', id: 'user:conversation' },
+      request: {
+        workspaceId: data.workspaceId,
+        posture: 'guided',
+        instruction: 'Summarize the conversation into schema-aligned changes.',
+        sourceMaterialIds: [data.material.id],
+        conversationTranscript: 'You: Raise allocation to 25%.\n\nAssistant: That is on page 3.',
+      },
+      resolveModel: async () => model(generate),
+      inference: inference(data.projectId),
+    });
+
+    expect(generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationTranscript: 'You: Raise allocation to 25%.\n\nAssistant: That is on page 3.',
+        context: expect.objectContaining({
+          memories: [expect.objectContaining({ mediaType: 'text/plain;charset=utf-8' })],
+        }),
+      })
+    );
+  });
+
+  it('passes attached images as memories but never as quotable Sources', async () => {
+    const data = await fixture('Image memory');
+    const image = await createMaterial(db, {
+      project_id: data.projectId,
+      source_type: 'image',
+      title: 'whiteboard.png',
+      mime_type: 'image/png',
+      content_text: 'iVBORw0KGgo=',
+      content_hash: 'test:image-memory',
+    });
+    const generate = vi.fn(async () => ({
+      draft: draft(),
+      usage: { inputTokens: 11, outputTokens: 7 },
+    }));
+    const request = {
+      workspaceId: data.workspaceId,
+      posture: 'guided' as const,
+      instruction: 'Use the whiteboard photo.',
+      sourceMaterialIds: [data.material.id],
+      imageMaterialIds: [image.id],
+    };
+
+    await generateTransitionProposal({
+      db,
+      projectId: data.projectId,
+      requestId: 'generation:image',
+      requester: { kind: 'human', id: 'user:image' },
+      request,
+      resolveModel: async () => model(generate),
+      inference: inference(data.projectId),
+    });
+
+    const input = generate.mock.calls[0]?.[0];
+    expect(input?.sources.map((source) => source.materialId)).toEqual([data.material.id]);
+    expect(input?.context.memories.at(-1)).toEqual(
+      expect.objectContaining({
+        uri: expect.stringContaining(`/materials/${image.id}`),
+        mediaType: 'image/png',
+      })
+    );
+    expect(input?.images).toEqual({
+      memoryIndexOffset: input!.context.memories.length - 1,
+      items: [expect.objectContaining({ materialId: image.id, data: 'iVBORw0KGgo=' })],
+    });
+
+    await expect(
+      generateTransitionProposal({
+        db,
+        projectId: data.projectId,
+        requestId: 'generation:image-as-source',
+        requester: { kind: 'human', id: 'user:image' },
+        request: { ...request, sourceMaterialIds: [image.id], imageMaterialIds: [] },
+        resolveModel: async () => model(generate),
+        inference: inference(data.projectId),
+      })
+    ).rejects.toThrow('is not quotable text and cannot be a Source');
+  });
+
+  it('aligns drifted provider drafts so guided conversation summaries can compile', async () => {
+    const data = await fixture('Aligned conversation draft');
+    const generate = vi.fn(async () => ({
+      draft: {
+        schema: 't3x.dev/proposal-generation-draft/v1',
+        version: 1,
+        posture: 'source_only',
+        intent: { mode: 'authored', value: 'Summarize the conversation', evidencePointers: [] },
+        rationale: { mode: 'unspecified' },
+        changes: [
+          {
+            id: 'audience',
+            operations: [{ add: { path: 'prd/audience', value: 'enterprise operators' } }],
+            claimedOrigin: 'inferred',
+            evidencePointers: [],
+            basisPointers: [{ kind: 'search_result', index: 0 }],
+            assumptions: [],
+            reason: 'The conversation asks for a structured audience slot',
+            challenges: [],
+          },
+        ],
+        alternatives: [],
+        warnings: [],
+      },
+      usage: { inputTokens: 11, outputTokens: 7 },
+    }));
+
+    const generated = await generateTransitionProposal({
+      db,
+      projectId: data.projectId,
+      requestId: 'generation:aligned-conversation',
+      requester: { kind: 'human', id: 'user:aligned' },
+      request: {
+        workspaceId: data.workspaceId,
+        posture: 'guided',
+        instruction: 'Summarize the conversation into schema-aligned changes.',
+        sourceMaterialIds: [data.material.id],
+        conversationTranscript: 'You: Raise allocation to 25%.',
+      },
+      resolveModel: async () => model(generate),
+      inference: inference(data.projectId),
+    });
+
+    expect(generated.reused).toBe(false);
+    expect(generated.view.generation?.groups[0]?.origin).toBe('inferred');
   });
 
   it('rejects forged quote pointers without persisting a Proposal', async () => {
@@ -550,6 +695,11 @@ it('generates incrementally over saved manual edits, then publishes one verified
   expect(view.pendingCandidates).toEqual([]);
   expect(view.selected?.cards).toHaveLength(1);
   expect(view.netDiff).toHaveLength(2);
+  expect(view.selected?.before).toEqual({ manual: 'keep' });
+  expect(view.selected?.after).toEqual({
+    manual: 'keep',
+    prd: { audience: 'enterprise operators' },
+  });
   const finalGraph = await materializeTransitionProposal({
     db,
     projectId: data.projectId,
@@ -597,6 +747,16 @@ it('generates incrementally over saved manual edits, then publishes one verified
   });
   expect(committed.commitDigest).toMatch(/^sha256:/);
   expect((await publishWorkspaceGeneration(input)).value.kind).toBe('reused');
+  await expect(
+    publishWorkspaceGeneration({ ...input, requestId: 'publish-again' })
+  ).rejects.toThrow('committed Draft round');
+  const renewed = await readWorkspaceAuthoring(db, {
+    projectId: data.projectId,
+    workspaceId: data.workspaceId,
+  });
+  expect(renewed.basis.refHead).toBe(committed.commitDigest);
+  expect(renewed.base).toEqual({ manual: 'keep', prd: { audience: 'enterprise operators' } });
+  expect(renewed.actions).toEqual([]);
 });
 
 it('allows structurally valid Draft edits despite semantic findings and retains them for Review', async () => {

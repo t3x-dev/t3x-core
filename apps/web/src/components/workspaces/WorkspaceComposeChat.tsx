@@ -5,6 +5,7 @@ import {
   Bot,
   Check,
   Copy,
+  FileText,
   Loader2,
   Search,
   Sparkles,
@@ -20,8 +21,12 @@ import {
   ConversationScrollButton,
 } from '@/components/ai-elements/conversation';
 import { MessageAction, MessageActions, MessageResponse } from '@/components/ai-elements/message';
-import type { WorkspaceAssistantActivity as AssistantActivity } from '@/hooks/sourceThreads/useSourceThreadGeneration';
-import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
+import type { ChatMessageFile, ChatMessageImage } from '@/hooks/conversations/useChatHistory';
+import { useMaterialImageSrc } from '@/hooks/materials/useMaterialImageSrc';
+import type {
+  WorkspaceAssistantActivity as AssistantActivity,
+  useSourceThreadGeneration,
+} from '@/hooks/sourceThreads/useSourceThreadGeneration';
 import { cn } from '@/utils/cn';
 import {
   type AssistantActivityRecord,
@@ -30,7 +35,33 @@ import {
 } from './WorkspaceAssistantActivity';
 import styles from './WorkspaceComposeChat.module.css';
 
-type WorkspaceComposeChatState = WorkspaceComposeReviewController['chat'];
+export interface WorkspaceComposeMessage {
+  author: string;
+  content: string;
+  id: string;
+  role: 'assistant' | 'user';
+  images?: ChatMessageImage[];
+  files?: ChatMessageFile[];
+}
+
+type SourceThreadGeneration = ReturnType<typeof useSourceThreadGeneration>;
+
+export interface WorkspaceComposeChatState {
+  error: string | null;
+  input: string;
+  isLoading: boolean;
+  isStreaming: boolean;
+  citations: SourceThreadGeneration['citations'];
+  isThinking: boolean;
+  messages: WorkspaceComposeMessage[];
+  searchQuery: SourceThreadGeneration['searchQuery'];
+  send: () => void;
+  setInput: (value: string) => void;
+  stop: () => void;
+  thinkingContent: string;
+  warning: SourceThreadGeneration['warning'];
+}
+
 type WorkspaceComposeCitation = NonNullable<WorkspaceComposeChatState['citations']>[number];
 
 const STREAM_ANIMATION = {
@@ -56,7 +87,6 @@ function discussionText(content: string) {
 interface WorkspaceComposeChatProps {
   chat: WorkspaceComposeChatState;
   variant?: 'default' | 'discussion';
-  discussionAction?: ReactNode;
   assistantActivity?: AssistantActivity | null;
   assistantPublication?: AssistantPublication | null;
   assistantPublishing?: boolean;
@@ -66,7 +96,6 @@ interface WorkspaceComposeChatProps {
 export function WorkspaceComposeChat({
   chat,
   variant = 'default',
-  discussionAction,
   assistantActivity,
   assistantPublication,
   assistantPublishing = false,
@@ -112,7 +141,7 @@ export function WorkspaceComposeChat({
           <ConversationEmptyState
             className={cn(
               'my-auto min-h-[260px] items-start gap-5 px-0 py-10 text-left',
-              variant === 'discussion' && 'justify-start'
+              variant === 'discussion' && styles.discussionWelcome
             )}
           >
             <span className="flex size-10 items-center justify-center rounded-xl border border-[var(--stroke-divider)] bg-[var(--surface-app)]">
@@ -123,8 +152,16 @@ export function WorkspaceComposeChat({
               )}
             </span>
             <div>
-              <h2 className="text-2xl font-semibold tracking-tight">
-                {variant === 'discussion' ? 'Think it through.' : 'What would you like to change?'}
+              <h2
+                className={
+                  variant === 'discussion'
+                    ? styles.welcomeTitle
+                    : 'text-2xl font-semibold tracking-tight'
+                }
+              >
+                {variant === 'discussion'
+                  ? 'Work through it together.'
+                  : 'What would you like to change?'}
               </h2>
               {variant === 'discussion' ? (
                 <p className="mt-2 max-w-[32rem] text-[13px] leading-5 text-[var(--text-secondary)]">
@@ -235,10 +272,24 @@ export function WorkspaceComposeChat({
         {!chat.isStreaming && citations.length > 0 && latestAssistantId ? (
           <CitationList citations={citations} />
         ) : null}
-        {discussionAction}
       </ConversationContent>
       <ConversationScrollButton aria-label="Scroll to latest message" />
     </Conversation>
+  );
+}
+
+function MessageImage({ image }: { image: ChatMessageImage }) {
+  const src = useMaterialImageSrc(image);
+  if (!src) return <span aria-hidden="true" className={styles.messageImage} />;
+  return (
+    <Image
+      alt="Attached image"
+      className={styles.messageImage}
+      height={120}
+      src={src}
+      unoptimized
+      width={120}
+    />
   );
 }
 
@@ -258,6 +309,20 @@ function ComposeChatMessage({
   variant: 'default' | 'discussion';
 }) {
   const isUser = message.role === 'user';
+  const images =
+    isUser && (message.images?.length || message.files?.length) ? (
+      <div className={styles.messageImages}>
+        {message.images?.map((image) => (
+          <MessageImage image={image} key={image.id} />
+        ))}
+        {message.files?.map((file) => (
+          <span className={styles.messageFile} key={file.id} title={file.name}>
+            <FileText aria-hidden="true" />
+            <span>{file.name}</span>
+          </span>
+        ))}
+      </div>
+    ) : null;
 
   if (variant === 'discussion') {
     const Avatar = isUser ? UserRound : Bot;
@@ -280,6 +345,7 @@ function ComposeChatMessage({
           ) : null}
         </div>
         {children}
+        {images}
         {isUser || message.content.trim() ? (
           <div className={styles.discussionBubble}>
             {isUser ? (
@@ -310,6 +376,7 @@ function ComposeChatMessage({
           <div className={styles.messageHeader}>
             <strong>You</strong>
           </div>
+          {images}
           <p className={styles.userText}>{message.content}</p>
         </div>
       </div>

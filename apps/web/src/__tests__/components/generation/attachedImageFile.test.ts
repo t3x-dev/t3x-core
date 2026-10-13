@@ -7,7 +7,7 @@ import {
 } from '@/components/generation/attachedImageFile';
 
 describe('clipboard images', () => {
-  it('keeps supported image files from a paste', () => {
+  it('keeps png, jpeg, gif, and webp files from a paste', () => {
     const png = new File(['png'], 'shot.png', { type: 'image/png' });
     const text = new File(['note'], 'note.txt', { type: 'text/plain' });
     const files = clipboardImageFiles({

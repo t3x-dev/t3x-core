@@ -1,0 +1,27 @@
+/* Keep Radix's native viewport and drag behavior; only restyle the overlay. */
+.subtle [data-slot="state-scroll-area-scrollbar"] {
+  border: 0;
+  background: transparent;
+  padding: 2px;
+}
+.subtle [data-slot="state-scroll-area-scrollbar"][data-orientation="vertical"] {
+  width: 8px;
+}
+.subtle [data-slot="state-scroll-area-scrollbar"][data-orientation="horizontal"] {
+  height: 8px;
+}
+.subtle [data-slot="state-scroll-area-thumb"] {
+  background: color-mix(in srgb, var(--text-tertiary) 28%, transparent);
+  transition: background-color 150ms ease;
+}
+.subtle [data-slot="state-scroll-area-scrollbar"]:hover [data-slot="state-scroll-area-thumb"] {
+  background: color-mix(in srgb, var(--text-tertiary) 52%, transparent);
+}
+.subtle [data-slot="state-scroll-area-scrollbar"]:active [data-slot="state-scroll-area-thumb"] {
+  background: color-mix(in srgb, var(--text-secondary) 65%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .subtle [data-slot="state-scroll-area-thumb"] {
+    transition: none;
+  }
+}

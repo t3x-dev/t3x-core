@@ -44,7 +44,7 @@ test('public first-impression surfaces avoid the retired meaning-first frame', (
     'packages/yops/README.md',
     'apps/web/src/app/page.tsx',
     'apps/web/src/components/onboarding/FirstRunDemoOverlay.tsx',
-    'apps/web/src/components/chat/ChatWorkspace.tsx',
+    'apps/web/src/components/workspaces/WorkspaceComposeReviewSurface.tsx',
     'tools/screenshot-demo.mjs',
   ];
   const oldPhrases = [

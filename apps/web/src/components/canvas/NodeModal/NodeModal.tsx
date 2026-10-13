@@ -3,18 +3,13 @@
 import type { Node } from '@xyflow/react';
 import { X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { getProjectIdWorkspacePath } from '@/domain/project/repoPath';
 import { useCanvasStore } from '@/store/canvasStore';
-import type {
-  CanvasNodeData,
-  ConversationConstraints,
-  DraftConstraintOverrides,
-} from '@/types/nodes';
+import type { CanvasNodeData } from '@/types/nodes';
 import { cn } from '@/utils/cn';
 import { glass } from '@/utils/theme';
-import { ConversationView } from './ConversationView';
 
 export type NodeQuickAction = {
   key: string;
@@ -28,68 +23,28 @@ interface NodeModalProps {
   node?: Node<CanvasNodeData>;
   onClose: () => void;
   onUpdate: (patch: Partial<CanvasNodeData>) => void;
-  quickActions?: NodeQuickAction[];
-  onSaveConstraints?: (constraints: ConversationConstraints) => void;
-  effectiveConstraints?: {
-    clauses: ConversationConstraints['clauses'];
-    must_have: string[];
-    mustnt_have: string[];
-  };
-  onUpdateConstraintOverrides?: (overrides: Partial<DraftConstraintOverrides>) => void;
-  isConversationLocked?: boolean;
   viewMode?: 'conversation' | 'commit';
 }
 
-export function NodeModal({
-  node,
-  onClose,
-  onUpdate,
-  quickActions,
-  onSaveConstraints,
-  effectiveConstraints,
-  onUpdateConstraintOverrides,
-  isConversationLocked,
-  viewMode = 'commit',
-}: NodeModalProps) {
+export function NodeModal({ node, onClose, viewMode = 'commit' }: NodeModalProps) {
   const router = useRouter();
   const projectId = useCanvasStore((state) => state.projectId);
+  const data = node?.data;
+  const isUnit = data?.kind === 'unit';
+  const isConversation =
+    isUnit && (data?.commitStatus === 'staging' || viewMode === 'conversation');
+  const handoffPath = data && isConversation ? buildWorkspaceHandoffPath(projectId, data) : null;
 
-  if (!node) return null;
+  useEffect(() => {
+    if (!handoffPath) return;
+    router.push(handoffPath);
+    onClose();
+  }, [handoffPath, onClose, router]);
 
-  const data = node.data;
-  if (!data) return null;
+  if (!data || isConversation) return null;
 
-  const isUnit = data.kind === 'unit';
-  const isStagingUnit = isUnit && data.commitStatus === 'staging';
-  const isCommittedUnit = isUnit && data.commitStatus === 'committed';
-
-  const isConversation = isStagingUnit || (isUnit && viewMode === 'conversation');
-
-  if (isConversation) {
-    return (
-      <ConversationView
-        node={node}
-        onClose={onClose}
-        onUpdate={onUpdate}
-        projectId={projectId || ''}
-        isStagingUnit={isStagingUnit}
-        quickActions={quickActions}
-        onSaveConstraints={onSaveConstraints}
-        effectiveConstraints={effectiveConstraints}
-        onUpdateConstraintOverrides={onUpdateConstraintOverrides}
-        isConversationLocked={isConversationLocked}
-        onOpenWorkspace={() => {
-          router.push(buildWorkspaceHandoffPath(projectId, data));
-          onClose();
-        }}
-      />
-    );
-  }
-
-  // Committed versions are inspected directly on the Canvas. The legacy
-  // commit-mode modal is intentionally unavailable, while conversation mode
-  // remains usable when the node has source discussion.
-  if (isCommittedUnit) return null;
+  // Committed versions are inspected directly on the Canvas.
+  if (isUnit && data.commitStatus === 'committed') return null;
 
   // Fallback for unknown node types
   return (

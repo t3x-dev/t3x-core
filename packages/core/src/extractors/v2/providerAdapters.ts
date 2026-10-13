@@ -2,9 +2,13 @@ import type { LLMProviderError } from '../../llm/types';
 import { createExtractionFailure } from './failures';
 import { normalizeExtractionText } from './normalization';
 
+export type OpenAIChatContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
 export interface OpenAIChatMessage {
   role: string;
-  content: string;
+  content: string | OpenAIChatContentPart[];
 }
 
 export interface OpenAIChatCompletionBodyInput {
@@ -14,10 +18,15 @@ export interface OpenAIChatCompletionBodyInput {
   messages: OpenAIChatMessage[];
   stop?: string[];
   response_format?: Record<string, unknown>;
+  reasoningEffort?: 'low' | 'medium' | 'high';
 }
 
 function usesOpenAICompletionTokenField(model: string): boolean {
   return /^gpt-5(\.|-|$)/.test(model);
+}
+
+export function supportsOpenAIReasoningEffort(model: string): boolean {
+  return /^(gpt-5|o[134])/.test(model);
 }
 
 export function buildOpenAIChatCompletionBody(
@@ -33,6 +42,11 @@ export function buildOpenAIChatCompletionBody(
     body.max_completion_tokens = input.maxTokens;
   } else {
     body.max_tokens = input.maxTokens;
+  }
+
+  if (input.reasoningEffort && supportsOpenAIReasoningEffort(input.model)) {
+    body.reasoning_effort = input.reasoningEffort;
+    delete body.temperature;
   }
 
   if (input.stop) {

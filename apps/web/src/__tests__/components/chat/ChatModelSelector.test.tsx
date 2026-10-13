@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatModelSelector } from '@/components/chat/ChatModelSelector';
 import { GenerationModelSelector } from '@/components/generation/GenerationModelSelector';
+import { useChatSessionStore } from '@/store/chatSessionStore';
 import { useSettingsModalStore } from '@/store/settingsModalStore';
 
 const useAvailableModelsMock = vi.fn();
@@ -17,6 +18,7 @@ describe('ChatModelSelector', () => {
     vi.clearAllMocks();
     act(() => {
       useSettingsModalStore.setState(useSettingsModalStore.getInitialState());
+      useChatSessionStore.setState(useChatSessionStore.getInitialState());
     });
     useAvailableModelsMock.mockReturnValue({ providers: [] });
   });
@@ -77,6 +79,9 @@ describe('ChatModelSelector', () => {
       'Add Models'
     );
 
+    fireEvent.click(screen.getByRole('button', { name: /ProviderOpenAI/i }));
+    expect(screen.getByRole('region', { name: 'Providers' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'OpenAI' }));
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'GPT 5.4 Mini' }));
     expect(onModelChange).toHaveBeenCalledWith('openai', 'gpt-5.4-mini');
   });
@@ -114,14 +119,21 @@ describe('ChatModelSelector', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Select model: GPT 5.4/i }));
-    fireEvent.click(screen.getByRole('button', { name: /EffortLow/i }));
+    fireEvent.click(screen.getByRole('button', { name: /EffortMedium/i }));
     expect(await screen.findByRole('region', { name: 'Effort' })).toBeTruthy();
-    expect(screen.getByRole('menuitemradio', { name: 'Low' }).getAttribute('aria-checked')).toBe(
+    expect(screen.getByRole('menuitemradio', { name: 'Medium' }).getAttribute('aria-checked')).toBe(
       'true'
     );
     expect(screen.getByRole('menuitemradio', { name: 'High' })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'High' }));
     expect(onThinkingChange).toHaveBeenCalledWith(true);
+    expect(useChatSessionStore.getState().reasoningEffort).toBe('high');
+    fireEvent.click(screen.getByRole('button', { name: /Select model: GPT 5.4/i }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Fast responses' }));
+    expect(useChatSessionStore.getState().fastEnabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: /ContextAuto/i }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Compact' }));
+    expect(useChatSessionStore.getState().contextMode).toBe('compact');
   });
 });

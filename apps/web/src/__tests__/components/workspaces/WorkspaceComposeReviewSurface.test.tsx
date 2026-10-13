@@ -27,6 +27,14 @@ const bootstrapMocks = vi.hoisted(() => ({
 vi.mock('@/hooks/workspaces/useWorkspaceAuthoringBootstrap', () => ({
   useWorkspaceAuthoringBootstrap: () => bootstrapMocks.value,
 }));
+vi.mock('@/hooks/schemas/useProjectYSchemaVersions', () => ({
+  useProjectYSchemaVersions: () => ({
+    error: undefined,
+    pending: false,
+    refresh: vi.fn(),
+    versions: [],
+  }),
+}));
 vi.mock('@/hooks/workspaces/useComposeActivity', () => ({
   useComposeActivity: () =>
     activityMocks.value ?? {
@@ -165,7 +173,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     navigationMocks.searchParams = new URLSearchParams();
   });
 
-  function renderAuthoringComposer() {
+  it('selects list rows directly and keeps Details or Chat permanently visible', async () => {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     // Ledger presence must not silently replace the established Compose interface.
     Object.assign(candidate, { authoringLedger: { actions: [] } });
@@ -225,6 +233,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         nextBeforeSequence: null,
       },
     };
+    const uploadFile = vi.fn().mockResolvedValue(true);
     const controller = {
       busyAction: null,
       candidate,
@@ -254,6 +263,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       notice: null,
       scenarios: { options: [], selectedId: candidate.id },
       sourceBusy: false,
+      uploadFile,
     } as unknown as WorkspaceComposeReviewController;
     const branchChange = vi.fn();
     render(
@@ -267,20 +277,17 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
 
-    return { branchChange, publishCandidate };
-  }
-
-  it('keeps the original Compose surface and composer even when an authoring ledger exists', () => {
-    const { branchChange } = renderAuthoringComposer();
-    const addSource = screen.getByRole('button', { name: 'Add source' });
     expect(screen.getByRole('tab', { name: 'Compose' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Sources' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Node history' })).toHaveAttribute(
-      'aria-selected',
+    expect(screen.queryByRole('tablist', { name: 'Change context' })).not.toBeInTheDocument();
+    const discussion = screen.getByRole('complementary', { name: 'Discuss change' });
+    expect(within(discussion).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
+    expect(within(discussion).getByTitle(candidate.title)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute(
+      'aria-pressed',
       'true'
     );
     expect(screen.queryByRole('button', { name: 'Review complete draft' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Chat', exact: true }));
     expect(sourceGenerationMocks.options?.workspaceAssistant?.allowProposal).toBe(true);
     expect(screen.queryByText('Generate a proposal from change requests')).not.toBeInTheDocument();
     expect(screen.queryByText('Proposal ready')).not.toBeInTheDocument();
@@ -292,11 +299,59 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
     expect(composer).toContainElement(modelSelector);
     expect(composer).toContainElement(send);
+    const sources = screen.getByRole('button', { name: 'Workspace sources (0 included)' });
+    expect(composer).toContainElement(sources);
+    expect(sources.compareDocumentPosition(modelSelector) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    fireEvent.change(screen.getByLabelText('Upload source material'), {
+      target: { files: [new File(['exact source'], 'source.txt', { type: 'text/plain' })] },
+    });
+    expect(uploadFile).toHaveBeenCalledWith(expect.objectContaining({ name: 'source.txt' }));
+    const allChanges = screen.getByRole('tab', { name: 'All changes' });
+    const latestAction = screen.getByRole('tab', { name: 'Latest' });
+    expect(latestAction).toHaveAttribute('aria-selected', 'true');
+    expect(
+      screen.getByRole('heading', { name: 'Proposed changes' }).closest('section')
+    ).toContainElement(screen.getByRole('tablist', { name: 'Change scope' }));
+    expect(
+      latestAction.compareDocumentPosition(screen.getByRole('button', { name: 'New change' })) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(screen.getByRole('heading', { name: 'Proposed changes' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Expand Approval' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete Approval' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect Approval: rollout/approval' }));
+    expect(within(discussion).getByRole('heading', { name: 'Details' })).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Inspect Approval: rollout/approval' })
+    ).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(discussion).getByRole('button', { name: 'Ask AI' }));
+    expect(screen.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    expect(screen.queryByRole('heading', { name: 'Event evidence' })).not.toBeInTheDocument();
+    fireEvent.click(allChanges);
+    expect(allChanges).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect Approval: rollout/approval' }));
+    expect(within(discussion).getByRole('heading', { name: 'Details' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    );
+    fireEvent.click(within(discussion).getByRole('button', { name: 'Ask AI' }));
+    expect(within(discussion).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Chat', exact: true }));
+    expect(within(discussion).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
+    expect(screen.queryByText('Before event')).not.toBeInTheDocument();
+    fireEvent.click(latestAction);
+    expect(latestAction).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByText('Action history is not available for this draft.')).toBeNull();
+
     expect(screen.queryByRole('button', { name: 'Add attachment' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Workspace workflow tabs')).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: 'Workspace scenario' })).not.toBeInTheDocument();
-    expect(addSource.querySelector('.lucide-file-up')).toBeInTheDocument();
-    expect(addSource.querySelector('.lucide-database')).not.toBeInTheDocument();
     const branchSwitcher = screen.getByRole('button', { name: /Switch branches\/tags/ });
     expect(branchSwitcher).toHaveTextContent('main');
     fireEvent.click(branchSwitcher);
@@ -310,41 +365,11 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(modelSelector.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );
-  });
 
-  it('switches immutable action scopes and opens discussion for the inspected node', () => {
-    renderAuthoringComposer();
-    const allChanges = screen.getByRole('tab', { name: 'All changes' });
-    const latestAction = screen.getByRole('tab', { name: 'Latest' });
-    expect(latestAction).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('heading', { name: 'Sources' }).closest('section')).toContainElement(
-      screen.getByRole('tablist', { name: 'Change scope' })
-    );
-    expect(
-      screen.getByRole('button', { name: 'Add manually' }).compareDocumentPosition(latestAction) &
-        Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(screen.getByRole('heading', { name: 'Proposed changes' })).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Expand Approval' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Discuss Approval' }));
-    expect(screen.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.queryByRole('heading', { name: 'Event evidence' })).not.toBeInTheDocument();
-    fireEvent.click(allChanges);
-    expect(allChanges).toHaveAttribute('aria-selected', 'true');
-    expect(screen.queryByText('Before event')).not.toBeInTheDocument();
-    fireEvent.click(latestAction);
-    expect(latestAction).toHaveAttribute('aria-selected', 'true');
-    expect(screen.queryByText('Action history is not available for this draft.')).toBeNull();
-  });
-
-  it('preserves failed proposal publication and exposes retry after reopening discussion', async () => {
-    const { publishCandidate } = renderAuthoringComposer();
-    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Close discussion' }));
-    expect(screen.queryByRole('complementary', { name: 'Discuss change' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Show discussion' }));
-    expect(screen.getByRole('complementary', { name: 'Discuss change' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
+    expect(screen.queryByRole('button', { name: 'Close discussion' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show discussion' })).not.toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Discuss change' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Chat', exact: true }));
     vi.stubGlobal('crypto', {
       ...globalThis.crypto,
       randomUUID: vi.fn(() => 'request-1'),
@@ -362,45 +387,284 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Candidate posture verification has not passed.'
     );
-    expect(publishCandidate).toHaveBeenCalled();
   });
 
-  it('routes composer send and file input to the controller', () => {
+  it('stages manual cards locally and saves the selected subset as one P', async () => {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
-    const send = vi.fn();
-    const generateChanges = vi.fn().mockResolvedValue(true);
-    const uploadFile = vi.fn().mockResolvedValue(true);
+    Object.assign(candidate, { authoringLedger: { actions: [] } });
+    const action = {
+      actionId: 'a1',
+      sequence: 1,
+      channel: 'manual' as const,
+      actor: { id: 'Maya', kind: 'human' as const },
+      publishedAt: '2026-09-21T11:53:00Z',
+      beforeRevision: 0,
+      afterRevision: 1,
+      operations: [],
+    };
+    const cards = [{ nodeId: 'allocation', path: 'rollout/allocation', before: 20, after: 25 }];
+    const publish = vi.fn().mockResolvedValue({ kind: 'published' });
+    activityMocks.value = {
+      enabled: true,
+      loading: false,
+      error: null,
+      actions: [action],
+      cards: { a1: cards },
+      cursor: null,
+      node: null,
+      nodeLoading: false,
+      nodeError: null,
+      nodeCursor: null,
+      notice: null,
+      newActivity: null,
+      compositionRevision: 1,
+      workspaceRevision: 1,
+      basis: { refName: 'main', refHead: null, baseDigest: 'base' },
+      refresh: vi.fn(),
+      loadOlder: vi.fn(),
+      loadLatest: vi.fn(),
+      inspectNode: vi.fn(),
+      selectActionNode: vi.fn(),
+      loadOlderNode: vi.fn(),
+      publish,
+      publishCandidate: vi.fn(),
+      createAssistantConversation: vi.fn(),
+      view: {
+        schema: 't3x.application/workspace-authoring-view/v1',
+        projectionVersion: 1,
+        workspaceRevision: 1,
+        compositionRevision: 1,
+        basis: { refName: 'main', refHead: null, baseDigest: 'base' },
+        actions: [action],
+        selected: { action, cards },
+        current: { rollout: { allocation: 25, channel: 'stable' } },
+        netDiff: cards,
+        node: null,
+        nextBeforeSequence: null,
+      },
+    };
+    render(
+      <WorkspaceComposeReviewSurface
+        branchOptions={['main']}
+        candidate={candidate}
+        controller={
+          {
+            busyAction: null,
+            candidate,
+            error: null,
+            hasCollaborationConflict: false,
+            isBusy: false,
+            materialSources: [],
+            notice: null,
+          } as unknown as WorkspaceComposeReviewController
+        }
+        mode="compose"
+        onModeChange={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect Allocation: rollout/allocation' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit', exact: true }));
+    fireEvent.change(screen.getByLabelText('New value'), {
+      target: { value: '30' },
+    });
+    fireEvent.change(screen.getByLabelText('Reason'), {
+      target: { value: 'Adjust pilot allocation' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save change' }));
+    expect(publish).not.toHaveBeenCalled();
+    expect(screen.getByText('Ungrouped manual changes')).toBeInTheDocument();
+    expect(
+      screen.getByRole('checkbox', { name: 'Include Allocation in the next P' })
+    ).toBeChecked();
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'New change' }), { key: 'Enter' });
+    expect(screen.queryByRole('menuitem', { name: 'Add manually' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Edit a field' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit structure' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Current structure' });
+    expect(within(dialog).getByText('allocation')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add inside rollout' }));
+    fireEvent.change(within(dialog).getByLabelText('New name'), {
+      target: { value: 'regions' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('What to add'), {
+      target: { value: 'field' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('New value'), {
+      target: { value: 'us' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Apply' }));
+    await waitFor(() => expect(within(dialog).getByText('regions')).toBeInTheDocument());
+    expect(publish).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getAllByRole('button', { name: 'Close' })[0]!);
+    await waitFor(() =>
+      expect(screen.getByRole('checkbox', { name: 'Include Regions in the next P' })).toBeChecked()
+    );
+
+    const inspectNode = activityMocks.value.inspectNode;
+    vi.mocked(inspectNode).mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect Regions: rollout/regions' }));
+    expect(screen.getByText('Unsaved change · not yet applied to Draft')).toBeVisible();
+    expect(screen.getByLabelText('Selected field details')).toHaveTextContent('us');
+    expect(inspectNode).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Chat', exact: true }));
+    expect(sourceGenerationMocks.options?.workspaceAssistant?.allowProposal).toBe(false);
+    expect(
+      screen.getByText(
+        'Save every ungrouped manual change as a P before asking the assistant to add changes.'
+      )
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Include Regions in the next P' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save selected as P (1)' }));
+    await waitFor(() =>
+      expect(publish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operations: [{ set: { path: 'rollout/allocation', value: 30 } }],
+        })
+      )
+    );
+    expect(
+      screen.getByRole('checkbox', { name: 'Include Regions in the next P' })
+    ).not.toBeChecked();
+    expect(
+      screen.queryByRole('checkbox', { name: 'Include Allocation in the next P' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('stages object slot edits as one object row and publishes the selected field operations as P', async () => {
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    Object.assign(candidate, { authoringLedger: { actions: [] } });
+    const path = 'tasks/[key=flight]';
+    const before = { key: 'flight', slots: { goal: '开飞机的任务', done: false }, children: [] };
+    const current = { ...before, slots: { ...before.slots, done: true } };
+    const action = {
+      actionId: 'a1',
+      sequence: 1,
+      channel: 'manual',
+      actor: { id: 'Maya', kind: 'human' },
+      publishedAt: '2026-09-21T11:53:00Z',
+      beforeRevision: 0,
+      afterRevision: 1,
+      operations: [],
+      reason: 'Prepare flight',
+    };
+    const cards = [{ nodeId: 'task-id', path, before, after: current }];
+    const publish = vi.fn().mockResolvedValue({ kind: 'published' });
+    activityMocks.value = {
+      enabled: true,
+      loading: false,
+      error: null,
+      actions: [action],
+      cards: { a1: cards },
+      cursor: null,
+      node: null,
+      nodeLoading: false,
+      nodeError: null,
+      nodeCursor: null,
+      notice: null,
+      newActivity: null,
+      compositionRevision: 1,
+      workspaceRevision: 1,
+      basis: { refName: 'main', refHead: null, baseDigest: 'base' },
+      refresh: vi.fn(),
+      loadOlder: vi.fn(),
+      loadLatest: vi.fn(),
+      inspectNode: vi.fn(),
+      selectActionNode: vi.fn(),
+      loadOlderNode: vi.fn(),
+      publish,
+      publishCandidate: vi.fn(),
+      createAssistantConversation: vi.fn(),
+      view: {
+        schema: 't3x.application/workspace-authoring-view/v1',
+        projectionVersion: 1,
+        workspaceRevision: 1,
+        compositionRevision: 1,
+        basis: { refName: 'main', refHead: null, baseDigest: 'base' },
+        actions: [action],
+        selected: { action, cards },
+        base: { tasks: [before] },
+        current: { tasks: [current] },
+        netDiff: cards,
+        node: null,
+        nextBeforeSequence: null,
+      },
+    } as unknown as ReturnType<typeof useComposeActivity>;
+    render(
+      <WorkspaceComposeReviewSurface
+        branchOptions={['main']}
+        candidate={candidate}
+        controller={
+          {
+            busyAction: null,
+            candidate,
+            error: null,
+            hasCollaborationConflict: false,
+            isBusy: false,
+            materialSources: [],
+            notice: null,
+          } as unknown as WorkspaceComposeReviewController
+        }
+        mode="compose"
+        onModeChange={vi.fn()}
+      />
+    );
+    const publishedEvent = screen.getByLabelText('Event: Prepare flight');
+    fireEvent.click(
+      within(publishedEvent).getByRole('button', { name: `Inspect Flight: ${path}` })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit', exact: true }));
+    fireEvent.change(screen.getByLabelText('goal'), { target: { value: '学习飞行' } });
+    fireEvent.change(screen.getByLabelText('done'), { target: { value: 'false' } });
+    fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'Start with training' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save change' }));
+    const ungrouped = await screen.findByLabelText('Event: Ungrouped manual changes');
+    expect(
+      within(ungrouped).getAllByRole('button', { name: `Inspect Flight: ${path}` })
+    ).toHaveLength(1);
+    expect(within(ungrouped).getAllByRole('checkbox')).toHaveLength(2);
+    expect(publish).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Edit', exact: true })).toBeEnabled()
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit', exact: true }));
+    expect(screen.getByRole('textbox', { name: 'goal', exact: true })).toHaveValue('学习飞行');
+    expect(screen.getByRole('combobox', { name: 'done', exact: true })).toHaveValue('false');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    // Saving the unchecked goal later must remain possible without widening the done operation.
+    fireEvent.click(
+      within(ungrouped).getByRole('checkbox', { name: 'Include goal in the next P' })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save selected as P (1)' }));
+    await waitFor(() =>
+      expect(publish).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          operations: [{ set: { path: `${path}/slots/done`, value: false } }],
+          reason: 'Start with training',
+        })
+      )
+    );
+    expect(
+      within(screen.getByLabelText('Event: Ungrouped manual changes')).getByRole('checkbox')
+    ).not.toBeChecked();
+    expect(activityMocks.value.inspectNode).not.toHaveBeenCalled();
+  });
+
+  it('waits in Chat until the user enables Draft activity', () => {
+    bootstrapMocks.value.start.mockClear();
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     const controller = {
       busyAction: null,
       candidate,
-      chat: {
-        error: null,
-        input: 'Prepare the reviewed change.',
-        isLoading: false,
-        isStreaming: false,
-        messages: [],
-        send,
-        setInput: vi.fn(),
-        stop: vi.fn(),
-        warning: null,
-      },
       error: null,
-      generateChanges,
       hasCollaborationConflict: false,
       isBusy: false,
       materialSources: [],
-      model: {
-        availabilityError: null,
-        change: vi.fn(),
-        loading: false,
-        ready: true,
-        selectedModel: 'gpt-5.4-mini',
-        selectedProvider: 'openai',
-      },
       notice: null,
       scenarios: { options: [], selectedId: candidate.id },
       sourceBusy: false,
-      uploadFile,
     } as unknown as WorkspaceComposeReviewController;
     render(
       <WorkspaceComposeReviewSurface
@@ -411,24 +675,12 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
-    expect(send).toHaveBeenCalledOnce();
-
-    const enable = screen.getByRole('button', { name: 'Enable Draft activity' });
-    expect(
-      enable.compareDocumentPosition(screen.getByRole('button', { name: 'Add manually' })) &
-        Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
-    fireEvent.click(enable);
+    expect(screen.queryByRole('button', { name: 'Send message' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Generate changes/ })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Upload source material')).not.toBeInTheDocument();
+    expect(bootstrapMocks.value.start).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /Enable Draft activity/ }));
     expect(bootstrapMocks.value.start).toHaveBeenCalledOnce();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Generate changes' }));
-    expect(generateChanges).toHaveBeenCalledOnce();
-
-    fireEvent.change(screen.getByLabelText('Upload source material'), {
-      target: { files: [new File(['exact source'], 'source.txt', { type: 'text/plain' })] },
-    });
-    expect(uploadFile).toHaveBeenCalledWith(expect.objectContaining({ name: 'source.txt' }));
   });
 
   it('wires artifact, changed-node, and evidence controls to real review interactions', async () => {
@@ -537,7 +789,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(
       screen.queryByRole('navigation', { name: 'Workspace navigation' })
     ).not.toBeInTheDocument();
-    const inspectWithoutHistory = screen.getByRole('button', { name: 'Inspect Outcome' });
+    const inspectWithoutHistory = screen.getByRole('button', { name: /^Inspect Outcome:/ });
     expect(inspectWithoutHistory).toBeDisabled();
     fireEvent.click(inspectWithoutHistory);
     expect(prepareReview).not.toHaveBeenCalled();
@@ -566,7 +818,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.getByRole('navigation', { name: 'Review views' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Review' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('button', { name: 'Validation' })).not.toBeInTheDocument();
-    expect(document.querySelector('.workspace-rendered-review-theme')).toBeInTheDocument();
+    expect(document.querySelector('.workspace-rendered-review-theme')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Commit changes' })).toBeDisabled();
     controller.review.reviewSnapshot = {
       projectId: 'proj_1',
@@ -636,7 +888,11 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       })
     );
     expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
-    expect(screen.queryAllByRole('columnheader')).toHaveLength(0);
+    expect(screen.getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
+      'Field',
+      'Before',
+      'After',
+    ]);
     expect(screen.getByRole('table').querySelector('[data-diff-kind="added"]')).toBeNull();
     expect(
       screen
@@ -671,6 +927,125 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         'prd/requirements/canary/title'
       )
     ).toHaveTextContent('prd.requirements.canary.title');
+  });
+
+  it.each([
+    false,
+    true,
+  ])('reviews the latest Draft event rather than the empty repository base (update=%s)', async (update) => {
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    Object.assign(candidate, { authoringLedger: { actions: [] } });
+    navigationMocks.searchParams = new URLSearchParams('workspaceMode=review&reviewPane=changes');
+    const current = {
+      domain: 't3x.dev/semantic-content',
+      version: 1,
+      content: {
+        relations: [],
+        trees: [
+          {
+            key: 'prd',
+            slots: {},
+            children: [
+              {
+                key: 'temperature',
+                children: [],
+                slots: { title: '气温', acceptance: ['低于20度'] },
+              },
+            ],
+          },
+        ],
+      },
+    };
+    const before = update ? JSON.parse(JSON.stringify(current)) : {};
+    if (update) before.content.trees[0].children[0].slots.acceptance = ['低于30度'];
+    activityMocks.value = {
+      enabled: true,
+      loading: false,
+      error: null,
+      actions: [],
+      cards: {},
+      view: {
+        base: {},
+        current,
+        workspaceRevision: 7,
+        compositionRevision: 4,
+        selected: {
+          before,
+          after: current,
+          cards: [
+            {
+              nodeId: 'temperature-content',
+              path: 'content/trees/[key=prd]/children/[key=temperature]/slots/acceptance',
+              before: update ? ['低于30度'] : undefined,
+              after: ['低于20度'],
+            },
+          ],
+        },
+        netDiff: [
+          {
+            nodeId: 'temperature-title',
+            path: 'content/trees/[key=prd]/children/[key=temperature]/slots/title',
+            after: '气温',
+          },
+          {
+            nodeId: 'temperature-content',
+            path: 'content/trees/[key=prd]/children/[key=temperature]/slots/acceptance',
+            after: ['低于20度'],
+          },
+        ],
+      },
+    } as unknown as ReturnType<typeof useComposeActivity>;
+    const prepareReview = vi.fn();
+    const controller = {
+      candidate,
+      busyAction: null,
+      isBusy: false,
+      error: null,
+      notice: null,
+      hasCollaborationConflict: false,
+      materialSources: [],
+      sourceBusy: false,
+      scenarios: { options: [], selectedId: candidate.id },
+      prepareReview,
+      chat: {
+        error: null,
+        input: '',
+        isLoading: false,
+        isStreaming: false,
+        messages: [],
+        send: vi.fn(),
+        setInput: vi.fn(),
+        stop: vi.fn(),
+        warning: null,
+      },
+      model: { loading: false, ready: true, selectedModel: 'gpt-5.4', selectedProvider: 'openai' },
+      review: {
+        changeProjection: null,
+        commands: null,
+        content: null,
+        deterministicValidation: null,
+        precondition: null,
+        reviewSnapshot: null,
+        transitionId: null,
+        view: null,
+      },
+    } as unknown as WorkspaceComposeReviewController;
+    render(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="review"
+        onModeChange={vi.fn()}
+      />
+    );
+    const structure = await screen.findByLabelText('Workspace review structure');
+    if (update) {
+      expect(within(structure).getAllByText(/低于30度/).length).toBeGreaterThan(0);
+      expect(screen.getByText(/1 modified/)).toBeTruthy();
+    }
+    expect(within(structure).getAllByText('气温').length).toBeGreaterThan(0);
+    expect(within(structure).getAllByText('低于20度').length).toBeGreaterThan(0);
+    expect(prepareReview).not.toHaveBeenCalled();
   });
 
   it('treats a stale validation review pane as Render', () => {
@@ -749,5 +1124,334 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
     expect(onModeChange).toHaveBeenCalledWith('compose');
+  });
+
+  it('lets Compose keep the default Schema or pin another published Schema', () => {
+    const bindSchema = vi.fn();
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    render(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={
+          {
+            busyAction: null,
+            bindSchema,
+            candidate,
+            chat: {
+              error: null,
+              input: '',
+              isLoading: false,
+              isStreaming: false,
+              messages: [],
+              send: vi.fn(),
+              setInput: vi.fn(),
+              stop: vi.fn(),
+              warning: null,
+            },
+            error: null,
+            hasCollaborationConflict: false,
+            isBusy: false,
+            materialSources: [],
+            model: {
+              availabilityError: null,
+              change: vi.fn(),
+              loading: false,
+              ready: true,
+              selectedModel: 'gpt-5.4',
+              selectedProvider: 'openai',
+            },
+            notice: null,
+            scenarios: { options: [], selectedId: candidate.id },
+            sourceBusy: false,
+          } as unknown as WorkspaceComposeReviewController
+        }
+        mode="compose"
+        onModeChange={vi.fn()}
+      />
+    );
+
+    const schema = screen.getByRole('combobox', { name: 'Workspace schema' });
+    expect(schema).toHaveValue('default');
+    expect(
+      within(schema).getByRole('option', { name: 'Default · PRD Schema v2' })
+    ).toBeInTheDocument();
+    fireEvent.change(schema, { target: { value: 't3x/prompt@v1' } });
+    expect(bindSchema).toHaveBeenCalledWith(
+      expect.objectContaining({ canonicalName: 't3x/prompt', version: 'v1' })
+    );
+  });
+
+  it('renders Compose authoring cards in Review instead of empty PRD boilerplate', async () => {
+    const candidate = {
+      ...getProjectWorkspaceStarterCandidate('proj_1'),
+      title: 'Main workspace',
+      summary: 'Collect source evidence and build the next structured state commit.',
+      schemaBindings: getWorkspacePreviewCandidates('proj_1')[0]!.schemaBindings,
+    };
+    const weatherTree = [
+      {
+        key: 'prd',
+        slots: {},
+        children: [
+          {
+            key: 'requirements',
+            slots: {},
+            children: [{ key: 'weather', slots: { title: '天气为晴天' }, children: [] }],
+          },
+        ],
+      },
+    ];
+    const current = {
+      domain: 't3x.dev/semantic-content',
+      version: 1,
+      content: { trees: weatherTree, relations: [] },
+    };
+    const cards = [
+      {
+        nodeId: 'weather',
+        path: 'content/trees/[key=prd]/children/[key=requirements]/children/[key=weather]/slots/title',
+        after: '天气为晴天',
+      },
+      { nodeId: 'domain', path: 'domain', after: 't3x.dev/semantic-content' },
+      { nodeId: 'version', path: 'version', after: 1 },
+    ];
+    activityMocks.value = {
+      enabled: true,
+      loading: false,
+      error: null,
+      actions: [],
+      cards: {},
+      cursor: null,
+      node: null,
+      nodeLoading: false,
+      nodeError: null,
+      nodeCursor: null,
+      notice: null,
+      newActivity: null,
+      compositionRevision: 2,
+      workspaceRevision: 4,
+      basis: { refName: 'main', refHead: null, baseDigest: 'empty' },
+      refresh: vi.fn(),
+      loadOlder: vi.fn(),
+      loadLatest: vi.fn(),
+      inspectNode: vi.fn(),
+      selectActionNode: vi.fn(),
+      loadOlderNode: vi.fn(),
+      publish: vi.fn(),
+      publishCandidate: vi.fn(),
+      createAssistantConversation: vi.fn(),
+      view: {
+        schema: 't3x.application/workspace-authoring-view/v1',
+        projectionVersion: 1,
+        workspaceRevision: 4,
+        compositionRevision: 2,
+        basis: { refName: 'main', refHead: null, baseDigest: 'empty' },
+        actions: [],
+        selected: null,
+        netDiff: cards,
+        node: null,
+        nextBeforeSequence: null,
+        base: {},
+        current,
+      },
+    } as unknown as ReturnType<typeof useComposeActivity>;
+    const controller = {
+      busyAction: null,
+      candidate,
+      chat: {
+        error: null,
+        input: '',
+        isLoading: false,
+        isStreaming: false,
+        messages: [],
+        send: vi.fn(),
+        setInput: vi.fn(),
+        stop: vi.fn(),
+        warning: null,
+      },
+      error: null,
+      hasCollaborationConflict: false,
+      isBusy: false,
+      materialSources: [],
+      model: {
+        availabilityError: null,
+        change: vi.fn(),
+        loading: false,
+        ready: true,
+        selectedModel: 'gpt-5.4-mini',
+        selectedProvider: 'openai',
+      },
+      notice: null,
+      prepareReview: vi.fn(),
+      renderedYaml: '',
+      review: {
+        changeProjection: null,
+        commands: null,
+        content: null,
+        deterministicValidation: null,
+        precondition: null,
+        reviewSnapshot: null,
+        transitionId: null,
+        view: null,
+      },
+      scenarios: { options: [], selectedId: candidate.id },
+      sourceBusy: false,
+    } as unknown as WorkspaceComposeReviewController;
+
+    render(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="review"
+        onModeChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText('Rendered result')).toBeInTheDocument();
+    expect(screen.getAllByText('天气为晴天').length).toBeGreaterThan(0);
+    expect(screen.getByText('Proposed changes')).toBeInTheDocument();
+    expect(screen.getByText('t3x.dev/semantic-content')).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: '1', exact: true })).toBeInTheDocument();
+    expect(screen.queryByText('No outcome has been recorded.')).not.toBeInTheDocument();
+    expect(screen.queryByText(candidate.summary)).not.toBeInTheDocument();
+    expect(screen.queryByText('No rollout plan recorded.')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Structure diff' }));
+    expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
+    expect(screen.queryByText('No structured changes are prepared yet')).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole('table')).getByTitle('prd/requirements/weather/title')
+    ).toBeInTheDocument();
+  });
+
+  it('shows the inherited branch State in Review before any change is made', async () => {
+    const candidate = {
+      ...getProjectWorkspaceStarterCandidate('proj_1'),
+      targetBranch: 'dev4',
+      schemaBindings: getWorkspacePreviewCandidates('proj_1')[0]!.schemaBindings,
+    };
+    const inherited = {
+      domain: 't3x.dev/semantic-content',
+      version: 1,
+      content: {
+        trees: [
+          {
+            key: 'prd',
+            slots: {},
+            children: [
+              {
+                key: 'requirements',
+                slots: {},
+                children: [{ key: 'weather', slots: { title: '天气为晴天' }, children: [] }],
+              },
+            ],
+          },
+        ],
+        relations: [],
+      },
+    };
+    activityMocks.value = {
+      enabled: true,
+      loading: false,
+      error: null,
+      actions: [],
+      cards: {},
+      cursor: null,
+      node: null,
+      nodeLoading: false,
+      nodeError: null,
+      nodeCursor: null,
+      notice: null,
+      newActivity: null,
+      compositionRevision: 0,
+      workspaceRevision: 1,
+      basis: { refName: 'dev4', refHead: 'sha256:main', baseDigest: 'main' },
+      refresh: vi.fn(),
+      loadOlder: vi.fn(),
+      loadLatest: vi.fn(),
+      inspectNode: vi.fn(),
+      selectActionNode: vi.fn(),
+      loadOlderNode: vi.fn(),
+      publish: vi.fn(),
+      publishCandidate: vi.fn(),
+      createAssistantConversation: vi.fn(),
+      view: {
+        schema: 't3x.application/workspace-authoring-view/v1',
+        projectionVersion: 1,
+        workspaceRevision: 1,
+        compositionRevision: 0,
+        basis: { refName: 'dev4', refHead: 'sha256:main', baseDigest: 'main' },
+        actions: [],
+        selected: null,
+        netDiff: [],
+        node: null,
+        nextBeforeSequence: null,
+        base: inherited,
+        current: inherited,
+      },
+    } as unknown as ReturnType<typeof useComposeActivity>;
+    const controller = {
+      busyAction: null,
+      candidate,
+      chat: {
+        error: null,
+        input: '',
+        isLoading: false,
+        isStreaming: false,
+        messages: [],
+        send: vi.fn(),
+        setInput: vi.fn(),
+        stop: vi.fn(),
+        warning: null,
+      },
+      error: null,
+      hasCollaborationConflict: false,
+      isBusy: false,
+      materialSources: [],
+      model: {
+        availabilityError: null,
+        change: vi.fn(),
+        loading: false,
+        ready: true,
+        selectedModel: 'gpt-5.4-mini',
+        selectedProvider: 'openai',
+      },
+      notice: null,
+      prepareReview: vi.fn(),
+      renderedYaml: '',
+      review: {
+        changeProjection: null,
+        commands: null,
+        content: null,
+        deterministicValidation: null,
+        precondition: null,
+        reviewSnapshot: null,
+        transitionId: null,
+        view: null,
+      },
+      scenarios: { options: [], selectedId: candidate.id },
+      sourceBusy: false,
+    } as unknown as WorkspaceComposeReviewController;
+
+    render(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="review"
+        onModeChange={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Structure diff' }));
+    expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
+    expect(screen.queryByText('No structured changes are prepared yet')).not.toBeInTheDocument();
+    expect(screen.getByText('0 added')).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('table')).getByTitle('prd/requirements/weather')
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rendered YAML' }));
+    expect(screen.queryByText('No structured changes are prepared yet')).not.toBeInTheDocument();
+    expect(screen.getAllByText(/天气为晴天/).length).toBeGreaterThan(0);
   });
 });

@@ -56,6 +56,7 @@ import {
 import {
   commitTransition,
   decideTransition,
+  type TransitionDecisionAuthoritySelection,
   TransitionDecisionDeniedError,
   TransitionReviewStaleError,
 } from './transition-control-plane/lifecycle';
@@ -903,10 +904,12 @@ export async function decideWorkspaceTransition(
       typeof requestFacts !== 'object' ||
       Array.isArray(requestFacts) ||
       !('adapter' in requestFacts) ||
-      requestFacts.adapter !== 'workspace_transition_review'
+      (requestFacts.adapter !== 'workspace_transition_review' &&
+        requestFacts.adapter !== 'workspace_authoring_review')
     ) {
       throw new WorkspaceTransitionReviewStaleError();
     }
+    const authoringReview = requestFacts.adapter === 'workspace_authoring_review';
     const precondition = canonicalPrecondition(input.precondition, graph.membership.refName);
     const decisionFacts: ProtocolValue = {
       adapter: 'workspace_transition',
@@ -927,6 +930,47 @@ export async function decideWorkspaceTransition(
         policy_digest: precondition.policyDigest,
       },
     };
+    const compatibilityAuthoritySelection: TransitionDecisionAuthoritySelection = {
+      select({ graph: lockedGraph, refPolicyBinding }) {
+        if (
+          input.policyBinding !== undefined &&
+          (input.policyBinding === null || refPolicyBinding === null
+            ? input.policyBinding !== refPolicyBinding
+            : !sameTransitionPolicyResource(
+                input.policyBinding.resource,
+                refPolicyBinding.resource
+              ))
+        ) {
+          throw new TransitionReviewStaleError();
+        }
+        const policyBinding = refPolicyBinding
+          ? resolveApplicableTransitionPolicy({
+              refPolicyBinding,
+              requestKind: lockedGraph.membership.requestKind,
+              preparationFacts: lockedGraph.preparation
+                ? JSON.parse(lockedGraph.preparation.canonicalJson)
+                : null,
+            })
+          : WORKSPACE_POLICY;
+        return {
+          policyDigest: policyBinding.resource.digest,
+          authority: {
+            async resolve() {
+              return {
+                actorContext: { actor: input.actor },
+                observationScope: OBSERVATION_SCOPE,
+                policy: policyBinding.policy,
+                policyResource: policyBinding.resource,
+                statements: lockedGraph.observations.map((observation) => ({
+                  statement: observation.statement,
+                  issuerContext: observation.issuerContext,
+                })) as TrustedDecisionFacts['statements'],
+              };
+            },
+          },
+        };
+      },
+    };
     const decided = await decideTransition({
       db,
       projectId: input.projectId,
@@ -936,47 +980,7 @@ export async function decideWorkspaceTransition(
       outcome: input.outcome,
       ...(input.decisionReason === undefined ? {} : { rationale: input.decisionReason }),
       precondition,
-      authoritySelection: {
-        select({ graph: lockedGraph, refPolicyBinding }) {
-          if (
-            input.policyBinding !== undefined &&
-            (input.policyBinding === null || refPolicyBinding === null
-              ? input.policyBinding !== refPolicyBinding
-              : !sameTransitionPolicyResource(
-                  input.policyBinding.resource,
-                  refPolicyBinding.resource
-                ))
-          ) {
-            throw new TransitionReviewStaleError();
-          }
-          const policyBinding = refPolicyBinding
-            ? resolveApplicableTransitionPolicy({
-                refPolicyBinding,
-                requestKind: lockedGraph.membership.requestKind,
-                preparationFacts: lockedGraph.preparation
-                  ? JSON.parse(lockedGraph.preparation.canonicalJson)
-                  : null,
-              })
-            : WORKSPACE_POLICY;
-          return {
-            policyDigest: policyBinding.resource.digest,
-            authority: {
-              async resolve() {
-                return {
-                  actorContext: { actor: input.actor },
-                  observationScope: OBSERVATION_SCOPE,
-                  policy: policyBinding.policy,
-                  policyResource: policyBinding.resource,
-                  statements: lockedGraph.observations.map((observation) => ({
-                    statement: observation.statement,
-                    issuerContext: observation.issuerContext,
-                  })) as TrustedDecisionFacts['statements'],
-                };
-              },
-            },
-          };
-        },
-      },
+      ...(authoringReview ? {} : { authoritySelection: compatibilityAuthoritySelection }),
     });
     const decidedInspection = inspectionWithWorkspacePrecondition(decided.view, precondition);
     if (input.outcome === 'rejected') {

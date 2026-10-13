@@ -149,6 +149,13 @@
       "rationale": "Project ownership or project-scoped resource boundary."
     },
     {
+      "source": "branches.openapi.ts",
+      "method": "PUT",
+      "path": "/v1/branches/rules",
+      "policy": "project",
+      "rationale": "Requires project access and a human principal before changing the branch Transition policy binding."
+    },
+    {
       "source": "chat.openapi.ts",
       "method": "POST",
       "path": "/v1/chat",
@@ -159,13 +166,6 @@
       "source": "chat.openapi.ts",
       "method": "GET",
       "path": "/v1/chat/providers",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "chat.openapi.ts",
-      "method": "POST",
-      "path": "/v1/chat/stream",
       "policy": "project",
       "rationale": "Project ownership or project-scoped resource boundary."
     },
@@ -1803,13 +1803,6 @@
     {
       "source": "workspaces.openapi.ts",
       "method": "POST",
-      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/extract-candidate",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "workspaces.openapi.ts",
-      "method": "POST",
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/transition/decide",
       "policy": "project",
       "rationale": "Project ownership or project-scoped resource boundary."
@@ -1818,13 +1811,6 @@
       "source": "workspaces.openapi.ts",
       "method": "POST",
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/transition/review",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "workspaces.openapi.ts",
-      "method": "POST",
-      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/yops-draft",
       "policy": "project",
       "rationale": "Project ownership or project-scoped resource boundary."
     },
@@ -2058,6 +2044,13 @@
       "path": "/v1/projects/{projectId}/schema-studio/candidates/{candidateId}",
       "policy": "project",
       "rationale": "Requires target project:edit; removes only the scoped candidate."
+    },
+    {
+      "source": "schema-studio.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/schema-studio/initial-schema",
+      "policy": "project",
+      "rationale": "Requires target project:edit and an exact Workspace revision before binding a schema to an empty Workspace."
     },
     {
       "source": "schema-studio.openapi.ts",

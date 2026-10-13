@@ -362,3 +362,54 @@ it('validates exact author and local samples against the selection without writi
   for (let i = 0; i < 30; i++) nested = { child: nested };
   expect((await request('preview', { ...input, sample: nested })).status).toBe(400);
 });
+
+it('imports an initial YAML definition, resolves its immutable binding, and safely retries', async () => {
+  const draft = await upsertWorkspaceDraft(db, {
+    project_id: target,
+    workspace_id: 'initial-upload',
+    target_branch: 'initial-upload',
+    title: 'Initial',
+    workspace_state: {
+      title: 'Initial',
+      targetBranch: 'initial-upload',
+      schemaBindings: [],
+      yopsDraft: { operations: [] },
+    },
+  });
+  const input = {
+    workspaceId: 'initial-upload',
+    ifRevision: draft.revision,
+    filename: 'schema.yaml',
+    yaml: JSON.stringify(normalizeYSchemaObject(builtInPrdCoreArtifact.schema)),
+  };
+  const response = await request('initial-schema', input);
+  expect(response.status).toBe(200);
+  const saved = await findWorkspaceDraft(db, target, 'initial-upload');
+  const resolved = await resolveWorkspaceYSchema(saved!.workspace_state!, db, target);
+  expect(resolved.schema).toEqual(normalizeYSchemaObject(builtInPrdCoreArtifact.schema));
+  expect((await request('initial-schema', input)).status).toBe(200);
+  expect((await findWorkspaceDraft(db, target, 'initial-upload'))!.revision).toBe(saved!.revision);
+});
+
+it('rejects invalid YAML, denied writes, and importing over an existing proposal', async () => {
+  const input = {
+    workspaceId: 'work',
+    ifRevision: 1,
+    filename: 'schema.yaml',
+    yaml: 'not: [valid',
+  };
+  expect((await request('initial-schema', input)).status).toBe(400);
+  denied.add(`${target}:project:edit`);
+  expect((await request('initial-schema', input)).status).toBe(403);
+  denied.delete(`${target}:project:edit`);
+  const draft = await findWorkspaceDraft(db, target, 'work');
+  expect(
+    (
+      await request('initial-schema', {
+        ...input,
+        ifRevision: draft!.revision,
+        yaml: JSON.stringify(normalizeYSchemaObject(builtInPrdCoreArtifact.schema)),
+      })
+    ).status
+  ).toBe(409);
+});

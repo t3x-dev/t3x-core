@@ -1,58 +1,23 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { chatStream } from '@/infrastructure/chat';
+import { describe, expect, it } from 'vitest';
+import { frameData, splitSseFrames } from '@/infrastructure/chat';
 
-const fetchMock = vi.fn();
-const encoder = new TextEncoder();
+describe('SSE frame parsing', () => {
+  it('keeps a partial frame until its blank-line delimiter arrives', () => {
+    const first = splitSseFrames('data: {"type":"text","content":"Serv');
+    expect(first).toEqual({ frames: [], remaining: 'data: {"type":"text","content":"Serv' });
 
-function streamFromChunks(chunks: string[]) {
-  return new ReadableStream({
-    start(controller) {
-      for (const chunk of chunks) {
-        controller.enqueue(encoder.encode(chunk));
-      }
-      controller.close();
-    },
-  });
-}
-
-describe('chatStream', () => {
-  beforeEach(() => {
-    fetchMock.mockReset();
-    vi.stubGlobal('fetch', fetchMock);
+    const second = splitSseFrames(`${first.remaining}ice"}\n\ndata: {"type":"done"}`);
+    expect(second.frames.map(frameData)).toEqual(['{"type":"text","content":"Service"}']);
+    expect(second.remaining).toBe('data: {"type":"done"}');
   });
 
-  afterEach(() => {
-    vi.unstubAllGlobals();
+  it('flushes the trailing frame without a blank-line delimiter on the final read', () => {
+    const { frames, remaining } = splitSseFrames('data: {"type":"done"}', true);
+    expect(frames.map(frameData)).toEqual(['{"type":"done"}']);
+    expect(remaining).toBe('');
   });
 
-  it('parses split SSE frames and keeps the trailing frame without a blank-line delimiter', async () => {
-    fetchMock.mockResolvedValue(
-      new Response(
-        streamFromChunks([
-          'data: {"type":"token","content":"Serv',
-          'ice"}\n\n',
-          'data: {"type":"done","content":"Service"}',
-        ]),
-        { status: 200 }
-      )
-    );
-
-    const events = [];
-    for await (const event of chatStream({
-      messages: [{ role: 'user', content: 'draft outcome' }],
-    })) {
-      events.push(event);
-    }
-
-    expect(events).toEqual([
-      { type: 'token', content: 'Service' },
-      { type: 'done', content: 'Service' },
-    ]);
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringMatching(/\/api\/v1\/chat\/stream$/),
-      expect.objectContaining({
-        method: 'POST',
-      })
-    );
+  it('ignores frames without data lines', () => {
+    expect(frameData('event: ping')).toBeNull();
   });
 });

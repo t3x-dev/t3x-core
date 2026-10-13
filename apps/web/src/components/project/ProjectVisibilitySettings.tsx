@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useProjectVisibility } from '@/hooks/projects/useProjectVisibility';
 import type { ProjectVisibility } from '@/types/api';
+import { SettingsSection } from './settings/SettingsSection';
 
 const VISIBILITY_OPTIONS: Array<{
   description: string;
@@ -131,24 +132,13 @@ export function ProjectVisibilitySettings({ projectId }: { projectId: string }) 
     useProjectVisibility(projectId);
 
   return (
-    <section
-      aria-labelledby="project-visibility-heading"
-      className="rounded-[var(--radius-card)] border border-[var(--stroke-divider)] bg-[var(--surface-primary)]"
+    <SettingsSection
+      description="Choose the repository privacy boundary. Public discovery and managed-AI grants are separate policies."
+      icon={Eye}
+      id="visibility"
+      title="Visibility"
     >
-      <div className="border-b border-[var(--stroke-divider)] px-5 py-4">
-        <h2
-          className="text-sm font-semibold text-[var(--text-primary)]"
-          id="project-visibility-heading"
-        >
-          Project visibility
-        </h2>
-        <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
-          Choose the repository privacy boundary. Public discovery and managed-AI grants are
-          separate policies.
-        </p>
-      </div>
-
-      <div className="grid gap-4 p-5">
+      <div className="grid gap-4">
         {loading ? (
           <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
             <Loader2 aria-hidden="true" className="size-4 animate-spin" />
@@ -172,6 +162,6 @@ export function ProjectVisibilitySettings({ projectId }: { projectId: string }) 
           </p>
         ) : null}
       </div>
-    </section>
+    </SettingsSection>
   );
 }
