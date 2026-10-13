@@ -12,6 +12,7 @@ import {
   groupComposeActivity,
 } from '@/domain/composeActivity';
 import { composeCardsAtPath } from '@/domain/workspaces/composeDraftChanges';
+import { composeObjectChangeCards } from '@/domain/workspaces/composeObjectChanges';
 import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
 import { saveProjectWorkspace } from '@/infrastructure/workspaces';
 import type { WorkspaceCandidate } from '@/types/workspaces';
@@ -55,7 +56,12 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
       before = older.nextBeforeSequence;
     }
     const details: Record<string, WorkspaceAuthoringCard[]> = {};
-    if (first.selected) details[first.selected.action.actionId] = first.selected.cards;
+    if (first.selected)
+      details[first.selected.action.actionId] = composeObjectChangeCards(
+        first.selected.cards,
+        first.selected.before,
+        first.selected.after
+      );
     const missing = all.filter((a) => !details[a.actionId]);
     for (let i = 0; i < missing.length; i += 4) {
       await Promise.all(
@@ -65,18 +71,23 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
           });
           if (result.selected?.action.actionId !== action.actionId)
             throw new Error('Event details are unavailable. Refresh activity to retry.');
-          details[action.actionId] = result.selected.cards;
+          if (result.workspaceRevision !== first.workspaceRevision)
+            throw new Error('Draft changed. Refresh activity to load a consistent history.');
+          details[action.actionId] = composeObjectChangeCards(
+            result.selected.cards,
+            result.selected.before,
+            result.selected.after
+          );
         })
       );
     }
-    const projected = { ...first, netDiff: expandComposeActivityCards(first.netDiff) };
-    setView(projected);
+    setView(first);
     setActions(all);
     setCards(details);
     setCursor(before);
     setNewActivity(null);
     setError(null);
-    return projected;
+    return first;
   }, [candidate.id, candidate.projectId, enabled, pageCount]);
   useEffect(() => {
     // Only a different workspace invalidates the visible projection. Clearing it
@@ -175,20 +186,28 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
           { action_id: actionId, node_id: nodeId }
         );
         if (!result.selected) return null;
-        const nodeCards = expandComposeActivityCards(result.selected.cards).filter(
+        const projectedCards = composeObjectChangeCards(
+          result.selected.cards,
+          result.selected.before,
+          result.selected.after
+        );
+        const nodeCards = expandComposeActivityCards(projectedCards).filter(
           (item) => item.nodeId === nodeId
         );
         const card = path
-          ? (composeCardsAtPath(result.selected.cards, path).find(
+          ? (projectedCards.find(
+              (item) => item.path === path || item.beforePath === path || item.afterPath === path
+            ) ??
+            composeCardsAtPath(result.selected.cards, path).find(
               (item) => item.nodeId === nodeId
             ) ??
             nodeCards.find(
               (item) => item.path === path || item.beforePath === path || item.afterPath === path
             ) ??
             (nodeCards.length === 1 ? nodeCards[0] : undefined))
-          : result.selected.cards.find((item) => item.nodeId === nodeId);
+          : projectedCards.find((item) => item.nodeId === nodeId);
         if (!card) return null;
-        setCards((current) => ({ ...current, [actionId]: result.selected!.cards }));
+        setCards((current) => ({ ...current, [actionId]: projectedCards }));
         setNode(result.node);
         setNodeCursor(
           result.node?.entries.length === 20 ? result.node.entries.at(-1)!.sequence : null

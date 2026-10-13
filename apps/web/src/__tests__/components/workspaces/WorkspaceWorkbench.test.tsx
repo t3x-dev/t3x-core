@@ -243,7 +243,11 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     expect(screen.getByRole('region', { name: 'Workspace detail' })).toHaveAccessibleDescription(
       release.title
     );
-    expect(screen.getByTitle(release.title)).toBeVisible();
+    expect(
+      within(screen.getByRole('complementary', { name: 'Discuss change' })).getByTitle(
+        release.title
+      )
+    ).toBeVisible();
   });
 
   it('waits for the user to enable Draft activity before preparing Chat', () => {
@@ -269,10 +273,12 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     ]);
     render(<WorkspaceWorkbench candidates={[candidate]} projectId="proj_1" />);
 
-    expect(screen.getByRole('button', { name: 'Discuss Outcome' })).toBeInTheDocument();
-    expect(screen.getByText('Auditable rollouts')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Discuss Title' })).toBeInTheDocument();
-    expect(screen.getByText('Canary rollout')).toBeVisible();
+    const outcome = screen.getByRole('button', { name: 'Inspect Outcome: prd/summary/outcome' });
+    const title = screen.getByRole('button', {
+      name: 'Inspect Title: prd/requirements/canary/title',
+    });
+    expect(within(outcome).getByText('Auditable rollouts')).toBeVisible();
+    expect(within(title).getByText('Canary rollout')).toBeVisible();
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
 
     expect(screen.getByLabelText('Rendered result')).toBeInTheDocument();

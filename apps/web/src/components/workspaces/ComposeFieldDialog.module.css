@@ -2,6 +2,7 @@
   display: flex;
   width: min(850px, calc(100vw - 32px));
   max-width: min(850px, calc(100vw - 32px));
+  height: min(800px, 85dvh);
   max-height: 85dvh;
   flex-direction: column;
   gap: 16px;
@@ -72,107 +73,35 @@
 }
 .tabs button > svg,
 .footer button > svg,
-.yamlHeading svg,
-.fieldIcon > svg,
-.editIcon {
+.yamlHeading svg {
   width: 16px;
   height: 16px;
   flex: none;
 }
 .body {
+  display: flex;
+  flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   padding: 3px;
   font-size: 13px;
-}
-.body[data-view="yaml"] {
-  display: flex;
-  overflow: hidden;
 }
 .body > output {
   display: block;
 }
-.tree {
-  max-width: 650px;
-  margin: 0 auto;
-  padding: 0;
-  list-style: none;
-}
-.tree li {
-  min-width: 0;
-}
-.tree button {
-  display: flex;
+.editor {
   width: 100%;
-  align-items: center;
-  gap: 12px;
-  min-height: 42px;
-  border-radius: var(--radius-md);
-  padding: 8px 12px;
-  text-align: left;
+  max-width: 600px;
+  margin: 0 auto;
+  overflow: auto;
 }
-.tree button:hover,
+.error {
+  color: var(--status-error);
+  font-size: 12px;
+}
 .yamlHeading button:hover,
 .footer button:hover:not(:disabled) {
   background: var(--surface-app);
-}
-.fieldLabel {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.fieldIcon,
-.groupIcon {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-app);
-  color: var(--text-secondary);
-}
-.groupIcon {
-  background: var(--accent-commit-soft);
-  color: var(--accent-commit);
-}
-.groupIcon > svg {
-  width: 20px;
-  height: 20px;
-  flex: none;
-}
-.tree code {
-  min-width: 0;
-  max-width: 55%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-.editIcon {
-  color: var(--text-tertiary);
-}
-.group {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 12px 6px;
-}
-.group strong {
-  font-weight: 500;
-}
-.group small {
-  flex: none;
-  color: var(--text-tertiary);
-  font: 11px var(--font-mono);
-}
-.editor {
-  max-width: 600px;
-  margin: 0 auto;
 }
 .editor > h3 {
   font-size: 16px;
@@ -289,9 +218,5 @@
 @media (max-width: 760px) {
   .dialog {
     padding: 20px;
-  }
-  .tree button {
-    gap: 8px;
-    padding-inline: 8px;
   }
 }

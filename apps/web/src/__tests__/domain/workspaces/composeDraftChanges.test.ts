@@ -14,20 +14,24 @@ const before = {
 const after = { ...before, slots: { title: 'New title', priority: 'should', enabled: false } };
 
 describe('All draft changes projection', () => {
-  it('keeps a newly added or removed node together, including its child nodes', () => {
+  it('keeps fields together while giving nested business objects their own rows', () => {
     const node = { ...after, children: [before] };
     const cards = [
       { nodeId: 'new', path, after: node },
       { nodeId: 'removed', path: 'old', before: node },
     ];
-    expect(composeDraftChangeCards(cards)).toEqual(cards);
+    expect(composeDraftChangeCards(cards).map((card) => card.path)).toEqual([
+      path,
+      `${path}/children/[key=product]`,
+      'old',
+      'old/children/[key=product]',
+    ]);
   });
 
   it('exposes every changed field while preserving typed values, owner and structural order', () => {
     const cards = composeDraftChangeCards([{ nodeId: 'owner', path, before, after }]);
     expect(cards.map((card) => [card.path, card.before, card.after])).toEqual([
-      [`${path}/slots/title`, 'Old title', 'New title'],
-      [`${path}/slots/priority`, 'could', 'should'],
+      [path, before, after],
     ]);
     expect(cards.every((card) => card.nodeId === 'owner')).toBe(true);
     expect(composeDraftChangeCards([{ nodeId: 'owner', path, before, after: before }])).toEqual([]);
@@ -60,11 +64,13 @@ describe('All draft changes projection', () => {
       before: [first, second],
       after: [second, first],
     };
-    expect(composeDraftChangeCards([reordered])).toEqual([reordered]);
+    expect(composeDraftChangeCards([reordered])).toEqual([
+      { ...reordered, sourceCards: [reordered] },
+    ]);
     const cards = composeDraftChangeCards([
       { ...reordered, after: [first, { ...second, slots: { priority: 3 } }] },
     ]);
-    expect(cards.map((card) => card.path)).toEqual(['nodes/[key=a]/slots/priority']);
+    expect(cards.map((card) => card.path)).toEqual(['nodes/[key=a]']);
   });
 
   it('projects the exact field from older whole-node actions, excluding untouched siblings', () => {

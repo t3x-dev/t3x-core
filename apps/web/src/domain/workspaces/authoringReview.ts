@@ -1,6 +1,6 @@
 import type { WorkspaceAuthoringCard, WorkspaceAuthoringView } from '@t3x-dev/api-client';
 import type { SemanticContent } from '@t3x-dev/core';
-import { expandComposeActivityCards } from '@/domain/composeActivity';
+import { expandAuthoringCards } from '@/domain/composeActivity';
 import type { WorkspaceCandidate, WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 import type { WorkspaceYOpsValidationResult, WorkspaceYOpsValue } from '@/types/workspaceYops';
 
@@ -107,7 +107,7 @@ export function buildAuthoringReviewProjection<
   const documents = authoringReviewDocuments(view);
   if (!view || !documents) return null;
   const operations = authoringReviewOperations(
-    expandComposeActivityCards(view.selected?.cards ?? view.netDiff)
+    expandAuthoringCards(view.selected?.cards ?? view.netDiff)
   );
   return {
     candidate: {

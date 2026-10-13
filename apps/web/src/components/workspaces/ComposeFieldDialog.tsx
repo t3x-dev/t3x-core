@@ -2,29 +2,16 @@ import { yamlLanguage } from '@codemirror/lang-yaml';
 import { highlightTree, tagHighlighter, tags } from '@lezer/highlight';
 import type { TransitionProtocolValue } from '@t3x-dev/api-client';
 import * as yaml from 'js-yaml';
-import {
-  Box,
-  CircleSlash,
-  Code2,
-  Copy,
-  FileCode2,
-  Hash,
-  List,
-  ListTree,
-  MessageSquare,
-  Pencil,
-  ToggleLeft,
-  Type,
-} from 'lucide-react';
+import { Code2, Copy, FileCode2, ListTree, MessageSquare } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { composeValueLabel } from '@/domain/composePresentation';
 import { authoringSemanticContent } from '@/domain/workspaces/authoringReview';
-import { type ComposeDraftField, composeDraftFields } from '@/domain/workspaces/composeDraftFields';
-import type { DraftYOp } from '@/domain/workspaces/draftStructure';
+import type { DraftStructureNode, DraftYOp } from '@/domain/workspaces/draftStructure';
 import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import { ComposeDraftValueEditor } from './ComposeDraftValueEditor';
 import styles from './ComposeFieldDialog.module.css';
+import { DraftStructureEditor } from './DraftStructureEditor';
 
 const yamlHighlighter = tagHighlighter([
   { tag: [tags.propertyName, tags.definitionKeyword, tags.keyword], class: styles.yamlKey },
@@ -51,21 +38,6 @@ function highlightYaml(source: string): ReactNode[] {
   return parts;
 }
 
-function fieldType(value: unknown) {
-  if (Array.isArray(value)) return { Icon: List, label: 'array' };
-  if (value === null) return { Icon: CircleSlash, label: 'null' };
-  switch (typeof value) {
-    case 'object':
-      return { Icon: Box, label: 'object' };
-    case 'number':
-      return { Icon: Hash, label: 'number' };
-    case 'boolean':
-      return { Icon: ToggleLeft, label: 'boolean' };
-    default:
-      return { Icon: Type, label: 'string' };
-  }
-}
-
 export function ComposeFieldDialog({
   activity,
   initialView,
@@ -74,6 +46,8 @@ export function ComposeFieldDialog({
   onDiscuss,
   current,
   onSubmit,
+  error,
+  pending = false,
 }: {
   activity: ReturnType<typeof useComposeActivity>;
   initialView: 'structure' | 'yaml';
@@ -82,16 +56,15 @@ export function ComposeFieldDialog({
   onDiscuss: () => void;
   current?: TransitionProtocolValue;
   onSubmit?: (operations: DraftYOp[], reason: string) => Promise<boolean>;
+  error?: string | null;
+  pending?: boolean;
 }) {
   const [view, setView] = useState(initialView);
-  const [selected, setSelected] = useState<ComposeDraftField | null>(null);
+  const [selected, setSelected] = useState<DraftStructureNode | null>(null);
   const [saving, setSaving] = useState(false);
+  const [editingStructure, setEditingStructure] = useState(false);
   const [copyNotice, setCopyNotice] = useState<string | null>(null);
   const document = current ?? activity.view?.current;
-  const fields = useMemo(
-    () => (document === undefined ? [] : composeDraftFields(document)),
-    [document]
-  );
   const renderedYaml = useMemo(
     () =>
       document === undefined
@@ -130,15 +103,15 @@ export function ComposeFieldDialog({
           </p>
           <DialogTitle>Current structure</DialogTitle>
           <DialogDescription>
-            Select a field to edit its current Draft value. Changes remain in the draft until
-            reviewed and committed.
+            Add, edit, or delete fields and items. More operations are available on each row.
+            Changes remain in the draft until reviewed and committed.
           </DialogDescription>
         </header>
         <fieldset className={styles.tabs} aria-label="Draft structure view">
           <button
             type="button"
             aria-pressed={view === 'structure'}
-            disabled={Boolean(selected)}
+            disabled={Boolean(selected) || editingStructure || saving || pending}
             onClick={() => setView('structure')}
           >
             <ListTree aria-hidden="true" /> Structure
@@ -146,12 +119,17 @@ export function ComposeFieldDialog({
           <button
             type="button"
             aria-pressed={view === 'yaml'}
-            disabled={Boolean(selected)}
+            disabled={Boolean(selected) || editingStructure || saving || pending}
             onClick={() => setView('yaml')}
           >
             <Code2 aria-hidden="true" /> YAML
           </button>
         </fieldset>
+        {error ? (
+          <p className={styles.error} role="alert">
+            {error}
+          </p>
+        ) : null}
         <div className={styles.body} data-view={view}>
           {document === undefined ? (
             <output>{activity.error ?? 'Loading current Draft…'}</output>
@@ -171,13 +149,13 @@ export function ComposeFieldDialog({
               </header>
               {copyNotice ? <output className={styles.copyNotice}>{copyNotice}</output> : null}
               {/* biome-ignore lint/a11y/noNoninteractiveTabindex: This independently scrolling YAML pane must remain reachable for keyboard scrolling. */}
-              <pre tabIndex={0} aria-label="YAML source">
+              <pre tabIndex={0} role="document" aria-label="YAML source">
                 <code>{highlightedYaml}</code>
               </pre>
             </section>
           ) : selected ? (
             <section className={styles.editor}>
-              <h3>{selected.label}</h3>
+              <h3>{selected.key}</h3>
               <code>{selected.path}</code>
               <p>Current value: {composeValueLabel(selected.value, 'Absent')}</p>
               <ComposeDraftValueEditor
@@ -193,54 +171,36 @@ export function ComposeFieldDialog({
                 }}
               />
             </section>
-          ) : fields.length ? (
-            <ul className={styles.tree} aria-label="Current Draft fields">
-              {fields.map((field) => {
-                const { Icon, label: type } = fieldType(field.value);
-                const valueLabel = composeValueLabel(field.value, 'Absent');
-                return (
-                  <li
-                    key={field.path}
-                    style={{ paddingLeft: `${Math.min(field.depth, 8) * 16}px` }}
-                  >
-                    {field.editable ? (
-                      <button
-                        type="button"
-                        aria-label={`Edit ${field.label}`}
-                        title={field.path}
-                        onClick={() => setSelected(field)}
-                      >
-                        <span className={styles.fieldIcon} title={type}>
-                          <Icon aria-hidden="true" />
-                        </span>
-                        <span className={styles.fieldLabel}>{field.label}</span>
-                        <code title={valueLabel}>{valueLabel}</code>
-                        <Pencil className={styles.editIcon} aria-hidden="true" />
-                      </button>
-                    ) : (
-                      <div className={styles.group} title={field.path}>
-                        <span className={styles.groupIcon} title={type}>
-                          <Icon aria-hidden="true" />
-                        </span>
-                        <strong className={styles.fieldLabel}>{field.label}</strong>
-                        {type === 'array' || type === 'object' ? (
-                          <small>{type}</small>
-                        ) : (
-                          <code title={valueLabel}>{valueLabel}</code>
-                        )}
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
           ) : (
-            <p>No fields yet. Describe your first change in Chat.</p>
+            <DraftStructureEditor
+              current={document}
+              pending={saving || pending}
+              onEditField={setSelected}
+              onEditingChange={setEditingStructure}
+              onPublish={async (operations, reason) => {
+                setSaving(true);
+                try {
+                  if (onSubmit) return await onSubmit(operations, reason);
+                  await activity.publish({
+                    request_id: crypto.randomUUID(),
+                    operations,
+                    reason,
+                  });
+                  return true;
+                } finally {
+                  setSaving(false);
+                }
+              }}
+            />
           )}
         </div>
         <footer className={styles.footer}>
           <output>{activity.notice ?? 'Current Draft · not committed'}</output>
-          <button type="button" disabled={Boolean(selected) || saving} onClick={onDiscuss}>
+          <button
+            type="button"
+            disabled={Boolean(selected) || editingStructure || saving || pending}
+            onClick={onDiscuss}
+          >
             <MessageSquare aria-hidden="true" /> Discuss in Chat
           </button>
         </footer>

@@ -1,8 +1,19 @@
 'use client';
 
-import { MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
+import {
+  Box,
+  ChevronRight,
+  CircleSlash,
+  Hash,
+  List,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  ToggleLeft,
+  Trash2,
+  Type,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,10 +31,11 @@ import {
   draftOpReason,
   editDraftOp,
   formatDraftValue,
+  isSemanticEnvelope,
   parseDraftValue,
   walkDraftStructure,
 } from '@/domain/workspaces/draftStructure';
-import styles from './CurrentDraftStructureDialog.module.css';
+import styles from './DraftStructureEditor.module.css';
 
 type Intent =
   | { kind: 'add'; node: DraftStructureNode }
@@ -62,30 +74,65 @@ const OP_LABELS: Record<DraftYOpName, string> = {
   assert: 'Assert',
 };
 
-export function CurrentDraftStructureDialog({
+export function DraftStructureEditor({
   current,
   error,
-  onClose,
+  onEditField,
+  onEditingChange,
   onPublish,
-  open,
   pending = false,
 }: {
   current: unknown;
   error?: string | null;
-  onClose: () => void;
+  onEditField: (node: DraftStructureNode) => void;
+  onEditingChange: (editing: boolean) => void;
   onPublish: (operations: DraftYOp[], reason: string) => Promise<boolean | void> | boolean | void;
-  open: boolean;
   pending?: boolean;
 }) {
-  const nodes = useMemo(() => walkDraftStructure(current), [current]);
+  const semantic = isSemanticEnvelope(current);
+  const nodes = useMemo(() => {
+    const structure = walkDraftStructure(current);
+    if (isSemanticEnvelope(current)) {
+      if (!Array.isArray(current.content.relations) || !current.content.relations.length)
+        return structure;
+      const relations = walkDraftStructure({ relations: current.content.relations }).map(
+        (node) => ({
+          ...node,
+          path: `content/${node.path}`,
+          parentPath: node.parentPath ? `content/${node.parentPath}` : 'content',
+        })
+      );
+      return [...structure, ...relations];
+    }
+    if (current && typeof current === 'object' && !Array.isArray(current)) {
+      const root: DraftStructureNode = {
+        path: '',
+        key: 'root',
+        kind: 'mapping',
+        value: current,
+        preview: '',
+        depth: 0,
+        parentPath: null,
+        childKeys: Object.keys(current),
+        expandable: structure.length > 0,
+      };
+      return [root, ...structure.map((node) => ({ ...node, depth: node.depth + 1 }))];
+    }
+    return structure;
+  }, [current]);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const [intent, setIntent] = useState<Intent | null>(null);
+  const [intent, updateIntent] = useState<Intent | null>(null);
+  const setIntent = (next: Intent | null) => {
+    updateIntent(next);
+    setLocalError(null);
+    onEditingChange(next !== null);
+  };
   const [localError, setLocalError] = useState<string | null>(null);
   const visible = useMemo(() => {
     const hidden = new Set<string>();
     for (const node of nodes) {
-      if (!node.parentPath) continue;
+      if (node.parentPath === null) continue;
       if (collapsed[node.parentPath] || hidden.has(node.parentPath)) hidden.add(node.path);
     }
     return nodes.filter((node) => !hidden.has(node.path));
@@ -137,73 +184,51 @@ export function CurrentDraftStructureDialog({
   };
 
   return (
-    <Dialog
-      onOpenChange={(next) => {
-        if (!next) {
-          setIntent(null);
-          onClose();
-        }
-      }}
-      open={open}
-    >
-      <DialogContent className={styles.content} showCloseButton>
-        <DialogTitle className={styles.title}>Current structure</DialogTitle>
-        <DialogDescription className={styles.hint}>
-          Add with +, edit or delete on a row. The other YOps stay on the row menu.
-        </DialogDescription>
-        {error || localError ? (
-          <p className={styles.status} data-tone="error" role="alert">
-            {localError ?? error}
-          </p>
-        ) : null}
-        {visible.length === 0 ? (
-          <div className={styles.empty}>This draft has no structure yet.</div>
-        ) : (
-          <div className={styles.tree} role="tree" aria-label="Current draft structure">
-            {visible.map((node) => (
-              <StructureRow
-                collapsed={Boolean(collapsed[node.path])}
-                intent={intent}
-                key={node.path || node.key}
-                node={node}
-                pending={pending}
-                selected={selectedPath === node.path}
-                onAdd={() => setIntent({ kind: 'add', node })}
-                onDelete={() => void publish([deleteDraftOp(node.path)])}
-                onEdit={() => setIntent({ kind: 'edit', node })}
-                onRun={(name) => void run(name, node)}
-                onSelect={() => {
-                  setSelectedPath(node.path);
-                  if (intent?.kind === 'pick-destination') void selectDestination(node);
-                  else if (node.expandable)
-                    setCollapsed((current) => ({ ...current, [node.path]: !current[node.path] }));
-                }}
-              />
-            ))}
-          </div>
-        )}
-        {intent ? (
-          <IntentEditor
-            intent={intent}
-            key={`${intent.kind}:${intent.node.path}:${'op' in intent ? intent.op : ''}`}
-            pending={pending}
-            onCancel={() => setIntent(null)}
-            onPublish={(operations) => void publish(operations)}
-          />
-        ) : (
-          <div className={styles.footer}>
-            <span>
-              {selectedPath
-                ? visible.find((node) => node.path === selectedPath)?.key
-                : 'Select a node to inspect'}
-            </span>
-            <button data-quiet="true" onClick={onClose} type="button">
-              Close
-            </button>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
+    <div className={styles.content}>
+      {error || localError ? (
+        <p className={styles.status} data-tone="error" role="alert">
+          {localError ?? error}
+        </p>
+      ) : null}
+      {visible.length === 0 ? (
+        <div className={styles.empty}>This draft has no structure yet.</div>
+      ) : (
+        <div className={styles.tree} role="tree" aria-label="Current draft structure">
+          {visible.map((node) => (
+            <StructureRow
+              collapsed={Boolean(collapsed[node.path])}
+              intent={intent}
+              key={node.path}
+              node={node}
+              pending={pending || intent !== null}
+              readOnly={semantic && node.path.startsWith('content/relations')}
+              selected={selectedPath === node.path}
+              onAdd={() => setIntent({ kind: 'add', node })}
+              onDelete={() => void publish([deleteDraftOp(node.path)])}
+              onEdit={() =>
+                node.kind === 'scalar' ? onEditField(node) : setIntent({ kind: 'edit', node })
+              }
+              onRun={(name) => void run(name, node)}
+              onSelect={() => {
+                setSelectedPath(node.path);
+                if (intent?.kind === 'pick-destination') void selectDestination(node);
+                else if (node.expandable)
+                  setCollapsed((current) => ({ ...current, [node.path]: !current[node.path] }));
+              }}
+            />
+          ))}
+        </div>
+      )}
+      {intent ? (
+        <IntentEditor
+          intent={intent}
+          key={`${intent.kind}:${intent.node.path}:${'op' in intent ? intent.op : ''}`}
+          pending={pending}
+          onCancel={() => setIntent(null)}
+          onPublish={(operations) => void publish(operations)}
+        />
+      ) : null}
+    </div>
   );
 }
 
@@ -217,6 +242,7 @@ function StructureRow({
   onRun,
   onSelect,
   pending,
+  readOnly,
   selected,
 }: {
   collapsed: boolean;
@@ -228,94 +254,121 @@ function StructureRow({
   onRun: (name: DraftYOpName) => void;
   onSelect: () => void;
   pending: boolean;
+  readOnly: boolean;
   selected: boolean;
 }) {
   const ops = availableDraftOps(node);
+  const { Icon, type } = structureType(node);
+  const label = /\[\d+\]$/.test(node.path) ? `[${node.key}]` : node.key || 'root';
   return (
     <div
       aria-expanded={node.expandable ? !collapsed : undefined}
       aria-selected={selected}
+      aria-level={node.depth + 1}
       className={styles.row}
       data-kind={node.kind}
       data-picking={intent?.kind === 'pick-destination' || undefined}
       data-selected={selected || undefined}
       onClick={onSelect}
       onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           onSelect();
         }
       }}
       role="treeitem"
-      style={{ paddingLeft: 8 + node.depth * 16 }}
+      style={{ paddingLeft: 8 + Math.min(node.depth, 8) * 16 }}
       tabIndex={0}
     >
-      <span className={styles.identity}>
-        <span className={styles.dot} />
-        <span className={styles.label}>{node.key || 'root'}</span>
+      <span className={styles.identity} title={node.path || 'root'}>
+        <ChevronRight
+          className={styles.chevron}
+          data-visible={node.expandable}
+          aria-hidden="true"
+        />
+        <span className={styles.typeIcon} title={type}>
+          <Icon aria-hidden="true" />
+        </span>
+        <span className={styles.label}>{label}</span>
       </span>
-      <span className={styles.preview}>{node.kind === 'scalar' ? node.preview : ''}</span>
-      <span className={styles.actions}>
-        {node.kind !== 'scalar' ? (
+      <span className={styles.preview} title={node.kind === 'scalar' ? node.preview : type}>
+        {node.kind === 'scalar' ? node.preview : type}
+      </span>
+      {readOnly ? (
+        <span className={styles.readOnly}>Read only</span>
+      ) : (
+        <span className={styles.actions}>
+          {node.kind !== 'scalar' ? (
+            <button
+              aria-label={`Add inside ${node.key}`}
+              disabled={pending}
+              onClick={(event) => {
+                event.stopPropagation();
+                onAdd();
+              }}
+              type="button"
+            >
+              <Plus size={14} />
+            </button>
+          ) : null}
           <button
-            aria-label={`Add inside ${node.key}`}
+            aria-label={`Edit ${node.key}`}
             disabled={pending}
             onClick={(event) => {
               event.stopPropagation();
-              onAdd();
+              onEdit();
             }}
             type="button"
           >
-            <Plus size={14} />
+            <Pencil size={14} />
           </button>
-        ) : null}
-        <button
-          aria-label={`Edit ${node.key}`}
-          disabled={pending}
-          onClick={(event) => {
-            event.stopPropagation();
-            onEdit();
-          }}
-          type="button"
-        >
-          <Pencil size={14} />
-        </button>
-        <button
-          aria-label={`Delete ${node.key}`}
-          data-danger="true"
-          disabled={pending || !node.path}
-          onClick={(event) => {
-            event.stopPropagation();
-            onDelete();
-          }}
-          type="button"
-        >
-          <Trash2 size={14} />
-        </button>
-        {ops.length > 0 ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                aria-label={`More operations for ${node.key}`}
-                disabled={pending}
-                onClick={(event) => event.stopPropagation()}
-                type="button"
-              >
-                <MoreHorizontal size={14} />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
-              {ops.map((name) => (
-                <DropdownMenuItem key={name} onSelect={() => onRun(name)}>
-                  {OP_LABELS[name]}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
-      </span>
+          <button
+            aria-label={`Delete ${node.key}`}
+            data-danger="true"
+            disabled={pending || !node.path}
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete();
+            }}
+            type="button"
+          >
+            <Trash2 size={14} />
+          </button>
+          {ops.length > 0 ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  aria-label={`More operations for ${node.key}`}
+                  disabled={pending}
+                  onClick={(event) => event.stopPropagation()}
+                  type="button"
+                >
+                  <MoreHorizontal size={14} />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
+                {ops.map((name) => (
+                  <DropdownMenuItem key={name} onSelect={() => onRun(name)}>
+                    {OP_LABELS[name]}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+        </span>
+      )}
     </div>
   );
+}
+
+function structureType(node: DraftStructureNode) {
+  if (node.kind === 'sequence') return { Icon: List, type: 'array' };
+  if (node.kind !== 'scalar') return { Icon: Box, type: 'object' };
+  if (node.value === null) return { Icon: CircleSlash, type: 'null' };
+  if (typeof node.value === 'number') return { Icon: Hash, type: 'number' };
+  if (typeof node.value === 'boolean') return { Icon: ToggleLeft, type: 'boolean' };
+  return { Icon: Type, type: 'string' };
 }
 
 function IntentEditor({
@@ -337,6 +390,7 @@ function IntentEditor({
     intent.kind === 'edit' ? formatDraftValue(intent.node.value) : ''
   );
   const [second, setSecond] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const [keys, setKeys] = useState<string[]>([]);
   const parse = () => {
     try {
@@ -431,16 +485,26 @@ function IntentEditor({
       className={styles.editor}
       onSubmit={(event) => {
         event.preventDefault();
+        setError(null);
         try {
           submit();
         } catch (cause) {
-          event.currentTarget.setAttribute(
-            'data-error',
-            cause instanceof Error ? cause.message : 'Invalid value'
-          );
+          setError(cause instanceof Error ? cause.message : 'Invalid value');
         }
       }}
     >
+      <header className={styles.editorHeading}>
+        <strong>
+          {intent.kind === 'edit' ? 'Edit value' : intent.kind === 'add' ? 'Add inside' : 'Update'}{' '}
+          {intent.node.key}
+        </strong>
+        <code>{intent.node.path || 'root'}</code>
+      </header>
+      {error ? (
+        <p className={styles.status} data-tone="error" role="alert">
+          {error}
+        </p>
+      ) : null}
       {intent.kind === 'add' ? (
         <>
           <input
@@ -469,7 +533,8 @@ function IntentEditor({
         </>
       ) : null}
       {intent.kind === 'edit' || intent.kind === 'append' ? (
-        <input
+        <textarea
+          rows={5}
           aria-label="Value"
           onChange={(event) => setValue(event.target.value)}
           value={value}

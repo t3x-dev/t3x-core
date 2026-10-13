@@ -479,3 +479,140 @@
     overflow: visible;
   }
 }
+.objectDelta {
+  display: grid;
+  gap: 12px;
+}
+.objectDelta h3 {
+  margin: 0 0 5px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.objectSnapshot {
+  font-size: 12px;
+}
+.objectSnapshot summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+.objectEditor {
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+  border-top: 1px solid var(--stroke-divider);
+  padding: 16px 0 20px;
+}
+.objectEditor header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.objectEditor h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.objectEditor header button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+}
+.editorField {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+.editorField label {
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.editorField input,
+.editorField textarea,
+.editorField select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font:
+    12px / 1.6 var(--font-inter),
+    sans-serif;
+}
+.editorField textarea {
+  resize: vertical;
+}
+.editorField textarea[data-json="true"] {
+  font-family: var(--font-mono);
+}
+.editorField input:focus,
+.editorField textarea:focus,
+.editorField select:focus {
+  outline: 2px solid var(--accent-commit);
+  outline-offset: 1px;
+}
+.editorField [aria-invalid="true"] {
+  border-color: var(--status-error);
+}
+.editorField small {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+.editorField .error,
+.objectEditor > .error,
+.objectEditor > .helper {
+  margin: 0;
+}
+.editorPreview {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-app);
+  padding: 12px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.editorPreview p {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+.editorPreview code {
+  display: block;
+  margin-bottom: 4px;
+  overflow-wrap: anywhere;
+}
+.editorPreview del,
+.editorPreview ins {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  text-decoration: none;
+  font: 11px / 1.6 var(--font-mono);
+}
+.editorActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.editorActions button {
+  min-height: 32px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  padding: 0 12px;
+  font-size: 12px;
+}
+.editorActions button:last-child {
+  border-color: var(--accent-commit);
+  background: var(--accent-commit);
+  color: var(--on-accent);
+}

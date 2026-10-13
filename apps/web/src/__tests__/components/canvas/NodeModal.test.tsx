@@ -65,7 +65,12 @@ describe('NodeModal', () => {
   it('opens the Workspace for a node conversation instead of an embedded chat', () => {
     const onClose = vi.fn();
     const { container } = render(
-      <NodeModal node={committedNode()} onClose={onClose} onUpdate={vi.fn()} viewMode="conversation" />
+      <NodeModal
+        node={committedNode()}
+        onClose={onClose}
+        onUpdate={vi.fn()}
+        viewMode="conversation"
+      />
     );
 
     expect(container).toBeEmptyDOMElement();
