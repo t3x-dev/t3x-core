@@ -2,6 +2,7 @@ import { currentComposition, REPOSITORY_STATE_POLICY } from '@t3x-dev/applicatio
 import { compileProposalDraft, createHumanProposalDraft, createYOpsState } from '@t3x-dev/core';
 import {
   bindTransitionPolicy,
+  createMaterial,
   deleteDraft,
   findWorkspaceDraft,
   insertBranch,
@@ -32,6 +33,12 @@ import {
 import { prepareWorkspaceAuthoringReview } from '../lib/workspace-authoring-review';
 import { decideWorkspaceTransition } from '../lib/workspace-transition';
 import { setupTestDB } from './setup';
+
+function schemaGaps(reviewed: Awaited<ReturnType<typeof prepareWorkspaceAuthoringReview>>) {
+  return reviewed.view.transition.checks.validation.runs.flatMap((run) =>
+    run.predicate.outcome === 'unsupported' ? [] : run.predicate.gaps
+  );
+}
 
 describe('durable Draft authoring commands', () => {
   let setup: Awaited<ReturnType<typeof setupTestDB>>;
@@ -310,6 +317,89 @@ describe('durable Draft authoring commands', () => {
     expect(graph.result.value).toEqual({ prd: { audience: 'operators' } });
     expect(JSON.parse(graph.preparation!.canonicalJson).ledger.actions).toHaveLength(1);
     expect(reviewed.view.precondition.workspaceRevision).toBe(saved.draft.revision);
+  });
+  it('accepts provenance-required slots when a document source resolves inside the project', async () => {
+    const workspaceId = 'review-evidence';
+    const init = await initialize(workspaceId);
+    const prd = {
+      summary: {
+        problem: 'Teams need a schema-backed PRD.',
+        audience: 'Product collaborators',
+        outcome: 'Candidates can be reviewed before commit.',
+      },
+      requirements: {
+        review_gate: {
+          title: 'Show validation before commit',
+          priority: 'must',
+          acceptance: ['Gaps stay separate from hard errors.'],
+        },
+      },
+    };
+    const saved = await publishWorkspaceAuthoringAction(setup.db, {
+      projectId,
+      workspaceId,
+      actionId: 'edit',
+      actor,
+      channel: 'manual',
+      expectedRevision: 0,
+      expectedWorkspaceRevision: init.draft.revision,
+      expectedRefHead: null,
+      operations: [{ set: { path: 'prd', value: prd } }],
+    });
+    const missing = await prepareWorkspaceAuthoringReview({
+      db: setup.db,
+      projectId,
+      workspaceId,
+      requestId: 'review-evidence-missing',
+      actor,
+      expectedRevision: 1,
+      expectedWorkspaceRevision: saved.draft.revision,
+      expectedRefHead: null,
+    });
+    const missingGaps = schemaGaps(missing);
+    expect(missingGaps.some((gap) => gap.code === 'REQUIRED_EVIDENCE_MISSING')).toBe(true);
+    expect(missing.view.transition.checks.validation.outcomes).toEqual(['failed']);
+
+    const material = await createMaterial(setup.db, {
+      project_id: projectId,
+      source_type: 'document',
+      title: 'prd.docx',
+      content_text: 'Product collaborators need a schema-backed PRD.',
+      content_hash: 'evidence-hash',
+    });
+    const state = saved.draft.workspace_state;
+    if (!state) throw new Error('Workspace state missing');
+    const sourced = await updateDraft(
+      setup.db,
+      saved.draft.id,
+      {
+        workspace_state: {
+          ...state,
+          sourceBundle: [
+            {
+              id: `material:${material.id}`,
+              type: 'document',
+              title: 'prd.docx',
+              materialId: material.id,
+              contentHash: material.content_hash,
+            },
+          ],
+        },
+      },
+      saved.draft.revision
+    );
+    const reviewed = await prepareWorkspaceAuthoringReview({
+      db: setup.db,
+      projectId,
+      workspaceId,
+      requestId: 'review-evidence-bound',
+      actor,
+      expectedRevision: 1,
+      expectedWorkspaceRevision: sourced.revision,
+      expectedRefHead: null,
+    });
+    expect(schemaGaps(reviewed)).toEqual([]);
+    expect(reviewed.view.transition.checks.validation.outcomes).toEqual(['passed']);
   });
   it('freezes the full manifest through canonical Review, Decision and Commit', async () => {
     const init = await initialize('review');
