@@ -63,6 +63,114 @@ function valueType(value: unknown) {
   return Array.isArray(value) ? 'array' : typeof value;
 }
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function currentValueFields(value: Record<string, unknown>) {
+  const node =
+    typeof value.key === 'string' && isPlainRecord(value.slots)
+      ? { slots: value.slots, children: Array.isArray(value.children) ? value.children : [] }
+      : null;
+  const entries = Object.entries(node ? node.slots : value);
+  const children = node
+    ? node.children.map((child, index) =>
+        isPlainRecord(child) && typeof child.key === 'string' ? child.key : `#${index + 1}`
+      )
+    : [];
+  return { entries, children, nodeKey: node ? (value.key as string) : null };
+}
+
+function CurrentFieldValue({ name, value }: { name: string; value: unknown }) {
+  if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
+    return value.length ? (
+      <ul className={styles.currentList}>
+        {value.map((item, index) => (
+          <li key={`${index}:${item}`}>{item}</li>
+        ))}
+      </ul>
+    ) : (
+      <span className={styles.currentEmpty}>Empty list</span>
+    );
+  }
+  if (typeof value === 'string' && !value) {
+    return <span className={styles.currentEmpty}>Empty text</span>;
+  }
+  return (
+    <ExpandableText
+      text={valueLabel(value)}
+      expandedText={valueLabel(value, true)}
+      label={`Current ${name}`}
+    />
+  );
+}
+
+function CurrentDraftValue({ value, unknown }: { value: unknown; unknown: boolean }) {
+  const [raw, setRaw] = useState(false);
+  const type = unknown ? 'unknown' : valueType(value);
+  const structured = !unknown && isPlainRecord(value);
+  const fields = structured ? currentValueFields(value) : null;
+  return (
+    <>
+      <div className={styles.currentLabel}>
+        <span>Current Draft value</span>
+        <span className={styles.currentMeta}>
+          {fields ? (
+            <button
+              type="button"
+              aria-pressed={raw}
+              className={styles.rawToggle}
+              onClick={() => setRaw((next) => !next)}
+            >
+              <Code2 aria-hidden="true" /> {raw ? 'Fields' : 'JSON'}
+            </button>
+          ) : null}
+          <span>{type}</span>
+        </span>
+      </div>
+      {fields && !raw ? (
+        <section className={styles.currentFields} aria-label="Current Draft value" data-type={type}>
+          {fields.entries.length ? (
+            <dl>
+              {fields.entries.map(([name, item]) => (
+                <div key={name}>
+                  <dt>{name}</dt>
+                  <dd>
+                    <CurrentFieldValue name={name} value={item} />
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <span className={styles.currentEmpty}>No fields yet</span>
+          )}
+          {fields.nodeKey !== null ? (
+            <footer>
+              <span>
+                <ListTree aria-hidden="true" />
+                {fields.children.length
+                  ? `${fields.children.length} child ${fields.children.length === 1 ? 'object' : 'objects'}`
+                  : 'No child objects'}
+              </span>
+              {fields.children.map((child) => (
+                <code key={child}>{child}</code>
+              ))}
+            </footer>
+          ) : null}
+        </section>
+      ) : (
+        <div className={styles.currentValue} data-type={type}>
+          <ExpandableText
+            text={unknown ? 'Unavailable' : valueLabel(value, Boolean(fields))}
+            expandedText={unknown ? 'Unavailable' : valueLabel(value, true)}
+            label="Current Draft value"
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
 function ExpandableText({
   text,
   expandedText,
@@ -625,18 +733,7 @@ export function ComposeNodeHistoryPanel({
           </button>
         </div>
         {copyNotice ? <output className={styles.helper}>{copyNotice}</output> : null}
-        <div className={styles.currentLabel}>
-          <span>Current Draft value</span>
-          <span>{node.state === 'unknown' ? 'unknown' : valueType(node.current)}</span>
-        </div>
-        <div className={styles.currentValue} data-type={valueType(node.current)}>
-          <ExpandableText
-            key={path}
-            text={node.state === 'unknown' ? 'Unavailable' : valueLabel(node.current)}
-            expandedText={node.state === 'unknown' ? 'Unavailable' : valueLabel(node.current, true)}
-            label="Current Draft value"
-          />
-        </div>
+        <CurrentDraftValue key={path} value={node.current} unknown={node.state === 'unknown'} />
         <div className={styles.selectedDelta}>
           <span>
             {isStaged
