@@ -91,6 +91,58 @@ describe('durable Draft authoring commands', () => {
     await ensureWorkspaceAuthoringSchema(setup.db, { ...input, expectedRevision: revision });
     expect((await findWorkspaceDraft(setup.db, projectId, 'unbound'))?.revision).toBe(revision);
   });
+  it('persists a new root object after earlier actions added fields to an existing object', async () => {
+    const workspaceId = 'append-root-after-edit';
+    const init = await initialize(workspaceId);
+    const command = {
+      projectId,
+      workspaceId,
+      actor,
+      channel: 'manual' as const,
+      expectedRefHead: null,
+    };
+    const seeded = await publishWorkspaceAuthoringAction(setup.db, {
+      ...command,
+      actionId: 'seed-root',
+      expectedRevision: 0,
+      expectedWorkspaceRevision: init.draft.revision,
+      operations: [
+        {
+          set: { path: 'trees', value: [{ key: 'prd', slots: { title: 'Draft' }, children: [] }] },
+        },
+      ],
+    });
+    const edited = await publishWorkspaceAuthoringAction(setup.db, {
+      ...command,
+      actionId: 'edit-root',
+      expectedRevision: 1,
+      expectedWorkspaceRevision: seeded.draft.revision,
+      operations: [{ set: { path: 'trees/[key=prd]/slots/audience', value: 'Team' } }],
+    });
+    const added = await publishWorkspaceAuthoringAction(setup.db, {
+      ...command,
+      actionId: 'append-root',
+      expectedRevision: 2,
+      expectedWorkspaceRevision: edited.draft.revision,
+      operations: [
+        { append: { path: 'trees', value: { key: 'new-root', slots: {}, children: [] } } },
+      ],
+    });
+    expect(added.value.kind).toBe('published');
+    const recovered = workspaceAuthoringState(
+      (await findWorkspaceDraft(setup.db, projectId, workspaceId))!.workspace_state!
+    );
+    const expected = {
+      trees: [
+        { key: 'prd', slots: { title: 'Draft', audience: 'Team' }, children: [] },
+        { key: 'new-root', slots: {}, children: [] },
+      ],
+    };
+    expect(recovered.ledger.compositionRevision).toBe(3);
+    expect(currentComposition(recovered.ledger)).toEqual(expected);
+    expect(buildAuthoringEffect(recovered.ledger).result.value).toEqual(expected);
+  });
+
   it('persists a multi-node action, recovers a lost response, and reconstructs immutable views', async () => {
     const init = await initialize('durable');
     const command = {

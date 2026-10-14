@@ -1,3 +1,4 @@
+import { canonicalKey } from '../canonical';
 import { YOPS_ERRORS, yopsError } from '../errors';
 import { resolvePath } from '../paths';
 import type { OpHandler } from '../registry';
@@ -44,7 +45,9 @@ export const assertHandler: OpHandler = (doc, fields, index) => {
         error: yopsError(YOPS_ERRORS.ASSERTION_FAILED, `Path "${path}" does not exist`, index),
       };
     }
-    if (JSON.stringify(value) !== JSON.stringify(equals)) {
+    // Mapping insertion order can change during editing or canonical serialization.
+    // Compare values recursively while preserving sequence order and scalar types.
+    if (canonicalKey(value) !== canonicalKey(equals)) {
       return {
         doc,
         error: yopsError(
