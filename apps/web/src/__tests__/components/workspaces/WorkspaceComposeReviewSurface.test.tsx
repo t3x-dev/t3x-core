@@ -1048,6 +1048,98 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(prepareReview).not.toHaveBeenCalled();
   });
 
+  it('shows the schema statement gaps on the current candidate', async () => {
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    navigationMocks.searchParams = new URLSearchParams('workspaceMode=review&reviewPane=checks');
+    const controller = {
+      busyAction: null,
+      candidate,
+      chat: {
+        error: null,
+        input: '',
+        isLoading: false,
+        isStreaming: false,
+        messages: [],
+        send: vi.fn(),
+        setInput: vi.fn(),
+        stop: vi.fn(),
+        warning: null,
+      },
+      error: null,
+      hasCollaborationConflict: false,
+      isBusy: false,
+      materialSources: [],
+      model: {
+        availabilityError: null,
+        change: vi.fn(),
+        loading: false,
+        ready: true,
+        selectedModel: 'gpt-5.4-mini',
+        selectedProvider: 'openai',
+      },
+      notice: null,
+      prepareReview: vi.fn(),
+      renderedYaml: '',
+      review: {
+        changeProjection: null,
+        commands: null,
+        content: null,
+        deterministicValidation: null,
+        precondition: null,
+        reviewSnapshot: null,
+        transitionId: null,
+        view: {
+          checks: {
+            objectIntegrity: 'verified',
+            replay: { observation: 'observed', outcomes: ['verified'], runs: [] },
+            validation: {
+              observation: 'observed',
+              outcomes: ['failed'],
+              runs: [
+                {
+                  predicate: {
+                    outcome: 'failed',
+                    gaps: [
+                      {
+                        code: 'REQUIRED_EVIDENCE_MISSING',
+                        path: 'summary/audience',
+                        message: 'summary/audience needs accepted source evidence.',
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          history: { observation: 'not_committed' },
+          mode: 'transition',
+        },
+      },
+      scenarios: { options: [], selectedId: candidate.id },
+      sourceBusy: false,
+    } as unknown as WorkspaceComposeReviewController;
+
+    render(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="review"
+        onModeChange={vi.fn()}
+      />
+    );
+
+    expect(
+      await screen.findByRole('region', { name: 'Workspace review checks' })
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('REQUIRED_EVIDENCE_MISSING').length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: 'Gap (1)' })).toBeInTheDocument();
+    expect(screen.getAllByText('summary/audience').length).toBeGreaterThan(0);
+    expect(screen.queryByText('REQUIRED_SLOT_MISSING')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Generate a candidate proposal from source evidence.')
+    ).not.toBeInTheDocument();
+  });
+
   it('treats a stale validation review pane as Render', () => {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     navigationMocks.searchParams = new URLSearchParams(

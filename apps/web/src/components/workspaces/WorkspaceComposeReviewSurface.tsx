@@ -2065,7 +2065,11 @@ function WorkspaceReviewChecksView({
     ? 'Snapshot projection'
     : _formatProposalSchemaLabel(candidate);
   const selectedStatus = selected?.status ?? 'pending';
-  const gap = selectedSnapshotId ? null : candidate.schemaReview.gaps[0];
+  const gaps = schemaValidationGaps(
+    selectedSnapshotId
+      ? selectedSnapshot?.snapshot.transition.checks.validation
+      : controller.review.view?.checks.validation
+  );
   const selectedReady = selectedStatus === 'passed';
 
   return (
@@ -2271,21 +2275,23 @@ function WorkspaceReviewChecksView({
             </section>
           ) : null}
 
-          {gap ? (
+          {gaps.length > 0 ? (
             <section className={checksStyles.detailCard}>
-              <h3>Gap (1)</h3>
-              <div className={checksStyles.gapCard}>
-                <AlertTriangle aria-hidden="true" />
-                <div>
-                  <strong>REQUIRED_SLOT_MISSING</strong>
-                  <code>{gap}</code>
-                  <p>{gap} is required before this state is ready.</p>
+              <h3>Gap ({gaps.length})</h3>
+              {gaps.map((gap) => (
+                <div className={checksStyles.gapCard} key={`${gap.code}:${gap.path}`}>
+                  <AlertTriangle aria-hidden="true" />
+                  <div>
+                    <strong>{gap.code}</strong>
+                    <code>{gap.path}</code>
+                    <p>{gap.message}</p>
+                  </div>
+                  <button onClick={onOpenStructure} type="button">
+                    <ExternalLink aria-hidden="true" />
+                    View in structure
+                  </button>
                 </div>
-                <button onClick={onOpenStructure} type="button">
-                  <ExternalLink aria-hidden="true" />
-                  View in structure
-                </button>
-              </div>
+              ))}
             </section>
           ) : null}
 
@@ -2299,23 +2305,23 @@ function WorkspaceReviewChecksView({
                 </button>
               </div>
               <p className={checksStyles.suggestion}>
-                {gap
-                  ? 'Add the required field with a valid value.'
+                {gaps.length > 0
+                  ? gaps.map((gap) => gap.message).join(' ')
                   : (selected?.detail ?? 'No check detail is available.')}
               </p>
             </section>
           ) : null}
 
-          {gap ? (
+          {gaps.length > 0 ? (
             <section className={checksStyles.detailCard}>
               <h3>Definition</h3>
-              <div className={checksStyles.definition}>
-                <code>{gap}</code>
-                <b>·</b>
-                <span>value</span>
-                <b>·</b>
-                <em>required</em>
-              </div>
+              {gaps.map((gap) => (
+                <div className={checksStyles.definition} key={`${gap.code}:${gap.path}`}>
+                  <code>{gap.path}</code>
+                  <b>·</b>
+                  <span>{gap.code}</span>
+                </div>
+              ))}
             </section>
           ) : null}
         </main>
@@ -3727,6 +3733,16 @@ function getReviewChecks(controller: WorkspaceComposeReviewController): ReviewCh
         : 'Protocol object integrity will be checked when the review snapshot is prepared.',
   });
   return checks;
+}
+
+function schemaValidationGaps(
+  validation: { runs?: ReadonlyArray<{ predicate: object }> } | null | undefined
+): Array<{ code: string; message: string; path: string }> {
+  return (validation?.runs ?? []).flatMap((run) =>
+    'gaps' in run.predicate && Array.isArray(run.predicate.gaps)
+      ? (run.predicate.gaps as Array<{ code: string; message: string; path: string }>)
+      : []
+  );
 }
 
 function checksFromSnapshot(
