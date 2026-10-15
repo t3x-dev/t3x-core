@@ -3,8 +3,7 @@ import { createConversation } from '@/commands/conversations';
 import { createProject } from '@/commands/projects';
 import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
 import { API_V1, fetchWithTimeout, handleResponse } from '@/infrastructure/core';
-import { type Material, uploadDocumentMaterial } from '@/infrastructure/materials';
-import { changeProjectVisibility, updateProject } from '@/infrastructure/projects';
+import { changeProjectVisibility } from '@/infrastructure/projects';
 import { saveWorkspaceDraft } from '@/queries/workspaces';
 import { apiProjectToSummary, useProjectStore } from '@/store/projectStore';
 import type { Project } from '@/types/api';
@@ -15,9 +14,6 @@ export interface RepositorySetupInput {
   description: string;
   owner: string;
   visibility: 'private' | 'unlisted' | 'public';
-  provider: string;
-  model: string;
-  files: File[];
   schema: File | null;
 }
 
@@ -28,11 +24,10 @@ export function useRepositorySetup() {
   const progress = useRef<{
     input?: RepositorySetupInput;
     project?: Project;
-    materials: Material[];
     workspace?: WorkspaceCandidate;
     schemaBound?: boolean;
     conversation?: string;
-  }>({ materials: [] });
+  }>({});
   const busy = useRef(false);
   async function create(input: RepositorySetupInput) {
     if (busy.current) return;
@@ -54,21 +49,12 @@ export function useRepositorySetup() {
       const store = useProjectStore.getState();
       if (!store.projects.some((project) => project.id === id))
         store.addToProjects(apiProjectToSummary(state.project));
-      await updateProject(id, {
-        default_provider: config.provider || null,
-        default_model: config.model || null,
-      });
-      while (state.materials.length < config.files.length) {
-        state.materials.push(
-          await uploadDocumentMaterial(id, config.files[state.materials.length]!)
-        );
-      }
       if (!state.workspace) {
         state.workspace = (
           await saveWorkspaceDraft(
             id,
             'workspace_branch:main',
-            getProjectWorkspaceStarterCandidate(id, state.materials)
+            getProjectWorkspaceStarterCandidate(id, [])
           )
         ).workspace;
       }

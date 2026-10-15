@@ -228,19 +228,6 @@
   background: var(--surface-panel);
   font-size: 14px;
 }
-.connection {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.connection select {
-  flex: 1;
-}
-.testStatus {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  white-space: nowrap;
-}
 .upload {
   display: flex;
   align-items: center;

@@ -38,10 +38,15 @@ export async function getProviderRegistry(): Promise<ProviderRegistry> {
 
   // Cache the Promise itself — all concurrent callers share ONE init
   if (!registryInit) {
-    registryInit = initRegistry().then((reg) => {
-      registry = reg;
-      return reg;
-    });
+    registryInit = initRegistry()
+      .then((reg) => {
+        registry = reg;
+        return reg;
+      })
+      .catch((error) => {
+        registryInit = null;
+        throw error;
+      });
   }
 
   return registryInit;

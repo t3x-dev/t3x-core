@@ -6,7 +6,8 @@ export default function ProviderCredentialsPage() {
       <div className="mb-8">
         <h1 className="text-lg font-semibold text-[var(--text-primary)]">Provider credentials</h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Configure local provider API keys and connection defaults.
+          Deployment operators manage shared AI credentials here. Database credentials take priority
+          over environment configuration.
         </p>
       </div>
       <ProviderSettingsCapabilityGate />

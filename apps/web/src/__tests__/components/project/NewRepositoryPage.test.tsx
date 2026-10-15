@@ -22,21 +22,14 @@ vi.mock('@/hooks/accounts/useNamespaceAccounts', () => ({
   useNamespaceAccounts: () => ({ accounts: [{ namespace: { slug: 'another-team' } }] }),
 }));
 vi.mock('@/hooks/shared/useProvidersList', () => ({
-  useProvidersList: () => ({
-    loading: false,
-    providers: [
-      {
-        id: 'openai',
-        name: 'OpenAI',
-        configured: true,
-        default_model: 'model-a',
-        available_models: ['model-a', 'model-b'],
-      },
-    ],
-  }),
+  useProvidersList: () => {
+    throw new Error('Provider API unavailable; creation must not query it');
+  },
 }));
 vi.mock('@/hooks/providers/useProviderCommands', () => ({
-  useProviderCommands: () => ({ runProviderConnectionTest: mocks.test }),
+  useProviderCommands: () => {
+    throw new Error('Creation must not test AI');
+  },
 }));
 vi.mock('@/hooks/projects/useRepositorySetup', () => ({
   useRepositorySetup: () => ({ create: mocks.create, pending: false, started: false, error: null }),
@@ -47,7 +40,7 @@ beforeEach(() => {
 });
 it('uses dropdowns, single-line description, and file uploads from the reference', () => {
   render(<NewRepositoryPage />);
-  for (const name of ['Owner', 'Visibility', 'Connection', 'Model'])
+  for (const name of ['Owner', 'Visibility'])
     expect(screen.getByRole('combobox', { name })).toBeInTheDocument();
   expect(screen.getByLabelText('Description').tagName).toBe('INPUT');
   expect(screen.getByLabelText('Upload YAML')).toHaveAttribute('accept', '.yaml,.yml');
@@ -55,7 +48,7 @@ it('uses dropdowns, single-line description, and file uploads from the reference
   fireEvent.click(screen.getByRole('button', { name: 'Collapse all' }));
   expect(screen.getByRole('button', { name: /General/ })).toHaveAttribute('aria-expanded', 'false');
 });
-it('tests the connection and submits the selected backend configuration and files', async () => {
+it('creates without AI and retains the canonical D01-005 destination', async () => {
   mocks.create.mockResolvedValue({
     project: { project_id: 'p', name: 'Catalog', canonical_path: '/another-team/Catalog' },
     workspaceId: 'workspace_branch:main',
@@ -65,11 +58,10 @@ it('tests the connection and submits the selected backend configuration and file
   fireEvent.change(screen.getByLabelText('Repository name'), { target: { value: 'Catalog' } });
   fireEvent.change(screen.getByLabelText('Owner'), { target: { value: 'another-team' } });
   fireEvent.change(screen.getByLabelText('Visibility'), { target: { value: 'unlisted' } });
-  fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'model-b' } });
-  const file = new File(['notes'], 'notes.md');
-  fireEvent.change(screen.getByLabelText('Upload files'), { target: { files: [file] } });
-  fireEvent.click(screen.getByRole('button', { name: 'Test' }));
-  await waitFor(() => expect(screen.getByText('Connected')).toBeInTheDocument());
+  expect(screen.queryByLabelText('Connection')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Model')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Upload files')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Test' })).not.toBeInTheDocument();
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Create and start conversation' })).toBeEnabled()
   );
@@ -79,24 +71,19 @@ it('tests the connection and submits the selected backend configuration and file
       expect.objectContaining({
         name: 'Catalog',
         owner: 'another-team',
-        provider: 'openai',
-        model: 'model-b',
         visibility: 'unlisted',
-        files: [file],
       })
     )
   );
-  expect(mocks.test).toHaveBeenCalledWith('openai');
+  expect(mocks.create.mock.calls[0][0]).not.toHaveProperty('provider');
+  expect(mocks.create.mock.calls[0][0]).not.toHaveProperty('files');
   expect(mocks.push).toHaveBeenCalledWith(
     '/another-team/Catalog/workspaces?workspace=workspace_branch%3Amain&conversation=c'
   );
 });
-it('keeps failed connection tests and invalid uploads from enabling creation', async () => {
-  mocks.test.mockResolvedValue({ ok: false, error: 'Invalid key' });
+it('preserves optional Schema file validation', async () => {
   render(<NewRepositoryPage />);
   fireEvent.change(screen.getByLabelText('Repository name'), { target: { value: 'Catalog' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Test' }));
-  await screen.findByText('Invalid key');
   fireEvent.change(screen.getByLabelText('Upload YAML'), {
     target: { files: [new File(['x'], 'wrong.txt')] },
   });

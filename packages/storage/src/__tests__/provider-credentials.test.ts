@@ -119,7 +119,9 @@ describe('provider credentials', () => {
     const bundle = await getProviderCredentialBundle(db);
 
     expect(bundle.secrets.OPENAI_API_KEY).toBe(newKey);
-    expect(bundle.safe.openai?.lastTestError).toBe('[redacted]');
+    expect(bundle.safe.openai?.lastTestError).toBeNull();
+    expect(bundle.safe.openai?.lastTestStatus).toBeNull();
+    expect(bundle.safe.openai?.lastTestedAt).toBeNull();
     expect(JSON.stringify(bundle.safe)).not.toContain(oldKey);
     expect(JSON.stringify(bundle.safe)).not.toContain(newKey);
 
@@ -132,7 +134,7 @@ describe('provider credentials', () => {
     expect(JSON.stringify(persisted)).not.toContain(newKey);
     expect((persisted as { credentialVersion?: number }).credentialVersion).toBe(2);
     expect((persisted as { encryptedApiKey?: string }).encryptedApiKey).toMatch(/^t3xenc:v1:/);
-    expect((persisted as { lastTestError?: string }).lastTestError).toBe('[redacted]');
+    expect((persisted as { lastTestError?: string }).lastTestError).toBeNull();
   });
 
   it('lazily migrates a legacy plaintext provider credential', async () => {

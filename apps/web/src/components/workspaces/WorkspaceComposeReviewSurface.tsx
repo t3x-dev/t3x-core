@@ -668,9 +668,9 @@ function ComposeSurface({
     (source) =>
       source.type === 'chat' && source.title === 'Compose assistant' && source.conversationId
   )?.conversationId;
-  const sourceMaterialIds = candidate.sourceBundle.flatMap((source) =>
-    source.materialId ? [source.materialId] : []
-  );
+  const sourceMaterialIds = controller.materialSources
+    .filter((source) => source.included)
+    .map((source) => source.materialId);
   const openChat = () => {
     setSidePanel('chat');
   };
@@ -802,6 +802,9 @@ function ComposeSurface({
             </span>
           ) : null}
         </header>
+        {!activity.enabled || sidePanel === 'history' || !activity.view ? (
+          <WorkspaceSourcesMenu candidate={candidate} controller={controller} />
+        ) : null}
         {!activity.enabled ? (
           <ComposeDraftPreparation
             key={candidate.id}
@@ -945,7 +948,13 @@ function WorkspaceSourcesMenu({
                 type="button"
               >
                 <Plus aria-hidden="true" />
-                {included.length > 0 ? <small>{included.length}</small> : null}
+                {controller.sourceBusy ? (
+                  <span>Updating sources…</span>
+                ) : included.length > 0 ? (
+                  <small>{included.length}</small>
+                ) : (
+                  <span>Add source</span>
+                )}
               </button>
             </DropdownMenuTrigger>
           </TooltipTrigger>

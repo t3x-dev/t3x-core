@@ -8,7 +8,7 @@ import { getModelsByProvider } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import * as storage from '@t3x-dev/storage';
 import { Hono } from 'hono';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB } from './setup';
 
 // biome-ignore lint/suspicious/noExplicitAny: test helper
@@ -85,6 +85,8 @@ describe('Provider Routes', () => {
     principal.route('/', providersRoutes);
     return principal;
   }
+
+  afterEach(() => vi.unstubAllEnvs());
 
   beforeAll(async () => {
     const setup = await setupTestDB();
@@ -209,6 +211,91 @@ describe('Provider Routes', () => {
     process.env.T3X_OPERATOR_KEY_IDS = 'ak_human';
     mockRegistry.listProviders.mockReturnValue([]);
     expect((await principalApp('human').request('/v1/providers')).status).toBe(200);
+  });
+
+  it('reports database precedence and environment fallback after removal', async () => {
+    vi.stubEnv('OPENAI_API_KEY', 'test-environment-KEY1');
+    const read = async () => (await (await app.request('/v1/providers/local/openai')).json()).data;
+    expect(await read()).toMatchObject({
+      api_key_source: 'environment',
+      stored: false,
+      configured: true,
+    });
+    await storage.upsertProviderCredential(mockDB, {
+      providerId: 'openai',
+      apiKey: 'test-database-KEY2',
+    });
+    expect(await read()).toMatchObject({
+      api_key_source: 'database',
+      api_key_preview: '…KEY2',
+      stored: true,
+    });
+    const removed = await app.request('/v1/providers/local/openai', { method: 'DELETE' });
+    expect((await removed.json()).data).toMatchObject({
+      api_key_source: 'environment',
+      configured: true,
+      stored: false,
+    });
+  });
+
+  it('masks short keys and never returns raw provider errors', async () => {
+    await storage.upsertProviderCredential(mockDB, { providerId: 'openai', apiKey: 'abcd' });
+    const status = await app.request('/v1/providers/local/openai');
+    expect(await status.text()).not.toContain('abcd');
+    mockRegistry.testConnection.mockResolvedValue({ ok: false, error: 'Authorization: abcd' });
+    const result = await app.request('/v1/providers/openai/test', { method: 'POST' });
+    expect(await result.text()).not.toContain('abcd');
+  });
+
+  it('clears previous test success when replacing a credential', async () => {
+    await storage.upsertProviderCredential(mockDB, {
+      providerId: 'openai',
+      apiKey: 'old-test-key',
+    });
+    await storage.updateProviderCredentialTestResult(mockDB, 'openai', { lastTestStatus: 'ok' });
+    const replaced = await app.request('/v1/providers/local/openai', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: 'new-test-key' }),
+    });
+    expect((await replaced.json()).data).toMatchObject({
+      last_test_status: null,
+      last_tested_at: null,
+    });
+  });
+
+  it.each([
+    '',
+    'invalid-key',
+  ])('explains unavailable encryption without persisting plaintext', async (key) => {
+    vi.stubEnv('T3X_CREDENTIAL_ENCRYPTION_KEY', key);
+    const res = await app.request('/v1/providers/local/openai', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: 'must-never-be-persisted' }),
+    });
+    expect(res.status).toBe(503);
+    const text = await res.text();
+    expect(text).toContain('T3X_CREDENTIAL_ENCRYPTION_KEY');
+    expect(text).not.toContain('must-never-be-persisted');
+    expect(
+      await storage.getGlobalSetting(mockDB, 'local_provider_credentials_v1_openai')
+    ).toBeNull();
+  });
+
+  it('reports decryption failure rather than an unconfigured or environment-only status', async () => {
+    await storage.upsertProviderCredential(mockDB, {
+      providerId: 'openai',
+      apiKey: 'database-secret',
+    });
+    vi.stubEnv('T3X_CREDENTIAL_ENCRYPTION_KEY', Buffer.alloc(32, 0x11).toString('base64'));
+    vi.stubEnv('OPENAI_API_KEY', 'environment-secret');
+    const res = await app.request('/v1/providers/local/openai');
+    expect(res.status).toBe(503);
+    const text = await res.text();
+    expect(text).toContain('CREDENTIAL_ENCRYPTION_UNAVAILABLE');
+    expect(text).not.toContain('database-secret');
+    expect(text).not.toContain('environment-secret');
   });
 
   it('normalizes google aliases to the local provider family model', async () => {

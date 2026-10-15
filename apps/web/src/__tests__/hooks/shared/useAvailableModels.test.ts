@@ -1,314 +1,66 @@
 // @vitest-environment jsdom
-
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanupRoots, renderHook, waitForHook } from '../../hooks/renderHook';
-
-vi.mock('@/queries/llm', () => ({
-  fetchAvailableModels: vi.fn(),
-}));
-
-vi.mock('@/queries/providerStatus', () => ({
-  fetchLocalProviderStatus: vi.fn(),
-}));
-
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { beforeEach, expect, it, vi } from 'vitest';
 import { useAvailableModels } from '@/hooks/shared/useAvailableModels';
 import { fetchAvailableModels } from '@/queries/llm';
 import { fetchLocalProviderStatus } from '@/queries/providerStatus';
 
-function makeModel(id: string, label: string) {
-  return { id, label, capabilities: [], max_output_tokens: 4096 };
-}
-
+vi.mock('@/queries/llm', () => ({ fetchAvailableModels: vi.fn() }));
+vi.mock('@/queries/providerStatus', () => ({ fetchLocalProviderStatus: vi.fn() }));
+const model = (id: string) => ({ id, label: id, capabilities: ['text'], max_output_tokens: 4096 });
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
+  vi.mocked(fetchLocalProviderStatus).mockRejectedValue(new Error('Forbidden'));
 });
-
-afterEach(() => {
-  cleanupRoots();
+it.each([
+  'openai',
+  'managed',
+])('uses available %s inference without credential administration', async (provider) => {
+  vi.mocked(fetchAvailableModels).mockResolvedValue({
+    generation_provider_order: [provider],
+    default_provider: provider,
+    providers: [{ name: provider, label: provider, available: true, models: [model('balanced')] }],
+  });
+  const { result } = renderHook(() => useAvailableModels());
+  expect(result.current.loading).toBe(true);
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  expect(result.current.hasConfiguredGenerationProvider).toBe(true);
+  expect(result.current.defaultProvider).toBe(provider);
+  expect(result.current.defaultModel).toBe('balanced');
+  expect(fetchLocalProviderStatus).not.toHaveBeenCalled();
 });
-
-describe('useAvailableModels', () => {
-  it('hides env-backed providers when no local credentials are stored', async () => {
-    vi.mocked(fetchLocalProviderStatus).mockImplementation(async (providerId: string) => {
-      const defaults = {
-        configured: false,
-        default_model: null,
-        last_test_status: null,
-        last_tested_at: null,
-        last_test_error: null,
-      };
-
-      return {
-        provider:
-          providerId === 'anthropic' ? 'anthropic' : providerId === 'openai' ? 'openai' : 'google',
-        ...defaults,
-      } as never;
+it('preserves backend ordering and the selected provider default', async () => {
+  vi.mocked(fetchAvailableModels).mockResolvedValue({
+    generation_provider_order: ['google', 'openai'],
+    default_provider: 'google',
+    providers: [
+      { name: 'openai', label: 'OpenAI', available: true, models: [model('gpt')] },
+      {
+        name: 'google',
+        label: 'Google',
+        available: true,
+        default_model: 'pro',
+        models: [model('flash'), model('pro')],
+      },
+      { name: 'anthropic', label: 'Anthropic', available: false, models: [model('claude')] },
+    ],
+  });
+  const { result } = renderHook(() => useAvailableModels());
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  expect(result.current.providers.map((provider) => provider.name)).toEqual(['google', 'openai']);
+  expect(result.current.defaultModel).toBe('pro');
+});
+it('distinguishes discovery failure from an empty catalog and retries without connecting', async () => {
+  vi.mocked(fetchAvailableModels)
+    .mockRejectedValueOnce(new Error('Unavailable'))
+    .mockResolvedValue({
+      generation_provider_order: [],
+      default_provider: null,
+      providers: [],
     });
-
-    vi.mocked(fetchAvailableModels).mockResolvedValue({
-      generation_provider_order: ['anthropic', 'openai', 'google'],
-      default_provider: 'anthropic',
-      providers: [
-        {
-          name: 'anthropic',
-          label: 'Anthropic',
-          available: false,
-          models: [makeModel('claude-sonnet-4-20250514', 'Claude Sonnet 4')],
-        },
-        {
-          name: 'openai',
-          label: 'OpenAI',
-          available: true,
-          models: [makeModel('gpt-4.1', 'GPT-4.1')],
-        },
-        {
-          name: 'google',
-          label: 'Google',
-          available: false,
-          models: [makeModel('gemini-2.5-pro', 'Gemini 2.5 Pro')],
-        },
-      ],
-    } as never);
-
-    const { result, unmount } = renderHook(() => useAvailableModels());
-    expect(result.current.loading).toBe(true);
-
-    await waitForHook();
-    await waitForHook();
-
-    expect(result.current.loading).toBe(false);
-    expect(result.current.hasConfiguredGenerationProvider).toBe(false);
-    expect(result.current.providers).toEqual([]);
-    expect(result.current.defaultProvider).toBeNull();
-    expect(result.current.defaultModel).toBeNull();
-    expect(result.current.availabilityError).toBeNull();
-
-    const loaded = await result.current.loadModels();
-    expect(loaded.providers).toEqual(result.current.providers);
-    unmount();
-  });
-
-  it('prefers a usable local default provider and model when they are available', async () => {
-    vi.mocked(fetchLocalProviderStatus).mockImplementation(async (providerId: string) => {
-      if (providerId === 'anthropic') {
-        return {
-          provider: 'anthropic',
-          configured: true,
-          default_model: 'claude-sonnet-4-20250514',
-          last_test_status: 'ok',
-          last_tested_at: null,
-          last_test_error: null,
-        } as never;
-      }
-
-      return {
-        provider: providerId === 'openai' ? 'openai' : 'google',
-        configured: false,
-        default_model: null,
-        last_test_status: null,
-        last_tested_at: null,
-        last_test_error: null,
-      } as never;
-    });
-
-    vi.mocked(fetchAvailableModels).mockResolvedValue({
-      generation_provider_order: ['anthropic', 'openai'],
-      default_provider: 'anthropic',
-      providers: [
-        {
-          name: 'anthropic',
-          label: 'Anthropic',
-          available: true,
-          models: [
-            makeModel('claude-sonnet-4-20250514', 'Claude Sonnet 4'),
-            makeModel('claude-haiku-4-20250514', 'Claude Haiku 4'),
-          ],
-        },
-        {
-          name: 'openai',
-          label: 'OpenAI',
-          available: true,
-          models: [makeModel('gpt-4.1', 'GPT-4.1')],
-        },
-      ],
-    } as never);
-
-    const { result, unmount } = renderHook(() => useAvailableModels());
-    await waitForHook();
-    await waitForHook();
-
-    expect(result.current.providers.map((provider) => provider.name)).toEqual(['anthropic']);
-    expect(result.current.defaultProvider).toBe('anthropic');
-    expect(result.current.defaultModel).toBe('claude-sonnet-4-20250514');
-    expect(result.current.availabilityError).toBeNull();
-    unmount();
-  });
-
-  it('uses backend provider ordering/default and only applies a saved default model within that provider', async () => {
-    vi.mocked(fetchLocalProviderStatus).mockImplementation(async (providerId: string) => {
-      if (providerId === 'openai') {
-        return {
-          provider: 'openai',
-          configured: true,
-          default_model: 'gpt-4o',
-          last_test_status: 'ok',
-          last_tested_at: null,
-          last_test_error: null,
-        } as never;
-      }
-
-      return {
-        provider: providerId === 'anthropic' ? 'anthropic' : 'google',
-        configured: false,
-        default_model: null,
-        last_test_status: null,
-        last_tested_at: null,
-        last_test_error: null,
-      } as never;
-    });
-
-    vi.mocked(fetchAvailableModels).mockResolvedValue({
-      generation_provider_order: ['google', 'openai', 'anthropic'],
-      default_provider: 'google',
-      providers: [
-        {
-          name: 'google',
-          label: 'Google',
-          available: true,
-          models: [
-            makeModel('gemini-2.5-flash', 'Gemini 2.5 Flash'),
-            makeModel('gemini-2.5-pro', 'Gemini 2.5 Pro'),
-          ],
-        },
-        {
-          name: 'openai',
-          label: 'OpenAI',
-          available: true,
-          models: [makeModel('gpt-4o', 'GPT-4o')],
-        },
-        {
-          name: 'anthropic',
-          label: 'Anthropic',
-          available: true,
-          models: [makeModel('claude-sonnet-4-20250514', 'Claude Sonnet 4')],
-        },
-      ],
-    } as never);
-
-    const { result, unmount } = renderHook(() => useAvailableModels());
-    await waitForHook();
-    await waitForHook();
-
-    expect(result.current.providers.map((provider) => provider.name)).toEqual(['openai']);
-    expect(result.current.defaultProvider).toBe('openai');
-    expect(result.current.defaultModel).toBe('gpt-4o');
-    expect(result.current.availabilityError).toBeNull();
-    unmount();
-  });
-
-  it('uses a saved local default model when it is valid for the backend-selected provider', async () => {
-    vi.mocked(fetchLocalProviderStatus).mockImplementation(async (providerId: string) => {
-      if (providerId === 'anthropic') {
-        return {
-          provider: 'anthropic',
-          configured: true,
-          default_model: 'claude-haiku-4-20250514',
-          last_test_status: 'ok',
-          last_tested_at: null,
-          last_test_error: null,
-        } as never;
-      }
-
-      return {
-        provider: providerId === 'openai' ? 'openai' : 'google',
-        configured: false,
-        default_model: null,
-        last_test_status: null,
-        last_tested_at: null,
-        last_test_error: null,
-      } as never;
-    });
-
-    vi.mocked(fetchAvailableModels).mockResolvedValue({
-      generation_provider_order: ['anthropic', 'openai'],
-      default_provider: 'anthropic',
-      providers: [
-        {
-          name: 'anthropic',
-          label: 'Anthropic',
-          available: true,
-          models: [
-            makeModel('claude-sonnet-4-20250514', 'Claude Sonnet 4'),
-            makeModel('claude-haiku-4-20250514', 'Claude Haiku 4'),
-          ],
-        },
-        {
-          name: 'openai',
-          label: 'OpenAI',
-          available: true,
-          models: [makeModel('gpt-4o', 'GPT-4o')],
-        },
-      ],
-    } as never);
-
-    const { result, unmount } = renderHook(() => useAvailableModels());
-    await waitForHook();
-    await waitForHook();
-
-    expect(result.current.defaultProvider).toBe('anthropic');
-    expect(result.current.defaultModel).toBe('claude-haiku-4-20250514');
-    expect(result.current.availabilityError).toBeNull();
-    unmount();
-  });
-
-  it('reports an API availability error when the model registry cannot be loaded', async () => {
-    vi.mocked(fetchLocalProviderStatus).mockResolvedValue({
-      provider: 'anthropic',
-      configured: false,
-      default_model: null,
-      last_test_status: null,
-      last_tested_at: null,
-      last_test_error: null,
-    } as never);
-    vi.mocked(fetchAvailableModels).mockRejectedValue(new Error('boom'));
-
-    const { result, unmount } = renderHook(() => useAvailableModels());
-    await waitForHook();
-    await waitForHook();
-
-    expect(result.current.providers).toEqual([]);
-    expect(result.current.loading).toBe(false);
-    expect(result.current.hasConfiguredGenerationProvider).toBe(false);
-    expect(result.current.defaultProvider).toBeNull();
-    expect(result.current.defaultModel).toBeNull();
-    expect(result.current.availabilityError).toBe('api_unavailable');
-    unmount();
-  });
-
-  it('reports an API availability error when provider status cannot be loaded', async () => {
-    vi.mocked(fetchLocalProviderStatus).mockRejectedValue(new Error('connect ECONNREFUSED'));
-    vi.mocked(fetchAvailableModels).mockResolvedValue({
-      generation_provider_order: ['anthropic'],
-      default_provider: 'anthropic',
-      providers: [
-        {
-          name: 'anthropic',
-          label: 'Anthropic',
-          available: true,
-          models: [makeModel('claude-sonnet-4-20250514', 'Claude Sonnet 4')],
-        },
-      ],
-    } as never);
-
-    const { result, unmount } = renderHook(() => useAvailableModels());
-    await waitForHook();
-    await waitForHook();
-
-    expect(fetchAvailableModels).not.toHaveBeenCalled();
-    expect(result.current.providers).toEqual([]);
-    expect(result.current.loading).toBe(false);
-    expect(result.current.hasConfiguredGenerationProvider).toBe(false);
-    expect(result.current.availabilityError).toBe('api_unavailable');
-    unmount();
-  });
+  const { result } = renderHook(() => useAvailableModels());
+  await waitFor(() => expect(result.current.availabilityError).toBe('api_unavailable'));
+  act(() => result.current.refresh());
+  await waitFor(() => expect(result.current.availabilityError).toBeNull());
+  expect(result.current.hasConfiguredGenerationProvider).toBe(false);
 });

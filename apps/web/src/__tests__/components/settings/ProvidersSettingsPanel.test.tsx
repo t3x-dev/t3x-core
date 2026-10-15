@@ -45,9 +45,9 @@ function status(
     last_test_status: null,
     last_tested_at: null,
     last_test_error: null,
-    api_key_source: 'file',
+    api_key_source: 'database',
     api_key_preview: '…abcd',
-    env_overrides_stored: false,
+    stored: false,
     ...overrides,
   };
 }
@@ -107,13 +107,13 @@ describe('ProvidersSettingsPanel', () => {
     // exposes. The panel fetches these three in parallel on mount.
     mockFetchLocalProviderStatus.mockImplementation(async (provider: string) => {
       if (provider === 'anthropic') {
-        return status('anthropic', { api_key_source: 'env', api_key_preview: '…JnYA' });
+        return status('anthropic', { api_key_source: 'environment', api_key_preview: '…JnYA' });
       }
       if (provider === 'openai') {
         return status('openai', {
-          api_key_source: 'env',
+          api_key_source: 'environment',
           api_key_preview: '…XfPq',
-          env_overrides_stored: true,
+          stored: true,
         });
       }
       if (provider === 'google') {
@@ -144,7 +144,7 @@ describe('ProvidersSettingsPanel', () => {
     await waitFor(() => screen.getByRole('heading', { name: 'Providers' }));
 
     // Anthropic + OpenAI both come from env; Google is not configured.
-    expect(screen.getAllByText('from .env').length).toBe(2);
+    expect(screen.getAllByText('Environment').length).toBe(2);
     expect(screen.getByText('Not configured')).toBeInTheDocument();
 
     // Previews render alongside the chip (last-4-char tails).
@@ -152,12 +152,12 @@ describe('ProvidersSettingsPanel', () => {
     expect(screen.getByText(/…XfPq/)).toBeInTheDocument();
   });
 
-  it('renders the env-overrides-stored warning exactly where applicable', async () => {
+  it('explains the database-first precedence without an opposite override warning', async () => {
     render(<ProvidersSettingsPanel />);
     await waitFor(() => screen.getByRole('heading', { name: 'Providers' }));
 
-    const banners = screen.getAllByText(/environment variable is overriding/i);
-    expect(banners).toHaveLength(1);
+    expect(screen.queryByText(/environment variable is overriding/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Database > environment > none')).toBeInTheDocument();
   });
 
   it('does not render the retired LLM Generation / Embedding section headings', async () => {

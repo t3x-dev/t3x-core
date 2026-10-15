@@ -103,10 +103,7 @@ describe('SettingsLayout', () => {
       '/settings/members'
     );
     expect(screen.getByRole('link', { name: 'Usage' })).toHaveAttribute('href', '/settings/usage');
-    expect(screen.getByRole('link', { name: 'Provider credentials' })).toHaveAttribute(
-      'href',
-      '/settings/provider-credentials'
-    );
+    expect(screen.queryByRole('link', { name: 'Provider credentials' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Help' })).toHaveAttribute('href', '/settings/help');
   });
 
