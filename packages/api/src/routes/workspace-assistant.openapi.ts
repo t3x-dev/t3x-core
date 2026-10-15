@@ -20,6 +20,7 @@ import {
   resolveInferenceIngressChannel,
   resolveInferenceProjectScope,
   resolveInferenceRunId,
+  toGenerationModelScope,
 } from '../lib/inference';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
 import {
@@ -28,12 +29,18 @@ import {
 } from '../lib/proposal-generation';
 import { resolveProviderAndModel } from '../lib/provider-resolver';
 import {
+  defaultGenerationProviderRuntime,
+  getGenerationProviderRuntime,
+} from '../lib/provider-runtime';
+import {
   requireTransitionAuthority,
   TransitionProjectScopeDeniedError,
   TransitionScopeDeniedError,
   transitionApiKey,
 } from '../lib/transition-authority';
 import { chatWithWorkspace } from '../lib/workspace-assistant';
+import { createWorkspaceProposalModel } from '../lib/workspace-assistant/adapters/generation-model';
+import type { AssistantModelBinding } from '../lib/workspace-assistant/adapters/provider-tools';
 import { workspaceAuthoringState } from '../lib/workspace-authoring';
 import { ErrorResponseSchema } from '../schemas/common';
 
@@ -107,18 +114,49 @@ workspaceAssistantRoutes.post(
     const conversation = await findConversationById(db, body.conversation_id);
     if (conversation?.projectId !== projectId)
       return errorResponse(c, 'NOT_FOUND', 'Source thread not found');
-    const resolved = await resolveProviderAndModel({
-      db,
-      projectId,
-      conversationId: body.conversation_id,
-      userId: getUserId(c),
-      requestedProvider: body.provider,
-      requestedModel: body.model,
-    });
-    if (!resolved.ok) return errorResponse(c, 'INVALID_REQUEST', resolved.message);
-    const provider = resolved.provider as LLMProvider;
-    if (typeof provider.generate !== 'function')
-      return errorResponse(c, 'INVALID_REQUEST', 'Selected provider cannot chat');
+    const inference = {
+      runtime: getInferenceRuntime(c) ?? defaultRuntime,
+      runId: resolveInferenceRunId(c),
+      scope: {
+        actor: resolveInferenceActor(c),
+        ingressChannel: resolveInferenceIngressChannel(c),
+        ...resolveInferenceProjectScope(project),
+      },
+    };
+    const modelRuntime = getGenerationProviderRuntime(c);
+    let binding: AssistantModelBinding;
+    let selectedModel: string;
+    let selectedProvider: string;
+    if (modelRuntime !== defaultGenerationProviderRuntime) {
+      // "managed" is a discovery label, never a local provider or credential lookup.
+      if (body.provider && body.provider !== 'managed')
+        return errorResponse(c, 'INVALID_REQUEST', 'Select a model from the managed catalog');
+      const resolved = await modelRuntime.resolve({
+        requestedModel: body.model,
+        scope: toGenerationModelScope(inference.scope, { conversationId: body.conversation_id }),
+        requiredCapabilities: ['text'],
+      });
+      if (!resolved.ok) return errorResponse(c, 'INVALID_REQUEST', resolved.message);
+      binding = { generationModel: resolved.model };
+      selectedModel = body.model ?? resolved.model.modelId;
+      selectedProvider = 'managed';
+    } else {
+      const resolved = await resolveProviderAndModel({
+        db,
+        projectId,
+        conversationId: body.conversation_id,
+        userId: getUserId(c),
+        requestedProvider: body.provider,
+        requestedModel: body.model,
+      });
+      if (!resolved.ok) return errorResponse(c, 'INVALID_REQUEST', resolved.message);
+      const provider = resolved.provider as LLMProvider;
+      if (typeof provider.generate !== 'function')
+        return errorResponse(c, 'INVALID_REQUEST', 'Selected provider cannot chat');
+      binding = { provider };
+      selectedModel = resolved.model;
+      selectedProvider = resolved.providerId;
+    }
     const authorize = async (capability: 'read' | 'propose') => {
       const initialCredential = transitionApiKey(c);
       if (initialCredential) {
@@ -176,30 +214,31 @@ workspaceAssistantRoutes.post(
                   : undefined,
           },
           actor: principal.actor,
-          provider,
-          model: resolved.model,
+          ...binding,
+          model: selectedModel,
           reasoningEffort: body.fast ? 'low' : body.reasoning_effort,
-          inference: {
-            runtime: getInferenceRuntime(c) ?? defaultRuntime,
-            runId: resolveInferenceRunId(c),
-            scope: {
-              actor: resolveInferenceActor(c),
-              ingressChannel: resolveInferenceIngressChannel(c),
-              ...resolveInferenceProjectScope(project),
-            },
-          },
+          inference,
           operationNamespace,
           authorize,
           exactEdit: body.exact_edit
             ? { ...body.exact_edit, operations: body.exact_edit.operations as DraftYOp[] }
             : undefined,
-          proposal: body.allow_proposal
-            ? {
-                posture: body.posture,
-                requestedProvider: resolved.providerId,
-                requestedModel: resolved.model,
-              }
-            : undefined,
+          proposal:
+            body.allow_proposal &&
+            (!binding.generationModel ||
+              binding.generationModel.capabilities.includes('structured_output'))
+              ? {
+                  posture: body.posture,
+                  requestedProvider: selectedProvider,
+                  requestedModel: selectedModel,
+                  ...(binding.generationModel
+                    ? {
+                        resolveModel: async () =>
+                          createWorkspaceProposalModel(binding.generationModel!),
+                      }
+                    : {}),
+                }
+              : undefined,
           signal: controller.signal,
           emit: async (event) => {
             if (event.type === 'text') content += event.content;

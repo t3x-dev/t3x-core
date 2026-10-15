@@ -28,6 +28,7 @@ import {
 import type { YSchema } from '@t3x-dev/yschema';
 import {
   executeMeteredInference,
+  type InferenceAttempt,
   type InferenceFinishStatus,
   type InferenceProviderCost,
   type InferenceRuntime,
@@ -265,12 +266,17 @@ export interface ProposalGenerationModelInput {
 export interface ProposalGenerationModel {
   provider: string;
   model: string;
-  generate(input: ProposalGenerationModelInput): Promise<ProposalGenerationModelResult>;
+  generate(
+    input: ProposalGenerationModelInput,
+    attempt?: InferenceAttempt
+  ): Promise<ProposalGenerationModelResult>;
 }
 
 export interface ProposalGenerationModelResult {
   draft: unknown;
   usage: InferenceUsage;
+  resolvedProvider?: string;
+  resolvedModel?: string;
   finishStatus?: InferenceFinishStatus;
   providerRequestId?: string;
   providerReportedCost?: InferenceProviderCost;
@@ -814,30 +820,35 @@ export async function generateTransitionProposal(input: {
       resolvedProvider: model.provider,
       resolvedModel: model.model,
       now: input.now,
-      invoke: async () => {
-        const result = await model.generate({
-          profile: profile.profile,
-          context,
-          base: workspace.base,
-          ...(authoring ? { authoring } : {}),
-          yschema: { resource: schemaResource, value: yschema },
-          schemaLayout,
-          sources,
-          ...(images.length
-            ? {
-                images: {
-                  memoryIndexOffset: context.memories.length - images.length,
-                  items: images,
-                },
-              }
-            : {}),
-          instruction: input.request.instruction,
-          prompt: GENERATION_PROMPT,
-          ...(conversationTranscript ? { conversationTranscript } : {}),
-        });
+      invoke: async (attempt) => {
+        const result = await model.generate(
+          {
+            profile: profile.profile,
+            context,
+            base: workspace.base,
+            ...(authoring ? { authoring } : {}),
+            yschema: { resource: schemaResource, value: yschema },
+            schemaLayout,
+            sources,
+            ...(images.length
+              ? {
+                  images: {
+                    memoryIndexOffset: context.memories.length - images.length,
+                    items: images,
+                  },
+                }
+              : {}),
+            instruction: input.request.instruction,
+            prompt: GENERATION_PROMPT,
+            ...(conversationTranscript ? { conversationTranscript } : {}),
+          },
+          attempt
+        );
         return {
           value: result.draft,
           usage: result.usage,
+          resolvedProvider: result.resolvedProvider,
+          resolvedModel: result.resolvedModel,
           ...(result.finishStatus ? { finishStatus: result.finishStatus } : {}),
           ...(result.providerRequestId ? { providerRequestId: result.providerRequestId } : {}),
           ...(result.providerReportedCost

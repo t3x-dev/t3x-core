@@ -325,6 +325,11 @@ describe('governed Proposal generation', () => {
         context: expect.objectContaining({
           memories: [expect.objectContaining({ mediaType: 'text/plain;charset=utf-8' })],
         }),
+      }),
+      expect.objectContaining({
+        generationId: expect.stringMatching(/^gen_proposal_/),
+        feature: 'transition.proposal-generation',
+        scope: expect.objectContaining({ projectId: data.projectId }),
       })
     );
   });

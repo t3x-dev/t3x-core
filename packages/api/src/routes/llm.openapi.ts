@@ -20,8 +20,8 @@ llmRoutes.get('/v1/llm/models', async (c) => {
   const catalogAuthority = runtime.catalog ?? defaultGenerationProviderRuntime.catalog;
   if (!catalogAuthority) throw new Error('Default generation model catalog is unavailable');
   const catalog = await catalogAuthority.snapshot();
-  // Hosted catalogs are authoritative and must never depend on local credentials.
-  if (runtime.catalog && runtime.catalog !== defaultGenerationProviderRuntime.catalog) {
+  // Use the same runtime boundary as Workspace chat, including v1 compatibility catalogs.
+  if (runtime !== defaultGenerationProviderRuntime) {
     const models = catalog.models.filter((model) => model.availability === 'available');
     return c.json({
       success: true,
