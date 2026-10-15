@@ -4,6 +4,7 @@ import {
   insertProject,
   listSchemaStudioCandidates,
   updateYSchemaArtifactIdentity,
+  upsertWorkspaceDraft,
   upsertYSchemaArtifactVersion,
 } from '@t3x-dev/storage';
 import { builtInPrdCoreArtifact, sha256CompositionValue } from '@t3x-dev/yschema';
@@ -18,6 +19,7 @@ let source: string;
 const denied = new Set<string>();
 vi.mock('../lib/db', () => ({ getDB: () => Promise.resolve(db) }));
 vi.mock('../lib/project-access', () => ({
+  getProjectAccessPrincipal: () => undefined,
   assertProjectAccess: async (
     c: { req: { method: string } },
     _db: unknown,
@@ -124,6 +126,96 @@ it('pins and deduplicates exact references without mutating Workspace or copying
   expect(saved).not.toContain('manifest');
   expect(saved).not.toContain('resources');
   expect((await add({ ...body, expectedHash: `sha256:${'0'.repeat(64)}` })).status).toBe(409);
+});
+it('persists one Schema edit candidate across create, retry, edit, and recovery', async () => {
+  const workspaceId = 'schema-edit';
+  await upsertWorkspaceDraft(db, {
+    project_id: target,
+    workspace_id: workspaceId,
+    target_branch: workspaceId,
+    title: 'Schema edit',
+    workspace_state: {
+      title: 'Schema edit',
+      targetBranch: workspaceId,
+      schemaBindings: [],
+      yopsDraft: { operations: [] },
+    },
+  });
+  const [base] = await listSchemaStudioCandidates(db, target);
+  const url = `/v1/projects/${target}/schema-studio/edit-candidates/${workspaceId}`;
+  const create = {
+    workspaceId,
+    candidateIds: [base!.id],
+    ifRevision: 0,
+    retryKey: 'create-edit-candidate',
+    intent: 'Add an advantage node',
+    origin: 'studio',
+    localContribution: { nodes: {} },
+  };
+  const put = (body: unknown) =>
+    app.request(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  const createResponses = await Promise.all([put(create), put(create)]);
+  expect(createResponses.map((response) => response.status)).toEqual([200, 200]);
+  const createResults = await Promise.all(
+    createResponses.map(async (response) => (await response.json()).data)
+  );
+  expect(createResults.map((result) => result.outcome).sort()).toEqual(['created', 'reused']);
+  const created = createResults.find((result) => result.outcome === 'created')!;
+  const retried = createResults.find((result) => result.outcome === 'reused')!;
+  expect(created).toMatchObject({
+    outcome: 'created',
+    candidate: {
+      workspaceId,
+      revision: 1,
+      retryKey: 'create-edit-candidate',
+      baseSources: [{ hash }],
+    },
+  });
+
+  expect(retried).toMatchObject({
+    outcome: 'reused',
+    workspaceRevision: created.workspaceRevision,
+    candidate: { candidateId: created.candidate.candidateId, revision: 1 },
+  });
+  expect((await (await app.request(url)).json()).data).toEqual(created.candidate);
+
+  const edit = {
+    ...create,
+    ifRevision: 1,
+    retryKey: 'edit-advantage',
+    localContribution: { nodes: { advantage: { slots: {} } } },
+  };
+  const updatedResponse = await put(edit);
+  expect(updatedResponse.status).toBe(200);
+  const updated = (await updatedResponse.json()).data;
+  expect(updated).toMatchObject({
+    outcome: 'updated',
+    candidate: {
+      candidateId: created.candidate.candidateId,
+      revision: 2,
+      localContribution: edit.localContribution,
+    },
+  });
+  const staleResponse = await put({ ...create, retryKey: 'stale-edit', ifRevision: 1 });
+  expect(staleResponse.status).toBe(409);
+  expect((await staleResponse.json()).error.details).toMatchObject({
+    reason: 'stale_revision',
+    currentRevision: 2,
+  });
+  const mismatchResponse = await put({ ...edit, intent: 'Reuse the key for another request' });
+  expect(mismatchResponse.status).toBe(409);
+  expect((await mismatchResponse.json()).error.details.reason).toBe('idempotency_mismatch');
+
+  const recovered = (await (await app.request(url)).json()).data;
+  expect(recovered).toEqual(updated.candidate);
+  expect(
+    (await findWorkspaceDraft(db, target, workspaceId))?.workspace_state?.schemaEditCandidate
+  ).toEqual(updated.candidate);
 });
 it('checks target write and source read authority; revoked source is redacted on list', async () => {
   denied.add(`${target}:project:edit`);

@@ -1,12 +1,23 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   AddStudioCandidateSchema,
+  SaveStudioSchemaEditCandidateInputSchema,
   StudioApplyInputSchema,
   StudioCandidateListSchema,
   StudioCandidateSchema,
   StudioPreviewInputSchema,
   StudioPreviewSchema,
+  StudioSchemaEditCandidateSaveResultSchema,
+  StudioSchemaEditCandidateSchema,
 } from '@t3x-dev/api-client';
+import {
+  type DraftDocument,
+  parseWorkspaceSchemaEditCandidate,
+  resolveWorkspaceSchemaBindingMode,
+  saveWorkspaceSchemaEditCandidate,
+  type WorkspaceSchemaEditBaseSource,
+  type WorkspaceSchemaEditOrigin,
+} from '@t3x-dev/application';
 import {
   addSchemaStudioCandidate,
   ConflictError,
@@ -20,9 +31,9 @@ import {
 import { parseYSchema, sha256CompositionValue } from '@t3x-dev/yschema';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { assertProjectAccess } from '../lib/project-access';
+import { assertProjectAccess, getProjectAccessPrincipal } from '../lib/project-access';
 import { projectStudioCandidate, resolveStudioSource } from '../lib/schema-studio';
-import { previewStudio, StudioError } from '../lib/schema-studio-preview';
+import { compileStudioSelection, previewStudio, StudioError } from '../lib/schema-studio-preview';
 import { ensureBuiltInYSchemaArtifacts } from '../lib/yschema-artifact-registry';
 import { schemaRootKeyFromBinding } from '../lib/yschema-registry';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -106,6 +117,48 @@ const readSourceRoute = createRoute({
               manifest: z.record(z.string(), z.unknown()),
             })
           ),
+        },
+      },
+    },
+    ...errors,
+  },
+});
+const schemaEditParams = params.extend({ workspaceId: z.string().min(1) });
+const readSchemaEditCandidateRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/schema-studio/edit-candidates/{workspaceId}',
+  tags: ['YSchema'],
+  summary: 'Recover the server-managed Schema edit candidate for a Workspace',
+  request: { params: schemaEditParams },
+  responses: {
+    200: {
+      description: 'Persisted Schema edit candidate',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(StudioSchemaEditCandidateSchema),
+        },
+      },
+    },
+    ...errors,
+  },
+});
+const saveSchemaEditCandidateRoute = createRoute({
+  method: 'put',
+  path: '/v1/projects/{projectId}/schema-studio/edit-candidates/{workspaceId}',
+  tags: ['YSchema'],
+  summary: 'Create or edit one server-managed Schema candidate with CAS and retry recovery',
+  request: {
+    params: schemaEditParams,
+    body: {
+      content: { 'application/json': { schema: SaveStudioSchemaEditCandidateInputSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Created, updated, or idempotently recovered Schema edit candidate',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(StudioSchemaEditCandidateSaveResultSchema),
         },
       },
     },
@@ -207,6 +260,131 @@ schemaStudioRoutes.openapi(removeRoute, async (c) => {
   return c.json({ success: true as const, data: { removed: true as const } }, 200);
 });
 
+schemaStudioRoutes.openapi(readSchemaEditCandidateRoute, async (c) => {
+  const db = await getDB();
+  const { projectId, workspaceId } = c.req.valid('param');
+  const access = await assertProjectAccess(c, db, projectId, 'project:read');
+  if (access instanceof Response) return access;
+  const draft = await findWorkspaceDraft(db, projectId, workspaceId);
+  const stored = draft?.workspace_state?.schemaEditCandidate;
+  if (!stored)
+    return errorResponse(c, 'NOT_FOUND', 'No Schema edit candidate exists for this Workspace.');
+  const candidate = parseWorkspaceSchemaEditCandidate(stored);
+  for (const source of candidate.baseSources) {
+    const available = await resolveStudioSource(c, db, {
+      sourceProjectId: source.projectId,
+      canonicalName: source.canonicalName,
+      version: source.version,
+      artifactHash: source.hash,
+    });
+    if (!available)
+      return errorResponse(c, 'NOT_FOUND', 'A Schema edit source is no longer available.');
+  }
+  c.header('Cache-Control', 'private, no-store');
+  return c.json({ success: true as const, data: candidate }, 200);
+});
+
+schemaStudioRoutes.openapi(saveSchemaEditCandidateRoute, async (c) => {
+  const db = await getDB();
+  const { projectId, workspaceId } = c.req.valid('param');
+  const input = c.req.valid('json');
+  if (input.workspaceId !== workspaceId)
+    return errorResponse(c, 'INVALID_REQUEST', 'Workspace path and request body do not match.');
+  const access = await assertProjectAccess(c, db, projectId, 'project:edit');
+  if (access instanceof Response) return access;
+
+  try {
+    const selection = await compileStudioSelection(c, db, projectId, input.candidateIds);
+    const candidateId = `sec_${(await sha256CompositionValue({ projectId, workspaceId })).slice(
+      'sha256:'.length
+    )}`;
+    const principal = getProjectAccessPrincipal(c);
+    const origin: WorkspaceSchemaEditOrigin = principal
+      ? {
+          channel: input.origin,
+          actor: {
+            kind: principal.principalKind ?? 'human',
+            id: principal.userId ?? principal.keyId ?? 'authenticated-principal',
+          },
+        }
+      : { channel: input.origin, actor: { kind: 'local', id: 'auth-disabled-local' } };
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const draft = await findWorkspaceDraft(db, projectId, workspaceId);
+      if (!draft?.workspace_state)
+        return errorResponse(c, 'NOT_FOUND', 'The target Workspace does not exist.');
+      const stored = draft.workspace_state.schemaEditCandidate;
+      const current = stored ? parseWorkspaceSchemaEditCandidate(stored) : null;
+      const result = saveWorkspaceSchemaEditCandidate(current, {
+        candidateId,
+        workspaceId,
+        expectedRevision: input.ifRevision,
+        baseSources: selection.sources as readonly WorkspaceSchemaEditBaseSource[],
+        localContribution: input.localContribution as DraftDocument,
+        intent: input.intent,
+        origin,
+        retryKey: input.retryKey,
+      });
+      if (result.kind === 'conflict')
+        return errorResponse(c, 'CONFLICT', result.message, {
+          reason: result.reason,
+          currentRevision: result.currentRevision,
+        });
+      if (result.kind === 'reused')
+        return c.json(
+          {
+            success: true as const,
+            data: {
+              outcome: result.kind,
+              workspaceRevision: draft.revision,
+              candidate: result.candidate,
+            },
+          },
+          200
+        );
+      try {
+        const state = {
+          ...draft.workspace_state,
+          schemaEditCandidate: result.candidate,
+          updatedAt: new Date().toISOString(),
+        };
+        const saved = await upsertWorkspaceDraft(
+          db,
+          {
+            project_id: projectId,
+            workspace_id: workspaceId,
+            title: String(draft.workspace_state.title ?? workspaceId),
+            target_branch: draft.target_branch,
+            parent_commit_hash: draft.parent_commit_hash,
+            workspace_state: state,
+          },
+          draft.revision
+        );
+        return c.json(
+          {
+            success: true as const,
+            data: {
+              outcome: result.kind,
+              workspaceRevision: saved.revision,
+              candidate: result.candidate,
+            },
+          },
+          200
+        );
+      } catch (error) {
+        if (error instanceof ConflictError && attempt === 0) continue;
+        throw error;
+      }
+    }
+    return errorResponse(c, 'CONFLICT', 'The Workspace changed. Retry the Schema edit.');
+  } catch (error) {
+    if (error instanceof StudioError) return errorResponse(c, error.code, error.message);
+    if (error instanceof ConflictError)
+      return errorResponse(c, 'CONFLICT', 'The Workspace changed. Retry the Schema edit.');
+    throw error;
+  }
+});
+
 const previewRoute = createRoute({
   method: 'post',
   path: '/v1/projects/{projectId}/schema-studio/preview',
@@ -294,7 +472,9 @@ schemaStudioRoutes.openapi(applyRoute, async (c) => {
       schemaName:
         preview.sources.length === 1 ? preview.sources[0]!.canonicalName : 'Studio selection',
       version: preview.sources.length === 1 ? preview.sources[0]!.version : '1',
-      mode: 'pinned',
+      mode: resolveWorkspaceSchemaBindingMode({
+        source: preview.modules.length ? 'composition' : 'published_schema',
+      }),
       schemaHash: preview.schemaHash,
       compositionId,
       compositionRevision: 1,
@@ -479,7 +659,7 @@ schemaStudioRoutes.openapi(initialSchemaRoute, async (c) => {
                 canonicalName: compositionId,
                 schemaName: input.filename,
                 version: '1',
-                mode: 'pinned',
+                mode: resolveWorkspaceSchemaBindingMode({ source: 'workspace_schema' }),
                 schemaHash: hash,
                 compositionId,
                 compositionRevision: 1,

@@ -245,6 +245,34 @@ it('applies once with CAS, invalidates stale diagnostics and retains exact adopt
   denied.clear();
 });
 
+it('binds a Studio Module composition as a draft override', async () => {
+  const workspaceId = 'composition-binding';
+  await upsertWorkspaceDraft(db, {
+    project_id: target,
+    workspace_id: workspaceId,
+    target_branch: workspaceId,
+    title: 'Composition binding',
+    workspace_state: {
+      title: 'Composition binding',
+      targetBranch: workspaceId,
+      schemaBindings: [],
+      yopsDraft: { operations: [] },
+    },
+  });
+  const preview = (await (await request('preview', { candidateIds: [coreId], workspaceId })).json())
+    .data;
+  const response = await request('apply', {
+    candidateIds: [coreId],
+    workspaceId,
+    ifRevision: preview.workspace.revision,
+    reviewHash: preview.reviewHash,
+  });
+  expect(response.status).toBe(200);
+  expect(
+    (await findWorkspaceDraft(db, target, workspaceId))?.workspace_state?.schemaBindings[0]
+  ).toMatchObject({ mode: 'draft_override' });
+});
+
 it('projects locks only for declared required imports, not legacy suggestions', async () => {
   const base = {
     apiVersion: 't3x.dev/yschema-module/v2',
@@ -385,6 +413,7 @@ it('imports an initial YAML definition, resolves its immutable binding, and safe
   const response = await request('initial-schema', input);
   expect(response.status).toBe(200);
   const saved = await findWorkspaceDraft(db, target, 'initial-upload');
+  expect(saved?.workspace_state?.schemaBindings[0]).toMatchObject({ mode: 'draft_override' });
   const resolved = await resolveWorkspaceYSchema(saved!.workspace_state!, db, target);
   expect(resolved.schema).toEqual(normalizeYSchemaObject(builtInPrdCoreArtifact.schema));
   expect((await request('initial-schema', input)).status).toBe(200);

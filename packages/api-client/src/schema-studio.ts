@@ -124,3 +124,71 @@ export const StudioPreviewSchema = z.object({
 export type StudioPreview = z.infer<typeof StudioPreviewSchema>;
 export type StudioPreviewInput = z.infer<typeof StudioPreviewInputSchema>;
 export type StudioApplyInput = z.infer<typeof StudioApplyInputSchema>;
+
+export const StudioSchemaEditOriginChannelSchema = z.enum(['studio', 'assistant', 'import', 'api']);
+
+export const StudioSchemaEditLocalContributionSchema = z
+  .record(z.string(), z.unknown())
+  .superRefine((value, ctx) => {
+    const pending: Array<[unknown, number]> = [[value, 0]];
+    let count = 0;
+    while (pending.length) {
+      const [item, depth] = pending.pop()!;
+      if (++count > 25000 || depth > 32) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Schema contribution exceeds the supported structure limit.',
+        });
+        return;
+      }
+      if (item && typeof item === 'object')
+        for (const child of Object.values(item)) pending.push([child, depth + 1]);
+    }
+    if (new TextEncoder().encode(JSON.stringify(value)).length > 1024 * 1024)
+      ctx.addIssue({ code: 'custom', message: 'Schema contribution must be at most 1 MiB.' });
+  });
+
+export const SaveStudioSchemaEditCandidateInputSchema = z
+  .object({
+    workspaceId: z.string().min(1),
+    candidateIds: ids,
+    ifRevision: z.number().int().nonnegative(),
+    retryKey: z.string().min(1).max(200),
+    intent: z.string().min(1).max(2000),
+    origin: StudioSchemaEditOriginChannelSchema,
+    localContribution: StudioSchemaEditLocalContributionSchema,
+  })
+  .strict();
+
+export const StudioSchemaEditCandidateSchema = z.object({
+  schema: z.literal('t3x.application/workspace-schema-edit-candidate/v1'),
+  candidateId: z.string().min(1),
+  workspaceId: z.string().min(1),
+  revision: z.number().int().positive(),
+  baseSources: z.array(StudioSourceSchema).min(1),
+  localContribution: StudioSchemaEditLocalContributionSchema,
+  intent: z.string().min(1),
+  origin: z.object({
+    channel: StudioSchemaEditOriginChannelSchema,
+    actor: z.object({
+      kind: z.enum(['human', 'agent', 'service', 'local']),
+      id: z.string().min(1),
+    }),
+  }),
+  retryKey: z.string().min(1),
+  requestDigest: digest,
+});
+
+export const StudioSchemaEditCandidateSaveResultSchema = z.object({
+  outcome: z.enum(['created', 'updated', 'reused']),
+  workspaceRevision: z.number().int().positive(),
+  candidate: StudioSchemaEditCandidateSchema,
+});
+
+export type SaveStudioSchemaEditCandidateInput = z.infer<
+  typeof SaveStudioSchemaEditCandidateInputSchema
+>;
+export type StudioSchemaEditCandidate = z.infer<typeof StudioSchemaEditCandidateSchema>;
+export type StudioSchemaEditCandidateSaveResult = z.infer<
+  typeof StudioSchemaEditCandidateSaveResultSchema
+>;

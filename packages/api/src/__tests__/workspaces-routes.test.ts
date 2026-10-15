@@ -801,6 +801,44 @@ describe('Workspace routes', () => {
     expect(body.data.workspace.lastCommitHash).toBeUndefined();
   });
 
+  it('does not let generic Workspace saves replace a server-managed Schema edit candidate', async () => {
+    const serverCandidate = {
+      candidateId: 'schema-edit:server',
+      revision: 2,
+      retryKey: 'server-retry',
+    };
+    storageMock.seedWorkspaceDraft({
+      id: 'workspace_prd_handoff',
+      projectId: 'proj_sources',
+      title: 'Schema editing workspace',
+      targetBranch: 'main',
+      status: 'draft',
+      schemaEditCandidate: serverCandidate,
+    });
+    const response = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff',
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          if_revision: 1,
+          workspace: {
+            title: 'Renamed workspace',
+            targetBranch: 'main',
+            schemaEditCandidate: { candidateId: 'schema-edit:forged', revision: 999 },
+          },
+        }),
+      }
+    );
+
+    expect(response.status).toBe(200);
+    const body: ApiResponse = await response.json();
+    expect(body.data.workspace.schemaEditCandidate).toEqual(serverCandidate);
+    expect(
+      storageMock.upsertWorkspaceDraft.mock.calls.at(-1)?.[1].workspace_state.schemaEditCandidate
+    ).toEqual(serverCandidate);
+  });
+
   it('normalizes invalid review save statuses before persisting', async () => {
     const res = await app.request('/v1/projects/proj_sources/workspaces/workspace_prd_handoff', {
       method: 'PATCH',

@@ -4,6 +4,19 @@ export type {
   WorkspaceSchemaBindingSourceKind,
 } from './binding';
 export { resolveWorkspaceSchemaBindingMode } from './binding';
+export type {
+  SaveWorkspaceSchemaEditCandidateInput,
+  SaveWorkspaceSchemaEditCandidateResult,
+  WorkspaceSchemaEditBaseSource,
+  WorkspaceSchemaEditCandidate,
+  WorkspaceSchemaEditOrigin,
+  WorkspaceSchemaEditOriginChannel,
+} from './edit-candidate';
+export {
+  parseWorkspaceSchemaEditCandidate,
+  saveWorkspaceSchemaEditCandidate,
+  WORKSPACE_SCHEMA_EDIT_CANDIDATE_SCHEMA,
+} from './edit-candidate';
 export { parseWorkspaceSchemaAuthoringDraft } from './persistence';
 export type {
   SchemaAuthoringDigest,
