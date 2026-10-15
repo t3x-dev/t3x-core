@@ -165,7 +165,9 @@ describe('Compose field editing', () => {
         'set regions'
       )
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Add inside regions' }));
+    const addInsideRegions = screen.getByRole('button', { name: 'Add inside regions' });
+    await waitFor(() => expect(addInsideRegions).toBeEnabled());
+    fireEvent.click(addInsideRegions);
     fireEvent.change(screen.getByLabelText('New value'), { target: { value: 'ap' } });
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
     await waitFor(() =>
@@ -174,14 +176,20 @@ describe('Compose field editing', () => {
         'append regions'
       )
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Delete 0' }));
+    const deleteFirstRegion = screen.getByRole('button', { name: 'Delete 0' });
+    await waitFor(() => expect(deleteFirstRegion).toBeEnabled());
+    fireEvent.click(deleteFirstRegion);
     await waitFor(() =>
       expect(onSubmit).toHaveBeenLastCalledWith(
         [{ drop: { path: 'regions/[0]' } }],
         'drop regions/[0]'
       )
     );
-    fireEvent.keyDown(screen.getByRole('button', { name: 'More operations for regions' }), {
+    const moreRegionOperations = screen.getByRole('button', {
+      name: 'More operations for regions',
+    });
+    await waitFor(() => expect(moreRegionOperations).toBeEnabled());
+    fireEvent.keyDown(moreRegionOperations, {
       key: 'Enter',
     });
     expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeInTheDocument();
