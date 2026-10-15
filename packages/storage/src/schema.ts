@@ -122,6 +122,29 @@ export const projects = pgTable(
   ]
 );
 
+/** Current and historical address claims share one unique key. Null projectId
+ * is a blocked legacy candidate or permanent-deletion tombstone, never free. */
+export const repositoryPaths = pgTable(
+  'repository_paths',
+  {
+    namespaceId: text('namespace_id')
+      .notNull()
+      .references(() => namespaces.namespaceId, { onDelete: 'restrict' }),
+    nameKey: text('name_key').notNull(),
+    resolvable: boolean('resolvable').notNull().default(false),
+    projectId: text('project_id').references(() => projects.projectId, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.namespaceId, table.nameKey] }),
+    index('repository_paths_project').on(table.projectId),
+    check(
+      'repository_paths_name_key_check',
+      sql`${table.nameKey} = lower(${table.nameKey} COLLATE "C")`
+    ),
+  ]
+);
+
 /** Append-only evidence for explicit project visibility transitions. */
 export const projectVisibilityEvents = pgTable(
   'project_visibility_events',

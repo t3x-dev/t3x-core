@@ -53,6 +53,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const isLoginPage = pathname === '/login';
   const setProjectNotify = useProjectStore((state) => state.setNotifyCallback);
   const projects = useProjectStore((state) => state.projects) ?? [];
+  const details = useProjectStore((state) => state.details);
   const setCanvasNotify = useCanvasStore((state) => state.setNotifyCallback);
   const setPinsNotify = usePinsStore((state) => state.setNotifyCallback);
   const density = useSettingsStore((s) => s.density);
@@ -61,7 +62,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const cleanupLegacyKeys = useSessionStore((s) => s.cleanupLegacyKeys);
   const params = useParams();
   const projectId = typeof params?.projectId === 'string' ? params.projectId : null;
-  const repositoryPath = resolveCanonicalRepositoryPath(pathname, projectId, projects);
+  const repositoryPath = resolveCanonicalRepositoryPath(pathname, projectId, [
+    ...Object.values(details),
+    ...projects,
+  ]);
 
   // Clean up legacy onboarding localStorage keys on first mount
   useEffect(() => {

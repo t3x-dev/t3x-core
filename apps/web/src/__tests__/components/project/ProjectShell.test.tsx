@@ -40,7 +40,11 @@ describe('ProjectShell', () => {
 
   it('uses the reference project navigation in Workspace and routes settings correctly', () => {
     render(
-      <ProjectShell activeTab="workspaces" ownerSlug="t3x-dev" project={project}>
+      <ProjectShell
+        activeTab="workspaces"
+        ownerSlug="t3x-dev"
+        project={{ ...project, namespace: 't3x-dev', canonical_path: '/t3x-dev/Test-Project' }}
+      >
         <div>Review content</div>
       </ProjectShell>
     );
@@ -55,7 +59,7 @@ describe('ProjectShell', () => {
     );
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
-      '/project/proj_test/settings?returnTo=%2Ft3x-dev%2Ftest-project%3Ftab%3Dworkspaces'
+      '/t3x-dev/Test-Project/settings?returnTo=%2Ft3x-dev%2FTest-Project%3Ftab%3Dworkspaces'
     );
     expect(screen.queryByText('active')).not.toBeInTheDocument();
     expect(screen.getByText('Review content')).toBeInTheDocument();

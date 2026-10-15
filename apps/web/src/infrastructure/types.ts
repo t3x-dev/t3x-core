@@ -21,6 +21,9 @@ export type {
 export type ProjectVisibility = 'private' | 'unlisted' | 'public';
 
 export interface Project {
+  namespace?: string | null;
+  canonical_path?: string | null;
+  path_status?: 'ready' | 'pending_migration';
   project_id: string;
   name: string;
   visibility: ProjectVisibility;

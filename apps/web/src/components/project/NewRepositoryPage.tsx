@@ -7,17 +7,18 @@ import { type FormEvent, useState } from 'react';
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { DEFAULT_OWNER_SLUG, getProjectRepoPath, toRepoSlug } from '@/domain/project/repoPath';
+import { getProjectRepoPath } from '@/domain/project/repoPath';
 import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
+import { useRepositoryName } from '@/hooks/projects/useRepositoryName';
 import { useRepositorySetup } from '@/hooks/projects/useRepositorySetup';
 import { useProviderCommands } from '@/hooks/providers/useProviderCommands';
 import { useProvidersList } from '@/hooks/shared/useProvidersList';
 import styles from './NewRepositoryPage.module.css';
+import { RepositoryNameFeedback } from './RepositoryNameFeedback';
 
 export function NewRepositoryPage() {
   const params = useParams<{ owner?: string | string[] }>();
-  const routeOwner =
-    (Array.isArray(params.owner) ? params.owner[0] : params.owner) || DEFAULT_OWNER_SLUG;
+  const routeOwner = (Array.isArray(params.owner) ? params.owner[0] : params.owner) || '';
   const [owner, setOwner] = useState(routeOwner);
   const { accounts } = useNamespaceAccounts();
   const { providers, loading } = useProvidersList();
@@ -25,6 +26,7 @@ export function NewRepositoryPage() {
   const setup = useRepositorySetup();
   const router = useRouter();
   const [name, setName] = useState('');
+  const nameCheck = useRepositoryName(owner, name);
   const [description, setDescription] = useState('');
   const [visibility, setVisibility] = useState<'private' | 'unlisted' | 'public'>('private');
   const [providerId, setProviderId] = useState('');
@@ -47,7 +49,11 @@ export function NewRepositoryPage() {
   const [collapsed, setCollapsed] = useState<string[]>([]);
   const locked = setup.pending || setup.started;
   const ready =
-    !!name.trim() && !!provider?.configured && !!model && tested === provider.id && !fileError;
+    nameCheck.canSubmit &&
+    !!provider?.configured &&
+    !!model &&
+    tested === provider.id &&
+    !fileError;
   const owners = Array.from(new Set([routeOwner, ...accounts.map((item) => item.namespace.slug)]));
   const toggle = (id: string) =>
     setCollapsed((current) =>
@@ -83,7 +89,7 @@ export function NewRepositoryPage() {
     event.preventDefault();
     if (!ready || !provider) return;
     const result = await setup.create({
-      name,
+      name: nameCheck.result!.name,
       description,
       owner,
       visibility,
@@ -170,12 +176,7 @@ export function NewRepositoryPage() {
                     onChange={(event) => setName(event.target.value)}
                     placeholder="product-catalog"
                   />
-                  <p className={styles.hint}>
-                    Available at{' '}
-                    <code>
-                      /{owner}/{toRepoSlug(name.trim() || 'New repository')}
-                    </code>
-                  </p>
+                  <RepositoryNameFeedback check={nameCheck} />
                 </div>
               </div>
               <div className={styles.field}>

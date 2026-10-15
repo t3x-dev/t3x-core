@@ -15,9 +15,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { formatUserFacingError } from '@/domain/format/errors';
-import { getProjectIdRepoPath, toRepoSlug } from '@/domain/project/repoPath';
+import { getProjectIdRepoPath } from '@/domain/project/repoPath';
 import { projectDescription } from '@/hooks/projects/useProjectSettings';
+import { useRepositoryName } from '@/hooks/projects/useRepositoryName';
 import type { ProjectDetail } from '@/types/api';
+import { RepositoryNameFeedback } from '../RepositoryNameFeedback';
 import styles from './ProjectGeneralSettings.module.css';
 import { SettingsField } from './SettingsSection';
 
@@ -95,11 +97,12 @@ export function ProjectGeneralSettings({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const trimmedName = name.trim();
+  const nameCheck = useRepositoryName(project.namespace, name, project.project_id);
+  const trimmedName = nameCheck.result?.name ?? name.trim();
   const trimmedDescription = description.trim();
-  const dirty = trimmedName !== project.name || trimmedDescription !== savedDescription;
-  const nextSlug = toRepoSlug(trimmedName, project.project_id);
-  const slugChanges = nextSlug !== toRepoSlug(project.name, project.project_id);
+  const nameEdited = name !== project.name;
+  const dirty = nameEdited || trimmedDescription !== savedDescription;
+  const slugChanges = trimmedName !== project.name;
   const stableLink =
     typeof window === 'undefined'
       ? getProjectIdRepoPath(project.project_id)
@@ -107,14 +110,19 @@ export function ProjectGeneralSettings({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!trimmedName) {
-      setError('Repository name is required.');
+    if (nameEdited && !nameCheck.canSubmit) {
+      setError(
+        nameCheck.result?.message ?? nameCheck.error ?? 'Wait for the name check to finish.'
+      );
       return;
     }
     setSaving(true);
     setError(null);
     try {
-      await onSave({ description: trimmedDescription, name: trimmedName });
+      await onSave({
+        description: trimmedDescription,
+        name: nameEdited ? trimmedName : project.name,
+      });
       toast.success('Repository details saved');
     } catch (cause) {
       setError(formatUserFacingError(cause, 'Failed to save repository details.'));
@@ -143,19 +151,19 @@ export function ProjectGeneralSettings({
             aria-invalid={error && !trimmedName ? 'true' : undefined}
             disabled={saving}
             id="settings-repo-name"
-            maxLength={255}
+            maxLength={4096}
             onChange={(event) => {
               setName(event.target.value);
               setError(null);
             }}
             value={name}
           />
-          {slugChanges && trimmedName ? (
+          <RepositoryNameFeedback check={nameCheck} />
+          {slugChanges && (
             <p className="mt-1.5 text-xs text-[var(--status-warning)]">
-              The shareable path becomes <code className="font-mono">…/{nextSlug}</code>. Links that
-              use the project ID keep working.
+              Previous repository addresses will remain reserved and redirect to this repository.
             </p>
-          ) : null}
+          )}
         </SettingsField>
 
         <SettingsField
@@ -202,7 +210,11 @@ export function ProjectGeneralSettings({
           >
             Discard
           </Button>
-          <Button disabled={!dirty || saving || !trimmedName} type="submit" variant="commit">
+          <Button
+            disabled={!dirty || saving || (nameEdited && !nameCheck.canSubmit)}
+            type="submit"
+            variant="commit"
+          >
             {saving ? 'Saving…' : 'Save changes'}
           </Button>
         </div>

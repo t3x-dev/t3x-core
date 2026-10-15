@@ -28,9 +28,11 @@ describe('ProjectSettingsTab', () => {
     description: 'Click audit workflow',
     drafts: 1,
     id: 'proj_audit',
-    name: 'Mobile Click Audit 1780972749777',
+    name: 'Mobile-Click-Audit-1780972749777',
     nodes: 2,
-    owner: 'You',
+    owner: 't3x-dev',
+    namespace: 't3x-dev',
+    canonical_path: '/t3x-dev/Mobile-Click-Audit-1780972749777',
     status: 'active',
     updatedAt: 'just now',
   };
@@ -39,12 +41,12 @@ describe('ProjectSettingsTab', () => {
     render(<ProjectSettingsTab project={project} />);
 
     expect(screen.getByRole('heading', { name: 'Repository settings' })).toBeInTheDocument();
-    expect(screen.getAllByText('Mobile Click Audit 1780972749777').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Mobile-Click-Audit-1780972749777').length).toBeGreaterThan(0);
     expect(screen.getByText('Repository path')).toBeInTheDocument();
-    expect(screen.getByText('/t3x-dev/mobile-click-audit')).toBeInTheDocument();
+    expect(screen.getByText('/t3x-dev/Mobile-Click-Audit-1780972749777')).toBeInTheDocument();
     expect(screen.getByText('General')).toBeInTheDocument();
     expect(screen.getByLabelText('Repository name')).toHaveValue(
-      'Mobile Click Audit 1780972749777'
+      'Mobile-Click-Audit-1780972749777'
     );
     expect(screen.getByLabelText('Repository description')).toHaveValue('Click audit workflow');
     expect(screen.getByText('Defaults')).toBeInTheDocument();
@@ -65,11 +67,11 @@ describe('ProjectSettingsTab', () => {
     expect(screen.getByRole('button', { name: 'Reset repository profile' })).toBeEnabled();
     expect(screen.getByRole('link', { name: 'Provider setup' })).toHaveAttribute(
       'href',
-      '/settings/providers?returnTo=%2Ft3x-dev%2Fmobile-click-audit%2Fsettings'
+      '/settings/providers?returnTo=%2Ft3x-dev%2FMobile-Click-Audit-1780972749777%2Fsettings'
     );
     expect(screen.getByRole('link', { name: 'API / CLI / MCP access' })).toHaveAttribute(
       'href',
-      '/settings/access?returnTo=%2Ft3x-dev%2Fmobile-click-audit%2Fsettings'
+      '/settings/access?returnTo=%2Ft3x-dev%2FMobile-Click-Audit-1780972749777%2Fsettings'
     );
   });
 });

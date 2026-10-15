@@ -1,168 +1,120 @@
 'use client';
 
+import type { RepositoryAddress } from '@t3x-dev/api-client';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
-import { Suspense, useEffect, useMemo } from 'react';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
 import { ProjectDetailPageContent } from '@/app/project/[projectId]/page';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { NewRepositoryPage } from '@/components/project/NewRepositoryPage';
 import { OrganizationSettingsPage } from '@/components/project/OrganizationSettingsPage';
 import { ProjectDirectoryPage } from '@/components/project/ProjectDirectoryPage';
-import { isProjectTabSegment, parseProjectTab } from '@/components/project/projectTabModel';
-import { DEFAULT_OWNER_SLUG, toRepoSlug } from '@/domain/project/repoPath';
-import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
-import { useProjectStore } from '@/store/projectStore';
-
-function firstParam(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? (value[0] ?? '') : (value ?? '');
-}
+import { parseProjectTab } from '@/components/project/projectTabModel';
+import { RepositoryNestedPage } from '@/components/project/RepositoryNestedPage';
+import { getProjectIdRepoPath } from '@/domain/project/repoPath';
+import {
+  isSupportedRepositorySuffix,
+  repositoryLocation,
+} from '@/domain/project/repositoryLocation';
+import { resolveRepository } from '@/queries/projects';
 
 function OwnerRepoProjectPageContent() {
-  const params = useParams<{ owner?: string | string[]; repoPath?: string[] }>();
+  const params = useParams<{ owner: string; repoPath?: string[] }>();
+  const owner = params.owner;
+  const segments = params.repoPath ?? [];
+  const name = segments[0] ?? '';
+  const suffix =
+    segments.length > 1 ? `/${segments.slice(1).map(encodeURIComponent).join('/')}` : '';
+  const directory = !name;
+  const creating = name.toLowerCase() === 'new' && segments.length === 1;
+  const organizationSettings =
+    owner.toLowerCase() === 't3x-dev' && name.toLowerCase() === 'settings' && segments.length === 1;
+  const special = directory || creating || organizationSettings;
+  const key = JSON.stringify([owner, name]);
+  const [attempt, setAttempt] = useState(0);
+  const [lookup, setLookup] = useState<{
+    key: string;
+    address?: RepositoryAddress;
+    error?: Error;
+  } | null>(null);
   const router = useRouter();
-  const ownerSlug = firstParam(params.owner).toLowerCase();
-  const repoSegments = params.repoPath ?? [];
-  const repoSlug = (repoSegments[0] ?? '').toLowerCase();
-  const tabSegment = repoSegments[1] ?? null;
-  const initialTab = parseProjectTab(tabSegment);
-  const hasStateTabSegment = repoSegments.length > 1 && tabSegment === 'state';
-  const hasInvalidTabSegment =
-    repoSegments.length > 1 && tabSegment !== null && !isProjectTabSegment(tabSegment);
-  const isDefaultOwner = ownerSlug === DEFAULT_OWNER_SLUG;
-  const isOwnerDirectory = repoSegments.length === 0;
-  const isNewRepositoryPage = repoSlug === 'new' && repoSegments.length === 1;
-  const isOrganizationSettingsPage =
-    isDefaultOwner && repoSlug === 'settings' && repoSegments.length === 1;
-  const isRepositorySettingsRedirect = repoSegments.length > 1 && tabSegment === 'settings';
-  const projects = useProjectStore((state) => state.projects);
-  const initialized = useProjectStore((state) => state.initialized);
-  const projectScope = useProjectStore((state) => state.projectScope);
-  const loading = useProjectStore((state) => state.loading);
-  const error = useProjectStore((state) => state.error);
-  const { list: fetchProjects } = useProjectCrud();
-
+  const pathname = usePathname();
+  const query = useSearchParams().toString();
   useEffect(() => {
-    if (isOwnerDirectory || isNewRepositoryPage || isOrganizationSettingsPage) return;
-    if (projectScope !== ownerSlug && !loading) void fetchProjects(ownerSlug);
-  }, [
-    fetchProjects,
-    initialized,
-    isNewRepositoryPage,
-    isOrganizationSettingsPage,
-    isOwnerDirectory,
-    loading,
-    ownerSlug,
-    projectScope,
-  ]);
-
-  const project = useMemo(() => {
-    if (!repoSlug) return undefined;
-    return projects.find((item) => toRepoSlug(item.name, item.id) === repoSlug);
-  }, [projects, repoSlug]);
-
+    if (special) return;
+    let cancelled = false;
+    setLookup(null);
+    void resolveRepository(owner, name)
+      .then((address) => {
+        if (!cancelled) setLookup({ key, address });
+      })
+      .catch((error) => {
+        if (!cancelled)
+          setLookup({ key, error: error instanceof Error ? error : new Error(String(error)) });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [key, owner, name, special, attempt]);
+  const current = lookup?.key === key ? lookup : null;
+  const address = current?.address;
+  const supported = isSupportedRepositorySuffix(suffix);
   useEffect(() => {
-    if (!project || !hasStateTabSegment) return;
-    router.replace(`/${ownerSlug}/${repoSlug}`);
-  }, [hasStateTabSegment, ownerSlug, project, repoSlug, router]);
-
-  useEffect(() => {
-    if (!isRepositorySettingsRedirect || !project?.id || projectScope !== ownerSlug || loading)
-      return;
-    const returnTo = `/${ownerSlug}/${repoSlug}`;
-    router.replace(
-      `/project/${encodeURIComponent(project.id)}/settings?returnTo=${encodeURIComponent(returnTo)}`
+    if (!address || !supported) return;
+    const target = repositoryLocation(
+      address.canonical_path ?? getProjectIdRepoPath(address.project_id),
+      suffix,
+      query,
+      window.location.hash
     );
-  }, [
-    isRepositorySettingsRedirect,
-    loading,
-    ownerSlug,
-    project?.id,
-    projectScope,
-    repoSlug,
-    router,
-  ]);
+    const here = `${pathname}${query ? `?${query}` : ''}${window.location.hash}`;
+    if (target !== here) router.replace(target, { scroll: false });
+  }, [address, supported, suffix, pathname, query, router]);
 
-  if (isOwnerDirectory) {
-    return <ProjectDirectoryPage ownerSlug={ownerSlug} />;
-  }
-
-  if (isNewRepositoryPage) {
-    return <NewRepositoryPage />;
-  }
-
-  if (isOrganizationSettingsPage) {
-    return <OrganizationSettingsPage ownerSlug={ownerSlug} />;
-  }
-
-  if (!initialized || loading || projectScope !== ownerSlug) {
+  if (directory) return <ProjectDirectoryPage ownerSlug={owner} />;
+  if (creating) return <NewRepositoryPage />;
+  if (organizationSettings) return <OrganizationSettingsPage ownerSlug={owner} />;
+  if (!current) return <LoadingSpinner message="Loading repository..." />;
+  if (current.error)
+    return <ErrorMessage error={current.error} onRetry={() => setAttempt((v) => v + 1)} />;
+  if (!address) return null;
+  if (!supported)
     return (
-      <div className="flex h-full flex-col">
-        <LoadingSpinner message="Loading repository..." />
+      <div className="p-8">
+        <p>Repository view not found</p>
+        <Link href={address.canonical_path ?? getProjectIdRepoPath(address.project_id)}>
+          Back to repository
+        </Link>
       </div>
     );
-  }
-
-  if (error) {
+  if (!address.canonical_path)
+    return <LoadingSpinner message="Opening repository by ID; its name needs migration." />;
+  const view = segments[1] ?? 'state';
+  if (
+    [
+      'settings',
+      'diff',
+      'merge',
+      'changes',
+      'leaf',
+      'history',
+      'knowledge-graph',
+      'sources',
+    ].includes(view)
+  )
     return (
-      <div className="flex h-full flex-col">
-        <ErrorMessage error={error} onRetry={() => void fetchProjects(ownerSlug)} />
-      </div>
+      <RepositoryNestedPage
+        key={address.project_id}
+        projectId={address.project_id}
+        segments={segments.slice(1)}
+      />
     );
-  }
-
-  if (!project) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 p-8">
-        <div className="rounded-2xl bg-muted/50 p-8 text-center backdrop-blur-sm">
-          <p className="text-lg font-semibold text-foreground">Repository not found</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            The repository{' '}
-            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
-              /{ownerSlug || DEFAULT_OWNER_SLUG}/{repoSlug || 'repo'}
-            </code>{' '}
-            does not exist or was deleted.
-          </p>
-          <Link
-            className="mt-4 inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-            href={`/${ownerSlug || DEFAULT_OWNER_SLUG}`}
-          >
-            Back to {ownerSlug || DEFAULT_OWNER_SLUG}
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  if (isRepositorySettingsRedirect) return null;
-
-  if (hasInvalidTabSegment) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 p-8">
-        <div className="rounded-2xl bg-muted/50 p-8 text-center backdrop-blur-sm">
-          <p className="text-lg font-semibold text-foreground">Repository view not found</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            The repository view{' '}
-            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
-              /{ownerSlug}/{repoSlug}/{tabSegment}
-            </code>{' '}
-            does not exist.
-          </p>
-          <Link
-            className="mt-4 inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-            href={`/${ownerSlug}/${repoSlug}`}
-          >
-            Back to {repoSlug}
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <ProjectDetailPageContent
-      initialTabOverride={initialTab}
-      ownerSlugOverride={ownerSlug}
-      projectIdOverride={project.id}
+      key={address.project_id}
+      initialTabOverride={parseProjectTab(view)}
+      ownerSlugOverride={address.namespace ?? undefined}
+      projectIdOverride={address.project_id}
     />
   );
 }

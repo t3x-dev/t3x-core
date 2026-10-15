@@ -12,7 +12,7 @@ import { type ReactNode, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { DEFAULT_OWNER_SLUG, getProjectRepoPath } from '@/domain/project/repoPath';
+import { getProjectRepoPath } from '@/domain/project/repoPath';
 import type { ProjectSummary } from '@/store/projectStore';
 import { withReturnTo } from '@/utils/navigationReturn';
 
@@ -98,7 +98,7 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
               <div className="rounded-[var(--radius-control)] bg-[var(--hover-bg)] px-3 py-2">
                 <dt className="font-medium text-[var(--text-tertiary)]">Owner</dt>
                 <dd className="mt-1 font-semibold text-[var(--text-primary)]">
-                  {DEFAULT_OWNER_SLUG}
+                  {project.namespace ?? 'Unassigned'}
                 </dd>
               </div>
               <div className="rounded-[var(--radius-control)] bg-[var(--hover-bg)] px-3 py-2">

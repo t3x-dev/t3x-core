@@ -28,6 +28,9 @@ export const ProjectVisibilitySchema = z.enum(['private', 'unlisted', 'public'])
 export const ProjectSchema = z.object({
   project_id: z.string(),
   name: z.string(),
+  namespace: z.string().nullable().optional(),
+  canonical_path: z.string().nullable().optional(),
+  path_status: z.enum(['ready', 'pending_migration']).optional(),
   visibility: ProjectVisibilitySchema,
   created_at: z.string().datetime(),
   metadata: MetadataSchema,
@@ -49,7 +52,7 @@ export const ProjectWithStatsSchema = ProjectSchema.extend({
 
 // Create project request
 export const CreateProjectSchema = z.object({
-  name: z.string().min(1).max(255),
+  name: z.string().max(4096),
   metadata: z.record(z.string(), z.any()).optional(),
   namespace: z.string().min(2).max(39).optional(),
   // Omitted preserves the existing empty-project workflow.
@@ -59,7 +62,7 @@ export const CreateProjectSchema = z.object({
 // Update project request
 export const UpdateProjectSchema = z
   .object({
-    name: z.string().min(1).max(255).optional(),
+    name: z.string().max(4096).optional(),
     metadata: z.record(z.string(), z.any()).optional(),
     provider_config: ProviderConfigSchema.optional(),
     default_provider: z.string().nullable().optional(),

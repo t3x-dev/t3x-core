@@ -1,7 +1,9 @@
 /**
  * Projects Routes with OpenAPI
  */
+
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { inspectRepositoryName } from '@t3x-dev/application';
 import {
   DEMO_WORKSPACE_FIXTURE,
   generateProjectId,
@@ -21,11 +23,13 @@ import {
   findProjectWithStats,
   findUnownedProjects,
   getBusinessRules,
+  getRepositoryAddress,
   insertProject,
   leaves,
   permanentDeleteProject,
   projects,
   putBusinessRules,
+  repositoryPathError,
   restoreProject,
   seedDemoWorkspace,
   transitionCommits,
@@ -98,6 +102,7 @@ function isDemoProject(project: { name: string; metadataJson: string | null }) {
 
 function toApiProject(project: {
   projectId: string;
+  namespaceId?: string | null;
   name: string;
   visibility: 'private' | 'unlisted' | 'public';
   createdAt: Date;
@@ -164,6 +169,7 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
     db: Awaited<ReturnType<typeof getDB>>,
     p: {
       projectId: string;
+      namespaceId?: string | null;
       name: string;
       visibility: 'private' | 'unlisted' | 'public';
       createdAt: Date;
@@ -193,6 +199,7 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
         .then((rows) => rows[0]),
     ]);
     return {
+      ...(await getRepositoryAddress(db, p)),
       project_id: p.projectId,
       name: p.name,
       visibility: p.visibility,
@@ -399,6 +406,8 @@ projectRoutes.openapi(claimUnownedProjectsRoute, async (c) => {
     );
     return c.json({ success: true as const, data: { projects: claimed.map(toApiProject) } }, 200);
   } catch (err) {
+    const pathError = repositoryPathError(err);
+    if (pathError) return errorResponse(c, pathError.code, pathError.message);
     if (err instanceof ProjectLifecyclePolicyDeniedError) {
       return c.json(
         { success: false as const, error: { code: err.code, message: err.message } },
@@ -467,7 +476,16 @@ projectRoutes.openapi(ensureDemoWorkspaceRoute, async (c) => {
     });
     const existingDemo = existingProjects.find(isDemoProject);
     if (existingDemo) {
-      return c.json({ success: true as const, data: toApiProject(existingDemo) }, 200);
+      return c.json(
+        {
+          success: true as const,
+          data: {
+            ...toApiProject(existingDemo),
+            ...(await getRepositoryAddress(db, existingDemo)),
+          },
+        },
+        200
+      );
     }
 
     const projectId = generateProjectId();
@@ -500,7 +518,16 @@ projectRoutes.openapi(ensureDemoWorkspaceRoute, async (c) => {
         )
       : await mutate();
     if (result.project) {
-      return c.json({ success: true as const, data: toApiProject(result.project) }, 200);
+      return c.json(
+        {
+          success: true as const,
+          data: {
+            ...toApiProject(result.project),
+            ...(await getRepositoryAddress(db, result.project)),
+          },
+        },
+        200
+      );
     }
 
     return c.json(
@@ -514,6 +541,8 @@ projectRoutes.openapi(ensureDemoWorkspaceRoute, async (c) => {
       500
     );
   } catch (err) {
+    const pathError = repositoryPathError(err);
+    if (pathError) return errorResponse(c, pathError.code, pathError.message);
     if (err instanceof ProjectLifecyclePolicyDeniedError) {
       return c.json(
         { success: false as const, error: { code: err.code, message: err.message } },
@@ -590,6 +619,13 @@ const createProjectRoute = createRoute({
 
 projectRoutes.openapi(createProjectRoute, async (c) => {
   const body = c.req.valid('json');
+  const naming = inspectRepositoryName(body.name);
+  if (!naming.valid)
+    return c.json(
+      { success: false as const, error: { code: naming.code!, message: naming.message! } },
+      400
+    );
+  body.name = naming.name;
 
   const denied = assertProjectCreationAccess(c);
   if (denied) return denied;
@@ -670,6 +706,7 @@ projectRoutes.openapi(createProjectRoute, async (c) => {
     );
 
     const apiProject = {
+      ...(await getRepositoryAddress(db, project)),
       project_id: project.projectId,
       name: project.name,
       visibility: project.visibility,
@@ -679,6 +716,8 @@ projectRoutes.openapi(createProjectRoute, async (c) => {
 
     return c.json({ success: true as const, data: apiProject }, 201);
   } catch (err) {
+    const pathError = repositoryPathError(err);
+    if (pathError) return errorResponse(c, pathError.code, pathError.message);
     if (err instanceof ProjectLifecyclePolicyDeniedError) {
       return c.json(
         { success: false as const, error: { code: err.code, message: err.message } },
@@ -767,6 +806,7 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
     const outputsCount = Number(outputCountRow?.count ?? 0);
 
     const apiProject = {
+      ...(await getRepositoryAddress(db, project)),
       project_id: project.projectId,
       name: project.name,
       visibility: project.visibility,
@@ -806,6 +846,10 @@ const updateProjectRoute = createRoute({
     },
   },
   responses: {
+    409: {
+      description: 'Repository path occupied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     200: {
       description: 'Project updated',
       content: {
@@ -841,10 +885,18 @@ const updateProjectRoute = createRoute({
   },
 });
 
-// @ts-expect-error - OpenAPI handler return type
 projectRoutes.openapi(updateProjectRoute, async (c) => {
   const { id } = c.req.valid('param');
   const body = c.req.valid('json');
+  if (body.name !== undefined) {
+    const naming = inspectRepositoryName(body.name);
+    if (!naming.valid)
+      return c.json(
+        { success: false as const, error: { code: naming.code!, message: naming.message! } },
+        400
+      );
+    body.name = naming.name;
+  }
   const canonicalDefaultModel =
     body.default_model == null ? body.default_model : getCanonicalModelId(body.default_model);
 
@@ -891,6 +943,7 @@ projectRoutes.openapi(updateProjectRoute, async (c) => {
     }
 
     const apiProject = {
+      ...(await getRepositoryAddress(db, project)),
       project_id: project.projectId,
       name: project.name,
       visibility: project.visibility,
@@ -904,6 +957,8 @@ projectRoutes.openapi(updateProjectRoute, async (c) => {
 
     return c.json({ success: true as const, data: apiProject }, 200);
   } catch (err) {
+    const pathError = repositoryPathError(err);
+    if (pathError) return errorResponse(c, pathError.code, pathError.message);
     const message = err instanceof Error ? err.message : 'Unknown error';
     return c.json({ success: false as const, error: { code: 'UPDATE_FAILED', message } }, 500);
   }
@@ -1020,6 +1075,10 @@ const restoreProjectRoute = createRoute({
     params: IdParamSchema,
   },
   responses: {
+    400: {
+      description: 'Repository name needs migration',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     200: {
       description: 'Project restored',
       content: {
@@ -1109,6 +1168,7 @@ projectRoutes.openapi(restoreProjectRoute, async (c) => {
     }
 
     const apiProject = {
+      ...(await getRepositoryAddress(db, restored)),
       project_id: restored.projectId,
       name: restored.name,
       visibility: restored.visibility,
@@ -1118,6 +1178,8 @@ projectRoutes.openapi(restoreProjectRoute, async (c) => {
 
     return c.json({ success: true as const, data: apiProject }, 200);
   } catch (err) {
+    const pathError = repositoryPathError(err);
+    if (pathError) return errorResponse(c, pathError.code, pathError.message);
     if (err instanceof ProjectLifecyclePolicyDeniedError) {
       return c.json(
         { success: false as const, error: { code: err.code, message: err.message } },

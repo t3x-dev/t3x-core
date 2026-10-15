@@ -4,6 +4,15 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { NewRepositoryPage } from '@/components/project/NewRepositoryPage';
 
+vi.mock('@/queries/projects', () => ({
+  checkRepositoryName: async (namespace: string, name: string) => ({
+    name,
+    valid: true,
+    available: Boolean(name),
+    namespace,
+    canonical_path: `/${namespace}/${name}`,
+  }),
+}));
 const mocks = vi.hoisted(() => ({ create: vi.fn(), push: vi.fn(), test: vi.fn() }));
 vi.mock('next/navigation', () => ({
   useParams: () => ({ owner: 't3x-dev' }),
@@ -48,7 +57,7 @@ it('uses dropdowns, single-line description, and file uploads from the reference
 });
 it('tests the connection and submits the selected backend configuration and files', async () => {
   mocks.create.mockResolvedValue({
-    project: { id: 'p', name: 'Catalog' },
+    project: { project_id: 'p', name: 'Catalog', canonical_path: '/another-team/Catalog' },
     workspaceId: 'workspace_branch:main',
     conversationId: 'c',
   });
@@ -61,6 +70,9 @@ it('tests the connection and submits the selected backend configuration and file
   fireEvent.change(screen.getByLabelText('Upload files'), { target: { files: [file] } });
   fireEvent.click(screen.getByRole('button', { name: 'Test' }));
   await waitFor(() => expect(screen.getByText('Connected')).toBeInTheDocument());
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Create and start conversation' })).toBeEnabled()
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Create and start conversation' }));
   await waitFor(() =>
     expect(mocks.create).toHaveBeenCalledWith(
@@ -75,6 +87,9 @@ it('tests the connection and submits the selected backend configuration and file
     )
   );
   expect(mocks.test).toHaveBeenCalledWith('openai');
+  expect(mocks.push).toHaveBeenCalledWith(
+    '/another-team/Catalog/workspaces?workspace=workspace_branch%3Amain&conversation=c'
+  );
 });
 it('keeps failed connection tests and invalid uploads from enabling creation', async () => {
   mocks.test.mockResolvedValue({ ok: false, error: 'Invalid key' });

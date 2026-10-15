@@ -1,3 +1,4 @@
+import type { RepositoryAddress, RepositoryNameCheck } from '@t3x-dev/api-client';
 /**
  * Projects CRUD API
  */
@@ -273,4 +274,15 @@ export async function backfillMerkle(projectId: string): Promise<BackfillResult>
     { method: 'POST' }
   );
   return handleResponse<BackfillResult>(res);
+}
+
+export function resolveRepository(owner: string, name: string): Promise<RepositoryAddress> {
+  return getSharedApiClient().resolveRepository(owner, name);
+}
+export function checkRepositoryName(
+  namespace: string,
+  name: string,
+  projectId?: string
+): Promise<RepositoryNameCheck> {
+  return getSharedApiClient().checkRepositoryName(namespace, name, projectId);
 }

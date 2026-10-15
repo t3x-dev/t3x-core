@@ -55,6 +55,7 @@
     "postpack": "node ../../tools/restore-package-json.mjs"
   },
   "dependencies": {
+    "@t3x-dev/application": "workspace:*",
     "@t3x-dev/core": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "embedded-postgres": "^18.3.0-beta.16",

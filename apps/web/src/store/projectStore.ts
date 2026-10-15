@@ -15,6 +15,9 @@ import type { Project, ProjectVisibility } from '@/types/api';
 import type { NotifyCallback } from './shared';
 
 export interface ProjectSummary {
+  namespace?: string | null;
+  canonical_path?: string | null;
+  path_status?: 'ready' | 'pending_migration';
   id: string;
   name: string;
   description: string;
@@ -33,6 +36,8 @@ export interface ProjectSummary {
 }
 
 type ProjectStore = {
+  details: Record<string, ProjectSummary>;
+  cacheProject: (project: ProjectSummary) => void;
   projects: ProjectSummary[];
   loading: boolean;
   error: Error | null;
@@ -76,10 +81,13 @@ const deriveStatus = (project: Project): 'draft' | 'active' | 'paused' => {
 
 export const apiProjectToSummary = (project: Project): ProjectSummary => ({
   id: project.project_id,
+  namespace: project.namespace,
+  canonical_path: project.canonical_path,
+  path_status: project.path_status,
   name: project.name,
   description: (project.metadata?.description as string) || '',
   updatedAt: formatDate(project.created_at),
-  owner: 'You',
+  owner: project.namespace ?? 'Unassigned',
   status: deriveStatus(project),
   nodes: project.turns_count || 0,
   drafts: project.conversations_count || 0,
@@ -93,6 +101,9 @@ export const apiProjectToSummary = (project: Project): ProjectSummary => ({
 });
 
 export const useProjectStore = create<ProjectStore>((set, get) => ({
+  details: {},
+  cacheProject: (project) =>
+    set((state) => ({ details: { ...state.details, [project.id]: project } })),
   projects: [],
   loading: false,
   error: null,
@@ -111,13 +122,20 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
   removeProject: (id) => {
     const existing = get().projects.find((p) => p.id === id);
-    set((state) => ({ projects: state.projects.filter((p) => p.id !== id) }));
+    set((state) => {
+      const details = { ...state.details };
+      delete details[id];
+      return { projects: state.projects.filter((p) => p.id !== id), details };
+    });
     return existing;
   },
 
   updateProject: (id, patch) =>
     set((state) => ({
       projects: state.projects.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+      details: state.details[id]
+        ? { ...state.details, [id]: { ...state.details[id], ...patch } }
+        : state.details,
     })),
 
   getProject: (id) => get().projects.find((project) => project.id === id),

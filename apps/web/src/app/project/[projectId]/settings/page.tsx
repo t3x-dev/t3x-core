@@ -26,7 +26,7 @@ import {
   RotateCcw,
   Sparkles,
 } from 'lucide-react';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { AutopilotSettings } from '@/components/autopilot/AutopilotSettings';
 import { ProjectCollaborationPanel } from '@/components/project/ProjectCollaborationPanel';
@@ -40,6 +40,7 @@ import { ProjectIntegritySettings } from '@/components/project/settings/ProjectI
 import { ProjectSettingsNav } from '@/components/project/settings/ProjectSettingsNav';
 import { SettingsSection } from '@/components/project/settings/SettingsSection';
 import { ModelSelector } from '@/components/shared/ModelSelector';
+import { useRepositoryRouteParams as useParams } from '@/hooks/projects/repositoryRouteContext';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { projectDescription, useProjectSettings } from '@/hooks/projects/useProjectSettings';
 import { useProviderCommands } from '@/hooks/providers/useProviderCommands';

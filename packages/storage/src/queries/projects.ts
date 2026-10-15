@@ -4,6 +4,7 @@
  * CRUD operations for projects using Drizzle ORM.
  */
 
+import { inspectRepositoryName } from '@t3x-dev/application';
 import { generateProjectId } from '@t3x-dev/core';
 import { and, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
@@ -62,6 +63,8 @@ export interface ProjectWithStats extends Project {
  * Insert a new project
  */
 export async function insertProject(db: AnyDB, input: CreateProjectInput): Promise<Project> {
+  const naming = inspectRepositoryName(input.name);
+  if (!naming.valid) throw new Error(naming.message!);
   const projectId = input.projectId ?? generateProjectId();
   const createdAt = new Date();
   const metadataJson = input.metadata ? JSON.stringify(input.metadata) : null;
@@ -70,7 +73,7 @@ export async function insertProject(db: AnyDB, input: CreateProjectInput): Promi
     .insert(projects)
     .values({
       projectId,
-      name: input.name,
+      name: naming.name,
       ownerId: input.ownerId ?? null,
       namespaceId: input.namespaceId ?? null,
       createdAt,
@@ -265,7 +268,9 @@ export async function updateProject(
 ): Promise<Project | null> {
   const updateData: Partial<NewProject> = {};
   if (updates.name !== undefined) {
-    updateData.name = updates.name;
+    const naming = inspectRepositoryName(updates.name);
+    if (!naming.valid) throw new Error(naming.message!);
+    updateData.name = naming.name;
   }
   if (updates.metadata !== undefined) {
     updateData.metadataJson = JSON.stringify(updates.metadata);
