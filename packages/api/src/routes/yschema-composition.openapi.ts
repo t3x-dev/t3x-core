@@ -5,7 +5,7 @@ import {
   SchemaReleasePresentationReferenceSchema,
   StatePresentationSchema,
 } from '@t3x-dev/api-client';
-import { createStatePresentation } from '@t3x-dev/application';
+import { createStatePresentation, resolveWorkspaceSchemaBindingMode } from '@t3x-dev/application';
 import {
   ConflictError,
   decodeCursor,
@@ -1398,7 +1398,7 @@ yschemaCompositionRoutes.openapi(applyWorkspaceCompositionRoute, async (c) => {
       (persisted.composition.apiVersion === 't3x.dev/yschema-composition/v2'
         ? `r${persisted.composition.revision}`
         : (artifacts?.core.version ?? '1.0.0')),
-    mode: 'draft_override',
+    mode: resolveWorkspaceSchemaBindingMode({ source: 'composition' }),
     schemaHash: preview.compiledSchemaHash,
     compositionId: persisted.composition.id,
     compositionRevision: persisted.composition.revision,
