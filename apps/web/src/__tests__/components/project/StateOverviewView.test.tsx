@@ -154,7 +154,7 @@ it('shows current repository information across heads without borrowing version 
     />
   );
   expect(screen.getByRole('heading', { name: 'Current repository' })).toBeVisible();
-  expect(screen.getByText('当前')).toBeVisible();
+  expect(screen.getByText('#当前')).toBeVisible();
   expect(screen.getByText('Current description')).toBeVisible();
   expect(screen.queryByText('Author description')).toBeNull();
   expect(screen.getByText('[Image unavailable: Missing]')).toBeVisible();
@@ -242,7 +242,7 @@ it('offers authorized editing with no Commit and keeps failed input, cancellatio
     />
   );
   expect(screen.getByText('No README added yet.')).toBeVisible();
-  expect(screen.getByText('Saved tag')).toBeVisible();
+  expect(screen.getByText('#Saved tag')).toBeVisible();
 });
 
 it('saves only normalized tags and blocks duplicate submission while pending', async () => {
@@ -264,15 +264,46 @@ it('saves only normalized tags and blocks duplicate submission while pending', a
     />
   );
   fireEvent.click(screen.getByRole('button', { name: 'Add tags' }));
-  fireEvent.change(screen.getByLabelText('Tags, one per line'), {
-    target: { value: '中文\n Dev \n中文\n' },
-  });
+  const input = screen.getByRole('textbox', { name: 'Tags', exact: true });
+  for (const tag of ['中文', ' Dev ', '中文']) {
+    fireEvent.change(input, { target: { value: tag } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+  }
+  fireEvent.change(input, { target: { value: 'Unfinished' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save tags' }));
   expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled();
   fireEvent.submit(screen.getByRole('button', { name: 'Saving…' }).closest('form')!);
-  expect(save).toHaveBeenCalledExactlyOnceWith({ tags: ['中文', 'Dev'] });
+  expect(save).toHaveBeenCalledExactlyOnceWith({ tags: ['中文', 'Dev', 'Unfinished'] });
   finish();
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+});
+
+it('prefills only an empty README draft from current repository metadata and persists only on Save', async () => {
+  const save = vi.fn().mockResolvedValue(undefined);
+  const repositoryProps = {
+    ...props,
+    introductionSource: 'repository' as const,
+    projectName: 'Catalog',
+    projectDescription: 'Repository description',
+    repositoryProfile: { readme: '', tags: [] },
+    canEditRepository: true,
+    onSaveRepositoryProfile: save,
+  };
+  const { rerender } = render(<StateOverviewView {...repositoryProps} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Add README', exact: true }));
+  expect(screen.getByRole('dialog', { name: 'Add repository README' })).toBeVisible();
+  expect(screen.getByRole('textbox', { name: 'Repository README' })).toHaveValue(
+    '# Catalog\n\nRepository description\n'
+  );
+  expect(save).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(screen.getByText('No README added yet.')).toBeVisible();
+  rerender(<StateOverviewView {...repositoryProps} projectName="Renamed" projectDescription="" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Add README', exact: true }));
+  expect(screen.getByRole('textbox', { name: 'Repository README' })).toHaveValue('# Renamed\n');
+  fireEvent.click(screen.getByRole('button', { name: 'Save README', exact: true }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(save).toHaveBeenCalledExactlyOnceWith({ readme: '# Renamed\n' });
 });
 
 it('keeps repository information visible when State fails, without executable viewer edit controls', () => {

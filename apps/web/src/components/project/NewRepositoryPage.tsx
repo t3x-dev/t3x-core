@@ -17,7 +17,7 @@ import { useRepositoryName } from '@/hooks/projects/useRepositoryName';
 import { useRepositorySetup } from '@/hooks/projects/useRepositorySetup';
 import styles from './NewRepositoryPage.module.css';
 import { RepositoryNameFeedback } from './RepositoryNameFeedback';
-import { RepositoryTagsInput } from './RepositoryTagsInput';
+import { type RepositoryTagsDraft, RepositoryTagsInput } from './RepositoryTagsInput';
 
 export function NewRepositoryPage() {
   const params = useParams<{ owner?: string | string[] }>();
@@ -30,8 +30,8 @@ export function NewRepositoryPage() {
   const nameCheck = useRepositoryName(owner, name);
   const [description, setDescription] = useState('');
   const [initializeReadme, setInitializeReadme] = useState(false);
-  const [tags, setTags] = useState('');
-  const parsedTags = RepositoryTagsSchema.safeParse(tags.split('\n'));
+  const [tags, setTags] = useState<RepositoryTagsDraft>({ tags: [], input: '' });
+  const parsedTags = RepositoryTagsSchema.safeParse([...tags.tags, tags.input]);
   const parsedReadme = RepositoryReadmeSchema.safeParse(
     initializeReadme ? initialRepositoryReadme(nameCheck.result?.name ?? name, description) : ''
   );

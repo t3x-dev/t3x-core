@@ -235,14 +235,19 @@ export function StateOverviewView({
           {shownTags.length ? (
             <div className={styles.tags}>
               {shownTags.map((tag) => (
-                <span key={tag}>{tag}</span>
+                <span key={tag}>{version || tag.startsWith('#') ? tag : `#${tag}`}</span>
               ))}
             </div>
           ) : (
             <p className="text-xs text-[var(--text-tertiary)]">No tags</p>
           )}
           {canEdit ? (
-            <RepositoryProfileEditor field="tags" profile={repositoryProfile} onSave={canEdit} />
+            <RepositoryProfileEditor
+              field="tags"
+              profile={repositoryProfile}
+              projectName={projectName}
+              onSave={canEdit}
+            />
           ) : null}
         </fieldset>
       </div>
@@ -287,6 +292,8 @@ export function StateOverviewView({
                   <RepositoryProfileEditor
                     field="readme"
                     profile={repositoryProfile}
+                    projectName={projectName}
+                    projectDescription={projectDescription}
                     onSave={canEdit}
                   />
                 ) : null}
@@ -331,7 +338,6 @@ export function StateOverviewView({
                     label="Repository README"
                     emptyMessage="No README added yet."
                     showUnavailableImages
-                    compact
                     embedded
                   />
                 )}
