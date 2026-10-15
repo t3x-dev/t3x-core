@@ -25,7 +25,7 @@ test('previews confirmed names and preserves navigation through renames and lega
   await expect(page.getByText('Name is available.', { exact: false })).toBeVisible();
   await page.getByLabel('Repository name', { exact: true }).fill('项目计划');
   await expect(page.getByText('Repository name must contain an ASCII letter or number.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Create and start conversation' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Create repository' })).toBeDisabled();
   await page.getByLabel('Repository name', { exact: true }).fill(name.toLowerCase());
   await expect(page.getByText('This repository name is already occupied in this namespace.')).toBeVisible();
 

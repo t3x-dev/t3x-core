@@ -2,7 +2,6 @@ import { useRef, useState } from 'react';
 import { createConversation } from '@/commands/conversations';
 import { createProject } from '@/commands/projects';
 import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
-import { API_V1, fetchWithTimeout, handleResponse } from '@/infrastructure/core';
 import { changeProjectVisibility } from '@/infrastructure/projects';
 import { saveWorkspaceDraft } from '@/queries/workspaces';
 import { apiProjectToSummary, useProjectStore } from '@/store/projectStore';
@@ -14,7 +13,6 @@ export interface RepositorySetupInput {
   description: string;
   owner: string;
   visibility: 'private' | 'unlisted' | 'public';
-  schema: File | null;
 }
 
 export function useRepositorySetup() {
@@ -25,7 +23,6 @@ export function useRepositorySetup() {
     input?: RepositorySetupInput;
     project?: Project;
     workspace?: WorkspaceCandidate;
-    schemaBound?: boolean;
     conversation?: string;
   }>({});
   const busy = useRef(false);
@@ -37,7 +34,6 @@ export function useRepositorySetup() {
     const state = progress.current;
     state.input ??= input;
     const config = state.input;
-    if (!state.schemaBound) config.schema = input.schema;
     try {
       state.project ??= await createProject(
         config.name.trim(),
@@ -57,24 +53,6 @@ export function useRepositorySetup() {
             getProjectWorkspaceStarterCandidate(id, [])
           )
         ).workspace;
-      }
-      if (config.schema && !state.schemaBound) {
-        await handleResponse(
-          await fetchWithTimeout(
-            `${API_V1}/projects/${encodeURIComponent(id)}/schema-studio/initial-schema`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                workspaceId: state.workspace.id,
-                ifRevision: state.workspace.revision,
-                filename: config.schema.name,
-                yaml: await config.schema.text(),
-              }),
-            }
-          )
-        );
-        state.schemaBound = true;
       }
       if (!state.conversation) {
         const conversation = await createConversation(

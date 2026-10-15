@@ -8,11 +8,16 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   update: vi.fn(),
   upload: vi.fn(),
+  schemaRequest: vi.fn(),
   save: vi.fn(),
   conversation: vi.fn(),
   visibility: vi.fn(),
 }));
 vi.mock('@/commands/projects', () => ({ createProject: mocks.create }));
+vi.mock('@/infrastructure/core', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/infrastructure/core')>()),
+  fetchWithTimeout: mocks.schemaRequest,
+}));
 vi.mock('@/commands/conversations', () => ({ createConversation: mocks.conversation }));
 vi.mock('@/infrastructure/projects', () => ({
   updateProject: mocks.update,
@@ -43,9 +48,8 @@ const input = {
   description: 'Description',
   owner: 'team',
   visibility: 'private' as const,
-  schema: null,
 };
-it('creates an empty Workspace and conversation without AI defaults or material upload', async () => {
+it('creates an empty Workspace and conversation without AI defaults, material or Schema upload', async () => {
   const { result } = renderHook(() => useRepositorySetup());
   await act(async () => {
     await result.current.create(input);
@@ -53,6 +57,7 @@ it('creates an empty Workspace and conversation without AI defaults or material 
   expect(mocks.create).toHaveBeenCalledWith('Test', { description: 'Description' }, 'team');
   expect(mocks.update).not.toHaveBeenCalled();
   expect(mocks.upload).not.toHaveBeenCalled();
+  expect(mocks.schemaRequest).not.toHaveBeenCalled();
   expect(mocks.save.mock.calls[0]![2].sourceBundle).toEqual([]);
   expect(mocks.conversation).toHaveBeenCalledWith('p', 'Test source chat', undefined, undefined, {
     target_branch: 'main',

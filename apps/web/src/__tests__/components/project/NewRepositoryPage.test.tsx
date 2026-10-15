@@ -13,7 +13,11 @@ vi.mock('@/queries/projects', () => ({
     canonical_path: `/${namespace}/${name}`,
   }),
 }));
-const mocks = vi.hoisted(() => ({ create: vi.fn(), push: vi.fn(), test: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  create: vi.fn(),
+  push: vi.fn(),
+  setup: { pending: false, started: false, error: null as string | null },
+}));
 vi.mock('next/navigation', () => ({
   useParams: () => ({ owner: 't3x-dev' }),
   useRouter: () => ({ push: mocks.push }),
@@ -32,21 +36,25 @@ vi.mock('@/hooks/providers/useProviderCommands', () => ({
   },
 }));
 vi.mock('@/hooks/projects/useRepositorySetup', () => ({
-  useRepositorySetup: () => ({ create: mocks.create, pending: false, started: false, error: null }),
+  useRepositorySetup: () => ({ create: mocks.create, ...mocks.setup }),
 }));
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.test.mockResolvedValue({ ok: true });
+  mocks.setup = { pending: false, started: false, error: null };
 });
-it('uses dropdowns, single-line description, and file uploads from the reference', () => {
-  render(<NewRepositoryPage />);
+it('shows General and Configuration with reserved README and tags rows but no uploads', () => {
+  const { container } = render(<NewRepositoryPage />);
   for (const name of ['Owner', 'Visibility'])
     expect(screen.getByRole('combobox', { name })).toBeInTheDocument();
   expect(screen.getByLabelText('Description').tagName).toBe('INPUT');
-  expect(screen.getByLabelText('Upload YAML')).toHaveAttribute('accept', '.yaml,.yml');
-  expect(screen.getByRole('button', { name: 'Create and start conversation' })).toBeDisabled();
-  fireEvent.click(screen.getByRole('button', { name: 'Collapse all' }));
-  expect(screen.getByRole('button', { name: /General/ })).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.getByRole('region', { name: 'General' })).toBeInTheDocument();
+  expect(screen.getByRole('region', { name: 'Configuration' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Add README' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Add tags' })).toBeInTheDocument();
+  expect(container.querySelector('input[type="file"]')).toBeNull();
+  expect(screen.queryByText(/Schema|\.gitignore|Add license/i)).not.toBeInTheDocument();
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Create repository' })).toBeDisabled();
 });
 it('creates without AI and retains the canonical D01-005 destination', async () => {
   mocks.create.mockResolvedValue({
@@ -63,9 +71,9 @@ it('creates without AI and retains the canonical D01-005 destination', async () 
   expect(screen.queryByLabelText('Upload files')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Test' })).not.toBeInTheDocument();
   await waitFor(() =>
-    expect(screen.getByRole('button', { name: 'Create and start conversation' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Create repository' })).toBeEnabled()
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Create and start conversation' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create repository' }));
   await waitFor(() =>
     expect(mocks.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -77,16 +85,21 @@ it('creates without AI and retains the canonical D01-005 destination', async () 
   );
   expect(mocks.create.mock.calls[0][0]).not.toHaveProperty('provider');
   expect(mocks.create.mock.calls[0][0]).not.toHaveProperty('files');
+  expect(mocks.create.mock.calls[0][0]).not.toHaveProperty('schema');
+  expect(mocks.create.mock.calls[0][0]).not.toHaveProperty('readme');
+  expect(mocks.create.mock.calls[0][0]).not.toHaveProperty('tags');
   expect(mocks.push).toHaveBeenCalledWith(
     '/another-team/Catalog/workspaces?workspace=workspace_branch%3Amain&conversation=c'
   );
 });
-it('preserves optional Schema file validation', async () => {
+it('keeps a partially created repository locked and allows setup retry', async () => {
+  mocks.setup.started = true;
+  mocks.setup.error = 'Repository created; retry to finish setup. Permission denied';
   render(<NewRepositoryPage />);
-  fireEvent.change(screen.getByLabelText('Repository name'), { target: { value: 'Catalog' } });
-  fireEvent.change(screen.getByLabelText('Upload YAML'), {
-    target: { files: [new File(['x'], 'wrong.txt')] },
-  });
-  expect(screen.getByText('Choose a supported file, up to 5 MB each.')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Create and start conversation' })).toBeDisabled();
+  expect(screen.getByRole('alert')).toHaveTextContent('Permission denied');
+  expect(screen.getByLabelText('Repository name')).toBeDisabled();
+  expect(screen.getByLabelText('Owner')).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Retry setup' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry setup' }));
+  await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(1));
 });
