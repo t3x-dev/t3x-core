@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 86 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(86);
+  it('has 89 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(89);
   });
 
   it('key equals value for every code', () => {
@@ -69,6 +69,9 @@ describe('ErrorCodes', () => {
         "MISSING_AUTHOR": "MISSING_AUTHOR",
         "MISSING_PROJECT_FOR_ALIAS": "MISSING_PROJECT_FOR_ALIAS",
         "MISSING_SOURCE": "MISSING_SOURCE",
+        "NAME_INVALID": "NAME_INVALID",
+        "NAME_OCCUPIED": "NAME_OCCUPIED",
+        "NAME_RESERVED": "NAME_RESERVED",
         "NOT_FOUND": "NOT_FOUND",
         "NO_OUTPUT": "NO_OUTPUT",
         "PARENT_NOT_FOUND": "PARENT_NOT_FOUND",

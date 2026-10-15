@@ -17,6 +17,49 @@ afterEach(async () => {
 });
 
 describe('PostgreSQL schema migrations', () => {
+  it('repairs an early v76 path table without changing names or releasing blocked claims', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+    await setup.sql.unsafe(`
+      INSERT INTO projects(project_id, name, namespace_id, created_at) VALUES
+        ('v76-clean', 'Confirmed-Name', 'ns_t3x_dev', NOW());
+      DROP TRIGGER projects_repository_path ON projects;
+      ALTER TABLE repository_paths DROP COLUMN resolvable;
+      INSERT INTO projects(project_id, name, namespace_id, created_at) VALUES
+        ('v76-abnormal', 'Needs Confirmation', 'ns_t3x_dev', NOW());
+      INSERT INTO repository_paths(namespace_id, name_key, project_id) VALUES
+        ('ns_t3x_dev', 'needs-confirmation', 'v76-abnormal'),
+        ('ns_t3x_dev', 'uncertain-history', 'v76-clean'),
+        ('ns_t3x_dev', 'blocked-name', NULL);
+    `);
+    await closePostgresStorage();
+    await createPostgresBootstrapStorage({ connectionString: setup.connectionString });
+    expect(
+      await setup.sql.unsafe(
+        'SELECT name_key, project_id, resolvable FROM repository_paths ORDER BY name_key'
+      )
+    ).toMatchObject([
+      { name_key: 'blocked-name', project_id: null, resolvable: false },
+      { name_key: 'confirmed-name', project_id: 'v76-clean', resolvable: true },
+      { name_key: 'needs-confirmation', project_id: 'v76-abnormal', resolvable: false },
+      { name_key: 'uncertain-history', project_id: 'v76-clean', resolvable: false },
+    ]);
+    expect(
+      await setup.sql.unsafe("SELECT name FROM projects WHERE project_id = 'v76-abnormal'")
+    ).toMatchObject([{ name: 'Needs Confirmation' }]);
+    await setup.sql.unsafe("UPDATE projects SET name = 'Renamed' WHERE project_id = 'v76-clean'");
+    await closePostgresStorage();
+    await createPostgresBootstrapStorage({ connectionString: setup.connectionString });
+    expect(
+      await setup.sql.unsafe(
+        "SELECT resolvable FROM repository_paths WHERE name_key = 'confirmed-name'"
+      )
+    ).toMatchObject([{ resolvable: true }]);
+    await expect(
+      setup.sql.unsafe("UPDATE projects SET name = 'Blocked-Name' WHERE project_id = 'v76-clean'")
+    ).rejects.toThrow();
+  });
+
   it('upgrades v75 without changing abnormal names or assigning missing namespaces', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;

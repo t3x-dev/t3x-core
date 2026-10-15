@@ -14,6 +14,8 @@ export const REPOSITORY_PATHS_SQL = `
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (namespace_id, name_key)
   );
+  -- Early local v76 bootstraps predate the explicit resolvability flag.
+  ALTER TABLE repository_paths ADD COLUMN IF NOT EXISTS resolvable BOOLEAN NOT NULL DEFAULT FALSE;
   CREATE INDEX IF NOT EXISTS repository_paths_project ON repository_paths(project_id);
 
   CREATE OR REPLACE FUNCTION enforce_repository_path() RETURNS trigger AS $$
@@ -87,7 +89,11 @@ export async function ensureRepositoryPaths(sql: postgres.TransactionSql) {
   }
   for (const claim of candidates.values()) {
     await sql.unsafe(
-      'INSERT INTO repository_paths(namespace_id, name_key, project_id, resolvable) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING',
+      `INSERT INTO repository_paths(namespace_id, name_key, project_id, resolvable)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (namespace_id, name_key) DO UPDATE
+          SET resolvable = repository_paths.resolvable OR EXCLUDED.resolvable
+          WHERE repository_paths.project_id = EXCLUDED.project_id`,
       [claim.namespaceId, claim.nameKey, claim.projectId, claim.resolvable]
     );
   }

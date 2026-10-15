@@ -38,6 +38,11 @@ project, but are not resolvable until explicitly renamed to a valid name.
 Ambiguous candidates get blocked claims with no project owner. This permits the
 schema migration to finish even when historical data needs human review.
 
+The migration entry point also repairs the known early local v76 table shape
+that lacks `resolvable`. It enables only unambiguous, unchanged current names
+owned by the matching project. Uncertain historical candidates stay reserved
+and unresolved pending review; it does not guess ownership or rewrite names.
+
 Build the application and storage packages before using these commands. Inspect
 the intended database first, using a read-only connection when available:
 

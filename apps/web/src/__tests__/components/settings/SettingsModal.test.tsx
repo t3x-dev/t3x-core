@@ -201,8 +201,13 @@ vi.mock('@/store/pinsStore', () => ({
 }));
 
 vi.mock('@/store/projectStore', () => ({
-  useProjectStore: (selector: (state: { setNotifyCallback: typeof setProjectNotify }) => unknown) =>
-    selector({ setNotifyCallback: setProjectNotify }),
+  useProjectStore: (
+    selector: (state: {
+      setNotifyCallback: typeof setProjectNotify;
+      projects: [];
+      details: Record<string, never>;
+    }) => unknown
+  ) => selector({ setNotifyCallback: setProjectNotify, projects: [], details: {} }),
 }));
 
 vi.mock('@/store/sessionStore', () => ({

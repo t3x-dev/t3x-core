@@ -293,6 +293,20 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
   }
 
   if (rows.length > 0 && rows[0].version >= POSTGRES_SCHEMA_VERSION) {
+    if (rows[0].version === 76) {
+      // A development bootstrap may already have recorded v76 before its
+      // resolvability flag was added. Repair only this known shape, under the
+      // migration lock; the read-only runtime path never performs this DDL.
+      const [shape] = await sql.unsafe<{ present: boolean; complete: boolean }[]>(`
+        SELECT to_regclass('public.repository_paths') IS NOT NULL AS present,
+          EXISTS (SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'repository_paths'
+              AND column_name = 'resolvable') AS complete
+      `);
+      if (shape?.present && !shape.complete) {
+        await ensureRepositoryPaths(sql as postgres.TransactionSql);
+      }
+    }
     return;
   }
 

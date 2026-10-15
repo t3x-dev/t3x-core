@@ -1,9 +1,8 @@
 'use client';
 
-import type { RepositoryAddress } from '@t3x-dev/api-client';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect } from 'react';
 import { ProjectDetailPageContent } from '@/app/project/[projectId]/page';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { NewRepositoryPage } from '@/components/project/NewRepositoryPage';
@@ -16,7 +15,7 @@ import {
   isSupportedRepositorySuffix,
   repositoryLocation,
 } from '@/domain/project/repositoryLocation';
-import { resolveRepository } from '@/queries/projects';
+import { useRepositoryAddress } from '@/hooks/projects/useRepositoryAddress';
 
 function OwnerRepoProjectPageContent() {
   const params = useParams<{ owner: string; repoPath?: string[] }>();
@@ -30,33 +29,10 @@ function OwnerRepoProjectPageContent() {
   const organizationSettings =
     owner.toLowerCase() === 't3x-dev' && name.toLowerCase() === 'settings' && segments.length === 1;
   const special = directory || creating || organizationSettings;
-  const key = JSON.stringify([owner, name]);
-  const [attempt, setAttempt] = useState(0);
-  const [lookup, setLookup] = useState<{
-    key: string;
-    address?: RepositoryAddress;
-    error?: Error;
-  } | null>(null);
   const router = useRouter();
   const pathname = usePathname();
   const query = useSearchParams().toString();
-  useEffect(() => {
-    if (special) return;
-    let cancelled = false;
-    setLookup(null);
-    void resolveRepository(owner, name)
-      .then((address) => {
-        if (!cancelled) setLookup({ key, address });
-      })
-      .catch((error) => {
-        if (!cancelled)
-          setLookup({ key, error: error instanceof Error ? error : new Error(String(error)) });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [key, owner, name, special, attempt]);
-  const current = lookup?.key === key ? lookup : null;
+  const { current, retry } = useRepositoryAddress(owner, name, !special);
   const address = current?.address;
   const supported = isSupportedRepositorySuffix(suffix);
   useEffect(() => {
@@ -75,8 +51,7 @@ function OwnerRepoProjectPageContent() {
   if (creating) return <NewRepositoryPage />;
   if (organizationSettings) return <OrganizationSettingsPage ownerSlug={owner} />;
   if (!current) return <LoadingSpinner message="Loading repository..." />;
-  if (current.error)
-    return <ErrorMessage error={current.error} onRetry={() => setAttempt((v) => v + 1)} />;
+  if (current.error) return <ErrorMessage error={current.error} onRetry={retry} />;
   if (!address) return null;
   if (!supported)
     return (
