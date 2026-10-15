@@ -50,6 +50,7 @@ export function getSessionUser(): SessionUser | null {
 export function setSessionKey(apiKey: string): void {
   const maxAge = COOKIE_MAX_AGE_DAYS * 24 * 60 * 60;
   document.cookie = `${COOKIE_NAME}=${encodeURIComponent(apiKey)}; path=/; max-age=${maxAge}; samesite=lax`;
+  window.dispatchEvent(new Event('t3x:session-changed'));
 }
 
 /**

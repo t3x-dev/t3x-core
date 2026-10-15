@@ -8,11 +8,16 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   update: vi.fn(),
   upload: vi.fn(),
+  schemaRequest: vi.fn(),
   save: vi.fn(),
   conversation: vi.fn(),
   visibility: vi.fn(),
 }));
 vi.mock('@/commands/projects', () => ({ createProject: mocks.create }));
+vi.mock('@/infrastructure/core', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/infrastructure/core')>()),
+  fetchWithTimeout: mocks.schemaRequest,
+}));
 vi.mock('@/commands/conversations', () => ({ createConversation: mocks.conversation }));
 vi.mock('@/infrastructure/projects', () => ({
   updateProject: mocks.update,
@@ -43,22 +48,17 @@ const input = {
   description: 'Description',
   owner: 'team',
   visibility: 'private' as const,
-  provider: 'openai',
-  model: 'model-a',
-  files: [new File(['notes'], 'notes.md')],
-  schema: null,
 };
-it('persists the configuration, attaches uploaded material to the Workspace, and creates its conversation', async () => {
+it('creates an empty Workspace and conversation without AI defaults, material or Schema upload', async () => {
   const { result } = renderHook(() => useRepositorySetup());
   await act(async () => {
     await result.current.create(input);
   });
   expect(mocks.create).toHaveBeenCalledWith('Test', { description: 'Description' }, 'team');
-  expect(mocks.update).toHaveBeenCalledWith('p', {
-    default_provider: 'openai',
-    default_model: 'model-a',
-  });
-  expect(mocks.save.mock.calls[0]![2].sourceBundle[0].materialId).toBe('m');
+  expect(mocks.update).not.toHaveBeenCalled();
+  expect(mocks.upload).not.toHaveBeenCalled();
+  expect(mocks.schemaRequest).not.toHaveBeenCalled();
+  expect(mocks.save.mock.calls[0]![2].sourceBundle).toEqual([]);
   expect(mocks.conversation).toHaveBeenCalledWith('p', 'Test source chat', undefined, undefined, {
     target_branch: 'main',
     workspace_id: 'workspace_branch:main',
@@ -75,7 +75,7 @@ it('resumes after a conversation failure without creating another repository or 
     await result.current.create(input);
   });
   expect(mocks.create).toHaveBeenCalledTimes(1);
-  expect(mocks.upload).toHaveBeenCalledTimes(1);
+  expect(mocks.upload).not.toHaveBeenCalled();
   expect(mocks.save).toHaveBeenCalledTimes(1);
   expect(result.current.error).toBeNull();
   expect(useProjectStore.getState().projects.filter((project) => project.id === 'p')).toHaveLength(
@@ -90,4 +90,35 @@ it('adds the new repository to an already loaded owner project list', async () =
     await result.current.create(input);
   });
   expect(useProjectStore.getState().projects.map((project) => project.id)).toEqual(['p']);
+});
+
+it('resumes after visibility failure without duplicating the Workspace or conversation', async () => {
+  mocks.visibility.mockRejectedValueOnce(new Error('Permission denied'));
+  const { result } = renderHook(() => useRepositorySetup());
+  await act(async () => {
+    await result.current.create({ ...input, visibility: 'public' });
+  });
+  expect(result.current.error).toContain('Repository created; retry');
+  expect(result.current.error).toContain('Permission denied');
+  await act(async () => {
+    await result.current.create({ ...input, visibility: 'public' });
+  });
+  expect(mocks.create).toHaveBeenCalledTimes(1);
+  expect(mocks.save).toHaveBeenCalledTimes(1);
+  expect(mocks.conversation).toHaveBeenCalledTimes(1);
+  expect(result.current.error).toBeNull();
+});
+it('reports repository creation errors and permits a corrected retry', async () => {
+  mocks.create.mockRejectedValueOnce(new Error('Namespace permission denied'));
+  const { result } = renderHook(() => useRepositorySetup());
+  await act(async () => {
+    await result.current.create(input);
+  });
+  expect(result.current.started).toBe(false);
+  expect(result.current.error).toBe('Namespace permission denied');
+  expect(mocks.save).not.toHaveBeenCalled();
+  await act(async () => {
+    await result.current.create({ ...input, owner: 'allowed' });
+  });
+  expect(mocks.create).toHaveBeenLastCalledWith('Test', { description: 'Description' }, 'allowed');
 });

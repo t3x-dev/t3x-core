@@ -643,7 +643,7 @@ describe('CanvasWorkspace initial fit view', () => {
     screen.getByRole('button', { name: 'Open Leaf' }).click();
 
     expect(navigationMocks.routerPush).toHaveBeenCalledWith(
-      '/t3x-dev/trust-gate/outputs?leaf=leaf_audience'
+      '/project/proj_test?tab=outputs&leaf=leaf_audience'
     );
   });
 

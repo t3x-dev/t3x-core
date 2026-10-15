@@ -1,6 +1,6 @@
 'use client';
-import { useParams } from 'next/navigation';
 import { LegacyLeafReader } from '@/components/leaf/LegacyLeafReader';
+import { useRepositoryRouteParams as useParams } from '@/hooks/projects/repositoryRouteContext';
 export default function LeafDetailPage() {
   return <LeafDetailWorkspace />;
 }

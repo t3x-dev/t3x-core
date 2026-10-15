@@ -36,6 +36,9 @@ export type ApiResponse<T> = ApiSuccessResponse<T> | ApiErrorResponse;
 export type ProjectVisibility = 'private' | 'unlisted' | 'public';
 
 export interface Project {
+  namespace?: string | null;
+  canonical_path?: string | null;
+  path_status?: 'ready' | 'pending_migration';
   project_id: string;
   name: string;
   visibility: ProjectVisibility;
@@ -52,6 +55,7 @@ export interface ProjectWithStats extends Project {
 }
 
 export interface CreateProjectInput {
+  namespace?: string;
   /** Initialize a private repository with a deterministic, editable PRD; no AI call. */
   starter?: 'prd-v1';
   name: string;
@@ -1307,4 +1311,24 @@ export interface CommitTransitionResult {
   commit: TransitionProtocolValue;
   transition: TransitionViewV1;
   workspace?: Record<string, unknown>;
+}
+
+/** Application-owned repository address contracts. */
+export interface RepositoryAddress {
+  project_id: string;
+  name: string;
+  namespace: string | null;
+  canonical_path: string | null;
+  path_status: 'ready' | 'pending_migration';
+  redirect: boolean;
+}
+export interface RepositoryNameCheck {
+  name: string;
+  changed: boolean;
+  valid: boolean;
+  available: boolean;
+  code: string | null;
+  message: string | null;
+  namespace: string;
+  canonical_path: string | null;
 }

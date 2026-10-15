@@ -53,6 +53,13 @@
     {
       "source": "auth-me.openapi.ts",
       "method": "GET",
+      "path": "/v1/auth/me/capabilities",
+      "policy": "authenticated",
+      "rationale": "Returns only the authenticated request identity's administration permissions and disables shared response caching."
+    },
+    {
+      "source": "auth-me.openapi.ts",
+      "method": "GET",
       "path": "/v1/auth/me",
       "policy": "authenticated",
       "rationale": "Authenticated user surface without a cross-project resource."
@@ -1267,6 +1274,20 @@
       "path": "/v1/commits/{hash}/relations",
       "policy": "project",
       "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "repository-paths.openapi.ts",
+      "method": "GET",
+      "path": "/v1/repositories/{owner}/{name}",
+      "policy": "project",
+      "rationale": "Resolves a current or historical repository address, then checks read access to the resolved project before returning its identity and canonical path."
+    },
+    {
+      "source": "repository-paths.openapi.ts",
+      "method": "GET",
+      "path": "/v1/repository-name",
+      "policy": "project",
+      "rationale": "Requires project edit access for renames, or project creation and namespace access for new names; availability never returns another project identity."
     },
     {
       "source": "runner.openapi.ts",

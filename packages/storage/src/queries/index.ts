@@ -404,6 +404,7 @@ export {
   type UpdateRecipeInput,
   updateRecipe,
 } from './recipes';
+export * from './repository-paths';
 // Runs (Engine → Runner → n8n flow)
 export {
   type ConfigurationStats,

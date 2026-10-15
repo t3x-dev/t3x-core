@@ -4,6 +4,7 @@ import {
   type StatePresentationResult,
   StatePresentationResultSchema,
 } from './state-presentation.js';
+import type { RepositoryAddress, RepositoryNameCheck } from './types';
 import {
   type WorkspaceDeliveryInput,
   type WorkspaceDeliveryResult,
@@ -601,12 +602,29 @@ export class T3xClient {
     return this.request<ProjectWithStats>('GET', `/v1/projects/${id}`);
   }
 
+  async resolveRepository(owner: string, name: string): Promise<RepositoryAddress> {
+    return this.request(
+      'GET',
+      `/v1/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`
+    );
+  }
+
+  async checkRepositoryName(
+    namespace: string,
+    name: string,
+    projectId?: string
+  ): Promise<RepositoryNameCheck> {
+    const query = new URLSearchParams({ namespace, name });
+    if (projectId) query.set('project_id', projectId);
+    return this.request('GET', `/v1/repository-name?${query.toString()}`);
+  }
+
   async createProject(input: CreateProjectInput): Promise<Project> {
     return this.request<Project>('POST', '/v1/projects', input);
   }
 
   async updateProject(id: string, input: UpdateProjectInput): Promise<Project> {
-    return this.request<Project>('PATCH', `/v1/projects/${id}`, input);
+    return this.request<Project>('PUT', `/v1/projects/${encodeURIComponent(id)}`, input);
   }
 
   async changeProjectVisibility(

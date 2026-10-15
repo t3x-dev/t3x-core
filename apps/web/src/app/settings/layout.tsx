@@ -16,7 +16,9 @@ import {
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
+import { useDeploymentCapabilities } from '@/components/deployment/DeploymentCapabilitiesProvider';
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
+import { SettingsReturnLink } from '@/components/settings/SettingsReturnLink';
 import { DEFAULT_OWNER_SLUG } from '@/domain/project/repoPath';
 import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
 import { useSession } from '@/hooks/shared/useSession';
@@ -125,6 +127,7 @@ function SettingsNavLink({
 
 function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
   const currentPath = usePathname() ?? '';
+  const { canAdministerProviderCredentials } = useDeploymentCapabilities();
   const ownerParam = useSearchParams().get('owner')?.trim();
   const projectId = '';
   const { clear, getKey } = useSession();
@@ -147,7 +150,10 @@ function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
           <section>
             <h2 className={styles.groupTitle}>Personal</h2>
             <nav className={styles.navList}>
-              {PERSONAL_NAV.map((item) => (
+              {PERSONAL_NAV.filter(
+                (item) =>
+                  item.href !== '/settings/provider-credentials' || canAdministerProviderCredentials
+              ).map((item) => (
                 <SettingsNavLink
                   key={item.label}
                   item={item}
@@ -200,7 +206,10 @@ function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
             </button>
           ) : null}
         </aside>
-        <div className={styles.content}>{children}</div>
+        <div className={styles.content}>
+          <SettingsReturnLink />
+          {children}
+        </div>
       </div>
     </div>
   );

@@ -159,3 +159,9 @@ export async function postRegister(credentials: RegisterCredentials): Promise<Au
   });
   return handleResponse<AuthSessionResponse>(res);
 }
+
+export async function getAuthCapabilities(): Promise<{ operator: boolean }> {
+  return handleResponse(
+    await fetchWithTimeout(`${API_V1}/auth/me/capabilities`, { cache: 'no-store' })
+  );
+}

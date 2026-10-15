@@ -181,6 +181,7 @@ beforeEach(() => {
   vi.mocked(fetchLatestYSchemaValidation).mockResolvedValue(null);
   vi.mocked(runYSchemaValidation).mockReset();
   useProjectStore.setState({
+    details: {},
     projects: [{ id: 'proj_test', name: 'Test Project' } as never],
     initialized: true,
     loading: false,
@@ -198,7 +199,7 @@ beforeEach(() => {
 
 afterEach(() => {
   useChatStore.setState({ activeProjectId: null, activeConversationId: null });
-  useProjectStore.setState({ projects: [], initialized: false, loading: false });
+  useProjectStore.setState({ details: {}, projects: [], initialized: false, loading: false });
   useCanvasStore.setState({
     nodes: [],
     edges: [],
@@ -235,6 +236,24 @@ describe('ProjectDetailPage — project-first shell states', () => {
       'tab=schemas&branch=feature%2Frelease&workspace=workspace_7'
     );
     pathnameValue = '/orbit-labs/test-project';
+    useProjectStore.setState({
+      details: {},
+      projects: [
+        {
+          id: 'proj_test',
+          name: 'Test Project',
+          canonical_path: '/orbit-labs/test-project',
+          namespace: 'orbit-labs',
+        } as never,
+      ],
+    });
+    vi.mocked(fetchProject).mockResolvedValue({
+      project_id: 'proj_test',
+      name: 'Test Project',
+      canonical_path: '/orbit-labs/test-project',
+      namespace: 'orbit-labs',
+      created_at: '2026-01-01T00:00:00Z',
+    } as never);
     routeParamsValue = {};
 
     render(
@@ -255,9 +274,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     const view = render(<ProjectDetailPage />);
 
-    expect(replaceMock).toHaveBeenCalledWith(
-      '/project/proj_test/settings?returnTo=%2Fproject%2Fproj_test'
-    );
+    expect(replaceMock).toHaveBeenCalledWith('/project/proj_test/settings');
     expect(view.container).toBeEmptyDOMElement();
   });
 
@@ -529,6 +546,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
   it('keeps committed State visible when the project has sources but no commit', async () => {
     useProjectStore.setState({
+      details: {},
       projects: [{ id: 'proj_test', name: 'Test Project', drafts: 1 } as never],
       initialized: true,
       loading: false,

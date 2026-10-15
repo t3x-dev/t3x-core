@@ -123,6 +123,7 @@ import {
   yschemaPrdSmokeRoutes,
   yschemaValidationRoutes,
 } from './routes';
+import { repositoryPathRoutes } from './routes/repository-paths.openapi';
 import { createWsRoute } from './routes/ws';
 import type { AppEnv } from './types';
 
@@ -250,6 +251,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', collaborationReadRoutes);
   api.route('/', collaborationCommandRoutes);
   api.route('/', collaborationInvitationRoutes);
+  api.route('/', repositoryPathRoutes);
   api.route('/', projectRoutes);
   api.route('/', createProjectVisibilityRoutes(options?.projectVisibilityPolicy));
   api.route('/', pullRequestRoutes);

@@ -18,7 +18,7 @@ function createFallbackStatus(provider: LocalProviderId): LocalProviderStatus {
     last_test_error: null,
     api_key_source: 'none',
     api_key_preview: null,
-    env_overrides_stored: false,
+    stored: false,
   };
 }
 
@@ -61,7 +61,7 @@ export function useProviderStatus(): UseProviderStatusResult {
         )
       );
       setStatusError(
-        settled.every((result) => result.status === 'rejected') ? 'api_unavailable' : null
+        settled.some((result) => result.status === 'rejected') ? 'api_unavailable' : null
       );
       setLoading(false);
     }

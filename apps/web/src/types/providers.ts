@@ -30,6 +30,7 @@ export interface LLMProviderInfo {
   name: string;
   label: string;
   available: boolean;
+  default_model?: string | null;
   models: LLMModelInfo[];
 }
 
@@ -40,7 +41,7 @@ export interface LLMModelsResponse {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Local provider settings (keys stored on the user's machine)
+// Deployment provider settings (encrypted credentials in global_settings)
 // ────────────────────────────────────────────────────────────────────────────
 
 export type LocalProviderId = LocalGenerationProviderId;
@@ -48,7 +49,7 @@ export type LocalProviderAlias = 'claude' | 'gemini' | 'google-ai' | 'gpt';
 export type LocalProviderClientId = LocalProviderId | LocalProviderAlias;
 export type LocalProviderTestStatus = 'ok' | 'error';
 
-export type LocalProviderKeySource = 'env' | 'file' | 'none';
+export type LocalProviderKeySource = 'database' | 'environment' | 'none';
 
 export const GENERATION_PROVIDER_ORDER = [...GENERATION_RUNTIME_PROVIDER_IDS] as const;
 
@@ -59,12 +60,12 @@ export interface LocalProviderStatus {
   last_test_status: LocalProviderTestStatus | null;
   last_tested_at: string | null;
   last_test_error: string | null;
-  /** Which layer produced the currently-active key: 'env' > 'file' > 'none'. */
+  /** Active credential source: database > environment > none. */
   api_key_source: LocalProviderKeySource;
   /** Last-four tail of the active key, e.g. `…JnYA`; null when unconfigured. */
   api_key_preview: string | null;
-  /** True when an env var is masking a stored file-based credential. */
-  env_overrides_stored: boolean;
+  /** Whether a deployment database credential can be removed. */
+  stored: boolean;
 }
 
 export interface LocalProviderCredentialInput {

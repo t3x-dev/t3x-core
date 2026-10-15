@@ -24,9 +24,9 @@ export async function mockConfiguredExtractionModel(page: Page): Promise<void> {
           last_test_status: configured ? 'ok' : null,
           last_tested_at: null,
           last_test_error: null,
-          api_key_source: configured ? 'file' : 'none',
+          api_key_source: configured ? 'database' : 'none',
           api_key_preview: configured ? '…test' : null,
-          env_overrides_stored: false,
+          stored: configured,
         },
       }),
     });

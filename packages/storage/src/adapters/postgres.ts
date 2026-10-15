@@ -9,6 +9,7 @@ import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from '../schema';
 import { seedBuiltinTemplates } from '../seed/templates';
+import { ensureRepositoryPaths } from './repository-paths';
 
 export type PostgresDB = PostgresJsDatabase<typeof schema>;
 
@@ -187,7 +188,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-export const POSTGRES_SCHEMA_VERSION = 75;
+export const POSTGRES_SCHEMA_VERSION = 76;
 
 function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
   if (!tableExists) return 'missing';
@@ -292,6 +293,20 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
   }
 
   if (rows.length > 0 && rows[0].version >= POSTGRES_SCHEMA_VERSION) {
+    if (rows[0].version === 76) {
+      // A development bootstrap may already have recorded v76 before its
+      // resolvability flag was added. Repair only this known shape, under the
+      // migration lock; the read-only runtime path never performs this DDL.
+      const [shape] = await sql.unsafe<{ present: boolean; complete: boolean }[]>(`
+        SELECT to_regclass('public.repository_paths') IS NOT NULL AS present,
+          EXISTS (SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'repository_paths'
+              AND column_name = 'resolvable') AS complete
+      `);
+      if (shape?.present && !shape.complete) {
+        await ensureRepositoryPaths(sql as postgres.TransactionSql);
+      }
+    }
     return;
   }
 
@@ -2264,7 +2279,10 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
     ON CONFLICT (namespace_id) DO NOTHING;
 
     ALTER TABLE projects ADD COLUMN IF NOT EXISTS namespace_id TEXT;
-    UPDATE projects SET namespace_id = 'ns_t3x_dev' WHERE namespace_id IS NULL;
+    -- Only the original v68 upgrade owns this historical backfill. Later schema
+    -- upgrades must not silently assign namespaces to anomalous imported rows.
+    UPDATE projects SET namespace_id = 'ns_t3x_dev' WHERE namespace_id IS NULL
+      AND ${(rows[0]?.version ?? 0) < 68 ? 'TRUE' : 'FALSE'};
     CREATE INDEX IF NOT EXISTS idx_projects_namespace_created
       ON projects(namespace_id, created_at);
 
@@ -2603,6 +2621,9 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS schema_studio_candidates_project
       ON schema_studio_candidates(project_id, created_at, id);
   `);
+
+  // Schema v76 only reserves addresses; abnormal historical names stay untouched.
+  await ensureRepositoryPaths(sql as postgres.TransactionSql);
 
   // Record schema version so subsequent startups skip the init SQL.
   await sql.unsafe(`

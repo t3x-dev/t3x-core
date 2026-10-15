@@ -1,6 +1,10 @@
 import type { ResolvedConfig } from '@t3x-dev/core';
 import type { AnyDB } from '../adapters';
-import { decryptCredential, encryptCredential } from '../lib/credential-encryption';
+import {
+  CredentialEncryptionError,
+  decryptCredential,
+  encryptCredential,
+} from '../lib/credential-encryption';
 import { deleteGlobalSetting, getGlobalSetting, setGlobalSetting } from './global-settings';
 
 const PROVIDER_CREDENTIAL_KEY_PREFIX = 'local_provider_credentials_v1_';
@@ -122,9 +126,12 @@ async function readProviderCredential(
   if (!persisted) return null;
 
   const storedSecret = persisted.encryptedApiKey ?? persisted.apiKey;
-  if (!storedSecret) return null;
+  if (!storedSecret)
+    throw new CredentialEncryptionError('Stored provider credential is missing its secret');
   if (persisted.encryptedApiKey && !persisted.encryptedApiKey.startsWith('t3xenc:v1:')) {
-    throw new Error(`Encrypted provider credential is malformed for ${providerId}`);
+    throw new CredentialEncryptionError(
+      `Encrypted provider credential is malformed for ${providerId}`
+    );
   }
   const decrypted = decryptCredential(storedSecret, `provider:${providerId}:api-key`);
   const credential: StoredProviderCredential = {
@@ -185,15 +192,17 @@ export async function upsertProviderCredential(
 ): Promise<ProviderCredentialBundle> {
   const providerId = normalizeProviderId(input.providerId);
   const now = new Date().toISOString();
-  const previous = await readProviderCredential(db, providerId);
+  // Check the existing encrypted record before replacing it; a broken master key
+  // must not turn a credential update into silent data loss.
+  await readProviderCredential(db, providerId);
 
   await writeProviderCredential(db, providerId, {
     apiKey: input.apiKey,
     defaultModel: input.defaultModel ?? null,
     updatedAt: now,
-    lastTestStatus: previous?.lastTestStatus ?? null,
-    lastTestedAt: previous?.lastTestedAt ?? null,
-    lastTestError: toSafeLastTestError(previous?.lastTestError ?? null),
+    lastTestStatus: null,
+    lastTestedAt: null,
+    lastTestError: null,
   });
   return getProviderCredentialBundle(db);
 }

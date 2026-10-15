@@ -312,7 +312,7 @@ describe('Canvas node semantic markers', () => {
     renderUnitNode(makeNodeData());
 
     const leafLink = screen.getByRole('link', { name: /Open leaf Launch brief/i });
-    expect(leafLink).toHaveAttribute('href', '/t3x-dev/canvas-project/outputs?leaf=leaf_canvas');
+    expect(leafLink).toHaveAttribute('href', '/project/proj_canvas?tab=outputs&leaf=leaf_canvas');
 
     fireEvent.click(screen.getByRole('button', { name: /Expand leaf list/i }));
 
@@ -326,7 +326,7 @@ describe('Canvas node semantic markers', () => {
 
     expect(screen.getByRole('link', { name: /Open leaf Launch brief/i })).toHaveAttribute(
       'href',
-      '/t3x-dev/canvas-project/outputs?leaf=leaf_canvas'
+      '/project/proj_store?tab=outputs&leaf=leaf_canvas'
     );
   });
 

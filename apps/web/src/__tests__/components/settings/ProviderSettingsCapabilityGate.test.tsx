@@ -12,6 +12,8 @@ import { DeploymentCapabilitiesProvider } from '@/components/deployment/Deployme
 import { ProviderSettingsCapabilityGate } from '@/components/settings/ProviderSettingsCapabilityGate';
 import { ProviderSettingsOverviewCard } from '@/components/settings/ProviderSettingsOverviewCard';
 
+vi.mock('@/infrastructure/auth', () => ({ getAuthCapabilities: async () => ({ operator: true }) }));
+
 vi.mock('@/components/settings/ProvidersSettingsPanel', () => ({
   ProvidersSettingsPanel: () => <div>Local provider credential controls</div>,
 }));
@@ -39,10 +41,10 @@ function renderGate(capabilities: DeploymentCapabilities) {
 }
 
 describe('ProviderSettingsCapabilityGate', () => {
-  it('renders local credential controls only for self-hosted administration', () => {
+  it('renders local credential controls only for self-hosted operators', async () => {
     renderGate(SELF_HOSTED_DEPLOYMENT_CAPABILITIES);
 
-    expect(screen.getByText('Local provider credential controls')).toBeInTheDocument();
+    expect(await screen.findByText('Local provider credential controls')).toBeInTheDocument();
   });
 
   it('renders an explanatory managed surface on direct navigation', () => {
@@ -59,13 +61,13 @@ describe('ProviderSettingsCapabilityGate', () => {
     expect(screen.queryByText('Local provider credential controls')).not.toBeInTheDocument();
   });
 
-  it('advertises provider setup on the overview only when local administration is enabled', () => {
+  it('advertises provider setup on the overview only when local administration is enabled', async () => {
     const selfHosted = render(
       <DeploymentCapabilitiesProvider initialCapabilities={SELF_HOSTED_DEPLOYMENT_CAPABILITIES}>
         <ProviderSettingsOverviewCard />
       </DeploymentCapabilitiesProvider>
     );
-    expect(screen.getByRole('link', { name: 'AI Providers Configure' })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'AI Providers Configure' })).toBeInTheDocument();
 
     selfHosted.unmount();
     render(

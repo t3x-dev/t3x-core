@@ -3,6 +3,7 @@
 import { Check, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useDeploymentCapabilities } from '@/components/deployment/DeploymentCapabilitiesProvider';
 import { useAvailableModels } from '@/hooks/shared/useAvailableModels';
 import { useChatSessionStore } from '@/store/chatSessionStore';
 import { useSettingsModalStore } from '@/store/settingsModalStore';
@@ -33,7 +34,9 @@ export function GenerationModelSelector({
   const [query, setQuery] = useState('');
   const preferences = useChatSessionStore();
   const [popoverHeight, setPopoverHeight] = useState(320);
-  const { defaultModel, defaultProvider, providers } = useAvailableModels();
+  const { defaultModel, defaultProvider, providers, loading, availabilityError } =
+    useAvailableModels();
+  const { canAdministerProviderCredentials } = useDeploymentCapabilities();
   const openSettingsModal = useSettingsModalStore((state) => state.openSettingsModal);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -55,7 +58,13 @@ export function GenerationModelSelector({
   const currentLabel =
     currentModel?.label ||
     selectedModel ||
-    (modelOptions.length > 0 ? 'Select model' : 'No models configured');
+    (loading
+      ? 'Loading models…'
+      : availabilityError
+        ? 'Models unavailable'
+        : modelOptions.length > 0
+          ? 'Select model'
+          : 'No models available');
   const modelValueLabel =
     selectedModel === 'gpt-5.4' ? 'gpt5.4' : compactModelLabel(currentLabel, 'control');
   const selectedVendor =
@@ -237,17 +246,19 @@ export function GenerationModelSelector({
                       <p className={styles.empty}>No matching models</p>
                     ) : null}
                   </div>
-                  <button
-                    aria-label="Open provider settings"
-                    className={styles.addModels}
-                    onClick={() => {
-                      setOpen(false);
-                      openSettingsModal('providers');
-                    }}
-                    type="button"
-                  >
-                    Add Models
-                  </button>
+                  {canAdministerProviderCredentials ? (
+                    <button
+                      aria-label="Open provider settings"
+                      className={styles.addModels}
+                      onClick={() => {
+                        setOpen(false);
+                        openSettingsModal('providers');
+                      }}
+                      type="button"
+                    >
+                      Add Models
+                    </button>
+                  ) : null}
                 </section>
               ) : activePane === 'provider' ? (
                 <section className={styles.effortPanel} aria-label="Providers">

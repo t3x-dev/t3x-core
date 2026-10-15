@@ -28,6 +28,9 @@ export const ErrorCodes = {
   // Version errors
   COMMIT_VERSION_UNSUPPORTED: 'COMMIT_VERSION_UNSUPPORTED',
 
+  NAME_OCCUPIED: 'NAME_OCCUPIED',
+  NAME_RESERVED: 'NAME_RESERVED',
+  NAME_INVALID: 'NAME_INVALID',
   // Validation errors
   INVALID_REQUEST: 'INVALID_REQUEST',
   VALIDATION_FAILED: 'VALIDATION_FAILED',
@@ -185,6 +188,9 @@ export interface ApiError {
  * HTTP status codes for each error type
  */
 export const ErrorStatusCodes: Record<ErrorCode, number> = {
+  NAME_OCCUPIED: 409,
+  NAME_RESERVED: 400,
+  NAME_INVALID: 400,
   // 400 Bad Request
   COMMIT_VERSION_UNSUPPORTED: 400,
   INVALID_REQUEST: 400,

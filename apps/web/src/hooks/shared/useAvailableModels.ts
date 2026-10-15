@@ -2,20 +2,13 @@
  * useAvailableModels — runtime-usable LLM provider list for chat-facing model pickers.
  *
  * Filters the backend model registry to providers that are actually usable
- * at runtime. Backend ordering/default drives provider selection; local
- * provider status is used only to prefer a saved default model when that
- * backend-selected provider is still available.
- * Failures are swallowed to match the current empty-state UX.
+ * at runtime. The server owns availability, including managed inference.
+ * Credential administration permissions are not required for model discovery.
+ * Loading and discovery failures remain distinct from an empty catalog.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useProviderStatus } from '@/hooks/providers/useProviderStatus';
-import { toLocalProviderId } from '@/infrastructure/misc';
-import type {
-  LLMModelsResponse,
-  LLMProviderInfo,
-  LocalProviderStatus,
-} from '@/infrastructure/types';
+import type { LLMModelsResponse, LLMProviderInfo } from '@/infrastructure/types';
 import { fetchAvailableModels } from '@/queries/llm';
 
 export type GenerationProviderAvailabilityError = 'api_unavailable';
@@ -28,6 +21,7 @@ export interface UseAvailableModelsResult {
   defaultProvider: string | null;
   defaultModel: string | null;
   availabilityError: GenerationProviderAvailabilityError | null;
+  refresh: () => void;
 }
 
 export interface AvailableModelSelection {
@@ -35,18 +29,8 @@ export interface AvailableModelSelection {
   model: string | null;
 }
 
-function filterUsableProviders(
-  providers: LLMProviderInfo[],
-  statuses: LocalProviderStatus[]
-): LLMProviderInfo[] {
-  return providers.filter((provider) => {
-    const localProviderId = toLocalProviderId(provider.name);
-    if (!provider.available || provider.models.length === 0 || localProviderId === null) {
-      return false;
-    }
-
-    return statuses.some((status) => status.provider === localProviderId && status.configured);
-  });
+function filterUsableProviders(providers: LLMProviderInfo[]): LLMProviderInfo[] {
+  return providers.filter((provider) => provider.available && provider.models.length > 0);
 }
 
 function orderProviders(
@@ -70,14 +54,8 @@ function orderProviders(
   });
 }
 
-function getUsableProviders(
-  data: LLMModelsResponse,
-  statuses: LocalProviderStatus[]
-): LLMProviderInfo[] {
-  return orderProviders(
-    filterUsableProviders(data.providers, statuses),
-    data.generation_provider_order
-  );
+function getUsableProviders(data: LLMModelsResponse): LLMProviderInfo[] {
+  return orderProviders(filterUsableProviders(data.providers), data.generation_provider_order);
 }
 
 export function resolveAvailableModelSelection(
@@ -130,59 +108,52 @@ export function useAvailableModels(): {
   defaultProvider: string | null;
   defaultModel: string | null;
   availabilityError: GenerationProviderAvailabilityError | null;
+  refresh: () => void;
 } {
   const [providers, setProviders] = useState<LLMProviderInfo[]>([]);
   const [backendDefaultProvider, setBackendDefaultProvider] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [availabilityError, setAvailabilityError] =
     useState<GenerationProviderAvailabilityError | null>(null);
-  const { loading: providerStatusLoading, statuses, statusError } = useProviderStatus();
-
+  const [revision, setRevision] = useState(0);
+  const refresh = useCallback(() => setRevision((value) => value + 1), []);
   const loadModels = useCallback(async () => {
     const data = await fetchAvailableModels();
-    return { providers: getUsableProviders(data, statuses) };
-  }, [statuses]);
+    return { providers: getUsableProviders(data) };
+  }, []);
 
   useEffect(() => {
-    if (providerStatusLoading) {
-      setLoading(true);
-      return;
-    }
-
-    if (statusError) {
-      setProviders([]);
-      setBackendDefaultProvider(null);
-      setAvailabilityError(statusError);
-      setLoading(false);
-      return;
-    }
-
     let cancelled = false;
-
     setLoading(true);
-    fetchAvailableModels()
+    setAvailabilityError(null);
+    void fetchAvailableModels()
       .then((data) => {
-        if (!cancelled) {
-          setProviders(getUsableProviders(data, statuses));
-          setBackendDefaultProvider(data.default_provider);
-          setAvailabilityError(null);
-        }
+        if (cancelled) return;
+        setProviders(getUsableProviders(data));
+        setBackendDefaultProvider(data.default_provider);
       })
       .catch(() => {
-        if (!cancelled) {
-          setProviders([]);
-          setBackendDefaultProvider(null);
-          setAvailabilityError('api_unavailable');
-        }
+        if (cancelled) return;
+        setProviders([]);
+        setBackendDefaultProvider(null);
+        setAvailabilityError('api_unavailable');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-
     return () => {
       cancelled = true;
     };
-  }, [providerStatusLoading, statusError, statuses]);
+  }, [revision]);
+
+  useEffect(() => {
+    window.addEventListener('focus', refresh);
+    window.addEventListener('t3x:provider-configuration-changed', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('t3x:provider-configuration-changed', refresh);
+    };
+  }, [refresh]);
 
   const defaultUsableProvider = useMemo(() => {
     if (providers.length === 0) {
@@ -204,24 +175,21 @@ export function useAvailableModels(): {
       return null;
     }
 
-    const localProviderId = toLocalProviderId(defaultUsableProvider);
-    const preferredModel =
-      localProviderId == null
-        ? null
-        : (statuses.find((status) => status.provider === localProviderId)?.default_model ?? null);
+    const preferredModel = provider.default_model ?? null;
 
     return provider.models.some((model) => model.id === preferredModel)
       ? preferredModel
       : (provider.models[0]?.id ?? null);
-  }, [defaultUsableProvider, providers, statuses]);
+  }, [defaultUsableProvider, providers]);
 
   return {
     providers,
-    loading: providerStatusLoading || loading,
+    loading,
     loadModels,
     hasConfiguredGenerationProvider: providers.length > 0,
     defaultProvider: defaultUsableProvider,
     defaultModel: defaultUsableModel,
     availabilityError,
+    refresh,
   };
 }
