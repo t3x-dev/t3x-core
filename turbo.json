@@ -3,7 +3,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**"],
+      "outputs": ["dist/**", ".next/**", "src/specData.ts"],
       "env": ["NEXT_PUBLIC_API_URL", "NEXT_PUBLIC_AUTH_DISABLED"],
       "cache": true
     },
