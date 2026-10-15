@@ -36,6 +36,9 @@ export type ApiResponse<T> = ApiSuccessResponse<T> | ApiErrorResponse;
 export type ProjectVisibility = 'private' | 'unlisted' | 'public';
 
 export interface Project {
+  repository_profile?: import('./repository-profile').RepositoryProfile;
+  /** Present on the authorized project detail response. */
+  can_edit?: boolean;
   namespace?: string | null;
   canonical_path?: string | null;
   path_status?: 'ready' | 'pending_migration';
@@ -55,6 +58,8 @@ export interface ProjectWithStats extends Project {
 }
 
 export interface CreateProjectInput {
+  initialize_readme?: boolean;
+  tags?: string[];
   namespace?: string;
   /** Initialize a private repository with a deterministic, editable PRD; no AI call. */
   starter?: 'prd-v1';
@@ -63,6 +68,7 @@ export interface CreateProjectInput {
 }
 
 export interface UpdateProjectInput {
+  repository_profile?: import('./repository-profile').RepositoryProfilePatch;
   name?: string;
   metadata?: Record<string, unknown>;
 }

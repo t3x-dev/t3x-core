@@ -13,6 +13,8 @@ export interface RepositorySetupInput {
   description: string;
   owner: string;
   visibility: 'private' | 'unlisted' | 'public';
+  initializeReadme?: boolean;
+  tags?: string[];
 }
 
 export function useRepositorySetup() {
@@ -38,7 +40,9 @@ export function useRepositorySetup() {
       state.project ??= await createProject(
         config.name.trim(),
         { description: config.description.trim() },
-        config.owner
+        config.owner,
+        undefined,
+        { initialize_readme: config.initializeReadme ?? false, tags: config.tags ?? [] }
       );
       setStarted(true);
       const id = state.project.project_id;

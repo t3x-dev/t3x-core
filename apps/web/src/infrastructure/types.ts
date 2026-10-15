@@ -2,6 +2,7 @@
  * API client types - aligned with @t3x-dev/storage schema
  */
 
+import type { RepositoryProfile } from '@t3x-dev/api-client';
 import type { ExtractionStyleConfig } from '@t3x-dev/core';
 
 // Re-export external types used by consumers
@@ -21,6 +22,8 @@ export type {
 export type ProjectVisibility = 'private' | 'unlisted' | 'public';
 
 export interface Project {
+  repository_profile?: RepositoryProfile;
+  can_edit?: boolean;
   namespace?: string | null;
   canonical_path?: string | null;
   path_status?: 'ready' | 'pending_migration';

@@ -10,11 +10,14 @@
  * reading those values need no change.
  */
 
+import type { RepositoryProfile } from '@t3x-dev/api-client';
 import { create } from 'zustand';
 import type { Project, ProjectVisibility } from '@/types/api';
 import type { NotifyCallback } from './shared';
 
 export interface ProjectSummary {
+  repositoryProfile?: RepositoryProfile;
+  canEdit?: boolean;
   namespace?: string | null;
   canonical_path?: string | null;
   path_status?: 'ready' | 'pending_migration';
@@ -80,6 +83,8 @@ const deriveStatus = (project: Project): 'draft' | 'active' | 'paused' => {
 };
 
 export const apiProjectToSummary = (project: Project): ProjectSummary => ({
+  repositoryProfile: project.repository_profile,
+  canEdit: project.can_edit,
   id: project.project_id,
   namespace: project.namespace,
   canonical_path: project.canonical_path,

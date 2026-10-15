@@ -128,16 +128,19 @@
 }
 .tags {
   display: flex;
+  min-width: 0;
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 12px;
 }
 .tags span {
-  white-space: nowrap;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
   display: inline-flex;
   align-items: center;
-  height: 24px;
-  padding: 0 10px;
+  min-height: 24px;
+  padding: 2px 10px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 500;

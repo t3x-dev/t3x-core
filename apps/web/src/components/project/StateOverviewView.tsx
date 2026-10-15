@@ -1,17 +1,15 @@
 'use client';
 
+import type { RepositoryProfile, RepositoryProfilePatch } from '@t3x-dev/api-client';
 import {
-  ArrowUpFromLine,
   BookOpen,
   Box,
   ChevronRight,
   Code2,
-  Eye,
   FileText,
   GitCommit,
   Globe2,
   Info,
-  Layers,
   List,
   LockKeyhole,
   Maximize2,
@@ -20,14 +18,17 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { type ReactNode, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { resourceUrl, StateAuthorReadme } from '@/components/project/StateAuthorReadme';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { StateSemanticReader, StateValueReader } from '@/components/project/StateValueReader';
 import { Button } from '@/components/ui/button';
 import { useStateOverview } from '@/hooks/commits/useStateOverview';
 import type { ApiCommit } from '@/types/api';
+import { RepositoryProfileEditor } from './RepositoryProfileEditor';
 import styles from './StateOverviewView.module.css';
+
+const EMPTY_PROFILE: RepositoryProfile = { readme: '', tags: [] };
 
 function displayName(key: string) {
   return key
@@ -66,7 +67,19 @@ export function StateOverviewView({
   historyHref,
   workspaceHref,
   commits = [],
+  introductionSource = 'repository',
+  repositoryProfile = EMPTY_PROFILE,
+  canEditRepository = false,
+  onSaveRepositoryProfile,
+  stateLoading = false,
+  stateError,
 }: {
+  introductionSource?: 'repository' | 'version';
+  repositoryProfile?: RepositoryProfile;
+  canEditRepository?: boolean;
+  onSaveRepositoryProfile?: (patch: RepositoryProfilePatch) => Promise<void>;
+  stateLoading?: boolean;
+  stateError?: string | null;
   navigation?: ReactNode;
   headerOnly?: boolean;
   hideHeader?: boolean;
@@ -88,23 +101,35 @@ export function StateOverviewView({
   onAuthorRevision?: (digest: string) => void;
   reader?: (expanded: boolean, expand: () => void) => ReactNode;
 }) {
-  const { data, error, loading, retry } = useStateOverview(projectId, commitDigest);
+  const { data, error, loading, retry } = useStateOverview(
+    projectId,
+    headerOnly && introductionSource === 'repository' ? null : commitDigest
+  );
   const [expanded, setExpanded] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [contentsOpen, setContentsOpen] = useState(false);
   const [readmeHeadings, setReadmeHeadings] = useState<string[]>([]);
   const readmeRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    // Reset the State reader when its version changes without remounting the
+    // independent repository editors (and discarding their unsaved input).
+    setExpanded(false);
+    setSelected(null);
+    setContentsOpen(false);
+  }, [commitDigest]);
+
+  const version = introductionSource === 'version';
   const empty = !commitDigest;
-  if (headerOnly && !empty && (loading || error || !data)) return null;
-  if (!empty && loading)
+  if (version && headerOnly && !empty && (loading || error || !data)) return null;
+  if (version && !empty && loading)
     return (
       <div className={styles.feedback}>
         {navigation}
         <output>Loading Overview…</output>
       </div>
     );
-  if (!empty && (error || !data))
+  if (version && !empty && (error || !data))
     return (
       <div className={styles.feedback} role="alert">
         {navigation}
@@ -116,7 +141,7 @@ export function StateOverviewView({
       </div>
     );
 
-  const author = data?.author?.document;
+  const author = version ? data?.author?.document : undefined;
   const resources = author?.resources ?? [];
   const avatar = resources.find((resource) => resource.path === author?.avatarPath);
   const value = data?.render.model.value;
@@ -143,17 +168,12 @@ export function StateOverviewView({
         )
         .slice(0, 2)
     : rowsFor(value).slice(0, 2);
-  const isReleaseControl =
-    projectId === 'test-bug' ||
-    projectName.toLowerCase() === 'test-bug' ||
-    projectName.toLowerCase() === 'release control' ||
-    schemaName?.toLowerCase().includes('release plan');
-  const shownName = isReleaseControl ? 'Release Control' : projectName;
+  const shownName = projectName;
   const shownOwner = projectOwner;
   const shownVisibility = projectVisibility;
-  const shownDescription = isReleaseControl
-    ? 'Stage a release, gather evidence at each step, and ship with a record of who approved what.'
-    : author?.description?.trim() || projectDescription?.trim();
+  const shownDescription = version ? author?.description?.trim() : projectDescription?.trim();
+  const shownTags = version ? (author?.tags ?? []) : repositoryProfile.tags;
+  const canEdit = !version && canEditRepository && onSaveRepositoryProfile;
   const shownSchema = schemaName || 'Not specified';
   const currentCommit = commits.find((commit) => commit.hash === commitDigest);
   const recentCommits = [...commits]
@@ -170,11 +190,7 @@ export function StateOverviewView({
 
   const projectHeader = (
     <header className={styles.projectHeader}>
-      {isReleaseControl ? (
-        <div className={styles.avatarFallback}>
-          <Box aria-hidden="true" />
-        </div>
-      ) : avatar ? (
+      {avatar ? (
         <Image
           src={resourceUrl(avatar)}
           alt={avatar.alt}
@@ -215,19 +231,20 @@ export function StateOverviewView({
           ) : null}
         </p>
         {shownDescription ? <p className={styles.description}>{shownDescription}</p> : null}
-        {isReleaseControl ? (
-          <div className={styles.tags}>
-            <span>release-management</span>
-            <span>structured-state</span>
-            <span>collaboration</span>
-          </div>
-        ) : author?.tags.length ? (
-          <div className={styles.tags}>
-            {author.tags.map((tag) => (
-              <span key={tag}>{tag}</span>
-            ))}
-          </div>
-        ) : null}
+        <fieldset className="min-w-0" aria-label={version ? 'Version tags' : 'Repository tags'}>
+          {shownTags.length ? (
+            <div className={styles.tags}>
+              {shownTags.map((tag) => (
+                <span key={tag}>{tag}</span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-[var(--text-tertiary)]">No tags</p>
+          )}
+          {canEdit ? (
+            <RepositoryProfileEditor field="tags" profile={repositoryProfile} onSave={canEdit} />
+          ) : null}
+        </fieldset>
       </div>
     </header>
   );
@@ -259,10 +276,20 @@ export function StateOverviewView({
         )}
         <div className={expanded ? styles.expanded : styles.columns}>
           {!expanded ? (
-            <section aria-label="Project introduction" className={styles.readmeCard}>
+            <section
+              aria-label={version ? 'Version introduction' : 'Repository information'}
+              className={styles.readmeCard}
+            >
               <div className={styles.cardTitle}>
                 <BookOpen aria-hidden="true" />
-                <strong>README</strong>
+                <strong>{version ? 'Version introduction' : 'README'}</strong>
+                {canEdit ? (
+                  <RepositoryProfileEditor
+                    field="readme"
+                    profile={repositoryProfile}
+                    onSave={canEdit}
+                  />
+                ) : null}
                 <button
                   type="button"
                   aria-expanded={contentsOpen}
@@ -296,10 +323,17 @@ export function StateOverviewView({
                 </nav>
               ) : null}
               <div className={styles.readmeBody} ref={readmeRef}>
-                {isReleaseControl || !author?.readme?.trim() ? (
-                  <ReleaseControlReadme />
-                ) : (
+                {version ? (
                   <StateAuthorReadme author={author} compact embedded />
+                ) : (
+                  <StateAuthorReadme
+                    author={{ readme: repositoryProfile.readme, resources: [] }}
+                    label="Repository README"
+                    emptyMessage="No README added yet."
+                    showUnavailableImages
+                    compact
+                    embedded
+                  />
                 )}
               </div>
             </section>
@@ -310,7 +344,11 @@ export function StateOverviewView({
               <div className={styles.cardTitle}>
                 <GitCommit aria-hidden="true" />
                 <strong>State</strong>
-                {empty ? (
+                {stateLoading || loading ? (
+                  <span>Loading State…</span>
+                ) : stateError || error ? (
+                  <span>State unavailable</span>
+                ) : empty ? (
                   <span>No commits yet</span>
                 ) : (
                   <>
@@ -331,7 +369,18 @@ export function StateOverviewView({
                   </>
                 )}
               </div>
-              {empty ? (
+              {stateLoading || loading ? (
+                <output>Loading committed State…</output>
+              ) : stateError || error || (!empty && !data) ? (
+                <div role="alert" className={styles.feedback}>
+                  <p>{stateError || error || 'State unavailable'}</p>
+                  {error ? (
+                    <Button size="sm" variant="outline" onClick={retry}>
+                      Retry State
+                    </Button>
+                  ) : null}
+                </div>
+              ) : empty ? (
                 <>
                   <p>
                     This branch has no committed state yet. Create the first change in a Workspace.
@@ -464,9 +513,7 @@ export function StateOverviewView({
                   <div className={styles.aboutRow}>
                     <span>Owner</span>
                     <strong>
-                      {isReleaseControl ? (
-                        <OrbitMark className={styles.ownerAvatar} />
-                      ) : avatar ? (
+                      {avatar ? (
                         <Image
                           src={resourceUrl(avatar)}
                           alt=""
@@ -517,130 +564,6 @@ function commitDate(value: string) {
     : 'Date unavailable';
 }
 
-function OrbitMark({ className }: { className: string }) {
-  return (
-    <div className={className}>
-      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
-        <path
-          d="M9 23C4 18 4 14 9 9s9-5 14 0M23 9c5 5 5 9 0 14s-9 5-14 0"
-          stroke="var(--accent-pending)"
-          strokeWidth="3"
-          strokeLinecap="round"
-        />
-        <circle cx="9" cy="23" r="4.5" fill="var(--accent-pending)" />
-        <circle cx="23" cy="9" r="4.5" fill="var(--accent-pending)" />
-      </svg>
-    </div>
-  );
-}
-
-function ReleaseControlReadme() {
-  return (
-    <>
-      <div className={styles.releaseJourney}>
-        <div className={styles.journeySteps}>
-          <JourneyStep kind="build" icon={<Box />} title="Build">
-            Assemble the candidate and attach its checks.
-          </JourneyStep>
-          <JourneyStep kind="review" icon={<Eye />} title="Review">
-            Reviewers verify evidence and decide.
-          </JourneyStep>
-          <JourneyStep kind="stage" icon={<Layers />} title="Stage">
-            Expose it to a small audience first.
-          </JourneyStep>
-          <JourneyStep kind="release" icon={<ArrowUpFromLine />} title="Release">
-            Roll out to everyone once criteria hold.
-          </JourneyStep>
-        </div>
-      </div>
-      <div className={styles.readmeCopy}>
-        <section>
-          <h1>Release with evidence</h1>
-          <p>
-            Every stage records what was checked and who decided. Nothing advances until the
-            criteria for the current stage are met, and the record stays attached to the release.
-          </p>
-          <h2>Planning guide: Release stages</h2>
-          <div className={styles.planTable}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Stage</th>
-                  <th>Audience</th>
-                  <th>Allocation</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  ['Internal preview', 'Internal team', 10],
-                  ['Limited release', 'Selected customers', 25],
-                  ['General release', 'Everyone', 100],
-                ].map(([stage, audience, allocation]) => (
-                  <tr key={stage}>
-                    <td>{stage}</td>
-                    <td>{audience}</td>
-                    <td>
-                      <span className={styles.allocation}>
-                        <i>
-                          <u style={{ width: `${allocation}%` }} />
-                        </i>
-                        <b>{allocation}%</b>
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-        <section className={styles.teamWorks}>
-          <h2>How the team works</h2>
-          <ol>
-            <li>
-              <div>
-                <strong>Propose.</strong> Describe the change as a proposal; checks run
-                automatically and attach to it.
-              </div>
-            </li>
-            <li>
-              <div>
-                <strong>Decide.</strong> A reviewer accepts or rejects it, with the evidence in
-                front of them.
-              </div>
-            </li>
-            <li>
-              <div>
-                <strong>Commit.</strong> Accepted changes become the new committed state and advance
-                the stage.
-              </div>
-            </li>
-          </ol>
-        </section>
-      </div>
-    </>
-  );
-}
-
-function JourneyStep({
-  kind,
-  icon,
-  title,
-  children,
-}: {
-  kind: string;
-  icon: ReactNode;
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className={`${styles.journeyStep} ${styles[kind]}`}>
-      <span>{icon}</span>
-      <strong>{title}</strong>
-      <p>{children}</p>
-    </div>
-  );
-}
-
 function GenericStateSummary({
   sections,
   value,
@@ -649,32 +572,30 @@ function GenericStateSummary({
   value: unknown;
 }) {
   return (
-    <>
-      <div id="overview-render-content" className={styles.stateSections}>
-        {sections.length ? (
-          sections.map(([key, sectionValue]) => (
-            <div key={key} className={styles.stateSection}>
-              <h3>{displayName(key)}</h3>
-              {rowsFor(sectionValue).length ? (
-                rowsFor(sectionValue).map(([rowKey, rowValue]) => (
-                  <div className={styles.stateRow} key={rowKey}>
-                    <span>{displayName(rowKey)}</span>
-                    <strong>{preview(rowValue)}</strong>
-                  </div>
-                ))
-              ) : (
-                <div className={styles.stateRow}>
-                  <span>Value</span>
-                  <strong>{preview(sectionValue)}</strong>
+    <div id="overview-render-content" className={styles.stateSections}>
+      {sections.length ? (
+        sections.map(([key, sectionValue]) => (
+          <div key={key} className={styles.stateSection}>
+            <h3>{displayName(key)}</h3>
+            {rowsFor(sectionValue).length ? (
+              rowsFor(sectionValue).map(([rowKey, rowValue]) => (
+                <div className={styles.stateRow} key={rowKey}>
+                  <span>{displayName(rowKey)}</span>
+                  <strong>{preview(rowValue)}</strong>
                 </div>
-              )}
-            </div>
-          ))
-        ) : (
-          <p>{preview(value)}</p>
-        )}
-      </div>
-    </>
+              ))
+            ) : (
+              <div className={styles.stateRow}>
+                <span>Value</span>
+                <strong>{preview(sectionValue)}</strong>
+              </div>
+            )}
+          </div>
+        ))
+      ) : (
+        <p>{preview(value)}</p>
+      )}
+    </div>
   );
 }
 

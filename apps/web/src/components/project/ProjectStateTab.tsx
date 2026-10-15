@@ -70,6 +70,7 @@ import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitOperations } from '@/hooks/commits/useCommitOperations';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
+import { useRepositoryProfile } from '@/hooks/projects/useRepositoryProfile';
 import { useSkillArtifact } from '@/hooks/projects/useSkillArtifact';
 import { useSchemaArtifactRegistry } from '@/hooks/schemas/useSchemaArtifactRegistry';
 import { useBranches } from '@/hooks/shared/useBranches';
@@ -92,6 +93,8 @@ type ProjectStateMode = 'snapshot' | 'canvas';
 type BranchFocus = string;
 
 interface ProjectStateTabProps {
+  repositoryProfile?: import('@t3x-dev/api-client').RepositoryProfile;
+  canEditRepository?: boolean;
   initialView?: ProjectStateView;
   onRunValidation?: (commitHash: string, schemaName: string) => Promise<void> | void;
   projectId: string;
@@ -144,10 +147,13 @@ export function ProjectStateTab({
   projectDescription,
   projectOwner,
   projectVisibility,
+  repositoryProfile,
+  canEditRepository = false,
   validation,
   validationError,
   validationRunning = false,
 }: ProjectStateTabProps) {
+  const saveRepositoryProfile = useRepositoryProfile(projectId);
   const pathname = usePathname();
   const { push: pushRoute, replace: replaceRoute } = useRouter();
   const searchParams = useSearchParams();
@@ -604,21 +610,23 @@ export function ProjectStateTab({
         <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--surface-card)]">
           {activeView !== 'canvas' ? (
             <>
-              {!snapshot.loading && !snapshot.primaryError ? (
-                <StateOverviewView
-                  headerOnly
-                  projectId={projectId}
-                  commitDigest={headCommit?.hash ?? null}
-                  projectName={projectName}
-                  projectDescription={projectDescription}
-                  projectOwner={projectOwner}
-                  projectVisibility={projectVisibility}
-                  schemaName={schemaName}
-                  schemaHref={schemaHref}
-                  commits={snapshot.commits}
-                  onViewStructure={() => updateActiveView('structure')}
-                />
-              ) : null}
+              <StateOverviewView
+                headerOnly
+                projectId={projectId}
+                commitDigest={headCommit?.hash ?? null}
+                projectName={projectName}
+                projectDescription={projectDescription}
+                projectOwner={projectOwner}
+                projectVisibility={projectVisibility}
+                repositoryProfile={repositoryProfile}
+                canEditRepository={canEditRepository}
+                onSaveRepositoryProfile={saveRepositoryProfile}
+                introductionSource={focusedCommitHash ? 'version' : 'repository'}
+                schemaName={schemaName}
+                schemaHref={schemaHref}
+                commits={snapshot.commits}
+                onViewStructure={() => updateActiveView('structure')}
+              />
               <StateInspectionToolbar
                 projectName={projectName}
                 activeView={activeView}
@@ -666,118 +674,110 @@ export function ProjectStateTab({
                   onViewLatest={handleViewLatest}
                 />
               ) : null}
-              {snapshot.primaryError ? (
+              {snapshot.primaryError && activeView !== 'overview' ? (
                 <StateEmpty message={snapshot.primaryError} title="No committed state loaded" />
               ) : null}
-              {!snapshot.primaryError && !snapshot.loading && !headCommit ? (
-                activeView === 'overview' ? (
-                  <StateOverviewView
-                    hideHeader
-                    navigation={null}
-                    workspaceHref={workspaceHref}
-                    projectId={projectId}
-                    commitDigest={null}
-                    projectName={projectName}
-                    projectDescription={projectDescription}
-                    projectOwner={projectOwner}
-                    projectVisibility={projectVisibility}
-                    schemaName={schemaName}
-                    schemaHref={schemaHref}
-                  />
-                ) : (
-                  <StateEmpty
-                    message="Start in a Workspace, review your changes, and create the first commit."
-                    workspaceHref={workspaceHref}
-                    title="No commit on this branch"
-                  />
-                )
+              {!snapshot.primaryError &&
+              !snapshot.loading &&
+              !headCommit &&
+              activeView !== 'overview' ? (
+                <StateEmpty
+                  message="Start in a Workspace, review your changes, and create the first commit."
+                  workspaceHref={workspaceHref}
+                  title="No commit on this branch"
+                />
               ) : null}
-              {!snapshot.primaryError && snapshot.loading ? (
+              {!snapshot.primaryError && snapshot.loading && activeView !== 'overview' ? (
                 <StateEmpty
                   message="Loading commit, YOps, and validation context."
                   title="Loading state"
                 />
               ) : null}
+              {activeView === 'overview' ? (
+                <StateOverviewView
+                  hideHeader
+                  navigation={null}
+                  historyHref={historyHref}
+                  workspaceHref={workspaceHref}
+                  commits={snapshot.commits}
+                  projectId={projectId}
+                  commitDigest={
+                    snapshot.loading || snapshot.primaryError ? null : (headCommit?.hash ?? null)
+                  }
+                  stateLoading={snapshot.loading}
+                  stateError={snapshot.primaryError}
+                  projectName={projectName}
+                  projectDescription={projectDescription}
+                  projectOwner={projectOwner}
+                  projectVisibility={projectVisibility}
+                  repositoryProfile={repositoryProfile}
+                  canEditRepository={canEditRepository}
+                  onSaveRepositoryProfile={saveRepositoryProfile}
+                  introductionSource={focusedCommitHash ? 'version' : 'repository'}
+                  schemaName={schemaName}
+                  schemaHref={schemaHref}
+                  onViewStructure={() => updateActiveView('structure')}
+                  validationLabel={readinessLabel}
+                  refName={branchFocus}
+                  onAuthorRevision={(digest) => {
+                    void refresh();
+                    const params = new URLSearchParams(routeQueryRef.current);
+                    params.set('commit', digest);
+                    params.set('view', 'overview');
+                    replaceRoute(`${pathname}?${params.toString()}`, { scroll: false });
+                  }}
+                  reader={
+                    skillRenderModel || prdRenderModel || promptRenderModel
+                      ? (expanded, expand) => (
+                          <>
+                            {skillRenderModel ? (
+                              <StateSkillReader
+                                artifact={skillArtifact.artifact}
+                                artifactError={skillArtifact.error?.message ?? null}
+                                artifactLoading={skillArtifact.loading}
+                                model={skillRenderModel}
+                                schemaName={schemaName}
+                                validationGapCount={validationGapCount}
+                                validationReady={validationReady}
+                                yamlText={yamlText}
+                              />
+                            ) : null}
+                            {prdRenderModel ? (
+                              <StatePrdReader
+                                compact={!expanded}
+                                onRequestExpand={expand}
+                                model={prdRenderModel}
+                                schemaArtifacts={prdSchemaRegistry.artifacts}
+                                schemaComposition={schemaCompositionWorkspace?.schemaComposition}
+                                schemaCompositionSource={
+                                  schemaCompositionWorkspace === committedWorkspace
+                                    ? 'committed'
+                                    : 'workspace'
+                                }
+                                schemaName={schemaName}
+                                schemaRegistryHref={schemaHref}
+                                validationGapCount={validationGapCount}
+                                validationReady={validationReady}
+                                yamlText={yamlText}
+                              />
+                            ) : null}
+                            {promptRenderModel ? (
+                              <StatePromptReader
+                                model={promptRenderModel}
+                                schemaName={schemaName}
+                                validationGapCount={validationIssueCount}
+                                validationReady={validationReady}
+                                yamlText={yamlText}
+                              />
+                            ) : null}
+                          </>
+                        )
+                      : undefined
+                  }
+                />
+              ) : null}
               {!snapshot.primaryError && !snapshot.loading && headCommit ? (
                 <>
-                  {activeView === 'overview' ? (
-                    <StateOverviewView
-                      key={headCommit.hash}
-                      hideHeader
-                      navigation={null}
-                      historyHref={historyHref}
-                      workspaceHref={workspaceHref}
-                      commits={snapshot.commits}
-                      projectId={projectId}
-                      commitDigest={headCommit.hash}
-                      projectName={projectName}
-                      projectDescription={projectDescription}
-                      projectOwner={projectOwner}
-                      projectVisibility={projectVisibility}
-                      schemaName={schemaName}
-                      schemaHref={schemaHref}
-                      onViewStructure={() => updateActiveView('structure')}
-                      validationLabel={readinessLabel}
-                      refName={branchFocus}
-                      onAuthorRevision={(digest) => {
-                        void refresh();
-                        const params = new URLSearchParams(routeQueryRef.current);
-                        params.set('commit', digest);
-                        params.set('view', 'overview');
-                        replaceRoute(`${pathname}?${params.toString()}`, { scroll: false });
-                      }}
-                      reader={
-                        skillRenderModel || prdRenderModel || promptRenderModel
-                          ? (expanded, expand) => (
-                              <>
-                                {skillRenderModel ? (
-                                  <StateSkillReader
-                                    artifact={skillArtifact.artifact}
-                                    artifactError={skillArtifact.error?.message ?? null}
-                                    artifactLoading={skillArtifact.loading}
-                                    model={skillRenderModel}
-                                    schemaName={schemaName}
-                                    validationGapCount={validationGapCount}
-                                    validationReady={validationReady}
-                                    yamlText={yamlText}
-                                  />
-                                ) : null}
-                                {prdRenderModel ? (
-                                  <StatePrdReader
-                                    compact={!expanded}
-                                    onRequestExpand={expand}
-                                    model={prdRenderModel}
-                                    schemaArtifacts={prdSchemaRegistry.artifacts}
-                                    schemaComposition={
-                                      schemaCompositionWorkspace?.schemaComposition
-                                    }
-                                    schemaCompositionSource={
-                                      schemaCompositionWorkspace === committedWorkspace
-                                        ? 'committed'
-                                        : 'workspace'
-                                    }
-                                    schemaName={schemaName}
-                                    schemaRegistryHref={schemaHref}
-                                    validationGapCount={validationGapCount}
-                                    validationReady={validationReady}
-                                    yamlText={yamlText}
-                                  />
-                                ) : null}
-                                {promptRenderModel ? (
-                                  <StatePromptReader
-                                    model={promptRenderModel}
-                                    schemaName={schemaName}
-                                    validationGapCount={validationIssueCount}
-                                    validationReady={validationReady}
-                                    yamlText={yamlText}
-                                  />
-                                ) : null}
-                              </>
-                            )
-                          : undefined
-                      }
-                    />
-                  ) : null}
                   {activeView === 'structure' ? (
                     <StateStructureView
                       branch={branchFocus || 'main'}

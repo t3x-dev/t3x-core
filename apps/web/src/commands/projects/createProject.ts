@@ -15,10 +15,11 @@ export async function createProject(
   name: string,
   metadata?: Record<string, unknown>,
   namespace?: string,
-  starter?: CreateProjectInput['starter']
+  starter?: CreateProjectInput['starter'],
+  profile?: Pick<CreateProjectInput, 'initialize_readme' | 'tags'>
 ): Promise<Project> {
   try {
-    return await createProjectInfra(name, metadata, namespace, starter);
+    return await createProjectInfra(name, metadata, namespace, starter, profile);
   } catch (cause) {
     throw new ProjectPersistenceError(
       cause instanceof Error ? cause.message : 'createProject failed',
