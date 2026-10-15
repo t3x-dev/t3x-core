@@ -171,12 +171,51 @@ describe('ProjectReviewsTab', () => {
     expect(screen.getByText('YOps changes')).toBeInTheDocument();
     expect(screen.getByText('Source commit')).toBeInTheDocument();
     expect(screen.getByText('Base commit')).toBeInTheDocument();
-    expect(screen.getByText(/Showing key changes from/i)).toBeInTheDocument();
+    expect(screen.getByText(/differs between/i)).toBeInTheDocument();
     expect(screen.queryByText(/\+112/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create pull request' })).toHaveAttribute(
       'data-variant',
       'commit'
     );
+  });
+
+  it('shows both sides of a field instead of a truncated one-line diff', () => {
+    changePreview.mockReturnValue({
+      changes: [
+        {
+          afterValue: 'dev problem text that stays fully visible',
+          beforeValue: 'main problem text that stays fully visible',
+          id: 'modified:candidate/product/problem',
+          kind: 'modified',
+          op: 'SET',
+          path: 'candidate/product/problem',
+          reason: 'Updated problem statement',
+          summary: 'Updated problem statement',
+        },
+        {
+          afterValue: '个性化学习路径推荐',
+          beforeValue: 'No value recorded',
+          id: 'added:candidate/requirements/personalized_learning_path/title',
+          kind: 'added',
+          op: 'ADD',
+          path: 'candidate/requirements/personalized_learning_path/title',
+          reason: 'Added requirement title',
+          summary: 'Added requirement title',
+        },
+      ],
+      error: null,
+      loading: false,
+    });
+    render(<ProjectReviewsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
+
+    expect(screen.getByText('candidate.product')).toBeInTheDocument();
+    expect(document.body.textContent).toContain('main problem text that stays fully visible');
+    expect(document.body.textContent).toContain('dev problem text that stays fully visible');
+    expect(screen.getByText('Added in outputs/bundle-refresh')).toBeInTheDocument();
+    expect(screen.getByText('个性化学习路径推荐')).toBeInTheDocument();
+    expect(screen.queryByText('No value recorded')).not.toBeInTheDocument();
   });
 
   it('previews a diverged branch from its merge base, not the moved target head', async () => {

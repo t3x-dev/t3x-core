@@ -60,6 +60,7 @@ import { cn } from '@/utils/cn';
 import createStyles from './ProjectReviewsCreate.module.css';
 import detailStyles from './ProjectReviewsDetail.module.css';
 import listStyles from './ProjectReviewsList.module.css';
+import { PullRequestChangePreview } from './PullRequestChangePreview';
 import {
   type MergeResolutionProgress,
   PullRequestMergeReviewPanel,
@@ -1621,7 +1622,7 @@ function PullRequestCreateView({
             <h2>Change preview</h2>
             <p>
               {selectedCandidate
-                ? `Showing key changes from ${selectedCandidate.branch} to ${selectedCandidate.baseBranch}.`
+                ? `Every field that differs between ${selectedCandidate.branch} and ${selectedCandidate.baseBranch}.`
                 : 'Select a source branch to preview the structured comparison.'}
             </p>
             {fieldPreview.loading ? (
@@ -1630,51 +1631,30 @@ function PullRequestCreateView({
             {fieldPreview.error ? (
               <p className={createStyles.inlineMessage}>{fieldPreview.error}</p>
             ) : null}
-            <div className={createStyles.previewList}>
-              {fieldPreview.changes && !fieldPreview.error ? (
-                <>
-                  <div className={createStyles.previewHeading}>
-                    <ChevronDown aria-hidden="true" />
-                    <strong>Changed nodes</strong>
-                    <span>{fieldPreview.changes.length} field changes</span>
-                  </div>
-                  {fieldPreview.changes.map((change) => (
-                    <div className={createStyles.fieldChange} key={change.id}>
-                      <span className={createStyles.changeIcon}>
-                        <PencilLine aria-hidden="true" />
-                      </span>
-                      <code title={change.path}>{change.path.replaceAll('/', '.')}</code>
-                      <span className={createStyles.fieldValues}>
-                        {change.kind !== 'added' ? (
-                          <del title={change.beforeValue}>{change.beforeValue}</del>
-                        ) : null}
-                        {change.kind !== 'removed' ? (
-                          <ins title={change.afterValue}>{change.afterValue}</ins>
-                        ) : null}
-                      </span>
+            {fieldPreview.changes && !fieldPreview.error && selectedCandidate ? (
+              <PullRequestChangePreview
+                baseBranch={selectedCandidate.baseBranch}
+                changes={fieldPreview.changes}
+                sourceBranch={selectedCandidate.branch}
+              />
+            ) : (
+              <div className={createStyles.previewList}>
+                {previewRows.length > 0 ? (
+                  previewRows.map((row) => (
+                    <div className={createStyles.previewRow} key={row.label}>
+                      <PhCube aria-hidden="true" className={createStyles.cubeIcon} size={24} />
+                      <span className={createStyles.previewLabel}>{row.label}</span>
+                      <ChangeKindBadge kind={row.kind} />
+                      <span className={createStyles.previewValue}>{row.value}</span>
                     </div>
-                  ))}
-                  {!fieldPreview.changes.length ? (
-                    <p className={createStyles.previewEmpty}>
-                      No field changes between these revisions.
-                    </p>
-                  ) : null}
-                </>
-              ) : previewRows.length > 0 ? (
-                previewRows.map((row) => (
-                  <div className={createStyles.previewRow} key={row.label}>
-                    <PhCube aria-hidden="true" className={createStyles.cubeIcon} size={24} />
-                    <span className={createStyles.previewLabel}>{row.label}</span>
-                    <ChangeKindBadge kind={row.kind} />
-                    <span className={createStyles.previewValue}>{row.value}</span>
+                  ))
+                ) : (
+                  <div className={createStyles.previewEmpty}>
+                    No structured comparison is ready yet.
                   </div>
-                ))
-              ) : (
-                <div className={createStyles.previewEmpty}>
-                  No structured comparison is ready yet.
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </section>
         </div>
 
