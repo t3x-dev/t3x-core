@@ -37,7 +37,7 @@ import {
   UserRound,
   XCircle,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -48,7 +48,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { shortHash } from '@/domain/format/formatters';
-import type { PullRequestConflictSide } from '@/domain/project/pullRequestConflictDecision';
 import type {
   ApiProjectPullRequest,
   ApiProjectPullRequestActivity,
@@ -61,12 +60,18 @@ import { cn } from '@/utils/cn';
 import createStyles from './ProjectReviewsCreate.module.css';
 import detailStyles from './ProjectReviewsDetail.module.css';
 import listStyles from './ProjectReviewsList.module.css';
+import {
+  type MergeResolutionProgress,
+  PullRequestMergeReviewPanel,
+  type PullRequestMergeReviewPanelProps,
+} from './PullRequestMergeReviewPanel';
 
 type PullRequestStatus = 'draft' | 'open' | 'checking' | 'ready' | 'blocked' | 'merged' | 'closed';
 type PullRequestListMode = 'open' | 'merged' | 'closed';
 type PullRequestView = 'list' | 'create' | 'detail';
 type PullRequestDetailTab = 'overview' | 'structured-diff' | 'checks' | 'activity' | 'merge';
 type PullRequestCompareStatus = 'ready' | 'already_open' | 'no_changes' | 'base_empty';
+type PullRequestConflictSide = 'main' | 'feature';
 
 interface ProjectPullRequest {
   id: string;
@@ -496,14 +501,15 @@ export function ProjectReviewsTab({
   onPullRequestNumberChange?: (number?: number) => void;
 } = {}) {
   const {
-    applyConflictDecision: applyProjectConflictDecision,
     closePullRequest: closeProjectPullRequest,
     createPullRequest: createProjectPullRequest,
     fetchCompareCandidates,
+    fetchMergeReview,
     fetchPullRequest: fetchProjectPullRequest,
     fetchPullRequests,
     mergePullRequest: mergeProjectPullRequest,
     rerunReadiness: rerunProjectPullRequestReadiness,
+    saveMergeDecision,
   } = useProjectPullRequestsApi();
   const [pullRequests, setPullRequests] = useState(() => (projectId ? [] : INITIAL_PULL_REQUESTS));
   const [baseBranches, setBaseBranches] = useState(() => (projectId ? [] : BASE_BRANCHES));
@@ -541,8 +547,15 @@ export function ProjectReviewsTab({
   }));
   const [apiError, setApiError] = useState<string | null>(null);
   const [conflictDecision, setConflictDecision] = useState<MergeDecision | null>(null);
-  const [applyingResolution, setApplyingResolution] = useState(false);
+  const [conflictProgress, setConflictProgress] = useState<MergeResolutionProgress | null>(null);
   const [resolutionError, setResolutionError] = useState<string | null>(null);
+  const handleResolutionChange = useCallback(
+    (decision: MergeDecision | null, progress: MergeResolutionProgress) => {
+      setConflictDecision(decision);
+      setConflictProgress(progress);
+    },
+    []
+  );
   const openedDeepLink = useRef<string | null>(null);
 
   useEffect(() => {
@@ -569,6 +582,7 @@ export function ProjectReviewsTab({
           ...items.filter((item) => item.number !== mapped.number),
         ]);
         setSelectedId(mapped.id);
+        if (mapped.status === 'blocked') setDetailTab('structured-diff');
       })
       .catch((err) => {
         if (!cancelled)
@@ -581,6 +595,7 @@ export function ProjectReviewsTab({
       });
     return () => {
       cancelled = true;
+      if (openedDeepLink.current === key) openedDeepLink.current = null;
     };
   }, [fetchProjectPullRequest, initialPullRequestNumber, projectId]);
 
@@ -781,6 +796,7 @@ export function ProjectReviewsTab({
     setReadinessError(null);
     setDetailError(null);
     setConflictDecision(null);
+    setConflictProgress(null);
     setResolutionError(null);
     setDetailTab('structured-diff');
     setView('detail');
@@ -884,6 +900,11 @@ export function ProjectReviewsTab({
         const mapped = toProjectPullRequestDetail(created);
         setPullRequests((items) => [mapped, ...items]);
         markCompareCandidateOpened(mapped.sourceBranch, mapped.targetBranch, mapped.number);
+        setApiError(null);
+        if (mapped.status === 'blocked') {
+          openPullRequest(mapped);
+          return;
+        }
         setSelectedId(mapped.id);
         setHighlightedId(mapped.id);
         setMode('open');
@@ -920,39 +941,20 @@ export function ProjectReviewsTab({
     pullRequest.status === 'ready' ||
     (pullRequest.status === 'blocked' && conflictDecision !== null);
 
+  /** Local fixture PRs have no merge draft; one side settles their single sample conflict. */
   const applyResolution = (side: PullRequestConflictSide | null) => {
-    const pullRequest = selectedPullRequest;
-    if (!pullRequest || applyingResolution) return;
-
     setResolutionError(null);
-    if (side === null) {
-      setConflictDecision(null);
-      return;
-    }
-    if (!projectId || !pullRequest.mergeDraftId) {
-      setConflictDecision({
-        conflictResolutions: { fixture: side === 'feature' ? 'source' : 'target' },
-        keepFromSource: [],
-        keepFromTarget: [],
-        keepRelationsFromSource: true,
-        keepRelationsFromTarget: true,
-      });
-      return;
-    }
-
-    setApplyingResolution(true);
-    applyProjectConflictDecision(pullRequest.mergeDraftId, side)
-      .then((decision) => {
-        setConflictDecision(decision);
-      })
-      .catch((err) => {
-        setResolutionError(
-          err instanceof Error ? err.message : 'Could not save the conflict resolution.'
-        );
-      })
-      .finally(() => {
-        setApplyingResolution(false);
-      });
+    setConflictDecision(
+      side === null
+        ? null
+        : {
+            conflictResolutions: { fixture: side === 'feature' ? 'source' : 'target' },
+            keepFromSource: [],
+            keepFromTarget: [],
+            keepRelationsFromSource: true,
+            keepRelationsFromTarget: true,
+          }
+    );
   };
 
   const mergePullRequest = (pullRequest: ProjectPullRequest) => {
@@ -1069,6 +1071,9 @@ export function ProjectReviewsTab({
       .then((updated) => {
         const mapped = toProjectPullRequestDetail(updated);
         setPullRequests((items) => items.map((item) => (item.id === mapped.id ? mapped : item)));
+        setConflictDecision(null);
+        setConflictProgress(null);
+        if (mapped.status === 'blocked') setDetailTab('structured-diff');
       })
       .catch((err) => {
         setReadinessError(
@@ -1124,17 +1129,19 @@ export function ProjectReviewsTab({
   if (view === 'detail' && selectedPullRequest) {
     return (
       <PullRequestDetailView
-        applyingResolution={applyingResolution}
         closeConfirmationActive={closeConfirmId === selectedPullRequest.id}
         closeError={closeError}
         closing={closingId === selectedPullRequest.id}
+        conflictProgress={conflictProgress}
         conflictResolved={conflictDecision !== null}
         detailError={detailError}
         detailLoading={detailLoadingId === selectedPullRequest.id}
         detailTab={detailTab}
         mergeError={mergeError}
+        fetchMergeReview={fetchMergeReview}
         merging={mergingId === selectedPullRequest.id}
         onApplyResolution={applyResolution}
+        onResolutionChange={handleResolutionChange}
         onBack={() => {
           onPullRequestNumberChange?.(undefined);
           setView('list');
@@ -1143,10 +1150,12 @@ export function ProjectReviewsTab({
         onChangeTab={setDetailTab}
         onMerge={() => mergePullRequest(selectedPullRequest)}
         onRerun={() => rerunReadiness(selectedPullRequest)}
+        projectId={projectId}
         pullRequest={selectedPullRequest}
         readinessError={readinessError}
         resolutionError={resolutionError}
         rerunning={rerunningId === selectedPullRequest.id}
+        saveMergeDecision={saveMergeDecision}
       />
     );
   }
@@ -1808,14 +1817,15 @@ function ChangeKindBadge({ kind }: { kind: string }) {
 }
 
 function PullRequestDetailView({
-  applyingResolution,
   closeConfirmationActive,
   closeError,
   closing,
+  conflictProgress,
   conflictResolved,
   detailError,
   detailLoading,
   detailTab,
+  fetchMergeReview,
   mergeError,
   merging,
   onApplyResolution,
@@ -1824,19 +1834,23 @@ function PullRequestDetailView({
   onChangeTab,
   onMerge,
   onRerun,
+  onResolutionChange,
+  projectId,
   pullRequest,
   readinessError,
   resolutionError,
   rerunning,
+  saveMergeDecision,
 }: {
-  applyingResolution: boolean;
   closeConfirmationActive: boolean;
   closeError: string | null;
   closing: boolean;
+  conflictProgress: MergeResolutionProgress | null;
   conflictResolved: boolean;
   detailError: string | null;
   detailLoading: boolean;
   detailTab: PullRequestDetailTab;
+  fetchMergeReview: PullRequestMergeReviewPanelProps['fetchMergeReview'];
   mergeError: string | null;
   merging: boolean;
   onApplyResolution: (side: PullRequestConflictSide | null) => void;
@@ -1845,10 +1859,13 @@ function PullRequestDetailView({
   onChangeTab: (tab: PullRequestDetailTab) => void;
   onMerge: () => void;
   onRerun: () => void;
+  onResolutionChange: PullRequestMergeReviewPanelProps['onResolutionChange'];
+  projectId?: string;
   pullRequest: ProjectPullRequest;
   readinessError: string | null;
   resolutionError: string | null;
   rerunning: boolean;
+  saveMergeDecision: PullRequestMergeReviewPanelProps['saveMergeDecision'];
 }) {
   const [copied, setCopied] = useState(false);
   const closeable = !['merged', 'closed'].includes(pullRequest.status);
@@ -1859,7 +1876,8 @@ function PullRequestDetailView({
       ? 'Confirm close'
       : 'Close PR';
 
-  const conflictCount = pullRequest.status === 'blocked' && !conflictResolved ? 1 : 0;
+  const conflictCount =
+    conflictProgress?.unresolved ?? (pullRequest.status === 'blocked' && !conflictResolved ? 1 : 0);
   const passedChecks = (pullRequest.checks ?? []).filter(
     (check) => check.status === 'passed'
   ).length;
@@ -1936,9 +1954,20 @@ function PullRequestDetailView({
           <DetailLoadingState />
         ) : detailTab === 'checks' ? (
           <ChecksPanel checks={pullRequest.checks ?? []} />
+        ) : projectId ? (
+          <PullRequestMergeReviewPanel
+            fetchMergeReview={fetchMergeReview}
+            key={`${pullRequest.number}:${pullRequest.mergeDraftId ?? 'none'}:${pullRequest.updatedAtIso ?? ''}`}
+            onRerun={onRerun}
+            onResolutionChange={onResolutionChange}
+            projectId={projectId}
+            pullRequest={pullRequest}
+            rerunning={rerunning}
+            saveMergeDecision={saveMergeDecision}
+          />
         ) : (
           <StructuredDiffPanel
-            applyingResolution={applyingResolution}
+            applyingResolution={false}
             conflictResolved={conflictResolved}
             copied={copied}
             onApplyResolution={onApplyResolution}
@@ -1955,9 +1984,11 @@ function PullRequestDetailView({
       <footer className={detailStyles.footer}>
         <div>
           {conflictResolved
-            ? 'Resolution saved. Merge is ready.'
+            ? 'All conflicts decided. Merge is ready.'
             : conflictCount > 0
-              ? `Choose ${conflictCount} conflict to continue.`
+              ? conflictProgress
+                ? `${conflictCount} of ${conflictProgress.total} conflicts still need a decision.`
+                : `Choose ${conflictCount} conflict to continue.`
               : `${passedChecks} checks passed.`}
         </div>
         <div className={detailStyles.footerActions}>

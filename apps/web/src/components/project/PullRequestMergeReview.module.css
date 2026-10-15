@@ -1,0 +1,250 @@
+.emptyState {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  border: 1px dashed #dbe5f1;
+  border-radius: 8px;
+  background: #fff;
+  padding: 32px 20px;
+  color: #475569;
+  font-size: 13px;
+  text-align: center;
+}
+
+.primaryButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 6px;
+  background: #1457ed;
+  padding: 8px 14px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+.primaryButton svg {
+  width: 14px;
+  height: 14px;
+}
+
+.toolbar {
+  flex-wrap: wrap;
+}
+
+.bulkActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #475569;
+}
+.bulkActions button {
+  border: 1px solid #cfdcf3;
+  border-radius: 4px;
+  background: #fff;
+  padding: 4px 8px;
+  color: #1e3a8a;
+  font-size: 11px;
+  font-weight: 600;
+}
+.bulkActions button:hover {
+  background: #f1f5ff;
+}
+
+.nodeRow td {
+  background: #f8fafc;
+}
+.nodeRow b {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.muted {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.statusTag {
+  border-radius: 4px;
+  padding: 2px 6px;
+  background: #ecfdf5;
+  color: #047857;
+  font-size: 10px;
+  font-weight: 700;
+}
+.statusTag[data-status="conflict"] {
+  background: #fff1e7;
+  color: #ef4f13;
+}
+.statusTag[data-status="target_only"] {
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.valueText {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  word-break: break-word;
+}
+
+.mergedCell {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  min-width: 0;
+}
+
+.choosePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 4px;
+  background: #fff1e7;
+  padding: 2px 7px;
+  color: #ef4f13;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.slotDecision {
+  margin-top: 12px;
+  border-top: 1px solid #eef2f7;
+  padding-top: 4px;
+}
+
+.baseValue {
+  display: grid;
+  gap: 3px;
+  border-radius: 4px;
+  background: #eef1f6;
+  padding: 6px 8px;
+  color: #172554;
+}
+.baseValue > span:first-child {
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.options {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+.options label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px solid #dbe5f1;
+  border-radius: 6px;
+  background: #fff;
+  padding: 8px;
+  color: #0f1f63;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.options label > span {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 4px;
+}
+.options label .valueText {
+  color: #334155;
+  font-weight: 400;
+}
+.options small {
+  color: #5772bd;
+  font-size: 10px;
+  font-weight: 400;
+}
+.options input[type="radio"] {
+  margin-top: 2px;
+  accent-color: #2962ff;
+}
+.options .optionActive {
+  border-color: #2962ff;
+  box-shadow: inset 0 0 0 1px #2962ff;
+  background: #f5f8ff;
+}
+
+.customInput {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid #cfdcf3;
+  border-radius: 4px;
+  background: #fff;
+  padding: 6px;
+  color: #0f172a;
+  font: 11px / 1.45 var(--font-mono);
+}
+
+.hint {
+  margin-top: 10px;
+  color: #475569;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.autoList {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+.autoList > div {
+  display: grid;
+  gap: 2px;
+  border-radius: 4px;
+  background: #f8fafc;
+  padding: 6px 8px;
+}
+.autoList dt {
+  color: #64748b;
+  font: 10px var(--font-mono);
+}
+.autoList dd {
+  color: #0f172a;
+}
+
+.conflictNav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 14px;
+  border-top: 1px solid #eef2f7;
+  padding-top: 10px;
+  color: #475569;
+  font-size: 11px;
+}
+.conflictNav button {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 4px;
+  background: transparent;
+  padding: 4px 6px;
+  color: #1648da;
+  font-size: 11px;
+  font-weight: 600;
+}
+.conflictNav button:hover {
+  background: #f1f5ff;
+}
+.conflictNav svg {
+  width: 14px;
+  height: 14px;
+}
+
+.saveError {
+  margin-top: 8px;
+  color: #b91c1c;
+  font-size: 11px;
+}
