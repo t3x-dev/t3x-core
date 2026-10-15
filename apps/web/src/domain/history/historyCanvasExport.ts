@@ -21,18 +21,36 @@ export interface HistoryCanvasExportNode {
 export interface HistoryCanvasExportEdge {
   d: string;
   feature: boolean;
+  color?: string;
+}
+
+export interface HistoryCanvasExportLane {
+  branch: string;
+  color: string;
+  y: number;
+  height: number;
 }
 
 export function buildHistoryCanvasSvg(input: {
   nodes: readonly HistoryCanvasExportNode[];
   edges: readonly HistoryCanvasExportEdge[];
+  lanes?: readonly HistoryCanvasExportLane[];
+  width?: number;
+  height?: number;
 }): string {
-  const width = 1040;
-  const height = 720;
+  const width = input.width ?? 1040;
+  const height = input.height ?? 720;
+  const lanes = (input.lanes ?? [])
+    .map(
+      (lane) =>
+        `<rect x="0" y="${lane.y}" width="${width}" height="${lane.height}" fill="${lane.color}" fill-opacity="0.04" />
+  <text x="24" y="${lane.y + 28}" fill="${lane.color}" font-family="Inter, sans-serif" font-size="12" font-weight="700">${escapeXml(lane.branch)}</text>`
+    )
+    .join('');
   const edges = input.edges
     .map(
       (edge) =>
-        `<path d="${escapeXml(edge.d)}" fill="none" stroke="${edge.feature ? '#ec4899' : '#6366f1'}" stroke-width="3" />`
+        `<path d="${escapeXml(edge.d)}" fill="none" stroke="${edge.color ?? (edge.feature ? '#ec4899' : '#6366f1')}" stroke-width="3"${edge.feature ? ' stroke-dasharray="6 4"' : ''} />`
     )
     .join('');
   const nodes = input.nodes
@@ -50,6 +68,7 @@ export function buildHistoryCanvasSvg(input: {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <rect width="100%" height="100%" fill="#ffffff" />
+  ${lanes}
   ${edges}
   ${nodes}
 </svg>

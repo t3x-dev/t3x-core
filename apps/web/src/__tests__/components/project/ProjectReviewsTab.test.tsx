@@ -10,14 +10,15 @@ Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
 });
 
 const pullRequestApi = vi.hoisted(() => ({
-  applyConflictDecision: vi.fn(),
   closePullRequest: vi.fn(),
   createPullRequest: vi.fn(),
   fetchCompareCandidates: vi.fn(),
+  fetchMergeReview: vi.fn(),
   fetchPullRequest: vi.fn(),
   fetchPullRequests: vi.fn(),
   mergePullRequest: vi.fn(),
   rerunReadiness: vi.fn(),
+  saveMergeDecision: vi.fn(),
 }));
 
 vi.mock('@/hooks/projects/useProjectPullRequestsApi', () => ({
@@ -81,6 +82,7 @@ const emptyBaseCompareCandidate = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  changePreview.mockReturnValue({ changes: undefined, error: null, loading: false });
   pullRequestApi.fetchPullRequests.mockResolvedValue({
     pull_requests: [],
     counts: { active: 0, merged: 0 },
@@ -169,12 +171,51 @@ describe('ProjectReviewsTab', () => {
     expect(screen.getByText('YOps changes')).toBeInTheDocument();
     expect(screen.getByText('Source commit')).toBeInTheDocument();
     expect(screen.getByText('Base commit')).toBeInTheDocument();
-    expect(screen.getByText(/Showing key changes from/i)).toBeInTheDocument();
+    expect(screen.getByText(/differs between/i)).toBeInTheDocument();
     expect(screen.queryByText(/\+112/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create pull request' })).toHaveAttribute(
       'data-variant',
       'commit'
     );
+  });
+
+  it('shows both sides of a field instead of a truncated one-line diff', () => {
+    changePreview.mockReturnValue({
+      changes: [
+        {
+          afterValue: 'dev problem text that stays fully visible',
+          beforeValue: 'main problem text that stays fully visible',
+          id: 'modified:candidate/product/problem',
+          kind: 'modified',
+          op: 'SET',
+          path: 'candidate/product/problem',
+          reason: 'Updated problem statement',
+          summary: 'Updated problem statement',
+        },
+        {
+          afterValue: '个性化学习路径推荐',
+          beforeValue: 'No value recorded',
+          id: 'added:candidate/requirements/personalized_learning_path/title',
+          kind: 'added',
+          op: 'ADD',
+          path: 'candidate/requirements/personalized_learning_path/title',
+          reason: 'Added requirement title',
+          summary: 'Added requirement title',
+        },
+      ],
+      error: null,
+      loading: false,
+    });
+    render(<ProjectReviewsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
+
+    expect(screen.getByText('candidate.product')).toBeInTheDocument();
+    expect(document.body.textContent).toContain('main problem text that stays fully visible');
+    expect(document.body.textContent).toContain('dev problem text that stays fully visible');
+    expect(screen.getByText('Added in outputs/bundle-refresh')).toBeInTheDocument();
+    expect(screen.getByText('个性化学习路径推荐')).toBeInTheDocument();
+    expect(screen.queryByText('No value recorded')).not.toBeInTheDocument();
   });
 
   it('previews a diverged branch from its merge base, not the moved target head', async () => {
@@ -476,7 +517,7 @@ describe('ProjectReviewsTab', () => {
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Use feature' }));
 
-    expect(screen.getByText('Resolution saved. Merge is ready.')).toBeInTheDocument();
+    expect(screen.getByText('All conflicts decided. Merge is ready.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Merge PR' })).toBeEnabled();
     expect(screen.queryByRole('checkbox', { name: 'Use feature' })).not.toBeInTheDocument();
 
@@ -489,120 +530,66 @@ describe('ProjectReviewsTab', () => {
     expect(screen.queryByRole('checkbox', { name: 'Keep main' })).not.toBeInTheDocument();
   });
 
-  it('writes the selected side onto the merge draft before merging a project PR', async () => {
+  it('resolves each conflicting field on its own before merging a project PR', async () => {
     pullRequestApi.fetchPullRequests.mockResolvedValue({
-      pull_requests: [
-        {
-          id: 'pr_blocked',
-          number: 1,
-          project_id: 'proj_real',
-          title: 'Propose weekly product brief',
-          description: 'Review the weekly brief.',
-          source_branch: 'review/pr-demo',
-          target_branch: 'main',
-          source_commit_id: 'sha256:feature',
-          target_base_commit_id: 'sha256:main',
-          merge_draft_id: 'mdraft_1',
-          merge_commit_id: null,
-          status: 'blocked',
-          author_id: 'you',
-          steward_id: null,
-          review_owner_id: null,
-          workspace_id: null,
-          release_lane_id: null,
-          linked_work: null,
-          created_at: '2026-09-18T00:00:00.000Z',
-          updated_at: '2026-09-18T00:00:00.000Z',
-          merged_at: null,
-          closed_at: null,
-        },
-      ],
+      pull_requests: [blockedPullRequest],
       counts: { active: 1, merged: 0 },
     });
-    pullRequestApi.fetchPullRequest.mockResolvedValue({
-      id: 'pr_blocked',
-      number: 1,
-      project_id: 'proj_real',
-      title: 'Propose weekly product brief',
-      description: 'Review the weekly brief.',
-      source_branch: 'review/pr-demo',
-      target_branch: 'main',
-      source_commit_id: 'sha256:feature',
-      target_base_commit_id: 'sha256:main',
-      merge_draft_id: 'mdraft_1',
-      merge_commit_id: null,
-      status: 'blocked',
-      author_id: 'you',
-      steward_id: null,
-      review_owner_id: null,
-      workspace_id: null,
-      release_lane_id: null,
-      linked_work: null,
-      created_at: '2026-09-18T00:00:00.000Z',
-      updated_at: '2026-09-18T00:00:00.000Z',
-      merged_at: null,
-      closed_at: null,
-      diff_summary: { changed_nodes: 2, yops_operations: 0, output_impacts: 0, source_refs: 0 },
-      checks: [
-        {
-          id: 'chk_conflict',
-          pull_request_id: 'pr_blocked',
-          kind: 'conflict_resolution',
-          status: 'blocked',
-          title: 'Conflict resolution',
-          message: '1 structural conflict(s) require a decision.',
-          started_at: null,
-          completed_at: null,
-        },
-      ],
-      activity: [],
-    });
-    const decisions = {
-      conflictResolutions: { 'candidate/product': 'source' as const },
-      keepFromSource: [],
-      keepFromTarget: [],
-      keepRelationsFromSource: true,
-      keepRelationsFromTarget: true,
-    };
-    pullRequestApi.applyConflictDecision.mockResolvedValue(decisions);
+    pullRequestApi.fetchPullRequest.mockResolvedValue(blockedPullRequestDetail);
+    pullRequestApi.fetchMergeReview.mockResolvedValue(conflictReview);
+    pullRequestApi.saveMergeDecision.mockResolvedValue(1);
     pullRequestApi.mergePullRequest.mockResolvedValue({
-      id: 'pr_blocked',
-      number: 1,
-      project_id: 'proj_real',
-      title: 'Propose weekly product brief',
-      description: 'Review the weekly brief.',
-      source_branch: 'review/pr-demo',
-      target_branch: 'main',
-      source_commit_id: 'sha256:feature',
-      target_base_commit_id: 'sha256:main',
-      merge_draft_id: 'mdraft_1',
+      ...blockedPullRequestDetail,
       merge_commit_id: 'sha256:merged',
       status: 'merged',
-      author_id: 'you',
-      steward_id: null,
-      review_owner_id: null,
-      workspace_id: null,
-      release_lane_id: null,
-      linked_work: null,
-      created_at: '2026-09-18T00:00:00.000Z',
-      updated_at: '2026-09-18T00:00:00.000Z',
-      merged_at: '2026-09-18T00:01:00.000Z',
-      closed_at: '2026-09-18T00:01:00.000Z',
-      diff_summary: { changed_nodes: 2, yops_operations: 0, output_impacts: 0, source_refs: 0 },
-      checks: [],
-      activity: [],
     });
 
     render(<ProjectReviewsTab projectId="proj_real" />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'View PR' }));
-    fireEvent.click(screen.getByText('Changes'));
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'Use feature' }));
+    expect(await screen.findByRole('heading', { name: 'Resolve conflict' })).toBeInTheDocument();
+    expect(await screen.findByText('2 of 2 conflicts still need a decision.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Merge PR' })).toBeDisabled();
 
-    await waitFor(() => {
-      expect(pullRequestApi.applyConflictDecision).toHaveBeenCalledWith('mdraft_1', 'feature');
+    fireEvent.click(screen.getByRole('radio', { name: 'Keep main for problem' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Write a value for title' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Custom value for title' }), {
+      target: { value: 'My own title' },
     });
-    expect(screen.getByRole('button', { name: 'Merge PR' })).toBeEnabled();
+    expect(screen.getByText('1 of 2 conflicts still need a decision.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Next conflict/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Use review/pr-demo' }));
+    expect(screen.getByText('All conflicts decided. Merge is ready.')).toBeInTheDocument();
+
+    const decisions = {
+      conflictResolutions: {
+        'candidate/product': {
+          edit: {
+            key: 'product',
+            slots: { owner: 'dev', problem: 'Main problem', title: 'My own title' },
+            children: [],
+          },
+        },
+        'candidate/requirements': {
+          edit: { key: 'requirements', slots: { priority: 'should' }, children: [] },
+        },
+      },
+      keepFromSource: ['candidate/extra'],
+      keepFromTarget: [],
+      keepRelationsFromSource: true,
+      keepRelationsFromTarget: true,
+    };
+    await waitFor(
+      () => {
+        expect(pullRequestApi.saveMergeDecision).toHaveBeenLastCalledWith(
+          'mdraft_1',
+          decisions,
+          expect.any(Number)
+        );
+      },
+      { timeout: 3000 }
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Merge PR' }));
     await waitFor(() => {
@@ -614,4 +601,110 @@ describe('ProjectReviewsTab', () => {
       });
     });
   });
+
+  it('opens the conflict page as soon as a new PR finds conflicts', async () => {
+    pullRequestApi.createPullRequest.mockResolvedValue(blockedPullRequestDetail);
+    pullRequestApi.fetchPullRequest.mockResolvedValue(blockedPullRequestDetail);
+    pullRequestApi.fetchMergeReview.mockResolvedValue(conflictReview);
+    render(<ProjectReviewsTab projectId="proj_real" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
+    expect(await screen.findByDisplayValue('Real feature')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Create pull request' })).toBeEnabled();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create pull request' }));
+
+    expect(await screen.findByRole('heading', { name: 'Resolve conflict' })).toBeInTheDocument();
+    expect(pullRequestApi.fetchMergeReview).toHaveBeenCalledWith('proj_real', 1);
+  });
 });
+
+const blockedPullRequest = {
+  id: 'pr_blocked',
+  number: 1,
+  project_id: 'proj_real',
+  title: 'Propose weekly product brief',
+  description: 'Review the weekly brief.',
+  source_branch: 'review/pr-demo',
+  target_branch: 'main',
+  source_commit_id: 'sha256:feature',
+  target_base_commit_id: 'sha256:main',
+  merge_draft_id: 'mdraft_1',
+  merge_commit_id: null,
+  status: 'blocked' as const,
+  author_id: 'you',
+  steward_id: null,
+  review_owner_id: null,
+  workspace_id: null,
+  release_lane_id: null,
+  linked_work: null,
+  created_at: '2026-09-18T00:00:00.000Z',
+  updated_at: '2026-09-18T00:00:00.000Z',
+  merged_at: null,
+  closed_at: null,
+};
+
+const blockedPullRequestDetail = {
+  ...blockedPullRequest,
+  diff_summary: { changed_nodes: 3, yops_operations: 0, output_impacts: 0, source_refs: 0 },
+  checks: [
+    {
+      id: 'chk_conflict',
+      pull_request_id: 'pr_blocked',
+      kind: 'conflict_resolution',
+      status: 'blocked',
+      title: 'Conflict resolution',
+      message: '2 structural conflict(s) require a decision.',
+      started_at: null,
+      completed_at: null,
+    },
+  ],
+  activity: [],
+};
+
+const conflictReview = {
+  draft_id: 'mdraft_1',
+  decision_revision: 0,
+  decisions: null,
+  source_commit_id: 'sha256:feature',
+  target_commit_id: 'sha256:main',
+  merge_base_commit_id: 'sha256:base',
+  nodes: [
+    {
+      path: 'candidate/extra',
+      status: 'source_only',
+      presence: { base: false, source: true, target: false },
+      slots: [{ key: 'ready', source: true, merged: true, conflict: false }],
+    },
+    {
+      path: 'candidate/product',
+      status: 'conflict',
+      presence: { base: true, source: true, target: true },
+      slots: [
+        {
+          key: 'owner',
+          base: 'base',
+          source: 'dev',
+          target: 'base',
+          merged: 'dev',
+          conflict: false,
+        },
+        {
+          key: 'problem',
+          base: 'Old problem',
+          source: 'Dev problem',
+          target: 'Main problem',
+          conflict: true,
+        },
+        { key: 'title', base: 'Old', source: 'Dev title', target: 'Main title', conflict: true },
+      ],
+    },
+    {
+      path: 'candidate/requirements',
+      status: 'conflict',
+      presence: { base: true, source: true, target: true },
+      slots: [{ key: 'priority', base: 'may', source: 'should', target: 'must', conflict: true }],
+    },
+  ],
+};

@@ -88,6 +88,104 @@
   color: var(--text-tertiary);
   font: 10px var(--font-mono);
 }
+.currentMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.rawToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: 999px;
+  padding: 1px 8px;
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font: 500 10px var(--font-mono);
+}
+.rawToggle:hover,
+.rawToggle[aria-pressed="true"] {
+  border-color: var(--stroke-strong);
+  color: var(--text-primary);
+}
+.rawToggle svg {
+  width: 11px;
+  height: 11px;
+}
+.currentFields {
+  margin-bottom: 12px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  overflow: hidden;
+}
+.currentFields dl {
+  margin: 0;
+}
+.currentFields dl > div {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+}
+.currentFields dl > div + div {
+  border-top: 1px solid var(--stroke-divider);
+}
+.currentFields dt {
+  color: var(--text-tertiary);
+  font: 500 10px var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.currentFields dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.currentList {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding-left: 16px;
+  list-style: disc;
+}
+.currentEmpty {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+.currentFields > .currentEmpty {
+  display: block;
+  padding: 10px 12px;
+}
+.currentFields footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  border-top: 1px solid var(--stroke-divider);
+  padding: 8px 12px;
+  background: var(--surface-app);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.currentFields footer > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 2px;
+}
+.currentFields footer svg {
+  width: 12px;
+  height: 12px;
+}
+.currentFields footer code {
+  border-radius: 4px;
+  padding: 1px 6px;
+  background: var(--surface-card);
+  font: 10px var(--font-mono);
+}
 .currentValue {
   border-radius: var(--radius-md);
   background: var(--surface-app);

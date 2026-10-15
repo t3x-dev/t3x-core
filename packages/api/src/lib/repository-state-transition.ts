@@ -15,12 +15,14 @@ import {
   decodeRepositorySemanticState,
   describeCommitV2,
   describeTransitionObject,
+  flattenTrees,
   type MergeDecision,
   type MergeResult,
   type MergeSummaryData,
   type ProposalStatement,
   prepareMerge,
   type SemanticContent,
+  type SlotValue,
   type State,
   sha256,
   type TransitionViewV1,
@@ -301,6 +303,7 @@ interface RepositoryMergeContext {
   source: VerifiedTransitionCommitGraph;
   target: VerifiedTransitionCommitGraph;
   mergeBaseState: State;
+  mergeBaseDigest: string | null;
   prepared: MergeResult;
 }
 
@@ -368,7 +371,13 @@ async function loadRepositoryMergeContext(input: {
     decodeRepositorySemanticState(source.state),
     decodeRepositorySemanticState(target.state)
   );
-  return { source, target, mergeBaseState, prepared };
+  return {
+    source,
+    target,
+    mergeBaseState,
+    mergeBaseDigest: candidates[0]?.digest ?? null,
+    prepared,
+  };
 }
 
 export interface PrepareRepositoryYOpsMergeInput {
@@ -384,6 +393,124 @@ export async function prepareRepositoryYOpsMerge(
 ): Promise<MergeResult> {
   const context = await loadRepositoryMergeContext(input);
   return context.prepared;
+}
+
+type FlatNode = ReturnType<typeof flattenTrees>[number];
+
+export interface RepositoryMergeReviewSlot {
+  key: string;
+  base?: SlotValue;
+  source?: SlotValue;
+  target?: SlotValue;
+  /** Value the deterministic merge keeps; absent for conflicting slots. */
+  merged?: SlotValue;
+  conflict: boolean;
+}
+
+export interface RepositoryMergeReviewNode {
+  path: string;
+  status: 'conflict' | 'auto' | 'source_only' | 'target_only';
+  presence: { base: boolean; source: boolean; target: boolean };
+  slots: RepositoryMergeReviewSlot[];
+}
+
+export interface RepositoryMergeReview {
+  prepared: MergeResult;
+  mergeBaseDigest: string | null;
+  nodes: RepositoryMergeReviewNode[];
+}
+
+function sameSlot(left: SlotValue | undefined, right: SlotValue | undefined): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function reviewSlots(
+  base: FlatNode | undefined,
+  source: FlatNode | undefined,
+  target: FlatNode | undefined,
+  conflictKeys: ReadonlySet<string>,
+  includeUnchanged: boolean
+): RepositoryMergeReviewSlot[] {
+  const keys = [
+    ...new Set([
+      ...Object.keys(base?.slots ?? {}),
+      ...Object.keys(source?.slots ?? {}),
+      ...Object.keys(target?.slots ?? {}),
+    ]),
+  ].sort();
+  return keys.flatMap((key): RepositoryMergeReviewSlot[] => {
+    const baseValue = base?.slots[key];
+    const sourceValue = source?.slots[key];
+    const targetValue = target?.slots[key];
+    if (!includeUnchanged && sameSlot(baseValue, sourceValue) && sameSlot(baseValue, targetValue))
+      return [];
+    const conflict = conflictKeys.has(key);
+    const sourceChanged = !sameSlot(baseValue, sourceValue);
+    return [
+      {
+        key,
+        ...(baseValue !== undefined ? { base: baseValue } : {}),
+        ...(sourceValue !== undefined ? { source: sourceValue } : {}),
+        ...(targetValue !== undefined ? { target: targetValue } : {}),
+        ...(!conflict && (sourceChanged ? sourceValue : targetValue) !== undefined
+          ? { merged: sourceChanged ? sourceValue : targetValue }
+          : {}),
+        conflict,
+      },
+    ];
+  });
+}
+
+/** Explain the merge plan per node: every changed slot with its base, source, and target value. */
+export async function reviewRepositoryYOpsMerge(
+  input: PrepareRepositoryYOpsMergeInput
+): Promise<RepositoryMergeReview> {
+  const context = await loadRepositoryMergeContext(input);
+  const { prepared } = context;
+  const frames = (state: State) =>
+    new Map(flattenTrees(decodeRepositorySemanticState(state).trees).map((f) => [f.id, f]));
+  const baseFrames = frames(context.mergeBaseState);
+  const sourceFrames = frames(context.source.state);
+  const targetFrames = frames(context.target.state);
+  const conflictKeys = new Map(
+    prepared.conflicts.map((conflict) => [
+      conflict.path,
+      new Set(conflict.slotConflicts.map((slot) => slot.key)),
+    ])
+  );
+  const statusByPath = new Map<string, RepositoryMergeReviewNode['status']>([
+    ...prepared.autoKept.map((path) => [path, 'auto'] as const),
+    ...prepared.onlyInSource.map((path) => [path, 'source_only'] as const),
+    ...prepared.onlyInTarget.map((path) => [path, 'target_only'] as const),
+    ...prepared.conflicts.map((conflict) => [conflict.path, 'conflict'] as const),
+  ]);
+  const nodes = [...statusByPath.entries()]
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .flatMap(([path, status]): RepositoryMergeReviewNode[] => {
+      const base = baseFrames.get(path);
+      const source = sourceFrames.get(path);
+      const target = targetFrames.get(path);
+      // A conflict resolves by replacing the whole node, so its untouched slots are needed too.
+      const slots = reviewSlots(
+        base,
+        source,
+        target,
+        conflictKeys.get(path) ?? new Set(),
+        status === 'conflict'
+      );
+      const presenceChanged =
+        Boolean(base) !== Boolean(source) || Boolean(base) !== Boolean(target);
+      if (status === 'auto' && slots.length === 0 && !presenceChanged) return [];
+      return [
+        {
+          path,
+          status,
+          presence: { base: Boolean(base), source: Boolean(source), target: Boolean(target) },
+          slots,
+        },
+      ];
+    });
+  return { prepared, mergeBaseDigest: context.mergeBaseDigest, nodes };
 }
 
 export interface CommitRepositoryYOpsMergeInput extends PrepareRepositoryYOpsMergeInput {

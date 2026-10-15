@@ -355,7 +355,7 @@ function protocolLeafPaths(value: ProtocolValue, prefix = ''): string[] {
 }
 
 /** Bind YSchema provenance only to source materials re-resolved inside the project boundary. */
-async function workspaceProvenance(
+export async function workspaceProvenance(
   db: AnyDB,
   projectId: string,
   workspace: Record<string, unknown>,

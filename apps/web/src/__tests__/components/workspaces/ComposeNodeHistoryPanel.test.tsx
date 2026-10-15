@@ -299,9 +299,16 @@ describe('Compose object Details', () => {
       />
     );
     expect(screen.getByLabelText('Selected object details')).toBeInTheDocument();
+    const currentValue = screen.getByRole('region', { name: 'Current Draft value' });
+    expect(currentValue).toHaveTextContent('准备飞行');
+    expect(currentValue).toHaveTextContent('No child objects');
+    expect(currentValue).not.toHaveTextContent('"slots"');
+    expect(currentValue.querySelectorAll('dt')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'JSON' }));
     expect(screen.getByRole('region', { name: 'Current Draft value' })).toHaveTextContent(
-      '准备飞行'
+      '"slots"'
     );
+    fireEvent.click(screen.getByRole('button', { name: 'Fields' }));
     expect(screen.getByRole('region', { name: 'Field change: goal' })).toHaveTextContent(
       '开飞机的任务'
     );

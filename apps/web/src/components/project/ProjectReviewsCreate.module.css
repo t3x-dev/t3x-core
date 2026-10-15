@@ -235,14 +235,12 @@
   margin-top: 34px;
 }
 .preview h2 {
-  display: inline;
   font-size: 16px;
   font-weight: 650;
   letter-spacing: -0.01em;
 }
 .preview > p {
-  display: inline;
-  margin-left: 10px;
+  margin-top: 4px;
   font-size: 12.5px;
   color: #8b909a;
 }
@@ -534,82 +532,139 @@
   color: #8b909a;
   font-size: 11.5px;
 }
-.previewHeading {
-  display: flex;
-  align-items: center;
+.diffPreview {
+  display: grid;
   gap: 10px;
-  height: 40px;
-  padding: 0 10px 0 8px;
-  font-size: 13.5px;
+  margin-top: 14px;
 }
-.previewHeading svg {
-  width: 15px;
-  height: 15px;
-  color: #8b909a;
+.diffSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
-.previewHeading strong {
+.diffSummary span {
+  border-radius: 999px;
+  background: #f1f1f3;
+  padding: 3px 9px;
+  color: #5b606b;
+  font-size: 11.5px;
   font-weight: 600;
 }
-.previewHeading > span {
-  font-size: 12.5px;
-  color: #8b909a;
-}
-.fieldChange {
-  display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) minmax(80px, 40%);
-  gap: 12px;
-  align-items: center;
-  min-height: 44px;
-  padding: 8px 12px 8px 10px;
-  border-radius: 10px;
-  background: white;
-  margin-top: 4px;
-  font-size: 13px;
-  box-shadow: 0 1px 2px rgba(15, 18, 30, 0.03);
-}
-.changeIcon {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
-  color: #ea6a0c;
+.diffSummary span[data-kind="modified"] {
   background: rgba(234, 106, 12, 0.12);
+  color: #b45309;
 }
-.changeIcon svg {
-  width: 12px;
-  height: 12px;
+.diffSummary span[data-kind="added"],
+.diffNode header span[data-kind="added"] {
+  background: #eaf7ef;
+  color: #15803d;
 }
-.fieldChange > code {
-  font-size: 12.5px;
+.diffSummary span[data-kind="removed"],
+.diffNode header span[data-kind="removed"] {
+  background: #fff1f2;
+  color: #be123c;
+}
+.diffNode {
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  border: 1px solid #eceef2;
+  border-radius: 14px;
+  background: white;
 }
-.fieldValues {
+.diffNode header {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 4px;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding: 8px 12px;
+  background: #f7f8fa;
+}
+.diffNode header code {
+  min-width: 0;
   font-size: 12.5px;
-}
-.fieldValues del,
-.fieldValues ins {
-  padding: 0 4px;
-  border-radius: 4px;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.fieldValues del {
-  background: rgba(229, 72, 77, 0.12);
-  color: #b42318;
-}
-.fieldValues ins {
-  background: rgba(22, 163, 74, 0.14);
-  color: #15703a;
-  text-decoration: none;
   font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.diffNode header span {
+  flex: none;
+  border-radius: 999px;
+  background: rgba(234, 106, 12, 0.12);
+  padding: 2px 8px;
+  color: #b45309;
+  font-size: 11px;
+  font-weight: 650;
+}
+.diffField {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+.diffField + .diffField {
+  border-top: 1px solid #f1f1f3;
+}
+.diffField > b {
+  font-size: 12.5px;
+  font-weight: 650;
+}
+.diffPair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.diffValue {
+  min-width: 0;
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+.diffValue[data-side="base"] {
+  background: #fff6f6;
+}
+.diffValue[data-side="source"] {
+  background: #f3faf6;
+}
+.diffValue > span {
+  display: block;
+  margin-bottom: 4px;
+  color: #8b909a;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.diffValue p {
+  margin: 0;
+  color: #16181d;
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.diffValue mark {
+  border-radius: 3px;
+  padding: 0 1px;
+  background: transparent;
+  color: inherit;
+}
+.diffValue[data-side="base"] mark {
+  background: #fecdd3;
+}
+.diffValue[data-side="source"] mark {
+  background: #bbf7d0;
+}
+.diffValue p[data-clamped] {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+}
+.diffValue button {
+  margin-top: 6px;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 600;
+}
+@media (max-width: 860px) {
+  .diffPair {
+    grid-template-columns: 1fr;
+  }
 }
