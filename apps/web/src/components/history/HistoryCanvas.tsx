@@ -1,6 +1,23 @@
 'use client';
 
 import {
+  Background,
+  BackgroundVariant,
+  type Edge,
+  Handle,
+  MarkerType,
+  MiniMap,
+  type Node,
+  type NodeProps,
+  Position,
+  ReactFlow,
+  ReactFlowProvider,
+  useReactFlow,
+  useStore,
+  useViewport,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
@@ -19,9 +36,16 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
-import { type PointerEvent, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatDate, shortHash } from '@/domain/format/formatters';
 import { buildHistoryCanvasSvg, downloadTextFile } from '@/domain/history/historyCanvasExport';
+import {
+  HISTORY_LANE_LAYOUT,
+  HISTORY_VIRTUALIZE_AFTER,
+  type HistoryLane,
+  type HistoryLaneNode,
+  layoutHistoryLanes,
+} from '@/domain/history/historyLaneLayout';
 import type { ApiCommit, Branch } from '@/types/api';
 import styles from './HistoryCanvas.module.css';
 
@@ -40,43 +64,31 @@ interface HistoryCanvasProps {
   onViewDiff: (hash: string) => void;
 }
 
-const POSITIONS = [
-  { left: 60, top: 350, width: 220, height: 120, kind: 'root' },
-  { left: 360, top: 190, width: 240, height: 136, kind: 'main' },
-  { left: 360, top: 490, width: 240, height: 136, kind: 'feature' },
-  { left: 680, top: 340, width: 280, height: 176, kind: 'merge' },
-] as const;
+const COMPACT_ZOOM = 0.55;
+/** The minimap's d3 pan handler swallows a click after any movement, so clicks are detected here. */
+const MINIMAP_CLICK_SLOP = 6;
 
-type CanvasPosition = (typeof POSITIONS)[number];
-
-function edgePath(parent: CanvasPosition, child: CanvasPosition, parentIndex: number) {
-  const parentCenterX = parent.left + parent.width / 2;
-  const childCenterX = child.left + child.width / 2;
-  const parentCenterY = parent.top + parent.height / 2;
-  const childCenterY = child.top + child.height / 2;
-  const horizontallyAligned = Math.abs(childCenterX - parentCenterX) < 80;
-
-  if (horizontallyAligned) {
-    const downward = childCenterY >= parentCenterY;
-    const startX = parentCenterX;
-    const startY = downward ? parent.top + parent.height : parent.top;
-    const endX = childCenterX;
-    const endY = downward ? child.top : child.top + child.height;
-    const controlY = startY + (endY - startY) / 2;
-    return `M ${startX} ${startY} C ${startX} ${controlY}, ${endX} ${controlY}, ${endX} ${endY}`;
-  }
-
-  const rightward = childCenterX > parentCenterX;
-  const startX = rightward ? parent.left + parent.width : parent.left;
-  const endX = rightward ? child.left : child.left + child.width;
-  const startY = parentCenterY;
-  const endY = childCenterY + (child.kind === 'merge' ? (parentIndex - 0.5) * 40 : 0);
-  const direction = rightward ? 1 : -1;
-  const controlDistance = Math.max(44, Math.abs(endX - startX) * 0.45);
-  const firstControlX = startX + direction * controlDistance;
-  const secondControlX = endX - direction * controlDistance;
-  return `M ${startX} ${startY} C ${firstControlX} ${startY}, ${secondControlX} ${endY}, ${endX} ${endY}`;
+/** Converts a pointer on the minimap SVG into flow coordinates (its viewBox is flow space). */
+function minimapPoint(target: EventTarget, clientX: number, clientY: number) {
+  if (!(target instanceof Element)) return null;
+  const svg = target.closest('.react-flow__minimap')?.querySelector('svg');
+  const matrix = svg?.getScreenCTM();
+  if (!svg || !matrix) return null;
+  const point = new DOMPoint(clientX, clientY).matrixTransform(matrix.inverse());
+  return { x: point.x, y: point.y };
 }
+
+type CommitNodeData = {
+  lane: HistoryLaneNode;
+  selected: boolean;
+  diffStats?: CanvasCommit['diffStats'];
+  onSelect: (hash: string) => void;
+};
+
+type LaneNodeData = { lane: HistoryLane };
+
+type CommitFlowNode = Node<CommitNodeData, 'commit'>;
+type LaneFlowNode = Node<LaneNodeData, 'lane'>;
 
 function authorName(commit: ApiCommit) {
   return commit.author?.name || commit.author?.id || commit.author?.type || 'Unknown';
@@ -93,11 +105,117 @@ function initials(name: string) {
   );
 }
 
-function graphCommits(commits: CanvasCommit[]) {
-  return commits.slice(0, 4).reverse();
+function CommitCardNode({ data }: NodeProps<CommitFlowNode>) {
+  const compact = useStore((state) => state.transform[2] < COMPACT_ZOOM);
+  const { lane, selected, diffStats, onSelect } = data;
+  const commit = lane.commit;
+  const label = commit.message || 'Untitled commit';
+  const laneStyle = { '--lane-color': lane.color } as CSSProperties;
+  return (
+    <>
+      <Handle
+        className={styles.flowHandle}
+        isConnectable={false}
+        position={Position.Left}
+        type="target"
+      />
+      {compact && !selected ? (
+        <button
+          aria-label={`Inspect ${commit.message || shortHash(commit.hash)}`}
+          className={styles.compactNode}
+          onClick={() => onSelect(commit.hash)}
+          style={laneStyle}
+          title={`${label} · ${shortHash(commit.hash)}`}
+          type="button"
+        >
+          <span className={styles.compactDot} />
+          <span className={styles.compactHash}>{shortHash(commit.hash)}</span>
+        </button>
+      ) : (
+        <button
+          aria-label={`Inspect ${commit.message || shortHash(commit.hash)}`}
+          className={`${styles.node} ${styles.flowNode} ${lane.root ? styles.nodeRoot : ''} ${selected ? styles.selectedNode : ''}`}
+          onClick={() => onSelect(commit.hash)}
+          style={laneStyle}
+          type="button"
+        >
+          <span className={styles.nodeTop} />
+          <span className={styles.nodeBody}>
+            <span className={styles.nodeTitle}>
+              <span className={styles.nodeIcon}>
+                {commit.parents.length > 1 ? (
+                  <GitMerge size={selected ? 20 : 16} strokeWidth={2.5} />
+                ) : (
+                  <GitBranch size={selected ? 20 : 15} strokeWidth={2.5} />
+                )}
+              </span>
+              <span style={{ minWidth: 0 }}>
+                <span className={styles.nodeMessage}>{label}</span>
+                {selected && (
+                  <span className={styles.selectedSubtitle}>
+                    {commit.parents.length > 1
+                      ? 'Merged history revision'
+                      : `Committed to ${lane.branch}`}
+                  </span>
+                )}
+              </span>
+            </span>
+            <span className={styles.nodeMeta}>
+              <span className={styles.hash}>{shortHash(commit.hash)}</span>
+              {selected && diffStats ? (
+                <span className={styles.stats}>
+                  <span className={styles.statAdded}>+{diffStats.addedCount}</span>
+                  <span className={styles.statDivider}>|</span>
+                  <span className={styles.statModified}>~{diffStats.modifiedCount}</span>
+                  <span className={styles.statDivider}>|</span>
+                  <span className={styles.statRemoved}>-{diffStats.removedCount}</span>
+                </span>
+              ) : (
+                <span className={styles.branchBadge}>
+                  <span className={styles.miniDot} />
+                  {lane.branch}
+                </span>
+              )}
+            </span>
+          </span>
+        </button>
+      )}
+      <Handle
+        className={styles.flowHandle}
+        isConnectable={false}
+        position={Position.Right}
+        type="source"
+      />
+    </>
+  );
 }
 
-export function HistoryCanvas({
+function LaneBandNode({ data }: NodeProps<LaneFlowNode>) {
+  return (
+    <div
+      className={styles.laneBand}
+      data-history-lane={data.lane.branch}
+      style={{ '--lane-color': data.lane.color } as CSSProperties}
+    >
+      <span className={styles.laneLabel}>
+        <span className={styles.miniDot} />
+        {data.lane.branch}
+      </span>
+    </div>
+  );
+}
+
+const NODE_TYPES = { commit: CommitCardNode, lane: LaneBandNode };
+
+export function HistoryCanvas(props: HistoryCanvasProps) {
+  return (
+    <ReactFlowProvider>
+      <HistoryCanvasInner key={props.selectedBranch} {...props} />
+    </ReactFlowProvider>
+  );
+}
+
+function HistoryCanvasInner({
   branches,
   commits,
   selectedBranch,
@@ -106,118 +224,147 @@ export function HistoryCanvas({
   onListView,
   onViewDiff,
 }: HistoryCanvasProps) {
-  const nodes = useMemo(() => graphCommits(commits), [commits]);
-  const [selectedHash, setSelectedHash] = useState(() => nodes.at(-1)?.commit.hash ?? '');
-  const [zoom, setZoom] = useState(100);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const layout = useMemo(() => layoutHistoryLanes(commits.map((item) => item.commit)), [commits]);
+  const diffStatsByHash = useMemo(
+    () => new Map(commits.map((item) => [item.commit.hash, item.diffStats])),
+    [commits]
+  );
+  const latestHash = layout.nodes.at(-1)?.hash ?? '';
+  const [selectedHash, setSelectedHash] = useState(latestHash);
   const [canvasTool, setCanvasTool] = useState<'select' | 'pan'>('select');
-  const [isPanning, setIsPanning] = useState(false);
-  const dragRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(
-    null
+  const { fitView, setCenter, zoomIn, zoomOut } = useReactFlow();
+  const { zoom } = useViewport();
+
+  const selected =
+    layout.nodes.find((node) => node.hash === selectedHash) ?? layout.nodes.at(-1) ?? null;
+  const selectedCommit = selected?.commit;
+
+  const focusNode = useCallback(
+    (node: HistoryLaneNode | null | undefined, duration = 0) => {
+      if (!node) return;
+      void setCenter(
+        node.x + HISTORY_LANE_LAYOUT.nodeWidth / 2,
+        node.y + HISTORY_LANE_LAYOUT.nodeHeight / 2,
+        { zoom: 1, duration }
+      );
+    },
+    [setCenter]
+  );
+
+  const minimapPress = useRef<{ x: number; y: number } | null>(null);
+
+  function jumpTo(point: { x: number; y: number }) {
+    const { nodeWidth, nodeHeight } = HISTORY_LANE_LAYOUT;
+    const target = layout.nodes.find(
+      (node) =>
+        point.x >= node.x &&
+        point.x <= node.x + nodeWidth &&
+        point.y >= node.y &&
+        point.y <= node.y + nodeHeight
+    );
+    if (target) {
+      setSelectedHash(target.hash);
+      focusNode(target, 240);
+      return;
+    }
+    void setCenter(point.x, point.y, { zoom, duration: 240 });
+  }
+
+  const latestNode = layout.nodes.at(-1);
+  useEffect(() => {
+    focusNode(latestNode);
+  }, [focusNode, latestNode]);
+
+  const flowNodes = useMemo<Array<CommitFlowNode | LaneFlowNode>>(
+    () => [
+      ...layout.lanes.map(
+        (lane): LaneFlowNode => ({
+          id: `lane:${lane.branch}`,
+          type: 'lane',
+          position: { x: 0, y: lane.y },
+          data: { lane },
+          width: layout.width,
+          height: HISTORY_LANE_LAYOUT.laneHeight,
+          draggable: false,
+          selectable: false,
+          focusable: false,
+          zIndex: -1,
+        })
+      ),
+      ...layout.nodes.map(
+        (node): CommitFlowNode => ({
+          id: node.hash,
+          type: 'commit',
+          position: { x: node.x, y: node.y },
+          data: {
+            lane: node,
+            selected: node.hash === selected?.hash,
+            diffStats: diffStatsByHash.get(node.hash),
+            onSelect: setSelectedHash,
+          },
+          width: HISTORY_LANE_LAYOUT.nodeWidth,
+          height: HISTORY_LANE_LAYOUT.nodeHeight,
+          draggable: false,
+          selectable: false,
+          zIndex: node.hash === selected?.hash ? 2 : 1,
+        })
+      ),
+    ],
+    [diffStatsByHash, layout, selected?.hash]
+  );
+
+  const flowEdges = useMemo<Edge[]>(
+    () =>
+      layout.edges.map((edge) => ({
+        id: edge.key,
+        source: edge.parentHash,
+        target: edge.childHash,
+        type: edge.crossLane ? 'default' : 'straight',
+        focusable: false,
+        selectable: false,
+        markerEnd: { type: MarkerType.ArrowClosed, color: edge.color, width: 16, height: 16 },
+        style: {
+          stroke: edge.color,
+          strokeWidth: 3,
+          strokeOpacity: 0.8,
+          ...(edge.crossLane ? { strokeDasharray: '6 4' } : {}),
+        },
+        data: { parentHash: edge.parentHash, childHash: edge.childHash },
+      })),
+    [layout.edges]
   );
 
   function resetView() {
-    setZoom(100);
-    setPan({ x: 0, y: 0 });
+    setCanvasTool('select');
+    focusNode(selected, 200);
   }
-
-  function beginPan(
-    event: {
-      clientX: number;
-      clientY: number;
-      preventDefault: () => void;
-      target: EventTarget | null;
-    },
-    currentTarget: HTMLElement,
-    pointerId?: number
-  ) {
-    const target = event.target as HTMLElement | null;
-    if (target?.closest('[data-history-chrome]')) return;
-    if (canvasTool !== 'pan' || dragRef.current) return;
-    event.preventDefault();
-    if (pointerId !== undefined) currentTarget.setPointerCapture?.(pointerId);
-    dragRef.current = {
-      startX: event.clientX,
-      startY: event.clientY,
-      panX: pan.x,
-      panY: pan.y,
-    };
-    setIsPanning(true);
-  }
-
-  function movePan(clientX: number, clientY: number) {
-    const drag = dragRef.current;
-    if (!drag) return;
-    setPan({
-      x: drag.panX + clientX - drag.startX,
-      y: drag.panY + clientY - drag.startY,
-    });
-  }
-
-  function endPan(currentTarget: HTMLElement, pointerId?: number) {
-    if (!dragRef.current) return;
-    dragRef.current = null;
-    setIsPanning(false);
-    if (pointerId !== undefined && currentTarget.hasPointerCapture?.(pointerId)) {
-      currentTarget.releasePointerCapture?.(pointerId);
-    }
-  }
-
-  function handleCanvasPointerDown(event: PointerEvent<HTMLElement>) {
-    beginPan(event, event.currentTarget, event.pointerId);
-  }
-
-  function handleCanvasPointerMove(event: PointerEvent<HTMLElement>) {
-    movePan(event.clientX, event.clientY);
-  }
-
-  function handleCanvasPointerUp(event: PointerEvent<HTMLElement>) {
-    endPan(event.currentTarget, event.pointerId);
-  }
-  const selected = nodes.find((item) => item.commit.hash === selectedHash) ?? nodes.at(-1);
-  const selectedCommit = selected?.commit;
-  const edges = useMemo(
-    () =>
-      nodes.flatMap((child, childIndex) => {
-        const childPosition = POSITIONS[childIndex];
-        if (!childPosition) return [];
-        return child.commit.parents.flatMap((parentHash, parentIndex) => {
-          const parentNodeIndex = nodes.findIndex((node) => node.commit.hash === parentHash);
-          const parentPosition = POSITIONS[parentNodeIndex];
-          if (parentNodeIndex < 0 || !parentPosition) return [];
-          const feature =
-            child.commit.branch !== nodes[parentNodeIndex]?.commit.branch || parentIndex > 0;
-          return [
-            {
-              d: edgePath(parentPosition, childPosition, parentIndex),
-              feature,
-              key: `${parentHash}-${child.commit.hash}`,
-              parentHash,
-              childHash: child.commit.hash,
-            },
-          ];
-        });
-      }),
-    [nodes]
-  );
 
   function downloadGraph() {
     downloadTextFile(
       `history-${selectedBranch === 'all' ? 'all-branches' : selectedBranch}.svg`,
       buildHistoryCanvasSvg({
-        edges,
-        nodes: nodes.map((item, index) => {
-          const position = POSITIONS[index] ?? POSITIONS[3];
-          return {
-            hash: item.commit.hash,
-            message: item.commit.message || 'Untitled commit',
-            branch: item.commit.branch || 'main',
-            left: position.left,
-            top: position.top,
-            width: position.width,
-            height: position.height,
-          };
-        }),
+        width: layout.width,
+        height: layout.height,
+        lanes: layout.lanes.map((lane) => ({
+          branch: lane.branch,
+          color: lane.color,
+          y: lane.y,
+          height: HISTORY_LANE_LAYOUT.laneHeight,
+        })),
+        edges: layout.edges.map((edge) => ({
+          d: edge.d,
+          feature: edge.crossLane,
+          color: edge.color,
+        })),
+        nodes: layout.nodes.map((node) => ({
+          hash: node.hash,
+          message: node.commit.message || 'Untitled commit',
+          branch: node.branch,
+          left: node.x,
+          top: node.y,
+          width: HISTORY_LANE_LAYOUT.nodeWidth,
+          height: HISTORY_LANE_LAYOUT.nodeHeight,
+        })),
       }),
       'image/svg+xml;charset=utf-8'
     );
@@ -253,16 +400,70 @@ export function HistoryCanvas({
       <main className={styles.main}>
         <section
           aria-label="Commit graph canvas"
-          className={`${styles.canvas} ${canvasTool === 'pan' ? styles.canvasPan : ''} ${isPanning ? styles.canvasPanning : ''}`}
-          onPointerDown={handleCanvasPointerDown}
-          onPointerMove={handleCanvasPointerMove}
-          onPointerUp={handleCanvasPointerUp}
-          onPointerCancel={handleCanvasPointerUp}
-          onMouseDown={(event) => beginPan(event, event.currentTarget)}
-          onMouseMove={(event) => movePan(event.clientX, event.clientY)}
-          onMouseUp={(event) => endPan(event.currentTarget)}
-          onMouseLeave={(event) => endPan(event.currentTarget)}
+          className={`${styles.canvas} ${canvasTool === 'pan' ? styles.canvasPan : ''}`}
+          onPointerDownCapture={(event) => {
+            minimapPress.current = minimapPoint(event.target, event.clientX, event.clientY)
+              ? { x: event.clientX, y: event.clientY }
+              : null;
+          }}
+          onPointerUpCapture={(event) => {
+            const press = minimapPress.current;
+            minimapPress.current = null;
+            if (
+              !press ||
+              Math.hypot(event.clientX - press.x, event.clientY - press.y) > MINIMAP_CLICK_SLOP
+            ) {
+              return;
+            }
+            const point = minimapPoint(event.target, event.clientX, event.clientY);
+            if (point) jumpTo(point);
+          }}
         >
+          <ReactFlow
+            className={styles.flowCanvas}
+            data-history-viewport="true"
+            edges={flowEdges}
+            edgesFocusable={false}
+            elementsSelectable={false}
+            maxZoom={1.5}
+            minZoom={0.15}
+            nodeTypes={NODE_TYPES}
+            nodes={flowNodes}
+            nodesConnectable={false}
+            nodesDraggable={false}
+            onNodeClick={(_, node) => {
+              if (node.type === 'commit' && canvasTool === 'select') setSelectedHash(node.id);
+            }}
+            onlyRenderVisibleElements={layout.nodes.length > HISTORY_VIRTUALIZE_AFTER}
+            panOnDrag={canvasTool === 'pan' ? true : [1]}
+            panOnScroll
+            proOptions={{ hideAttribution: true }}
+            zoomOnDoubleClick={false}
+          >
+            <Background
+              color="var(--stroke-default)"
+              gap={24}
+              size={1.5}
+              variant={BackgroundVariant.Dots}
+            />
+            <MiniMap
+              ariaLabel="History minimap"
+              className={styles.minimap}
+              maskColor="color-mix(in srgb, var(--surface-panel) 70%, transparent)"
+              nodeBorderRadius={4}
+              nodeColor={(node) =>
+                node.type === 'lane'
+                  ? `${(node.data as LaneNodeData).lane.color}14`
+                  : node.id === selected?.hash
+                    ? 'var(--accent-commit)'
+                    : (node.data as CommitNodeData).lane.color
+              }
+              pannable
+              position="bottom-right"
+              zoomable
+            />
+          </ReactFlow>
+
           <div className={styles.canvasTopLeft} data-history-chrome="true">
             <label className={`${styles.canvasButton} ${styles.branchSelect}`}>
               <select
@@ -297,18 +498,18 @@ export function HistoryCanvas({
               <button
                 aria-label="Zoom out"
                 className={styles.zoomButton}
-                onClick={() => setZoom((value) => Math.max(70, value - 10))}
+                onClick={() => void zoomOut({ duration: 180 })}
                 type="button"
               >
                 <ZoomOut size={18} strokeWidth={2.5} />
               </button>
               <span className={styles.zoomDivider} />
-              <span className={styles.zoomValue}>{zoom}%</span>
+              <span className={styles.zoomValue}>{Math.round(zoom * 100)}%</span>
               <span className={styles.zoomDivider} />
               <button
                 aria-label="Zoom in"
                 className={styles.zoomButton}
-                onClick={() => setZoom((value) => Math.min(130, value + 10))}
+                onClick={() => void zoomIn({ duration: 180 })}
                 type="button"
               >
                 <ZoomIn size={18} strokeWidth={2.5} />
@@ -317,121 +518,11 @@ export function HistoryCanvas({
             <button
               aria-label="Fit to view"
               className={`${styles.canvasButton} ${styles.iconOnly}`}
-              onClick={resetView}
+              onClick={() => void fitView({ padding: 0.12, duration: 240 })}
               type="button"
             >
               <Maximize2 size={18} />
             </button>
-          </div>
-
-          <div
-            className={`${styles.viewport} ${isPanning ? styles.viewportPanning : ''}`}
-            data-history-viewport="true"
-            style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom / 100})` }}
-          >
-            {edges.length > 0 && (
-              <svg aria-hidden="true" className={styles.edges} data-history-edges="true">
-                <defs>
-                  <marker
-                    id="history-arrow-indigo"
-                    viewBox="0 0 10 10"
-                    refX="8"
-                    refY="5"
-                    markerWidth="6"
-                    markerHeight="6"
-                    orient="auto-start-reverse"
-                  >
-                    <path className={styles.markerMain} d="M 0 1 L 10 5 L 0 9 z" />
-                  </marker>
-                  <marker
-                    id="history-arrow-pink"
-                    viewBox="0 0 10 10"
-                    refX="8"
-                    refY="5"
-                    markerWidth="6"
-                    markerHeight="6"
-                    orient="auto-start-reverse"
-                  >
-                    <path className={styles.markerFeature} d="M 0 1 L 10 5 L 0 9 z" />
-                  </marker>
-                </defs>
-                {edges.map((edge) => (
-                  <path
-                    className={edge.feature ? styles.edgeFeature : styles.edgeMain}
-                    d={edge.d}
-                    data-child-hash={edge.childHash}
-                    data-parent-hash={edge.parentHash}
-                    key={edge.key}
-                    markerEnd={
-                      edge.feature ? 'url(#history-arrow-pink)' : 'url(#history-arrow-indigo)'
-                    }
-                  />
-                ))}
-              </svg>
-            )}
-
-            {nodes.map((item, index) => {
-              const position = POSITIONS[index] ?? POSITIONS[3];
-              const commit = item.commit;
-              const isSelected = commit.hash === selected?.commit.hash;
-              const feature = position.kind === 'feature';
-              return (
-                <button
-                  aria-label={`Inspect ${commit.message || shortHash(commit.hash)}`}
-                  className={`${styles.node} ${position.kind === 'root' ? styles.nodeRoot : ''} ${feature ? styles.nodeFeature : ''} ${isSelected ? styles.selectedNode : ''}`}
-                  key={commit.hash}
-                  onClick={() => setSelectedHash(commit.hash)}
-                  style={{ left: position.left, top: position.top, width: position.width }}
-                  type="button"
-                >
-                  <span className={styles.nodeTop} />
-                  <span className={styles.nodeBody}>
-                    <span className={styles.nodeTitle}>
-                      <span className={styles.nodeIcon}>
-                        {commit.parents.length > 1 ? (
-                          <GitMerge size={isSelected ? 20 : 16} strokeWidth={2.5} />
-                        ) : (
-                          <GitBranch size={isSelected ? 20 : 15} strokeWidth={2.5} />
-                        )}
-                      </span>
-                      <span style={{ minWidth: 0 }}>
-                        <span className={styles.nodeMessage}>
-                          {commit.message || 'Untitled commit'}
-                        </span>
-                        {isSelected && (
-                          <span className={styles.selectedSubtitle}>
-                            {commit.parents.length > 1
-                              ? 'Merged history revision'
-                              : `Committed to ${commit.branch || 'main'}`}
-                          </span>
-                        )}
-                      </span>
-                    </span>
-                    <span className={styles.nodeMeta}>
-                      <span className={styles.hash}>{shortHash(commit.hash)}</span>
-                      {isSelected && item.diffStats ? (
-                        <span className={styles.stats}>
-                          <span className={styles.statAdded}>+{item.diffStats.addedCount}</span>
-                          <span className={styles.statDivider}>|</span>
-                          <span className={styles.statModified}>
-                            ~{item.diffStats.modifiedCount}
-                          </span>
-                          <span className={styles.statDivider}>|</span>
-                          <span className={styles.statRemoved}>-{item.diffStats.removedCount}</span>
-                        </span>
-                      ) : (
-                        <span
-                          className={`${styles.branchBadge} ${feature ? styles.branchBadgeFeature : ''} ${position.kind === 'root' ? styles.branchBadgeRoot : ''}`}
-                        >
-                          <span className={styles.miniDot} />
-                          {commit.branch || 'main'}
-                        </span>
-                      )}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
           </div>
 
           <div className={styles.toolDock} data-history-chrome="true">
@@ -457,10 +548,7 @@ export function HistoryCanvas({
             <button
               aria-label="Reset canvas view"
               className={styles.toolButton}
-              onClick={() => {
-                setCanvasTool('select');
-                resetView();
-              }}
+              onClick={resetView}
               type="button"
             >
               <PanelsTopLeft size={18} strokeWidth={2.5} />
