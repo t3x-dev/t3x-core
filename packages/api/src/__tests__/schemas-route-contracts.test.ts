@@ -165,11 +165,11 @@ describe('route contract schemas', () => {
         last_test_status: 'ok',
         last_tested_at: null,
         last_test_error: null,
-        api_key_source: 'file',
+        api_key_source: 'database',
         api_key_preview: '…JnYA',
-        env_overrides_stored: false,
+        stored: true,
       })
-    ).toMatchObject({ provider: 'openai' });
+    ).toMatchObject({ provider: 'openai', api_key_source: 'database', stored: true });
 
     expect(
       LocalProviderWriteSchema.parse({
