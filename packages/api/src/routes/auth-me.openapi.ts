@@ -29,28 +29,27 @@ export const authMeRoutes = new OpenAPIHono({
 });
 
 // Request identity is deliberately separate from publicly cacheable deployment capabilities.
-authMeRoutes.openapi(
-  createRoute({
-    method: 'get',
-    path: '/v1/auth/me/capabilities',
-    tags: ['Auth'],
-    summary: 'Get current request administration permissions',
-    responses: {
-      200: {
-        description: 'Current identity permissions',
-        content: {
-          'application/json': {
-            schema: SuccessResponseSchema(z.object({ operator: z.boolean() })),
-          },
+const capabilitiesRoute = createRoute({
+  method: 'get',
+  path: '/v1/auth/me/capabilities',
+  tags: ['Auth'],
+  summary: 'Get current request administration permissions',
+  responses: {
+    200: {
+      description: 'Current identity permissions',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(z.object({ operator: z.boolean() })),
         },
       },
     },
-  }),
-  (c) => {
-    c.header('Cache-Control', 'private, no-store');
-    return c.json({ success: true as const, data: { operator: hasOperatorAccess(c) } });
-  }
-);
+  },
+});
+
+authMeRoutes.openapi(capabilitiesRoute, (c) => {
+  c.header('Cache-Control', 'private, no-store');
+  return c.json({ success: true as const, data: { operator: hasOperatorAccess(c) } });
+});
 
 // ============================================================
 // Schemas
