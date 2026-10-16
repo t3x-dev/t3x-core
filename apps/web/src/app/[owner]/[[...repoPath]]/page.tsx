@@ -22,8 +22,6 @@ function OwnerRepoProjectPageContent() {
   const owner = params.owner;
   const segments = params.repoPath ?? [];
   const name = segments[0] ?? '';
-  const suffix =
-    segments.length > 1 ? `/${segments.slice(1).map(encodeURIComponent).join('/')}` : '';
   const directory = !name;
   const creating = name.toLowerCase() === 'new' && segments.length === 1;
   const organizationSettings =
@@ -31,6 +29,10 @@ function OwnerRepoProjectPageContent() {
   const special = directory || creating || organizationSettings;
   const router = useRouter();
   const pathname = usePathname();
+  // Preserve the URL's encoded suffix: encoding route params again can turn
+  // %3A into %253A on every canonical redirect and prevent the route from settling.
+  const suffixSegments = pathname.split('/').slice(3);
+  const suffix = suffixSegments.length ? `/${suffixSegments.join('/')}` : '';
   const query = useSearchParams().toString();
   const { current, retry } = useRepositoryAddress(owner, name, !special);
   const address = current?.address;

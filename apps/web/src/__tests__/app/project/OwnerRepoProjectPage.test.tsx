@@ -8,11 +8,12 @@ const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
   replace: vi.fn(),
   params: { owner: 'alice', repoPath: ['Repo'] } as { owner: string; repoPath: string[] },
+  pathname: null as string | null,
   query: 'workspace=w&conversation=c&branch=main&pr=9',
 }));
 vi.mock('next/navigation', () => ({
   useParams: () => mocks.params,
-  usePathname: () => `/${mocks.params.owner}/${mocks.params.repoPath.join('/')}`,
+  usePathname: () => mocks.pathname ?? `/${mocks.params.owner}/${mocks.params.repoPath.join('/')}`,
   useSearchParams: () => new URLSearchParams(mocks.query),
   useRouter: () => ({ replace: mocks.replace }),
 }));
@@ -53,6 +54,7 @@ vi.mock('@/components/project/OrganizationSettingsPage', () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.params = { owner: 'alice', repoPath: ['Repo'] };
+  mocks.pathname = null;
   mocks.query = 'workspace=w&conversation=c&branch=main&pr=9';
   window.location.hash = '';
   mocks.resolve.mockResolvedValue({
@@ -119,6 +121,40 @@ it('opens canonical settings and nested changes without bouncing to an ID URL', 
   mocks.params.repoPath = ['Repo', 'settings'];
   render(<OwnerRepoProjectPage />);
   expect(await screen.findByTestId('nested')).toHaveTextContent('proj_outside_list settings');
+  expect(mocks.replace).not.toHaveBeenCalled();
+});
+it.each(['workspace_branch:main', 'workspace_branch%3Amain'])(
+  'keeps the canonical review URL stable when route params contain %s',
+  async (workspaceId) => {
+    mocks.params.repoPath = ['Repo', 'changes', workspaceId, 'rvs_review'];
+    mocks.pathname = '/alice/Repo/changes/workspace_branch%3Amain/rvs_review';
+    const { rerender } = render(<OwnerRepoProjectPage />);
+    expect(await screen.findByTestId('nested')).toHaveTextContent(
+      `changes/${workspaceId}/rvs_review`
+    );
+    expect(mocks.replace).not.toHaveBeenCalled();
+    rerender(<OwnerRepoProjectPage />);
+    expect(mocks.replace).not.toHaveBeenCalled();
+  }
+);
+it('preserves encoded review identifiers across a repository rename and then stops redirecting', async () => {
+  const workspaceId = 'workspace_branch%3Afeature%2F100%25';
+  mocks.params = { owner: 'ALICE', repoPath: ['Old', 'changes', workspaceId, 'rvs_review'] };
+  mocks.pathname = `/ALICE/Old/changes/${workspaceId}/rvs_review`;
+  mocks.query = 'branch=feature%2F100%25&returnTo=%2Falice%2FOld';
+  window.location.hash = '#checks';
+  const { rerender } = render(<OwnerRepoProjectPage />);
+  await waitFor(() =>
+    expect(mocks.replace).toHaveBeenCalledWith(
+      `/alice/Repo/changes/${workspaceId}/rvs_review?${mocks.query}#checks`,
+      { scroll: false }
+    )
+  );
+  mocks.replace.mockClear();
+  mocks.params = { owner: 'alice', repoPath: ['Repo', 'changes', workspaceId, 'rvs_review'] };
+  mocks.pathname = `/alice/Repo/changes/${workspaceId}/rvs_review`;
+  rerender(<OwnerRepoProjectPage />);
+  expect(await screen.findByTestId('nested')).toHaveTextContent(`changes/${workspaceId}/rvs_review`);
   expect(mocks.replace).not.toHaveBeenCalled();
 });
 it('does not guess a page for unsupported suffixes', async () => {
