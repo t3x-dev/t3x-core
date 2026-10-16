@@ -11,6 +11,46 @@ import {
 } from '@t3x-dev/api-client';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
+export async function previewSchemaContentPreparation(
+  projectId: string,
+  workspaceId: string,
+  input: import('@t3x-dev/api-client').SchemaPreparationInput
+) {
+  const { SchemaPreparationPreviewSchema } = await import('@t3x-dev/api-client');
+  return SchemaPreparationPreviewSchema.parse(
+    await handleResponse(
+      await fetchWithTimeout(
+        `${API_V1}/projects/${encodeURIComponent(projectId)}/schema-studio/preparation/${encodeURIComponent(workspaceId)}/preview`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+        }
+      )
+    )
+  );
+}
+
+export async function applySchemaContentPreparation(
+  projectId: string,
+  workspaceId: string,
+  input: import('@t3x-dev/api-client').SchemaPreparationApplyInput
+) {
+  const { SchemaPreparationResultSchema } = await import('@t3x-dev/api-client');
+  return SchemaPreparationResultSchema.parse(
+    await handleResponse(
+      await fetchWithTimeout(
+        `${API_V1}/projects/${encodeURIComponent(projectId)}/schema-studio/preparation/${encodeURIComponent(workspaceId)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+        }
+      )
+    )
+  );
+}
+
 const path = (projectId: string) =>
   `${API_V1}/projects/${encodeURIComponent(projectId)}/schema-studio/candidates`;
 export async function listStudioCandidates(projectId: string) {

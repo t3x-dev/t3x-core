@@ -4,6 +4,10 @@ export type {
   WorkspaceSchemaBindingSourceKind,
 } from './binding';
 export { resolveWorkspaceSchemaBindingMode } from './binding';
+export {
+  compileSchemaContentMigration,
+  type SchemaContentMigrationCommand,
+} from './content-migration';
 export type {
   SaveWorkspaceSchemaEditCandidateInput,
   SaveWorkspaceSchemaEditCandidateResult,

@@ -1,6 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
+import { SchemaContentPreparationDialog } from '@/components/schemas/SchemaContentPreparationDialog';
+import { Button } from '@/components/ui/button';
 import { getProjectIdRepoPath } from '@/domain/project/repoPath';
 import { useWorkspaceSchemaPending } from '@/hooks/schemas/useWorkspaceSchemaPending';
 
@@ -9,6 +12,7 @@ export function WorkspaceSchemaPendingNotice({
   workspaceId,
   revision,
   branch,
+  onPrepared,
 }: {
   projectId: string;
   workspaceId: string;
@@ -16,6 +20,7 @@ export function WorkspaceSchemaPendingNotice({
   branch: string;
   onPrepared?: () => void | Promise<void>;
 }) {
+  const [preparing, setPreparing] = useState(false);
   const pending = useWorkspaceSchemaPending(projectId, workspaceId, revision);
   if (pending.loading || pending.data?.status === 'none') return null;
   const params = new URLSearchParams({
@@ -49,6 +54,13 @@ export function WorkspaceSchemaPendingNotice({
           ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            disabled={pending.data?.status !== 'pending_preparation' || !revision}
+            onClick={() => setPreparing(true)}
+          >
+            Prepare content
+          </Button>
           <Link
             className="rounded border border-[var(--stroke-divider)] px-3 py-2 text-xs"
             href={href}
@@ -57,6 +69,21 @@ export function WorkspaceSchemaPendingNotice({
           </Link>
         </div>
       </div>
+      {preparing && pending.data?.pending && revision ? (
+        <SchemaContentPreparationDialog
+          projectId={projectId}
+          workspaceId={workspaceId}
+          revision={revision}
+          target={{ kind: 'pending', pendingId: pending.data.pending.pendingId }}
+          open={preparing}
+          onOpenChange={setPreparing}
+          onPrepared={async () => {
+            await onPrepared?.();
+            setPreparing(false);
+            pending.refresh();
+          }}
+        />
+      ) : null}
     </aside>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import type { StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
+import type { SchemaPreparationTarget, StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
 import { ArrowRight, Layers } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -28,6 +28,7 @@ import { useBranches } from '@/hooks/shared/useBranches';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import moduleStyles from './AddModulesDialog.module.css';
+import { SchemaContentPreparationDialog } from './SchemaContentPreparationDialog';
 import { SchemaDefinitionWorkbench } from './SchemaDefinitionWorkbench';
 import { SchemaStudioSurface } from './SchemaStudioSurface';
 import { StudioChanges, StudioImpactPreview } from './StudioDefinitionPreview';
@@ -195,6 +196,11 @@ export function SchemaStudioExperience({
     revision: number;
   }>();
   const [review, setReview] = useState<StudioPreview>();
+  const [preparation, setPreparation] = useState<{
+    workspaceId: string;
+    revision: number;
+    target: SchemaPreparationTarget;
+  }>();
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string>();
   const mounted = useRef(true);
@@ -700,6 +706,34 @@ export function SchemaStudioExperience({
                   Cancel
                 </Button>
                 <Button
+                  variant="outline"
+                  disabled={
+                    applying ||
+                    !review.report.valid ||
+                    !review.adoption.allowed ||
+                    review.impact?.status === 'blocked' ||
+                    (hasSchemaEdit && !savedCandidateRef) ||
+                    review.reviewHash !== data?.reviewHash ||
+                    !review.workspace
+                  }
+                  onClick={() => {
+                    if (!review.workspace) return;
+                    setPreparation({
+                      workspaceId: review.workspace.id,
+                      revision: review.workspace.revision,
+                      target: {
+                        kind: 'studio',
+                        candidateIds: [...selection],
+                        reviewHash: review.reviewHash,
+                        ...(savedCandidateRef ? { schemaEditCandidate: savedCandidateRef } : {}),
+                      },
+                    });
+                    setReview(undefined);
+                  }}
+                >
+                  Prepare content & mappings
+                </Button>
+                <Button
                   disabled={
                     applying ||
                     (hasSchemaEdit && !savedCandidateRef) ||
@@ -721,6 +755,22 @@ export function SchemaStudioExperience({
         <Link className="sr-only" href={workspaceLink}>
           Review in Workspace <ArrowRight />
         </Link>
+      ) : null}
+      {preparation ? (
+        <SchemaContentPreparationDialog
+          projectId={projectId}
+          workspaceId={preparation.workspaceId}
+          revision={preparation.revision}
+          target={preparation.target}
+          open
+          onOpenChange={(open) => {
+            if (!open) setPreparation(undefined);
+          }}
+          onPrepared={async () => {
+            await workspaces.refresh();
+            router.push(workspaceLink);
+          }}
+        />
       ) : null}
     </section>
   );

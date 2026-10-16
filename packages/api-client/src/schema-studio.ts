@@ -239,6 +239,79 @@ export const StudioAdoptResultSchema = z.object({
 export type WorkspaceSchemaPending = z.infer<typeof WorkspaceSchemaPendingSchema>;
 export type WorkspaceSchemaPendingView = z.infer<typeof WorkspaceSchemaPendingViewSchema>;
 
+export const SchemaContentMigrationCommandSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('set'), path: z.string().min(1), value: z.json() }).strict(),
+  z.object({ kind: z.literal('append'), path: z.string().min(1), value: z.json() }).strict(),
+  z.object({ kind: z.literal('remove'), path: z.string().min(1) }).strict(),
+  z.object({ kind: z.literal('move'), from: z.string().min(1), to: z.string().min(1) }).strict(),
+  z
+    .object({
+      kind: z.literal('rename_node'),
+      path: z.string().min(1),
+      toKey: z.string().regex(/^[a-z][a-z0-9_]*$/),
+    })
+    .strict(),
+]);
+export const SchemaPreparationTargetSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('pending'), pendingId: digest }).strict(),
+  z
+    .object({
+      kind: z.literal('studio'),
+      candidateIds: ids,
+      reviewHash: digest,
+      schemaEditCandidate: StudioSchemaEditCandidateRefSchema.optional(),
+    })
+    .strict(),
+]);
+export const SchemaPreparationInputSchema = z
+  .object({
+    target: SchemaPreparationTargetSchema,
+    ifRevision: z.number().int().positive(),
+    commands: z.array(SchemaContentMigrationCommandSchema).max(200),
+    confirmedChanges: z.array(z.string().min(1)).max(200).default([]),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const check = StudioSampleValueSchema.safeParse({ commands: value.commands });
+    if (!check.success)
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Migration inputs exceed the supported JSON structure limit.',
+      });
+  });
+export const SchemaPreparationApplyInputSchema = SchemaPreparationInputSchema.safeExtend({
+  previewHash: digest,
+  requestId: z.string().min(1).max(200),
+});
+export const SchemaPreparationPreviewSchema = z.object({
+  previewHash: digest,
+  workspaceRevision: z.number().int().positive(),
+  compositionRevision: z.number().int().nonnegative(),
+  refHead: digest.nullable(),
+  schemaHash: digest,
+  schema: z.record(z.string(), z.unknown()),
+  rootKey: z.string(),
+  before: z.json(),
+  after: z.json(),
+  operations: z.array(z.record(z.string(), z.unknown())),
+  impact: SchemaEvolutionImpactSchema,
+  valid: z.boolean(),
+  ready: z.boolean(),
+  canPrepare: z.boolean(),
+  issues: z.array(z.object({ code: z.string(), path: z.string(), message: z.string() })),
+});
+export const SchemaPreparationResultSchema = z.object({
+  outcome: z.enum(['prepared', 'reused']),
+  workspaceRevision: z.number().int().positive(),
+  compositionRevision: z.number().int().nonnegative(),
+  schemaHash: digest,
+});
+export type SchemaContentMigrationCommand = z.infer<typeof SchemaContentMigrationCommandSchema>;
+export type SchemaPreparationInput = z.infer<typeof SchemaPreparationInputSchema>;
+export type SchemaPreparationApplyInput = z.infer<typeof SchemaPreparationApplyInputSchema>;
+export type SchemaPreparationPreview = z.infer<typeof SchemaPreparationPreviewSchema>;
+export type SchemaPreparationTarget = z.infer<typeof SchemaPreparationTargetSchema>;
+
 export const StudioSchemaEditOriginChannelSchema = z.enum(['studio', 'assistant', 'import', 'api']);
 
 export const SaveStudioSchemaEditCandidateInputSchema = z
