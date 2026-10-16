@@ -67,7 +67,7 @@ export function RepositoryProfileEditor({
       }}
     >
       <DialogTrigger asChild>
-        <Button size="sm" variant="ghost">
+        <Button size="sm" variant="ghost" className="h-7 text-xs text-[var(--text-secondary)]">
           <Pencil aria-hidden="true" className="size-3.5" /> {hasContent ? 'Edit' : 'Add'} {label}
         </Button>
       </DialogTrigger>

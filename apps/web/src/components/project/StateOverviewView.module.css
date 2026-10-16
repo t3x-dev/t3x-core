@@ -59,6 +59,7 @@
   stroke-width: 1.6;
 }
 .projectIdentity {
+  flex: 1;
   min-width: 0;
 }
 .titleLine {
@@ -128,34 +129,27 @@
 }
 .tags {
   display: flex;
+  align-items: center;
   min-width: 0;
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 12px;
 }
-.tags span {
+.tag {
   max-width: 100%;
   white-space: normal;
   overflow-wrap: anywhere;
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
+  min-height: 28px;
   padding: 2px 10px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 500;
-}
-.tags span:nth-child(3n + 1) {
-  background: rgba(240, 128, 60, 0.12);
-  color: #c2570c;
-}
-.tags span:nth-child(3n + 2) {
-  background: #f3efff;
-  color: #6d28d9;
-}
-.tags span:nth-child(3n) {
-  background: #edf2ff;
-  color: #2563eb;
+  line-height: 20px;
+  border-color: var(--stroke-divider);
+  background: var(--surface-panel);
+  color: var(--text-secondary);
 }
 .actions {
   display: flex;
@@ -279,6 +273,46 @@
 .readmeCard {
   min-width: 0;
   max-width: 760px;
+  border-color: var(--stroke-default);
+}
+.readmeHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--stroke-divider);
+}
+.readmeTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 20px;
+}
+.readmeTitle h2 {
+  margin: 0;
+  font: inherit;
+}
+.readmeTitle > svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--text-tertiary);
+}
+.readmeActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.readmeContent {
+  min-width: 0;
+  padding: 24px;
 }
 .cardTitle {
   display: flex;
@@ -295,17 +329,6 @@
 .cardTitle strong {
   font-weight: 650;
 }
-.readmeCard > .cardTitle {
-  margin-bottom: 18px;
-  color: #8b909a;
-  font-size: 12px;
-  letter-spacing: 0.02em;
-}
-.readmeCard > .cardTitle svg {
-  width: 14px;
-  height: 14px;
-}
-.contentsButton,
 .expandButton {
   display: inline-flex;
   align-items: center;
@@ -315,7 +338,6 @@
   font-size: 12px;
   cursor: pointer;
 }
-.contentsButton svg,
 .expandButton svg {
   width: 13px;
   height: 13px;
@@ -328,7 +350,6 @@
   width: 14px;
   height: 14px;
 }
-.contentsButton:hover,
 .expandButton:hover,
 .viewLink:hover,
 .aboutRow a:hover {
@@ -835,6 +856,9 @@
   }
 }
 @media (max-width: 540px) {
+  .readmeContent {
+    padding: 16px;
+  }
   .page {
     padding: 0 16px 24px;
   }

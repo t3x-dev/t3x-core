@@ -22,7 +22,9 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { resourceUrl, StateAuthorReadme } from '@/components/project/StateAuthorReadme';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { StateSemanticReader, StateValueReader } from '@/components/project/StateValueReader';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useStateOverview } from '@/hooks/commits/useStateOverview';
 import type { ApiCommit } from '@/types/api';
 import { RepositoryProfileEditor } from './RepositoryProfileEditor';
@@ -231,13 +233,13 @@ export function StateOverviewView({
           ) : null}
         </p>
         {shownDescription ? <p className={styles.description}>{shownDescription}</p> : null}
-        <fieldset className="min-w-0" aria-label={version ? 'Version tags' : 'Repository tags'}>
+        <fieldset className={styles.tags} aria-label={version ? 'Version tags' : 'Repository tags'}>
           {shownTags.length ? (
-            <div className={styles.tags}>
-              {shownTags.map((tag) => (
-                <span key={tag}>{version || tag.startsWith('#') ? tag : `#${tag}`}</span>
-              ))}
-            </div>
+            shownTags.map((tag) => (
+              <Badge key={tag} variant="outline" className={styles.tag}>
+                {version || tag.startsWith('#') ? tag : `#${tag}`}
+              </Badge>
+            ))
           ) : (
             <p className="text-xs text-[var(--text-tertiary)]">No tags</p>
           )}
@@ -281,68 +283,77 @@ export function StateOverviewView({
         )}
         <div className={expanded ? styles.expanded : styles.columns}>
           {!expanded ? (
-            <section
+            <Card
+              role="region"
               aria-label={version ? 'Version introduction' : 'Repository information'}
-              className={styles.readmeCard}
+              className={`gap-0 py-0 ${styles.readmeCard}`}
             >
-              <div className={styles.cardTitle}>
-                <BookOpen aria-hidden="true" />
-                <strong>{version ? 'Version introduction' : 'README'}</strong>
-                {canEdit ? (
-                  <RepositoryProfileEditor
-                    field="readme"
-                    profile={repositoryProfile}
-                    projectName={projectName}
-                    projectDescription={projectDescription}
-                    onSave={canEdit}
-                  />
+              <CardHeader className={styles.readmeHeader}>
+                <CardTitle className={styles.readmeTitle}>
+                  <BookOpen aria-hidden="true" />
+                  <h2>{version ? 'Version introduction' : 'README'}</h2>
+                </CardTitle>
+                <div className={styles.readmeActions}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    aria-expanded={contentsOpen}
+                    onClick={() => {
+                      if (!contentsOpen) collectHeadings();
+                      setContentsOpen(!contentsOpen);
+                    }}
+                    className="h-7 text-xs text-[var(--text-secondary)]"
+                  >
+                    <List aria-hidden="true" className="size-3.5" /> Contents
+                  </Button>
+                  {canEdit ? (
+                    <RepositoryProfileEditor
+                      field="readme"
+                      profile={repositoryProfile}
+                      projectName={projectName}
+                      projectDescription={projectDescription}
+                      onSave={canEdit}
+                    />
+                  ) : null}
+                </div>
+              </CardHeader>
+              <CardContent className={styles.readmeContent}>
+                {contentsOpen ? (
+                  <nav aria-label="README contents" className={styles.contents}>
+                    {readmeHeadings.map((heading, index) => (
+                      <button
+                        key={`${index}:${heading}`}
+                        type="button"
+                        onClick={() => {
+                          setContentsOpen(false);
+                          readmeRef.current
+                            ?.querySelectorAll('h1, h2, h3')
+                            [index]?.scrollIntoView({ block: 'start' });
+                        }}
+                      >
+                        {heading}
+                        <ChevronRight aria-hidden="true" />
+                      </button>
+                    ))}
+                    {!readmeHeadings.length ? <span>No README headings</span> : null}
+                  </nav>
                 ) : null}
-                <button
-                  type="button"
-                  aria-expanded={contentsOpen}
-                  onClick={() => {
-                    if (!contentsOpen) collectHeadings();
-                    setContentsOpen(!contentsOpen);
-                  }}
-                  className={styles.contentsButton}
-                >
-                  <List aria-hidden="true" /> Contents
-                </button>
-              </div>
-              {contentsOpen ? (
-                <nav aria-label="README contents" className={styles.contents}>
-                  {readmeHeadings.map((heading, index) => (
-                    <button
-                      key={`${index}:${heading}`}
-                      type="button"
-                      onClick={() => {
-                        setContentsOpen(false);
-                        readmeRef.current
-                          ?.querySelectorAll('h1, h2, h3')
-                          [index]?.scrollIntoView({ block: 'start' });
-                      }}
-                    >
-                      {heading}
-                      <ChevronRight aria-hidden="true" />
-                    </button>
-                  ))}
-                  {!readmeHeadings.length ? <span>No README headings</span> : null}
-                </nav>
-              ) : null}
-              <div className={styles.readmeBody} ref={readmeRef}>
-                {version ? (
-                  <StateAuthorReadme author={author} compact embedded />
-                ) : (
-                  <StateAuthorReadme
-                    author={{ readme: repositoryProfile.readme, resources: [] }}
-                    label="Repository README"
-                    emptyMessage="No README added yet."
-                    showUnavailableImages
-                    embedded
-                  />
-                )}
-              </div>
-            </section>
+                <div className={styles.readmeBody} ref={readmeRef}>
+                  {version ? (
+                    <StateAuthorReadme author={author} compact embedded />
+                  ) : (
+                    <StateAuthorReadme
+                      author={{ readme: repositoryProfile.readme, resources: [] }}
+                      label="Repository README"
+                      emptyMessage="No README added yet."
+                      showUnavailableImages
+                      embedded
+                    />
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           ) : null}
 
           <aside aria-label="T3X rendered State" className={styles.sideColumn}>
