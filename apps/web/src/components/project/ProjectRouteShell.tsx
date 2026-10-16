@@ -85,13 +85,14 @@ export function ProjectRouteShell({
 
   // Keep the known repository header while refreshing its details. Redirects
   // still use the freshly resolved project above, rather than a cached address.
-  const project = resolvedProject ?? storedProject ?? {
-    id: projectId,
-    name: fallbackProjectName,
-    description: 'Structured state repository',
-    status: 'active' as const,
-    visibility: 'private' as const,
-  };
+  const project = resolvedProject ??
+    storedProject ?? {
+      id: projectId,
+      name: fallbackProjectName,
+      description: 'Structured state repository',
+      status: 'active' as const,
+      visibility: 'private' as const,
+    };
 
   return (
     <ProjectShell
