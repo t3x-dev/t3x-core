@@ -2,8 +2,10 @@ import { createStatePresentation } from '@t3x-dev/application';
 import { createYOpsState } from '@t3x-dev/core';
 import {
   type AnyDB,
+  createMaterial,
   ensureMainBranch,
   findProjectById,
+  findWorkspaceDraft,
   insertProject,
   insertStatePresentation,
   listProjectYSchemaVersionHistory,
@@ -13,6 +15,7 @@ import {
   builtInPrdCoreArtifact,
   compileYSchemaComposition,
   sha256CompositionValue,
+  t3xPrdP0Fixtures,
 } from '@t3x-dev/yschema';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -92,11 +95,26 @@ beforeAll(async () => {
     document: presentation.document,
     createdBy: 'fixture',
   });
+  const material = await createMaterial(db, {
+    project_id: projectId,
+    source_type: 'paste',
+    content_text: JSON.stringify(t3xPrdP0Fixtures.validCandidateTree),
+    content_hash: await sha256CompositionValue(t3xPrdP0Fixtures.validCandidateTree),
+  });
   await upsertWorkspaceDraft(db, {
     project_id: projectId,
     workspace_id: 'studio',
     title: 'Studio',
-    workspace_state: { schemaComposition: composition },
+    workspace_state: {
+      schemaComposition: composition,
+      schemaCandidate: {
+        fields: Object.entries(t3xPrdP0Fixtures.validCandidateTree).map(([path, value]) => ({
+          path,
+          value,
+        })),
+      },
+      sourceBundle: [{ materialId: material.id, contentHash: material.content_hash }],
+    },
   });
   compositionHash = (
     await compileYSchemaComposition({ composition, core: builtInPrdCoreArtifact, modules: [] })
@@ -125,7 +143,7 @@ const publish = (body: unknown, target = app) =>
   });
 it('pins a verified introduction in the immutable release hash and catalog reference', async () => {
   const response = await publish(input());
-  expect(response.status).toBe(200);
+  expect(response.status, await response.clone().text()).toBe(200);
   const manifest = (await response.json()).data;
   expect(manifest.registry.presentationRef).toEqual({ projectId, ...reference() });
   const versions = await listProjectYSchemaVersionHistory(db, { project_id: projectId });
@@ -323,12 +341,18 @@ it('does not expose a private introduction reference through public or another p
 });
 
 it('also pins the introduction in an open v2 Blueprint release', async () => {
+  const prepared = await findWorkspaceDraft(db, projectId, 'studio');
   await upsertWorkspaceDraft(db, {
     project_id: projectId,
     workspace_id: 'studio-v2',
     target_branch: 'studio-v2',
     title: 'Open Studio',
-    workspace_state: { targetBranch: 'studio-v2', title: 'Open Studio' },
+    workspace_state: {
+      targetBranch: 'studio-v2',
+      title: 'Open Studio',
+      schemaCandidate: prepared!.workspace_state!.schemaCandidate,
+      sourceBundle: prepared!.workspace_state!.sourceBundle,
+    },
   });
   const base = `/v1/projects/${projectId}/workspaces/studio-v2/schema-composition`;
   const saved = await app.request(base, {

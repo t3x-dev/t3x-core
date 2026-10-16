@@ -2,7 +2,9 @@ import { currentComposition } from '@t3x-dev/application';
 import type { ApiKey } from '@t3x-dev/core';
 import {
   type AnyDB,
+  createMaterial,
   findWorkspaceDraft,
+  findYSchemaArtifactVersion,
   findYSchemaCompositionSnapshot,
   getLatestTransitionReviewSnapshot,
   getTransitionRefHead,
@@ -416,6 +418,148 @@ it('SE-011 freezes complete schema/content, commits exact Schema Hash, and uses 
   expect(
     graph.observations.some(({ statement }) => JSON.stringify(statement).includes(targetHash))
   ).toBe(true);
+});
+
+it('edits an existing strict Schema through guarded YOps, adopts, prepares evidenced content, reviews, commits, publishes and reloads the exact release', async () => {
+  const id = 'schema-edit-publish-e2e';
+  await seed(id);
+  const strictBase = normalizeYSchemaObject({
+    ...baseSchema,
+    name: 'test/strict-base',
+    version: '1.0.0',
+    strict: true,
+  });
+  const candidateId = await addSchema('strict-base-e2e', strictBase);
+  const material = await createMaterial(db, {
+    project_id: projectId,
+    source_type: 'paste',
+    content_text: 'Edited content. Confirmed advantage.',
+    content_hash: `sha256:${'a'.repeat(64)}`,
+  });
+  await transactWorkspaceAuthoring(
+    db,
+    { projectId, workspaceId: id, refName: id },
+    async (_tx, draft) => ({
+      workspace: {
+        ...draft.workspace_state,
+        sourceBundle: [{ materialId: material.id, contentHash: material.content_hash }],
+      },
+      value: null,
+    })
+  );
+  const definition = normalizeYSchemaObject({
+    ...strictBase,
+    nodes: {
+      ...strictBase.nodes,
+      requirements: { slots: { title: { type: 'string', minLength: 1 } } },
+      advantage: { slots: { title: { type: 'string', provenanceRequired: true } } },
+    },
+  });
+  const save = await app.request(`/v1/projects/${projectId}/schema-studio/edit-candidates/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      workspaceId: id,
+      candidateIds: [candidateId],
+      ifRevision: 0,
+      retryKey: 'edit-strict-base',
+      intent: 'Constrain existing title and add evidenced advantage',
+      origin: 'studio',
+      localContribution: {},
+      schemaDefinition: definition,
+      baseSchemaHash: await sha256CompositionValue(strictBase),
+    }),
+  });
+  expect(save.status).toBe(200);
+  const saved = (await save.json()).data.candidate;
+  expect(saved.authoringDraft.base.kind).toBe('published_schema');
+  expect(saved.authoringDraft.effect.operations[0]).toHaveProperty('assert');
+  const candidateRef = { candidateId: saved.candidateId, revision: saved.revision };
+  const previewInput = {
+    workspaceId: id,
+    candidateIds: [candidateId],
+    schemaEditCandidate: candidateRef,
+  };
+  let preview = (await (await studio('preview', previewInput)).json()).data;
+  expect(preview.schema).toEqual(definition);
+  expect(preview.schema.strict).toBe(true);
+  const beforeAdopt = await findWorkspaceDraft(db, projectId, id);
+  const adoptedResponse = await studio('apply', {
+    ...previewInput,
+    ifRevision: preview.workspace.revision,
+    reviewHash: preview.reviewHash,
+  });
+  expect(adoptedResponse.status).toBe(200);
+  const adopted = (await adoptedResponse.json()).data;
+  expect((await findWorkspaceDraft(db, projectId, id))!.workspace_state.schemaBindings).toEqual(
+    beforeAdopt!.workspace_state.schemaBindings
+  );
+  const migration = {
+    target: { kind: 'pending', pendingId: adopted.pending.pendingId },
+    ifRevision: adopted.workspaceRevision,
+    commands: [
+      { kind: 'set', path: 'candidate/advantage', value: { title: 'Confirmed advantage' } },
+    ],
+    confirmedChanges: [],
+  };
+  const migrationResponse = await post(`${preparationPath(id)}/preview`, migration);
+  expect(migrationResponse.status).toBe(200);
+  const checked = (await migrationResponse.json()).data;
+  expect(checked.issues).toEqual([]);
+  expect(checked.canPrepare).toBe(true);
+  expect(
+    (
+      await post(preparationPath(id), {
+        ...migration,
+        previewHash: checked.previewHash,
+        requestId: 'prepare-effect-e2e',
+      })
+    ).status
+  ).toBe(200);
+  const reviewed = await fullReview(id);
+  expect(reviewed.schemaReview.draft.schemaHash).toBe(saved.authoringDraft.resultSchemaHash);
+  const committed = await fullDecision(id, reviewed);
+  expect(committed.commit).toBeDefined();
+  preview = (await (await studio('preview', previewInput)).json()).data;
+  const publishInput = {
+    candidateIds: [candidateId],
+    schemaEditCandidate: candidateRef,
+    ifRevision: preview.workspace.revision,
+    reviewHash: preview.reviewHash,
+    canonicalName: `projects/${projectId}/derived-e2e`,
+    version: '1.0.0',
+    title: 'Derived end-to-end Schema',
+    description: '',
+    tags: [],
+    releaseNotes: '',
+  };
+  const publication = await studio(`publish/${id}`, publishInput);
+  expect(publication.status).toBe(200);
+  const release = (await publication.json()).data;
+  const stored = await findYSchemaArtifactVersion(db, {
+    canonical_name: publishInput.canonicalName,
+    version: '1.0.0',
+    project_id: projectId,
+  });
+  expect(stored!.manifest.schema).toMatchObject({ strict: true, nodes: definition.nodes });
+  expect(stored!.manifest.blueprint).toMatchObject({ authoringDraft: saved.authoringDraft });
+  const catalog = await app.request(
+    `/v1/projects/${projectId}/yschema/catalog?${new URLSearchParams({ canonical_name: publishInput.canonicalName })}`
+  );
+  expect(catalog.status).toBe(200);
+  expect((await catalog.json()).data.items[0].release.hash).toBe(release.source.hash);
+  const reading = await app.request(
+    `/v1/projects/${projectId}/schema-studio/source?${new URLSearchParams({ sourceProjectId: projectId, canonicalName: publishInput.canonicalName, version: '1.0.0', expectedHash: release.source.hash })}`
+  );
+  expect(reading.status).toBe(200);
+  expect((await reading.json()).data.manifest).toEqual(stored!.manifest);
+  // The original published Base was never modified.
+  const original = await findYSchemaArtifactVersion(db, {
+    canonical_name: 'test/strict-base-e2e',
+    version: '1.0.0',
+    project_id: sourceId,
+  });
+  expect(original!.manifest.schema).toEqual(strictBase);
 });
 it('SE-011 Reject records an immutable decision without changing Workspace or ref head', async () => {
   const id = 'full-review-reject';

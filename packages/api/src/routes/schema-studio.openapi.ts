@@ -45,6 +45,7 @@ import {
 import { ensureBuiltInYSchemaArtifacts } from '../lib/yschema-artifact-registry';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import { schemaPreparationRoutes } from './schema-preparation.openapi';
+import { schemaPublishRoutes } from './schema-publish.openapi';
 
 const params = z.object({ projectId: z.string().min(1) });
 const errors = {
@@ -175,6 +176,7 @@ const saveSchemaEditCandidateRoute = createRoute({
 });
 export const schemaStudioRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 schemaStudioRoutes.route('/', schemaPreparationRoutes);
+schemaStudioRoutes.route('/', schemaPublishRoutes);
 schemaStudioRoutes.openapi(readSourceRoute, async (c) => {
   const db = await getDB();
   const { projectId } = c.req.valid('param');

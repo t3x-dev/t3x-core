@@ -2032,6 +2032,48 @@
       "rationale": "Project edit authority and server-selected Transition policy with exact-head CAS."
     },
     {
+      "source": "schema-publish.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/schema-studio/publish/{workspaceId}",
+      "policy": "project",
+      "rationale": "Requires target edit and source redistribution authority; freezes the exact saved and reviewed candidate as a private immutable Schema without changing Workspace state."
+    },
+    {
+      "source": "schema-studio.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/schema-studio/edit-candidates/{workspaceId}",
+      "policy": "project",
+      "rationale": "Project read authority recovers only the scoped saved edit candidate."
+    },
+    {
+      "source": "schema-studio.openapi.ts",
+      "method": "PUT",
+      "path": "/v1/projects/{projectId}/schema-studio/edit-candidates/{workspaceId}",
+      "policy": "project",
+      "rationale": "Project edit authority and Workspace revision guard protect candidate persistence."
+    },
+    {
+      "source": "schema-studio.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/schema-studio/pending/{workspaceId}",
+      "policy": "project",
+      "rationale": "Project read authority reports the scoped pending Schema and live freshness checks."
+    },
+    {
+      "source": "schema-preparation.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/schema-studio/preparation/{workspaceId}/preview",
+      "policy": "project",
+      "rationale": "Project read and Transition inspect authority guard read-only content migration preview."
+    },
+    {
+      "source": "schema-preparation.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/schema-studio/preparation/{workspaceId}",
+      "policy": "project",
+      "rationale": "Project edit and Transition propose authority guard atomic Schema and content preparation."
+    },
+    {
       "source": "schema-studio.openapi.ts",
       "method": "GET",
       "path": "/v1/projects/{projectId}/schema-studio/candidates",

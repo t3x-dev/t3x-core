@@ -32,6 +32,7 @@ import { SchemaContentPreparationDialog } from './SchemaContentPreparationDialog
 import { SchemaDefinitionWorkbench } from './SchemaDefinitionWorkbench';
 import { SchemaStudioSurface } from './SchemaStudioSurface';
 import { StudioChanges, StudioImpactPreview } from './StudioDefinitionPreview';
+import { StudioPublishDialog } from './StudioPublishDialog';
 
 type ModuleTone = 'blue' | 'purple' | 'orange' | 'green' | 'rose' | 'slate' | 'amber';
 
@@ -201,6 +202,7 @@ export function SchemaStudioExperience({
     revision: number;
   }>();
   const [review, setReview] = useState<StudioPreview>();
+  const [publishReview, setPublishReview] = useState<StudioPreview>();
   const [preparation, setPreparation] = useState<{
     workspaceId: string;
     revision: number;
@@ -406,6 +408,10 @@ export function SchemaStudioExperience({
     setReview(undefined);
     setError(undefined);
   }, [candidateSelectionKey, workspaceId, data?.reviewHash]);
+
+  useEffect(() => {
+    setPublishReview(undefined);
+  }, [candidateSelectionKey, workspaceId]);
 
   const liveSources = useMemo<StudioSource[]>(() => {
     if (!candidates.items.length) return [];
@@ -784,9 +790,26 @@ export function SchemaStudioExperience({
                   <p className="mt-2 break-all font-mono">{review.schemaHash}</p>
                 </details>
               </div>
-              <div className="flex shrink-0 justify-end gap-3 border-t border-[var(--stroke-divider)] pt-3">
+              <div className="flex shrink-0 flex-wrap justify-end gap-3 border-t border-[var(--stroke-divider)] pt-3">
                 <Button disabled={applying} onClick={() => setReview(undefined)} variant="outline">
                   Cancel
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={
+                    applying ||
+                    !savedCandidateRef ||
+                    !review.impact?.canPublish ||
+                    !review.report.valid ||
+                    !review.adoption.allowed ||
+                    review.reviewHash !== data?.reviewHash
+                  }
+                  onClick={() => {
+                    setPublishReview(review);
+                    setReview(undefined);
+                  }}
+                >
+                  Publish private Schema
                 </Button>
                 <Button
                   variant="outline"
@@ -852,6 +875,19 @@ export function SchemaStudioExperience({
           onPrepared={async () => {
             await workspaces.refresh();
             router.push(workspaceLink);
+          }}
+        />
+      ) : null}
+      {publishReview && publishReview.workspace?.id === workspaceId ? (
+        <StudioPublishDialog
+          key={`${workspaceId}:${publishReview.reviewHash}`}
+          projectId={projectId}
+          workspaceId={workspaceId}
+          candidateIds={[...selection]}
+          preview={publishReview}
+          currentReviewHash={data?.reviewHash}
+          onOpenChange={(open) => {
+            if (!open) setPublishReview(undefined);
           }}
         />
       ) : null}

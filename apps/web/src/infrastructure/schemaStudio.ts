@@ -11,6 +11,26 @@ import {
 } from '@t3x-dev/api-client';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
+export async function publishStudioSchema(
+  projectId: string,
+  workspaceId: string,
+  input: import('@t3x-dev/api-client').StudioPublishInput
+) {
+  const { StudioPublishResultSchema } = await import('@t3x-dev/api-client');
+  return StudioPublishResultSchema.parse(
+    await handleResponse(
+      await fetchWithTimeout(
+        `${API_V1}/projects/${encodeURIComponent(projectId)}/schema-studio/publish/${encodeURIComponent(workspaceId)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+        }
+      )
+    )
+  );
+}
+
 export async function previewSchemaContentPreparation(
   projectId: string,
   workspaceId: string,

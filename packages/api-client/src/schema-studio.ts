@@ -217,6 +217,35 @@ export type StudioPreview = z.infer<typeof StudioPreviewSchema>;
 export type StudioPreviewInput = z.infer<typeof StudioPreviewInputSchema>;
 export type StudioApplyInput = z.infer<typeof StudioApplyInputSchema>;
 
+/** Publish a saved, checked Studio candidate as a private immutable Schema, never a Module. */
+export const StudioPublishInputSchema = z
+  .object({
+    candidateIds: ids,
+    schemaEditCandidate: StudioSchemaEditCandidateRefSchema,
+    ifRevision: z.number().int().positive(),
+    reviewHash: digest,
+    canonicalName: z
+      .string()
+      .trim()
+      .min(3)
+      .max(160)
+      .regex(/^[a-z0-9][a-z0-9._/-]*[a-z0-9]$/),
+    version: z.string().regex(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$/),
+    title: z.string().trim().min(1).max(80),
+    description: z.string().trim().max(500).default(''),
+    releaseNotes: z.string().trim().max(1000).default(''),
+    tags: z.array(z.string().trim().min(1).max(80)).max(40).default([]),
+  })
+  .strict();
+export const StudioPublishResultSchema = z.object({
+  source: StudioSourceSchema,
+  schemaHash: digest,
+  kind: z.literal('schema'),
+  visibility: z.literal('private'),
+});
+export type StudioPublishInput = z.infer<typeof StudioPublishInputSchema>;
+export type StudioPublishResult = z.infer<typeof StudioPublishResultSchema>;
+
 export const WorkspaceSchemaPendingSchema = z
   .object({
     schema: z.literal('t3x.dev/workspace-schema-pending/v1'),

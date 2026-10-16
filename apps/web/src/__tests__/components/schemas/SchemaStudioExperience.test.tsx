@@ -7,6 +7,7 @@ import { SchemaStudioExperience } from '@/components/schemas/SchemaStudioExperie
 
 const mocks = vi.hoisted(() => ({
   apply: vi.fn(),
+  publish: vi.fn(),
   data: undefined as unknown,
   pendingSchema: { status: 'none', pending: null } as unknown,
   query: 'candidate=provider',
@@ -70,6 +71,9 @@ vi.mock('@/hooks/schemas/useStudioPreview', () => ({
     return { data: mocks.data, loading: false, refresh: vi.fn() };
   },
 }));
+vi.mock('@/hooks/schemas/usePublishStudioSchema', () => ({
+  usePublishStudioSchema: () => mocks.publish,
+}));
 vi.mock('@/hooks/schemas/useStudioSchemaEditCandidate', () => ({
   useStudioSchemaEditCandidate: () => ({
     candidate: mocks.schemaEditCandidate,
@@ -88,6 +92,7 @@ vi.mock('@/hooks/schemas/useWorkspaceSchemaPending', () => ({
 beforeEach(() => {
   mocks.query = 'candidate=provider';
   mocks.apply.mockReset();
+  mocks.publish.mockReset();
   mocks.push.mockReset();
   mocks.refresh.mockReset();
   mocks.saveDraft.mockReset();
@@ -466,6 +471,57 @@ it('shows unsafe content impact while preventing confirmation, then discards a s
   rerender(<SchemaStudioExperience projectId="p" />);
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(mocks.apply).not.toHaveBeenCalled();
+});
+
+it('opens private publication from the checked saved candidate without applying or navigating the Workspace', async () => {
+  mocks.query = 'workspace=workspace_branch%3Amain&candidate=provider';
+  mocks.workspaces = [
+    {
+      id: 'workspace_branch:main',
+      revision: 3,
+      status: 'draft',
+      targetBranch: 'main',
+      title: 'Main workspace',
+    },
+  ];
+  mocks.schemaEditCandidate = {
+    candidateId: 'saved-local',
+    revision: 3,
+    localContribution: { nodes: {} },
+    origin: { channel: 'studio' },
+  };
+  mocks.data = {
+    samples: [],
+    schema: { nodes: {} },
+    schemaHash: `sha256:${'a'.repeat(64)}`,
+    reviewHash: `sha256:${'b'.repeat(64)}`,
+    renderPlan: [],
+    origins: {},
+    sources: [],
+    modules: [],
+    report: { valid: true, issues: [] },
+    impact: {
+      status: 'safe',
+      canAdopt: true,
+      canPublish: true,
+      items: [],
+      content: { source: 'candidate_fields', valid: true, ready: true, issues: [] },
+    },
+    adoption: { allowed: true },
+    workspace: { id: 'workspace_branch:main', revision: 3, changes: [] },
+    freshness: { candidateId: 'saved-local', candidateRevision: 3 },
+  };
+  render(<SchemaStudioExperience projectId="p" />);
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Review changes' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Publish private Schema' }));
+  expect(screen.getByRole('dialog', { name: 'Publish private Schema' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Publish private version' })).toBeEnabled();
+  expect(mocks.apply).not.toHaveBeenCalled();
+  expect(mocks.publish).not.toHaveBeenCalled();
+  expect(mocks.push).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 });
 
 it('saves a main branch workspace when none is persisted', async () => {
