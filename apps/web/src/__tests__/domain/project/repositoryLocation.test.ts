@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+import { getProjectTabSegment, PROJECT_TABS } from '@/components/project/projectTabModel';
 import {
   isSupportedRepositorySuffix,
   repositoryLocation,
@@ -22,7 +23,18 @@ it('keeps page context while collapsing historical/case/ID addresses in one step
     '#diff'
   );
   expect(location).toBe('/team/Repo/changes/ws/snapshot?branch=main&returnTo=%2Fteam%2FOld#diff');
-  expect(repositoryLocation('/team/Repo', '/reviews', 'pr=42')).toBe('/team/Repo/reviews?pr=42');
+  expect(repositoryLocation('/team/Repo', '/pull-requests', 'pr=42')).toBe(
+    '/team/Repo/pull-requests?pr=42'
+  );
+});
+
+it.each(PROJECT_TABS)('accepts the public route generated for $label', ({ id }) => {
+  const segment = getProjectTabSegment(id);
+  expect(isSupportedRepositorySuffix(`/${segment}`)).toBe(true);
+  expect(isSupportedRepositorySuffix(`/${segment}/`)).toBe(true);
+  expect(repositoryLocation('/team/Repo', '', `tab=${segment}&branch=main&pr=42`, '#details')).toBe(
+    `/team/Repo${id === 'state' ? '' : `/${segment}`}?branch=main&pr=42#details`
+  );
 });
 
 it('only migrates explicitly supported nested routes', () => {
@@ -41,7 +53,9 @@ it('only migrates explicitly supported nested routes', () => {
     '/settings/unknown',
     '/commit/legacy',
     '/draft/d',
+    '/reviews',
     '/reviews/extra',
+    '/pull-requests/extra',
     '/unknown',
   ])
     expect(isSupportedRepositorySuffix(suffix)).toBe(false);
