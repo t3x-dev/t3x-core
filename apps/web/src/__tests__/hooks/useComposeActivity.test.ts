@@ -5,10 +5,52 @@ import { composeDraftChangeCards } from '@/domain/workspaces/composeDraftChanges
 import { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
-const { read } = vi.hoisted(() => ({ read: vi.fn() }));
+const { read, reconcile } = vi.hoisted(() => ({ read: vi.fn(), reconcile: vi.fn() }));
 vi.mock('@/infrastructure/sharedApiClient', () => ({
-  getSharedApiClient: () => ({ workspaces: { authoring: { read } } }),
+  getSharedApiClient: () => ({ workspaces: { authoring: { read, reconcile } } }),
 }));
+
+it('syncs using fresh preconditions and preserves the visible Draft if reconciliation conflicts', async () => {
+  read.mockReset();
+  reconcile.mockReset();
+  const old = {
+    actions: [],
+    netDiff: [],
+    selected: null,
+    nextBeforeSequence: null,
+    workspaceRevision: 2,
+    compositionRevision: 0,
+    synchronization: { required: true, currentRefHead: 'head-b' },
+  };
+  read.mockResolvedValue(old);
+  const candidate = { id: 'ws', projectId: 'p', revision: 1 } as WorkspaceCandidate;
+  const { result, unmount } = renderHook(() => useComposeActivity(candidate, true));
+  await waitFor(() => expect(result.current.view).toEqual(old));
+  reconcile.mockRejectedValueOnce(new Error('Overlapping changes'));
+  await act(async () => {
+    expect(await result.current.reconcile()).toBe(false);
+  });
+  expect(result.current.view).toEqual(old);
+  expect(result.current.reconciliationError).toBe('Overlapping changes');
+  const next = {
+    ...old,
+    workspaceRevision: 3,
+    synchronization: { required: false, currentRefHead: 'head-b' },
+  };
+  reconcile.mockImplementationOnce(async () => {
+    read.mockResolvedValue(next);
+  });
+  await act(async () => {
+    expect(await result.current.reconcile()).toBe(true);
+  });
+  expect(reconcile).toHaveBeenLastCalledWith(
+    'p',
+    'ws',
+    expect.objectContaining({ expected_workspace_revision: 2, expected_ref_head: 'head-b' })
+  );
+  expect(result.current.view).toEqual(next);
+  unmount();
+});
 
 it('retains the visible projection during revision refreshes and resets on workspace switches', async () => {
   const first = {
@@ -44,6 +86,37 @@ it('retains the visible projection during revision refreshes and resets on works
   rerender({ workspace: { ...candidate, id: 'ws-b' } });
   expect(result.current.view).toBeNull();
   unmount();
+});
+
+it('detects branch-head changes even when the composition revision stays at zero', async () => {
+  read.mockReset();
+  const interval = vi.spyOn(window, 'setInterval');
+  const first = {
+    actions: [],
+    netDiff: [],
+    selected: null,
+    nextBeforeSequence: null,
+    workspaceRevision: 1,
+    compositionRevision: 0,
+    synchronization: { currentRefHead: 'a', required: false },
+  };
+  read.mockResolvedValue(first);
+  const candidate = { id: 'ws', projectId: 'p', revision: 1 } as WorkspaceCandidate;
+  const { result, unmount } = renderHook(() => useComposeActivity(candidate, true));
+  try {
+    await waitFor(() => expect(result.current.view).toEqual(first));
+    const poll = interval.mock.calls.find(([, delay]) => delay === 5000)?.[0] as () => void;
+    const next = { ...first, synchronization: { currentRefHead: 'b', required: true } };
+    read.mockResolvedValue(next);
+    await act(async () => {
+      poll?.();
+    });
+    expect(result.current.newActivity).toEqual(next);
+    expect(result.current.view).toEqual(first);
+  } finally {
+    unmount();
+    interval.mockRestore();
+  }
 });
 
 it('keeps the selected field path when a historical action expands into several fields', async () => {

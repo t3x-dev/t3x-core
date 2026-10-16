@@ -275,6 +275,10 @@ export async function readWorkspaceAuthoring(
 ) {
   const draft = await requireWorkspace(db, input.projectId, input.workspaceId);
   const { ledger, basis } = workspaceAuthoringState(draft.workspace_state!);
+  const head = await getTransitionRefHead(db, {
+    projectId: input.projectId,
+    refName: basis.refName,
+  });
   const limit = Math.min(100, Math.max(1, input.limit ?? 20));
   const actions = listDraftActions(ledger)
     .filter((a) => input.beforeSequence === undefined || a.sequence < input.beforeSequence)
@@ -292,6 +296,7 @@ export async function readWorkspaceAuthoring(
     workspaceRevision: draft.revision,
     compositionRevision: ledger.compositionRevision,
     basis: { refName: basis.refName, refHead: basis.refHead, baseDigest: basis.baseDigest },
+    synchronization: { currentRefHead: head.head, required: head.head !== basis.refHead },
     sources: (Array.isArray(draft.workspace_state?.sourceBundle)
       ? draft.workspace_state.sourceBundle
       : []
@@ -381,6 +386,9 @@ export function buildAuthoringPreparation(workspace: Record<string, unknown>) {
     ledger,
     basis,
     bindings: buildAuthoringEffect(ledger).bindings,
+    ...(Array.isArray(workspace.authoringReconciliations)
+      ? { reconciliations: workspace.authoringReconciliations }
+      : {}),
   };
 }
 
@@ -404,6 +412,14 @@ export async function findRetiredAuthoringLedger(
     ? (workspace.authoringHistory as WorkspaceAuthoringHistoryEntry[])
     : [];
   const canonicalBasis = canonicalizeProtocolValue(JSON.parse(JSON.stringify(basis ?? null)));
+  const reconciliations = (workspace.authoringReconciliations ?? []) as Array<{
+    basis: unknown;
+    ledger: unknown;
+  }>;
+  const archived = reconciliations.find(
+    (entry) => canonicalizeProtocolValue(JSON.parse(JSON.stringify(entry.basis))) === canonicalBasis
+  );
+  if (archived) return parseDraftActionLedger(archived.ledger);
   const entry = history.find(
     (item) => canonicalizeProtocolValue(JSON.parse(JSON.stringify(item.basis))) === canonicalBasis
   );

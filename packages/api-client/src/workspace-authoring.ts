@@ -32,6 +32,7 @@ export interface WorkspaceAuthoringView {
   workspaceRevision: number;
   compositionRevision: number;
   basis: { refName: string; refHead: string | null; baseDigest: string };
+  synchronization?: { currentRefHead: string | null; required: boolean };
   sources?: Array<{
     id: string;
     title?: string;
@@ -106,6 +107,11 @@ export interface WorkspaceAuthoringOutcome {
   receipt?: { actionId: string; outcome: 'no_change'; message: string };
 }
 export interface WorkspaceAuthoringCapability {
+  reconcile(
+    projectId: string,
+    workspaceId: string,
+    input: Omit<InitializeWorkspaceAuthoringInput, 'legacy_document'>
+  ): Promise<{ kind: 'reconciled' | 'reused' | 'no_change'; workspaceRevision: number }>;
   prepareReview(
     projectId: string,
     workspaceId: string,

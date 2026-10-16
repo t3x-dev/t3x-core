@@ -101,6 +101,7 @@ import { composeDraftChangeCards } from '@/domain/workspaces/composeDraftChanges
 import { composeValuesEqual } from '@/domain/workspaces/composeObjectChanges';
 import { type DraftYOp, nextAuthoringRequestId } from '@/domain/workspaces/draftStructure';
 import {
+  assertStagedEditsCurrent,
   MANUAL_STAGING_EVENT_ID,
   type ManualStagingControls,
   previewStagedCurrent,
@@ -209,6 +210,7 @@ export function WorkspaceComposeReviewSurface({
   );
   // Compose publication and Review must observe the same current Draft projection.
   const activity = useComposeActivity(controller.candidate, authoringBootstrap.active);
+  const syncRequired = (activity.newActivity ?? activity.view)?.synchronization?.required;
 
   const writeWorkspaceSurfaceUrl = useCallback(
     (nextMode: WorkspaceSurfaceMode, nextPane?: ReviewPane) => {
@@ -267,6 +269,30 @@ export function WorkspaceComposeReviewSurface({
         composeStyles.workspaceTheme
       )}
     >
+      {syncRequired ? (
+        <div
+          aria-live="polite"
+          className="border-b border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] px-4 py-3 text-sm text-[var(--text-primary)]"
+        >
+          <p>
+            The branch has new commits. Sync this Workspace to continue editing. Saved edits and
+            history will be preserved.
+          </p>
+          <button
+            type="button"
+            className="mt-2 rounded border px-3 py-1 font-medium"
+            disabled={activity.reconciling}
+            onClick={() => void activity.reconcile()}
+          >
+            {activity.reconciling ? 'Syncing…' : 'Sync latest branch'}
+          </button>
+          {activity.reconciliationError ? (
+            <p role="alert" className="mt-2">
+              {activity.reconciliationError}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       <div className={composeStyles.workspaceBody}>
         <div
           className={cn(
@@ -607,6 +633,7 @@ function ComposeSurface({
     setStructurePending(true);
     setStructureError(null);
     try {
+      assertStagedEditsCurrent(publishedCurrent, selected);
       await activity.publish({
         request_id: nextAuthoringRequestId(),
         operations: selected.map((item) => item.operation),
@@ -620,7 +647,7 @@ function ComposeSurface({
     } finally {
       setStructurePending(false);
     }
-  }, [activity, staged]);
+  }, [activity, staged, publishedCurrent]);
   const stagingControls = useMemo(
     () => ({
       items: staged,
@@ -1471,6 +1498,12 @@ function ReviewSurface({
       <WorkspaceRenderedReview
         authoringCards={authoringVisibleCards(expandAuthoringCards(activity.view?.netDiff ?? []))}
         authoringPreview={Boolean(authoringReview)}
+        snapshotCurrent={
+          !(activity.newActivity ?? activity.view) ||
+          (!(activity.newActivity ?? activity.view)?.synchronization?.required &&
+            controller.review.reviewSnapshot?.review.precondition.workspaceRevision ===
+              (activity.newActivity ?? activity.view)?.workspaceRevision)
+        }
         candidate={candidate}
         review={comparisonReview}
         controller={controller}
@@ -1733,6 +1766,7 @@ type WorkspaceReviewDiffChange = StructuredDiffChange & { path: string };
 function WorkspaceRenderedReview({
   authoringCards = [],
   authoringPreview = false,
+  snapshotCurrent = true,
   candidate,
   review,
   controller,
@@ -1742,6 +1776,7 @@ function WorkspaceRenderedReview({
 }: {
   authoringCards?: WorkspaceAuthoringCard[];
   authoringPreview?: boolean;
+  snapshotCurrent?: boolean;
   candidate: WorkspaceCandidate;
   review: WorkspaceComposeReviewController['review'];
   controller: WorkspaceComposeReviewController;
@@ -1950,9 +1985,9 @@ function WorkspaceRenderedReview({
           ) : null}
           <footer className={reviewStyles.commitFooter}>
             <button
-              disabled={!reviewSnapshot}
+              disabled={!reviewSnapshot || !snapshotCurrent}
               onClick={() => {
-                if (reviewSnapshot)
+                if (reviewSnapshot && snapshotCurrent)
                   router.push(
                     `${repositoryPath}/changes/${encodeURIComponent(reviewSnapshot.workspaceId)}/${encodeURIComponent(reviewSnapshot.snapshotId)}`
                   );
@@ -1962,9 +1997,11 @@ function WorkspaceRenderedReview({
               <Share2 aria-hidden="true" /> Commit changes
             </button>
             <span>
-              {reviewSnapshot
-                ? 'Review snapshot ready for decision.'
-                : 'Review snapshot not prepared.'}
+              {reviewSnapshot && !snapshotCurrent
+                ? 'The branch or Draft changed. Prepare review again.'
+                : reviewSnapshot
+                  ? 'Review snapshot ready for decision.'
+                  : 'Review snapshot not prepared.'}
             </span>
           </footer>
         </section>

@@ -19,6 +19,7 @@ import {
 } from '../lib/workspace-authoring';
 import { prepareWorkspaceAuthoringReview } from '../lib/workspace-authoring-review';
 import { publishWorkspaceGeneration } from '../lib/workspace-generation-publication';
+import { reconcileWorkspaceAuthoring } from '../lib/workspace-reconciliation';
 import { ErrorResponseSchema } from '../schemas/common';
 
 const Params = z.object({ projectId: z.string().min(1), workspaceId: z.string().min(1) });
@@ -117,6 +118,29 @@ const publish = createRoute({
                 )
                 .max(1000),
               reason: z.string().trim().max(2000).optional(),
+            })
+            .strict(),
+        },
+      },
+    },
+  },
+  responses,
+});
+
+const reconcile = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/reconciliation',
+  tags: ['Workspaces'],
+  request: {
+    params: Params,
+    body: {
+      content: {
+        'application/json': {
+          schema: z
+            .object({
+              request_id: Identity,
+              expected_workspace_revision: z.number().int().positive(),
+              expected_ref_head: RefHead,
             })
             .strict(),
         },
@@ -230,6 +254,31 @@ workspaceAuthoringRoutes.openapi(publish, async (c) => {
         ...('receipt' in outcome ? { receipt: outcome.receipt } : {}),
       },
     },
+    200
+  );
+});
+
+workspaceAuthoringRoutes.openapi(reconcile, async (c) => {
+  const { projectId, workspaceId } = c.req.valid('param');
+  const body = c.req.valid('json');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+  const principal = requireTransitionAuthority({
+    apiKey: transitionApiKey(c),
+    projectId,
+    scope: 'transition:propose',
+  });
+  const result = await reconcileWorkspaceAuthoring(db, {
+    projectId,
+    workspaceId,
+    actor: principal.actor,
+    requestId: body.request_id,
+    expectedWorkspaceRevision: body.expected_workspace_revision,
+    expectedRefHead: body.expected_ref_head,
+  });
+  return c.json(
+    { success: true as const, data: { ...result.value, workspaceRevision: result.draft.revision } },
     200
   );
 });

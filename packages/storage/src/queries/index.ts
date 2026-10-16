@@ -157,6 +157,7 @@ export {
   renewWorkspaceAuthoring,
   sealWorkspaceAuthoring,
   transactWorkspaceAuthoring,
+  transactWorkspaceReconciliation,
   type UpdateDraftInput,
   updateDraft,
   updateDraftPreview,

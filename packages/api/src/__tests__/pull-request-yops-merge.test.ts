@@ -11,10 +11,21 @@ import {
   yvalueToTrees,
 } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
-import { findBranchByName, insertBranch, insertProject } from '@t3x-dev/storage';
+import {
+  findBranchByName,
+  findWorkspaceDraft,
+  insertBranch,
+  insertProject,
+  upsertWorkspaceDraft,
+} from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
+import {
+  initializeWorkspaceAuthoring,
+  publishWorkspaceAuthoringAction,
+  workspaceAuthoringState,
+} from '../lib/workspace-authoring';
 import { pullRequestRoutes } from '../routes/pull-requests.openapi';
 import { setupTestDB, testData } from './setup';
 import { commitSemanticFixture } from './transition-fixture';
@@ -457,6 +468,45 @@ describe('Pull request merge across the 18 YOps', () => {
       keepRelationsFromSource: true,
       keepRelationsFromTarget: true,
     };
+    const checkWorkspaces =
+      scenario.name === 'set writes a dev slot while main changes another slot';
+    const actor = { kind: 'human' as const, id: 'human:test' };
+    if (checkWorkspaces) {
+      for (const workspaceId of ['clean', 'dirty']) {
+        const refName = workspaceId === 'clean' ? 'main' : 'dev';
+        const refHead = workspaceId === 'clean' ? target.commitDigest : source.commitDigest;
+        const workspace = await upsertWorkspaceDraft(mockDB, {
+          project_id: projectId,
+          workspace_id: workspaceId,
+          title: workspaceId,
+          target_branch: refName,
+          workspace_state: { targetBranch: refName },
+        });
+        const initialized = await initializeWorkspaceAuthoring(mockDB, {
+          projectId,
+          workspaceId,
+          actionId: `init:${workspaceId}`,
+          actor,
+          expectedWorkspaceRevision: workspace.revision,
+          expectedRefHead: refHead,
+        });
+        if (workspaceId === 'dirty')
+          await publishWorkspaceAuthoringAction(mockDB, {
+            projectId,
+            workspaceId,
+            actor,
+            actionId: 'local-edit',
+            channel: 'manual',
+            expectedWorkspaceRevision: initialized.draft.revision,
+            expectedRevision: 0,
+            expectedRefHead: refHead,
+            operations: [{ set: { path: 'local', value: 'keep' } }],
+          });
+      }
+    }
+    const dirtyBefore = checkWorkspaces
+      ? await findWorkspaceDraft(mockDB, projectId, 'dirty')
+      : null;
     const merge = await app.request(`/v1/projects/${projectId}/pull-requests/${number}/merge`, {
       body: JSON.stringify({
         expected_source_commit_id: source.commitDigest,
@@ -476,6 +526,12 @@ describe('Pull request merge across the 18 YOps', () => {
     expect(merge.status).toBe(200);
     const mergedHead = (await findBranchByName(mockDB, projectId, 'main'))?.headCommitHash;
     expect(mergedHead).toBeTruthy();
+    if (checkWorkspaces) {
+      const clean = (await findWorkspaceDraft(mockDB, projectId, 'clean'))!;
+      expect(workspaceAuthoringState(clean.workspace_state!).basis.refHead).toBe(mergedHead);
+      expect(workspaceAuthoringState(clean.workspace_state!).ledger.compositionRevision).toBe(0);
+      expect(await findWorkspaceDraft(mockDB, projectId, 'dirty')).toEqual(dirtyBefore);
+    }
     const merged = (await getRepositorySemanticCommit(mockDB, mergedHead!, projectId))!
       .semanticContent;
     const predicted = executeMerge(forkContent, sourceContent, targetContent, prepared, decisions);

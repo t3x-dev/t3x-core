@@ -2132,6 +2132,13 @@
     {
       "source": "workspace-authoring.openapi.ts",
       "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/reconciliation",
+      "policy": "project",
+      "rationale": "Requires project access and Transition propose authority; server-owned actor, exact Workspace/ref CAS, immutable archived edits, and deterministic reconciliation without advancing the ref."
+    },
+    {
+      "source": "workspace-authoring.openapi.ts",
+      "method": "POST",
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/reviews",
       "policy": "project",
       "rationale": "Requires project edit and Transition propose/verify authority; freezes complete server-owned authoring history, never a selected UI subset."

@@ -54,6 +54,7 @@ import {
   toTrustedTransitionAuthor,
   transitionApiKey,
 } from '../lib/transition-authority';
+import { synchronizeCleanBranchWorkspaces } from '../lib/workspace-reconciliation';
 import { buildPipelineContext } from '../ops/context';
 import { MergeError, mergeExecuteOp, mergePrepareOp } from '../ops/merge';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -1632,6 +1633,12 @@ pullRequestRoutes.openapi(mergePullRequestRoute, async (c) => {
         )
       );
 
+      await synchronizeCleanBranchWorkspaces(tx, {
+        projectId,
+        refName: pullRequest.targetBranch,
+        refHead: result.commit.hash,
+        actor: writeAuthority.principal.actor,
+      });
       await commitMergeDraft(tx, draft.draftId);
       const mergedAt = new Date();
       const updated = await updatePullRequest(tx, pullRequest.pullRequestId, {
