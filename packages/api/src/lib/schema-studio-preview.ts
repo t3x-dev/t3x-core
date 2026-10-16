@@ -7,10 +7,13 @@ import {
   parseWorkspaceSchemaEditCandidate,
   type WorkspaceSchemaEditCandidate,
 } from '@t3x-dev/application';
+import {
+  applyWorkspaceSchemaYOps,
+  compileWorkspaceSchemaDefinition,
+  WorkspaceSchemaYOpsError,
+} from '@t3x-dev/core';
 import { type AnyDB, findSchemaStudioCandidate, findWorkspaceDraft } from '@t3x-dev/storage';
 import {
-  builtInYSchemaCores,
-  builtInYSchemaModules,
   compileYSchemaCompositionV2,
   diffYSchemas,
   normalizeYSchemaObject,
@@ -20,9 +23,8 @@ import {
   type YSchemaLocalContributionV2,
 } from '@t3x-dev/yschema';
 import type { Context } from 'hono';
-import { assertProjectAccess } from './project-access';
 import { assessWorkspaceSchemaImpact } from './schema-evolution-impact';
-import { resolveStudioSource } from './schema-studio';
+import { resolveStudioSource, schemaSourceAdoptionReason } from './schema-studio';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
 import { artifactViewToOpenModule } from './yschema-artifact-registry';
 export class StudioError extends Error {
@@ -33,7 +35,6 @@ export class StudioError extends Error {
     super(message);
   }
 }
-const licenses = new Set(['MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC', 'CC0-1.0']);
 function samplePreview(
   value: unknown,
   schema: YSchema,
@@ -127,27 +128,7 @@ export async function compileStudioSelection(
   );
   let adoptionReason: string | null = null;
   for (const { view } of entries) {
-    if (view.ownerProjectId === projectId) continue;
-    if (view.visibility === 'private' || view.visibility === 'team') {
-      if (
-        !view.ownerProjectId ||
-        (await assertProjectAccess(c, db, view.ownerProjectId, 'project:edit')) instanceof Response
-      )
-        adoptionReason =
-          'Importing private structure requires edit authority on its source project.';
-    } else {
-      const builtIn = [...builtInYSchemaCores, ...builtInYSchemaModules].find(
-        (item) => item.canonicalName === view.canonicalName && item.version === view.version
-      );
-      const repositoryOwned =
-        builtIn && (await sha256CompositionValue(builtIn)) === view.artifactHash;
-      if (
-        !repositoryOwned &&
-        !(typeof view.manifest.license === 'string' && licenses.has(view.manifest.license))
-      )
-        adoptionReason =
-          'This release has no supported declared redistribution license. Ask its publisher before importing.';
-    }
+    adoptionReason = (await schemaSourceAdoptionReason(c, db, projectId, view)) ?? adoptionReason;
   }
   const whole = entries.filter(({ view }) => view.kind === 'schema');
   if (whole.length && entries.length !== 1)
@@ -200,6 +181,18 @@ export async function compileStudioSelection(
     modules,
     ...(localContribution ? { localContribution } : {}),
   });
+  // Whole-Schema bases retain root semantics; Modules alone do not carry strict/name metadata.
+  if (whole.length) {
+    const base = normalizeYSchemaObject(whole[0]!.view.manifest.schema);
+    const derived = {
+      ...base,
+      nodes: compiled.schema.nodes,
+      relationTypes: compiled.schema.relationTypes,
+      rules: compiled.schema.rules,
+    };
+    compiled.schema = compiled.report.valid ? normalizeYSchemaObject(derived) : derived;
+    compiled.compiledSchemaHash = await sha256CompositionValue(compiled.schema);
+  }
   return {
     samples: samplesFor(compiled.schema, compiled.report.valid),
     schema: compiled.schema,
@@ -270,7 +263,7 @@ export async function previewStudio(
         'The Schema edit candidate changed. Refresh it before checking again.'
       );
   }
-  const selected = await compileStudioSelection(
+  let selected = await compileStudioSelection(
     c,
     db,
     projectId,
@@ -285,6 +278,87 @@ export async function previewStudio(
       'CONFLICT',
       'The selected base sources changed after this Schema edit candidate was saved.'
     );
+  if (editCandidate?.authoringDraft || input.schemaDefinition) {
+    if (!selected.report.valid)
+      throw new StudioError(
+        'REVIEW_REQUIRED',
+        'Resolve the Base definition checks before editing it.'
+      );
+    try {
+      const authoring = editCandidate?.authoringDraft;
+      const expected = authoring?.base.schemaHash ?? input.baseSchemaHash;
+      if (!expected || expected !== selected.schemaHash)
+        throw new StudioError(
+          'CONFLICT',
+          'The exact Base Schema changed. Reload it before editing.'
+        );
+      const applied = authoring
+        ? await applyWorkspaceSchemaYOps(selected.schema, authoring.effect.operations)
+        : await compileWorkspaceSchemaDefinition(selected.schema, input.schemaDefinition);
+      if (authoring?.resultSchemaHash && authoring.resultSchemaHash !== applied.schemaHash)
+        throw new StudioError(
+          'CONFLICT',
+          'The saved Schema Effect does not replay to its frozen result.'
+        );
+      const localOrigin = {
+        kind: 'local' as const,
+        contributionId: editCandidate?.candidateId ?? 'studio-unsaved-effect',
+        revision: editCandidate?.revision ?? 0,
+      };
+      const origins: Record<string, unknown> = {};
+      const recordOrigins = (nodes: YSchema['nodes'], before: YSchema['nodes'], prefix = '') => {
+        for (const [key, node] of Object.entries(nodes)) {
+          const path = prefix ? `${prefix}/${key}` : key;
+          const previous = before[key];
+          const source = selected.origins[path as keyof typeof selected.origins];
+          origins[path] =
+            previous && JSON.stringify(previous) === JSON.stringify(node)
+              ? (source ?? localOrigin)
+              : source
+                ? {
+                    kind: 'derived',
+                    sources: [
+                      ...(typeof source === 'object' &&
+                      source !== null &&
+                      'kind' in source &&
+                      source.kind === 'derived' &&
+                      'sources' in source &&
+                      Array.isArray(source.sources)
+                        ? source.sources
+                        : [source]),
+                      localOrigin,
+                    ],
+                  }
+                : localOrigin;
+          for (const [slot, definition] of Object.entries(node.slots ?? {})) {
+            const slotPath = `${path}/${slot}`;
+            origins[slotPath] =
+              previous?.slots?.[slot] &&
+              JSON.stringify(previous.slots[slot]) === JSON.stringify(definition)
+                ? (selected.origins[slotPath as keyof typeof selected.origins] ?? localOrigin)
+                : localOrigin;
+          }
+          if (node.children && node.children !== 'any')
+            recordOrigins(
+              node.children,
+              previous?.children && previous.children !== 'any' ? previous.children : {},
+              path
+            );
+        }
+      };
+      recordOrigins(applied.schema.nodes, selected.schema.nodes);
+      selected = {
+        ...selected,
+        schema: applied.schema,
+        schemaHash: applied.schemaHash,
+        origins,
+      } as typeof selected;
+    } catch (error) {
+      if (error instanceof WorkspaceSchemaYOpsError)
+        throw new StudioError('INVALID_REQUEST', error.message);
+      throw error;
+    }
+  }
   let workspace: {
     id: string;
     revision: number;

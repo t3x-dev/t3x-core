@@ -20,6 +20,7 @@ import {
   type WorkspaceSchemaEditBaseSource,
   type WorkspaceSchemaEditOrigin,
 } from '@t3x-dev/application';
+import { compileWorkspaceSchemaDefinition, WorkspaceSchemaYOpsError } from '@t3x-dev/core';
 import {
   addSchemaStudioCandidate,
   ConflictError,
@@ -289,7 +290,10 @@ schemaStudioRoutes.openapi(readSchemaEditCandidateRoute, async (c) => {
       return errorResponse(c, 'NOT_FOUND', 'A Schema edit source is no longer available.');
   }
   c.header('Cache-Control', 'private, no-store');
-  return c.json({ success: true as const, data: candidate }, 200);
+  return c.json(
+    { success: true as const, data: StudioSchemaEditCandidateSchema.parse(candidate) },
+    200
+  );
 });
 
 schemaStudioRoutes.openapi(saveSchemaEditCandidateRoute, async (c) => {
@@ -303,6 +307,32 @@ schemaStudioRoutes.openapi(saveSchemaEditCandidateRoute, async (c) => {
 
   try {
     const selection = await compileStudioSelection(c, db, projectId, input.candidateIds);
+    if (
+      input.schemaDefinition &&
+      (input.baseSchemaHash !== selection.schemaHash || Object.keys(input.localContribution).length)
+    )
+      throw new StudioError(
+        'CONFLICT',
+        'Reload the exact Base and submit either a Schema Effect or a local contribution.'
+      );
+    const applied = input.schemaDefinition
+      ? await compileWorkspaceSchemaDefinition(selection.schema, input.schemaDefinition)
+      : null;
+    if (applied && selection.modules.length) {
+      await saveYSchemaCompositionSnapshot(db, {
+        snapshot_id: `studio-authoring-base:${projectId}:${selection.selectionHash}`,
+        project_id: projectId,
+        composition_id: `studio:${selection.selectionHash}`,
+        composition_revision: 1,
+        composition_hash: selection.selectionHash,
+        compiled_schema_hash: selection.schemaHash,
+        compiler_version: 'yschema-v2',
+        manifest_json: { sources: selection.sources },
+        schema_json: { ...selection.schema },
+        render_plan_json: selection.renderPlan,
+        origins_json: selection.origins,
+      });
+    }
     const candidateId = `sec_${(await sha256CompositionValue({ projectId, workspaceId })).slice(
       'sha256:'.length
     )}`;
@@ -329,6 +359,34 @@ schemaStudioRoutes.openapi(saveSchemaEditCandidateRoute, async (c) => {
         expectedRevision: input.ifRevision,
         baseSources: selection.sources as readonly WorkspaceSchemaEditBaseSource[],
         localContribution: input.localContribution as DraftDocument,
+        ...(applied
+          ? {
+              authoringDraft: {
+                schema: 't3x.application/workspace-schema-authoring-draft/v1' as const,
+                revision: input.ifRevision + 1,
+                base:
+                  selection.modules.length === 0 && selection.sources.length === 1
+                    ? {
+                        kind: 'published_schema' as const,
+                        projectId: selection.sources[0]!.projectId,
+                        canonicalName: selection.sources[0]!.canonicalName,
+                        version: selection.sources[0]!.version,
+                        artifactVersionId: selection.sources[0]!.artifactVersionId,
+                        artifactHash: selection.sources[0]!.hash as `sha256:${string}`,
+                        schemaHash: selection.schemaHash as `sha256:${string}`,
+                      }
+                    : {
+                        kind: 'composition' as const,
+                        compositionId: `studio:${selection.selectionHash}`,
+                        compositionRevision: 1,
+                        compositionHash: selection.selectionHash as `sha256:${string}`,
+                        schemaHash: selection.schemaHash as `sha256:${string}`,
+                      },
+                effect: { profile: 'yops.ops.v1' as const, operations: applied.operations },
+                resultSchemaHash: applied.schemaHash,
+              },
+            }
+          : {}),
         intent: input.intent,
         origin,
         retryKey: input.retryKey,
@@ -345,7 +403,7 @@ schemaStudioRoutes.openapi(saveSchemaEditCandidateRoute, async (c) => {
             data: {
               outcome: result.kind,
               workspaceRevision: draft.revision,
-              candidate: result.candidate,
+              candidate: StudioSchemaEditCandidateSchema.parse(result.candidate),
             },
           },
           200
@@ -363,7 +421,7 @@ schemaStudioRoutes.openapi(saveSchemaEditCandidateRoute, async (c) => {
             data: {
               outcome: result.kind,
               workspaceRevision: saved.revision,
-              candidate: result.candidate,
+              candidate: StudioSchemaEditCandidateSchema.parse(result.candidate),
             },
           },
           200
@@ -375,6 +433,8 @@ schemaStudioRoutes.openapi(saveSchemaEditCandidateRoute, async (c) => {
     }
     return errorResponse(c, 'CONFLICT', 'The Workspace changed. Retry the Schema edit.');
   } catch (error) {
+    if (error instanceof WorkspaceSchemaYOpsError)
+      return errorResponse(c, 'INVALID_REQUEST', error.message);
     if (error instanceof StudioError) return errorResponse(c, error.code, error.message);
     if (error instanceof ConflictError)
       return errorResponse(c, 'CONFLICT', 'The Workspace changed. Retry the Schema edit.');

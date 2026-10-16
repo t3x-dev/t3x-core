@@ -1,9 +1,57 @@
 import type { StudioCandidate } from '@t3x-dev/api-client';
-import type { AnyDB, SchemaStudioCandidateRecord } from '@t3x-dev/storage';
+import type {
+  AnyDB,
+  SchemaStudioCandidateRecord,
+  YSchemaArtifactVersionView,
+} from '@t3x-dev/storage';
 import { findYSchemaArtifactVersion } from '@t3x-dev/storage';
-import { sha256CompositionValue } from '@t3x-dev/yschema';
+import {
+  builtInYSchemaCores,
+  builtInYSchemaModules,
+  sha256CompositionValue,
+} from '@t3x-dev/yschema';
 import type { Context } from 'hono';
 import { assertProjectAccess } from './project-access';
+
+const licenses = new Set(['MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC', 'CC0-1.0']);
+export class SchemaSourceUnavailableError extends Error {}
+
+/** One redistribution policy for Studio and the compatibility Composition entry point. */
+export async function schemaSourceAdoptionReason(
+  c: Context | undefined,
+  db: AnyDB,
+  projectId: string,
+  view: YSchemaArtifactVersionView
+): Promise<string | null> {
+  if (view.lifecycleStatus !== 'active' || !['active', 'published'].includes(view.status))
+    return 'Source release is unavailable.';
+  if ((await sha256CompositionValue(view.manifest)) !== view.artifactHash)
+    return 'Source release failed integrity verification.';
+  if (
+    view.ownerProjectId &&
+    view.ownerProjectId !== projectId &&
+    (!c ||
+      (await assertProjectAccess(c, db, view.ownerProjectId, 'project:read')) instanceof Response)
+  )
+    return 'Source release is unavailable or no longer authorized.';
+  if (view.ownerProjectId === projectId) return null;
+  if (view.visibility === 'private' || view.visibility === 'team') {
+    if (
+      !c ||
+      !view.ownerProjectId ||
+      (await assertProjectAccess(c, db, view.ownerProjectId, 'project:edit')) instanceof Response
+    )
+      return 'Importing private structure requires edit authority on its source project.';
+    return null;
+  }
+  const builtIn = [...builtInYSchemaCores, ...builtInYSchemaModules].find(
+    (item) => item.canonicalName === view.canonicalName && item.version === view.version
+  );
+  if (builtIn && (await sha256CompositionValue(builtIn)) === view.artifactHash) return null;
+  return typeof view.manifest.license === 'string' && licenses.has(view.manifest.license)
+    ? null
+    : 'This release has no supported declared redistribution license. Ask its publisher before importing.';
+}
 
 /** References confer no authority. Every use rechecks source visibility and integrity. */
 export async function resolveStudioSource(
