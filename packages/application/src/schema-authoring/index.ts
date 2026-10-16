@@ -19,6 +19,17 @@ export {
 } from './edit-candidate';
 export { parseWorkspaceSchemaAuthoringDraft } from './persistence';
 export type {
+  AppliedWorkspaceSchemaYOps,
+  WorkspaceSchemaEditCommand,
+  WorkspaceSchemaYOpsErrorCode,
+} from './schema-yops';
+export {
+  applyWorkspaceSchemaYOps,
+  compileWorkspaceSchemaEditCommand,
+  executeWorkspaceSchemaEditCommand,
+  WorkspaceSchemaYOpsError,
+} from './schema-yops';
+export type {
   SchemaAuthoringDigest,
   WorkspacePublishedSchemaBase,
   WorkspaceSchemaAuthoringBase,
