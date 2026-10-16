@@ -890,9 +890,6 @@ importers:
       '@t3x-dev/transition':
         specifier: workspace:*
         version: link:../transition
-      '@t3x-dev/yschema':
-        specifier: workspace:*
-        version: link:../yschema
       js-yaml:
         specifier: 4.3.2
         version: 4.3.2
