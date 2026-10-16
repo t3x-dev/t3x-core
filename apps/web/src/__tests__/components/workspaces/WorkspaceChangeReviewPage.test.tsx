@@ -203,3 +203,46 @@ it('links the exact committed State and replaces the obsolete pre-decision snaps
     '/project/proj_1/changes/workspace_prd_handoff/rvs_committed'
   );
 });
+
+it('keeps the complete frozen Schema and content visible without loading a newer Draft for comparison', () => {
+  const data = snapshotResponse();
+  Object.assign(data, {
+    schema_review: {
+      schema: 't3x.application/workspace-schema-review/v1',
+      base: { status: 'unbound', schemaHash: null, definition: null, bindings: [] },
+      draft: {
+        status: 'bound',
+        schemaHash: `sha256:${'a'.repeat(64)}`,
+        definition: { nodes: { advantage: {} } },
+        bindings: [],
+      },
+      actionCount: 2,
+      changes: [{ kind: 'ADD', path: 'nodes.advantage', summary: 'Contract path added.' }],
+      baseContent: {},
+      draftContent: { title: 'Frozen complete Draft' },
+    },
+  });
+  vi.mocked(useWorkspaceReviewSnapshot).mockReturnValue({
+    decide: vi.fn(),
+    load: vi.fn(),
+    overrideReason: '',
+    setOverrideReason: vi.fn(),
+    state: { data: data as never, deciding: false, loading: false, error: null },
+  });
+  render(
+    <WorkspaceChangeReviewPage
+      projectId="proj_1"
+      workspaceId="workspace_prd_handoff"
+      snapshotId={data.snapshot_id}
+    />
+  );
+  expect(screen.getByText('ADD nodes.advantage')).toBeInTheDocument();
+  expect(
+    screen.getByRole('region', { name: 'Complete Draft content', hidden: true })
+  ).toHaveTextContent('Frozen complete Draft');
+  expect(useReviewedFieldChanges).toHaveBeenLastCalledWith(
+    'proj_1',
+    'workspace_prd_handoff',
+    undefined
+  );
+});

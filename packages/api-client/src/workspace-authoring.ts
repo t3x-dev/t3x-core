@@ -119,6 +119,7 @@ export interface WorkspaceAuthoringCapability {
       preparationDigest: string;
     };
     reused: boolean;
+    schemaReview?: import('./schema-studio').WorkspaceFullSchemaReview;
   }>;
   read(
     projectId: string,

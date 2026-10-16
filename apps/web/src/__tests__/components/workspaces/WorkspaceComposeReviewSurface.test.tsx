@@ -932,7 +932,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
   it.each([
     false,
     true,
-  ])('reviews the latest Draft event rather than the empty repository base (update=%s)', async (update) => {
+  ])('reviews the complete Base-to-Draft instead of only the selected event (update=%s)', async (update) => {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     Object.assign(candidate, { authoringLedger: { actions: [] } });
     navigationMocks.searchParams = new URLSearchParams('workspaceMode=review&reviewPane=changes');
@@ -1039,10 +1039,8 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
     const structure = await screen.findByLabelText('Workspace review structure');
-    if (update) {
-      expect(within(structure).getAllByText(/低于30度/).length).toBeGreaterThan(0);
-      expect(screen.getByText(/1 modified/)).toBeTruthy();
-    }
+    expect(within(structure).queryByText(/低于30度/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/1 modified/)).not.toBeInTheDocument();
     expect(within(structure).getAllByText('气温').length).toBeGreaterThan(0);
     expect(within(structure).getAllByText('低于20度').length).toBeGreaterThan(0);
     expect(prepareReview).not.toHaveBeenCalled();
@@ -1273,7 +1271,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
   });
 
-  it('renders Compose authoring cards in Review instead of empty PRD boilerplate', async () => {
+  it('renders complete authoring Draft in Review even while a single Compose action is selected', async () => {
     const candidate = {
       ...getProjectWorkspaceStarterCandidate('proj_1'),
       title: 'Main workspace',
@@ -1347,6 +1345,21 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         current,
       },
     } as unknown as ReturnType<typeof useComposeActivity>;
+    if (activityMocks.value.view) {
+      Object.assign(activityMocks.value.view, {
+        selected: {
+          before: {},
+          after: {
+            ...current,
+            content: {
+              trees: [{ key: 'isolated', slots: { title: 'Selected action only' }, children: [] }],
+              relations: [],
+            },
+          },
+          cards: [],
+        },
+      });
+    }
     const controller = {
       busyAction: null,
       candidate,

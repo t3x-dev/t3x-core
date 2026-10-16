@@ -2,6 +2,7 @@ import type {
   ChangeProjectionV1,
   ReviewSnapshotV1,
   WorkspaceAuthoringView,
+  WorkspaceFullSchemaReview,
 } from '@t3x-dev/api-client';
 import type { TransitionViewV1 } from '@t3x-dev/core';
 import * as yaml from 'js-yaml';
@@ -54,6 +55,7 @@ export interface WorkspaceReviewSessionState {
   reviewSnapshot: ReviewSnapshotV1 | null;
   transitionId: string | null;
   view: TransitionViewV1 | null;
+  schemaReview?: WorkspaceFullSchemaReview | null;
 }
 
 export interface WorkspaceComposeReviewControllerOptions {
@@ -86,6 +88,7 @@ const EMPTY_REVIEW: WorkspaceReviewSessionState = {
   reviewSnapshot: null,
   transitionId: null,
   view: null,
+  schemaReview: null,
 };
 
 export function useWorkspaceComposeReviewController({
@@ -113,6 +116,13 @@ export function useWorkspaceComposeReviewController({
   const [assistantPrefill, setAssistantPrefill] = useState<string | null>(null);
   const reviewGenerationRef = useRef(0);
   const activeCandidateIdRef = useRef(candidate.id);
+  const candidateVersion = JSON.stringify([
+    candidate.id,
+    candidate.revision,
+    candidate.schemaBindings,
+    candidate.authoringLedger,
+  ]);
+  const candidateVersionRef = useRef(candidateVersion);
   const materialUpload = useMaterialUpload();
   const pinsCrud = usePinsCrud();
   const { fetch: refreshPins } = pinsCrud;
@@ -120,6 +130,8 @@ export function useWorkspaceComposeReviewController({
 
   useEffect(() => {
     const candidateChanged = activeCandidateIdRef.current !== candidate.id;
+    const versionChanged = candidateVersionRef.current !== candidateVersion;
+    candidateVersionRef.current = candidateVersion;
     activeCandidateIdRef.current = candidate.id;
     if (candidateChanged) {
       reviewGenerationRef.current += 1;
@@ -132,12 +144,22 @@ export function useWorkspaceComposeReviewController({
       setAssistantPrefill(null);
       return;
     }
+    if (versionChanged) {
+      // The legacy preparation path performs its own save; that acknowledgement
+      // is not a concurrent edit. Managed authoring Review itself is read-only.
+      if (candidate.authoringLedger || busyAction !== 'review.prepare')
+        reviewGenerationRef.current += 1;
+      setReview(EMPTY_REVIEW);
+      setDecisionReason('');
+      if (busyAction !== 'review.prepare')
+        setNotice('Draft changed; prepare a complete Review again.');
+    }
     setWorkingCandidate((current) =>
       candidate.revision === undefined || (current.revision ?? -1) <= candidate.revision
         ? candidate
         : current
     );
-  }, [candidate]);
+  }, [candidate, candidateVersion, busyAction]);
 
   useEffect(() => {
     void refreshPins(candidate.projectId);
@@ -159,7 +181,10 @@ export function useWorkspaceComposeReviewController({
   const persistCandidate = useCallback(
     async (nextCandidate: WorkspaceCandidate, command: WorkspaceDraftCommand) => {
       setWorkingCandidate(nextCandidate);
-      if (command !== 'review.prepare') setReview(EMPTY_REVIEW);
+      if (command !== 'review.prepare') {
+        reviewGenerationRef.current += 1;
+        setReview(EMPTY_REVIEW);
+      }
       if (!onDraftCommand) return nextCandidate;
       try {
         const saved = await onDraftCommand(nextCandidate, command);
@@ -337,10 +362,16 @@ export function useWorkspaceComposeReviewController({
           workingCandidate.projectId,
           workingCandidate.id
         );
-      } catch {
+      } catch (error) {
+        if (workingCandidate.authoringLedger) throw error;
         authoringView = null;
       }
-      const documents = authoringReviewDocuments(authoringView);
+      const documents = authoringReviewDocuments(
+        authoringView ? { ...authoringView, selected: null } : null
+      );
+      if (workingCandidate.authoringLedger && !documents) {
+        throw new Error('The complete Authoring Draft is unavailable. Retry Workspace Review.');
+      }
       if (authoringView && documents) {
         const reviewed = await getSharedApiClient().workspaces.authoring.prepareReview(
           workingCandidate.projectId,
@@ -359,6 +390,7 @@ export function useWorkspaceComposeReviewController({
             transition_id: reviewed.view.transition_id,
           })
           .catch(() => null);
+        if (generation !== reviewGenerationRef.current) return false;
         setReview({
           changeProjection: latest?.change_projection ?? null,
           content: documents.current,
@@ -377,6 +409,7 @@ export function useWorkspaceComposeReviewController({
           reviewSnapshot: latest?.snapshot ?? null,
           transitionId: reviewed.view.transition_id,
           view: reviewed.view.transition,
+          schemaReview: reviewed.schemaReview ?? latest?.schema_review ?? null,
         });
         setNotice('Immutable review prepared from the current draft.');
         return true;
@@ -427,6 +460,7 @@ export function useWorkspaceComposeReviewController({
       setNotice('Immutable review prepared from the current draft.');
       return true;
     } catch (error) {
+      if (generation !== reviewGenerationRef.current) return false;
       setReview(EMPTY_REVIEW);
       setLocalError(formatUserFacingError(error, 'Workspace review preparation failed.'));
       setNotice(null);
@@ -440,6 +474,16 @@ export function useWorkspaceComposeReviewController({
     async (outcome: WorkspaceTransitionOutcome, reason?: string) => {
       if (!review.transitionId || !review.content || !review.precondition || busyAction) {
         setLocalError('Prepare the current draft for review before making a decision.');
+        return null;
+      }
+      if (
+        workingCandidate.authoringLedger &&
+        outcome !== 'rejected' &&
+        (!review.schemaReview || review.schemaReview.base.status === 'unknown')
+      ) {
+        setLocalError(
+          'A complete Workspace Schema Review with a verified Base is required. Prepare Review again.'
+        );
         return null;
       }
       const normalizedReason = reason?.trim();
@@ -474,13 +518,21 @@ export function useWorkspaceComposeReviewController({
         setNotice('Decision recorded without advancing branch history.');
         return null;
       } catch (error) {
+        if (/changed|revision|conflict|stale/i.test(String(error))) setReview(EMPTY_REVIEW);
         setLocalError(formatUserFacingError(error, 'Workspace decision failed.'));
         return null;
       } finally {
         setBusyAction(null);
       }
     },
-    [busyAction, candidate.id, candidate.projectId, onYOpsCommitted, review]
+    [
+      busyAction,
+      candidate.id,
+      candidate.projectId,
+      onYOpsCommitted,
+      review,
+      workingCandidate.authoringLedger,
+    ]
   );
 
   const copyReceipt = useCallback(async () => {

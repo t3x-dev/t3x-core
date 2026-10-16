@@ -739,6 +739,7 @@ export interface WorkspaceTransitionDecisionEnvelope extends WorkspaceTransition
 }
 
 export interface WorkspaceTransitionReviewSnapshotEnvelope {
+  schema_review?: import('./schema-studio').WorkspaceFullSchemaReview | null;
   snapshot_id: string;
   snapshot_digest: string;
   project_id: string;

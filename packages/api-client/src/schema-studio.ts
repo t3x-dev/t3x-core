@@ -312,6 +312,43 @@ export type SchemaPreparationApplyInput = z.infer<typeof SchemaPreparationApplyI
 export type SchemaPreparationPreview = z.infer<typeof SchemaPreparationPreviewSchema>;
 export type SchemaPreparationTarget = z.infer<typeof SchemaPreparationTargetSchema>;
 
+export const WorkspaceSchemaDefinitionSnapshotSchema = z
+  .object({
+    status: z.enum(['bound', 'unbound', 'unknown']),
+    schemaHash: digest.nullable(),
+    definition: z.record(z.string(), z.unknown()).nullable(),
+    bindings: z.array(z.record(z.string(), z.unknown())),
+  })
+  .strict()
+  .superRefine((snapshot, context) => {
+    const valid =
+      snapshot.status === 'bound'
+        ? snapshot.schemaHash !== null && snapshot.definition !== null
+        : snapshot.schemaHash === null &&
+          snapshot.definition === null &&
+          snapshot.bindings.length === 0;
+    if (!valid)
+      context.addIssue({
+        code: 'custom',
+        message: 'Schema snapshot status does not match its definition, hash and bindings.',
+      });
+  });
+export const WorkspaceFullSchemaReviewSchema = z
+  .object({
+    schema: z.literal('t3x.application/workspace-schema-review/v1'),
+    base: WorkspaceSchemaDefinitionSnapshotSchema,
+    draft: WorkspaceSchemaDefinitionSnapshotSchema,
+    changes: z.array(change),
+    actionCount: z.number().int().nonnegative(),
+    baseContent: z.json(),
+    draftContent: z.json(),
+  })
+  .strict();
+export type WorkspaceSchemaDefinitionSnapshot = z.infer<
+  typeof WorkspaceSchemaDefinitionSnapshotSchema
+>;
+export type WorkspaceFullSchemaReview = z.infer<typeof WorkspaceFullSchemaReviewSchema>;
+
 export const StudioSchemaEditOriginChannelSchema = z.enum(['studio', 'assistant', 'import', 'api']);
 
 export const SaveStudioSchemaEditCandidateInputSchema = z

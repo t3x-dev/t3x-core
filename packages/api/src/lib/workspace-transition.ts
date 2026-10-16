@@ -75,6 +75,7 @@ import {
   persistWorkspaceReviewArtifacts,
   reviewSnapshotCreatedAt,
 } from './workspace-review-artifacts';
+import { buildWorkspaceSchemaReview } from './workspace-schema-review';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
 import { schemaRootKeyFromBinding } from './yschema-registry';
 
@@ -748,9 +749,14 @@ async function materializePreparedWorkspaceTransition(
     },
     ...(prepared.workspace.authoringLedger
       ? {
-          preparationFacts: buildAuthoringPreparation(
-            prepared.workspace
-          ) as unknown as ProtocolValue,
+          preparationFacts: {
+            ...buildAuthoringPreparation(prepared.workspace),
+            schemaReview: await buildWorkspaceSchemaReview(
+              db,
+              prepared.projectId,
+              prepared.workspace
+            ),
+          } as unknown as ProtocolValue,
         }
       : {}),
     requestId,

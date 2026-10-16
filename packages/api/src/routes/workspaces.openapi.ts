@@ -8,6 +8,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { WorkspaceFullSchemaReviewSchema } from '@t3x-dev/api-client';
 import {
   type ApiKey,
   type Draft,
@@ -22,6 +23,7 @@ import {
   findBranchByName,
   findWorkspaceDraft,
   getLatestTransitionReviewSnapshot,
+  getTransitionProposalPreparation,
   getTransitionReviewSnapshot,
   insertYOpsLogEntry,
   listTransitionReviewSnapshots,
@@ -164,6 +166,7 @@ const WorkspaceTransitionReviewResponseSchema = z.object({
   precondition: WorkspaceTransitionPreconditionSchema,
   review_snapshot: z.any(),
   change_projection: z.any(),
+  schema_review: WorkspaceFullSchemaReviewSchema.nullable(),
 });
 
 const WorkspaceTransitionDecisionResponseSchema = WorkspaceTransitionReviewResponseSchema.extend({
@@ -683,7 +686,11 @@ workspaceRoutes.openapi(listWorkspaceTransitionReviewSnapshotsRoute, async (c) =
   return c.json(
     {
       success: true as const,
-      data: { snapshots: snapshots.map(transitionReviewSnapshotToWire) },
+      data: {
+        snapshots: await Promise.all(
+          snapshots.map((record) => transitionReviewSnapshotToWire(db, record))
+        ),
+      },
     },
     200
   );
@@ -709,7 +716,7 @@ workspaceRoutes.openapi(getLatestWorkspaceTransitionReviewSnapshotRoute, async (
   return c.json(
     {
       success: true as const,
-      data: transitionReviewSnapshotToWire(snapshot),
+      data: await transitionReviewSnapshotToWire(db, snapshot),
     },
     200
   );
@@ -729,7 +736,7 @@ workspaceRoutes.openapi(getWorkspaceTransitionReviewSnapshotRoute, async (c) => 
   return c.json(
     {
       success: true as const,
-      data: transitionReviewSnapshotToWire(snapshot),
+      data: await transitionReviewSnapshotToWire(db, snapshot),
     },
     200
   );
@@ -784,6 +791,7 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
     schemaEditCandidate: storedSchemaEditCandidate,
     schemaPending: storedSchemaPending,
     schemaPreparations: storedSchemaPreparations,
+    workspaceSchemaBase: storedWorkspaceSchemaBase,
     status: storedStatus,
     ...storedEditableWorkspace
   } = storedWorkspace;
@@ -793,6 +801,7 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
     schemaEditCandidate: _ignoredSchemaEditCandidate,
     schemaPending: _ignoredSchemaPending,
     schemaPreparations: _ignoredSchemaPreparations,
+    workspaceSchemaBase: _ignoredWorkspaceSchemaBase,
     status,
     ...clientWorkspace
   } = workspace;
@@ -813,6 +822,9 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
     ...(storedSchemaPending !== undefined ? { schemaPending: storedSchemaPending } : {}),
     ...(storedSchemaPreparations !== undefined
       ? { schemaPreparations: storedSchemaPreparations }
+      : {}),
+    ...(storedWorkspaceSchemaBase !== undefined
+      ? { workspaceSchemaBase: storedWorkspaceSchemaBase }
       : {}),
   };
   const missingTargetBranch = await findMissingWorkspaceTargetBranch(
@@ -1149,7 +1161,9 @@ function transitionPreconditionToWire(precondition: WorkspaceTransitionPrecondit
   };
 }
 
-function transitionReviewSnapshotToWire(record: StoredTransitionReviewSnapshot) {
+async function transitionReviewSnapshotToWire(db: AnyDB, record: StoredTransitionReviewSnapshot) {
+  const preparation = await getTransitionProposalPreparation(db, record.transitionId);
+  const frozen = preparation ? JSON.parse(preparation.canonicalJson) : null;
   return {
     snapshot_id: record.snapshotId,
     snapshot_digest: record.snapshotDigest,
@@ -1161,6 +1175,9 @@ function transitionReviewSnapshotToWire(record: StoredTransitionReviewSnapshot) 
     supersedes_snapshot_digest: record.supersedesSnapshotDigest,
     snapshot: record.snapshot,
     change_projection: record.changeProjection,
+    schema_review: frozen?.schemaReview
+      ? WorkspaceFullSchemaReviewSchema.parse(frozen.schemaReview)
+      : null,
     created_at: record.createdAt,
   };
 }

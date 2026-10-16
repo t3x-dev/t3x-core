@@ -4,20 +4,28 @@ import {
   type AnyDB,
   findWorkspaceDraft,
   findYSchemaCompositionSnapshot,
+  getLatestTransitionReviewSnapshot,
+  getTransitionRefHead,
   insertBranch,
   insertProject,
+  resolveTransitionProposalGraph,
   saveYSchemaCompositionSnapshot,
+  transactWorkspaceAuthoring,
   upsertWorkspaceDraft,
   upsertYSchemaArtifactVersion,
 } from '@t3x-dev/storage';
 import { normalizeYSchemaObject, sha256CompositionValue } from '@t3x-dev/yschema';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
+import { commitTransition, decideTransition } from '../lib/transition-control-plane/lifecycle';
 import {
   initializeWorkspaceAuthoring,
   publishWorkspaceAuthoringAction,
   workspaceAuthoringState,
 } from '../lib/workspace-authoring';
+import { prepareWorkspaceAuthoringReview } from '../lib/workspace-authoring-review';
+import { assertWorkspaceSchemaReview } from '../lib/workspace-schema-review';
+import { decideWorkspaceTransition, reviewWorkspaceTransition } from '../lib/workspace-transition';
 import { resolveWorkspaceYSchema } from '../lib/workspace-yschema';
 import { setupTestDB } from './setup';
 
@@ -276,6 +284,279 @@ beforeEach(() => {
   runtime.failSnapshot = false;
   runtime.movedHead = false;
   denied.clear();
+});
+
+const reviewer = { kind: 'human' as const, id: 'human:local-user' };
+async function fullReview(workspaceId: string, requestId = `full-review:${workspaceId}`) {
+  const draft = (await findWorkspaceDraft(db, projectId, workspaceId))!;
+  const { ledger, basis } = workspaceAuthoringState(draft.workspace_state);
+  return prepareWorkspaceAuthoringReview({
+    db,
+    projectId,
+    workspaceId,
+    actor: reviewer,
+    requestId,
+    expectedWorkspaceRevision: draft.revision,
+    expectedRevision: ledger.compositionRevision,
+    expectedRefHead: basis.refHead,
+  });
+}
+async function fullDecision(
+  workspaceId: string,
+  reviewed: Awaited<ReturnType<typeof fullReview>>,
+  outcome: 'accepted' | 'rejected' = 'accepted'
+) {
+  return decideWorkspaceTransition(db, {
+    projectId,
+    workspaceId,
+    actor: reviewer,
+    policyBinding: null,
+    transitionId: reviewed.view.transitionId,
+    outcome,
+    precondition: {
+      ...reviewed.view.precondition,
+      policyDigest: reviewed.view.precondition.policyDigest!,
+    },
+  });
+}
+async function editReviewedDraft(workspaceId: string) {
+  const draft = (await findWorkspaceDraft(db, projectId, workspaceId))!;
+  const { ledger, basis } = workspaceAuthoringState(draft.workspace_state);
+  return publishWorkspaceAuthoringAction(db, {
+    projectId,
+    workspaceId,
+    actor: reviewer,
+    actionId: `concurrent:${ledger.compositionRevision}`,
+    channel: 'manual',
+    expectedWorkspaceRevision: draft.revision,
+    expectedRevision: ledger.compositionRevision,
+    expectedRefHead: basis.refHead,
+    operations: [
+      {
+        set: {
+          path: 'candidate/features/title',
+          value: `A concurrent edit ${ledger.compositionRevision}`,
+        },
+      },
+    ],
+  });
+}
+it('SE-011 freezes complete schema/content, commits exact Schema Hash, and uses that Base next round', async () => {
+  const id = 'full-review-two-rounds';
+  await seed(id);
+  const first = await fullReview(id);
+  expect(first.schemaReview.base.status).toBe('unbound');
+  await fullDecision(id, first);
+  let draft = (await findWorkspaceDraft(db, projectId, id))!;
+  const firstHead = draft.parent_commit_hash;
+  expect(draft.workspace_state.workspaceSchemaBase).toMatchObject({
+    refHead: firstHead,
+    snapshot: { status: 'bound', schemaHash: await sha256CompositionValue(baseSchema) },
+  });
+  // Simulate an existing branch that predates the local Schema Base cache.
+  const withoutCache = await transactWorkspaceAuthoring(
+    db,
+    { projectId, workspaceId: id, refName: id },
+    async (_tx, current) => {
+      const { workspaceSchemaBase: _cache, ...workspace } = current.workspace_state;
+      return { workspace, value: undefined };
+    }
+  );
+  draft = withoutCache.draft;
+  const { ledger, basis } = workspaceAuthoringState(draft.workspace_state);
+  await publishWorkspaceAuthoringAction(db, {
+    projectId,
+    workspaceId: id,
+    actor: reviewer,
+    actionId: 'prior-to-migration',
+    channel: 'manual',
+    expectedWorkspaceRevision: draft.revision,
+    expectedRevision: ledger.compositionRevision,
+    expectedRefHead: basis.refHead,
+    operations: [
+      { set: { path: 'candidate/requirements/title', value: 'Preserve this earlier action' } },
+    ],
+  });
+  const plan = await mapping(id);
+  expect((await post(preparationPath(id), plan)).status).toBe(200);
+  const reviewed = await fullReview(id, 'second-round');
+  expect(reviewed.schemaReview.actionCount).toBe(2);
+  expect(reviewed.schemaReview.base.schemaHash).toBe(await sha256CompositionValue(baseSchema));
+  expect(reviewed.schemaReview.baseContent).toEqual({
+    candidate: { requirements: { title: 'Edited content' } },
+  });
+  expect(reviewed.schemaReview.draftContent).toEqual({
+    candidate: { features: { title: 'Preserve this earlier action' } },
+  });
+  expect(reviewed.schemaReview.changes).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ kind: 'REMOVE', path: 'nodes.requirements' }),
+      expect.objectContaining({ kind: 'ADD', path: 'nodes.features' }),
+    ])
+  );
+  const graph = await resolveTransitionProposalGraph(db, projectId, reviewed.view.transitionId);
+  expect(JSON.parse(graph.preparation!.canonicalJson).schemaReview).toEqual(reviewed.schemaReview);
+  const snapshot = await getLatestTransitionReviewSnapshot(db, {
+    projectId,
+    workspaceId: id,
+    transitionId: reviewed.view.transitionId,
+  });
+  expect(snapshot).toBeDefined();
+  const committed = await fullDecision(id, reviewed);
+  expect(committed.commit).toBeDefined();
+  draft = (await findWorkspaceDraft(db, projectId, id))!;
+  const targetHash = await sha256CompositionValue(migratedSchema);
+  expect(draft.parent_commit_hash).not.toBe(firstHead);
+  expect(draft.workspace_state.workspaceSchemaBase).toEqual({
+    refHead: draft.parent_commit_hash,
+    snapshot: reviewed.schemaReview.draft,
+  });
+  expect(draft.workspace_state.authoringHistory.at(-1)).toMatchObject({ schemaHash: targetHash });
+  // Native validation Statement included in the Commit closure binds the same definition digest.
+  expect(
+    graph.observations.some(({ statement }) => JSON.stringify(statement).includes(targetHash))
+  ).toBe(true);
+});
+it('SE-011 Reject records an immutable decision without changing Workspace or ref head', async () => {
+  const id = 'full-review-reject';
+  await seed(id);
+  const plan = await mapping(id);
+  expect((await post(preparationPath(id), plan)).status).toBe(200);
+  const reviewed = await fullReview(id);
+  const before = await findWorkspaceDraft(db, projectId, id);
+  const rejected = await fullDecision(id, reviewed, 'rejected');
+  expect(rejected.commit).toBeUndefined();
+  expect(rejected.transition.decision).toMatchObject({
+    observation: 'supplied',
+    outcome: 'rejected',
+  });
+  expect(await findWorkspaceDraft(db, projectId, id)).toEqual(before);
+  expect((await getTransitionRefHead(db, { projectId, refName: id })).head).toBeNull();
+});
+it('SE-011 concurrent Draft edits invalidate both old Decision and an already accepted Commit', async () => {
+  const id = 'full-review-concurrent';
+  await seed(id);
+  expect((await post(preparationPath(id), await mapping(id))).status).toBe(200);
+  const reviewed = await fullReview(id);
+  await editReviewedDraft(id);
+  await expect(
+    decideTransition({
+      db,
+      projectId,
+      actor: reviewer,
+      transitionId: reviewed.view.transitionId,
+      requestId: 'decide-obsolete-review',
+      outcome: 'accepted',
+      precondition: reviewed.view.precondition,
+    })
+  ).rejects.toThrow();
+  const latest = await fullReview(id, 'review-after-concurrent-edit');
+  const accepted = await decideTransition({
+    db,
+    projectId,
+    actor: reviewer,
+    transitionId: latest.view.transitionId,
+    requestId: 'accept-before-edit',
+    outcome: 'accepted',
+    precondition: latest.view.precondition,
+  });
+  await editReviewedDraft(id);
+  await expect(fullDecision(id, reviewed)).rejects.toThrow();
+  await expect(
+    commitTransition({
+      db,
+      projectId,
+      actor: reviewer,
+      transitionId: latest.view.transitionId,
+      requestId: 'commit-after-edit',
+      decisionDigest: accepted.decisionDigest,
+      expectedHead: null,
+    })
+  ).rejects.toThrow();
+  expect((await getTransitionRefHead(db, { projectId, refName: id })).head).toBeNull();
+});
+it('SE-011 does not let Studio checks substitute for complete Review or accept an unknown Base', async () => {
+  const id = 'full-review-no-bypass';
+  await seed(id);
+  expect((await post(preparationPath(id), await mapping(id))).status).toBe(200);
+  const reviewed = await fullReview(id);
+  const graph = await resolveTransitionProposalGraph(db, projectId, reviewed.view.transitionId);
+  const workspace = (await findWorkspaceDraft(db, projectId, id))!.workspace_state;
+  const preparation = JSON.parse(graph.preparation!.canonicalJson);
+  delete preparation.schemaReview;
+  await expect(
+    assertWorkspaceSchemaReview(db, projectId, workspace, {
+      ...graph,
+      preparation: { ...graph.preparation!, canonicalJson: JSON.stringify(preparation) },
+    })
+  ).rejects.toThrow('complete Workspace Review');
+  // Unknown is explicit, never fabricated from the target definition.
+  const unknownBase = { status: 'unknown', schemaHash: null, definition: null, bindings: [] };
+  const unknown = {
+    ...workspace,
+    workspaceSchemaBase: { refHead: workspace.authoringBasis.refHead, snapshot: unknownBase },
+  };
+  const frozen = { ...reviewed.schemaReview, base: unknownBase, changes: [] };
+  const unknownGraph = {
+    ...graph,
+    preparation: { ...graph.preparation!, canonicalJson: JSON.stringify({ schemaReview: frozen }) },
+  };
+  await expect(assertWorkspaceSchemaReview(db, projectId, unknown, unknownGraph)).rejects.toThrow(
+    'Base Schema'
+  );
+  await expect(
+    assertWorkspaceSchemaReview(db, projectId, unknown, unknownGraph, false)
+  ).resolves.toBeUndefined();
+});
+it('SE-011 schema-only binding drift cannot reuse a previous full Review', async () => {
+  const id = 'full-review-binding-drift';
+  await seed(id);
+  const reviewed = await fullReview(id);
+  const draft = (await findWorkspaceDraft(db, projectId, id))!;
+  await transactWorkspaceAuthoring(
+    db,
+    { projectId, workspaceId: id, refName: id },
+    async (_tx, current) => ({
+      workspace: {
+        ...current.workspace_state,
+        schemaBindings: [{ ...draft.workspace_state.schemaBindings[0], rootKey: 'different_root' }],
+      },
+      value: undefined,
+    })
+  );
+  await expect(fullDecision(id, reviewed)).rejects.toThrow();
+  expect((await getTransitionRefHead(db, { projectId, refName: id })).head).toBeNull();
+});
+
+it('SE-011 the compatibility Workspace Review freezes the same complete contract before Commit', async () => {
+  const id = 'full-review-compatibility';
+  await seed(id, true);
+  expect((await post(preparationPath(id), await mapping(id, true))).status).toBe(200);
+  const draft = (await findWorkspaceDraft(db, projectId, id))!;
+  const document = currentComposition(workspaceAuthoringState(draft.workspace_state).ledger) as {
+    content: { trees: unknown[]; relations: unknown[] };
+  };
+  const reviewed = await reviewWorkspaceTransition(db, {
+    projectId,
+    workspaceId: id,
+    actor: reviewer,
+    expectedRevision: draft.revision,
+    content: document.content as never,
+  });
+  const graph = await resolveTransitionProposalGraph(db, projectId, reviewed.transitionId);
+  expect(JSON.parse(graph.preparation!.canonicalJson).schemaReview.draftContent).toEqual(document);
+  await decideWorkspaceTransition(db, {
+    projectId,
+    workspaceId: id,
+    actor: reviewer,
+    transitionId: reviewed.transitionId,
+    outcome: 'accepted',
+    precondition: reviewed.precondition,
+  });
+  const saved = (await findWorkspaceDraft(db, projectId, id))!;
+  expect(saved.workspace_state.workspaceSchemaBase.snapshot.schemaHash).toBe(
+    await sha256CompositionValue(migratedSchema)
+  );
 });
 
 it('previews read-only, then atomically appends migration and Schema without losing earlier Draft actions', async () => {

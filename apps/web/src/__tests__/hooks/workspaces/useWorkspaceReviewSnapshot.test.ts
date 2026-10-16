@@ -1,5 +1,9 @@
 // @vitest-environment jsdom
 
+import type {
+  WorkspaceFullSchemaReview,
+  WorkspaceTransitionReviewSnapshotEnvelope,
+} from '@t3x-dev/api-client';
 import { waitFor } from '@testing-library/react';
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -57,9 +61,25 @@ describe('useWorkspaceReviewSnapshot', () => {
   });
 
   it('decides from the immutable snapshot without replaying Workspace content in Web', async () => {
-    vi.mocked(fetchWorkspaceTransitionReviewSnapshot).mockResolvedValue(
-      snapshotEnvelope('reviewing')
-    );
+    const loaded: WorkspaceTransitionReviewSnapshotEnvelope = snapshotEnvelope('reviewing');
+    const schemaReview: WorkspaceFullSchemaReview = {
+      schema: 't3x.application/workspace-schema-review/v1',
+      base: { status: 'unbound', schemaHash: null, definition: null, bindings: [] },
+      draft: {
+        status: 'bound',
+        schemaHash: `sha256:${'a'.repeat(64)}`,
+        definition: { nodes: {} },
+        bindings: [],
+      },
+      changes: [],
+      actionCount: 2,
+      baseContent: {},
+      draftContent: { title: 'Frozen Draft' },
+    };
+    vi.mocked(fetchWorkspaceTransitionReviewSnapshot).mockResolvedValue({
+      ...loaded,
+      schema_review: schemaReview,
+    });
     vi.mocked(decideWorkspaceTransition).mockResolvedValue({
       ...decisionEnvelope('committed'),
       workspace: { id: 'workspace_prd_handoff', projectId: 'proj_1' },
@@ -92,8 +112,52 @@ describe('useWorkspaceReviewSnapshot', () => {
       },
     });
     expect(result.current.state.data?.change_projection.status).toBe('committed');
+    expect(result.current.state.data?.schema_review).toEqual(schemaReview);
     expect(commitCreated).toHaveBeenCalledOnce();
     window.removeEventListener('t3x:commit-created', commitCreated);
+  });
+
+  it('blocks accept for an unavailable Base contract but leaves rejection available for audit', async () => {
+    vi.mocked(decideWorkspaceTransition).mockClear();
+    const loaded: WorkspaceTransitionReviewSnapshotEnvelope = snapshotEnvelope('reviewing');
+    const unknown: WorkspaceFullSchemaReview = {
+      schema: 't3x.application/workspace-schema-review/v1',
+      base: { status: 'unknown', schemaHash: null, definition: null, bindings: [] },
+      draft: {
+        status: 'bound',
+        schemaHash: `sha256:${'a'.repeat(64)}`,
+        definition: { nodes: {} },
+        bindings: [],
+      },
+      changes: [],
+      actionCount: 1,
+      baseContent: {},
+      draftContent: {},
+    };
+    vi.mocked(fetchWorkspaceTransitionReviewSnapshot).mockResolvedValue({
+      ...loaded,
+      schema_review: unknown,
+    });
+    const { result } = renderHook(() =>
+      useWorkspaceReviewSnapshot('proj_1', 'workspace_prd_handoff', loaded.snapshot_id)
+    );
+    await waitFor(() => expect(result.current.state.loading).toBe(false));
+    await act(async () => {
+      await result.current.decide('accepted');
+    });
+    expect(decideWorkspaceTransition).not.toHaveBeenCalled();
+    expect(result.current.state.error).toContain('Base Schema');
+    vi.mocked(decideWorkspaceTransition).mockRejectedValueOnce(
+      new Error('Audit transport unavailable')
+    );
+    await act(async () => {
+      await result.current.decide('rejected');
+    });
+    expect(decideWorkspaceTransition).toHaveBeenCalledWith(
+      'proj_1',
+      'workspace_prd_handoff',
+      expect.objectContaining({ outcome: 'rejected' })
+    );
   });
 });
 

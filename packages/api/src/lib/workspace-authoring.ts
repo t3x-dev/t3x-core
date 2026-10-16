@@ -381,6 +381,8 @@ export function buildAuthoringPreparation(workspace: Record<string, unknown>) {
     ledger,
     basis,
     bindings: buildAuthoringEffect(ledger).bindings,
+    schemaBindings: workspace.schemaBindings ?? [],
+    workspaceSchemaBase: workspace.workspaceSchemaBase ?? null,
   };
 }
 
@@ -392,6 +394,7 @@ export interface WorkspaceAuthoringHistoryEntry {
   preparationDigest: string | null;
   compositionRevision: number;
   basis: WorkspaceAuthoringBasis;
+  schemaHash?: string | null;
 }
 
 /** Recover the frozen ledger of a committed round whose basis matches, from its Commit preparation. */
@@ -423,6 +426,7 @@ export function renewWorkspaceAuthoringState(
     transitionId: string;
     preparationDigest: string | null;
     result: ReturnType<typeof createYOpsState>;
+    schemaBase?: import('@t3x-dev/api-client').WorkspaceSchemaDefinitionSnapshot;
   }
 ): Record<string, unknown> {
   const { ledger, basis } = workspaceAuthoringState(workspace);
@@ -435,6 +439,7 @@ export function renewWorkspaceAuthoringState(
     preparationDigest: input.preparationDigest,
     compositionRevision: ledger.compositionRevision,
     basis,
+    ...(input.schemaBase ? { schemaHash: input.schemaBase.schemaHash } : {}),
   };
   const nextBasis: WorkspaceAuthoringBasis = {
     schema: 't3x.application/workspace-authoring-basis/v1',
@@ -452,6 +457,9 @@ export function renewWorkspaceAuthoringState(
     authoringLedger: createDraftActionLedger(input.result.value as DraftDocument),
     authoringBasis: nextBasis,
     baseCommitHash: input.commitDigest,
+    ...(input.schemaBase
+      ? { workspaceSchemaBase: { refHead: input.commitDigest, snapshot: input.schemaBase } }
+      : {}),
   };
 }
 
@@ -463,9 +471,10 @@ export function assertWorkspaceAuthoringReview(
   const frozen = buildAuthoringPreparation(workspace);
   const built = buildAuthoringEffect(frozen.ledger);
   const preparation = graph.preparation ? JSON.parse(graph.preparation.canonicalJson) : null;
+  const { schemaReview: _schemaReview, ...manifest } = preparation ?? {};
   if (
     !preparation ||
-    canonicalizeProtocolValue(preparation) !==
+    canonicalizeProtocolValue(manifest) !==
       canonicalizeProtocolValue(JSON.parse(JSON.stringify(frozen))) ||
     describeTransitionObject(graph.effect).digest !== describeTransitionObject(built.effect).digest
   )
