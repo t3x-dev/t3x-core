@@ -2,6 +2,11 @@ import type { LLMProvider } from '@t3x-dev/core';
 import { describe, expect, it, vi } from 'vitest';
 import { createInferenceRuntime } from '../lib/inference';
 import {
+  GENERATION_MODEL_SPECIFICATION_VERSION,
+  type GenerationModel,
+  GenerationModelError,
+} from '../lib/model-runtime-contract';
+import {
   type AssistantEvent,
   runAssistantProvider,
 } from '../lib/workspace-assistant/adapters/provider-tools';
@@ -35,6 +40,78 @@ function fixture() {
   };
 }
 describe('metered Assistant loop', () => {
+  it.each([
+    true,
+    false,
+  ])('preserves managed image input or rejects an unsupported capability: %s', async (supportsImages) => {
+    const { input, events } = fixture();
+    const generate = vi.fn<GenerationModel['generate']>(async () => ({
+      output: [{ type: 'text', text: 'Image understood.' }],
+      evidence: { provider: 'gateway', model: 'image-model', usage, finishReason: 'stop' },
+    }));
+    const run = runAssistantProvider({
+      ...input,
+      generationModel: {
+        specificationVersion: GENERATION_MODEL_SPECIFICATION_VERSION,
+        provider: 'gateway',
+        modelId: 'balanced',
+        capabilities: supportsImages ? ['text', 'image_input'] : ['text'],
+        generate,
+      },
+      prompt: {
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: { type: 'base64', media_type: 'image/png', data: 'image-bytes' },
+              },
+            ],
+          },
+        ],
+      },
+      capabilities: {},
+    });
+    if (supportsImages) {
+      await run;
+      expect(generate.mock.calls[0][0].request.messages[0].content).toEqual([
+        { type: 'image', mediaType: 'image/png', data: 'image-bytes' },
+      ]);
+      expect(events).toContainEqual({ type: 'text', content: 'Image understood.' });
+    } else {
+      await expect(run).rejects.toThrow('generation_content_unsupported');
+      expect(generate).not.toHaveBeenCalled();
+    }
+  });
+
+  it('does not mark an interrupted managed stream as a completed response', async () => {
+    const { input, events } = fixture();
+    await expect(
+      runAssistantProvider({
+        ...input,
+        generationModel: {
+          specificationVersion: GENERATION_MODEL_SPECIFICATION_VERSION,
+          provider: 'gateway',
+          modelId: 'balanced',
+          capabilities: ['text', 'streaming'],
+          generate: vi.fn(),
+          stream: async () => ({
+            chunks: (async function* () {
+              yield { type: 'text_delta' as const, delta: 'Partial' };
+            })(),
+            terminal: Promise.resolve({
+              kind: 'failed',
+              error: new GenerationModelError('upstream_interrupted', 'unknown'),
+            }),
+          }),
+        },
+        capabilities: {},
+      })
+    ).rejects.toThrow('upstream_interrupted');
+    expect(events).toContainEqual({ type: 'text', content: 'Partial' });
+    expect(events.some((event) => event.type === 'done')).toBe(false);
+  });
   it('meters every continuation and binds operation identity independently from model call IDs', async () => {
     const { input, metered, events } = fixture();
     const execute = vi.fn(async () => ({ value: 25 }));

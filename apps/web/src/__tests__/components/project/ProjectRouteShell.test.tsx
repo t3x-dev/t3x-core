@@ -87,6 +87,24 @@ describe('ProjectRouteShell', () => {
     expect(screen.getByText('Index page owns its shell')).toBeInTheDocument();
   });
 
+  it('redirects project ID pull request links to the public repository route', async () => {
+    navigation.pathname = '/project/proj_test';
+    navigation.search = 'tab=pull-requests&branch=feature%2Frelease&pr=7';
+
+    render(
+      <ProjectRouteShell projectId="proj_test">
+        <div>Pull requests</div>
+      </ProjectRouteShell>
+    );
+
+    await waitFor(() =>
+      expect(navigation.replace).toHaveBeenCalledWith(
+        '/team/Test-Project/pull-requests?branch=feature%2Frelease&pr=7',
+        { scroll: false }
+      )
+    );
+  });
+
   it('maps workspace change routes to the Workspaces tab', () => {
     navigation.pathname = '/project/proj_test/changes/ws_1/snap_1';
 

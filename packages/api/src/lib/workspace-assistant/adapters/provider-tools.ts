@@ -1,9 +1,15 @@
 import { createHash } from 'node:crypto';
 import { type LLMPrompt, type LLMProvider, promptTextLength } from '@t3x-dev/core';
 import { executeMeteredInference } from '../../inference';
+import type { GenerationModel } from '../../model-runtime-contract';
 import type { AssistantCapabilities } from '../capabilities';
 import type { AssistantInference } from '../contracts';
 import { assistantProviderCapabilities } from '../policy';
+import { invokeWorkspaceGenerationModel } from './generation-model';
+
+export type AssistantModelBinding =
+  | { provider: LLMProvider; generationModel?: never }
+  | { provider?: never; generationModel: GenerationModel };
 
 export type AssistantEvent =
   | { type: 'capabilities'; tools: boolean; proposal: boolean }
@@ -18,20 +24,23 @@ export type AssistantEvent =
   | { type: 'done'; reason: 'completed' | 'step_limit' | 'cancelled' };
 
 /** Bounded loop. Each upstream call is separately admitted and metered through the existing runtime. */
-export async function runAssistantProvider(input: {
-  provider: LLMProvider;
-  model: string;
-  reasoningEffort?: 'low' | 'medium' | 'high';
-  prompt: LLMPrompt;
-  capabilities: AssistantCapabilities;
-  inference: AssistantInference;
-  operationNamespace: string;
-  assertCurrent: () => Promise<void>;
-  emit: (event: AssistantEvent) => Promise<void>;
-  signal?: AbortSignal;
-  maxSteps?: number;
-}) {
-  const hasTools = assistantProviderCapabilities(input.provider).tools;
+export async function runAssistantProvider(
+  input: AssistantModelBinding & {
+    model: string;
+    reasoningEffort?: 'low' | 'medium' | 'high';
+    prompt: LLMPrompt;
+    capabilities: AssistantCapabilities;
+    inference: AssistantInference;
+    operationNamespace: string;
+    assertCurrent: () => Promise<void>;
+    emit: (event: AssistantEvent) => Promise<void>;
+    signal?: AbortSignal;
+    maxSteps?: number;
+  }
+) {
+  const hasTools = input.generationModel
+    ? input.generationModel.capabilities.includes('tool_use')
+    : assistantProviderCapabilities(input.provider).tools;
   await input.emit({
     type: 'capabilities',
     tools: hasTools,
@@ -41,7 +50,8 @@ export async function runAssistantProvider(input: {
   const maxSteps = Math.min(8, Math.max(1, input.maxSteps ?? 5));
   let callIndex = 0;
   const seen = new Set<string>();
-  const canStreamPlainResponse = typeof input.provider.streamFromPrompt === 'function' && !hasTools;
+  const canStreamPlainResponse =
+    typeof input.provider?.streamFromPrompt === 'function' && !hasTools;
   for (let step = 0; step < maxSteps; step++) {
     if (input.signal?.aborted) {
       await input.emit({ type: 'done', reason: 'cancelled' });
@@ -60,11 +70,11 @@ export async function runAssistantProvider(input: {
           requestedModel: input.model,
           scope: input.inference.scope,
         },
-        resolvedProvider: input.provider.id,
+        resolvedProvider: input.provider!.id,
         resolvedModel: input.model,
         invoke: async () => {
           let usage = { inputTokens: 0, outputTokens: 0 };
-          for await (const event of input.provider.streamFromPrompt!(
+          for await (const event of input.provider!.streamFromPrompt!(
             prompt,
             { model: input.model, maxTokens: 4096, reasoningEffort: input.reasoningEffort },
             input.signal
@@ -94,9 +104,21 @@ export async function runAssistantProvider(input: {
         requestedModel: input.model,
         scope: input.inference.scope,
       },
-      resolvedProvider: input.provider.id,
+      resolvedProvider: input.generationModel?.provider ?? input.provider!.id,
       resolvedModel: input.model,
-      invoke: async () => {
+      invoke: async (attempt) => {
+        if (input.generationModel) {
+          return invokeWorkspaceGenerationModel({
+            model: input.generationModel,
+            attempt,
+            prompt,
+            tools: hasTools
+              ? Object.values(input.capabilities).map((capability) => capability.definition)
+              : undefined,
+            signal: input.signal,
+            emitText: (content) => input.emit({ type: 'text', content }),
+          });
+        }
         if (hasTools) {
           const result = await input.provider.generateWithTools!(
             prompt,

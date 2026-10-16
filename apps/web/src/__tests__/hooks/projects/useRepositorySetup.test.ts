@@ -54,7 +54,13 @@ it('creates an empty Workspace and conversation without AI defaults, material or
   await act(async () => {
     await result.current.create(input);
   });
-  expect(mocks.create).toHaveBeenCalledWith('Test', { description: 'Description' }, 'team');
+  expect(mocks.create).toHaveBeenCalledWith(
+    'Test',
+    { description: 'Description' },
+    'team',
+    undefined,
+    { initialize_readme: false, tags: [] }
+  );
   expect(mocks.update).not.toHaveBeenCalled();
   expect(mocks.upload).not.toHaveBeenCalled();
   expect(mocks.schemaRequest).not.toHaveBeenCalled();
@@ -83,7 +89,9 @@ it('resumes after a conversation failure without creating another repository or 
   );
 });
 it('adds the new repository to an already loaded owner project list', async () => {
-  useProjectStore.getState().setProjectScope('team');
+  useProjectStore
+    .getState()
+    .setProjectScope('team', undefined, { initialize_readme: false, tags: [] });
   useProjectStore.getState().setProjects([]);
   const { result } = renderHook(() => useRepositorySetup());
   await act(async () => {
@@ -120,5 +128,30 @@ it('reports repository creation errors and permits a corrected retry', async () 
   await act(async () => {
     await result.current.create({ ...input, owner: 'allowed' });
   });
-  expect(mocks.create).toHaveBeenLastCalledWith('Test', { description: 'Description' }, 'allowed');
+  expect(mocks.create).toHaveBeenLastCalledWith(
+    'Test',
+    { description: 'Description' },
+    'allowed',
+    undefined,
+    { initialize_readme: false, tags: [] }
+  );
+});
+
+it('sends README and normalized tags in the creation request, retaining them across setup retries', async () => {
+  mocks.conversation.mockRejectedValueOnce(new Error('Unavailable'));
+  const { result } = renderHook(() => useRepositorySetup());
+  await act(async () => {
+    await result.current.create({ ...input, initializeReadme: true, tags: ['中文', 'Dev'] });
+  });
+  await act(async () => {
+    await result.current.create(input);
+  });
+  expect(mocks.create).toHaveBeenCalledExactlyOnceWith(
+    'Test',
+    { description: 'Description' },
+    'team',
+    undefined,
+    { initialize_readme: true, tags: ['中文', 'Dev'] }
+  );
+  expect(mocks.update).not.toHaveBeenCalled();
 });

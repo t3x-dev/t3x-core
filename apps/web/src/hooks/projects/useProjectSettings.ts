@@ -54,13 +54,12 @@ export function useProjectSettings(projectId: string) {
 
   const saveGeneral = useCallback(
     async ({ description, name }: { description: string; name: string }) => {
-      // The API replaces metadata wholesale, so unrelated keys must be carried over.
-      const metadata = { ...(project?.metadata ?? {}), description };
       const updated = await updateProject(projectId, {
-        metadata,
+        metadata: { description },
         ...(name !== project?.name ? { name } : {}),
       });
-      setProject((prev) => (prev ? { ...prev, ...updated, metadata } : prev));
+      const metadata = updated.metadata;
+      setProject((prev) => (prev ? { ...prev, ...updated } : prev));
       useProjectStore.getState().updateProject(projectId, {
         description,
         metadata,

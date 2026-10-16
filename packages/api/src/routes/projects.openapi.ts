@@ -3,6 +3,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { initialRepositoryReadme, RepositoryReadmeSchema } from '@t3x-dev/api-client';
 import { inspectRepositoryName } from '@t3x-dev/application';
 import {
   DEMO_WORKSPACE_FIXTURE,
@@ -49,6 +50,7 @@ import {
   assertProjectCreationAccess,
   getProjectListAuthority,
   getUserId,
+  listAuthorizedProjectActions,
 } from '../lib/project-access';
 import {
   getProjectLifecyclePolicy,
@@ -57,6 +59,7 @@ import {
   resolveProjectLifecycleActor,
 } from '../lib/project-lifecycle-policy';
 import { createPrdStarterContent } from '../lib/project-starter';
+import { projectMetadataFields } from '../lib/repository-profile';
 import {
   commitRepositoryYOpsState,
   createRepositoryYOpsStateFromSemanticContent,
@@ -113,7 +116,7 @@ function toApiProject(project: {
     name: project.name,
     visibility: project.visibility,
     created_at: project.createdAt.toISOString(),
-    metadata: project.metadataJson ? JSON.parse(project.metadataJson) : null,
+    ...projectMetadataFields(project.metadataJson),
   };
 }
 
@@ -204,7 +207,7 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
       name: p.name,
       visibility: p.visibility,
       created_at: p.createdAt.toISOString(),
-      metadata: p.metadataJson ? JSON.parse(p.metadataJson) : null,
+      ...projectMetadataFields(p.metadataJson),
       conversations_count: Number(convCountRow?.count ?? 0),
       commits_count: Number(commitCountRow?.count ?? 0),
       branches_count: Number(branchCountRow?.count ?? 0),
@@ -627,6 +630,19 @@ projectRoutes.openapi(createProjectRoute, async (c) => {
     );
   body.name = naming.name;
 
+  const readme = body.initialize_readme
+    ? initialRepositoryReadme(body.name, body.metadata?.description)
+    : '';
+  const readmeCheck = RepositoryReadmeSchema.safeParse(readme);
+  if (!readmeCheck.success)
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'INVALID_INPUT', message: readmeCheck.error.issues[0]!.message },
+      },
+      400
+    );
+
   const denied = assertProjectCreationAccess(c);
   if (denied) return denied;
 
@@ -671,6 +687,10 @@ projectRoutes.openapi(createProjectRoute, async (c) => {
             projectId,
             name: body.name,
             metadata: body.metadata,
+            repositoryProfile:
+              body.initialize_readme || body.tags !== undefined
+                ? { readme, tags: body.tags ?? [] }
+                : undefined,
             ownerId: userId,
             namespaceId: namespace.namespaceId,
           });
@@ -711,7 +731,7 @@ projectRoutes.openapi(createProjectRoute, async (c) => {
       name: project.name,
       visibility: project.visibility,
       created_at: project.createdAt.toISOString(),
-      metadata: project.metadataJson ? JSON.parse(project.metadataJson) : null,
+      ...projectMetadataFields(project.metadataJson),
     };
 
     return c.json({ success: true as const, data: apiProject }, 201);
@@ -811,7 +831,7 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
       name: project.name,
       visibility: project.visibility,
       created_at: project.createdAt.toISOString(),
-      metadata: project.metadataJson ? JSON.parse(project.metadataJson) : null,
+      ...projectMetadataFields(project.metadataJson),
       provider_config: project.providerConfig ? JSON.parse(project.providerConfig) : null,
       conversations_count: project.stats.conversationsCount,
       turns_count: project.stats.turnsCount,
@@ -820,6 +840,7 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
       drafts_count: project.stats.draftsCount,
       outputs_count: outputsCount,
       extraction_style: project.extractionStyle ?? null,
+      can_edit: (await listAuthorizedProjectActions(c, db, id)).includes('project:edit'),
     };
 
     return c.json({ success: true as const, data: apiProject }, 200);
@@ -921,6 +942,7 @@ projectRoutes.openapi(updateProjectRoute, async (c) => {
     const project = await updateProject(db, id, {
       name: body.name,
       metadata: body.metadata,
+      repositoryProfile: body.repository_profile,
       providerConfig:
         body.provider_config === undefined
           ? undefined
@@ -948,7 +970,7 @@ projectRoutes.openapi(updateProjectRoute, async (c) => {
       name: project.name,
       visibility: project.visibility,
       created_at: project.createdAt.toISOString(),
-      metadata: project.metadataJson ? JSON.parse(project.metadataJson) : null,
+      ...projectMetadataFields(project.metadataJson),
       provider_config: project.providerConfig ? JSON.parse(project.providerConfig) : null,
       default_provider: project.defaultProvider ?? null,
       default_model: project.defaultModel ?? null,
@@ -1173,7 +1195,7 @@ projectRoutes.openapi(restoreProjectRoute, async (c) => {
       name: restored.name,
       visibility: restored.visibility,
       created_at: restored.createdAt.toISOString(),
-      metadata: restored.metadataJson ? JSON.parse(restored.metadataJson) : null,
+      ...projectMetadataFields(restored.metadataJson),
     };
 
     return c.json({ success: true as const, data: apiProject }, 200);

@@ -117,7 +117,7 @@ providersRoutes.onError((error, c) => {
           ? 'CREDENTIAL_ENCRYPTION_UNAVAILABLE'
           : 'PROVIDER_CONFIGURATION_UNAVAILABLE',
         message: encryption
-          ? 'Database credential encryption is unavailable. The deployment administrator must check T3X_CREDENTIAL_ENCRYPTION_KEY (a base64-encoded 32-byte key) and the keys used for existing credentials. No plaintext fallback is used.'
+          ? 'Database credentials could not be read or encrypted. The deployment administrator must check T3X_CREDENTIAL_ENCRYPTION_KEY (a base64-encoded 32-byte key), previous encryption keys and stored credential records. No plaintext fallback is used.'
           : 'Provider configuration could not be loaded or updated. Check the database connection and retry.',
       },
     },
@@ -613,33 +613,26 @@ providersRoutes.openapi(testProviderRoute, async (c) => {
     );
   }
 
-  if (localProvider) {
-    await refreshProviderRegistryConfig();
-  }
-
   const testedBundle = localProvider ? await getProviderCredentialBundle(await getDB()) : null;
+  // Configure and start the test from one snapshot, without an intervening await.
+  if (testedBundle) registry.setConfigOverrides(testedBundle.secrets);
   const result = await registry.testConnection(runtimeProviderId);
   // Provider errors can contain request headers or keys. Return only safe test diagnostics.
   if (!result.ok && result.error)
     result.error =
       'Connection test failed. Check the active credential, provider availability and network, then retry.';
 
-  if (localProvider) {
+  const testedRevision = localProvider ? testedBundle?.revisions[localProvider] : null;
+  if (localProvider && testedRevision) {
     try {
       const db = await getDB();
-      const bundle = await getProviderCredentialBundle(db);
-      const keyName = ENV_KEY_BY_LOCAL_PROVIDER[localProvider] as keyof typeof bundle.secrets;
-      if (
-        bundle.safe[localProvider].configured &&
-        bundle.secrets[keyName] === testedBundle?.secrets[keyName]
-      ) {
-        await updateProviderCredentialTestResult(db, localProvider, {
-          lastTestStatus: result.ok ? 'ok' : 'error',
-          lastTestedAt: new Date(),
-          lastTestError: result.error ?? null,
-        });
-        await refreshProviderRegistryConfig();
-      }
+      await updateProviderCredentialTestResult(db, localProvider, {
+        expectedRevision: testedRevision,
+        lastTestStatus: result.ok ? 'ok' : 'error',
+        lastTestedAt: new Date(),
+        lastTestError: result.error ?? null,
+      });
+      await refreshProviderRegistryConfig();
     } catch {
       // Best-effort local metadata persistence only.
     }

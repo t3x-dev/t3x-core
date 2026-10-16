@@ -1,39 +1,45 @@
 import type { DraftActionActor, DraftYOp } from '@t3x-dev/application';
-import type { LLMProvider } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
-import { type AssistantEvent, runAssistantProvider } from './adapters/provider-tools';
+import type { ProposalGenerationModel } from '../proposal-generation';
+import {
+  type AssistantEvent,
+  type AssistantModelBinding,
+  runAssistantProvider,
+} from './adapters/provider-tools';
 import { createAssistantCapabilities } from './capabilities';
 import { assertAssistantContextCurrent, prepareAssistantContext } from './context';
 import type { AssistantContextInput, AssistantInference } from './contracts';
 
-export async function chatWithWorkspace(input: {
-  db: AnyDB;
-  context: AssistantContextInput;
-  actor: DraftActionActor;
-  provider: LLMProvider;
-  model: string;
-  reasoningEffort?: 'low' | 'medium' | 'high';
-  inference: AssistantInference;
-  operationNamespace: string;
-  authorize: (capability: 'read' | 'propose') => Promise<void>;
-  exactEdit?: { operations: DraftYOp[]; reason?: string };
-  proposal?: {
-    posture: 'source_only' | 'guided' | 'recommend';
-    requestedProvider?: string;
-    requestedModel?: string;
-  };
-  signal?: AbortSignal;
-  emit: (
-    event:
-      | AssistantEvent
-      | {
-          type: 'context';
-          workspaceRevision: number;
-          compositionRevision: number;
-          disclosure: unknown;
-        }
-  ) => Promise<void>;
-}) {
+export async function chatWithWorkspace(
+  input: AssistantModelBinding & {
+    db: AnyDB;
+    context: AssistantContextInput;
+    actor: DraftActionActor;
+    model: string;
+    reasoningEffort?: 'low' | 'medium' | 'high';
+    inference: AssistantInference;
+    operationNamespace: string;
+    authorize: (capability: 'read' | 'propose') => Promise<void>;
+    exactEdit?: { operations: DraftYOp[]; reason?: string };
+    proposal?: {
+      posture: 'source_only' | 'guided' | 'recommend';
+      requestedProvider?: string;
+      requestedModel?: string;
+      resolveModel?: () => Promise<ProposalGenerationModel>;
+    };
+    signal?: AbortSignal;
+    emit: (
+      event:
+        | AssistantEvent
+        | {
+            type: 'context';
+            workspaceRevision: number;
+            compositionRevision: number;
+            disclosure: unknown;
+          }
+    ) => Promise<void>;
+  }
+) {
   const prepared = await prepareAssistantContext(input.db, input.context, () =>
     input.authorize('read')
   );

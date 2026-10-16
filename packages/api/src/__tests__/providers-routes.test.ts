@@ -30,6 +30,7 @@ const mockRegistry = {
   assignRole: vi.fn(),
   testConnection: vi.fn(),
   clearInstances: vi.fn(),
+  setConfigOverrides: vi.fn(),
 };
 
 vi.mock('../lib/db', () => ({
@@ -107,6 +108,7 @@ describe('Provider Routes', () => {
     mockRegistry.assignRole.mockReset();
     mockRegistry.testConnection.mockReset();
     mockRegistry.clearInstances.mockReset();
+    mockRegistry.setConfigOverrides.mockReset();
     vi.mocked(refreshProviderRegistryConfig).mockClear();
     await storage.deleteProviderCredential(mockDB, 'anthropic');
     await storage.deleteProviderCredential(mockDB, 'openai');
@@ -248,11 +250,14 @@ describe('Provider Routes', () => {
   });
 
   it('clears previous test success when replacing a credential', async () => {
-    await storage.upsertProviderCredential(mockDB, {
+    const { revisions } = await storage.upsertProviderCredential(mockDB, {
       providerId: 'openai',
       apiKey: 'old-test-key',
     });
-    await storage.updateProviderCredentialTestResult(mockDB, 'openai', { lastTestStatus: 'ok' });
+    await storage.updateProviderCredentialTestResult(mockDB, 'openai', {
+      expectedRevision: revisions.openai!,
+      lastTestStatus: 'ok',
+    });
     const replaced = await app.request('/v1/providers/local/openai', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -296,6 +301,89 @@ describe('Provider Routes', () => {
     expect(text).toContain('CREDENTIAL_ENCRYPTION_UNAVAILABLE');
     expect(text).not.toContain('database-secret');
     expect(text).not.toContain('environment-secret');
+  });
+
+  it.each([
+    'read',
+    'save',
+    'test',
+  ])('fails closed for malformed credential JSON on %s', async (operation) => {
+    vi.stubEnv('OPENAI_API_KEY', 'environment-must-not-win');
+    const raw = '{broken-json-private-fragment';
+    await storage.setGlobalSetting(mockDB, 'local_provider_credentials_v1_openai', raw);
+    try {
+      const res = await app.request(
+        operation === 'test' ? '/v1/providers/openai/test' : '/v1/providers/local/openai',
+        operation === 'save'
+          ? {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ api_key: 'replacement-key' }),
+            }
+          : { method: operation === 'test' ? 'POST' : 'GET' }
+      );
+      expect(res.status).toBe(503);
+      const text = await res.text();
+      expect(text).toContain('CREDENTIAL_ENCRYPTION_UNAVAILABLE');
+      expect(text).not.toContain(raw);
+      expect(text).not.toContain('environment-must-not-win');
+      expect(mockRegistry.testConnection).not.toHaveBeenCalled();
+    } finally {
+      await storage.deleteProviderCredential(mockDB, 'openai');
+    }
+  });
+
+  it.each([
+    'replacement',
+    'same key',
+    'deletion',
+    'environment to database',
+  ])('does not apply an in-flight connection test to a later credential %s', async (change) => {
+    if (change === 'environment to database') {
+      vi.stubEnv('OPENAI_API_KEY', 'environment-key');
+    } else {
+      await storage.upsertProviderCredential(mockDB, {
+        providerId: 'openai',
+        apiKey: 'tested-key',
+      });
+    }
+    let started!: () => void;
+    const testing = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    mockRegistry.testConnection.mockImplementation(async () => {
+      started();
+      await gate;
+      return { ok: true, latencyMs: 1 };
+    });
+    const request = app.request('/v1/providers/openai/test', { method: 'POST' });
+    try {
+      await testing;
+      expect(mockRegistry.setConfigOverrides).toHaveBeenLastCalledWith(
+        change === 'environment to database' ? {} : { OPENAI_API_KEY: 'tested-key' }
+      );
+      if (change === 'deletion') {
+        await storage.deleteProviderCredential(mockDB, 'openai');
+      } else {
+        await storage.upsertProviderCredential(mockDB, {
+          providerId: 'openai',
+          apiKey: change === 'same key' ? 'tested-key' : 'replacement-key',
+        });
+      }
+    } finally {
+      finish();
+    }
+    expect((await request).status).toBe(200);
+    const bundle = await storage.getProviderCredentialBundle(mockDB);
+    expect(bundle.secrets.OPENAI_API_KEY).toBe(
+      change === 'deletion' ? undefined : change === 'same key' ? 'tested-key' : 'replacement-key'
+    );
+    expect(bundle.safe.openai.lastTestStatus).toBeNull();
+    expect(bundle.safe.openai.lastTestedAt).toBeNull();
   });
 
   it('normalizes google aliases to the local provider family model', async () => {

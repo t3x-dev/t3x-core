@@ -1,5 +1,10 @@
 'use client';
 
+import {
+  initialRepositoryReadme,
+  RepositoryReadmeSchema,
+  RepositoryTagsSchema,
+} from '@t3x-dev/api-client';
 import { ChevronDown, Globe, Link2, LockKeyhole, UserRound } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
@@ -12,6 +17,7 @@ import { useRepositoryName } from '@/hooks/projects/useRepositoryName';
 import { useRepositorySetup } from '@/hooks/projects/useRepositorySetup';
 import styles from './NewRepositoryPage.module.css';
 import { RepositoryNameFeedback } from './RepositoryNameFeedback';
+import { type RepositoryTagsDraft, RepositoryTagsInput } from './RepositoryTagsInput';
 
 export function NewRepositoryPage() {
   const params = useParams<{ owner?: string | string[] }>();
@@ -23,9 +29,16 @@ export function NewRepositoryPage() {
   const [name, setName] = useState('');
   const nameCheck = useRepositoryName(owner, name);
   const [description, setDescription] = useState('');
+  const [initializeReadme, setInitializeReadme] = useState(false);
+  const [tags, setTags] = useState<RepositoryTagsDraft>({ tags: [], input: '' });
+  const parsedTags = RepositoryTagsSchema.safeParse([...tags.tags, tags.input]);
+  const parsedReadme = RepositoryReadmeSchema.safeParse(
+    initializeReadme ? initialRepositoryReadme(nameCheck.result?.name ?? name, description) : ''
+  );
   const [visibility, setVisibility] = useState<'private' | 'unlisted' | 'public'>('private');
   const locked = setup.pending || setup.started;
-  const ready = setup.started || nameCheck.canSubmit;
+  const ready =
+    setup.started || (nameCheck.canSubmit && parsedTags.success && parsedReadme.success);
   const owners = Array.from(new Set([routeOwner, ...accounts.map((item) => item.namespace.slug)]));
   const VisibilityIcon =
     visibility === 'private' ? LockKeyhole : visibility === 'public' ? Globe : Link2;
@@ -38,6 +51,8 @@ export function NewRepositoryPage() {
       description,
       owner,
       visibility,
+      initializeReadme,
+      tags: parsedTags.success ? parsedTags.data : [],
     });
     if (result)
       router.push(
@@ -173,10 +188,28 @@ export function NewRepositoryPage() {
               </div>
               <div className={styles.optionGroup}>
                 <div className={styles.reservedOption}>
-                  <h3>Add README</h3>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-sm font-semibold">
+                      <input
+                        type="checkbox"
+                        checked={initializeReadme}
+                        disabled={locked}
+                        onChange={(event) => setInitializeReadme(event.target.checked)}
+                      />
+                      Initialize README
+                    </label>
+                    <p className="text-xs text-[var(--text-secondary)]">
+                      Use the confirmed repository name and description. You can edit it later.
+                    </p>
+                    {!parsedReadme.success ? (
+                      <p role="alert" className="text-sm text-[var(--status-error)]">
+                        {parsedReadme.error.issues[0]?.message}
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
                 <div className={styles.reservedOption}>
-                  <h3>Add tags</h3>
+                  <RepositoryTagsInput value={tags} onChange={setTags} disabled={locked} />
                 </div>
               </div>
             </div>

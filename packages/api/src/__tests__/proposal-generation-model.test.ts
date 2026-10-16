@@ -1,9 +1,15 @@
 import { LLMProviderError } from '@t3x-dev/core';
 import type { YSchema } from '@t3x-dev/yschema';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createInferenceRuntime, executeMeteredInference } from '../lib/inference';
+import {
+  GENERATION_MODEL_SPECIFICATION_VERSION,
+  type GenerationModel,
+} from '../lib/model-runtime-contract';
 import type { ProposalGenerationModelInput } from '../lib/proposal-generation';
 import { defaultProposalGenerationModel } from '../lib/proposal-generation-model';
 import { semanticSchemaLayout } from '../lib/semantic-schema-layout';
+import { createWorkspaceProposalModel } from '../lib/workspace-assistant/adapters/generation-model';
 
 const { generateStructured, resolveProviderAndModel } = vi.hoisted(() => ({
   generateStructured: vi.fn(),
@@ -61,6 +67,89 @@ const draft = {
   ],
   warnings: [],
 };
+
+describe('managed Workspace Proposal binding', () => {
+  const evidence = {
+    provider: 'hosted-gateway',
+    model: 'actual-model',
+    usage: { inputTokens: 12, outputTokens: 8 },
+    finishReason: 'stop' as const,
+    providerRequestId: 'structured-request',
+    providerReportedCost: { amount: '0.002', currency: 'USD' },
+  };
+  function managed(generate: GenerationModel['generate']) {
+    return createWorkspaceProposalModel({
+      specificationVersion: GENERATION_MODEL_SPECIFICATION_VERSION,
+      provider: 'managed',
+      modelId: 'balanced',
+      capabilities: ['text', 'structured_output'],
+      generate,
+    });
+  }
+  async function invoke(generate: GenerationModel['generate']) {
+    const target = managed(generate);
+    return executeMeteredInference({
+      runtime: createInferenceRuntime({ createGenerationId: () => 'managed-proposal-attempt' }),
+      input: {
+        runId: 'proposal-run',
+        feature: 'transition.proposal-generation',
+        requestedModel: 'balanced',
+        scope: { actor: { kind: 'user', id: 'u' }, projectId: 'p' },
+      },
+      resolvedProvider: target.provider,
+      resolvedModel: target.model,
+      invoke: async (attempt) => {
+        const result = await target.generate(input, attempt);
+        return { ...result, value: result.draft };
+      },
+    });
+  }
+  it('uses the admitted identity and existing draft validation with actual upstream evidence', async () => {
+    const generate = vi.fn<GenerationModel['generate']>(async () => ({
+      output: [{ type: 'json', value: draft }],
+      evidence,
+    }));
+    const result = await invoke(generate);
+    expect(result.value).toEqual(draft);
+    expect(generate).toHaveBeenCalledOnce();
+    expect(generate.mock.calls[0][0]).toMatchObject({
+      generationId: 'managed-proposal-attempt',
+      runId: 'proposal-run',
+      attemptIndex: 0,
+      feature: 'transition.proposal-generation',
+      request: {
+        output: { type: 'json', name: 'ProposalGenerationDraft' },
+        maxOutputTokens: 16000,
+      },
+    });
+    expect(result.receipt).toMatchObject({
+      resolvedProvider: evidence.provider,
+      resolvedModel: evidence.model,
+      providerRequestId: evidence.providerRequestId,
+      providerReportedCost: evidence.providerReportedCost,
+      usage: evidence.usage,
+    });
+  });
+  it('rejects invalid drafts without a hidden second upstream call or local fallback', async () => {
+    const invalid = structuredClone(draft);
+    invalid.changes[0].operations = [
+      { append: { path: 'missing/children', value: 'invalid' } },
+    ] as never;
+    const generate = vi.fn<GenerationModel['generate']>(async () => ({
+      output: [{ type: 'json', value: invalid }],
+      evidence,
+    }));
+    await expect(invoke(generate)).rejects.toThrow('Generated operations cannot be applied');
+    expect(generate).toHaveBeenCalledOnce();
+  });
+  it('rejects unmanaged calls without an admitted attempt identity', async () => {
+    const generate = vi.fn();
+    await expect(managed(generate).generate(input)).rejects.toThrow(
+      'generation_capability_unsupported'
+    );
+    expect(generate).not.toHaveBeenCalled();
+  });
+});
 
 async function model() {
   return defaultProposalGenerationModel({ db: {}, projectId: 'test', request: {} } as Parameters<

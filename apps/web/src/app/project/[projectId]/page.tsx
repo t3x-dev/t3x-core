@@ -456,6 +456,8 @@ export function ProjectDetailPageContent({
         projectDescription={project.description}
         projectOwner={project.owner}
         projectVisibility={project.visibility}
+        repositoryProfile={project.repositoryProfile}
+        canEditRepository={project.canEdit}
         validation={project.yschemaValidation}
         validationError={yschemaValidationError}
         validationRunning={yschemaValidationRunning}

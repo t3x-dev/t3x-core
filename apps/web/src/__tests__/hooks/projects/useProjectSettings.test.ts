@@ -45,6 +45,7 @@ describe('useProjectSettings', () => {
       ...project,
       name: 'renamed',
       canonical_path: '/team/renamed',
+      metadata: { description: 'new', starter: 'prd-v1' },
     });
     const { result } = renderHook(() => useProjectSettings('proj_1'));
     await waitFor(() => expect(result.current.project).not.toBeNull());
@@ -52,7 +53,7 @@ describe('useProjectSettings', () => {
     await act(() => result.current.saveGeneral({ description: 'new', name: 'renamed' }));
 
     expect(updateProject).toHaveBeenCalledWith('proj_1', {
-      metadata: { description: 'new', starter: 'prd-v1' },
+      metadata: { description: 'new' },
       name: 'renamed',
     });
     expect(result.current.project?.metadata).toEqual({ description: 'new', starter: 'prd-v1' });
