@@ -453,6 +453,15 @@ schemaStudioRoutes.openapi(applyRoute, async (c) => {
       );
     if (!preview.report.valid)
       return errorResponse(c, 'REVIEW_REQUIRED', 'Selected definitions have blocking issues.');
+    if (!preview.impact?.canAdopt)
+      return errorResponse(
+        c,
+        'REVIEW_REQUIRED',
+        'Resolve the Schema content impact before applying.',
+        {
+          impact: preview.impact,
+        }
+      );
     if (preview.reviewHash !== input.reviewHash || preview.workspace?.revision !== input.ifRevision)
       throw new StudioError(
         'CONFLICT',

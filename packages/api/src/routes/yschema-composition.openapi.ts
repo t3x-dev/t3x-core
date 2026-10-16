@@ -2,6 +2,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   SchemaCatalogCollectionsSchema,
   SchemaCatalogPageSchema,
+  SchemaEvolutionImpactSchema,
   SchemaReleasePresentationReferenceSchema,
   StatePresentationSchema,
 } from '@t3x-dev/api-client';
@@ -37,6 +38,7 @@ import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
 import { readSchemaEditorPicks } from '../lib/schema-editor-picks';
+import { assessWorkspaceSchemaImpact } from '../lib/schema-evolution-impact';
 import {
   artifactViewToManifest,
   ensureBuiltInYSchemaArtifacts,
@@ -242,6 +244,7 @@ const CompositionPreviewResponseSchema = z
     compiledSchemaHash: z.string(),
     compositionHash: z.string(),
     reportHash: z.string().optional(),
+    impact: SchemaEvolutionImpactSchema.optional(),
   })
   .openapi('YSchemaCompositionPreviewResponse');
 
@@ -1122,6 +1125,19 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
         { issues: preview.report.issues }
       );
     }
+    const impact = await assessWorkspaceSchemaImpact(
+      db,
+      projectId,
+      draft.workspace_state,
+      preview.schema
+    );
+    if (!impact.canPublish)
+      return errorResponse(
+        c,
+        'REVIEW_REQUIRED',
+        'Resolve the Schema content impact before publishing.',
+        { impact }
+      );
     const modulesByIdentity = new Map(
       modules.map((module) => [`${module.canonicalName}@${module.version}`, module])
     );
@@ -1243,6 +1259,20 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
       { issues: preview.report.issues }
     );
   }
+
+  const impact = await assessWorkspaceSchemaImpact(
+    db,
+    projectId,
+    draft.workspace_state,
+    preview.schema
+  );
+  if (!impact.canPublish)
+    return errorResponse(
+      c,
+      'REVIEW_REQUIRED',
+      'Resolve the Schema content impact before publishing.',
+      { impact }
+    );
 
   const schema = normalizeYSchemaObject({
     ...preview.schema,
@@ -1397,6 +1427,20 @@ yschemaCompositionRoutes.openapi(applyWorkspaceCompositionRoute, async (c) => {
       { issues: preview.report.issues }
     );
   }
+
+  const impact = await assessWorkspaceSchemaImpact(
+    db,
+    projectId,
+    draft.workspace_state,
+    preview.schema
+  );
+  if (!impact.canAdopt)
+    return errorResponse(
+      c,
+      'REVIEW_REQUIRED',
+      'Resolve the Schema content impact before applying.',
+      { impact }
+    );
 
   const binding = {
     canonicalName:

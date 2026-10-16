@@ -65,68 +65,6 @@ export const StudioSampleSchema = z.object({
   issues: z.array(z.object({ code: z.string(), path: z.string(), message: z.string() })),
 });
 export type StudioSample = z.infer<typeof StudioSampleSchema>;
-export const StudioPreviewInputSchema = z
-  .object({
-    candidateIds: ids,
-    workspaceId: z.string().min(1).optional(),
-    compareToCandidateIds: ids.optional(),
-    sample: StudioSampleValueSchema.optional(),
-  })
-  .strict();
-export const StudioApplyInputSchema = z
-  .object({
-    candidateIds: ids,
-    workspaceId: z.string().min(1),
-    ifRevision: z.number().int().nonnegative(),
-    reviewHash: digest,
-  })
-  .strict();
-const change = z.object({
-  kind: z.enum(['ADD', 'CHANGE', 'REMOVE']),
-  path: z.string(),
-  summary: z.string(),
-});
-export const StudioPreviewSchema = z.object({
-  samples: z.array(StudioSampleSchema).default([]),
-  localSample: StudioSampleSchema.nullable().default(null),
-  selectionHash: digest,
-  schemaHash: digest,
-  reviewHash: digest,
-  schema: z.record(z.string(), z.unknown()),
-  report: z.object({
-    valid: z.boolean(),
-    issues: z.array(
-      z.object({
-        code: z.string(),
-        message: z.string(),
-        blocking: z.boolean(),
-        path: z.string().optional(),
-      })
-    ),
-  }),
-  renderPlan: z.array(z.record(z.string(), z.unknown())),
-  origins: z.record(z.string(), z.unknown()),
-  modules: z
-    .array(z.object({ candidateId: z.string(), requiredBy: z.array(z.string()) }))
-    .default([]),
-  sources: z.array(StudioSourceSchema),
-  adoption: z.object({ allowed: z.boolean(), reason: z.string().nullable() }),
-  workspace: z
-    .object({
-      id: z.string(),
-      revision: z.number(),
-      binding: z.record(z.string(), z.unknown()).nullable(),
-      changes: z.array(change),
-    })
-    .nullable(),
-  comparison: z.object({ schemaHash: digest, changes: z.array(change) }).nullable(),
-});
-export type StudioPreview = z.infer<typeof StudioPreviewSchema>;
-export type StudioPreviewInput = z.infer<typeof StudioPreviewInputSchema>;
-export type StudioApplyInput = z.infer<typeof StudioApplyInputSchema>;
-
-export const StudioSchemaEditOriginChannelSchema = z.enum(['studio', 'assistant', 'import', 'api']);
-
 export const StudioSchemaEditLocalContributionSchema = z
   .record(z.string(), z.unknown())
   .superRefine((value, ctx) => {
@@ -147,6 +85,115 @@ export const StudioSchemaEditLocalContributionSchema = z
     if (new TextEncoder().encode(JSON.stringify(value)).length > 1024 * 1024)
       ctx.addIssue({ code: 'custom', message: 'Schema contribution must be at most 1 MiB.' });
   });
+export const StudioSchemaEditCandidateRefSchema = z.object({
+  candidateId: z.string().min(1),
+  revision: z.number().int().positive(),
+});
+export const StudioPreviewInputSchema = z
+  .object({
+    candidateIds: ids,
+    workspaceId: z.string().min(1).optional(),
+    compareToCandidateIds: ids.optional(),
+    sample: StudioSampleValueSchema.optional(),
+    localContribution: StudioSchemaEditLocalContributionSchema.optional(),
+    schemaEditCandidate: StudioSchemaEditCandidateRefSchema.optional(),
+  })
+  .strict()
+  .refine((value) => !(value.localContribution && value.schemaEditCandidate), {
+    message: 'Preview either a saved Schema edit candidate or an unsaved local contribution.',
+  });
+export const StudioApplyInputSchema = z
+  .object({
+    candidateIds: ids,
+    workspaceId: z.string().min(1),
+    ifRevision: z.number().int().nonnegative(),
+    reviewHash: digest,
+    schemaEditCandidate: StudioSchemaEditCandidateRefSchema.optional(),
+  })
+  .strict();
+const change = z.object({
+  kind: z.enum(['ADD', 'CHANGE', 'REMOVE']),
+  path: z.string(),
+  summary: z.string(),
+});
+export const SchemaEvolutionImpactSchema = z.object({
+  status: z.enum(['safe', 'needs_input', 'needs_mapping', 'blocked']),
+  canAdopt: z.boolean(),
+  canPublish: z.boolean(),
+  changes: z.array(change),
+  items: z.array(
+    z.object({
+      kind: z.enum(['safe_addition', 'safe_change', 'needs_input', 'needs_mapping', 'blocked']),
+      code: z.string(),
+      path: z.string(),
+      message: z.string(),
+      affectedPaths: z.array(z.string()),
+    })
+  ),
+  content: z.object({
+    source: z.enum(['authoring_ledger', 'candidate_fields', 'empty', 'unavailable']),
+    hash: digest.nullable(),
+    valid: z.boolean().nullable(),
+    ready: z.boolean().nullable(),
+    issues: z.array(z.object({ code: z.string(), path: z.string(), message: z.string() })),
+  }),
+});
+export type SchemaEvolutionImpact = z.infer<typeof SchemaEvolutionImpactSchema>;
+const studioCheckIssue = z.object({
+  code: z.string(),
+  message: z.string(),
+  blocking: z.boolean(),
+  path: z.string().optional(),
+});
+export const StudioCheckLayerSchema = z.object({
+  id: z.enum(['definition', 'composition', 'provenance', 'workspace', 'freshness']),
+  label: z.string(),
+  status: z.enum(['passed', 'failed', 'warning', 'not_run']),
+  issues: z.array(studioCheckIssue),
+  summary: z.string().optional(),
+});
+export const StudioPreviewSchema = z.object({
+  impact: SchemaEvolutionImpactSchema.nullable().default(null),
+  samples: z.array(StudioSampleSchema).default([]),
+  localSample: StudioSampleSchema.nullable().default(null),
+  selectionHash: digest,
+  schemaHash: digest,
+  reviewHash: digest,
+  schema: z.record(z.string(), z.unknown()),
+  report: z.object({
+    valid: z.boolean(),
+    issues: z.array(studioCheckIssue),
+    layers: z.array(StudioCheckLayerSchema).default([]),
+  }),
+  renderPlan: z.array(z.record(z.string(), z.unknown())),
+  origins: z.record(z.string(), z.unknown()),
+  modules: z
+    .array(z.object({ candidateId: z.string(), requiredBy: z.array(z.string()) }))
+    .default([]),
+  sources: z.array(StudioSourceSchema),
+  adoption: z.object({ allowed: z.boolean(), reason: z.string().nullable() }),
+  workspace: z
+    .object({
+      id: z.string(),
+      revision: z.number(),
+      binding: z.record(z.string(), z.unknown()).nullable(),
+      changes: z.array(change),
+    })
+    .nullable(),
+  comparison: z.object({ schemaHash: digest, changes: z.array(change) }).nullable(),
+  freshness: z.object({
+    candidateId: z.string().nullable(),
+    candidateRevision: z.number().int().positive().nullable(),
+    candidateRequestDigest: digest.nullable(),
+    workspaceRevision: z.number().int().nonnegative().nullable(),
+    schemaHash: digest,
+  }),
+});
+export type StudioPreview = z.infer<typeof StudioPreviewSchema>;
+export type StudioPreviewInput = z.infer<typeof StudioPreviewInputSchema>;
+export type StudioApplyInput = z.infer<typeof StudioApplyInputSchema>;
+
+export const StudioSchemaEditOriginChannelSchema = z.enum(['studio', 'assistant', 'import', 'api']);
 
 export const SaveStudioSchemaEditCandidateInputSchema = z
   .object({

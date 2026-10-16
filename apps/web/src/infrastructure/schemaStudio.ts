@@ -1,7 +1,10 @@
 import {
   type AddStudioCandidate,
+  type SaveStudioSchemaEditCandidateInput,
   StudioCandidateListSchema,
   StudioCandidateSchema,
+  StudioSchemaEditCandidateSaveResultSchema,
+  StudioSchemaEditCandidateSchema,
 } from '@t3x-dev/api-client';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
@@ -26,6 +29,31 @@ export async function addStudioCandidate(projectId: string, source: AddStudioCan
 export async function removeStudioCandidate(projectId: string, id: string) {
   await handleResponse(
     await fetchWithTimeout(`${path(projectId)}/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  );
+}
+
+const schemaEditPath = (projectId: string, workspaceId: string) =>
+  `${API_V1}/projects/${encodeURIComponent(projectId)}/schema-studio/edit-candidates/${encodeURIComponent(workspaceId)}`;
+
+export async function readStudioSchemaEditCandidate(projectId: string, workspaceId: string) {
+  const response = await fetchWithTimeout(schemaEditPath(projectId, workspaceId));
+  if (response.status === 404) return null;
+  return StudioSchemaEditCandidateSchema.parse(await handleResponse(response));
+}
+
+export async function saveStudioSchemaEditCandidate(
+  projectId: string,
+  workspaceId: string,
+  input: SaveStudioSchemaEditCandidateInput
+) {
+  return StudioSchemaEditCandidateSaveResultSchema.parse(
+    await handleResponse(
+      await fetchWithTimeout(schemaEditPath(projectId, workspaceId), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      })
+    )
   );
 }
 

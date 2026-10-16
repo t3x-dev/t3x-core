@@ -217,6 +217,122 @@ it('persists one Schema edit candidate across create, retry, edit, and recovery'
     (await findWorkspaceDraft(db, target, workspaceId))?.workspace_state?.schemaEditCandidate
   ).toEqual(updated.candidate);
 });
+it('binds layered checks and review hashes to the saved candidate revision', async () => {
+  const workspaceId = 'layered-checks';
+  await upsertWorkspaceDraft(db, {
+    project_id: target,
+    workspace_id: workspaceId,
+    target_branch: workspaceId,
+    title: 'Layered checks',
+    workspace_state: {
+      title: 'Layered checks',
+      targetBranch: workspaceId,
+      schemaBindings: [],
+      yopsDraft: { operations: [] },
+    },
+  });
+  const [base] = await listSchemaStudioCandidates(db, target);
+  const candidateUrl = `/v1/projects/${target}/schema-studio/edit-candidates/${workspaceId}`;
+  const put = (body: unknown) =>
+    app.request(candidateUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  const preview = (body: unknown) =>
+    app.request(`/v1/projects/${target}/schema-studio/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  const contribution = {
+    nodes: {
+      advantage: {
+        slots: { title: { type: 'string', minLength: 1 } },
+        requiredSlots: ['title'],
+      },
+    },
+  };
+  const created = (
+    await (
+      await put({
+        workspaceId,
+        candidateIds: [base!.id],
+        ifRevision: 0,
+        retryKey: 'layered-create',
+        intent: 'Add advantage',
+        origin: 'studio',
+        localContribution: contribution,
+      })
+    ).json()
+  ).data;
+  const firstInput = {
+    candidateIds: [base!.id],
+    workspaceId,
+    schemaEditCandidate: {
+      candidateId: created.candidate.candidateId,
+      revision: created.candidate.revision,
+    },
+  };
+  const firstResponse = await preview(firstInput);
+  expect(firstResponse.status).toBe(200);
+  const first = (await firstResponse.json()).data;
+  expect(first.freshness).toMatchObject({
+    candidateId: created.candidate.candidateId,
+    candidateRevision: 1,
+    candidateRequestDigest: created.candidate.requestDigest,
+    schemaHash: first.schemaHash,
+  });
+  expect(first.origins.advantage).toMatchObject({
+    kind: 'local',
+    contributionId: created.candidate.candidateId,
+    revision: 1,
+  });
+  expect(first.report.layers.map((layer: { id: string }) => layer.id)).toEqual([
+    'definition',
+    'composition',
+    'provenance',
+    'workspace',
+    'freshness',
+  ]);
+  expect(first.report.layers).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ id: 'workspace', status: 'warning' }),
+      expect.objectContaining({ id: 'freshness', status: 'passed' }),
+    ])
+  );
+  const repeated = (await (await preview(firstInput)).json()).data;
+  expect(repeated.reviewHash).toBe(first.reviewHash);
+
+  const updated = (
+    await (
+      await put({
+        workspaceId,
+        candidateIds: [base!.id],
+        ifRevision: 1,
+        retryKey: 'layered-update',
+        intent: 'Keep advantage with a clarified intent',
+        origin: 'studio',
+        localContribution: contribution,
+      })
+    ).json()
+  ).data;
+  expect((await preview(firstInput)).status).toBe(409);
+  const current = (
+    await (
+      await preview({
+        ...firstInput,
+        schemaEditCandidate: {
+          candidateId: updated.candidate.candidateId,
+          revision: updated.candidate.revision,
+        },
+      })
+    ).json()
+  ).data;
+  expect(current.freshness.candidateRevision).toBe(2);
+  expect(current.reviewHash).not.toBe(first.reviewHash);
+  expect(current.schemaHash).toBe(first.schemaHash);
+});
 it('checks target write and source read authority; revoked source is redacted on list', async () => {
   denied.add(`${target}:project:edit`);
   expect(

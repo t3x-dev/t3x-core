@@ -169,6 +169,76 @@ it('compiles deterministically, compares definitions, and keeps preview read-onl
     ).status
   ).toBe(409);
 });
+it('previews a Workspace-local contribution on top of the immutable selection', async () => {
+  for (const baseId of [coreId, schemaId]) {
+    const input = {
+      candidateIds: [baseId],
+      workspaceId: 'work',
+      localContribution: {
+        nodes: {
+          advantage: {
+            required: false,
+            slots: { title: { type: 'string', minLength: 1 } },
+            requiredSlots: ['title'],
+          },
+        },
+      },
+    };
+    const first = (await (await request('preview', input)).json()).data;
+    const second = (await (await request('preview', input)).json()).data;
+    expect(first.report.valid).toBe(true);
+    expect(first.schema.nodes.advantage).toEqual(input.localContribution.nodes.advantage);
+    expect(first.origins.advantage).toMatchObject({ kind: 'local', revision: 0 });
+    expect(first.schemaHash).toBe(second.schemaHash);
+    expect(first.reviewHash).toBe(second.reviewHash);
+  }
+});
+it('reports current Workspace candidate content that no longer fits the selected schema', async () => {
+  await upsertWorkspaceDraft(db, {
+    project_id: target,
+    workspace_id: 'content-check',
+    target_branch: 'content-check',
+    title: 'Content check',
+    workspace_state: {
+      title: 'Content check',
+      targetBranch: 'content-check',
+      schemaBindings: [],
+      schemaCandidate: {
+        summary: 'Existing candidate',
+        fields: [
+          {
+            id: 'problem',
+            path: 'summary.problem',
+            label: 'Problem',
+            type: 'number',
+            required: true,
+            status: 'type_mismatch',
+            value: 42,
+          },
+        ],
+      },
+      yopsDraft: { operations: [] },
+    },
+  });
+  const preview = (
+    await (
+      await request('preview', { candidateIds: [coreId], workspaceId: 'content-check' })
+    ).json()
+  ).data;
+  const workspaceLayer = preview.report.layers.find(
+    (layer: { id: string }) => layer.id === 'workspace'
+  );
+  expect(workspaceLayer).toMatchObject({
+    id: 'workspace',
+    status: 'failed',
+  });
+  expect(
+    workspaceLayer.issues.some(
+      (issue: { code: string; path?: string }) =>
+        issue.code.startsWith('WORKSPACE_') && issue.path?.includes('summary')
+    )
+  ).toBe(true);
+});
 it('requires source redistribution and target edit authority and rejects stale review hashes', async () => {
   denied.add(`${source}:project:edit`);
   const preview = (
