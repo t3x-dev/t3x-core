@@ -109,7 +109,7 @@ beforeEach(() => {
   mocks.workspaces = [];
   mocks.data = {
     samples: [],
-    schema: { nodes: {} },
+    schema: { yschema: '0.1', name: 'studio:test', strict: false, nodes: {} },
     schemaHash: 'definition-hash',
     reviewHash: 'review',
     renderPlan: [],
@@ -170,9 +170,7 @@ it('keeps a required provider checked and locked while blocking a failed definit
   expect(composition).toContainElement(
     screen.getByRole('complementary', { name: 'Module details' })
   );
-  expect(
-    within(controls).getByRole('button', { name: 'Advanced definition workbench' })
-  ).toBeVisible();
+  expect(within(controls).getByRole('button', { name: 'Add modules' })).toBeVisible();
   expect(within(controls).getByRole('button', { name: 'Review changes' })).toBeDisabled();
   expect(screen.getByLabelText('Target Workspace')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Zoom out' })).toBeVisible();
@@ -229,12 +227,13 @@ it('opens the module workbench in a wide viewport-bounded dialog with a scrollab
       <div>Module workbench content</div>
     </SchemaStudioExperience>
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Advanced definition workbench' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Add modules' }));
   const dialog = screen.getByRole('dialog', { name: 'Add modules' });
   expect(dialog).toHaveClass(moduleStyles.dialog);
-  expect(within(dialog).getByText('Module workbench content').parentElement).toHaveClass(
-    moduleStyles.body
-  );
+  expect(
+    within(dialog).getByText(/No separate Composition draft is created/).parentElement
+  ).toHaveClass(moduleStyles.body);
+  expect(within(dialog).queryByText('Module workbench content')).not.toBeInTheDocument();
   fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(mocks.apply).not.toHaveBeenCalled();
@@ -258,7 +257,7 @@ it('opens the embedded definition workbench and saves one shared Structure/YAML 
   fireEvent.click(within(dialog).getByRole('button', { name: 'Add node' }));
   expect(within(dialog).getByLabelText('Node name new_node')).toBeVisible();
   fireEvent.click(within(dialog).getByRole('tab', { name: 'YAML' }));
-  expect(within(dialog).getByLabelText('Local Schema contribution YAML editor')).toBeVisible();
+  expect(within(dialog).getByLabelText('Schema definition YAML editor')).toBeVisible();
   fireEvent.click(within(dialog).getByRole('button', { name: 'Save candidate' }));
   await waitFor(() =>
     expect(mocks.saveSchemaEdit).toHaveBeenCalledWith(
@@ -267,7 +266,8 @@ it('opens the embedded definition workbench and saves one shared Structure/YAML 
         candidateIds: ['provider'],
         ifRevision: 0,
         origin: 'studio',
-        localContribution: { nodes: { new_node: { slots: {} } } },
+        localContribution: {},
+        schemaDefinition: expect.objectContaining({ nodes: { new_node: { slots: {} } } }),
       })
     )
   );
@@ -288,6 +288,47 @@ it('selects the only draft workspace once instead of duplicating Main workspace'
   expect(select.querySelectorAll('option')).toHaveLength(1);
   expect(select).toHaveValue('workspace_branch:main');
   expect(select).toHaveTextContent('Main workspace');
+});
+
+it('edits existing fields against a frozen Base and retains unsaved input while preview is revalidating', async () => {
+  mocks.workspaces = [
+    {
+      id: 'workspace_branch:main',
+      revision: 1,
+      status: 'draft',
+      targetBranch: 'main',
+      title: 'Main workspace',
+    },
+  ];
+  mocks.data = {
+    ...(mocks.data as object),
+    schema: {
+      yschema: '0.1',
+      name: 'studio:test',
+      strict: true,
+      nodes: { product: { slots: { title: { type: 'string' } } } },
+    },
+  };
+  const { rerender } = render(<SchemaStudioExperience projectId="p" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Edit definition' }));
+  fireEvent.change(screen.getByLabelText('Slot type title'), { target: { value: 'number' } });
+  expect(screen.getByLabelText('Slot type title')).toHaveValue('number');
+  mocks.data = undefined;
+  rerender(<SchemaStudioExperience projectId="p" />);
+  expect(screen.getByLabelText('Slot type title')).toHaveValue('number');
+  fireEvent.click(screen.getByRole('button', { name: 'Save candidate' }));
+  await waitFor(() =>
+    expect(mocks.saveSchemaEdit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseSchemaHash: 'definition-hash',
+        localContribution: {},
+        schemaDefinition: expect.objectContaining({
+          strict: true,
+          nodes: { product: { slots: { title: { type: 'number' } } } },
+        }),
+      })
+    )
+  );
 });
 
 it.each([

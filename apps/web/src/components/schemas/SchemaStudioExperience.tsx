@@ -169,7 +169,6 @@ function candidateIcon(index: number) {
 
 export function SchemaStudioExperience({
   projectId,
-  children,
   navigation,
 }: {
   projectId: string;
@@ -190,7 +189,13 @@ export function SchemaStudioExperience({
   const [activeModuleId, setActiveModuleId] = useState('requirements');
   const [advanced, setAdvanced] = useState(params?.get('mode') === 'compose');
   const [definitionOpen, setDefinitionOpen] = useState(false);
+  const [editorBase, setEditorBase] = useState<{
+    schema: Record<string, unknown>;
+    hash: string;
+    initial: Record<string, unknown>;
+  }>();
   const [localContribution, setLocalContribution] = useState<Record<string, unknown>>({});
+  const [schemaDefinition, setSchemaDefinition] = useState<Record<string, unknown>>();
   const [savedCandidateRef, setSavedCandidateRef] = useState<{
     candidateId: string;
     revision: number;
@@ -305,6 +310,7 @@ export function SchemaStudioExperience({
     persistedTarget?.revision
   );
   const recoveredSelection = useRef('');
+  const recoveredEditIdentity = useRef('');
   const recoveryKey = `${projectId}:${persistedTarget?.id ?? ''}`;
   useEffect(() => {
     if (
@@ -344,7 +350,11 @@ export function SchemaStudioExperience({
   ]);
   useEffect(() => {
     if (schemaEdit.loading) return;
+    const identity = `${projectId}:${workspaceId}:${recoveredCandidateKey}`;
+    if (recoveredEditIdentity.current === identity) return;
+    recoveredEditIdentity.current = identity;
     setLocalContribution(structuredClone(schemaEdit.candidate?.localContribution ?? {}));
+    setSchemaDefinition(undefined);
     setSavedCandidateRef(
       schemaEdit.candidate
         ? {
@@ -353,7 +363,13 @@ export function SchemaStudioExperience({
           }
         : undefined
     );
-  }, [recoveredCandidateKey, schemaEdit.loading, workspaceId]);
+  }, [projectId, recoveredCandidateKey, schemaEdit.loading, workspaceId]);
+
+  useEffect(() => {
+    setDefinitionOpen(false);
+    setEditorBase(undefined);
+    setSchemaDefinition(undefined);
+  }, [workspaceId]);
 
   const previewInput = {
     candidateIds: selection,
@@ -361,7 +377,7 @@ export function SchemaStudioExperience({
   };
   const basePreview = useStudioPreview(projectId, previewInput, persistedTarget?.revision);
   const hasLocalContribution = contributionHasContent(localContribution);
-  const hasSchemaEdit = hasLocalContribution || !!savedCandidateRef;
+  const hasSchemaEdit = hasLocalContribution || !!savedCandidateRef || !!schemaDefinition;
   const localPreview = useStudioPreview(
     projectId,
     hasSchemaEdit
@@ -369,7 +385,12 @@ export function SchemaStudioExperience({
           ...previewInput,
           ...(savedCandidateRef
             ? { schemaEditCandidate: savedCandidateRef }
-            : { localContribution }),
+            : schemaDefinition
+              ? {
+                  schemaDefinition,
+                  baseSchemaHash: editorBase?.hash ?? basePreview.data?.schemaHash,
+                }
+              : { localContribution }),
         }
       : { candidateIds: [] },
     persistedTarget?.revision
@@ -439,6 +460,8 @@ export function SchemaStudioExperience({
     setActiveModuleId(module.id);
     if (!module.candidate) return;
     const candidate = module.candidate;
+    setSavedCandidateRef(undefined);
+    setSchemaDefinition(undefined);
     setSelection((current) =>
       current.includes(candidate.id)
         ? current.filter((value) => value !== candidate.id)
@@ -518,9 +541,16 @@ export function SchemaStudioExperience({
       retryKey: `studio:${persistedTarget.id}:${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
       intent,
       origin: 'studio',
-      localContribution: contribution,
+      localContribution: contribution.yschema === '0.1' ? {} : contribution,
+      ...(contribution.yschema === '0.1'
+        ? {
+            schemaDefinition: contribution,
+            baseSchemaHash: editorBase?.hash ?? basePreview.data?.schemaHash,
+          }
+        : {}),
     });
     setLocalContribution(structuredClone(saved.candidate.localContribution));
+    setSchemaDefinition(undefined);
     setSavedCandidateRef({
       candidateId: saved.candidate.candidateId,
       revision: saved.candidate.revision,
@@ -531,6 +561,7 @@ export function SchemaStudioExperience({
 
   function changeDefinitionOpen(open: boolean) {
     if (!open) {
+      setSchemaDefinition(undefined);
       setLocalContribution(structuredClone(schemaEdit.candidate?.localContribution ?? {}));
       setSavedCandidateRef(
         schemaEdit.candidate
@@ -607,7 +638,15 @@ export function SchemaStudioExperience({
         onAdd={() => setAdvanced(true)}
         onEditDefinition={
           activeModule && persistedTarget && selection.length
-            ? () => setDefinitionOpen(true)
+            ? () => {
+                if (!basePreview.data || !data) return;
+                setEditorBase({
+                  schema: structuredClone(basePreview.data.schema),
+                  hash: basePreview.data.schemaHash,
+                  initial: structuredClone(data.schema),
+                });
+                setDefinitionOpen(true);
+              }
             : undefined
         }
         onReview={openReview}
@@ -619,16 +658,19 @@ export function SchemaStudioExperience({
         }}
       />
       <SchemaDefinitionWorkbench
-        baseSchema={basePreview.data?.schema}
+        baseSchema={definitionOpen ? editorBase?.schema : basePreview.data?.schema}
         initialContribution={localContribution}
+        initialDefinition={schemaDefinition ?? (definitionOpen ? editorBase?.initial : undefined)}
         onOpenChange={changeDefinitionOpen}
         onPreview={(contribution) => {
-          setLocalContribution(contribution);
+          if (contribution.yschema === '0.1') setSchemaDefinition(contribution);
+          else setLocalContribution(contribution);
           setSavedCandidateRef(undefined);
         }}
         onSave={saveDefinition}
         open={definitionOpen}
         pending={schemaEdit.pending}
+        previewError={preview.error}
         recoveryLabel={
           schemaEdit.candidate
             ? `Recovered candidate revision ${schemaEdit.candidate.revision} · ${schemaEdit.candidate.origin.channel}`
@@ -651,7 +693,48 @@ export function SchemaStudioExperience({
               </DialogDescription>
             </div>
           </DialogHeader>
-          <div className={moduleStyles.body}>{children}</div>
+          <div className={`${moduleStyles.body} space-y-3 p-5`}>
+            <p className="text-sm">
+              Choose sources for this Studio candidate. No separate Composition draft is created.
+            </p>
+            {candidates.items.map((candidate) => (
+              <label key={candidate.id} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={selection.includes(candidate.id)}
+                  disabled={!candidate.available || !!schemaEdit.candidate?.authoringDraft}
+                  onChange={() => choose({ id: candidate.id, candidate } as StudioModule)}
+                />
+                {candidate.title ?? 'Unavailable source'} · {candidate.source?.version}
+              </label>
+            ))}
+            {schemaEdit.candidate?.authoringDraft ? (
+              <p className="text-sm">
+                This edited candidate pins its exact Base. Edit its definition without replacing the
+                source selection.
+              </p>
+            ) : null}
+            <Link href={browseHref}>Browse more source releases</Link>
+            <Button
+              disabled={
+                !persistedTarget ||
+                !selection.length ||
+                schemaEdit.pending ||
+                !!schemaEdit.candidate?.authoringDraft
+              }
+              onClick={() =>
+                void saveDefinition(localContribution, 'Select Schema sources')
+                  .then(() => setAdvanced(false))
+                  .catch((cause) =>
+                    setError(
+                      cause instanceof Error ? cause.message : 'Candidate could not be saved.'
+                    )
+                  )
+              }
+            >
+              Save selected modules
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

@@ -32,8 +32,10 @@ export function SchemaDefinitionWorkbench({
   baseSchema,
   resultSchema,
   initialContribution,
+  initialDefinition,
   pending = false,
   recoveryLabel,
+  previewError,
   onPreview,
   onSave,
 }: {
@@ -42,8 +44,10 @@ export function SchemaDefinitionWorkbench({
   baseSchema?: Record<string, unknown>;
   resultSchema?: Record<string, unknown>;
   initialContribution?: LocalContribution;
+  initialDefinition?: LocalContribution;
   pending?: boolean;
   recoveryLabel?: string;
+  previewError?: string;
   onPreview: (contribution: LocalContribution) => void;
   onSave: (contribution: LocalContribution, intent: string) => Promise<void>;
 }) {
@@ -55,11 +59,11 @@ export function SchemaDefinitionWorkbench({
 
   useEffect(() => {
     if (!open) return;
-    const next = structuredClone(initialContribution ?? EMPTY_CONTRIBUTION);
+    const next = structuredClone(initialDefinition ?? initialContribution ?? EMPTY_CONTRIBUTION);
     setContribution(next);
     setYaml(renderYaml(next));
     setError(undefined);
-  }, [initialContribution, open]);
+  }, [initialDefinition, initialContribution, open]);
 
   const nodes = useMemo(() => localNodes(contribution), [contribution]);
 
@@ -100,8 +104,9 @@ export function SchemaDefinitionWorkbench({
         <DialogHeader className="shrink-0 border-b border-[var(--stroke-divider)] px-6 py-4 pr-12 text-left">
           <DialogTitle>Edit Schema definition</DialogTitle>
           <DialogDescription>
-            Add a Workspace-local contribution. Published sources remain immutable; Structure and
-            YAML edit the same candidate.
+            Edit the complete Workspace-local definition. Changes replay as guarded Schema YOps;
+            published sources and root constraints remain unchanged. Structure and YAML edit the
+            same candidate.
           </DialogDescription>
           {recoveryLabel ? (
             <p className="text-[11px] text-[var(--text-tertiary)]">{recoveryLabel}</p>
@@ -143,7 +148,11 @@ export function SchemaDefinitionWorkbench({
             {mode === 'yaml' ? (
               <div className="min-h-0 flex-1 bg-[var(--editor-bg)]">
                 <WorkspaceYOpsEditor
-                  ariaLabel="Local Schema contribution YAML editor"
+                  ariaLabel={
+                    initialDefinition
+                      ? 'Schema definition YAML editor'
+                      : 'Local Schema contribution YAML editor'
+                  }
                   onChange={setYaml}
                   value={yaml}
                 />
@@ -153,10 +162,10 @@ export function SchemaDefinitionWorkbench({
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-                      Local nodes
+                      Schema nodes
                     </h3>
                     <p className="text-[11px] text-[var(--text-tertiary)]">
-                      New nodes and Slots compile after the selected sources.
+                      Edit, rename, add or remove nodes and Slots above the immutable Base.
                     </p>
                   </div>
                   <Button
@@ -207,9 +216,9 @@ export function SchemaDefinitionWorkbench({
               placeholder="Why are you changing this Schema?"
               value={intent}
             />
-            {error ? (
+            {error || previewError ? (
               <p className="mt-1 text-xs text-[var(--destructive)]" role="alert">
-                {error}
+                {error ?? previewError}
               </p>
             ) : null}
           </div>
@@ -243,8 +252,8 @@ function LocalNodeEditor({
         <Input
           aria-label={`Node name ${name}`}
           className="font-mono text-xs"
-          onChange={(event) => onChange(event.target.value, node)}
-          value={name}
+          onBlur={(event) => onChange(event.target.value, node)}
+          defaultValue={name}
         />
         <label className="flex items-center gap-1.5 text-[11px] text-[var(--text-secondary)]">
           <input
@@ -280,10 +289,10 @@ function LocalNodeEditor({
             <Input
               aria-label={`Slot name ${slotName}`}
               className="font-mono text-xs"
-              onChange={(event) =>
+              onBlur={(event) =>
                 onChange(name, replaceSlot(node, slotName, event.target.value, slot))
               }
-              value={slotName}
+              defaultValue={slotName}
             />
             <select
               aria-label={`Slot type ${slotName}`}

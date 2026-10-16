@@ -134,7 +134,7 @@ export function SchemaStudioSurface({
           </div>
           <button
             className={`${shared.btn} ${s.b2}`}
-            aria-label="Advanced definition workbench"
+            aria-label="Add modules"
             onClick={onAdd}
             disabled={!onAdd}
           >
