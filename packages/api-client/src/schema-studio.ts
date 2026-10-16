@@ -1,6 +1,25 @@
 import { z } from 'zod';
 
 const digest = z.string().regex(/^sha256:[0-9a-f]{64}$/);
+const recursiveJsonValue = z.json();
+// Keep recursive JSON validation without exposing a lazy schema to OpenAPI 3 generators.
+const schemaJsonValue = z
+  .union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(z.unknown()),
+    z.record(z.string(), z.unknown()),
+  ])
+  .transform((value, context) => {
+    const parsed = recursiveJsonValue.safeParse(value);
+    if (!parsed.success) {
+      context.addIssue({ code: 'custom', message: 'Expected a JSON value.' });
+      return z.NEVER;
+    }
+    return parsed.data;
+  });
 export const StudioSourceSchema = z.object({
   projectId: z.string().min(1).nullable(),
   canonicalName: z.string().min(1).max(240),
@@ -245,8 +264,8 @@ export type WorkspaceSchemaPending = z.infer<typeof WorkspaceSchemaPendingSchema
 export type WorkspaceSchemaPendingView = z.infer<typeof WorkspaceSchemaPendingViewSchema>;
 
 export const SchemaContentMigrationCommandSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('set'), path: z.string().min(1), value: z.json() }).strict(),
-  z.object({ kind: z.literal('append'), path: z.string().min(1), value: z.json() }).strict(),
+  z.object({ kind: z.literal('set'), path: z.string().min(1), value: schemaJsonValue }).strict(),
+  z.object({ kind: z.literal('append'), path: z.string().min(1), value: schemaJsonValue }).strict(),
   z.object({ kind: z.literal('remove'), path: z.string().min(1) }).strict(),
   z.object({ kind: z.literal('move'), from: z.string().min(1), to: z.string().min(1) }).strict(),
   z
@@ -296,8 +315,8 @@ export const SchemaPreparationPreviewSchema = z.object({
   schemaHash: digest,
   schema: z.record(z.string(), z.unknown()),
   rootKey: z.string(),
-  before: z.json(),
-  after: z.json(),
+  before: schemaJsonValue,
+  after: schemaJsonValue,
   operations: z.array(z.record(z.string(), z.unknown())),
   impact: SchemaEvolutionImpactSchema,
   valid: z.boolean(),
@@ -345,8 +364,8 @@ export const WorkspaceFullSchemaReviewSchema = z
     draft: WorkspaceSchemaDefinitionSnapshotSchema,
     changes: z.array(change),
     actionCount: z.number().int().nonnegative(),
-    baseContent: z.json(),
-    draftContent: z.json(),
+    baseContent: schemaJsonValue,
+    draftContent: schemaJsonValue,
   })
   .strict();
 export type WorkspaceSchemaDefinitionSnapshot = z.infer<
