@@ -9,6 +9,7 @@ import { ConflictError, DraftAuthoringConflictError } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
+import { SchemaSourceUnavailableError } from '../lib/schema-studio';
 import { StudioError } from '../lib/schema-studio-preview';
 import {
   requireTransitionAuthority,
@@ -67,6 +68,8 @@ const applyRoute = createRoute({
 });
 export const schemaPreparationRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 schemaPreparationRoutes.onError((error, c) => {
+  if (error instanceof SchemaSourceUnavailableError)
+    return errorResponse(c, 'FORBIDDEN', error.message);
   if (error instanceof StudioError) return errorResponse(c, error.code, error.message);
   if (error instanceof ConflictError || error instanceof DraftAuthoringConflictError)
     return errorResponse(c, 'CONFLICT', error.message);

@@ -16,6 +16,7 @@ import {
   type YSchemaRelation,
 } from '@t3x-dev/yschema';
 import { workspaceAuthoringState } from './workspace-authoring';
+import { workspaceProvenance } from './workspace-provenance';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
 import { schemaRootKeyFromBinding } from './yschema-registry';
 
@@ -238,13 +239,21 @@ export async function assessWorkspaceSchemaImpact(
         });
       }
     }
+    const provenanceByPath = await workspaceProvenance(
+      db,
+      projectId,
+      workspace,
+      content.tree as never
+    );
     const previous = validateTree({
       schema: base,
+      provenanceByPath,
       tree: content.tree as never,
       relations: content.relations,
     });
     const current = validateTree({
       schema: target,
+      provenanceByPath,
       tree: content.tree as never,
       relations: content.relations,
     });

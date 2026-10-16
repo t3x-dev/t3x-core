@@ -131,11 +131,11 @@ export async function readPendingWorkspaceSchema(
         composition.apiVersion === 't3x.dev/yschema-composition/v2'
           ? await compileYSchemaCompositionV2({
               composition,
-              modules: await resolveCompositionArtifactsV2(db, composition, projectId),
+              modules: await resolveCompositionArtifactsV2(db, composition, projectId, c),
             })
           : await compileYSchemaComposition({
               composition,
-              ...(await resolveCompositionArtifacts(db, composition, projectId)),
+              ...(await resolveCompositionArtifacts(db, composition, projectId, c)),
             });
       selectionHash = preview.compositionHash;
       schemaHash = preview.compiledSchemaHash;

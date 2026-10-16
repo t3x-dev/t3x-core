@@ -41,6 +41,7 @@ import { assessWorkspaceSchemaImpact, schemaContentFromDocument } from './schema
 import { resolveStudioSource } from './schema-studio';
 import { previewStudio, StudioError } from './schema-studio-preview';
 import { buildAuthoringEffect, workspaceAuthoringState } from './workspace-authoring';
+import { workspaceProvenance } from './workspace-provenance';
 import {
   resolveCompositionArtifacts,
   resolveCompositionArtifactsV2,
@@ -115,11 +116,11 @@ async function resolveSource(
     composition.apiVersion === 't3x.dev/yschema-composition/v2'
       ? await compileYSchemaCompositionV2({
           composition,
-          modules: await resolveCompositionArtifactsV2(db, composition, projectId),
+          modules: await resolveCompositionArtifactsV2(db, composition, projectId, c),
         })
       : await compileYSchemaComposition({
           composition,
-          ...(await resolveCompositionArtifacts(db, composition, projectId)),
+          ...(await resolveCompositionArtifacts(db, composition, projectId, c)),
         });
   if (!preview.report.valid || preview.compositionHash !== source.compositionHash)
     throw new StudioError('CONFLICT', 'The Composition sources or definition changed.');
@@ -216,6 +217,12 @@ export async function previewWorkspaceSchemaPreparation(
     schema: target.schema,
     tree: afterContent.tree as never,
     relations: afterContent.relations,
+    provenanceByPath: await workspaceProvenance(
+      db,
+      projectId,
+      workspace,
+      afterContent.tree as never
+    ),
   });
   const issues: Array<{ code: string; path: string; message: string }> = [
     ...report.errors,

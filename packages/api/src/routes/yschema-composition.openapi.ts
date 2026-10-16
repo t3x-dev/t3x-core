@@ -39,6 +39,7 @@ import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
 import { readSchemaEditorPicks } from '../lib/schema-editor-picks';
 import { assessWorkspaceSchemaImpact } from '../lib/schema-evolution-impact';
+import { SchemaSourceUnavailableError } from '../lib/schema-studio';
 import { StudioError } from '../lib/schema-studio-preview';
 import { savePendingWorkspaceSchema } from '../lib/workspace-schema-pending';
 import {
@@ -682,6 +683,11 @@ const publishWorkspaceCompositionRoute = createRoute({
 });
 
 export const yschemaCompositionRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
+yschemaCompositionRoutes.onError((error, c) => {
+  if (error instanceof SchemaSourceUnavailableError)
+    return errorResponse(c, 'FORBIDDEN', error.message);
+  throw error;
+});
 
 yschemaCompositionRoutes.openapi(catalogCollectionsRoute, async (c) => {
   return c.json({ success: true as const, data: { items: catalogCollections } }, 200);
@@ -861,7 +867,9 @@ yschemaCompositionRoutes.openapi(previewCompositionRoute, async (c) => {
   if (composition.apiVersion === 't3x.dev/yschema-composition/v2') {
     const modules = await resolveCompositionArtifactsV2(
       db,
-      composition as YSchemaCompositionDraftV2
+      composition as YSchemaCompositionDraftV2,
+      undefined,
+      c
     );
     const result = await compileYSchemaCompositionV2({
       composition: composition as YSchemaCompositionDraftV2,
@@ -869,7 +877,7 @@ yschemaCompositionRoutes.openapi(previewCompositionRoute, async (c) => {
     });
     return c.json({ success: true as const, data: result }, 200);
   }
-  const artifacts = await resolveCompositionArtifacts(db, composition);
+  const artifacts = await resolveCompositionArtifacts(db, composition, undefined, c);
   const result = await compileYSchemaComposition({
     composition,
     ...artifacts,
@@ -888,7 +896,8 @@ yschemaCompositionRoutes.openapi(previewProjectCompositionRoute, async (c) => {
     const modules = await resolveCompositionArtifactsV2(
       db,
       composition as YSchemaCompositionDraftV2,
-      projectId
+      projectId,
+      c
     );
     const result = await compileYSchemaCompositionV2({
       composition: composition as YSchemaCompositionDraftV2,
@@ -896,7 +905,7 @@ yschemaCompositionRoutes.openapi(previewProjectCompositionRoute, async (c) => {
     });
     return c.json({ success: true as const, data: result }, 200);
   }
-  const artifacts = await resolveCompositionArtifacts(db, composition, projectId);
+  const artifacts = await resolveCompositionArtifacts(db, composition, projectId, c);
   const result = await compileYSchemaComposition({ composition, ...artifacts });
   return c.json({ success: true as const, data: result }, 200);
 });
@@ -968,11 +977,16 @@ yschemaCompositionRoutes.openapi(saveWorkspaceCompositionRoute, async (c) => {
 
   const openModules =
     composition.apiVersion === 't3x.dev/yschema-composition/v2'
-      ? await resolveCompositionArtifactsV2(db, composition as YSchemaCompositionDraftV2, projectId)
+      ? await resolveCompositionArtifactsV2(
+          db,
+          composition as YSchemaCompositionDraftV2,
+          projectId,
+          c
+        )
       : undefined;
   const artifacts =
     composition.apiVersion === 't3x.dev/yschema-composition/v1'
-      ? await resolveCompositionArtifacts(db, composition as YSchemaCompositionDraft, projectId)
+      ? await resolveCompositionArtifacts(db, composition as YSchemaCompositionDraft, projectId, c)
       : undefined;
   const normalized = normalizeComposition(
     composition as YSchemaCompositionDraft | YSchemaCompositionDraftV2,
@@ -1103,7 +1117,7 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
         { expectedRevision: persisted.composition.revision }
       );
     }
-    const modules = await resolveCompositionArtifactsV2(db, persisted.composition, projectId);
+    const modules = await resolveCompositionArtifactsV2(db, persisted.composition, projectId, c);
     const preview = await compileYSchemaCompositionV2({
       composition: persisted.composition,
       modules,
@@ -1237,7 +1251,7 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
     );
   }
 
-  const artifacts = await resolveCompositionArtifacts(db, persisted.composition, projectId);
+  const artifacts = await resolveCompositionArtifacts(db, persisted.composition, projectId, c);
   const preview = await compileYSchemaComposition({
     composition: persisted.composition,
     ...artifacts,
@@ -1394,11 +1408,11 @@ yschemaCompositionRoutes.openapi(applyWorkspaceCompositionRoute, async (c) => {
 
   const openModules =
     persisted.composition.apiVersion === 't3x.dev/yschema-composition/v2'
-      ? await resolveCompositionArtifactsV2(db, persisted.composition, projectId)
+      ? await resolveCompositionArtifactsV2(db, persisted.composition, projectId, c)
       : undefined;
   const artifacts =
     persisted.composition.apiVersion === 't3x.dev/yschema-composition/v1'
-      ? await resolveCompositionArtifacts(db, persisted.composition, projectId)
+      ? await resolveCompositionArtifacts(db, persisted.composition, projectId, c)
       : undefined;
   const preview =
     persisted.composition.apiVersion === 't3x.dev/yschema-composition/v2'
