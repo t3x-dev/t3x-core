@@ -200,6 +200,27 @@ const CompositionIssueSchema = z
   })
   .openapi('YSchemaCompositionIssue');
 
+const CompositionSourceOriginSchema = z.union([
+  z.object({
+    artifact: z.string(),
+    version: z.string(),
+    kind: z.enum(['core', 'module']),
+  }),
+  z.object({
+    kind: z.literal('local'),
+    contributionId: z.string(),
+    revision: z.number().int().nonnegative(),
+  }),
+]);
+
+const CompositionOriginSchema = z.union([
+  CompositionSourceOriginSchema,
+  z.object({
+    kind: z.literal('derived'),
+    sources: z.array(CompositionSourceOriginSchema),
+  }),
+]);
+
 const CompositionPreviewResponseSchema = z
   .object({
     schema: z.any(),
@@ -212,14 +233,7 @@ const CompositionPreviewResponseSchema = z
         nodePaths: z.array(z.string()),
       })
     ),
-    originsByPath: z.record(
-      z.string(),
-      z.object({
-        artifact: z.string(),
-        version: z.string(),
-        kind: z.enum(['core', 'module']),
-      })
-    ),
+    originsByPath: z.record(z.string(), CompositionOriginSchema),
     report: z.object({
       valid: z.boolean(),
       mode: z.enum(['open', 'governed']).optional(),
