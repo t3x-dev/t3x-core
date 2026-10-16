@@ -39,7 +39,7 @@ export function RepositoryTagsInput({
                 type="button"
                 disabled={disabled}
                 aria-label={`Remove tag ${tag}`}
-                className="shrink-0 rounded-full p-1 hover:bg-black/5 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
+                className="shrink-0 rounded-full p-1 hover:bg-[var(--hover-bg)] focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
                 onClick={() =>
                   onChange({ ...value, tags: value.tags.filter((item) => item !== tag) })
                 }
