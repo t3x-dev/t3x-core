@@ -83,7 +83,9 @@ export function ProjectRouteShell({
   // shared title/navigation header never disappears during navigation.
   if (isProjectIndex(pathname)) return children;
 
-  const project = resolvedProject ?? {
+  // Keep the known repository header while refreshing its details. Redirects
+  // still use the freshly resolved project above, rather than a cached address.
+  const project = resolvedProject ?? storedProject ?? {
     id: projectId,
     name: fallbackProjectName,
     description: 'Structured state repository',

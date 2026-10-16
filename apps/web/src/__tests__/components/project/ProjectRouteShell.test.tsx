@@ -87,6 +87,25 @@ describe('ProjectRouteShell', () => {
     expect(screen.getByText('Index page owns its shell')).toBeInTheDocument();
   });
 
+  it('keeps the known repository header while its fresh lookup is pending', () => {
+    navigation.load.mockReturnValue(new Promise(() => {}));
+    useProjectStore.setState({
+      details: {
+        [project.id]: { ...project, namespace: 'team', canonical_path: '/team/Test-Project' },
+      },
+    });
+
+    render(
+      <ProjectRouteShell projectId="proj_test">
+        <div>Change review</div>
+      </ProjectRouteShell>
+    );
+
+    expect(screen.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Project', exact: true })).not.toBeInTheDocument();
+    expect(navigation.replace).not.toHaveBeenCalled();
+  });
+
   it('redirects project ID pull request links to the public repository route', async () => {
     navigation.pathname = '/project/proj_test';
     navigation.search = 'tab=pull-requests&branch=feature%2Frelease&pr=7';

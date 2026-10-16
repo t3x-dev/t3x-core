@@ -10,6 +10,7 @@ import {
 } from '@/data/workspaceCandidates';
 import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
+import { type ProjectSummary, useProjectStore } from '@/store/projectStore';
 
 const activityMocks = vi.hoisted(() => ({
   value: undefined as ReturnType<typeof useComposeActivity> | undefined,
@@ -157,6 +158,7 @@ vi.mock('next/navigation', () => ({
 
 describe('WorkspaceComposeReviewSurface composer', () => {
   beforeEach(() => {
+    useProjectStore.setState({ projects: [], details: {} });
     snapshotMocks.list.mockReset().mockResolvedValue({ snapshots: [] });
     snapshotMocks.detail.mockReset();
     activityMocks.value = undefined;
@@ -837,6 +839,19 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Commit changes' }));
     expect(navigationMocks.push).toHaveBeenCalledWith(
       `/project/proj_1/changes/${encodeURIComponent(candidate.id)}/rvs_ready`
+    );
+    act(() => {
+      useProjectStore.getState().cacheProject({
+        id: 'proj_1',
+        name: 'Test Project',
+        namespace: 't3x-dev',
+        canonical_path: '/t3x-dev/test-project',
+      } as ProjectSummary);
+    });
+    navigationMocks.push.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Commit changes' }));
+    expect(navigationMocks.push).toHaveBeenCalledExactlyOnceWith(
+      `/t3x-dev/test-project/changes/${encodeURIComponent(candidate.id)}/rvs_ready`
     );
     fireEvent.click(screen.getByRole('button', { name: 'Open checks' }));
     expect(screen.getByRole('region', { name: 'Workspace review checks' })).toBeInTheDocument();

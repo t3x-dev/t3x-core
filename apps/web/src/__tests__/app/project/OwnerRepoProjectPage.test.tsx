@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import OwnerRepoProjectPage from '@/app/[owner]/[[...repoPath]]/page';
+import { type ProjectSummary, useProjectStore } from '@/store/projectStore';
 
 const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
@@ -53,6 +54,7 @@ vi.mock('@/components/project/OrganizationSettingsPage', () => ({
 }));
 beforeEach(() => {
   vi.clearAllMocks();
+  useProjectStore.setState({ projects: [], details: {} });
   mocks.params = { owner: 'alice', repoPath: ['Repo'] };
   mocks.pathname = null;
   mocks.query = 'workspace=w&conversation=c&branch=main&pr=9';
@@ -168,6 +170,34 @@ it('shows authorization failures without rendering cached repository content', a
   render(<OwnerRepoProjectPage />);
   expect(await screen.findByText('Access denied')).toBeInTheDocument();
   expect(screen.queryByTestId('detail')).not.toBeInTheDocument();
+});
+it('keeps the known header while checking access without exposing the review early', async () => {
+  mocks.params.repoPath = ['Repo', 'changes', 'workspace_branch%3Amain', 'rvs_review'];
+  let rejectLookup!: (error: Error) => void;
+  mocks.resolve.mockReturnValue(
+    new Promise((_, reject) => {
+      rejectLookup = reject;
+    })
+  );
+  useProjectStore.setState({
+    details: {
+      proj_outside_list: {
+        id: 'proj_outside_list',
+        name: 'Repo',
+        namespace: 'alice',
+        canonical_path: '/alice/Repo',
+      } as ProjectSummary,
+    },
+  });
+  render(<OwnerRepoProjectPage />);
+  expect(screen.getByRole('heading', { name: 'Repo', exact: true })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Workspaces' })).toHaveAttribute('aria-current', 'page');
+  expect(screen.getByText('Loading repository...')).toBeInTheDocument();
+  expect(screen.queryByTestId('nested')).not.toBeInTheDocument();
+  await act(async () => rejectLookup(new Error('Access denied')));
+  expect(await screen.findByText('Access denied')).toBeInTheDocument();
+  expect(screen.queryByTestId('nested')).not.toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'Repo', exact: true })).not.toBeInTheDocument();
 });
 it('leaves namespace directory and new-repository routes out of repository resolution', () => {
   mocks.params.repoPath = ['new'];

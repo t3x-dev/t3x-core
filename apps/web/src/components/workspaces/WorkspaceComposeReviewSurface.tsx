@@ -83,6 +83,7 @@ import {
   type StructuredDiffChange,
   type StructuredDiffKind,
 } from '@/domain/diff/structuredStateDiff';
+import { getProjectIdRepoPath, getProjectRepoPath } from '@/domain/project/repoPath';
 import {
   buildCanonicalStateYaml,
   buildStatePointRows,
@@ -122,6 +123,7 @@ import { useWorkspaceAuthoringBootstrap } from '@/hooks/workspaces/useWorkspaceA
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import { useWorkspaceReviewHistory } from '@/hooks/workspaces/useWorkspaceReviewHistory';
 import { validateWorkspaceCandidateYOps } from '@/hooks/workspaces/useWorkspaceYOps';
+import { useProjectStore } from '@/store/projectStore';
 import type {
   SourceBundleItem,
   WorkspaceCandidate,
@@ -1749,6 +1751,14 @@ function WorkspaceRenderedReview({
 }) {
   const router = useRouter();
   const reviewSnapshot = controller.review.reviewSnapshot;
+  const reviewProjectId = reviewSnapshot?.projectId ?? candidate.projectId;
+  const project = useProjectStore(
+    (state) =>
+      state.details[reviewProjectId] ?? state.projects.find((item) => item.id === reviewProjectId)
+  );
+  const repositoryPath = project
+    ? getProjectRepoPath(project)
+    : getProjectIdRepoPath(reviewProjectId);
   const structure = useMemo(
     () => buildWorkspaceReviewStructureModel(candidate, review),
     [candidate, review]
@@ -1944,7 +1954,7 @@ function WorkspaceRenderedReview({
               onClick={() => {
                 if (reviewSnapshot)
                   router.push(
-                    `/project/${encodeURIComponent(reviewSnapshot.projectId)}/changes/${encodeURIComponent(reviewSnapshot.workspaceId)}/${encodeURIComponent(reviewSnapshot.snapshotId)}`
+                    `${repositoryPath}/changes/${encodeURIComponent(reviewSnapshot.workspaceId)}/${encodeURIComponent(reviewSnapshot.snapshotId)}`
                   );
               }}
               type="button"
