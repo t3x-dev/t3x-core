@@ -1,5 +1,12 @@
 # @t3x-dev/api
 
+## 1.5.1
+
+### Patch Changes
+
+- Updated dependencies [[`02e6251`](https://github.com/t3x-dev/t3x-core/commit/02e6251bb3c395460767ae04144321f5f53142f2)]:
+  - @t3x-dev/application@1.6.0
+
 ## 1.4.0
 
 ### Minor Changes
