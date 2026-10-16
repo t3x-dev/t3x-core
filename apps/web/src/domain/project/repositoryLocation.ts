@@ -12,9 +12,15 @@ export function repositoryLocation(base: string, suffix: string, query: string, 
     const tab = params.get('tab');
     if (
       tab &&
-      ['state', 'workspaces', 'pull-requests', 'outputs', 'community', 'schemas', 'settings'].includes(
-        tab
-      )
+      [
+        'state',
+        'workspaces',
+        'pull-requests',
+        'outputs',
+        'community',
+        'schemas',
+        'settings',
+      ].includes(tab)
     ) {
       tail = tab === 'state' ? '' : `/${tab}`;
       params.delete('tab');
