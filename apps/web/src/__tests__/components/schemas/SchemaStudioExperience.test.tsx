@@ -78,6 +78,13 @@ vi.mock('@/hooks/schemas/useStudioSchemaEditCandidate', () => ({
     save: mocks.saveSchemaEdit,
   }),
 }));
+vi.mock('@/hooks/schemas/useWorkspaceSchemaPending', () => ({
+  useWorkspaceSchemaPending: () => ({
+    data: mocks.pendingSchema,
+    loading: false,
+    refresh: vi.fn(),
+  }),
+}));
 beforeEach(() => {
   mocks.query = 'candidate=provider';
   mocks.apply.mockReset();
@@ -283,6 +290,78 @@ it('selects the only draft workspace once instead of duplicating Main workspace'
   expect(select).toHaveTextContent('Main workspace');
 });
 
+it.each([
+  false,
+  true,
+])('adopts a pending candidate and returns to the same Workspace (local edit: %s)', async (localEdit) => {
+  mocks.query = 'workspace=workspace_branch%3Amain';
+  mocks.pendingSchema = {
+    status: 'pending_preparation',
+    pending: { source: { kind: 'studio', candidateIds: ['provider'] } },
+  };
+  if (localEdit)
+    mocks.schemaEditCandidate = {
+      candidateId: 'saved-local',
+      revision: 3,
+      localContribution: { nodes: { advantage: { slots: {} } } },
+      origin: { channel: 'studio' },
+    };
+  mocks.branches = ['main'];
+  mocks.workspaces = [
+    {
+      id: 'workspace_branch:main',
+      revision: 3,
+      status: 'draft',
+      targetBranch: 'main',
+      title: 'Main workspace',
+    },
+  ];
+  mocks.data = {
+    samples: [],
+    schema: { nodes: {} },
+    schemaHash: 'definition-hash',
+    reviewHash: 'review',
+    renderPlan: [],
+    origins: {},
+    sources: [],
+    modules: [],
+    report: { valid: true, issues: [] },
+    impact: {
+      status: 'safe',
+      canAdopt: true,
+      canPublish: true,
+      changes: [],
+      items: [],
+      content: { source: 'candidate_fields', hash: null, valid: true, ready: true, issues: [] },
+    },
+    adoption: { allowed: true },
+    workspace: { id: 'workspace_branch:main', revision: 3, changes: [] },
+  };
+  render(<SchemaStudioExperience projectId="p" />);
+  expect(screen.getByLabelText('Target Workspace')).toHaveValue('workspace_branch:main');
+  await waitFor(() =>
+    expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).toBeChecked()
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(mocks.apply).not.toHaveBeenCalled();
+  expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Adopt & return to Workspace' }));
+  expect(mocks.apply).toHaveBeenCalledWith({
+    candidateIds: ['provider'],
+    workspaceId: 'workspace_branch:main',
+    ifRevision: 3,
+    reviewHash: 'review',
+    ...(localEdit ? { schemaEditCandidate: { candidateId: 'saved-local', revision: 3 } } : {}),
+  });
+  await waitFor(() =>
+    expect(mocks.push).toHaveBeenCalledWith(
+      '/project/p?branch=main&tab=workspaces&workspace=workspace_branch%3Amain'
+    )
+  );
+});
+
 it('shows unsafe content impact while preventing confirmation, then discards a stale review', async () => {
   mocks.workspaces = [
     {
@@ -337,7 +416,9 @@ it('shows unsafe content impact while preventing confirmation, then discards a s
   fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
   const dialog = screen.getByRole('dialog', { name: 'Review Schema changes' });
   expect(within(dialog).getByText('Map existing content before removing product.')).toBeVisible();
-  expect(within(dialog).getByRole('button', { name: 'Apply to Workspace' })).toBeDisabled();
+  expect(
+    within(dialog).getByRole('button', { name: 'Adopt & return to Workspace' })
+  ).toBeDisabled();
   expect(within(dialog).getByRole('region', { name: 'Schema definition changes' })).toBeVisible();
   expect(within(dialog).getByRole('region', { name: 'Schema content impact' })).toBeVisible();
   mocks.data = { ...preview, reviewHash: 'new-revision-review' };

@@ -47,6 +47,14 @@ const storageMock = vi.hoisted(() => {
       Promise.resolve({ projectId, ownerId: null })
     ),
     findWorkspaceDraft: vi.fn(() => Promise.resolve(draft())),
+    saveWorkspaceSchemaPreparation: vi.fn((_db, input) => {
+      if (input.expectedRevision !== workspaceRevision) throw new Error('unexpected revision');
+      for (const key of ['schemaPending', 'schemaComposition', 'schemaEditCandidate']) {
+        if (Object.hasOwn(input, key)) workspaceState = { ...workspaceState, [key]: input[key] };
+      }
+      workspaceRevision += 1;
+      return Promise.resolve(draft());
+    }),
     upsertWorkspaceDraft: vi.fn(
       (_db, input: { workspace_state: Record<string, unknown> }, ifRevision?: number) => {
         if (ifRevision !== workspaceRevision) {
@@ -83,6 +91,7 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
     ...actual,
     findProjectById: storageMock.findProjectById,
     findWorkspaceDraft: storageMock.findWorkspaceDraft,
+    saveWorkspaceSchemaPreparation: storageMock.saveWorkspaceSchemaPreparation,
     listProjectYSchemaVersionHistory: storageMock.listProjectYSchemaVersionHistory,
     publishYSchemaArtifactVersion: storageMock.publishYSchemaArtifactVersion,
     saveYSchemaCompositionSnapshot: storageMock.saveYSchemaCompositionSnapshot,
@@ -270,6 +279,8 @@ describe('Workspace YSchema Composition persistence', () => {
   });
 
   it('publishes an open Composition as a Blueprint-backed Schema rather than a Module', async () => {
+    // A new unbound Workspace has no previous contract requiring content migration.
+    storageMock.state().schemaBindings = [];
     const savedResponse = await app.request(
       '/v1/projects/proj_modules/workspaces/workspace_modules/schema-composition',
       {
@@ -325,6 +336,7 @@ describe('Workspace YSchema Composition persistence', () => {
   });
 
   it('records a deterministic comparison against the prior Composition revision', async () => {
+    storageMock.state().schemaBindings = [];
     storageMock.listProjectYSchemaVersionHistory.mockResolvedValueOnce([
       {
         canonicalName: 'projects/proj_modules/product-schema',
@@ -383,6 +395,63 @@ describe('Workspace YSchema Composition persistence', () => {
         expect.objectContaining({ kind: 'ADD', path: 'nodes.problem' }),
       ]),
     });
+  });
+
+  it('blocks destructive Composition adoption and publication without changing Workspace content', async () => {
+    const state = storageMock.state();
+    state.schemaCandidate = {
+      fields: [{ path: 'summary.problem', value: 'Preserve this problem' }],
+    };
+    const savedResponse = await app.request(
+      '/v1/projects/proj_modules/workspaces/workspace_modules/schema-composition',
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ composition: openComposition(), if_revision: 4 }),
+      }
+    );
+    expect(savedResponse.status).toBe(200);
+    const saved: any = await savedResponse.json();
+    expect(saved.data.preview.impact).toMatchObject({
+      status: 'needs_mapping',
+      canAdopt: false,
+      canPublish: false,
+    });
+    const before = structuredClone(storageMock.state());
+    const applyResponse = await app.request(
+      '/v1/projects/proj_modules/workspaces/workspace_modules/schema-composition/apply',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          if_revision: 5,
+          composition_revision: 1,
+          composition_hash: saved.data.preview.compositionHash,
+        }),
+      }
+    );
+    expect(applyResponse.status).toBe(409);
+    expect(storageMock.saveYSchemaCompositionSnapshot).not.toHaveBeenCalled();
+    const publishResponse = await app.request(
+      '/v1/projects/proj_modules/workspaces/workspace_modules/schema-composition/publish',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          composition_revision: 1,
+          composition_hash: saved.data.preview.compositionHash,
+          canonical_name: 'projects/proj_modules/unsafe-schema',
+          version: '1.0.0',
+          title: 'Unsafe schema',
+        }),
+      }
+    );
+    expect(publishResponse.status).toBe(409);
+    const body: any = await publishResponse.json();
+    expect(body.error.code).toBe('REVIEW_REQUIRED');
+    expect(body.error.details.impact.canPublish).toBe(false);
+    expect(storageMock.publishYSchemaArtifactVersion).not.toHaveBeenCalled();
+    expect(storageMock.state()).toEqual(before);
   });
 
   it('lists the project-owned immutable Schema version history', async () => {
@@ -472,7 +541,7 @@ describe('Workspace YSchema Composition persistence', () => {
     expect(body.error.message).toContain('assigned more than once');
   });
 
-  it('applies the exact verified Composition and invalidates stale proposals', async () => {
+  it('adopts the exact verified Composition without replacing bindings or clearing proposals', async () => {
     const saveResponse = await app.request(
       '/v1/projects/proj_modules/workspaces/workspace_modules/schema-composition',
       {
@@ -482,6 +551,7 @@ describe('Workspace YSchema Composition persistence', () => {
       }
     );
     const saved: any = await saveResponse.json();
+    const before = structuredClone(storageMock.state());
     const response = await app.request(
       '/v1/projects/proj_modules/workspaces/workspace_modules/schema-composition/apply',
       {
@@ -498,23 +568,20 @@ describe('Workspace YSchema Composition persistence', () => {
     expect(response.status).toBe(200);
     const body: any = await response.json();
     expect(body.data.workspaceRevision).toBe(6);
-    expect(body.data.binding).toMatchObject({
-      canonicalName: 't3x/prd',
-      compositionId: 'composition:workspace_modules',
-      compositionRevision: 1,
-      compositionHash: saved.data.preview.compositionHash,
+    expect(body.data.pending).toMatchObject({
+      workspaceId: 'workspace_modules',
       schemaHash: saved.data.preview.compiledSchemaHash,
-      mode: 'draft_override',
+      source: {
+        kind: 'composition',
+        compositionId: 'composition:workspace_modules',
+        revision: 1,
+        compositionHash: saved.data.preview.compositionHash,
+      },
     });
-    expect(storageMock.state()).toMatchObject({
-      summary: 'Preserve this Workspace state.',
-      status: 'draft',
-      schemaBindings: [body.data.binding],
-      schemaCandidate: { fields: [] },
-      schemaReview: { verdict: 'needs_review' },
-      yopsDraft: { id: 'draft:old', operations: [] },
-    });
-    expect(storageMock.state()).not.toHaveProperty('commitOverride');
+    expect(body.data.binding).toBeUndefined();
+    const { schemaPending: _pending, ...unchanged } = storageMock.state();
+    expect(unchanged).toEqual(before);
+    expect(storageMock.saveYSchemaCompositionSnapshot).not.toHaveBeenCalled();
   });
 
   it('rejects a stale preview hash without changing the applied binding', async () => {

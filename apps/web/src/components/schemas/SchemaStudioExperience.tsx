@@ -23,6 +23,7 @@ import {
 import { useStudioCandidates } from '@/hooks/schemas/useStudioCandidates';
 import { useApplyStudioSelection, useStudioPreview } from '@/hooks/schemas/useStudioPreview';
 import { useStudioSchemaEditCandidate } from '@/hooks/schemas/useStudioSchemaEditCandidate';
+import { useWorkspaceSchemaPending } from '@/hooks/schemas/useWorkspaceSchemaPending';
 import { useBranches } from '@/hooks/shared/useBranches';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
@@ -292,6 +293,11 @@ export function SchemaStudioExperience({
     : schemaEdit.loading
       ? 'loading'
       : 'none';
+  const pendingSchema = useWorkspaceSchemaPending(
+    projectId,
+    persistedTarget?.id ?? '',
+    persistedTarget?.revision
+  );
   const recoveredSelection = useRef('');
   const recoveryKey = `${projectId}:${persistedTarget?.id ?? ''}`;
   useEffect(() => {
@@ -299,12 +305,16 @@ export function SchemaStudioExperience({
       !persistedTarget ||
       candidates.loading ||
       schemaEdit.loading ||
+      pendingSchema.loading ||
       recoveredSelection.current === recoveryKey
     )
       return;
     recoveredSelection.current = recoveryKey;
     if (requested) return;
-    if (schemaEdit.candidate) {
+    const source = pendingSchema.data?.pending?.source;
+    if (source?.kind === 'studio') {
+      setSelection([...source.candidateIds]);
+    } else if (schemaEdit.candidate) {
       const ids = (schemaEdit.candidate.baseSources ?? [])
         .map(
           (base) =>
@@ -320,6 +330,8 @@ export function SchemaStudioExperience({
     candidates.loading,
     schemaEdit.candidate,
     schemaEdit.loading,
+    pendingSchema.data,
+    pendingSchema.loading,
     persistedTarget,
     recoveryKey,
     requested,
@@ -463,7 +475,7 @@ export function SchemaStudioExperience({
       router.push(href);
     } catch (cause) {
       if (mounted.current) {
-        setError(cause instanceof Error ? cause.message : 'Apply failed');
+        setError(cause instanceof Error ? cause.message : 'Adoption failed');
         setReview(undefined);
         preview.refresh();
       }
@@ -583,6 +595,7 @@ export function SchemaStudioExperience({
         data={data}
         onCheck={() => {
           preview.refresh();
+          pendingSchema.refresh();
           void workspaces.refresh();
         }}
         onAdd={() => setAdvanced(true)}
@@ -647,7 +660,9 @@ export function SchemaStudioExperience({
             <DialogTitle>Review Schema changes</DialogTitle>
             <DialogDescription>
               {target?.title} · revision {review?.workspace?.revision}. Review definition changes
-              and their effect on current Workspace content before applying the definition.
+              and their effect on current Workspace content. Adopt saves a pending preparation task
+              and returns to this Workspace. Your current Schema, content and proposals remain
+              unchanged.
             </DialogDescription>
           </DialogHeader>
           {review ? (
@@ -695,7 +710,7 @@ export function SchemaStudioExperience({
                   }
                   onClick={() => void apply()}
                 >
-                  {applying ? 'Saving…' : 'Apply to Workspace'}
+                  {applying ? 'Saving…' : 'Adopt & return to Workspace'}
                 </Button>
               </div>
             </>

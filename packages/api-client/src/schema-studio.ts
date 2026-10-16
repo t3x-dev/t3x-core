@@ -193,6 +193,52 @@ export type StudioPreview = z.infer<typeof StudioPreviewSchema>;
 export type StudioPreviewInput = z.infer<typeof StudioPreviewInputSchema>;
 export type StudioApplyInput = z.infer<typeof StudioApplyInputSchema>;
 
+export const WorkspaceSchemaPendingSchema = z
+  .object({
+    schema: z.literal('t3x.dev/workspace-schema-pending/v1'),
+    pendingId: digest,
+    workspaceId: z.string().min(1),
+    targetBranch: z.string().min(1),
+    baseWorkspaceRevision: z.number().int().positive(),
+    workspaceRevision: z.number().int().positive(),
+    reviewHash: digest,
+    selectionHash: digest,
+    schemaHash: digest,
+    contentHash: digest.nullable(),
+    bindingHash: digest,
+    source: z.discriminatedUnion('kind', [
+      z
+        .object({
+          kind: z.literal('studio'),
+          candidateIds: ids,
+          schemaEditCandidate: StudioSchemaEditCandidateRefSchema.optional(),
+        })
+        .strict(),
+      z
+        .object({
+          kind: z.literal('composition'),
+          compositionId: z.string().min(1),
+          revision: z.number().int().positive(),
+          compositionHash: digest,
+        })
+        .strict(),
+    ]),
+  })
+  .strict();
+export const WorkspaceSchemaPendingViewSchema = z.object({
+  status: z.enum(['none', 'pending_preparation', 'stale', 'unavailable']),
+  pending: WorkspaceSchemaPendingSchema.nullable(),
+  reason: z.string().nullable(),
+  impact: SchemaEvolutionImpactSchema.nullable(),
+});
+export const StudioAdoptResultSchema = z.object({
+  workspaceRevision: z.number().int().positive(),
+  outcome: z.literal('pending_preparation'),
+  pending: WorkspaceSchemaPendingSchema,
+});
+export type WorkspaceSchemaPending = z.infer<typeof WorkspaceSchemaPendingSchema>;
+export type WorkspaceSchemaPendingView = z.infer<typeof WorkspaceSchemaPendingViewSchema>;
+
 export const StudioSchemaEditOriginChannelSchema = z.enum(['studio', 'assistant', 'import', 'api']);
 
 export const SaveStudioSchemaEditCandidateInputSchema = z

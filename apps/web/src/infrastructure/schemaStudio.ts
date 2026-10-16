@@ -1,10 +1,13 @@
 import {
   type AddStudioCandidate,
   type SaveStudioSchemaEditCandidateInput,
+  StudioAdoptResultSchema,
+  type StudioApplyInput,
   StudioCandidateListSchema,
   StudioCandidateSchema,
   StudioSchemaEditCandidateSaveResultSchema,
   StudioSchemaEditCandidateSchema,
+  WorkspaceSchemaPendingViewSchema,
 } from '@t3x-dev/api-client';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
@@ -75,18 +78,28 @@ export async function previewStudioSelection(
     )
   );
 }
-export async function applyStudioSelection(
-  projectId: string,
-  input: { candidateIds: string[]; workspaceId: string; ifRevision: number; reviewHash: string }
-) {
-  return handleResponse(
-    await fetchWithTimeout(
-      `${API_V1}/projects/${encodeURIComponent(projectId)}/schema-studio/apply`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
-      }
+export async function applyStudioSelection(projectId: string, input: StudioApplyInput) {
+  return StudioAdoptResultSchema.parse(
+    await handleResponse(
+      await fetchWithTimeout(
+        `${API_V1}/projects/${encodeURIComponent(projectId)}/schema-studio/apply`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+        }
+      )
+    )
+  );
+}
+
+export async function readWorkspaceSchemaPending(projectId: string, workspaceId: string) {
+  return WorkspaceSchemaPendingViewSchema.parse(
+    await handleResponse(
+      await fetchWithTimeout(
+        `${API_V1}/projects/${encodeURIComponent(projectId)}/schema-studio/pending/${encodeURIComponent(workspaceId)}`,
+        { cache: 'no-store' }
+      )
     )
   );
 }

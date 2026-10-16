@@ -450,6 +450,53 @@ export async function upsertWorkspaceDraft(
   );
 }
 
+/** Server-only Schema preparation metadata. Never changes bindings, content, or authoring facts. */
+export async function saveWorkspaceSchemaPreparation(
+  db: AnyDB,
+  input: {
+    projectId: string;
+    workspaceId: string;
+    expectedRevision: number;
+    schemaEditCandidate?: unknown;
+    schemaPending?: unknown;
+    schemaComposition?: unknown;
+  }
+): Promise<Draft> {
+  const current = await findWorkspaceDraft(db, input.projectId, input.workspaceId);
+  if (!current?.workspace_state) throw new NotFoundError(input.workspaceId);
+  if (current.revision !== input.expectedRevision || current.status !== 'editing')
+    throw new ConflictError(current.id, input.expectedRevision);
+  const state = {
+    ...current.workspace_state,
+    ...(input.schemaEditCandidate !== undefined
+      ? { schemaEditCandidate: input.schemaEditCandidate }
+      : {}),
+    ...(input.schemaPending !== undefined ? { schemaPending: input.schemaPending } : {}),
+    ...(input.schemaComposition !== undefined
+      ? { schemaComposition: input.schemaComposition }
+      : {}),
+    updatedAt: new Date().toISOString(),
+  };
+  const [saved] = await db
+    .update(drafts)
+    .set({
+      workspaceStateJson: state,
+      revision: current.revision + 1,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(drafts.id, current.id),
+        eq(drafts.projectId, input.projectId),
+        eq(drafts.revision, input.expectedRevision),
+        eq(drafts.status, 'editing')
+      )
+    )
+    .returning();
+  if (!saved) throw new ConflictError(current.id, input.expectedRevision);
+  return rowToDraft(saved);
+}
+
 /**
  * Delete a Draft
  */

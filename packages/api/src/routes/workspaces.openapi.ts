@@ -782,6 +782,7 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
     backendCandidateId: _storedBackendCandidateId,
     lastCommitHash: _storedLastCommitHash,
     schemaEditCandidate: storedSchemaEditCandidate,
+    schemaPending: storedSchemaPending,
     status: storedStatus,
     ...storedEditableWorkspace
   } = storedWorkspace;
@@ -789,6 +790,7 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
     backendCandidateId: _ignoredBackendCandidateId,
     lastCommitHash: _ignoredLastCommitHash,
     schemaEditCandidate: _ignoredSchemaEditCandidate,
+    schemaPending: _ignoredSchemaPending,
     status,
     ...clientWorkspace
   } = workspace;
@@ -806,6 +808,7 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
     ...(storedSchemaEditCandidate !== undefined
       ? { schemaEditCandidate: storedSchemaEditCandidate }
       : {}),
+    ...(storedSchemaPending !== undefined ? { schemaPending: storedSchemaPending } : {}),
   };
   const missingTargetBranch = await findMissingWorkspaceTargetBranch(
     db,

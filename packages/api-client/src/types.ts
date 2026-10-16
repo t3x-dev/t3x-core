@@ -1262,6 +1262,7 @@ export interface WorkspaceYSchemaCompositionResult {
   workspaceRevision: number;
   preview?: YSchemaCompositionPreview;
   binding?: Record<string, unknown>;
+  pending?: import('./schema-studio').WorkspaceSchemaPending;
 }
 
 export interface PublishWorkspaceYSchemaCompositionInput {

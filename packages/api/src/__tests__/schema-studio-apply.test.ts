@@ -1,7 +1,9 @@
 import {
   type AnyDB,
   findWorkspaceDraft,
+  insertBranch,
   insertProject,
+  saveYSchemaCompositionSnapshot,
   updateYSchemaArtifactIdentity,
   upsertWorkspaceDraft,
   upsertYSchemaArtifactVersion,
@@ -13,6 +15,7 @@ import {
 } from '@t3x-dev/yschema';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
+import { initializeWorkspaceAuthoring } from '../lib/workspace-authoring';
 import { resolveWorkspaceYSchema } from '../lib/workspace-yschema';
 import { setupTestDB, testData } from './setup';
 
@@ -23,6 +26,7 @@ let source: string;
 const denied = new Set<string>();
 vi.mock('../lib/db', () => ({ getDB: () => Promise.resolve(db) }));
 vi.mock('../lib/project-access', () => ({
+  getProjectAccessPrincipal: () => undefined,
   assertProjectAccess: async (
     c: { req: { method: string } },
     _db: unknown,
@@ -144,6 +148,12 @@ it('compiles deterministically, compares definitions, and keeps preview read-onl
   expect(a.reviewHash).toBe(b.reviewHash);
   expect(a.schemaHash).toBe(b.schemaHash);
   expect(a.report.valid).toBe(true);
+  expect(a.report.layers).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ id: 'definition', status: 'passed' }),
+      expect.objectContaining({ id: 'workspace', status: 'warning' }),
+    ])
+  );
   expect(a.workspace.changes.length).toBeGreaterThan(0);
   expect(a.comparison.changes).toEqual([]);
   expect((await findWorkspaceDraft(db, target, 'work'))?.revision).toBe(before?.revision);
@@ -158,6 +168,9 @@ it('compiles deterministically, compares definitions, and keeps preview read-onl
       (issue: { code: string }) => issue.code === 'REQUIRED_IMPORT_MISSING'
     )
   ).toBe(true);
+  expect(invalid.report.layers).toEqual(
+    expect.arrayContaining([expect.objectContaining({ id: 'composition', status: 'failed' })])
+  );
   expect(
     (
       await request('apply', {
@@ -239,12 +252,123 @@ it('reports current Workspace candidate content that no longer fits the selected
     )
   ).toBe(true);
 });
+it('enforces content impact on Apply even when the caller has a current review hash', async () => {
+  const schema = normalizeYSchemaObject({
+    yschema: '0.1',
+    name: 'Impact base',
+    strict: false,
+    nodes: { product: { slots: { title: { type: 'string' } } } },
+  });
+  const release = async (name: string, value: typeof schema) =>
+    candidate(
+      name,
+      {
+        apiVersion: 't3x.dev/yschema-blueprint/v1',
+        schema: value,
+        registry: {
+          schemaHash: await sha256CompositionValue(value),
+          renderPlan: [],
+          originsByPath: {},
+        },
+      },
+      'schema'
+    );
+  await release('impact-base', schema);
+  const workspaceId = 'impact-apply';
+  const schemaHash = await sha256CompositionValue(schema);
+  const compositionId = 'impact-baseline';
+  await saveYSchemaCompositionSnapshot(db, {
+    snapshot_id: 'impact-baseline-snapshot',
+    project_id: target,
+    composition_id: compositionId,
+    composition_revision: 1,
+    composition_hash: schemaHash,
+    compiled_schema_hash: schemaHash,
+    compiler_version: 'impact-test',
+    manifest_json: {},
+    schema_json: schema as unknown as Record<string, unknown>,
+    render_plan_json: [],
+    origins_json: {},
+  });
+  await upsertWorkspaceDraft(db, {
+    project_id: target,
+    workspace_id: workspaceId,
+    target_branch: workspaceId,
+    title: 'Impact apply',
+    workspace_state: {
+      title: 'Impact apply',
+      targetBranch: workspaceId,
+      schemaBindings: [
+        {
+          canonicalName: 'team/impact-base',
+          version: '1.0.0',
+          rootKey: 'candidate',
+          schemaHash,
+          compositionId,
+          compositionRevision: 1,
+          compositionHash: schemaHash,
+        },
+      ],
+      schemaCandidate: { fields: [{ path: 'product.title', value: 'Keep this value' }] },
+      yopsDraft: { operations: [] },
+    },
+  });
+  const before = await findWorkspaceDraft(db, target, workspaceId);
+  for (const edit of ['remove', 'rename', 'type'] as const) {
+    const next = structuredClone(schema);
+    if (edit === 'remove') delete next.nodes.product;
+    if (edit === 'rename') {
+      next.nodes.overview = next.nodes.product!;
+      delete next.nodes.product;
+    }
+    if (edit === 'type') next.nodes.product!.slots!.title.type = 'number';
+    const id = await release(`impact-${edit}`, next);
+    const response = await request('preview', { candidateIds: [id], workspaceId, sample: {} });
+    expect(response.status).toBe(200);
+    const preview = (await response.json()).data;
+    expect(preview.impact).toMatchObject({
+      status: 'needs_mapping',
+      canAdopt: false,
+      canPublish: false,
+    });
+    const applied = await request('apply', {
+      candidateIds: [id],
+      workspaceId,
+      ifRevision: preview.workspace.revision,
+      reviewHash: preview.reviewHash,
+    });
+    expect(applied.status).toBe(409);
+    expect((await applied.json()).error.code).toBe('REVIEW_REQUIRED');
+    expect(await findWorkspaceDraft(db, target, workspaceId)).toEqual(before);
+  }
+  const base = await release('impact-optional', {
+    ...schema,
+    nodes: { ...schema.nodes, advantage: { slots: {} } },
+  });
+  const safe = (await (await request('preview', { candidateIds: [base], workspaceId })).json())
+    .data;
+  expect(safe.impact).toMatchObject({ status: 'safe', canAdopt: true, canPublish: true });
+  expect(
+    (
+      await request('apply', {
+        candidateIds: [base],
+        workspaceId,
+        ifRevision: safe.workspace.revision,
+        reviewHash: safe.reviewHash,
+      })
+    ).status
+  ).toBe(200);
+});
+
 it('requires source redistribution and target edit authority and rejects stale review hashes', async () => {
   denied.add(`${source}:project:edit`);
   const preview = (
     await (await request('preview', { candidateIds: [coreId], workspaceId: 'work' })).json()
   ).data;
   expect(preview.adoption.allowed).toBe(false);
+  expect(preview.report.layers).toEqual(
+    expect.arrayContaining([expect.objectContaining({ id: 'provenance', status: 'failed' })])
+  );
   expect(
     (
       await request('apply', {
@@ -279,7 +403,8 @@ it('requires source redistribution and target edit authority and rejects stale r
     ).status
   ).toBe(409);
 });
-it('applies once with CAS, invalidates stale diagnostics and retains exact adopted schema after withdrawal', async () => {
+it('adopts once with CAS, preserves all effective state, and retains pending intent after withdrawal', async () => {
+  const before = (await findWorkspaceDraft(db, target, 'work'))!;
   const preview = (
     await (await request('preview', { candidateIds: [schemaId], workspaceId: 'work' })).json()
   ).data;
@@ -292,16 +417,25 @@ it('applies once with CAS, invalidates stale diagnostics and retains exact adopt
   const responses = await Promise.all([request('apply', body), request('apply', body)]);
   expect(responses.map((r) => r.status).sort()).toEqual([200, 409]);
   const saved = (await findWorkspaceDraft(db, target, 'work'))!;
-  expect(saved.workspace_state.schemaBindings[0]).toMatchObject({
-    mode: 'pinned',
-    rootKey: 'candidate',
+  expect(saved.workspace_state.schemaPending).toMatchObject({
+    workspaceId: 'work',
     schemaHash: preview.schemaHash,
+    workspaceRevision: saved.revision,
+    source: { kind: 'studio', candidateIds: [schemaId] },
   });
-  expect(saved.workspace_state.schemaReview.verdict).toBe('needs_review');
-  expect(saved.workspace_state.yopsDraft.operations).toEqual([]);
-  expect(saved.workspace_state.commitOverride).toBeUndefined();
-  expect(saved.workspace_state.extractionProposal).toBeUndefined();
-  expect((await resolveWorkspaceYSchema(saved.workspace_state, db, target)).schema).not.toBeNull();
+  const { schemaPending: _pending, updatedAt: _updatedAt, ...unchanged } = saved.workspace_state;
+  const { updatedAt: _oldUpdatedAt, ...original } = before.workspace_state;
+  expect(unchanged).toEqual(original);
+  const pendingUrl = `/v1/projects/${target}/schema-studio/pending/work`;
+  expect((await (await app.request(pendingUrl)).json()).data.status).toBe('pending_preparation');
+  const readRevision = saved.revision;
+  denied.add(`${source}:project:edit`);
+  expect((await (await app.request(pendingUrl)).json()).data).toMatchObject({
+    status: 'unavailable',
+    pending: null,
+  });
+  denied.clear();
+  expect((await findWorkspaceDraft(db, target, 'work'))?.revision).toBe(readRevision);
   await updateYSchemaArtifactIdentity(db, {
     artifact_id: 'apply-whole',
     project_id: source,
@@ -309,13 +443,19 @@ it('applies once with CAS, invalidates stale diagnostics and retains exact adopt
     lifecycle_status: 'archived',
   });
   expect((await request('preview', { candidateIds: [schemaId] })).status).toBe(404);
-  expect((await resolveWorkspaceYSchema(saved.workspace_state, db, target)).schema).not.toBeNull();
+  expect((await (await app.request(pendingUrl)).json()).data).toMatchObject({
+    status: 'unavailable',
+    pending: null,
+  });
+  expect((await findWorkspaceDraft(db, target, 'work'))?.workspace_state.schemaPending).toEqual(
+    saved.workspace_state.schemaPending
+  );
   denied.add(`${source}:project:read`);
   expect((await request('preview', { candidateIds: [coreId] })).status).toBe(404);
   denied.clear();
 });
 
-it('binds a Studio Module composition as a draft override', async () => {
+it('adopts a Module composition without activating a draft override and invalidates it on later edits', async () => {
   const workspaceId = 'composition-binding';
   await upsertWorkspaceDraft(db, {
     project_id: target,
@@ -338,9 +478,99 @@ it('binds a Studio Module composition as a draft override', async () => {
     reviewHash: preview.reviewHash,
   });
   expect(response.status).toBe(200);
+  const adopted = (await response.json()).data;
+  expect(adopted.outcome).toBe('pending_preparation');
+  const saved = (await findWorkspaceDraft(db, target, workspaceId))!;
+  expect(saved.workspace_state.schemaBindings).toEqual([]);
+  const pendingUrl = `/v1/projects/${target}/schema-studio/pending/${workspaceId}`;
+  expect((await (await app.request(pendingUrl)).json()).data.status).toBe('pending_preparation');
+  await upsertWorkspaceDraft(
+    db,
+    {
+      project_id: target,
+      workspace_id: workspaceId,
+      target_branch: workspaceId,
+      title: 'Concurrent edit',
+      workspace_state: { ...saved.workspace_state, title: 'Concurrent edit' },
+    },
+    saved.revision
+  );
+  expect((await (await app.request(pendingUrl)).json()).data).toMatchObject({
+    status: 'stale',
+    pending: adopted.pending,
+  });
+});
+
+it('adopts a saved local candidate on an Authoring Ledger Workspace without mutating authoring facts', async () => {
+  const workspaceId = 'ledger-pending';
+  await insertBranch(db, { projectId: target, name: workspaceId });
+  const draft = await upsertWorkspaceDraft(db, {
+    project_id: target,
+    workspace_id: workspaceId,
+    target_branch: workspaceId,
+    title: workspaceId,
+    workspace_state: {
+      targetBranch: workspaceId,
+      schemaBindings: [],
+      yopsDraft: { operations: [] },
+    },
+  });
+  await initializeWorkspaceAuthoring(db, {
+    projectId: target,
+    workspaceId,
+    expectedWorkspaceRevision: draft.revision,
+    expectedRefHead: null,
+    actionId: 'initialize:ledger-pending',
+    actor: { kind: 'human', id: 'human:test' },
+  });
+  const editUrl = `/v1/projects/${target}/schema-studio/edit-candidates/${workspaceId}`;
+  const save = async (revision: number) =>
+    app.request(editUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspaceId,
+        candidateIds: [coreId],
+        ifRevision: revision,
+        retryKey: `ledger-edit:${revision}`,
+        intent: 'Add an optional advantage node',
+        origin: 'studio',
+        localContribution: { nodes: { advantage: { slots: { title: { type: 'string' } } } } },
+      }),
+    });
+  const edited = await save(0);
+  expect(edited.status).toBe(200);
+  const edit = (await edited.json()).data.candidate;
+  const schemaEditCandidate = { candidateId: edit.candidateId, revision: edit.revision };
+  const previewResponse = await request('preview', {
+    candidateIds: [coreId],
+    workspaceId,
+    schemaEditCandidate,
+  });
+  expect(previewResponse.status).toBe(200);
+  const preview = (await previewResponse.json()).data;
+  expect(preview.schema.nodes.advantage).toBeDefined();
+  const before = (await findWorkspaceDraft(db, target, workspaceId))!;
+  const response = await request('apply', {
+    candidateIds: [coreId],
+    workspaceId,
+    schemaEditCandidate,
+    ifRevision: before.revision,
+    reviewHash: preview.reviewHash,
+  });
+  expect(response.status).toBe(200);
+  const saved = (await findWorkspaceDraft(db, target, workspaceId))!;
+  const { schemaPending: _pending, updatedAt: _at, ...unchanged } = saved.workspace_state;
+  const { updatedAt: _oldAt, ...original } = before.workspace_state;
+  expect(unchanged).toEqual(original);
+  expect(saved.workspace_state.authoringLedger).toBeDefined();
+  const pendingUrl = `/v1/projects/${target}/schema-studio/pending/${workspaceId}`;
+  expect((await (await app.request(pendingUrl)).json()).data.status).toBe('pending_preparation');
+  expect((await save(edit.revision)).status).toBe(200);
+  expect((await (await app.request(pendingUrl)).json()).data.status).toBe('stale');
   expect(
-    (await findWorkspaceDraft(db, target, workspaceId))?.workspace_state?.schemaBindings[0]
-  ).toMatchObject({ mode: 'draft_override' });
+    (await findWorkspaceDraft(db, target, workspaceId))?.workspace_state.schemaPending
+  ).toEqual(saved.workspace_state.schemaPending);
 });
 
 it('projects locks only for declared required imports, not legacy suggestions', async () => {
