@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { canonicalJson, cloneDocument } from '../workspace-authoring/document';
 import type { DraftDocument } from '../workspace-authoring/types';
-import type { SchemaAuthoringDigest } from './types';
+import { parseWorkspaceSchemaAuthoringDraft } from './persistence';
+import type { SchemaAuthoringDigest, WorkspaceSchemaAuthoringDraft } from './types';
 
 export const WORKSPACE_SCHEMA_EDIT_CANDIDATE_SCHEMA =
   't3x.application/workspace-schema-edit-candidate/v1' as const;
@@ -32,6 +33,7 @@ export interface WorkspaceSchemaEditCandidate {
   readonly revision: number;
   readonly baseSources: readonly WorkspaceSchemaEditBaseSource[];
   readonly localContribution: DraftDocument;
+  readonly authoringDraft?: WorkspaceSchemaAuthoringDraft;
   readonly intent: string;
   readonly origin: WorkspaceSchemaEditOrigin;
   readonly retryKey: string;
@@ -44,6 +46,7 @@ export interface SaveWorkspaceSchemaEditCandidateInput {
   readonly expectedRevision: number;
   readonly baseSources: readonly WorkspaceSchemaEditBaseSource[];
   readonly localContribution: DraftDocument;
+  readonly authoringDraft?: WorkspaceSchemaAuthoringDraft;
   readonly intent: string;
   readonly origin: WorkspaceSchemaEditOrigin;
   readonly retryKey: string;
@@ -164,6 +167,7 @@ export function parseWorkspaceSchemaEditCandidate(value: unknown): WorkspaceSche
         'revision',
         'baseSources',
         'localContribution',
+        'authoringDraft',
         'intent',
         'origin',
         'retryKey',
@@ -183,6 +187,11 @@ export function parseWorkspaceSchemaEditCandidate(value: unknown): WorkspaceSche
       candidate.localContribution,
       'Schema edit localContribution'
     ),
+    ...(candidate.authoringDraft === undefined
+      ? {}
+      : {
+          authoringDraft: parseWorkspaceSchemaAuthoringDraft(candidate.authoringDraft),
+        }),
     intent: nonEmptyString(candidate.intent, 'Schema edit intent'),
     origin: parseOrigin(candidate.origin),
     retryKey: nonEmptyString(candidate.retryKey, 'Schema edit retryKey'),
@@ -197,6 +206,7 @@ function requestDigest(input: SaveWorkspaceSchemaEditCandidateInput): SchemaAuth
     expectedRevision: input.expectedRevision,
     baseSources: input.baseSources,
     localContribution: input.localContribution,
+    ...(input.authoringDraft ? { authoringDraft: input.authoringDraft } : {}),
     intent: input.intent,
     origin: input.origin,
   });
@@ -247,6 +257,7 @@ export function saveWorkspaceSchemaEditCandidate(
         revision: parsed.revision + 1,
         baseSources: input.baseSources,
         localContribution: input.localContribution,
+        ...(input.authoringDraft ? { authoringDraft: input.authoringDraft } : {}),
         intent: input.intent,
         origin: input.origin,
         retryKey: input.retryKey,
@@ -270,6 +281,7 @@ export function saveWorkspaceSchemaEditCandidate(
       revision: 1,
       baseSources: input.baseSources,
       localContribution: input.localContribution,
+      ...(input.authoringDraft ? { authoringDraft: input.authoringDraft } : {}),
       intent: input.intent,
       origin: input.origin,
       retryKey: input.retryKey,

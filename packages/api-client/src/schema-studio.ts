@@ -96,12 +96,17 @@ export const StudioPreviewInputSchema = z
     compareToCandidateIds: ids.optional(),
     sample: StudioSampleValueSchema.optional(),
     localContribution: StudioSchemaEditLocalContributionSchema.optional(),
+    schemaDefinition: StudioSchemaEditLocalContributionSchema.optional(),
+    baseSchemaHash: digest.optional(),
     schemaEditCandidate: StudioSchemaEditCandidateRefSchema.optional(),
   })
   .strict()
-  .refine((value) => !(value.localContribution && value.schemaEditCandidate), {
-    message: 'Preview either a saved Schema edit candidate or an unsaved local contribution.',
-  });
+  .refine(
+    (value) => !(value.schemaEditCandidate && (value.localContribution || value.schemaDefinition)),
+    {
+      message: 'Preview either a saved Schema edit candidate or an unsaved local contribution.',
+    }
+  );
 export const StudioApplyInputSchema = z
   .object({
     candidateIds: ids,
@@ -360,6 +365,8 @@ export const SaveStudioSchemaEditCandidateInputSchema = z
     intent: z.string().min(1).max(2000),
     origin: StudioSchemaEditOriginChannelSchema,
     localContribution: StudioSchemaEditLocalContributionSchema,
+    schemaDefinition: StudioSchemaEditLocalContributionSchema.optional(),
+    baseSchemaHash: digest.optional(),
   })
   .strict();
 
@@ -370,6 +377,18 @@ export const StudioSchemaEditCandidateSchema = z.object({
   revision: z.number().int().positive(),
   baseSources: z.array(StudioSourceSchema).min(1),
   localContribution: StudioSchemaEditLocalContributionSchema,
+  authoringDraft: z
+    .object({
+      schema: z.literal('t3x.application/workspace-schema-authoring-draft/v1'),
+      revision: z.number().int().nonnegative(),
+      base: z.record(z.string(), z.unknown()),
+      effect: z.object({
+        profile: z.literal('yops.ops.v1'),
+        operations: z.array(z.record(z.string(), z.unknown())),
+      }),
+      resultSchemaHash: digest.optional(),
+    })
+    .optional(),
   intent: z.string().min(1),
   origin: z.object({
     channel: StudioSchemaEditOriginChannelSchema,
