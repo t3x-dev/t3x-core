@@ -71,14 +71,14 @@
   width: 100%;
   height: 52px;
   padding: 8px 12px;
-  background: var(--surface-elevated);
-  border-color: var(--stroke-default);
+  background: var(--management-control-bg);
+  border-color: var(--stroke-strong);
 }
 
 .choiceTrigger > svg:first-child {
   width: 20px;
   height: 20px;
-  color: var(--accent-commit);
+  color: var(--text-secondary);
 }
 
 .choiceCopy {
@@ -182,7 +182,7 @@
   flex: 0 0 auto;
   width: 18px;
   height: 18px;
-  color: var(--accent-commit);
+  color: var(--text-secondary);
 }
 
 .previewFlow > div span {

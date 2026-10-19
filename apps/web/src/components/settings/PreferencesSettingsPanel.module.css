@@ -49,11 +49,11 @@
   align-items: center;
   gap: 7px;
   padding: 5px 13px;
-  color: var(--accent-commit);
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
   line-height: 16px;
-  background: var(--accent-commit-soft);
+  background: var(--management-control-bg);
   border-radius: 999px;
 }
 .settingsGrid {
@@ -212,13 +212,13 @@
   left: 3px;
   width: 19px;
   height: 19px;
-  background: var(--on-accent);
+  background: var(--primary-foreground);
   border-radius: 50%;
   box-shadow: 0 1px 3px rgb(15 23 42 / 18%);
   transition: transform 150ms ease;
 }
 .switch[aria-checked="true"] {
-  background: var(--accent-commit);
+  background: var(--color-brand);
 }
 .switch[aria-checked="true"] i {
   transform: translateX(22px);
@@ -233,11 +233,11 @@
 .saveRow button {
   width: 129px;
   height: 37px;
-  color: var(--on-accent);
+  color: var(--primary-foreground);
   font: inherit;
   font-size: 14px;
   font-weight: 600;
-  background: var(--accent-commit);
+  background: var(--color-brand);
   border: 0;
   border-radius: 7px;
   cursor: pointer;

@@ -1,0 +1,118 @@
+/* Opt-in palette for repository management, settings, and the shared header.
+   Keep Workspace content and the site's theme preferences outside this scope. */
+.scope {
+  --text-primary: #1f2328;
+  --text-secondary: #505862;
+  --text-tertiary: #5f6771;
+  --surface-app: #f6f7f8;
+  --surface-panel: #ffffff;
+  --surface-card: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-canvas: #f6f7f8;
+  --stroke-default: #d1d7de;
+  --stroke-divider: #e2e6eb;
+  --stroke-strong: #8c959f;
+  --management-header-bg: #f3f4f6;
+  --management-control-bg: #f3f4f6;
+  --management-control-hover: #e9edf1;
+  --management-selected-bg: #e9edf1;
+  --hover-bg: #eef1f4;
+  --active-bg: #e3e7ec;
+
+  /* Blue links and solid actions have separate values in the dark theme. */
+  --accent-commit: #0969da;
+  --accent-commit-soft: #eaf3ff;
+  --color-brand: #0969da;
+  --color-brand-hover: #075bbd;
+  --primary: var(--color-brand);
+  --primary-foreground: #ffffff;
+  --on-accent: #ffffff;
+  --ring: #0969da;
+  --status-success: #1a7f37;
+  --status-success-muted: #edf8f0;
+  --status-error: #cf222e;
+  --status-error-muted: #fff1f1;
+  --status-warning: #8a4b08;
+  --status-warning-muted: #fff8e6;
+  --status-info: var(--accent-commit);
+  --status-info-muted: var(--accent-commit-soft);
+  --status-danger: var(--status-error);
+  --destructive: #cf222e;
+  --on-status: #ffffff;
+
+  /* Existing shared controls consume these aliases, including portal content. */
+  --surface-primary: var(--surface-card);
+  --surface-secondary: var(--management-control-bg);
+  --background: var(--surface-panel);
+  --foreground: var(--text-primary);
+  --card: var(--surface-card);
+  --card-foreground: var(--text-primary);
+  --popover: var(--surface-elevated);
+  --popover-foreground: var(--text-primary);
+  --secondary: var(--management-control-bg);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--surface-app);
+  --muted-foreground: var(--text-tertiary);
+  --accent: var(--management-control-hover);
+  --accent-foreground: var(--text-primary);
+  --border: var(--stroke-default);
+  --input: var(--stroke-strong);
+  color: var(--text-primary);
+}
+
+:global(.dark) .scope {
+  --text-primary: #e6e9ed;
+  --text-secondary: #b7bdc5;
+  --text-tertiary: #a3abb4;
+  --surface-app: #17191d;
+  --surface-panel: #1d2025;
+  --surface-card: #24282e;
+  --surface-elevated: #2b3037;
+  --surface-canvas: #17191d;
+  --stroke-default: #41474f;
+  --stroke-divider: #343a42;
+  --stroke-strong: #6b7480;
+  --management-header-bg: #202328;
+  --management-control-bg: #2b3037;
+  --management-control-hover: #363d46;
+  --management-selected-bg: #343a42;
+  --hover-bg: #2e343c;
+  --active-bg: #3d4550;
+  --accent-commit: #79b8ff;
+  --accent-commit-soft: #24374e;
+  --color-brand: #1f6feb;
+  --color-brand-hover: #185fcf;
+  --on-accent: #101820;
+  --ring: #79b8ff;
+  --status-success: #7ee2a8;
+  --status-success-muted: #20362a;
+  --status-error: #ff9b9b;
+  --status-error-muted: #3a2528;
+  --status-warning: #eac181;
+  --status-warning-muted: #382f20;
+  --destructive: #b62324;
+}
+
+.scope :global([data-slot="button"][data-variant="outline"]) {
+  border-color: var(--stroke-default);
+  background: var(--management-control-bg);
+  color: var(--text-primary);
+}
+
+.scope :global([data-slot="button"][data-variant="outline"]:hover:not(:disabled)) {
+  background: var(--management-control-hover);
+  border-color: var(--stroke-strong);
+}
+
+.scope :global([data-slot="button"][data-variant="default"]) {
+  color: var(--primary-foreground);
+}
+
+.scope :global([data-slot="button"][data-variant="destructive"]) {
+  background: var(--destructive);
+  color: var(--on-status);
+}
+
+.scope :global([data-slot="button"][data-variant="destructive"]:hover:not(:disabled)) {
+  background: color-mix(in srgb, var(--destructive) 88%, black);
+}

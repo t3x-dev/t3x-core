@@ -5,7 +5,7 @@
   min-width: 0;
   width: 100%;
   border-bottom: 1px solid var(--stroke-default);
-  background: var(--surface-card);
+  background: var(--management-header-bg);
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 14px;
@@ -147,6 +147,7 @@
   border: 1px solid var(--stroke-default);
   border-radius: 4px;
   color: var(--text-secondary);
+  background: var(--surface-panel);
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 400;
@@ -196,7 +197,7 @@
 }
 
 .tab[aria-current="page"] {
-  border-bottom-color: var(--text-primary);
+  border-bottom-color: var(--accent-commit);
   color: var(--text-primary);
   font-weight: 600;
 }

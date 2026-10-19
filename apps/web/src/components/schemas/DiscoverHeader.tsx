@@ -22,6 +22,7 @@ import {
   type ProjectTabId,
 } from '@/components/project/projectTabModel';
 import { Button } from '@/components/ui/button';
+import palette from '@/styles/management-palette.module.css';
 import styles from './DiscoverHeader.module.css';
 
 const tabIcons: Record<ProjectTabId, LucideIcon> = {
@@ -79,7 +80,7 @@ export function DiscoverHeader({
   }
 
   return (
-    <header className={styles.header}>
+    <header className={`${palette.scope} ${styles.header}`}>
       <div className={styles.topRow}>
         <div className={styles.identity}>
           <Link className={styles.brand} href="/" aria-label="Back to projects">
@@ -91,7 +92,7 @@ export function DiscoverHeader({
                 strokeWidth="2.2"
                 strokeLinecap="round"
               />
-              <circle cx="19" cy="17.5" r="2.2" fill="var(--accent-conversation)" />
+              <circle cx="19" cy="17.5" r="2.2" fill="var(--accent-commit)" />
             </svg>
             <span>T3X</span>
           </Link>

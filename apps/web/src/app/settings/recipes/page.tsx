@@ -35,6 +35,7 @@ import { formatUserFacingError } from '@/domain/format/errors';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { useRecipeCommands } from '@/hooks/recipes/useRecipeCommands';
 import { useProjectStore } from '@/store/projectStore';
+import palette from '@/styles/management-palette.module.css';
 import type { CreateRecipeInput, Recipe, RecipeStep, UpdateRecipeInput } from '@/types/api';
 import styles from './RecipeSettings.module.css';
 
@@ -352,7 +353,7 @@ export default function RecipesPage() {
                                     <MoreVertical aria-hidden="true" />
                                   </button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
+                                <DropdownMenuContent align="end" className={palette.scope}>
                                   <DropdownMenuItem
                                     className="text-[var(--status-error)] focus:text-[var(--status-error)]"
                                     onClick={() => setDeleteTarget(recipe)}
@@ -382,7 +383,7 @@ export default function RecipesPage() {
         }}
       >
         <SheetContent
-          className={styles.drawer}
+          className={`${palette.scope} ${styles.drawer}`}
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             document.getElementById('recipe-name')?.focus();
@@ -410,6 +411,7 @@ export default function RecipesPage() {
       </Sheet>
 
       <AlertDialog
+        contentClassName={palette.scope}
         open={deleteTarget !== null}
         onOpenChange={(open) => {
           if (!open) setDeleteTarget(null);

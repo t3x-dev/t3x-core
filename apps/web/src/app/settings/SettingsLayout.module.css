@@ -77,8 +77,20 @@
 }
 
 .navLinkActive {
-  color: var(--accent-commit);
-  background: var(--accent-commit-soft);
+  position: relative;
+  color: var(--text-primary);
+  font-weight: 600;
+  background: var(--management-selected-bg);
+}
+
+.navLinkActive::before {
+  position: absolute;
+  inset-block: 10px;
+  left: -5px;
+  width: 3px;
+  background: var(--accent-commit);
+  border-radius: var(--radius-full);
+  content: "";
 }
 
 .automationSection {
@@ -152,7 +164,7 @@
     justify-content: center;
     min-height: 40px;
     color: var(--text-secondary);
-    background: transparent;
+    background: var(--management-control-bg);
     border: 1px solid var(--stroke-default);
     border-radius: var(--radius-md);
     cursor: pointer;
@@ -171,7 +183,7 @@
     color: var(--text-primary);
     font: inherit;
     font-size: 14px;
-    background: var(--surface-card);
+    background: var(--management-control-bg);
     border: 1px solid var(--stroke-default);
     border-radius: var(--radius-md);
   }

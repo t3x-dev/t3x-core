@@ -49,11 +49,11 @@
   align-items: center;
   gap: 7px;
   padding: 5px 13px;
-  color: var(--accent-commit);
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
   line-height: 16px;
-  background: var(--accent-commit-soft);
+  background: var(--management-control-bg);
   border-radius: 999px;
 }
 .identityCard,
@@ -81,10 +81,10 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  color: var(--accent-commit);
+  color: var(--text-secondary);
   font-size: 22px;
   font-weight: 700;
-  background: var(--accent-commit-soft);
+  background: var(--management-control-bg);
   border-radius: 50%;
 }
 .avatar img {
@@ -167,14 +167,14 @@
   font: inherit;
   font-size: 14px;
   background: var(--surface-card);
-  border: 1px solid var(--stroke-default);
+  border: 1px solid var(--stroke-strong);
   border-radius: 7px;
   outline: none;
 }
 .formGrid input:focus,
 .formGrid select:focus {
-  border-color: var(--accent-commit);
-  box-shadow: 0 0 0 2px rgb(47 111 236 / 10%);
+  border-color: var(--ring);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 18%, transparent);
 }
 .formGrid input:disabled {
   color: var(--text-secondary);
@@ -190,11 +190,11 @@
   width: 122px;
   height: 36px;
   justify-self: end;
-  color: var(--on-accent);
+  color: var(--primary-foreground);
   font: inherit;
   font-size: 14px;
   font-weight: 600;
-  background: var(--accent-commit);
+  background: var(--color-brand);
   border: 0;
   border-radius: 7px;
   cursor: pointer;
@@ -273,15 +273,15 @@
   align-items: center;
   gap: 7px;
   padding: 3px 10px;
-  color: var(--status-success);
+  color: var(--text-secondary);
   font-size: 12px;
-  background: var(--status-success-muted);
+  background: var(--management-control-bg);
   border-radius: 999px;
 }
 .current i {
   width: 7px;
   height: 7px;
-  background: var(--status-success);
+  background: var(--accent-commit);
   border-radius: 50%;
 }
 .sessionRow > button {

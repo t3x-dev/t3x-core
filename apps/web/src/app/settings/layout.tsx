@@ -20,6 +20,7 @@ import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 import { SettingsReturnLink } from '@/components/settings/SettingsReturnLink';
 import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
 import { useSession } from '@/hooks/shared/useSession';
+import palette from '@/styles/management-palette.module.css';
 import { safeInternalReturnTo } from '@/utils/navigationReturn';
 import styles from './SettingsLayout.module.css';
 
@@ -162,7 +163,7 @@ function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
   useEffect(() => setIsAuthEnabled(Boolean(getKey())), [getKey]);
 
   return (
-    <div className={styles.accountLayout}>
+    <div className={`${palette.scope} ${styles.accountLayout}`}>
       <DiscoverHeader
         owner={headerOwner}
         namespaceTab="settings"

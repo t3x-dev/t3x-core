@@ -28,13 +28,17 @@
   align-items: center;
   gap: 10px;
   margin-bottom: 12px;
-  color: var(--accent-commit);
+  color: var(--text-secondary);
   font-size: 12px;
   line-height: 18px;
 }
 
 .breadcrumbs span[aria-hidden="true"] {
   color: var(--stroke-strong);
+}
+
+.breadcrumbs a {
+  color: var(--accent-commit);
 }
 
 .breadcrumbs strong {
@@ -72,21 +76,21 @@
   align-items: center;
   height: 26px;
   padding: 0 12px;
-  color: var(--accent-commit);
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
-  background: var(--accent-commit-soft);
+  background: var(--management-control-bg);
   border-radius: var(--radius-pill);
 }
 
 .newButton {
   min-width: 142px;
-  color: var(--on-accent);
-  background: var(--accent-commit);
+  color: var(--primary-foreground);
+  background: var(--color-brand);
 }
 
 .newButton:hover {
-  background: var(--commit-hover);
+  background: var(--color-brand-hover);
 }
 
 .contentScroll {
@@ -119,7 +123,7 @@
 .panelTitle svg {
   width: 18px;
   height: 18px;
-  color: var(--accent-commit);
+  color: var(--text-secondary);
 }
 
 .panelTitle h2 {
@@ -271,8 +275,8 @@
 }
 
 .enabled {
-  color: var(--status-success);
-  background: var(--status-success-muted);
+  color: var(--text-secondary);
+  background: var(--management-control-bg);
 }
 
 .disabled {
@@ -286,6 +290,10 @@
   height: 6px;
   background: currentcolor;
   border-radius: var(--radius-pill);
+}
+
+.enabled > span {
+  background: var(--accent-commit);
 }
 
 .deliveryCell {
@@ -377,6 +385,7 @@
   height: 60px;
   padding: 0 18px;
   border-bottom: 1px solid var(--stroke-divider);
+  background: var(--management-header-bg);
 }
 
 .drawerHeader h2 {

@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import palette from '@/styles/management-palette.module.css';
 
 interface ProviderCredentialDialogStatus {
   configured: boolean;
@@ -125,7 +126,7 @@ export function ProviderCredentialDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className={`${palette.scope} sm:max-w-md`}>
         <DialogHeader>
           <DialogTitle>{providerName} credentials</DialogTitle>
           <DialogDescription>
@@ -190,7 +191,7 @@ export function ProviderCredentialDialog({
           </div>
 
           {displayedError && (
-            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            <div className="rounded-md border border-[var(--status-error)]/30 bg-[var(--status-error-muted)] px-3 py-2 text-sm text-[var(--status-error)]">
               {displayedError}
             </div>
           )}

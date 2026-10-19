@@ -8,6 +8,7 @@
   gap: 48px;
   padding: 40px 32px 80px;
   color: var(--text-primary);
+  background: var(--surface-panel);
 }
 .sidebar {
   position: sticky;
@@ -45,7 +46,7 @@
   margin-bottom: 10px;
   overflow-wrap: anywhere;
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
 }
 .general {
   min-width: 0;

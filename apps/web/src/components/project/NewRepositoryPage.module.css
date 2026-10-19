@@ -118,7 +118,7 @@
 .field input,
 .selectControl select {
   min-height: 40px;
-  border: 1px solid var(--stroke-default);
+  border: 1px solid var(--stroke-strong);
   border-radius: var(--radius-md);
   background: var(--surface-card);
   color: var(--text-primary);
@@ -140,7 +140,12 @@
   min-width: 0;
   appearance: none;
   padding: 8px 32px 8px 36px;
+  background: var(--management-control-bg);
   cursor: pointer;
+}
+
+.selectControl select:hover:not(:disabled) {
+  background: var(--management-control-hover);
 }
 
 .selectControl select:focus-visible {
@@ -247,6 +252,10 @@
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.65;
+}
+
+.readmeOption > p[role="alert"] {
+  color: var(--status-error);
 }
 
 .footer {

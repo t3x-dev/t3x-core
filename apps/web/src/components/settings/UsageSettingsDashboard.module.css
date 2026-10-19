@@ -33,7 +33,7 @@
   color: var(--text-secondary);
 }
 .breadcrumb strong {
-  color: var(--accent-commit);
+  color: var(--text-primary);
   font-weight: 600;
 }
 
@@ -63,11 +63,11 @@
   align-items: center;
   gap: 6px;
   padding: 4px 12px;
-  color: var(--accent-commit);
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
   line-height: 16px;
-  background: var(--accent-commit-soft);
+  background: var(--management-control-bg);
   border: 1px solid var(--stroke-default);
   border-radius: 999px;
 }
@@ -79,12 +79,12 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  color: var(--text-secondary);
+  color: var(--text-primary);
   font: inherit;
   font-size: 14px;
   font-weight: 500;
   line-height: 20px;
-  background: var(--surface-card);
+  background: var(--management-control-bg);
   border: 1px solid var(--stroke-default);
   border-radius: 8px;
   box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
@@ -92,7 +92,7 @@
   transition: background 150ms ease;
 }
 .rangeButton:hover {
-  background: var(--surface-panel);
+  background: var(--management-control-hover);
 }
 .rangeButton > svg:first-child {
   color: var(--text-secondary);
@@ -152,8 +152,8 @@
   justify-content: center;
   width: 44px;
   height: 44px;
-  color: var(--accent-commit);
-  background: var(--accent-commit-soft);
+  color: var(--text-secondary);
+  background: var(--management-control-bg);
   border-radius: 999px;
 }
 .planIdentity h2,
@@ -200,19 +200,19 @@
 }
 .planActions button {
   padding: 8px 16px;
-  color: var(--accent-commit);
+  color: var(--text-secondary);
   font: inherit;
   font-size: 14px;
   font-weight: 600;
   line-height: 20px;
-  background: var(--accent-commit-soft);
+  background: var(--management-control-bg);
   border: 1px solid var(--stroke-default);
   border-radius: 8px;
   cursor: pointer;
   transition: background 150ms ease;
 }
 .planActions button:hover {
-  background: var(--accent-commit-soft);
+  background: var(--management-control-hover);
 }
 
 .sectionTitle {
@@ -248,12 +248,12 @@
   justify-content: center;
   width: 40px;
   height: 40px;
-  color: var(--accent-commit);
-  background: var(--accent-commit-soft);
+  color: var(--text-secondary);
+  background: var(--management-control-bg);
   border-radius: 999px;
 }
 .metricIconMuted {
-  color: var(--accent-commit);
+  color: var(--text-secondary);
   background: var(--surface-panel);
 }
 .metricCard p {
@@ -280,7 +280,7 @@
 .metricValue span {
   display: flex;
   align-items: center;
-  color: var(--status-success);
+  color: var(--text-secondary);
   font-size: 14px;
   font-weight: 600;
 }
@@ -288,10 +288,10 @@
   color: var(--text-secondary);
 }
 .metricValue .trendUp {
-  color: var(--status-success);
+  color: var(--text-secondary);
 }
 .metricValue .trendDown {
-  color: var(--status-error);
+  color: var(--text-secondary);
 }
 
 .errorState {
@@ -357,10 +357,10 @@
   background: var(--accent-commit);
 }
 .dotInput {
-  background: #38bdf8;
+  background: var(--text-secondary);
 }
 .dotOutput {
-  background: #c084fc;
+  background: var(--stroke-strong);
 }
 .chart {
   display: grid;
@@ -420,11 +420,11 @@
   width: 100%;
 }
 .inputBar {
-  background: #bae6fd;
+  background: var(--text-secondary);
   border-radius: 1px 1px 0 0;
 }
 .outputBar {
-  background: #d8b4fe;
+  background: var(--stroke-strong);
   border-radius: 0 0 1px 1px;
 }
 .line {
@@ -495,7 +495,7 @@
   gap: 4px;
 }
 .tableCard th svg {
-  color: var(--accent-commit);
+  color: var(--text-secondary);
 }
 .tableCard tbody tr {
   border-bottom: 1px solid var(--stroke-divider);
@@ -505,7 +505,7 @@
   border-bottom: 0;
 }
 .tableCard tbody tr:hover {
-  background: rgb(248 250 252 / 50%);
+  background: var(--hover-bg);
 }
 .tableCard td {
   padding: 16px 24px;
@@ -565,7 +565,7 @@
   width: 28px;
   height: 28px;
   margin: 0;
-  color: var(--accent-commit);
+  color: var(--text-secondary);
 }
 .share {
   display: flex;

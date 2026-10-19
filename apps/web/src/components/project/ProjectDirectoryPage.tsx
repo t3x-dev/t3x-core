@@ -32,6 +32,7 @@ import { useProjects } from '@/hooks/projects/useProjects';
 import { repositoryMutationError } from '@/hooks/projects/useDeletedProjects';
 import { useRepositoryName } from '@/hooks/projects/useRepositoryName';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
+import palette from '@/styles/management-palette.module.css';
 import { cn } from '@/utils/cn';
 import {
   orderProjectsByRecentOpen,
@@ -412,7 +413,7 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
   const hasLoadedProjects = projectSummaries.length > 0;
 
   return (
-    <div className={styles.page} ref={pageRef}>
+    <div className={cn(palette.scope, styles.page)} ref={pageRef}>
       <DiscoverHeader
         owner={ownerSlug}
         namespaceTab="repositories"
@@ -603,7 +604,7 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
       )}
 
       <Dialog open={Boolean(renameTarget)} onOpenChange={handleRenameDialogOpenChange}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className={cn(palette.scope, 'sm:max-w-[400px]')}>
           <form className="grid gap-4" onSubmit={handleRenameProject}>
             <DialogHeader>
               <DialogTitle>Rename Repository</DialogTitle>
@@ -650,7 +651,7 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
               >
                 Cancel
               </Button>
-              <Button disabled={renaming || !nameCheck.canSubmit} type="submit" variant="commit">
+              <Button disabled={renaming || !nameCheck.canSubmit} type="submit">
                 {renaming ? 'Saving...' : 'Save'}
               </Button>
             </DialogFooter>
@@ -664,7 +665,7 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
           if (!open && !deleting) setDeleteTarget(null);
         }}
       >
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className={cn(palette.scope, 'sm:max-w-[400px]')}>
           <DialogHeader>
             <DialogTitle>Delete repository?</DialogTitle>
             <DialogDescription className="break-words">

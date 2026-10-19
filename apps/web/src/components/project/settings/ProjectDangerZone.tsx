@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { getDeletedRepositoriesPath } from '@/domain/project/repoPath';
 import { repositoryMutationError } from '@/hooks/projects/useDeletedProjects';
 import type { ProjectDetail } from '@/types/api';
+import palette from '@/styles/management-palette.module.css';
 import { SettingsSection } from './SettingsSection';
 
 export function ProjectDangerZone({
@@ -86,7 +87,7 @@ export function ProjectDangerZone({
         }}
         open={open}
       >
-        <DialogContent className="sm:max-w-[420px]">
+        <DialogContent className={`${palette.scope} sm:max-w-[420px]`}>
           <DialogHeader>
             <DialogTitle>Delete {project.name}?</DialogTitle>
             <DialogDescription>

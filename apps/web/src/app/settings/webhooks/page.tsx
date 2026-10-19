@@ -30,6 +30,7 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { useWebhookCommands } from '@/hooks/webhooks/useWebhookCommands';
+import palette from '@/styles/management-palette.module.css';
 import type { CreateWebhookInput, UpdateWebhookInput, WebhookData } from '@/types/api';
 import styles from './WebhookSettings.module.css';
 
@@ -352,7 +353,7 @@ export default function WebhooksPage() {
                                   <MoreHorizontal aria-hidden="true" />
                                 </button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
+                              <DropdownMenuContent align="end" className={palette.scope}>
                                 <DropdownMenuItem
                                   disabled={testingId === webhook.webhook_id || !webhook.active}
                                   onClick={() => void handleTest(webhook)}
@@ -464,7 +465,7 @@ export default function WebhooksPage() {
         }}
       >
         <SheetContent
-          className={styles.drawer}
+          className={`${palette.scope} ${styles.drawer}`}
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             document.getElementById('webhook-url')?.focus();
@@ -492,6 +493,7 @@ export default function WebhooksPage() {
       </Sheet>
 
       <AlertDialog
+        contentClassName={palette.scope}
         open={deleteTarget !== null}
         onOpenChange={(open) => {
           if (!open) setDeleteTarget(null);

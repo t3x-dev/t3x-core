@@ -16,7 +16,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { getProjectRepoPath } from '@/domain/project/repoPath';
 import { repositoryMutationError, useDeletedProjects } from '@/hooks/projects/useDeletedProjects';
+import palette from '@/styles/management-palette.module.css';
 import type { Project } from '@/types/api';
+import { cn } from '@/utils/cn';
 import styles from './DeletedRepositoriesView.module.css';
 
 export function DeletedRepositoriesView({
@@ -76,7 +78,7 @@ export function DeletedRepositoriesView({
   }
 
   return (
-    <div className={styles.page}>
+    <div className={cn(palette.scope, styles.page)}>
       <Link href={backHref} scroll={false} className={styles.backLink}>
         <ArrowLeft aria-hidden="true" className="size-4" /> Back to repositories
       </Link>
@@ -218,7 +220,7 @@ export function DeletedRepositoriesView({
           if (!open) close();
         }}
       >
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent className={cn(palette.scope, 'sm:max-w-[480px]')}>
           <DialogHeader>
             <DialogTitle>
               {target?.action === 'restore'
@@ -280,7 +282,7 @@ export function DeletedRepositoriesView({
                   if (target?.action === 'delete') setDeleteConfirmationOpen(true);
                   else void confirm();
                 }}
-                variant={target?.action === 'restore' ? 'commit' : 'destructive'}
+                variant={target?.action === 'restore' ? 'default' : 'destructive'}
               >
                 {list.pending
                   ? 'Working...'
@@ -293,6 +295,7 @@ export function DeletedRepositoriesView({
         </DialogContent>
       </Dialog>
       <AlertDialog
+        contentClassName={palette.scope}
         open={deleteConfirmationOpen && target?.action === 'delete'}
         onOpenChange={(open) => {
           if (!list.pending) setDeleteConfirmationOpen(open);

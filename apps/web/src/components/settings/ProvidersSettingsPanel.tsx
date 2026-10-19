@@ -24,14 +24,6 @@ const SOURCE_LABEL: Record<LocalProviderKeySource, string> = {
   none: 'Not configured',
 };
 
-const SOURCE_CHIP_CLASS: Record<LocalProviderKeySource, string> = {
-  environment:
-    'bg-[var(--accent-pending)]/10 text-[var(--accent-pending)] border-[var(--accent-pending)]/30',
-  database:
-    'bg-[var(--status-success)]/10 text-[var(--status-success)] border-[var(--status-success)]/30',
-  none: 'bg-[var(--surface-secondary)] text-[var(--text-tertiary)] border-[var(--stroke-divider)]',
-};
-
 function displayName(provider: ProviderInfo): string {
   const local = toLocalProviderId(provider.id);
   if (local === 'google') return 'Google';
@@ -48,10 +40,7 @@ function SourceChip({
   const label = SOURCE_LABEL[source];
   return (
     <span
-      className={cn(
-        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium',
-        SOURCE_CHIP_CLASS[source]
-      )}
+      className="inline-flex items-center gap-1 rounded-full border border-[var(--stroke-divider)] bg-[var(--management-control-bg)] px-2 py-0.5 text-xs font-medium text-[var(--text-secondary)]"
       title={source === 'environment' ? 'Loaded from an environment variable' : undefined}
     >
       {label}
@@ -84,7 +73,7 @@ function ProviderCard({
     <div
       className={cn(
         'rounded-lg border border-[var(--stroke-divider)]',
-        configured ? 'bg-[var(--surface-primary)]' : 'bg-[var(--surface-secondary)] opacity-80'
+        configured ? 'bg-[var(--surface-card)]' : 'bg-[var(--surface-app)]'
       )}
     >
       <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
@@ -122,8 +111,8 @@ function ProviderCard({
             type="button"
             onClick={() => onManageCredentials(provider)}
             className={cn(
-              'flex items-center gap-1.5 rounded-md border border-[var(--stroke-divider)] px-2.5 py-1.5 text-xs font-medium',
-              'text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+              'flex items-center gap-1.5 rounded-md border border-[var(--stroke-default)] px-2.5 py-1.5 text-xs font-medium',
+              'bg-[var(--management-control-bg)] text-[var(--text-primary)] transition-colors hover:bg-[var(--management-control-hover)]'
             )}
           >
             {source === 'none' ? 'Connect' : 'Manage'}
@@ -134,8 +123,8 @@ function ProviderCard({
               onClick={() => onTest(provider.id)}
               disabled={isTesting}
               className={cn(
-                'flex items-center gap-1.5 rounded-md border border-[var(--stroke-divider)] px-2.5 py-1.5 text-xs font-medium',
-                'text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]',
+                'flex items-center gap-1.5 rounded-md border border-[var(--stroke-default)] px-2.5 py-1.5 text-xs font-medium',
+                'bg-[var(--management-control-bg)] text-[var(--text-primary)] transition-colors hover:bg-[var(--management-control-hover)]',
                 'disabled:cursor-not-allowed disabled:opacity-50'
               )}
             >
@@ -374,7 +363,7 @@ export function ProvidersSettingsPanel() {
   return (
     <>
       {loadError && (
-        <div className="mb-6 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+        <div className="mb-6 rounded-lg border border-[var(--status-error)]/30 bg-[var(--status-error-muted)] p-4 text-sm text-[var(--status-error)]">
           {loadError}
         </div>
       )}
@@ -413,8 +402,8 @@ export function ProvidersSettingsPanel() {
           type="button"
           onClick={loadProviders}
           className={cn(
-            'flex items-center gap-1.5 rounded-md border border-[var(--stroke-divider)] px-3 py-2 text-xs font-medium',
-            'text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+            'flex items-center gap-1.5 rounded-md border border-[var(--stroke-default)] px-3 py-2 text-xs font-medium',
+            'bg-[var(--management-control-bg)] text-[var(--text-primary)] transition-colors hover:bg-[var(--management-control-hover)]'
           )}
         >
           <RefreshCw className="h-3 w-3" />

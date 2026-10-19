@@ -18,6 +18,7 @@
   border-top: 1px solid var(--stroke-divider);
 }
 .link {
+  position: relative;
   display: flex;
   min-height: 38px;
   align-items: center;
@@ -41,9 +42,18 @@
   outline-offset: 2px;
 }
 .active {
-  background: var(--hover-bg);
+  background: var(--management-selected-bg);
   color: var(--text-primary);
   font-weight: 600;
+}
+.active::before {
+  position: absolute;
+  inset-block: 9px;
+  left: -5px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent-commit);
+  content: "";
 }
 .danger {
   color: var(--status-error);
@@ -67,7 +77,7 @@
     min-height: 42px;
     padding: 8px 12px;
     color: var(--text-primary);
-    background: var(--surface-panel);
+    background: var(--management-control-bg);
     border: 1px solid var(--stroke-default);
     border-radius: var(--radius-md);
     font: inherit;

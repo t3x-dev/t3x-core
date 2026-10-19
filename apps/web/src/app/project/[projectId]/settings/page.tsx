@@ -51,6 +51,7 @@ import {
   fetchProviders,
 } from '@/queries/providers';
 import type { ProviderInfo, RoleAssignment } from '@/types/api';
+import palette from '@/styles/management-palette.module.css';
 import { cn } from '@/utils/cn';
 
 type RoleGroup = 'generation' | 'embedding' | 'extraction' | 'merge';
@@ -400,7 +401,7 @@ function ProjectSettingsPageContent() {
   const project = settings.project;
 
   return (
-    <div className={generalStyles.layout}>
+    <div className={`${palette.scope} ${generalStyles.layout}`}>
       <aside className={generalStyles.sidebar}>
         <p className={generalStyles.sidebarTitle}>Repository settings</p>
         <ProjectSettingsNav />
@@ -494,6 +495,7 @@ function ProjectSettingsPageContent() {
                 </output>
               ) : projectModel ? (
                 <ModelSelector
+                  contentClassName={palette.scope}
                   initialModel={projectModel.model}
                   initialProvider={projectModel.provider}
                   key={modelVersion}

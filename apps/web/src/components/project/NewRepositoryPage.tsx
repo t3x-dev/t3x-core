@@ -24,6 +24,8 @@ import { getProjectRepoPath } from '@/domain/project/repoPath';
 import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
 import { useRepositoryName } from '@/hooks/projects/useRepositoryName';
 import { useRepositorySetup } from '@/hooks/projects/useRepositorySetup';
+import palette from '@/styles/management-palette.module.css';
+import { cn } from '@/utils/cn';
 import styles from './NewRepositoryPage.module.css';
 import { RepositoryNameFeedback } from './RepositoryNameFeedback';
 import { type RepositoryTagsDraft, RepositoryTagsInput } from './RepositoryTagsInput';
@@ -75,7 +77,7 @@ export function NewRepositoryPage() {
   }
 
   return (
-    <div className={styles.shell}>
+    <div className={cn(palette.scope, styles.shell)}>
       <DiscoverHeader
         owner={owner}
         namespaceTab="repositories"

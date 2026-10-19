@@ -51,11 +51,11 @@
   align-items: center;
   gap: 7px;
   padding: 5px 13px;
-  color: var(--accent-commit);
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
   line-height: 16px;
-  background: var(--accent-commit-soft);
+  background: var(--management-control-bg);
   border-radius: 999px;
 }
 .availableCard,
@@ -88,12 +88,12 @@
 .testButton {
   min-height: 36px;
   padding: 6px 10px;
-  color: var(--accent-commit);
+  color: var(--text-secondary);
   font: inherit;
   font-size: 12px;
   font-weight: 600;
-  background: var(--accent-commit-soft);
-  border: 0;
+  background: var(--management-control-bg);
+  border: 1px solid var(--stroke-default);
   border-radius: 7px;
   cursor: pointer;
 }
@@ -101,6 +101,11 @@
 .testButton:disabled {
   cursor: wait;
   opacity: 0.65;
+}
+.testAll:hover:not(:disabled),
+.testButton:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--management-control-hover);
 }
 .testButton {
   justify-self: end;
@@ -204,13 +209,13 @@
   left: 3px;
   width: 17px;
   height: 17px;
-  background: var(--on-accent);
+  background: var(--primary-foreground);
   border-radius: 50%;
   box-shadow: 0 1px 3px rgb(15 23 42 / 24%);
   transition: transform 150ms ease;
 }
 .switch[aria-checked="true"] {
-  background: var(--accent-commit);
+  background: var(--color-brand);
 }
 .switch[aria-checked="true"] i {
   transform: translateX(19px);
@@ -235,7 +240,7 @@
   min-height: 40px;
   align-items: center;
   background: var(--surface-card);
-  border: 1px solid var(--stroke-default);
+  border: 1px solid var(--stroke-strong);
   border-radius: 7px;
 }
 .modelSelect > span {

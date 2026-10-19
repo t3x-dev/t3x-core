@@ -51,11 +51,11 @@
   align-items: center;
   gap: 7px;
   padding: 5px 13px;
-  color: var(--accent-commit);
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
   line-height: 16px;
-  background: var(--accent-commit-soft);
+  background: var(--management-control-bg);
   border-radius: 999px;
 }
 .composeCard,
@@ -97,7 +97,7 @@
   min-height: 40px;
   align-items: center;
   background: var(--surface-card);
-  border: 1px solid var(--stroke-default);
+  border: 1px solid var(--stroke-strong);
   border-radius: 7px;
 }
 .modelSelect > span {
@@ -153,7 +153,7 @@
   padding-left: 4px;
 }
 .rank svg {
-  color: var(--accent-commit);
+  color: var(--text-secondary);
   cursor: grab;
 }
 .rank b {
@@ -225,13 +225,13 @@
   left: 3px;
   width: 17px;
   height: 17px;
-  background: var(--on-accent);
+  background: var(--primary-foreground);
   border-radius: 50%;
   box-shadow: 0 1px 3px rgb(15 23 42 / 24%);
   transition: transform 150ms ease;
 }
 .switch[aria-checked="true"] {
-  background: var(--accent-commit);
+  background: var(--color-brand);
 }
 .switch[aria-checked="true"] i {
   transform: translateX(19px);
@@ -249,11 +249,11 @@
   min-width: 122px;
   height: 37px;
   padding: 0 18px;
-  color: var(--on-accent);
+  color: var(--primary-foreground);
   font: inherit;
   font-size: 14px;
   font-weight: 600;
-  background: var(--accent-commit);
+  background: var(--color-brand);
   border: 0;
   border-radius: 7px;
   box-shadow: 0 1px 2px rgb(15 23 42 / 8%);

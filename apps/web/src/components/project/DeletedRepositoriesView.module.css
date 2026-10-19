@@ -68,6 +68,10 @@
   overflow-wrap: anywhere;
 }
 
+.notice a {
+  color: var(--accent-commit);
+}
+
 .errorState {
   display: grid;
   justify-items: start;
@@ -142,7 +146,7 @@
 
 .path {
   margin-top: 4px;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   font-family: var(--font-geist-mono), monospace;
   font-size: 12px;
   line-height: 1.6;
@@ -155,7 +159,7 @@
   align-items: center;
   gap: 8px 16px;
   margin-top: 12px;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   font-size: 12px;
   line-height: 1.6;
 }
