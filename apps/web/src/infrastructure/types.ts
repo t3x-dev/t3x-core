@@ -24,6 +24,9 @@ export type ProjectVisibility = 'private' | 'unlisted' | 'public';
 export interface Project {
   repository_profile?: RepositoryProfile;
   can_edit?: boolean;
+  deleted_at?: string | null;
+  can_restore?: boolean;
+  can_permanently_delete?: boolean;
   namespace?: string | null;
   canonical_path?: string | null;
   path_status?: 'ready' | 'pending_migration';
@@ -326,6 +329,7 @@ export interface DiffResult {
 // ============================================================================
 
 export interface ProjectListData {
+  status?: 'deleted';
   projects: Project[];
   limit: number;
   offset: number;

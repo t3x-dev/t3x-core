@@ -42,6 +42,9 @@ export const ProjectVisibilitySchema = z.enum(['private', 'unlisted', 'public'])
 export const ProjectSchema = z.object({
   repository_profile: RepositoryProfileSchema.optional(),
   can_edit: z.boolean().optional(),
+  deleted_at: z.string().datetime().nullable().optional(),
+  can_restore: z.boolean().optional(),
+  can_permanently_delete: z.boolean().optional(),
   project_id: z.string(),
   name: z.string(),
   namespace: z.string().nullable().optional(),
@@ -105,6 +108,7 @@ export const ProjectWithCountsSchema = ProjectSchema.extend({
 
 // List projects response
 export const ListProjectsResponseSchema = z.object({
+  status: z.literal('deleted').optional(),
   projects: z.array(ProjectWithCountsSchema),
   limit: z.number().int(),
   offset: z.number().int(),

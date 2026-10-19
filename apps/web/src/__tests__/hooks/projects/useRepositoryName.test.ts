@@ -2,6 +2,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useRepositoryName } from '@/hooks/projects/useRepositoryName';
+import { dispatchProjectDeleted } from '@/hooks/shared/deleteEvents';
 
 const check = vi.hoisted(() => vi.fn());
 vi.mock('@/queries/projects', () => ({ checkRepositoryName: check }));
@@ -46,6 +47,18 @@ it('blocks submission during failures and allows an explicit retry', async () =>
   expect(result.current.error).toBe('Network unavailable');
   expect(result.current.canSubmit).toBe(false);
   act(() => result.current.retry());
+  await act(() => vi.advanceTimersByTimeAsync(201));
+  expect(result.current.canSubmit).toBe(true);
+});
+
+it('rechecks an occupied name after a repository is permanently removed', async () => {
+  check.mockResolvedValueOnce({ name: 'test', available: false, code: 'NAME_OCCUPIED' });
+  check.mockResolvedValueOnce({ name: 'test', available: true });
+  const { result } = renderHook(() => useRepositoryName('alice', 'test'));
+  await act(() => vi.advanceTimersByTimeAsync(201));
+  expect(result.current.canSubmit).toBe(false);
+  act(() => dispatchProjectDeleted({ projectId: 'original-id' }));
+  expect(result.current.pending).toBe(true);
   await act(() => vi.advanceTimersByTimeAsync(201));
   expect(result.current.canSubmit).toBe(true);
 });

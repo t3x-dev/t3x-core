@@ -39,6 +39,10 @@ export interface Project {
   repository_profile?: import('./repository-profile').RepositoryProfile;
   /** Present on the authorized project detail response. */
   can_edit?: boolean;
+  deleted_at?: string | null;
+  /** Management capabilities returned by status=deleted lists. */
+  can_restore?: boolean;
+  can_permanently_delete?: boolean;
   namespace?: string | null;
   canonical_path?: string | null;
   path_status?: 'ready' | 'pending_migration';
@@ -86,9 +90,16 @@ export interface ChangeProjectVisibilityResult {
 }
 
 export interface ListProjectsResponse {
+  /** Echoed for deleted lists, including empty results. */
+  status?: 'deleted';
   projects: Project[];
   limit: number;
   offset: number;
+}
+
+export interface ListProjectsParams extends PaginationParams {
+  namespace?: string;
+  status?: 'active' | 'deleted';
 }
 
 // Conversation types

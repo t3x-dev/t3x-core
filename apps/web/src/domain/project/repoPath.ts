@@ -1,5 +1,9 @@
 export const DEFAULT_OWNER_SLUG = 't3x-dev';
 
+export function getDeletedRepositoriesPath(namespace?: string | null): string {
+  return `/${namespace ? encodeURIComponent(namespace) : ''}?view=deleted`;
+}
+
 /** File download label only. Address construction never derives a slug. */
 export function toRepoSlug(name: string, fallbackId?: string): string {
   // biome-ignore lint/suspicious/noControlCharactersInRegex: remove unsafe download filename characters

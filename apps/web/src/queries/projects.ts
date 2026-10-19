@@ -20,4 +20,13 @@ export function fetchProjects(
   return listProjects(limit, offset, namespace);
 }
 
+/** Management-only deleted repositories; the server applies current authority. */
+export function fetchDeletedProjects(
+  limit = 50,
+  offset = 0,
+  namespace?: string
+): Promise<ProjectListData> {
+  return listProjects(limit, offset, namespace, 'deleted');
+}
+
 export { checkRepositoryName, resolveRepository } from '@/infrastructure/projects';

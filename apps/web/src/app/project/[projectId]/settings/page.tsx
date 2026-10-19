@@ -40,6 +40,7 @@ import { ProjectIntegritySettings } from '@/components/project/settings/ProjectI
 import { ProjectSettingsNav } from '@/components/project/settings/ProjectSettingsNav';
 import { SettingsSection } from '@/components/project/settings/SettingsSection';
 import { ModelSelector } from '@/components/shared/ModelSelector';
+import { getDeletedRepositoriesPath } from '@/domain/project/repoPath';
 import { useRepositoryRouteParams as useParams } from '@/hooks/projects/repositoryRouteContext';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { projectDescription, useProjectSettings } from '@/hooks/projects/useProjectSettings';
@@ -271,7 +272,7 @@ function ProjectSettingsPageContent() {
 
   const handleDelete = async () => {
     await settings.remove();
-    router.push('/');
+    router.push(getDeletedRepositoriesPath(settings.project?.namespace));
   };
 
   const loadData = useCallback(async () => {

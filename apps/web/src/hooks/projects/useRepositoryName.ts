@@ -1,5 +1,6 @@
 import type { RepositoryNameCheck } from '@t3x-dev/api-client';
 import { useEffect, useState } from 'react';
+import { PROJECT_DELETED_EVENT, PROJECT_RESTORED_EVENT } from '@/hooks/shared/deleteEvents';
 import { checkRepositoryName } from '@/queries/projects';
 
 /** Key results to the exact input as well as cancelling old effects. This also
@@ -16,6 +17,18 @@ export function useRepositoryName(
     result?: RepositoryNameCheck;
     error?: string;
   } | null>(null);
+  useEffect(() => {
+    const invalidate = () => {
+      setState(null);
+      setAttempt((value) => value + 1);
+    };
+    window.addEventListener(PROJECT_DELETED_EVENT, invalidate);
+    window.addEventListener(PROJECT_RESTORED_EVENT, invalidate);
+    return () => {
+      window.removeEventListener(PROJECT_DELETED_EVENT, invalidate);
+      window.removeEventListener(PROJECT_RESTORED_EVENT, invalidate);
+    };
+  }, []);
   useEffect(() => {
     let cancelled = false;
     setState(null);

@@ -9,18 +9,42 @@ import type {
   CreateProjectInput,
   RepositoryProfilePatch,
 } from '@t3x-dev/api-client';
-import { API_V1, buildQueryString, fetchWithTimeout, handleResponse } from './core';
+import { API_V1, ApiError, buildQueryString, fetchWithTimeout, handleResponse } from './core';
 import { getSharedApiClient } from './sharedApiClient';
 import type { ExtractionStyleConfig, Project, ProjectDetail, ProjectListData } from './types';
 
 export async function listProjects(
   limit = 50,
   offset = 0,
-  namespace?: string
+  namespace?: string,
+  status?: 'active' | 'deleted'
 ): Promise<ProjectListData> {
-  const query = buildQueryString({ limit, offset, namespace });
+  const query = buildQueryString({ limit, offset, namespace, status });
   const res = await fetchWithTimeout(`${API_V1}/projects?${query}`);
-  return handleResponse<ProjectListData>(res);
+  const data = await handleResponse<ProjectListData>(res);
+  // Older servers ignore status=deleted and return active rows without action
+  // capabilities. Never present that successful but incompatible response as a
+  // deleted list or infer destructive permissions on the client.
+  if (
+    status === 'deleted' &&
+    (data?.status !== 'deleted' ||
+      !Array.isArray(data.projects) ||
+      data.projects.some(
+        (project) =>
+          !project ||
+          typeof project.deleted_at !== 'string' ||
+          !Number.isFinite(Date.parse(project.deleted_at)) ||
+          typeof project.can_restore !== 'boolean' ||
+          typeof project.can_permanently_delete !== 'boolean' ||
+          (namespace !== undefined && project.namespace !== namespace)
+      ))
+  ) {
+    throw new ApiError(
+      'INCOMPATIBLE_REPOSITORY_LIFECYCLE_API',
+      'The running API server returned an incompatible deleted-repository list. Update or restart the API server, then retry.'
+    );
+  }
+  return data;
 }
 
 export async function getProject(projectId: string): Promise<ProjectDetail> {
@@ -55,11 +79,30 @@ export interface DeleteProjectResponse {
   project_id: string;
 }
 
-export async function deleteProject(projectId: string): Promise<DeleteProjectResponse> {
-  const res = await fetchWithTimeout(`${API_V1}/projects/${encodeURIComponent(projectId)}`, {
-    method: 'DELETE',
-  });
+export async function deleteProject(
+  projectId: string,
+  options?: { permanent?: boolean; onlyIfDeleted?: boolean }
+): Promise<DeleteProjectResponse> {
+  const suffix = options?.permanent
+    ? `?permanent=true${options.onlyIfDeleted ? '&only_if_deleted=true' : ''}`
+    : '';
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}${suffix}`,
+    {
+      method: 'DELETE',
+    }
+  );
   return handleResponse<DeleteProjectResponse>(res);
+}
+
+export async function restoreProject(projectId: string): Promise<Project> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/restore`,
+    {
+      method: 'POST',
+    }
+  );
+  return handleResponse<Project>(res);
 }
 
 export interface UpdateProjectPayload {

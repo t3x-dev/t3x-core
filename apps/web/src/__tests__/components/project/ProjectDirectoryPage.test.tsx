@@ -5,11 +5,14 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import type React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectDirectoryPage } from '@/components/project/ProjectDirectoryPage';
-import { checkRepositoryName } from '@/queries/projects';
+import { checkRepositoryName, fetchDeletedProjects } from '@/queries/projects';
 import { useProjectStore } from '@/store/projectStore';
 import type { Project } from '@/types/api';
 
-vi.mock('@/queries/projects', () => ({ checkRepositoryName: vi.fn() }));
+vi.mock('@/queries/projects', () => ({
+  checkRepositoryName: vi.fn(),
+  fetchDeletedProjects: vi.fn(),
+}));
 
 const routerPush = vi.fn();
 const createProject = vi.fn();
@@ -19,17 +22,22 @@ const renameProject = vi.fn();
 let hookError: string | null = null;
 let hookLoading = false;
 let hookProjects: Project[] = [];
+let currentPath = '/';
+let currentQuery = '';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: routerPush }),
+  usePathname: () => currentPath,
+  useSearchParams: () => new URLSearchParams(currentQuery),
 }));
 
 vi.mock('next/link', () => ({
   default: ({
     children,
     href,
+    scroll: _scroll,
     ...props
-  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string; scroll?: boolean }) => (
     <a href={href} {...props}>
       {children}
     </a>
@@ -84,6 +92,11 @@ const projects: Project[] = [
 describe('ProjectDirectoryPage', () => {
   beforeEach(() => {
     vi.mocked(checkRepositoryName).mockReset();
+    vi.mocked(fetchDeletedProjects)
+      .mockReset()
+      .mockResolvedValue({ projects: [], limit: 21, offset: 0 });
+    currentPath = '/';
+    currentQuery = '';
     routerPush.mockReset();
     createProject.mockReset();
     refreshProjects.mockReset();
@@ -274,5 +287,49 @@ describe('ProjectDirectoryPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => expect(removeProject).toHaveBeenCalledWith('proj_prd'));
+    expect(
+      await screen.findByRole('link', { name: 'Manage deleted repositories' })
+    ).toHaveAttribute('href', '/?view=deleted');
+  });
+
+  it.each(['empty', 'error'])('keeps a bottom entry when the active list is %s', (state) => {
+    hookProjects = [];
+    if (state === 'error') hookError = 'Offline';
+    currentPath = '/alice';
+    render(<ProjectDirectoryPage ownerSlug="alice" />);
+    const entry = screen.getByRole('link', { name: 'Deleted repositories' });
+    expect(entry.closest('footer')).not.toBeNull();
+    expect(entry).toHaveAttribute('href', '/alice?view=deleted');
+  });
+
+  it('opens the URL-selected deleted view and preserves the active filter on return', async () => {
+    const { rerender } = render(<ProjectDirectoryPage />);
+    fireEvent.change(screen.getByPlaceholderText('Find a repository...'), {
+      target: { value: 'core' },
+    });
+    currentQuery = 'view=deleted';
+    rerender(<ProjectDirectoryPage />);
+    expect(
+      await screen.findByText('No deleted repositories to manage in this namespace.')
+    ).toBeInTheDocument();
+    expect(fetchDeletedProjects).toHaveBeenCalledWith(21, 0, 't3x-dev');
+    expect(screen.getByRole('link', { name: 'Back to repositories' })).toHaveAttribute('href', '/');
+    currentQuery = '';
+    rerender(<ProjectDirectoryPage />);
+    expect(screen.getByPlaceholderText('Find a repository...')).toHaveValue('core');
+  });
+
+  it('keeps an unconfirmed delete in the dialog and asks for a refresh', async () => {
+    removeProject.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    render(<ProjectDirectoryPage />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Delete repository prd-workflow' })[0]);
+    expect(screen.getByRole('dialog')).toHaveTextContent('Its data and all names stay reserved');
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not be confirmed');
+    expect(
+      screen.queryByRole('link', { name: 'Manage deleted repositories' })
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh list' }));
+    expect(refreshProjects).toHaveBeenCalledOnce();
   });
 });

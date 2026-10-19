@@ -349,6 +349,31 @@ describe('T3xClient', () => {
   // Projects
   // =========================================================================
   describe('projects', () => {
+    it('lists deleted repositories with management capabilities and namespace filtering', async () => {
+      const data = {
+        status: 'deleted',
+        projects: [
+          {
+            project_id: 'deleted',
+            name: 'Test',
+            deleted_at: '2026-10-19T00:00:00Z',
+            can_restore: true,
+            can_permanently_delete: true,
+          },
+        ],
+        limit: 10,
+        offset: 0,
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      expect(
+        await client.listProjects({ namespace: 'team', status: 'deleted', limit: 10 })
+      ).toEqual(data);
+      const url = new URL((fn.mock.calls[0] as unknown[])[0] as string);
+      expect(url.searchParams.get('status')).toBe('deleted');
+      expect(url.searchParams.get('namespace')).toBe('team');
+    });
+
     it('listProjects sends GET with pagination', async () => {
       const data = { projects: [], limit: 10, offset: 0 };
       const fn = mockFetch(successResponse(data));
@@ -452,6 +477,15 @@ describe('T3xClient', () => {
         expect.any(String),
         expect.objectContaining({ method: 'DELETE' })
       );
+    });
+
+    it('passes the deleted-state precondition for a permanent delete from a deleted list', async () => {
+      const fn = mockFetch(successResponse(null));
+      const client = createTestClient(fn);
+      await client.deleteProject('proj_1', { permanent: true, onlyIfDeleted: true });
+      const url = new URL((fn.mock.calls[0] as unknown[])[0] as string);
+      expect(url.searchParams.get('permanent')).toBe('true');
+      expect(url.searchParams.get('only_if_deleted')).toBe('true');
     });
 
     it('restoreProject sends POST to restore endpoint', async () => {

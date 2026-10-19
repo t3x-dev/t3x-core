@@ -188,7 +188,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-export const POSTGRES_SCHEMA_VERSION = 76;
+export const POSTGRES_SCHEMA_VERSION = 77;
 
 function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
   if (!tableExists) return 'missing';
@@ -293,24 +293,11 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
   }
 
   if (rows.length > 0 && rows[0].version >= POSTGRES_SCHEMA_VERSION) {
-    if (rows[0].version === 76) {
-      // A development bootstrap may already have recorded v76 before its
-      // resolvability flag was added. Repair only this known shape, under the
-      // migration lock; the read-only runtime path never performs this DDL.
-      const [shape] = await sql.unsafe<{ present: boolean; complete: boolean }[]>(`
-        SELECT to_regclass('public.repository_paths') IS NOT NULL AS present,
-          EXISTS (SELECT 1 FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'repository_paths'
-              AND column_name = 'resolvable') AS complete
-      `);
-      if (shape?.present && !shape.complete) {
-        await ensureRepositoryPaths(sql as postgres.TransactionSql);
-      }
-    }
     return;
   }
 
-  // First run or version bump — execute full schema init
+  // First run or version bump — execute full schema init. The v77 upgrade also
+  // repairs early v76 tables missing resolvable through ensureRepositoryPaths.
   await sql.unsafe(`
     -- Projects table
     CREATE TABLE IF NOT EXISTS projects (
@@ -2622,7 +2609,8 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
       ON schema_studio_candidates(project_id, created_at, id);
   `);
 
-  // Schema v76 only reserves addresses; abnormal historical names stay untouched.
+  // v76 reserves addresses; v77 releases linked claims on permanent deletion.
+  // Abnormal names and unattributed legacy claims stay untouched.
   await ensureRepositoryPaths(sql as postgres.TransactionSql);
 
   // Record schema version so subsequent startups skip the init SQL.

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { auditRepositoryNames } from '../audit-repository-names.mjs';
+import { auditRepositoryClaims, auditRepositoryNames } from '../audit-repository-names.mjs';
 
 test('read-only inventory reports normalization, conflicts, reserved and ownerless rows', () => {
   const rows = [
@@ -51,4 +51,31 @@ test('historical claims and tombstones also appear as migration conflicts', () =
     { namespace_id: 'n', name_key: 'old', project_id: null },
   ]);
   assert.ok(blocked[0].reasons.includes('PATH_BLOCKED'));
+});
+
+test('audits detached claims without inferring their origin or releasing them', () => {
+  const rows = [
+    { project_id: 'p', namespace_id: 'n', name: 'Deleted', deleted_at: '2026-10-19T00:00:00Z' },
+  ];
+  const claims = [
+    { namespace_id: 'n', name_key: 'old', project_id: 'p', resolvable: true },
+    { namespace_id: 'n', name_key: 'deleted', project_id: 'p', resolvable: true },
+    { namespace_id: 'n', name_key: 'tombstone', project_id: null, resolvable: true },
+    { namespace_id: 'n', name_key: 'collision', project_id: null, resolvable: false },
+    { namespace_id: 'n', name_key: 'early-v76', project_id: null },
+  ];
+  const original = JSON.stringify({ rows, claims });
+  const report = auditRepositoryClaims(rows, claims);
+  assert.deepEqual(
+    report.map((claim) => claim.classification),
+    [
+      'soft_deleted_project',
+      'soft_deleted_project',
+      'unknown_origin',
+      'unknown_origin',
+      'unknown_origin',
+    ]
+  );
+  assert.ok(report.every((claim) => claim.action === 'retain'));
+  assert.equal(JSON.stringify({ rows, claims }), original);
 });

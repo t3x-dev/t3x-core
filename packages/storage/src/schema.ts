@@ -122,8 +122,8 @@ export const projects = pgTable(
   ]
 );
 
-/** Current and historical address claims share one unique key. Null projectId
- * is a blocked legacy candidate or permanent-deletion tombstone, never free. */
+/** Current and historical addresses stay reserved through soft deletion and are
+ * released on permanent deletion. Unattributed legacy claims remain blocked. */
 export const repositoryPaths = pgTable(
   'repository_paths',
   {
@@ -132,7 +132,7 @@ export const repositoryPaths = pgTable(
       .references(() => namespaces.namespaceId, { onDelete: 'restrict' }),
     nameKey: text('name_key').notNull(),
     resolvable: boolean('resolvable').notNull().default(false),
-    projectId: text('project_id').references(() => projects.projectId, { onDelete: 'set null' }),
+    projectId: text('project_id').references(() => projects.projectId, { onDelete: 'cascade' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

@@ -127,11 +127,12 @@ const listProjectsRoute = createRoute({
   tags: ['Projects'],
   summary: 'List all projects',
   description:
-    'Lists all projects. Supports cursor-based pagination via optional `cursor` query parameter.',
+    'Lists active projects by default. status=deleted lists only deleted projects the caller can restore or delete. Supports cursor-based pagination.',
   request: {
     query: PaginationQuerySchema.extend({
       cursor: z.string().optional(),
       namespace: NamespaceSlugSchema.optional(),
+      status: z.enum(['active', 'deleted']).default('active'),
     }),
   },
   responses: {
@@ -140,7 +141,12 @@ const listProjectsRoute = createRoute({
       content: {
         'application/json': {
           schema: SuccessResponseSchema(
-            z.union([CursorPageResponseSchema(ProjectWithCountsSchema), ListProjectsResponseSchema])
+            z.union([
+              CursorPageResponseSchema(ProjectWithCountsSchema).extend({
+                status: z.literal('deleted').optional(),
+              }),
+              ListProjectsResponseSchema,
+            ])
           ),
         },
       },
@@ -165,7 +171,7 @@ const listProjectsRoute = createRoute({
 });
 
 projectRoutes.openapi(listProjectsRoute, async (c) => {
-  const { limit, offset, cursor, namespace: namespaceSlug } = c.req.valid('query');
+  const { limit, offset, cursor, namespace: namespaceSlug, status } = c.req.valid('query');
 
   // Shared helper: enrich a project row with counts
   const enrichProject = async (
@@ -176,6 +182,7 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
       name: string;
       visibility: 'private' | 'unlisted' | 'public';
       createdAt: Date;
+      deletedAt: Date | null;
       metadataJson: string | null;
     }
   ) => {
@@ -201,8 +208,19 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
         .where(and(eq(leaves.projectId, p.projectId), isNotNull(leaves.generatedAt)))
         .then((rows) => rows[0]),
     ]);
+    const actions =
+      status === 'deleted'
+        ? await listAuthorizedProjectActions(c, db, p.projectId, { includeDeleted: true })
+        : [];
     return {
       ...(await getRepositoryAddress(db, p)),
+      deleted_at: p.deletedAt?.toISOString() ?? null,
+      ...(status === 'deleted'
+        ? {
+            can_restore: actions.includes('project:restore'),
+            can_permanently_delete: actions.includes('project:delete'),
+          }
+        : {}),
       project_id: p.projectId,
       name: p.name,
       visibility: p.visibility,
@@ -230,11 +248,13 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
       const denied = await assertNamespaceAccess(c, db, namespace, 'namespace:read');
       if (denied) return denied;
     }
-    if (!namespaceSlug && !authority) await seedDemoWorkspaceIfEmpty(db, userId);
+    if (status === 'active' && !namespaceSlug && !authority)
+      await seedDemoWorkspaceIfEmpty(db, userId);
 
     // Cursor-based pagination mode
     if (cursor !== undefined) {
       const result = await findProjects(db, {
+        status,
         cursor,
         limit,
         authority,
@@ -248,6 +268,7 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
             items: apiProjects,
             next_cursor: result.next_cursor,
             has_more: result.has_more,
+            ...(status === 'deleted' ? { status: 'deleted' as const } : {}),
           },
         },
         200
@@ -256,6 +277,7 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
 
     // Legacy offset/limit mode
     const projects = await findProjects(db, {
+      status,
       limit,
       offset,
       authority,
@@ -265,7 +287,18 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
     // Enrich each project with counts using COUNT queries (avoid N+1 full-table fetches)
     const apiProjects = await Promise.all(projects.map((p) => enrichProject(db, p)));
 
-    return c.json({ success: true as const, data: { projects: apiProjects, limit, offset } }, 200);
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          projects: apiProjects,
+          limit,
+          offset,
+          ...(status === 'deleted' ? { status: 'deleted' as const } : {}),
+        },
+      },
+      200
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return c.json({ success: false as const, error: { code: 'LIST_FAILED', message } }, 500);
@@ -993,11 +1026,12 @@ const deleteProjectRoute = createRoute({
   tags: ['Projects'],
   summary: 'Delete a project',
   description:
-    'Soft-deletes a project by default. Use ?permanent=true for irreversible hard deletion.',
+    'Soft-deletes a project by default, preserving its data and all address claims for restoration. Use ?permanent=true for irreversible deletion and release of its current and historical names.',
   request: {
     params: IdParamSchema,
     query: z.object({
       permanent: z.string().optional(),
+      only_if_deleted: z.literal('true').optional(),
     }),
   },
   responses: {
@@ -1010,6 +1044,10 @@ const deleteProjectRoute = createRoute({
           ),
         },
       },
+    },
+    409: {
+      description: 'Repository is no longer deleted',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     403: {
       description: 'Access denied',
@@ -1040,7 +1078,7 @@ const deleteProjectRoute = createRoute({
 
 projectRoutes.openapi(deleteProjectRoute, async (c) => {
   const { id } = c.req.valid('param');
-  const { permanent } = c.req.valid('query');
+  const { permanent, only_if_deleted } = c.req.valid('query');
 
   try {
     const db = await getDB();
@@ -1050,8 +1088,22 @@ projectRoutes.openapi(deleteProjectRoute, async (c) => {
       const accessResult = await assertProjectAccessIncludingDeleted(c, db, id);
       if (accessResult instanceof Response) return accessResult;
 
-      const deleted = await permanentDeleteProject(db, id);
+      const deleted = await permanentDeleteProject(db, id, {
+        onlyIfDeleted: only_if_deleted === 'true',
+      });
       if (!deleted) {
+        if (only_if_deleted === 'true') {
+          return c.json(
+            {
+              success: false as const,
+              error: {
+                code: 'REPOSITORY_STATE_CHANGED',
+                message: 'Repository is no longer deleted. Refresh the list before continuing.',
+              },
+            },
+            409
+          );
+        }
         return c.json(
           {
             success: false as const,
@@ -1092,7 +1144,7 @@ const restoreProjectRoute = createRoute({
   method: 'post',
   path: '/v1/projects/{id}/restore',
   tags: ['Projects'],
-  summary: 'Restore a soft-deleted project',
+  summary: 'Restore a soft-deleted project with its original identity and address claims',
   request: {
     params: IdParamSchema,
   },

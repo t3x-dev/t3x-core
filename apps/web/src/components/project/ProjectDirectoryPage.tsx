@@ -13,7 +13,8 @@ import {
   Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
-import { type FormEvent, useCallback, useMemo, useState } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { type FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,6 +29,7 @@ import { Input } from '@/components/ui/input';
 import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
 import { DEFAULT_OWNER_SLUG, getProjectRepoPath } from '@/domain/project/repoPath';
 import { useProjects } from '@/hooks/projects/useProjects';
+import { repositoryMutationError } from '@/hooks/projects/useDeletedProjects';
 import { useRepositoryName } from '@/hooks/projects/useRepositoryName';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 import { cn } from '@/utils/cn';
@@ -37,6 +39,7 @@ import {
   recordRecentProjectOpen,
 } from '@/utils/recentProjects';
 import styles from './ProjectDirectoryPage.module.css';
+import { DeletedRepositoriesView } from './DeletedRepositoriesView';
 import { RepositoryNameFeedback } from './RepositoryNameFeedback';
 
 const repoTones = [
@@ -397,6 +400,27 @@ function SectionHeading({ count, title }: { count?: string; title: string }) {
 }
 
 export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { ownerSlug?: string }) {
+  return (
+    <Suspense fallback={null}>
+      <ProjectDirectoryContent key={ownerSlug} ownerSlug={ownerSlug} />
+    </Suspense>
+  );
+}
+
+function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const deletedView = searchParams.get('view') === 'deleted';
+  const pageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (pageRef.current) pageRef.current.scrollTop = 0;
+  }, [deletedView]);
+  const deletedParams = new URLSearchParams(searchParams.toString());
+  deletedParams.set('view', 'deleted');
+  const deletedHref = `${pathname}?${deletedParams.toString()}`;
+  const activeParams = new URLSearchParams(searchParams.toString());
+  activeParams.delete('view');
+  const activeHref = `${pathname}${activeParams.size ? `?${activeParams.toString()}` : ''}`;
   const projectStoreRemove = useProjectStore((state) => state.removeProject);
   const projectStoreUpdate = useProjectStore((state) => state.updateProject);
   const {
@@ -416,6 +440,10 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
   const nameCheck = useRepositoryName(renameTarget?.namespace, renameValue, renameTarget?.id);
   const [deleteTarget, setDeleteTarget] = useState<ProjectSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<ReturnType<typeof repositoryMutationError> | null>(
+    null
+  );
+  const [deletedName, setDeletedName] = useState<string | null>(null);
   const [recentProjectIds] = useState(() => readRecentProjectIds());
   const isPersonalNamespace = ownerSlug !== DEFAULT_OWNER_SLUG;
   const newRepositoryPath = `/${ownerSlug}/new`;
@@ -480,16 +508,25 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
   );
 
   const handleConfirmDeleteProject = useCallback(async () => {
-    if (!deleteTarget || deleting) return;
+    if (!deleteTarget || deleting || deleteError?.refreshRequired) return;
     setDeleting(true);
+    setDeleteError(null);
     try {
       await removeProject(deleteTarget.id);
       projectStoreRemove(deleteTarget.id);
+      setDeletedName(deleteTarget.name);
       setDeleteTarget(null);
+    } catch (cause) {
+      setDeleteError(repositoryMutationError(cause));
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, deleting, projectStoreRemove, removeProject]);
+  }, [deleteTarget, deleting, deleteError, projectStoreRemove, removeProject]);
+
+  const openDeleteDialog = useCallback((project: ProjectSummary) => {
+    setDeleteError(null);
+    setDeleteTarget(project);
+  }, []);
 
   const filteredProjects = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -508,7 +545,7 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
   const dataAvailable = hasLoadedProjects || (!loading && !error);
 
   return (
-    <div className={styles.page}>
+    <div className={styles.page} ref={pageRef}>
       <DiscoverHeader
         owner={ownerSlug}
         namespaceTab="repositories"
@@ -526,142 +563,184 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
         />
 
         <main className={styles.main}>
-          <div className={styles.toolbar}>
-            <Button
-              aria-label="Refresh repositories"
-              disabled={loading}
-              onClick={handleRefreshProjects}
-              size="icon"
-              variant="canvas-outline"
-            >
-              <RefreshCw className={cn('size-4', loading && 'animate-spin')} />
-            </Button>
-            <label className="relative min-w-[220px] max-w-[800px] flex-1">
-              <span className="sr-only">Find a repository</span>
-              <Search
-                aria-hidden="true"
-                className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[var(--text-primary)]"
-                strokeWidth={2.5}
-              />
-              <input
-                className="h-[45px] w-full rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-elevated)] pl-11 pr-4 text-[15px] text-[var(--text-primary)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-commit)]/40 focus:ring-1 focus:ring-[var(--accent-commit)]/40"
-                onChange={(event) => {
-                  setQuery(event.target.value);
-                  setRepositoriesExpanded(false);
-                }}
-                placeholder="Find a repository..."
-                value={query}
-              />
-            </label>
-            <Button asChild variant="commit">
-              <Link href={newRepositoryPath}>
-                <Plus className="size-4" /> New repository
-              </Link>
-            </Button>
-          </div>
-
-          {error && hasLoadedProjects && (
-            <div
-              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--status-error)]/25 bg-[var(--status-error)]/5 px-4 py-3 text-[13px] font-medium text-[var(--status-error)]"
-              role="alert"
-            >
-              <span>Couldn&apos;t refresh repositories. Showing the last loaded data.</span>
-              <Button
-                disabled={loading}
-                onClick={handleRefreshProjects}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                <RefreshCw className={cn('size-4', loading && 'animate-spin')} />
-                Retry
-              </Button>
-            </div>
-          )}
-
-          {loading && projectSummaries.length === 0 ? (
-            <output className="flex min-h-[70px] items-center text-sm text-[var(--text-secondary)]">
-              Loading repositories...
-            </output>
-          ) : error && projectSummaries.length === 0 ? (
-            <DirectoryLoadFailure
-              error={error}
-              onRetry={handleRefreshProjects}
-              retrying={loading}
-            />
-          ) : projectSummaries.length === 0 ? (
-            <EmptyDirectory newRepositoryPath={newRepositoryPath} />
+          {deletedView ? (
+            <DeletedRepositoriesView namespace={ownerSlug} backHref={activeHref} />
           ) : (
             <>
-              {pinnedProjects.length > 0 && (
-                <section>
-                  <SectionHeading
-                    count={`${isPersonalNamespace ? 'Personal' : 'Organization'} repositories with shareable paths`}
-                    title="Pinned repositories"
+              <div className={styles.toolbar}>
+                <Button
+                  aria-label="Refresh repositories"
+                  disabled={loading}
+                  onClick={handleRefreshProjects}
+                  size="icon"
+                  variant="canvas-outline"
+                >
+                  <RefreshCw className={cn('size-4', loading && 'animate-spin')} />
+                </Button>
+                <label className="relative min-w-[220px] max-w-[800px] flex-1">
+                  <span className="sr-only">Find a repository</span>
+                  <Search
+                    aria-hidden="true"
+                    className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[var(--text-primary)]"
+                    strokeWidth={2.5}
                   />
-                  <div className="grid gap-5 min-[1200px]:grid-cols-2">
-                    {pinnedProjects.map((project) => (
-                      <PinnedProjectCard
-                        key={project.id}
-                        onDelete={setDeleteTarget}
-                        onRename={openRenameDialog}
-                        ownerSlug={ownerSlug}
-                        project={project}
-                      />
-                    ))}
-                  </div>
-                </section>
+                  <input
+                    className="h-[45px] w-full rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-elevated)] pl-11 pr-4 text-[15px] text-[var(--text-primary)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-commit)]/40 focus:ring-1 focus:ring-[var(--accent-commit)]/40"
+                    onChange={(event) => {
+                      setQuery(event.target.value);
+                      setRepositoriesExpanded(false);
+                    }}
+                    placeholder="Find a repository..."
+                    value={query}
+                  />
+                </label>
+                <Button asChild variant="commit">
+                  <Link href={newRepositoryPath}>
+                    <Plus className="size-4" /> New repository
+                  </Link>
+                </Button>
+              </div>
+
+              {deletedName && (
+                <p role="status" className="mt-4 text-sm text-[var(--text-secondary)]">
+                  {deletedName} was deleted. Its data and names are kept.{' '}
+                  <Link
+                    href={deletedHref}
+                    scroll={false}
+                    className="text-[var(--accent-commit)] underline"
+                  >
+                    Manage deleted repositories
+                  </Link>
+                </p>
               )}
 
-              <section>
-                <SectionHeading count={`${filteredProjects.length} repos`} title="Repositories" />
-                <div className={styles.repositories} id="repository-list">
-                  {filteredProjects.length > 0 ? (
-                    <div className="divide-y divide-[var(--stroke-divider)]">
-                      {(repositoriesExpanded ? filteredProjects : filteredProjects.slice(0, 6)).map(
-                        (project) => (
-                          <ProjectRow
+              {error && hasLoadedProjects && (
+                <div
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--status-error)]/25 bg-[var(--status-error)]/5 px-4 py-3 text-[13px] font-medium text-[var(--status-error)]"
+                  role="alert"
+                >
+                  <span>Couldn&apos;t refresh repositories. Showing the last loaded data.</span>
+                  <Button
+                    disabled={loading}
+                    onClick={handleRefreshProjects}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    <RefreshCw className={cn('size-4', loading && 'animate-spin')} />
+                    Retry
+                  </Button>
+                </div>
+              )}
+
+              {loading && projectSummaries.length === 0 ? (
+                <output className="flex min-h-[70px] items-center text-sm text-[var(--text-secondary)]">
+                  Loading repositories...
+                </output>
+              ) : error && projectSummaries.length === 0 ? (
+                <DirectoryLoadFailure
+                  error={error}
+                  onRetry={handleRefreshProjects}
+                  retrying={loading}
+                />
+              ) : projectSummaries.length === 0 ? (
+                <EmptyDirectory newRepositoryPath={newRepositoryPath} />
+              ) : (
+                <>
+                  {pinnedProjects.length > 0 && (
+                    <section>
+                      <SectionHeading
+                        count={`${isPersonalNamespace ? 'Personal' : 'Organization'} repositories with shareable paths`}
+                        title="Pinned repositories"
+                      />
+                      <div className="grid gap-5 min-[1200px]:grid-cols-2">
+                        {pinnedProjects.map((project) => (
+                          <PinnedProjectCard
                             key={project.id}
-                            onDelete={setDeleteTarget}
+                            onDelete={openDeleteDialog}
                             onRename={openRenameDialog}
                             ownerSlug={ownerSlug}
                             project={project}
                           />
-                        )
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  <section>
+                    <SectionHeading
+                      count={`${filteredProjects.length} repos`}
+                      title="Repositories"
+                    />
+                    <div className={styles.repositories} id="repository-list">
+                      {filteredProjects.length > 0 ? (
+                        <div className="divide-y divide-[var(--stroke-divider)]">
+                          {(repositoriesExpanded
+                            ? filteredProjects
+                            : filteredProjects.slice(0, 6)
+                          ).map((project) => (
+                            <ProjectRow
+                              key={project.id}
+                              onDelete={openDeleteDialog}
+                              onRename={openRenameDialog}
+                              ownerSlug={ownerSlug}
+                              project={project}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between gap-4 p-5 text-[13px] text-[var(--text-secondary)]">
+                          <span>No repositories match this filter.</span>
+                          <Button
+                            onClick={() => setQuery('')}
+                            type="button"
+                            variant="canvas-outline"
+                          >
+                            Clear
+                          </Button>
+                        </div>
                       )}
                     </div>
-                  ) : (
-                    <div className="flex items-center justify-between gap-4 p-5 text-[13px] text-[var(--text-secondary)]">
-                      <span>No repositories match this filter.</span>
-                      <Button onClick={() => setQuery('')} type="button" variant="canvas-outline">
-                        Clear
-                      </Button>
-                    </div>
-                  )}
-                </div>
-                {filteredProjects.length > 6 ? (
-                  <button
-                    className={styles.expand}
-                    aria-expanded={repositoriesExpanded}
-                    aria-controls="repository-list"
-                    onClick={() => setRepositoriesExpanded((value) => !value)}
-                    type="button"
-                  >
-                    {repositoriesExpanded ? (
-                      <ChevronUp aria-hidden="true" />
-                    ) : (
-                      <ChevronDown aria-hidden="true" />
-                    )}
-                    {repositoriesExpanded
-                      ? 'Show less'
-                      : `Show all ${filteredProjects.length} repositories`}
-                  </button>
-                ) : null}
-              </section>
+                    {filteredProjects.length > 6 ? (
+                      <button
+                        className={styles.expand}
+                        aria-expanded={repositoriesExpanded}
+                        aria-controls="repository-list"
+                        onClick={() => setRepositoriesExpanded((value) => !value)}
+                        type="button"
+                      >
+                        {repositoriesExpanded ? (
+                          <ChevronUp aria-hidden="true" />
+                        ) : (
+                          <ChevronDown aria-hidden="true" />
+                        )}
+                        {repositoriesExpanded
+                          ? 'Show less'
+                          : `Show all ${filteredProjects.length} repositories`}
+                      </button>
+                    ) : null}
+                  </section>
+                </>
+              )}
             </>
           )}
         </main>
       </div>
+
+      {!deletedView && (
+        <footer className={styles.footer}>
+          <Link
+            href={deletedHref}
+            scroll={false}
+            className={cn(
+              'inline-flex items-center gap-2 rounded-md py-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline',
+              focusRing
+            )}
+          >
+            <Trash2 aria-hidden="true" className="size-4" /> Deleted repositories
+          </Link>
+        </footer>
+      )}
 
       <Dialog open={Boolean(renameTarget)} onOpenChange={handleRenameDialogOpenChange}>
         <DialogContent className="sm:max-w-[400px]">
@@ -729,10 +808,16 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
           <DialogHeader>
             <DialogTitle>Delete Repository</DialogTitle>
             <DialogDescription>
-              Delete "{deleteTarget?.name ?? DEFAULT_PROJECT_NAME}" from the backend? This cannot be
-              undone.
+              Delete "{deleteTarget?.name ?? DEFAULT_PROJECT_NAME}"? Collaborators lose access. Its
+              data and all names stay reserved. Use Deleted repositories at the bottom of this page
+              to restore it or permanently delete it and release its names.
             </DialogDescription>
           </DialogHeader>
+          {deleteError && (
+            <p role="alert" className="text-sm text-[var(--status-error)]">
+              {deleteError.message}
+            </p>
+          )}
           <DialogFooter>
             <Button
               disabled={deleting}
@@ -742,14 +827,26 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
             >
               Cancel
             </Button>
-            <Button
-              disabled={deleting}
-              onClick={handleConfirmDeleteProject}
-              type="button"
-              variant="destructive"
-            >
-              {deleting ? 'Deleting...' : 'Delete'}
-            </Button>
+            {deleteError?.refreshRequired ? (
+              <Button
+                variant="canvas-outline"
+                onClick={() => {
+                  setDeleteTarget(null);
+                  void refreshProjects();
+                }}
+              >
+                Refresh list
+              </Button>
+            ) : (
+              <Button
+                disabled={deleting}
+                onClick={handleConfirmDeleteProject}
+                type="button"
+                variant="destructive"
+              >
+                {deleting ? 'Deleting...' : 'Delete'}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
