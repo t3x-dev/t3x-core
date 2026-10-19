@@ -190,11 +190,13 @@ describe('Schema catalog journey', () => {
       'true'
     );
     const studio = screen.getByRole('region', { name: 'Schema Studio' });
+    expect(schemaViews.closest('header')).toHaveAttribute('data-view', 'studio');
     expect(studio).not.toContainElement(schemaViews);
     expect(screen.getByRole('region', { name: 'Schema experience' })).toContainElement(schemaViews);
     expect(screen.queryByText('Detailed Studio')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Advanced definition workbench' }));
-    expect(screen.getByText('Detailed Studio')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Add modules' }));
+    expect(screen.queryByText('Detailed Studio')).not.toBeInTheDocument();
+    expect(screen.getByText(/No separate Composition draft is created/)).toBeVisible();
     expect(mocks.catalog).toHaveBeenLastCalledWith('p', 'limit=48', false);
   });
 });

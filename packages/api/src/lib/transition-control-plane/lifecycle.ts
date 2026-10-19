@@ -65,6 +65,10 @@ import {
   renewWorkspaceAuthoringState,
 } from '../workspace-authoring';
 import {
+  assertWorkspaceSchemaReview,
+  frozenWorkspaceSchemaReview,
+} from '../workspace-schema-review';
+import {
   assertGenerationDecisionActor,
   refPolicyForActor,
   resolveApplicableTransitionPolicy,
@@ -156,7 +160,8 @@ async function resolveReviewFacts(
   db: AnyDB,
   projectId: string,
   transitionId: string,
-  policyBindingFoundAtLock: boolean
+  policyBindingFoundAtLock: boolean,
+  requireCompleteSchema: boolean
 ) {
   const graph = await resolveTransitionProposalGraph(db, projectId, transitionId);
   const [workspace, head, refPolicyBinding] = await Promise.all([
@@ -171,6 +176,13 @@ async function resolveReviewFacts(
   ]);
   if (workspace === null) throw new TransitionReviewStaleError();
   assertWorkspaceAuthoringReview(workspace.workspace_state ?? {}, graph);
+  await assertWorkspaceSchemaReview(
+    db,
+    projectId,
+    workspace.workspace_state ?? {},
+    graph,
+    requireCompleteSchema
+  );
   return {
     graph,
     workspace,
@@ -297,7 +309,8 @@ export async function decideTransition(input: {
         tx,
         input.projectId,
         input.transitionId,
-        locked.policyBindingFound
+        locked.policyBindingFound,
+        input.outcome !== 'rejected'
       );
       const selected =
         input.authoritySelection === undefined
@@ -696,6 +709,12 @@ export async function commitTransition(input: {
     throw new TransitionReviewStaleError();
   }
   assertWorkspaceAuthoringReview(workspace.workspace_state ?? {}, graph);
+  await assertWorkspaceSchemaReview(
+    input.db,
+    input.projectId,
+    workspace.workspace_state ?? {},
+    graph
+  );
   const parentObjects = head.format === 'transition_v2' ? [head.commit] : [];
   const parents = head.format === 'transition_v2' ? [describeCommitV2(head.commit)] : [];
   const objects: ProtocolObject[] = [
@@ -741,6 +760,12 @@ export async function commitTransition(input: {
         throw new TransitionReviewStaleError();
       }
       assertWorkspaceAuthoringReview(currentWorkspace.workspace_state ?? {}, graph);
+      await assertWorkspaceSchemaReview(
+        tx,
+        input.projectId,
+        currentWorkspace.workspace_state ?? {},
+        graph
+      );
       const baseWorkspace = {
         ...(currentWorkspace.workspace_state ?? {}),
         id: graph.membership.workspaceId,
@@ -769,6 +794,7 @@ export async function commitTransition(input: {
                 transitionId: input.transitionId,
                 preparationDigest: graph.preparation?.digest ?? null,
                 result: graph.result,
+                schemaBase: frozenWorkspaceSchemaReview(graph)?.draft,
               }
             ),
           })

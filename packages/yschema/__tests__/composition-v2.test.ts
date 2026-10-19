@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   compileYSchemaCompositionV2,
   type YSchemaCompositionDraftV2,
+  type YSchemaLocalContributionV2,
   type YSchemaModuleArtifactV2,
 } from '../src';
 
@@ -42,6 +43,17 @@ function composition(...modules: YSchemaModuleArtifactV2[]): YSchemaCompositionD
       version: module.version,
       presentationOrder: (index + 1) * 10,
     })),
+  };
+}
+
+function localContribution(
+  contribution: YSchemaLocalContributionV2['contribution']
+): YSchemaLocalContributionV2 {
+  return {
+    apiVersion: 't3x.dev/yschema-local-contribution/v2',
+    id: 'workspace:local-schema',
+    revision: 1,
+    contribution,
   };
 }
 
@@ -94,6 +106,98 @@ describe('YSchema Composition v2', () => {
     expect(left.compositionHash).not.toBe(right.compositionHash);
     expect(left.renderPlan.map((entry) => entry.artifact)).toEqual(['t3x/first', 't3x/second']);
     expect(right.renderPlan.map((entry) => entry.artifact)).toEqual(['t3x/second', 't3x/first']);
+  });
+
+  it('compiles a project-local node with deterministic local origin and hash', async () => {
+    const product = moduleArtifact('t3x/product', 'product');
+    const local = localContribution({
+      nodes: {
+        advantage: {
+          slots: { title: { type: 'string', minLength: 1 } },
+          requiredSlots: ['title'],
+        },
+      },
+    });
+    const input = {
+      composition: composition(product),
+      modules: [product],
+      localContribution: local,
+    };
+    const [first, second] = await Promise.all([
+      compileYSchemaCompositionV2(input),
+      compileYSchemaCompositionV2(structuredClone(input)),
+    ]);
+
+    expect(first.report.valid).toBe(true);
+    expect(first.schema.nodes.advantage).toBeDefined();
+    expect(first.originsByPath.advantage).toEqual({
+      kind: 'local',
+      contributionId: 'workspace:local-schema',
+      revision: 1,
+    });
+    expect(first.compiledSchemaHash).toBe(second.compiledSchemaHash);
+  });
+
+  it('merges non-conflicting local Slots and marks the shared node as derived', async () => {
+    const product = moduleArtifact('t3x/product', 'product');
+    const result = await compileYSchemaCompositionV2({
+      composition: composition(product),
+      modules: [product],
+      localContribution: localContribution({
+        nodes: {
+          product: {
+            slots: { advantage: { type: 'string' } },
+            requiredSlots: ['advantage'],
+          },
+        },
+      }),
+    });
+
+    expect(result.report.valid).toBe(true);
+    expect(result.schema.nodes.product.slots).toEqual({
+      title: { type: 'string' },
+      advantage: { type: 'string' },
+    });
+    expect(result.originsByPath['product/advantage']).toMatchObject({ kind: 'local' });
+    expect(result.originsByPath.product).toEqual({
+      kind: 'derived',
+      sources: [
+        { kind: 'local', contributionId: 'workspace:local-schema', revision: 1 },
+        { kind: 'module', artifact: 't3x/product', version: '1.0.0' },
+      ],
+    });
+    expect(result.renderPlan[0]?.nodePaths).toContain('product');
+  });
+
+  it('blocks local path, relation type, and Rule ownership conflicts', async () => {
+    const product = moduleArtifact('t3x/product', 'product', {
+      contribution: {
+        nodes: { product: { slots: { title: { type: 'string' } } } },
+        relationTypes: { supports: { from: 'product', to: 'product' } },
+        rules: [{ id: 'existing_rule' }],
+      },
+    });
+    const result = await compileYSchemaCompositionV2({
+      composition: composition(product),
+      modules: [product],
+      localContribution: localContribution({
+        nodes: { product: { slots: { title: { type: 'number' } } } },
+        relationTypes: { supports: { from: 'product', to: 'product' } },
+        rules: [{ id: 'existing_rule', description: 'local duplicate' }],
+      }),
+    });
+
+    expect(result.report.valid).toBe(false);
+    expect(result.report.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'PATH_OWNERSHIP_CONFLICT', path: 'product/title' }),
+        expect.objectContaining({
+          code: 'RELATION_TYPE_CONFLICT',
+          path: 'relationTypes/supports',
+        }),
+        expect.objectContaining({ code: 'RULE_ID_CONFLICT', path: 'rules/existing_rule' }),
+      ])
+    );
   });
 
   it('blocks structural ownership conflicts instead of using order as override', async () => {

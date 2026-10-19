@@ -11,7 +11,9 @@ import {
   type YSchemaModuleArtifactV2,
   type YSchemaModuleManifest,
 } from '@t3x-dev/yschema';
+import type { Context } from 'hono';
 import { schemaEcosystemStarters } from './schema-ecosystem-starters';
+import { SchemaSourceUnavailableError, schemaSourceAdoptionReason } from './schema-studio';
 
 export async function ensureBuiltInYSchemaArtifacts(db: AnyDB): Promise<void> {
   const artifacts: Array<YSchemaCoreArtifact | YSchemaModuleManifest> = [
@@ -78,7 +80,8 @@ async function seedOfficialArtifactVersion(
 export async function resolveCompositionArtifacts(
   db: AnyDB,
   composition: YSchemaCompositionDraft,
-  projectId?: string
+  projectId?: string,
+  c?: Context
 ): Promise<{ core: YSchemaCoreArtifact; modules: YSchemaModuleManifest[] }> {
   await ensureBuiltInYSchemaArtifacts(db);
   const [coreView, ...moduleViews] = await Promise.all([
@@ -99,6 +102,11 @@ export async function resolveCompositionArtifacts(
     builtInYSchemaCores.find((artifact) => artifact.family === composition.family) ??
     builtInYSchemaCores[0];
   if (!fallbackCore) throw new Error('No built-in YSchema Core artifacts are registered.');
+  for (const view of [coreView, ...moduleViews]) {
+    if (!view) continue;
+    const reason = await schemaSourceAdoptionReason(c, db, projectId ?? '', view);
+    if (reason) throw new SchemaSourceUnavailableError(reason);
+  }
   return {
     core: (coreView?.manifest ?? fallbackCore) as unknown as YSchemaCoreArtifact,
     modules: moduleViews.flatMap((item) =>
@@ -110,7 +118,8 @@ export async function resolveCompositionArtifacts(
 export async function resolveCompositionArtifactsV2(
   db: AnyDB,
   composition: YSchemaCompositionDraftV2,
-  projectId?: string
+  projectId?: string,
+  c?: Context
 ): Promise<YSchemaModuleArtifactV2[]> {
   await ensureBuiltInYSchemaArtifacts(db);
   const views = await Promise.all(
@@ -122,6 +131,11 @@ export async function resolveCompositionArtifactsV2(
       })
     )
   );
+  for (const view of views) {
+    if (!view) continue;
+    const reason = await schemaSourceAdoptionReason(c, db, projectId ?? '', view);
+    if (reason) throw new SchemaSourceUnavailableError(reason);
+  }
   return views.flatMap((view) =>
     view && view.kind !== 'schema' ? [artifactViewToOpenModule(view)] : []
   );

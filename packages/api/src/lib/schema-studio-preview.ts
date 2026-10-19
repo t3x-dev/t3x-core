@@ -3,31 +3,39 @@ import {
   type StudioSample,
   StudioSampleValueSchema,
 } from '@t3x-dev/api-client';
+import {
+  parseWorkspaceSchemaEditCandidate,
+  type WorkspaceSchemaEditCandidate,
+} from '@t3x-dev/application';
+import {
+  applyWorkspaceSchemaYOps,
+  compileWorkspaceSchemaDefinition,
+  WorkspaceSchemaYOpsError,
+} from '@t3x-dev/core';
 import { type AnyDB, findSchemaStudioCandidate, findWorkspaceDraft } from '@t3x-dev/storage';
 import {
-  builtInYSchemaCores,
-  builtInYSchemaModules,
   compileYSchemaCompositionV2,
   diffYSchemas,
   normalizeYSchemaObject,
   sha256CompositionValue,
   validateTree,
   type YSchema,
+  type YSchemaLocalContributionV2,
 } from '@t3x-dev/yschema';
 import type { Context } from 'hono';
-import { assertProjectAccess } from './project-access';
-import { resolveStudioSource } from './schema-studio';
+import { assessWorkspaceSchemaImpact, workspaceContent } from './schema-evolution-impact';
+import { resolveStudioSource, schemaSourceAdoptionReason } from './schema-studio';
+import { workspaceAuthoringState } from './workspace-authoring';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
 import { artifactViewToOpenModule } from './yschema-artifact-registry';
 export class StudioError extends Error {
   constructor(
-    public code: 'NOT_FOUND' | 'INVALID_REQUEST' | 'CONFLICT' | 'FORBIDDEN',
+    public code: 'NOT_FOUND' | 'INVALID_REQUEST' | 'CONFLICT' | 'FORBIDDEN' | 'REVIEW_REQUIRED',
     message: string
   ) {
     super(message);
   }
 }
-const licenses = new Set(['MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC', 'CC0-1.0']);
 function samplePreview(
   value: unknown,
   schema: YSchema,
@@ -80,7 +88,9 @@ export async function compileStudioSelection(
   c: Context,
   db: AnyDB,
   projectId: string,
-  candidateIds: string[]
+  candidateIds: string[],
+  rawLocalContribution?: Record<string, unknown>,
+  localIdentity?: { id: string; revision: number }
 ) {
   const entries = await Promise.all(
     candidateIds.map(async (id) => {
@@ -112,29 +122,14 @@ export async function compileStudioSelection(
     projectId,
     sources,
   });
+  const localContribution = studioLocalContribution(
+    rawLocalContribution,
+    selectionHash,
+    localIdentity
+  );
   let adoptionReason: string | null = null;
   for (const { view } of entries) {
-    if (view.ownerProjectId === projectId) continue;
-    if (view.visibility === 'private' || view.visibility === 'team') {
-      if (
-        !view.ownerProjectId ||
-        (await assertProjectAccess(c, db, view.ownerProjectId, 'project:edit')) instanceof Response
-      )
-        adoptionReason =
-          'Importing private structure requires edit authority on its source project.';
-    } else {
-      const builtIn = [...builtInYSchemaCores, ...builtInYSchemaModules].find(
-        (item) => item.canonicalName === view.canonicalName && item.version === view.version
-      );
-      const repositoryOwned =
-        builtIn && (await sha256CompositionValue(builtIn)) === view.artifactHash;
-      if (
-        !repositoryOwned &&
-        !(typeof view.manifest.license === 'string' && licenses.has(view.manifest.license))
-      )
-        adoptionReason =
-          'This release has no supported declared redistribution license. Ask its publisher before importing.';
-    }
+    adoptionReason = (await schemaSourceAdoptionReason(c, db, projectId, view)) ?? adoptionReason;
   }
   const whole = entries.filter(({ view }) => view.kind === 'schema');
   if (whole.length && entries.length !== 1)
@@ -157,18 +152,19 @@ export async function compileStudioSelection(
         'CONFLICT',
         'Published Schema integrity does not match its compiled definition.'
       );
-    return {
-      schema,
-      samples: samplesFor(schema, true),
-      schemaHash,
-      selectionHash,
-      sources,
-      report: { valid: true, issues: [] },
-      renderPlan: (registry.renderPlan ?? []) as Record<string, unknown>[],
-      origins: (registry.originsByPath ?? {}) as Record<string, unknown>,
-      modules: [],
-      adoption: { allowed: !adoptionReason, reason: adoptionReason },
-    };
+    if (!localContribution)
+      return {
+        schema,
+        samples: samplesFor(schema, true),
+        schemaHash,
+        selectionHash,
+        sources,
+        report: { valid: true, issues: [] },
+        renderPlan: (registry.renderPlan ?? []) as Record<string, unknown>[],
+        origins: (registry.originsByPath ?? {}) as Record<string, unknown>,
+        modules: [],
+        adoption: { allowed: !adoptionReason, reason: adoptionReason },
+      };
   }
   const modules = entries.map(({ view }) => artifactViewToOpenModule(view));
   const compiled = await compileYSchemaCompositionV2({
@@ -184,7 +180,20 @@ export async function compileStudioSelection(
       })),
     },
     modules,
+    ...(localContribution ? { localContribution } : {}),
   });
+  // Whole-Schema bases retain root semantics; Modules alone do not carry strict/name metadata.
+  if (whole.length) {
+    const base = normalizeYSchemaObject(whole[0]!.view.manifest.schema);
+    const derived = {
+      ...base,
+      nodes: compiled.schema.nodes,
+      relationTypes: compiled.schema.relationTypes,
+      rules: compiled.schema.rules,
+    };
+    compiled.schema = compiled.report.valid ? normalizeYSchemaObject(derived) : derived;
+    compiled.compiledSchemaHash = await sha256CompositionValue(compiled.schema);
+  }
   return {
     samples: samplesFor(compiled.schema, compiled.report.valid),
     schema: compiled.schema,
@@ -227,11 +236,141 @@ export async function previewStudio(
   projectId: string,
   input: StudioPreviewInput
 ) {
-  const selected = await compileStudioSelection(c, db, projectId, input.candidateIds);
-  let workspace = null;
+  let draft = input.workspaceId ? await findWorkspaceDraft(db, projectId, input.workspaceId) : null;
+  let editCandidate: WorkspaceSchemaEditCandidate | null = null;
+  if (input.schemaEditCandidate) {
+    if (!input.workspaceId)
+      throw new StudioError(
+        'INVALID_REQUEST',
+        'A saved Schema edit candidate must be previewed in its Workspace.'
+      );
+    if (!draft?.workspace_state)
+      throw new StudioError('NOT_FOUND', 'Target Workspace is unavailable.');
+    const stored = draft.workspace_state.schemaEditCandidate;
+    if (!stored)
+      throw new StudioError('CONFLICT', 'The saved Schema edit candidate no longer exists.');
+    try {
+      editCandidate = parseWorkspaceSchemaEditCandidate(stored);
+    } catch {
+      throw new StudioError('CONFLICT', 'The saved Schema edit candidate is invalid.');
+    }
+    if (
+      editCandidate.candidateId !== input.schemaEditCandidate.candidateId ||
+      editCandidate.revision !== input.schemaEditCandidate.revision ||
+      editCandidate.workspaceId !== input.workspaceId
+    )
+      throw new StudioError(
+        'CONFLICT',
+        'The Schema edit candidate changed. Refresh it before checking again.'
+      );
+  }
+  let selected = await compileStudioSelection(
+    c,
+    db,
+    projectId,
+    input.candidateIds,
+    (editCandidate?.localContribution ?? input.localContribution) as
+      | Record<string, unknown>
+      | undefined,
+    editCandidate ? { id: editCandidate.candidateId, revision: editCandidate.revision } : undefined
+  );
+  if (editCandidate && !sameStudioSources(editCandidate.baseSources, selected.sources))
+    throw new StudioError(
+      'CONFLICT',
+      'The selected base sources changed after this Schema edit candidate was saved.'
+    );
+  if (editCandidate?.authoringDraft || input.schemaDefinition) {
+    if (!selected.report.valid)
+      throw new StudioError(
+        'REVIEW_REQUIRED',
+        'Resolve the Base definition checks before editing it.'
+      );
+    try {
+      const authoring = editCandidate?.authoringDraft;
+      const expected = authoring?.base.schemaHash ?? input.baseSchemaHash;
+      if (!expected || expected !== selected.schemaHash)
+        throw new StudioError(
+          'CONFLICT',
+          'The exact Base Schema changed. Reload it before editing.'
+        );
+      const applied = authoring
+        ? await applyWorkspaceSchemaYOps(selected.schema, authoring.effect.operations)
+        : await compileWorkspaceSchemaDefinition(selected.schema, input.schemaDefinition);
+      if (authoring?.resultSchemaHash && authoring.resultSchemaHash !== applied.schemaHash)
+        throw new StudioError(
+          'CONFLICT',
+          'The saved Schema Effect does not replay to its frozen result.'
+        );
+      const localOrigin = {
+        kind: 'local' as const,
+        contributionId: editCandidate?.candidateId ?? 'studio-unsaved-effect',
+        revision: editCandidate?.revision ?? 0,
+      };
+      const origins: Record<string, unknown> = {};
+      const recordOrigins = (nodes: YSchema['nodes'], before: YSchema['nodes'], prefix = '') => {
+        for (const [key, node] of Object.entries(nodes)) {
+          const path = prefix ? `${prefix}/${key}` : key;
+          const previous = before[key];
+          const source = selected.origins[path as keyof typeof selected.origins];
+          origins[path] =
+            previous && JSON.stringify(previous) === JSON.stringify(node)
+              ? (source ?? localOrigin)
+              : source
+                ? {
+                    kind: 'derived',
+                    sources: [
+                      ...(typeof source === 'object' &&
+                      source !== null &&
+                      'kind' in source &&
+                      source.kind === 'derived' &&
+                      'sources' in source &&
+                      Array.isArray(source.sources)
+                        ? source.sources
+                        : [source]),
+                      localOrigin,
+                    ],
+                  }
+                : localOrigin;
+          for (const [slot, definition] of Object.entries(node.slots ?? {})) {
+            const slotPath = `${path}/${slot}`;
+            origins[slotPath] =
+              previous?.slots?.[slot] &&
+              JSON.stringify(previous.slots[slot]) === JSON.stringify(definition)
+                ? (selected.origins[slotPath as keyof typeof selected.origins] ?? localOrigin)
+                : localOrigin;
+          }
+          if (node.children && node.children !== 'any')
+            recordOrigins(
+              node.children,
+              previous?.children && previous.children !== 'any' ? previous.children : {},
+              path
+            );
+        }
+      };
+      recordOrigins(applied.schema.nodes, selected.schema.nodes);
+      selected = {
+        ...selected,
+        schema: applied.schema,
+        schemaHash: applied.schemaHash,
+        origins,
+      } as typeof selected;
+    } catch (error) {
+      if (error instanceof WorkspaceSchemaYOpsError)
+        throw new StudioError('INVALID_REQUEST', error.message);
+      throw error;
+    }
+  }
+  let workspace: {
+    id: string;
+    revision: number;
+    binding: Record<string, unknown> | null;
+    canBind: boolean;
+    changes: ReturnType<typeof diffYSchemas>;
+  } | null = null;
+  let impact: Awaited<ReturnType<typeof assessWorkspaceSchemaImpact>> | null = null;
   let baseSchemaHash: string | null = null;
   if (input.workspaceId) {
-    const draft = await findWorkspaceDraft(db, projectId, input.workspaceId);
+    draft ??= await findWorkspaceDraft(db, projectId, input.workspaceId);
     if (!draft?.workspace_state)
       throw new StudioError('NOT_FOUND', 'Target Workspace is unavailable.');
     const resolved = await resolveWorkspaceYSchema(draft.workspace_state, db, projectId);
@@ -253,11 +392,56 @@ export async function previewStudio(
     workspace = {
       id: input.workspaceId,
       revision: draft.revision,
+      canBind: (() => {
+        const state = draft.workspace_state!;
+        const operations = (state.yopsDraft as { operations?: unknown[] } | undefined)?.operations;
+        if (
+          (Array.isArray(bindings) && bindings.length) ||
+          state.schemaPending ||
+          state.baseCommitHash ||
+          state.lastCommitHash ||
+          draft.parent_commit_hash ||
+          operations?.length ||
+          state.extractionProposal ||
+          draft.nodes?.length ||
+          draft.semantic_points?.length
+        )
+          return false;
+        try {
+          const content = workspaceContent(state);
+          if (state.authoringLedger) {
+            const { ledger, basis } = workspaceAuthoringState(state);
+            if (ledger.actions.length || basis.refHead) return false;
+          }
+          return Object.keys(content.tree).length === 0 && content.relations.length === 0;
+        } catch {
+          return false;
+        }
+      })(),
       binding: Array.isArray(bindings)
         ? ((bindings[0] ?? null) as Record<string, unknown> | null)
         : null,
       changes: diffYSchemas(base, selected.schema),
     };
+    impact = await assessWorkspaceSchemaImpact(
+      db,
+      projectId,
+      draft.workspace_state,
+      selected.schema,
+      selected.report.valid
+    );
+    if (!selected.adoption.allowed) {
+      impact.status = 'blocked';
+      impact.canAdopt = false;
+      impact.canPublish = false;
+      impact.items.push({
+        kind: 'blocked',
+        code: 'SOURCE_ADOPTION_NOT_ALLOWED',
+        path: '$sources',
+        message: selected.adoption.reason ?? 'Source adoption is not authorized.',
+        affectedPaths: [],
+      });
+    }
   }
   let comparison = null;
   if (input.compareToCandidateIds) {
@@ -278,7 +462,27 @@ export async function previewStudio(
     workspaceId: input.workspaceId ?? null,
     workspaceRevision: workspace?.revision ?? null,
     baseSchemaHash,
+    contentHash: impact?.content.hash ?? null,
+    schemaEditCandidate: editCandidate
+      ? {
+          candidateId: editCandidate.candidateId,
+          revision: editCandidate.revision,
+          requestDigest: editCandidate.requestDigest,
+        }
+      : null,
   });
+  const report = studioLayeredReport(
+    selected.report,
+    selected.adoption,
+    workspace,
+    impact?.content.source !== 'unavailable' && impact?.content.valid != null,
+    impact?.content.issues.map((issue) => ({
+      ...issue,
+      code: `WORKSPACE_${issue.code}`,
+      blocking: !issue.code.startsWith('REQUIRED_'),
+    })) ?? [],
+    editCandidate
+  );
   return {
     ...selected,
     localSample:
@@ -288,8 +492,159 @@ export async function previewStudio(
     schema: selected.schema as unknown as Record<string, unknown>,
     renderPlan: selected.renderPlan as unknown as Record<string, unknown>[],
     origins: selected.origins as unknown as Record<string, unknown>,
+    report,
+    impact,
     reviewHash,
     workspace,
     comparison,
+    freshness: {
+      candidateId: editCandidate?.candidateId ?? null,
+      candidateRevision: editCandidate?.revision ?? null,
+      candidateRequestDigest: editCandidate?.requestDigest ?? null,
+      workspaceRevision: workspace?.revision ?? null,
+      schemaHash: selected.schemaHash,
+    },
   };
+}
+
+function studioLocalContribution(
+  value: Record<string, unknown> | undefined,
+  selectionHash: string,
+  identity?: { id: string; revision: number }
+): YSchemaLocalContributionV2 | undefined {
+  if (!value || Object.keys(value).length === 0) return undefined;
+  const allowed = new Set(['nodes', 'relationTypes', 'rules']);
+  const unsupported = Object.keys(value).filter((key) => !allowed.has(key));
+  if (unsupported.length)
+    throw new StudioError(
+      'INVALID_REQUEST',
+      `Local Schema contribution contains unsupported fields: ${unsupported.join(', ')}.`
+    );
+  for (const key of ['nodes', 'relationTypes'] as const) {
+    const item = value[key];
+    if (item !== undefined && (!item || typeof item !== 'object' || Array.isArray(item)))
+      throw new StudioError('INVALID_REQUEST', `Local contribution ${key} must be a mapping.`);
+  }
+  if (value.rules !== undefined && !Array.isArray(value.rules))
+    throw new StudioError('INVALID_REQUEST', 'Local contribution rules must be a list.');
+  return {
+    apiVersion: 't3x.dev/yschema-local-contribution/v2',
+    id: identity?.id ?? `studio-local:${selectionHash}`,
+    revision: identity?.revision ?? 0,
+    contribution: value as YSchemaLocalContributionV2['contribution'],
+  };
+}
+
+type StudioIssue = {
+  code: string;
+  message: string;
+  blocking: boolean;
+  path?: string;
+};
+
+const DEFINITION_ISSUES = new Set([
+  'ARTIFACT_HASH_MISMATCH',
+  'INVALID_COMPILED_SCHEMA',
+  'INVALID_LOCAL_CONTRIBUTION',
+  'MODULE_NOT_FOUND',
+  'UNSUPPORTED_YSCHEMA_VERSION',
+]);
+
+function studioLayeredReport(
+  report: { valid: boolean; issues: StudioIssue[] },
+  adoption: { allowed: boolean; reason: string | null },
+  workspace: { changes: Array<{ kind: string }> } | null,
+  workspaceContentChecked: boolean,
+  workspaceContentIssues: StudioIssue[],
+  editCandidate: WorkspaceSchemaEditCandidate | null
+) {
+  const definitionIssues = report.issues.filter((issue) => DEFINITION_ISSUES.has(issue.code));
+  const compositionIssues = report.issues.filter((issue) => !DEFINITION_ISSUES.has(issue.code));
+  const provenanceIssues: StudioIssue[] = adoption.allowed
+    ? []
+    : [
+        {
+          code: 'SOURCE_ADOPTION_NOT_ALLOWED',
+          message: adoption.reason ?? 'A selected source cannot be adopted.',
+          blocking: true,
+        },
+      ];
+  const statusFor = (issues: StudioIssue[]) =>
+    issues.some((issue) => issue.blocking)
+      ? ('failed' as const)
+      : issues.length
+        ? ('warning' as const)
+        : ('passed' as const);
+  return {
+    ...report,
+    layers: [
+      {
+        id: 'definition' as const,
+        label: 'Definition validity',
+        status: statusFor(definitionIssues),
+        issues: definitionIssues,
+      },
+      {
+        id: 'composition' as const,
+        label: 'Composition dependencies',
+        status: statusFor(compositionIssues),
+        issues: compositionIssues,
+      },
+      {
+        id: 'provenance' as const,
+        label: 'Source authorization',
+        status: statusFor(provenanceIssues),
+        issues: provenanceIssues,
+      },
+      {
+        id: 'workspace' as const,
+        label: 'Workspace content compatibility',
+        status: workspaceContentChecked ? statusFor(workspaceContentIssues) : ('not_run' as const),
+        issues: workspaceContentIssues,
+        summary: workspace
+          ? `${workspace.changes.length} definition change${workspace.changes.length === 1 ? '' : 's'}${workspaceContentChecked ? ' checked against the current candidate' : '; no candidate content to validate'}`
+          : 'Select a Workspace to calculate impact',
+      },
+      {
+        id: 'freshness' as const,
+        label: 'Review freshness',
+        status: 'passed' as const,
+        issues: [],
+        summary: editCandidate
+          ? `Candidate revision ${editCandidate.revision} is current`
+          : 'Preview is bound to the current selection',
+      },
+    ],
+  };
+}
+
+function sameStudioSources(
+  expected: readonly {
+    projectId: string | null;
+    canonicalName: string;
+    version: string;
+    artifactVersionId: string;
+    hash: string;
+  }[],
+  actual: readonly {
+    projectId: string | null;
+    canonicalName: string;
+    version: string;
+    artifactVersionId: string;
+    hash: string;
+  }[]
+) {
+  return (
+    expected.length === actual.length &&
+    expected.every((source, index) => {
+      const value = actual[index];
+      return (
+        value?.projectId === source.projectId &&
+        value.canonicalName === source.canonicalName &&
+        value.version === source.version &&
+        value.artifactVersionId === source.artifactVersionId &&
+        value.hash === source.hash
+      );
+    })
+  );
 }

@@ -113,7 +113,7 @@ export function SchemaCatalogExperience({
         )}
         aria-label="Schema experience"
       >
-        <header className={headerStyles.header}>
+        <header className={headerStyles.header} data-view={view}>
           {viewNavigation}
           <form
             className={headerStyles.search}

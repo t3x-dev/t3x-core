@@ -155,6 +155,7 @@ export {
   NotFoundError,
   promoteDraft,
   renewWorkspaceAuthoring,
+  saveWorkspaceSchemaPreparation,
   sealWorkspaceAuthoring,
   transactWorkspaceAuthoring,
   transactWorkspaceReconciliation,

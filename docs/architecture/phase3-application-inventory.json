@@ -17,7 +17,7 @@
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/lifecycle.ts",
-      "lines": 823
+      "lines": 849
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/materialize.ts",
@@ -29,10 +29,10 @@
     }
   ],
   "apiRouteAuthorization": {
-    "routeFiles": 76,
-    "filesUsingGetDB": 67,
-    "filesUsingAssertProjectAccess": 52,
-    "filesUsingRequireTransitionAuthority": 4,
+    "routeFiles": 78,
+    "filesUsingGetDB": 69,
+    "filesUsingAssertProjectAccess": 54,
+    "filesUsingRequireTransitionAuthority": 5,
     "getDBWithoutProjectAccess": [
       "packages/api/src/routes/auth-local.openapi.ts",
       "packages/api/src/routes/auth-me.openapi.ts",

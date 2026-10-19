@@ -14,6 +14,11 @@ export function useStudioPreview(
   const [result, setResult] = useState<{ key: string; data?: StudioPreview; error?: string }>();
   const [retry, setRetry] = useState(0);
   useEffect(() => {
+    const refresh = () => setRetry((value) => value + 1);
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+  }, []);
+  useEffect(() => {
     const current = ++epoch.current;
     setResult(undefined);
     const [target, selection] = JSON.parse(key) as [string, StudioPreviewInput];

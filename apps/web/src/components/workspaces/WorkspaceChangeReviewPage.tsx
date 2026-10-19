@@ -7,12 +7,13 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { fieldChangeCount } from '@/domain/workspaces/changeFields';
+import { fieldChangeCount, fieldChangeGroups } from '@/domain/workspaces/changeFields';
 import { useReviewedFieldChanges } from '@/hooks/workspaces/useReviewedFieldChanges';
 import { useWorkspaceReviewSnapshot } from '@/hooks/workspaces/useWorkspaceReviewSnapshot';
 import { ChangeDecisionPanel } from './ChangeDecisionPanel';
 import { ChangeReviewChanges } from './ChangeReviewChanges';
 import { TransitionAuditDetails } from './TransitionReviewPanel';
+import { WorkspaceSchemaReviewPanel } from './WorkspaceSchemaReviewPanel';
 
 export function WorkspaceChangeReviewPage({
   projectId,
@@ -35,11 +36,15 @@ export function WorkspaceChangeReviewPage({
   const projection = state.data?.change_projection ?? null;
   const snapshot = state.data?.snapshot ?? null;
   const view = snapshot?.transition?.mode === 'transition' ? snapshot.transition : null;
-  const fieldGroups = useReviewedFieldChanges(
+  const schemaReview = state.data?.schema_review;
+  const liveFieldGroups = useReviewedFieldChanges(
     normalizedProjectId,
     normalizedWorkspaceId,
-    view ? snapshot?.review.precondition.workspaceRevision : undefined
+    view && !schemaReview ? snapshot?.review.precondition.workspaceRevision : undefined
   );
+  const fieldGroups = schemaReview
+    ? fieldChangeGroups(schemaReview.baseContent, schemaReview.draftContent)
+    : liveFieldGroups;
   const commit = snapshot?.objects?.commit?.digest;
   const branch = snapshot?.review.precondition.refName;
   const workspaceHref = workspaceReviewHref(normalizedProjectId, normalizedWorkspaceId, branch);
@@ -134,9 +139,18 @@ export function WorkspaceChangeReviewPage({
                 onOverrideReasonChange={setOverrideReason}
                 overrideReason={overrideReason}
                 view={view}
+                commitBlocker={
+                  state.data?.schema_review?.base.status === 'unknown'
+                    ? 'Recover the exact Base Schema before accepting or committing.'
+                    : undefined
+                }
               />
             </div>
             <div className="min-w-0 lg:col-start-1">
+              <WorkspaceSchemaReviewPanel
+                review={state.data?.schema_review}
+                historical={Boolean(commit)}
+              />
               <ChangeReviewChanges groups={fieldGroups} operations={view.change.operations} />
             </div>
             <TransitionAuditDetails

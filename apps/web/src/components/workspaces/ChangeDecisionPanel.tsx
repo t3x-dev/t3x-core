@@ -31,6 +31,7 @@ export function ChangeDecisionPanel({
   onOverrideReasonChange,
   overrideReason,
   view,
+  commitBlocker,
 }: {
   branch: string | null;
   busy: boolean;
@@ -38,14 +39,16 @@ export function ChangeDecisionPanel({
   onOverrideReasonChange: (reason: string) => void;
   overrideReason: string;
   view: TransitionViewV1;
+  commitBlocker?: string;
 }) {
   const reasonRef = useRef<HTMLTextAreaElement>(null);
   const [reasonError, setReasonError] = useState(false);
   const checks = changeCheckRows(view);
   const blockers = changeDecisionBlockers(view);
   const decided = view.decision.observation === 'supplied';
-  const acceptAllowed = view.capabilities.accept.disposition === 'allowed';
-  const overrideAllowed = !acceptAllowed && view.capabilities.override.disposition === 'allowed';
+  const acceptAllowed = !commitBlocker && view.capabilities.accept.disposition === 'allowed';
+  const overrideAllowed =
+    !commitBlocker && !acceptAllowed && view.capabilities.override.disposition === 'allowed';
   const rejectAllowed = view.capabilities.reject.disposition === 'allowed';
   const status = panelStatus(view, acceptAllowed, overrideAllowed);
 
@@ -113,6 +116,11 @@ export function ChangeDecisionPanel({
 
       {!decided ? (
         <div className="grid gap-2 px-4 py-3">
+          {commitBlocker ? (
+            <p role="alert" className="text-xs text-[var(--status-warning)]">
+              {commitBlocker}
+            </p>
+          ) : null}
           {overrideAllowed ? (
             <label
               className="grid gap-1.5 text-xs font-semibold text-[var(--text-secondary)]"

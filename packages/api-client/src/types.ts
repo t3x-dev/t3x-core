@@ -749,6 +749,7 @@ export interface WorkspaceTransitionDecisionEnvelope extends WorkspaceTransition
 }
 
 export interface WorkspaceTransitionReviewSnapshotEnvelope {
+  schema_review?: import('./schema-studio').WorkspaceFullSchemaReview | null;
   snapshot_id: string;
   snapshot_digest: string;
   project_id: string;
@@ -1235,6 +1236,14 @@ export interface YSchemaCompositionDraftV2 {
 
 export type YSchemaCompositionDraft = YSchemaCompositionDraftV1 | YSchemaCompositionDraftV2;
 
+export type YSchemaCompositionSourceOrigin =
+  | { artifact: string; version: string; kind: 'core' | 'module' }
+  | { kind: 'local'; contributionId: string; revision: number };
+
+export type YSchemaCompositionOrigin =
+  | YSchemaCompositionSourceOrigin
+  | { kind: 'derived'; sources: YSchemaCompositionSourceOrigin[] };
+
 export interface YSchemaCompositionPreview {
   schema: Record<string, unknown>;
   renderPlan: Array<{
@@ -1244,7 +1253,7 @@ export interface YSchemaCompositionPreview {
     slot: string;
     nodePaths: string[];
   }>;
-  originsByPath: Record<string, { artifact: string; version: string; kind: 'core' | 'module' }>;
+  originsByPath: Record<string, YSchemaCompositionOrigin>;
   report: {
     valid: boolean;
     issues: Array<{
@@ -1264,6 +1273,7 @@ export interface WorkspaceYSchemaCompositionResult {
   workspaceRevision: number;
   preview?: YSchemaCompositionPreview;
   binding?: Record<string, unknown>;
+  pending?: import('./schema-studio').WorkspaceSchemaPending;
 }
 
 export interface PublishWorkspaceYSchemaCompositionInput {

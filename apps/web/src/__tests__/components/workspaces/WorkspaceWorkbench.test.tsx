@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceWorkbench } from '@/components/workspaces/WorkspaceWorkbench';
 import {
@@ -25,6 +25,13 @@ const mocks = vi.hoisted(() => ({
     role: 'assistant' | 'user';
   }>,
   validateComparison: vi.fn(),
+}));
+vi.mock('@/components/workspaces/WorkspaceSchemaPendingNotice', () => ({
+  WorkspaceSchemaPendingNotice: ({ onPrepared }: { onPrepared: () => Promise<void> }) => (
+    <button type="button" onClick={() => void onPrepared()}>
+      Complete Schema preparation
+    </button>
+  ),
 }));
 
 vi.mock('@/infrastructure/sharedApiClient', () => ({
@@ -221,6 +228,32 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
       workspace: { ...candidate, revision: (candidate.revision ?? 0) + 1 },
       yops_draft_id: candidate.yopsDraft.id,
     }));
+  });
+
+  it('hydrates the exact prepared Workspace revision instead of discarding the refresh result', async () => {
+    const original = workspace('workspace_main', 'Main workspace');
+    const remote = {
+      ...original,
+      revision: (original.revision ?? 0) + 1,
+      title: 'Prepared workspace',
+    };
+    const onRefresh = vi.fn();
+    mocks.refreshWorkspaces.mockResolvedValue([remote]);
+    render(
+      <WorkspaceWorkbench
+        candidates={[original]}
+        projectId="proj_1"
+        onWorkspacesRefresh={onRefresh}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Complete Schema preparation' }));
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Workspace detail' })).toHaveAccessibleDescription(
+        remote.title
+      )
+    );
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+    expect(mocks.saveDraft).not.toHaveBeenCalled();
   });
 
   it('exposes only the current Compose and Review workflow surfaces', () => {

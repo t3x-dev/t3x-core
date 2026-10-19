@@ -1,5 +1,5 @@
 'use client';
-import type { StudioPreview } from '@t3x-dev/api-client';
+import type { SchemaEvolutionImpact, StudioPreview } from '@t3x-dev/api-client';
 import { Box, LockKeyhole } from 'lucide-react';
 import { StateValueReader } from '@/components/project/StateValueReader';
 
@@ -129,5 +129,78 @@ export function StudioChanges({
     </ul>
   ) : (
     <p className="py-3 text-sm text-[var(--text-secondary)]">No definition changes.</p>
+  );
+}
+
+const IMPACT_LABELS = {
+  safe_addition: 'Safe addition',
+  safe_change: 'Compatible change',
+  needs_input: 'Needs input',
+  needs_mapping: 'Needs mapping',
+  blocked: 'Blocked',
+};
+
+export function StudioImpactPreview({ impact }: { impact: SchemaEvolutionImpact | null }) {
+  if (!impact)
+    return (
+      <p className="py-3 text-xs text-[var(--text-secondary)]">
+        Select a Workspace to preview content impact.
+      </p>
+    );
+  return (
+    <section aria-label="Schema content impact" className="min-w-0 space-y-3 text-xs">
+      <output className="block font-medium">
+        {impact.status === 'safe'
+          ? 'No new content blockers'
+          : impact.status === 'needs_input'
+            ? 'New required input — prepare content after adoption'
+            : impact.status === 'needs_mapping'
+              ? 'Mapping required before adoption or publication'
+              : 'Content impact could not be approved'}
+      </output>
+      <p className="text-[var(--text-secondary)]">
+        {impact.content.source === 'authoring_ledger'
+          ? 'Current Draft content'
+          : 'Workspace candidate content'}
+        {impact.content.valid === null
+          ? ' · not checked'
+          : impact.content.ready
+            ? ' · satisfies the candidate Schema'
+            : ' · still needs review'}
+      </p>
+      {impact.items.length ? (
+        <ul className="divide-y divide-[var(--stroke-divider)]">
+          {impact.items.map((item, index) => (
+            <li key={`${item.kind}:${item.code}:${item.path}:${index}`} className="space-y-1 py-3">
+              <span
+                className={
+                  item.kind === 'safe_addition' || item.kind === 'safe_change'
+                    ? 'text-[var(--status-success)]'
+                    : 'text-[var(--status-warning)]'
+                }
+              >
+                {IMPACT_LABELS[item.kind]}
+              </span>
+              <p className="break-all font-mono">{item.path}</p>
+              <p className="text-[var(--text-secondary)]">{item.message}</p>
+              {item.affectedPaths.length ? (
+                <details>
+                  <summary className="cursor-pointer">
+                    Affected content · {item.affectedPaths.length}
+                  </summary>
+                  {item.affectedPaths.map((path) => (
+                    <p className="mt-1 break-all font-mono" key={path}>
+                      {path}
+                    </p>
+                  ))}
+                </details>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>No content changes are required by this definition change.</p>
+      )}
+    </section>
   );
 }
