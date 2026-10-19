@@ -5,8 +5,11 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import type React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectDirectoryPage } from '@/components/project/ProjectDirectoryPage';
+import { checkRepositoryName } from '@/queries/projects';
 import { useProjectStore } from '@/store/projectStore';
 import type { Project } from '@/types/api';
+
+vi.mock('@/queries/projects', () => ({ checkRepositoryName: vi.fn() }));
 
 const routerPush = vi.fn();
 const createProject = vi.fn();
@@ -49,6 +52,8 @@ const projects: Project[] = [
   {
     project_id: 'proj_prd',
     name: 'prd-workflow',
+    namespace: 't3x-dev',
+    canonical_path: '/t3x-dev/prd-workflow',
     created_at: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
     turns_count: 4,
     conversations_count: 1,
@@ -62,6 +67,8 @@ const projects: Project[] = [
   {
     project_id: 'proj_core',
     name: 't3x-core',
+    namespace: 't3x-dev',
+    canonical_path: '/t3x-dev/t3x-core',
     created_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
     turns_count: 12,
     conversations_count: 2,
@@ -76,6 +83,7 @@ const projects: Project[] = [
 
 describe('ProjectDirectoryPage', () => {
   beforeEach(() => {
+    vi.mocked(checkRepositoryName).mockReset();
     routerPush.mockReset();
     createProject.mockReset();
     refreshProjects.mockReset();
@@ -90,6 +98,7 @@ describe('ProjectDirectoryPage', () => {
       initialized: true,
       loading: false,
       projects: [],
+      details: {},
     });
   });
 
@@ -111,7 +120,7 @@ describe('ProjectDirectoryPage', () => {
     expect(screen.queryByText('hi@t3x.dev')).not.toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /prd-workflow/i })[0]).toHaveAttribute(
       'href',
-      '/project/proj_prd'
+      '/t3x-dev/prd-workflow'
     );
     expect(screen.getAllByText('/t3x-dev/prd-workflow').length).toBeGreaterThan(0);
     expect(screen.queryByRole('link', { name: 'Chats' })).not.toBeInTheDocument();
@@ -136,6 +145,11 @@ describe('ProjectDirectoryPage', () => {
   });
 
   it('renders a personal namespace directory with owner-scoped links', () => {
+    hookProjects = projects.map((project) => ({
+      ...project,
+      namespace: 'lqw905',
+      canonical_path: `/lqw905/${project.name}`,
+    }));
     render(<ProjectDirectoryPage ownerSlug="lqw905" />);
 
     expect(screen.getByRole('heading', { name: 'lqw905' })).toBeInTheDocument();
@@ -150,7 +164,7 @@ describe('ProjectDirectoryPage', () => {
     );
     expect(screen.getAllByRole('link', { name: /prd-workflow/i })[0]).toHaveAttribute(
       'href',
-      '/project/proj_prd'
+      '/lqw905/prd-workflow'
     );
     expect(screen.getAllByText('/lqw905/prd-workflow').length).toBeGreaterThan(0);
     for (const link of screen.getAllByRole('link', { name: /new repository/i })) {
@@ -169,8 +183,8 @@ describe('ProjectDirectoryPage', () => {
     expect(recentSection).not.toBeNull();
 
     const recentLinks = within(recentSection as HTMLElement).getAllByRole('link');
-    expect(recentLinks[0]).toHaveAttribute('href', '/project/proj_core');
-    expect(recentLinks[1]).toHaveAttribute('href', '/project/proj_prd');
+    expect(recentLinks[0]).toHaveAttribute('href', '/t3x-dev/t3x-core');
+    expect(recentLinks[1]).toHaveAttribute('href', '/t3x-dev/prd-workflow');
   });
 
   it('filters project rows without leaving the directory', () => {
@@ -220,10 +234,21 @@ describe('ProjectDirectoryPage', () => {
     expect(refreshProjects).toHaveBeenCalledTimes(1);
   });
 
-  it('renames a backend project through the shared project hook', async () => {
+  it('previews and saves the backend-confirmed name through the shared project hook', async () => {
+    vi.mocked(checkRepositoryName).mockResolvedValue({
+      name: 'Renamed-PRD',
+      changed: true,
+      valid: true,
+      available: true,
+      code: null,
+      message: null,
+      namespace: 't3x-dev',
+      canonical_path: '/t3x-dev/Renamed-PRD',
+    });
     renameProject.mockResolvedValueOnce({
       ...projects[0],
-      name: 'Renamed PRD',
+      name: 'Renamed-PRD',
+      canonical_path: '/t3x-dev/Renamed-PRD',
     } satisfies Project);
 
     render(<ProjectDirectoryPage />);
@@ -232,9 +257,12 @@ describe('ProjectDirectoryPage', () => {
     fireEvent.change(screen.getByLabelText('Repository name'), {
       target: { value: 'Renamed PRD' },
     });
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled());
+    expect(screen.getByText('/t3x-dev/Renamed-PRD')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    await waitFor(() => expect(renameProject).toHaveBeenCalledWith('proj_prd', 'Renamed PRD'));
+    await waitFor(() => expect(renameProject).toHaveBeenCalledWith('proj_prd', 'Renamed-PRD'));
   });
 
   it('deletes a backend project through the shared project hook', async () => {

@@ -107,6 +107,24 @@ export const providersRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
 
+providersRoutes.onError((error, c) => {
+  const encryption = error.name === 'CredentialEncryptionError';
+  return c.json(
+    {
+      success: false as const,
+      error: {
+        code: encryption
+          ? 'CREDENTIAL_ENCRYPTION_UNAVAILABLE'
+          : 'PROVIDER_CONFIGURATION_UNAVAILABLE',
+        message: encryption
+          ? 'Database credentials could not be read or encrypted. The deployment administrator must check T3X_CREDENTIAL_ENCRYPTION_KEY (a base64-encoded 32-byte key), previous encryption keys and stored credential records. No plaintext fallback is used.'
+          : 'Provider configuration could not be loaded or updated. Check the database connection and retry.',
+      },
+    },
+    503
+  );
+});
+
 async function requireProviderOperator(c: Context, next: Next) {
   if ((await getDeploymentCapabilities(c)).provider_credentials.administration !== 'local') {
     return errorResponse(c, 'FORBIDDEN', 'Provider administration is disabled for this deployment');
@@ -140,33 +158,23 @@ function previewOfKey(key: string): string {
   // without leaking it.
   const trimmed = key.trim();
   if (trimmed.length === 0) return '';
-  if (trimmed.length <= 4) return trimmed;
+  if (trimmed.length <= 4) return '••••';
   return `…${trimmed.slice(-4)}`;
 }
 
-/**
- * Resolve which tier currently supplies the active key (env > file > none)
- * and return a preview + override flag. Read-only; does not mutate state.
- */
+/** Mirror ProviderRegistry: database overrides first, environment only when absent. */
 function resolveKeyProvenance(
   bundle: Awaited<ReturnType<typeof getProviderCredentialBundle>>,
   provider: LocalProviderId
-): { source: 'env' | 'file' | 'none'; preview: string | null; envOverridesStored: boolean } {
+): { source: 'database' | 'environment' | 'none'; preview: string | null } {
   const envName = ENV_KEY_BY_LOCAL_PROVIDER[provider];
-  const envKey = process.env[envName];
   const storedKey = bundle.secrets[envName as keyof typeof bundle.secrets];
-
-  if (envKey && envKey.trim().length > 0) {
-    return {
-      source: 'env',
-      preview: previewOfKey(envKey),
-      envOverridesStored: Boolean(storedKey && storedKey.trim().length > 0),
-    };
+  if (storedKey !== undefined) {
+    return { source: 'database', preview: previewOfKey(storedKey) };
   }
-  if (storedKey && storedKey.trim().length > 0) {
-    return { source: 'file', preview: previewOfKey(storedKey), envOverridesStored: false };
-  }
-  return { source: 'none', preview: null, envOverridesStored: false };
+  const envKey = process.env[envName];
+  if (envKey) return { source: 'environment', preview: previewOfKey(envKey) };
+  return { source: 'none', preview: null };
 }
 
 function toSafeLocalProviderStatus(
@@ -187,7 +195,7 @@ function toSafeLocalProviderStatus(
     last_test_error: safe.lastTestError,
     api_key_source: provenance.source,
     api_key_preview: provenance.preview,
-    env_overrides_stored: provenance.envOverridesStored,
+    stored: safe.configured,
   };
 }
 
@@ -605,24 +613,26 @@ providersRoutes.openapi(testProviderRoute, async (c) => {
     );
   }
 
-  if (localProvider) {
-    await refreshProviderRegistryConfig();
-  }
-
+  const testedBundle = localProvider ? await getProviderCredentialBundle(await getDB()) : null;
+  // Configure and start the test from one snapshot, without an intervening await.
+  if (testedBundle) registry.setConfigOverrides(testedBundle.secrets);
   const result = await registry.testConnection(runtimeProviderId);
+  // Provider errors can contain request headers or keys. Return only safe test diagnostics.
+  if (!result.ok && result.error)
+    result.error =
+      'Connection test failed. Check the active credential, provider availability and network, then retry.';
 
-  if (localProvider) {
+  const testedRevision = localProvider ? testedBundle?.revisions[localProvider] : null;
+  if (localProvider && testedRevision) {
     try {
       const db = await getDB();
-      const bundle = await getProviderCredentialBundle(db);
-      if (bundle.safe[localProvider].configured) {
-        await updateProviderCredentialTestResult(db, localProvider, {
-          lastTestStatus: result.ok ? 'ok' : 'error',
-          lastTestedAt: new Date(),
-          lastTestError: result.error ?? null,
-        });
-        await refreshProviderRegistryConfig();
-      }
+      await updateProviderCredentialTestResult(db, localProvider, {
+        expectedRevision: testedRevision,
+        lastTestStatus: result.ok ? 'ok' : 'error',
+        lastTestedAt: new Date(),
+        lastTestError: result.error ?? null,
+      });
+      await refreshProviderRegistryConfig();
     } catch {
       // Best-effort local metadata persistence only.
     }

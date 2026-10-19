@@ -4,8 +4,9 @@
  * CRUD operations for projects using Drizzle ORM.
  */
 
+import { inspectRepositoryName } from '@t3x-dev/application';
 import { generateProjectId } from '@t3x-dev/core';
-import { and, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lt, or, type SQL, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import {
   agentDrafts,
@@ -24,6 +25,7 @@ export interface CreateProjectInput {
   projectId?: string;
   name: string;
   metadata?: Record<string, unknown>;
+  repositoryProfile?: { readme: string; tags: string[] };
   /** Owner user ID. Omit or undefined → NULL (local/legacy data). */
   ownerId?: string;
   /** Namespace resource ID. Omit only for legacy or non-namespace flows. */
@@ -62,15 +64,21 @@ export interface ProjectWithStats extends Project {
  * Insert a new project
  */
 export async function insertProject(db: AnyDB, input: CreateProjectInput): Promise<Project> {
+  const naming = inspectRepositoryName(input.name);
+  if (!naming.valid) throw new Error(naming.message!);
   const projectId = input.projectId ?? generateProjectId();
   const createdAt = new Date();
-  const metadataJson = input.metadata ? JSON.stringify(input.metadata) : null;
+  const metadata = { ...input.metadata };
+  // This reserved key is writable only through the explicit profile contract.
+  delete metadata.repository_profile;
+  if (input.repositoryProfile) metadata.repository_profile = input.repositoryProfile;
+  const metadataJson = input.metadata || input.repositoryProfile ? JSON.stringify(metadata) : null;
 
   const [project] = await db
     .insert(projects)
     .values({
       projectId,
-      name: input.name,
+      name: naming.name,
       ownerId: input.ownerId ?? null,
       namespaceId: input.namespaceId ?? null,
       createdAt,
@@ -252,6 +260,7 @@ export async function updateProject(
   updates: {
     name?: string;
     metadata?: Record<string, unknown>;
+    repositoryProfile?: { readme?: string; tags?: string[] };
     providerConfig?: string | null;
     defaultProvider?: string | null;
     defaultModel?: string | null;
@@ -263,12 +272,26 @@ export async function updateProject(
     } | null;
   }
 ): Promise<Project | null> {
-  const updateData: Partial<NewProject> = {};
+  const updateData: Partial<Omit<NewProject, 'metadataJson'>> & {
+    metadataJson?: string | SQL;
+  } = {};
   if (updates.name !== undefined) {
-    updateData.name = updates.name;
+    const naming = inspectRepositoryName(updates.name);
+    if (!naming.valid) throw new Error(naming.message!);
+    updateData.name = naming.name;
   }
-  if (updates.metadata !== undefined) {
-    updateData.metadataJson = JSON.stringify(updates.metadata);
+  if (updates.metadata !== undefined || updates.repositoryProfile !== undefined) {
+    const metadata = { ...updates.metadata };
+    delete metadata.repository_profile;
+    // Evaluate against the row being updated, under PostgreSQL's row lock. A
+    // read/modify/write in JS would lose concurrent edits to unrelated fields.
+    const current = sql`COALESCE(${projects.metadataJson}::jsonb, '{}'::jsonb)`;
+    const merged = sql`(${current} || ${JSON.stringify(metadata)}::jsonb)`;
+    updateData.metadataJson = updates.repositoryProfile
+      ? sql`jsonb_set(${merged}, '{repository_profile}',
+          COALESCE(${current}->'repository_profile', '{}'::jsonb)
+          || ${JSON.stringify(updates.repositoryProfile)}::jsonb)::text`
+      : sql`${merged}::text`;
   }
   if (updates.providerConfig !== undefined) {
     updateData.providerConfig = updates.providerConfig;
@@ -282,6 +305,8 @@ export async function updateProject(
   if (updates.extractionStyle !== undefined) {
     updateData.extractionStyle = updates.extractionStyle;
   }
+
+  if (Object.keys(updateData).length === 0) return findProjectById(db, projectId);
 
   const [updated] = await db
     .update(projects)

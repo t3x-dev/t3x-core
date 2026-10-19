@@ -9,7 +9,20 @@ import {
 } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { createInferenceRuntime } from '../lib/inference';
+import {
+  createInferenceRuntime,
+  createInferenceRuntimeMiddleware,
+  type InferenceAdmissionPolicy,
+} from '../lib/inference';
+import {
+  createGenerationModelCatalogSnapshot,
+  GENERATION_MODEL_SPECIFICATION_VERSION,
+  GENERATION_PROVIDER_RUNTIME_VERSION,
+  type GenerationModel,
+  type GenerationProviderRuntime,
+} from '../lib/model-runtime-contract';
+import { resolveProviderAndModel } from '../lib/provider-resolver';
+import { createGenerationProviderRuntimeMiddleware } from '../lib/provider-runtime';
 import { createAssistantCapabilities } from '../lib/workspace-assistant/capabilities';
 import {
   assertAssistantContextCurrent,
@@ -19,17 +32,18 @@ import {
   initializeWorkspaceAuthoring,
   publishWorkspaceAuthoringAction,
 } from '../lib/workspace-authoring';
+import { llmRoutes } from '../routes/llm.openapi';
 import { workspaceAssistantRoutes } from '../routes/workspace-assistant.openapi';
 import { setupTestDB } from './setup';
 
 const runtime = vi.hoisted(() => ({ db: null as unknown, generate: vi.fn() }));
 vi.mock('../lib/db', () => ({ getDB: async () => runtime.db }));
 vi.mock('../lib/provider-resolver', () => ({
-  resolveProviderAndModel: async () => ({
+  resolveProviderAndModel: vi.fn(async () => ({
     ok: true,
     model: 'test',
     provider: { id: 'test', generate: runtime.generate },
-  }),
+  })),
 }));
 
 describe('Workspace Assistant streaming boundary', () => {
@@ -95,6 +109,194 @@ describe('Workspace Assistant streaming boundary', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     });
+
+  function managedApp(model: GenerationModel, denied = false) {
+    const resolve = vi.fn<GenerationProviderRuntime['resolve']>(async () => ({ ok: true, model }));
+    const providerRuntime: GenerationProviderRuntime = {
+      contractVersion: GENERATION_PROVIDER_RUNTIME_VERSION,
+      catalog: {
+        snapshot: async () =>
+          createGenerationModelCatalogSnapshot({
+            revision: 'hosted-test',
+            defaultModelId: 'balanced',
+            models: [
+              {
+                id: 'balanced',
+                label: 'Balanced',
+                availability: 'available',
+                capabilities: model.capabilities,
+              },
+            ],
+          }),
+      },
+      resolve,
+    };
+    const authorize = vi.fn<InferenceAdmissionPolicy['authorize']>(async () =>
+      denied
+        ? { outcome: 'denied' as const, code: 'quota', reason: 'Quota exhausted' }
+        : { outcome: 'admitted' as const, admission: { id: 'admission' } }
+    );
+    const settle = vi.fn<InferenceAdmissionPolicy['settle']>(async () => {});
+    const app = new Hono();
+    app.use('*', async (c, next) => {
+      c.set('userId', 'hosted-user');
+      c.set('inferenceIngressChannel', 'web');
+      await next();
+    });
+    app.use('*', createGenerationProviderRuntimeMiddleware(providerRuntime));
+    app.use(
+      '*',
+      createInferenceRuntimeMiddleware(
+        createInferenceRuntime({
+          admissionPolicy: { authorize, settle, release: async () => {} },
+        })
+      )
+    );
+    app.route('/', llmRoutes);
+    app.route('/', workspaceAssistantRoutes);
+    return { app, resolve, authorize, settle };
+  }
+
+  it.each([
+    'generate',
+    'stream',
+    'tools',
+  ])('invokes a discovered managed model through %s without local provider resolution', async (mode) => {
+    const f = await fixture(`managed-${mode}`);
+    vi.mocked(resolveProviderAndModel).mockClear();
+    const evidence = {
+      provider: 'hosted-gateway',
+      model: 'upstream-model',
+      providerRequestId: 'upstream-request',
+      usage: { inputTokens: 7, outputTokens: 3 },
+      finishReason: 'stop' as const,
+    };
+    const generate = vi.fn<GenerationModel['generate']>(async () => ({
+      output: [{ type: 'text' as const, text: 'Managed reply.' }],
+      evidence,
+    }));
+    if (mode === 'tools')
+      generate.mockResolvedValueOnce({
+        output: [{ type: 'tool_call', id: 'read-1', name: 'readStructure', input: { path: '' } }],
+        evidence: { ...evidence, finishReason: 'tool_call' },
+      });
+    const stream = vi.fn<NonNullable<GenerationModel['stream']>>(async () => ({
+      chunks: (async function* () {
+        yield { type: 'text_delta' as const, delta: 'Managed ' };
+        yield { type: 'text_delta' as const, delta: 'reply.' };
+      })(),
+      terminal: Promise.resolve({ kind: 'completed' as const, evidence }),
+    }));
+    const hosted = managedApp({
+      specificationVersion: GENERATION_MODEL_SPECIFICATION_VERSION,
+      provider: 'managed-service',
+      modelId: 'balanced',
+      capabilities:
+        mode === 'tools'
+          ? ['text', 'tool_use']
+          : mode === 'stream'
+            ? ['text', 'streaming']
+            : ['text'],
+      generate,
+      ...(mode === 'stream' ? { stream } : {}),
+    });
+    const catalog = await hosted.app.request('/v1/llm/models').then((r) => r.json());
+    const selected = catalog.data.providers[0];
+    expect(selected.name).toBe('managed');
+    const response = await hosted.app.request(f.url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...f.body, provider: selected.name, model: selected.models[0].id }),
+    });
+    expect(response.status).toBe(200);
+    const events = (await response.text())
+      .split('\n')
+      .filter((line) => line.startsWith('data: '))
+      .map((line) => JSON.parse(line.slice(6)));
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      content: 'Managed reply.',
+      reason: 'completed',
+    });
+    expect(events.at(-1).turnHash).toBeTruthy();
+    expect(resolveProviderAndModel).not.toHaveBeenCalled();
+    expect(hosted.resolve).toHaveBeenCalledWith({
+      requestedModel: 'balanced',
+      requiredCapabilities: ['text'],
+      scope: expect.objectContaining({
+        actor: { kind: 'user', id: 'hosted-user' },
+        ingressChannel: 'web',
+        projectId: f.projectId,
+        conversationId: f.input.conversationId,
+      }),
+    });
+    const calls = mode === 'stream' ? stream.mock.calls : generate.mock.calls;
+    expect(hosted.authorize).toHaveBeenCalledTimes(mode === 'tools' ? 2 : 1);
+    expect(hosted.settle).toHaveBeenCalledTimes(calls.length);
+    for (let index = 0; index < calls.length; index++) {
+      const invocation = calls[index][0];
+      expect(invocation).toMatchObject({
+        generationId: hosted.authorize.mock.calls[index][0].generationId,
+        attemptIndex: index,
+        feature: 'workspace.assistant.chat',
+      });
+      expect(hosted.settle.mock.calls[index][0].terminal.receipt).toMatchObject({
+        resolvedProvider: evidence.provider,
+        resolvedModel: evidence.model,
+        usage: evidence.usage,
+        providerRequestId: evidence.providerRequestId,
+      });
+    }
+    if (mode === 'tools') {
+      expect(generate.mock.calls[1][0].request.messages).toContainEqual({
+        role: 'tool',
+        content: [
+          expect.objectContaining({ type: 'tool_result', id: 'read-1', name: 'readStructure' }),
+        ],
+      });
+      expect(generate.mock.calls[0][0].generationId).not.toBe(
+        generate.mock.calls[1][0].generationId
+      );
+    }
+    const turns = await findTurnsByConversation(setup.db, {
+      conversationId: f.input.conversationId,
+      order: 'asc',
+    });
+    expect(turns.filter((turn) => turn.role === 'assistant')).toHaveLength(1);
+  });
+
+  it('does not fall back to local credentials on managed resolution or admission failure', async () => {
+    const f = await fixture('managed-denied');
+    const generate = vi.fn();
+    const hosted = managedApp(
+      {
+        specificationVersion: GENERATION_MODEL_SPECIFICATION_VERSION,
+        provider: 'hosted',
+        modelId: 'balanced',
+        capabilities: ['text'],
+        generate,
+      },
+      true
+    );
+    vi.mocked(resolveProviderAndModel).mockClear();
+    const request = () =>
+      hosted.app.request(f.url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...f.body, provider: 'managed', model: 'balanced' }),
+      });
+    const denied = await request();
+    expect(await denied.text()).toContain('Quota exhausted');
+    hosted.resolve.mockResolvedValueOnce({
+      ok: false,
+      code: 'unavailable',
+      message: 'Managed model unavailable',
+    });
+    expect((await request()).status).toBe(400);
+    expect(generate).not.toHaveBeenCalled();
+    expect(resolveProviderAndModel).not.toHaveBeenCalled();
+    expect(hosted.settle).not.toHaveBeenCalled();
+  });
   it('streams context and model output, persists exactly one assistant turn before done, and leaves Draft unchanged', async () => {
     const f = await fixture('stream');
     runtime.generate.mockResolvedValue({

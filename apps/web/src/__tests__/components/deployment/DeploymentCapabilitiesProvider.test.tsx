@@ -13,9 +13,12 @@ import {
   useDeploymentCapabilities,
 } from '@/components/deployment/DeploymentCapabilitiesProvider';
 
-const { mockGetDeploymentCapabilities } = vi.hoisted(() => ({
+const { mockGetDeploymentCapabilities, mockAuthCapabilities } = vi.hoisted(() => ({
   mockGetDeploymentCapabilities: vi.fn(),
+  mockAuthCapabilities: vi.fn(),
 }));
+
+vi.mock('@/infrastructure/auth', () => ({ getAuthCapabilities: mockAuthCapabilities }));
 
 vi.mock('@/queries/deploymentCapabilities', () => ({
   fetchDeploymentCapabilities: mockGetDeploymentCapabilities,
@@ -51,10 +54,11 @@ function Probe() {
 
 describe('DeploymentCapabilitiesProvider', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
+    mockAuthCapabilities.mockResolvedValue({ operator: true });
   });
 
-  it('uses a validated initial self-hosted contract without refetching', () => {
+  it('waits for operator authority even with initial deployment capabilities', async () => {
     render(
       <DeploymentCapabilitiesProvider initialCapabilities={SELF_HOSTED_DEPLOYMENT_CAPABILITIES}>
         <Probe />
@@ -63,7 +67,8 @@ describe('DeploymentCapabilitiesProvider', () => {
 
     expect(screen.getByTestId('status')).toHaveTextContent('ready');
     expect(screen.getByTestId('mode')).toHaveTextContent('self_hosted');
-    expect(screen.getByTestId('provider-admin')).toHaveTextContent('enabled');
+    expect(screen.getByTestId('provider-admin')).toHaveTextContent('disabled');
+    await waitFor(() => expect(screen.getByTestId('provider-admin')).toHaveTextContent('enabled'));
     expect(mockGetDeploymentCapabilities).not.toHaveBeenCalled();
   });
 
@@ -97,4 +102,19 @@ describe('DeploymentCapabilitiesProvider', () => {
     );
     expect(screen.getByTestId('provider-admin')).toHaveTextContent('disabled');
   });
+});
+
+it.each([
+  false,
+  'error',
+])('fails closed for denied or failed operator discovery: %s', async (operator) => {
+  if (operator === 'error') mockAuthCapabilities.mockRejectedValue(new Error('Offline'));
+  else mockAuthCapabilities.mockResolvedValue({ operator });
+  render(
+    <DeploymentCapabilitiesProvider initialCapabilities={SELF_HOSTED_DEPLOYMENT_CAPABILITIES}>
+      <Probe />
+    </DeploymentCapabilitiesProvider>
+  );
+  await waitFor(() => expect(mockAuthCapabilities).toHaveBeenCalled());
+  expect(screen.getByTestId('provider-admin')).toHaveTextContent('disabled');
 });

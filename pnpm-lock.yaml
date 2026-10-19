@@ -1007,6 +1007,9 @@ importers:
 
   packages/storage:
     dependencies:
+      '@t3x-dev/application':
+        specifier: workspace:*
+        version: link:../application
       '@t3x-dev/core':
         specifier: workspace:*
         version: link:../core

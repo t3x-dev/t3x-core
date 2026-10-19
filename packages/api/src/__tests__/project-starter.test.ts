@@ -89,13 +89,13 @@ describe('private no-AI PRD starter', () => {
     expect(graph).not.toBeNull();
     expect(graph!.proposal.actor).toEqual({ kind: 'human', id: `user:${owner}` });
     expect(decodeRepositorySemanticContentState(graph!.state)).toEqual(
-      createPrdStarterContent('My PRD')
+      createPrdStarterContent('My-PRD')
     );
     expect(graph!.commit.parents).toEqual([]);
   });
 
   it('preserves empty project creation when no starter is requested', async () => {
-    const response = await create(appFor(), { starter: undefined });
+    const response = await create(appFor(), { name: 'Empty-project', starter: undefined });
     expect(response.status).toBe(201);
     const { data } = await response.json();
     expect(
@@ -124,7 +124,7 @@ describe('private no-AI PRD starter', () => {
       .spyOn(writer, 'commitRepositoryYOpsState')
       .mockRejectedValueOnce(new Error('storage unavailable'));
     try {
-      expect((await create(appFor())).status).toBe(500);
+      expect((await create(appFor(), { name: 'Rollback-project' })).status).toBe(500);
       expect(await mockDB.select().from(projects)).toHaveLength(before.length);
     } finally {
       fail.mockRestore();

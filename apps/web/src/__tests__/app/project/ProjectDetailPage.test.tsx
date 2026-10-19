@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { COMMIT_CREATED_EVENT } from '@/hooks/commits/commitEvents';
 
@@ -181,6 +181,7 @@ beforeEach(() => {
   vi.mocked(fetchLatestYSchemaValidation).mockResolvedValue(null);
   vi.mocked(runYSchemaValidation).mockReset();
   useProjectStore.setState({
+    details: {},
     projects: [{ id: 'proj_test', name: 'Test Project' } as never],
     initialized: true,
     loading: false,
@@ -198,7 +199,7 @@ beforeEach(() => {
 
 afterEach(() => {
   useChatStore.setState({ activeProjectId: null, activeConversationId: null });
-  useProjectStore.setState({ projects: [], initialized: false, loading: false });
+  useProjectStore.setState({ details: {}, projects: [], initialized: false, loading: false });
   useCanvasStore.setState({
     nodes: [],
     edges: [],
@@ -235,6 +236,24 @@ describe('ProjectDetailPage — project-first shell states', () => {
       'tab=schemas&branch=feature%2Frelease&workspace=workspace_7'
     );
     pathnameValue = '/orbit-labs/test-project';
+    useProjectStore.setState({
+      details: {},
+      projects: [
+        {
+          id: 'proj_test',
+          name: 'Test Project',
+          canonical_path: '/orbit-labs/test-project',
+          namespace: 'orbit-labs',
+        } as never,
+      ],
+    });
+    vi.mocked(fetchProject).mockResolvedValue({
+      project_id: 'proj_test',
+      name: 'Test Project',
+      canonical_path: '/orbit-labs/test-project',
+      namespace: 'orbit-labs',
+      created_at: '2026-01-01T00:00:00Z',
+    } as never);
     routeParamsValue = {};
 
     render(
@@ -255,21 +274,25 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     const view = render(<ProjectDetailPage />);
 
-    expect(replaceMock).toHaveBeenCalledWith(
-      '/project/proj_test/settings?returnTo=%2Fproject%2Fproj_test'
-    );
+    expect(replaceMock).toHaveBeenCalledWith('/project/proj_test/settings');
     expect(view.container).toBeEmptyDOMElement();
   });
 
-  it('renders project detail from an owner/repo route override', () => {
+  it('renders project detail from an owner/repo route override', async () => {
     routeParamsValue = { owner: 't3x-dev', repo: 'test-project' };
     useChatStore.setState({ activeProjectId: null, activeConversationId: null });
 
     render(<ProjectDetailPageContent projectIdOverride="proj_test" />);
 
-    expect(screen.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
+    const projectNavigation = screen.getByRole('navigation', { name: 'Project views' });
+    const projectHeader = within(projectNavigation.closest('header')!);
+    expect(projectHeader.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
     expect(screen.queryByText('/t3x-dev/test-project')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
+    expect(projectHeader.getByRole('link', { name: 'State' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
@@ -505,16 +528,20 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     renderProjectContent();
 
+    const projectNavigation = screen.getByRole('navigation', { name: 'Project views' });
+    const projectBanner = projectNavigation.closest('header')!;
+    const projectHeader = within(projectBanner);
     expect(screen.getByRole('link', { name: 'Back to projects' })).toHaveAttribute('href', '/');
-    expect(screen.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
-    expect(screen.getByRole('banner')).toHaveTextContent('Project');
+    expect(projectHeader.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
+    expect(projectBanner).toHaveRole('banner');
     expect(screen.queryByText('/t3x-dev/test-project')).not.toBeInTheDocument();
     expect(screen.queryByText('repo')).not.toBeInTheDocument();
-    expect(screen.getByText('Private')).toBeInTheDocument();
+    expect(projectHeader.getByText('Private')).toBeInTheDocument();
     expect(screen.queryByText('Validation pending')).not.toBeInTheDocument();
-    const projectNavigation = screen.getByRole('navigation', { name: 'Project views' });
-    expect(projectNavigation.closest('header')).toBe(screen.getByRole('banner'));
-    expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
+    expect(within(projectNavigation).getByRole('link', { name: 'State' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
@@ -529,6 +556,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
   it('keeps committed State visible when the project has sources but no commit', async () => {
     useProjectStore.setState({
+      details: {},
       projects: [{ id: 'proj_test', name: 'Test Project', drafts: 1 } as never],
       initialized: true,
       loading: false,

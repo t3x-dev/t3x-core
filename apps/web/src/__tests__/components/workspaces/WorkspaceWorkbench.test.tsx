@@ -68,6 +68,15 @@ vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
   }),
 }));
 
+vi.mock('@/hooks/schemas/useProjectYSchemaVersions', () => ({
+  useProjectYSchemaVersions: () => ({
+    error: undefined,
+    pending: false,
+    refresh: vi.fn().mockResolvedValue([]),
+    versions: [],
+  }),
+}));
+
 vi.mock('@/hooks/workspaces/useWorkspaceFlow', () => ({
   useWorkspaceFlow: () => ({
     refreshWorkspaces: mocks.refreshWorkspaces,

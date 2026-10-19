@@ -29,7 +29,6 @@ import {
 } from '@/hooks/commits/commitEvents';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
-import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { fetchProject } from '@/queries/project';
 import { fetchLatestYSchemaValidation, runYSchemaValidation } from '@/queries/yschemaValidation';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -62,9 +61,6 @@ function isNotFoundError(error: Error | null): boolean {
 function withCurrentQuery(path: string, searchParams: { toString: () => string }) {
   const params = new URLSearchParams(searchParams.toString());
   params.delete('tab');
-  params.delete('zoom');
-  params.delete('x');
-  params.delete('y');
   const query = params.toString();
   return query ? `${path}?${query}` : path;
 }
@@ -90,12 +86,7 @@ function getProjectCanonicalPath(
 }
 
 function hasProjectUiQuery(searchParams: { has: (key: string) => boolean }) {
-  return (
-    searchParams.has('tab') ||
-    searchParams.has('zoom') ||
-    searchParams.has('x') ||
-    searchParams.has('y')
-  );
+  return searchParams.has('tab');
 }
 
 export function ProjectDetailPageContent({
@@ -133,18 +124,16 @@ export function ProjectDetailPageContent({
 
   useEffect(() => {
     if (!isSettingsRedirect) return;
-    const returnTo = pathname || getProjectIdRepoPath(projectId);
+    const query = new URLSearchParams(searchParams.toString());
+    query.delete('tab');
     router.replace(
-      `/project/${encodeURIComponent(projectId)}/settings?returnTo=${encodeURIComponent(returnTo)}`
+      `/project/${encodeURIComponent(projectId)}/settings${query.size ? `?${query}` : ''}${window.location.hash}`
     );
-  }, [isSettingsRedirect, pathname, projectId, router]);
+  }, [isSettingsRedirect, projectId, router, searchParams]);
 
-  const projectFromStore = useProjectStore((state) =>
-    state.projects.find((item) => item.id === projectId)
+  const projectFromStore = useProjectStore(
+    (state) => state.details?.[projectId] ?? state.projects.find((item) => item.id === projectId)
   );
-  const projectsInitialized = useProjectStore((state) => state.initialized);
-  const projectsLoading = useProjectStore((state) => state.loading);
-  const projectScope = useProjectStore((state) => state.projectScope);
   const [fetchedProject, setFetchedProject] = useState<ProjectSummary | null>(null);
   const [projectLookupLoading, setProjectLookupLoading] = useState(false);
   const [projectLookupError, setProjectLookupError] = useState<Error | null>(null);
@@ -162,7 +151,6 @@ export function ProjectDetailPageContent({
     () => (projectBase ? { ...projectBase, yschemaValidation } : null),
     [projectBase, yschemaValidation]
   );
-  const { list: fetchProjects } = useProjectCrud();
   const { fetch: fetchPins } = usePinsCrud();
   const { load: loadCanvas } = useCanvasNodeActions();
   useCanvasDeletionWiring(isCanvasActive);
@@ -215,22 +203,8 @@ export function ProjectDetailPageContent({
     // Viewport state is intentionally local to keep owner/repo URLs clean.
   }, []);
 
-  // Fetch projects list if not initialized (handles direct URL access)
   useEffect(() => {
-    if (!projectsInitialized && !projectsLoading) {
-      void fetchProjects();
-    }
-  }, [projectsInitialized, projectsLoading, fetchProjects]);
-
-  useEffect(() => {
-    if (!projectsInitialized || projectsLoading || !projectId) return;
-    if (projectFromStore) {
-      setFetchedProject(null);
-      setProjectLookupError(null);
-      setProjectLookupLoading(false);
-      return;
-    }
-
+    if (!projectId) return;
     let cancelled = false;
     setProjectLookupLoading(true);
     setProjectLookupError(null);
@@ -238,7 +212,9 @@ export function ProjectDetailPageContent({
     fetchProject(projectId)
       .then((detail) => {
         if (cancelled) return;
-        setFetchedProject(apiProjectToSummary(detail));
+        const summary = apiProjectToSummary(detail);
+        setFetchedProject(summary);
+        useProjectStore.getState().cacheProject(summary);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -252,7 +228,7 @@ export function ProjectDetailPageContent({
     return () => {
       cancelled = true;
     };
-  }, [projectId, projectFromStore, projectsInitialized, projectsLoading]);
+  }, [projectId]);
 
   useEffect(() => {
     if (isCanvasSurface || !projectBase?.id) {
@@ -372,18 +348,13 @@ export function ProjectDetailPageContent({
 
   // Show loading while projects list is still loading, or while confirming a
   // direct/new project URL that is not present in the list cache yet.
-  const projectLookupPending =
-    projectsInitialized &&
-    !projectsLoading &&
-    !projectFromStore &&
-    !fetchedProject &&
-    !projectLookupError;
+  const projectLookupPending = !projectFromStore && !fetchedProject && !projectLookupError;
 
   if (isSettingsRedirect) {
     return null;
   }
 
-  if (!projectsInitialized || projectsLoading || projectLookupLoading || projectLookupPending) {
+  if ((projectLookupLoading && !project) || projectLookupPending) {
     return (
       <div className="flex h-full flex-col">
         <LoadingSpinner message="Loading project..." />
@@ -485,6 +456,8 @@ export function ProjectDetailPageContent({
         projectDescription={project.description}
         projectOwner={project.owner}
         projectVisibility={project.visibility}
+        repositoryProfile={project.repositoryProfile}
+        canEditRepository={project.canEdit}
         validation={project.yschemaValidation}
         validationError={yschemaValidationError}
         validationRunning={yschemaValidationRunning}
@@ -528,9 +501,7 @@ export function ProjectDetailPageContent({
         activeTab={activeTab}
         branch={searchParams.get('branch')}
         immersive={isSchemaStudio || isSchemaRelease}
-        ownerSlug={
-          ownerSlugOverride ?? (projectFromStore ? (projectScope ?? undefined) : undefined)
-        }
+        ownerSlug={project.namespace ?? ownerSlugOverride}
         project={project}
         projectIdNavigation={!!routeProjectId}
         pullRequestNumber={Number(searchParams.get('pr')) || undefined}

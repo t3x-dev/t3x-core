@@ -22,6 +22,7 @@ import {
   createPostgresCollaborationLifecycleUnitOfWork,
   findNamespaceById,
   findNamespaceMembershipForPrincipal,
+  repositoryPathError,
   type StoredCollaborationPrincipalDto,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
@@ -88,6 +89,8 @@ function mutation(
 }
 
 function commandError(c: Parameters<typeof errorResponse>[0], error: unknown) {
+  const pathError = repositoryPathError(error);
+  if (pathError) return errorResponse(c, pathError.code, pathError.message);
   if (error instanceof CollaborationCommandRouteError) {
     return errorResponse(c, error.code, error.message);
   }

@@ -1,3 +1,4 @@
+import type { RepositoryAddress, RepositoryNameCheck } from '@t3x-dev/api-client';
 /**
  * Projects CRUD API
  */
@@ -6,6 +7,7 @@ import type {
   ChangeProjectVisibilityInput,
   ChangeProjectVisibilityResult,
   CreateProjectInput,
+  RepositoryProfilePatch,
 } from '@t3x-dev/api-client';
 import { API_V1, buildQueryString, fetchWithTimeout, handleResponse } from './core';
 import { getSharedApiClient } from './sharedApiClient';
@@ -30,12 +32,13 @@ export async function createProject(
   name: string,
   metadata?: Record<string, unknown>,
   namespace?: string,
-  starter?: CreateProjectInput['starter']
+  starter?: CreateProjectInput['starter'],
+  profile?: Pick<CreateProjectInput, 'initialize_readme' | 'tags'>
 ): Promise<Project> {
   const res = await fetchWithTimeout(`${API_V1}/projects`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, metadata, namespace, starter }),
+    body: JSON.stringify({ name, metadata, namespace, starter, ...profile }),
   });
   return handleResponse<Project>(res);
 }
@@ -60,6 +63,7 @@ export async function deleteProject(projectId: string): Promise<DeleteProjectRes
 }
 
 export interface UpdateProjectPayload {
+  repository_profile?: RepositoryProfilePatch;
   name?: string;
   metadata?: Record<string, unknown>;
   default_provider?: string | null;
@@ -273,4 +277,15 @@ export async function backfillMerkle(projectId: string): Promise<BackfillResult>
     { method: 'POST' }
   );
   return handleResponse<BackfillResult>(res);
+}
+
+export function resolveRepository(owner: string, name: string): Promise<RepositoryAddress> {
+  return getSharedApiClient().resolveRepository(owner, name);
+}
+export function checkRepositoryName(
+  namespace: string,
+  name: string,
+  projectId?: string
+): Promise<RepositoryNameCheck> {
+  return getSharedApiClient().checkRepositoryName(namespace, name, projectId);
 }

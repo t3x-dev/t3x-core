@@ -154,6 +154,8 @@ export function createProposalGenerationModel(resolved: {
   provider: Partial<LLMProvider>;
   providerId: string;
   model: string;
+  /** A managed invocation must not reuse one admitted identity for a repair attempt. */
+  retry?: false;
 }): ProposalGenerationModel {
   const provider = resolved.provider;
   if (!('generateStructured' in provider) || typeof provider.generateStructured !== 'function') {
@@ -294,7 +296,11 @@ export function createProposalGenerationModel(resolved: {
           if (!(error instanceof Error)) throw error;
           const failure = mapProviderErrorToExtractionFailure(resolved.providerId, error);
           // Reuse extraction's bounded, error-specific repair, not publication retries.
-          if (failure.retry.strategy !== 'targeted_reask' || attempt >= failure.retry.maxAttempts) {
+          if (
+            resolved.retry === false ||
+            failure.retry.strategy !== 'targeted_reask' ||
+            attempt >= failure.retry.maxAttempts
+          ) {
             throw error;
           }
           prompt = buildTargetedReaskPrompt(basePrompt, failure, {}, 'ProposalGenerationDraft');

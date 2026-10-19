@@ -334,11 +334,16 @@ export function useWorkspaceComposeReviewController({
       }
       setBusyAction('source:file');
       setLocalError(null);
+      let uploaded = false;
       try {
-        await addMaterial(await materialUpload.upload(candidate.projectId, file));
+        const material = await materialUpload.upload(candidate.projectId, file);
+        uploaded = true;
+        await addMaterial(material);
         return true;
       } catch (error) {
-        setLocalError(formatUserFacingError(error, 'Material upload failed.'));
+        setLocalError(
+          `${uploaded ? 'Material saved, but Workspace inclusion failed. ' : ''}${formatUserFacingError(error, 'Material upload failed.')}`
+        );
         return false;
       } finally {
         setBusyAction(null);

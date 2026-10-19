@@ -677,7 +677,8 @@ describe('WorkspaceComposeReviewSurface composer', () => {
 
     expect(screen.queryByRole('button', { name: 'Send message' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Generate changes/ })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Upload source material')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Upload source material')).toBeInTheDocument();
+    expect(screen.getByText('Add source')).toBeInTheDocument();
     expect(bootstrapMocks.value.start).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: /Enable Draft activity/ }));
     expect(bootstrapMocks.value.start).toHaveBeenCalledOnce();

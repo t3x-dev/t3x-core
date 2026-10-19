@@ -1,4 +1,5 @@
 'use client';
+import { useRepositoryRouteParams as useParams } from '@/hooks/projects/repositoryRouteContext';
 
 /**
  * Merge Workspace Page
@@ -7,7 +8,7 @@
  * with Git-style diff visualization and source tracing.
  */
 
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo } from 'react';
 import { MergeWorkspace } from '@/components/merge/MergeWorkspace';
 import { getProjectIdCanvasCommitPath, getProjectIdCanvasPath } from '@/domain/project/repoPath';

@@ -2,7 +2,7 @@ import {
   type DeploymentCapabilities,
   UNAVAILABLE_DEPLOYMENT_CAPABILITIES,
 } from '@t3x-dev/api-client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { fetchDeploymentCapabilities } from '@/queries/deploymentCapabilities';
 
 export type DeploymentCapabilitiesStatus = 'loading' | 'ready' | 'error';
@@ -16,8 +16,10 @@ export function useDeploymentCapabilitiesState(initialCapabilities?: DeploymentC
     status: initialCapabilities ? 'ready' : 'loading',
   }));
 
+  const [revision, setRevision] = useState(0);
+  const refresh = useCallback(() => setRevision((value) => value + 1), []);
   useEffect(() => {
-    if (initialCapabilities) return;
+    if (initialCapabilities && revision === 0) return;
 
     let cancelled = false;
     void fetchDeploymentCapabilities()
@@ -33,7 +35,7 @@ export function useDeploymentCapabilitiesState(initialCapabilities?: DeploymentC
     return () => {
       cancelled = true;
     };
-  }, [initialCapabilities]);
+  }, [initialCapabilities, revision]);
 
-  return state;
+  return { ...state, refresh };
 }

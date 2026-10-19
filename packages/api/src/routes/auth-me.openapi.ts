@@ -20,11 +20,35 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { createError, zodErrorHook } from '../lib/errors';
+import { hasOperatorAccess } from '../lib/operator-access';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import { ExtractionStyleSchema } from '../schemas/contracts';
 
 export const authMeRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
+});
+
+// Request identity is deliberately separate from publicly cacheable deployment capabilities.
+const capabilitiesRoute = createRoute({
+  method: 'get',
+  path: '/v1/auth/me/capabilities',
+  tags: ['Auth'],
+  summary: 'Get current request administration permissions',
+  responses: {
+    200: {
+      description: 'Current identity permissions',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(z.object({ operator: z.boolean() })),
+        },
+      },
+    },
+  },
+});
+
+authMeRoutes.openapi(capabilitiesRoute, (c) => {
+  c.header('Cache-Control', 'private, no-store');
+  return c.json({ success: true as const, data: { operator: hasOperatorAccess(c) } });
 });
 
 // ============================================================

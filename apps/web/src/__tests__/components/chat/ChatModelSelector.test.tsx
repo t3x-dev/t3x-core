@@ -8,9 +8,14 @@ import { useChatSessionStore } from '@/store/chatSessionStore';
 import { useSettingsModalStore } from '@/store/settingsModalStore';
 
 const useAvailableModelsMock = vi.fn();
+const useDeploymentCapabilitiesMock = vi.fn();
 
 vi.mock('@/hooks/shared/useAvailableModels', () => ({
   useAvailableModels: () => useAvailableModelsMock(),
+}));
+
+vi.mock('@/components/deployment/DeploymentCapabilitiesProvider', () => ({
+  useDeploymentCapabilities: () => useDeploymentCapabilitiesMock(),
 }));
 
 describe('ChatModelSelector', () => {
@@ -21,20 +26,32 @@ describe('ChatModelSelector', () => {
       useChatSessionStore.setState(useChatSessionStore.getInitialState());
     });
     useAvailableModelsMock.mockReturnValue({ providers: [] });
+    useDeploymentCapabilitiesMock.mockReturnValue({ canAdministerProviderCredentials: false });
   });
 
-  it('opens provider settings in the modal when no models are configured', async () => {
+  it('lets operators open model settings when no models are available', async () => {
+    useDeploymentCapabilitiesMock.mockReturnValue({ canAdministerProviderCredentials: true });
     render(<ChatModelSelector conversationId={null} selectedModel="" onModelChange={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /No models configured/i }));
+    fireEvent.click(screen.getByRole('button', { name: /No models available/i }));
     fireEvent.click(await screen.findByRole('button', { name: 'Open provider settings' }));
 
     expect(useSettingsModalStore.getState().isOpen).toBe(true);
     expect(useSettingsModalStore.getState().activeTab).toBe('providers');
   });
 
+  it('hides provider administration from non-operators', () => {
+    render(<ChatModelSelector conversationId={null} selectedModel="" onModelChange={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /No models available/i }));
+
+    expect(screen.queryByRole('button', { name: 'Open provider settings' })).toBeNull();
+    expect(useSettingsModalStore.getState().isOpen).toBe(false);
+  });
+
   it('uses the Cursor-style model pane with real configured options', async () => {
     const onModelChange = vi.fn();
+    useDeploymentCapabilitiesMock.mockReturnValue({ canAdministerProviderCredentials: true });
     useAvailableModelsMock.mockReturnValue({
       defaultModel: 'gpt-5.4',
       defaultProvider: 'openai',

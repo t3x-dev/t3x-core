@@ -390,14 +390,14 @@ describe('T3xClient', () => {
       );
     });
 
-    it('updateProject sends PATCH', async () => {
+    it('updateProject sends PUT', async () => {
       const fn = mockFetch(successResponse({ project_id: 'proj_1', name: 'Updated' }));
       const client = createTestClient(fn);
 
       await client.updateProject('proj_1', { name: 'Updated' });
       expect(fn).toHaveBeenCalledWith(
         expect.stringContaining('/v1/projects/proj_1'),
-        expect.objectContaining({ method: 'PATCH' })
+        expect.objectContaining({ method: 'PUT' })
       );
     });
 

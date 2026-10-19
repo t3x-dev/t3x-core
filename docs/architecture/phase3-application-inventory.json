@@ -29,9 +29,9 @@
     }
   ],
   "apiRouteAuthorization": {
-    "routeFiles": 75,
-    "filesUsingGetDB": 65,
-    "filesUsingAssertProjectAccess": 51,
+    "routeFiles": 76,
+    "filesUsingGetDB": 67,
+    "filesUsingAssertProjectAccess": 52,
     "filesUsingRequireTransitionAuthority": 4,
     "getDBWithoutProjectAccess": [
       "packages/api/src/routes/auth-local.openapi.ts",
@@ -40,6 +40,7 @@
       "packages/api/src/routes/deploy-agents.openapi.ts",
       "packages/api/src/routes/diff.openapi.ts",
       "packages/api/src/routes/health.openapi.ts",
+      "packages/api/src/routes/llm.openapi.ts",
       "packages/api/src/routes/namespaces.openapi.ts",
       "packages/api/src/routes/notifications.openapi.ts",
       "packages/api/src/routes/providers.openapi.ts",

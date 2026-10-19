@@ -20,6 +20,7 @@ COPY packages/yops/package.json ./packages/yops/
 COPY packages/yschema/package.json ./packages/yschema/
 COPY packages/transition/package.json ./packages/transition/
 COPY packages/core/package.json ./packages/core/
+COPY packages/application/package.json ./packages/application/
 COPY packages/storage/package.json ./packages/storage/
 COPY packages/api-client/package.json ./packages/api-client/
 COPY apps/web/package.json ./apps/web/
@@ -32,6 +33,7 @@ COPY packages/yops/ ./packages/yops/
 COPY packages/yschema/ ./packages/yschema/
 COPY packages/transition/ ./packages/transition/
 COPY packages/core/ ./packages/core/
+COPY packages/application/ ./packages/application/
 COPY packages/storage/ ./packages/storage/
 COPY packages/api-client/ ./packages/api-client/
 COPY apps/web/ ./apps/web/
@@ -41,6 +43,7 @@ RUN pnpm --filter @t3x-dev/yops build && \
     pnpm --filter @t3x-dev/yschema build && \
     pnpm --filter @t3x-dev/transition build && \
     pnpm --filter @t3x-dev/core build && \
+    pnpm --filter @t3x-dev/application build && \
     pnpm --filter @t3x-dev/storage build && \
     pnpm --filter @t3x-dev/api-client build
 

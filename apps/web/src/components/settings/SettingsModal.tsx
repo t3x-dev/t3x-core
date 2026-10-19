@@ -2,18 +2,24 @@
 
 import { Blocks, Monitor, Settings, User } from 'lucide-react';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { useDeploymentCapabilities } from '@/components/deployment/DeploymentCapabilitiesProvider';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { useSettingsModalStore } from '@/store/settingsModalStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { cn } from '@/utils/cn';
+import { buildReturnTo, withReturnTo } from '@/utils/navigationReturn';
 
 export function SettingsModal() {
+  const [returnTo, setReturnTo] = useState('/');
   const isOpen = useSettingsModalStore((state) => state.isOpen);
   const activeTab = useSettingsModalStore((state) => state.activeTab);
   const closeSettingsModal = useSettingsModalStore((state) => state.closeSettingsModal);
   const density = useSettingsStore((state) => state.density);
   const { canAdministerProviderCredentials } = useDeploymentCapabilities();
+  useEffect(() => {
+    if (isOpen) setReturnTo(buildReturnTo(window.location.pathname, window.location.search));
+  }, [isOpen]);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && closeSettingsModal()}>
@@ -53,7 +59,7 @@ export function SettingsModal() {
                 icon={Blocks}
                 title="Provider readiness"
                 detail="Check model, extraction, and generation credentials."
-                href="/settings/providers"
+                href={withReturnTo('/settings/provider-credentials', returnTo)}
                 isActive={activeTab === 'providers'}
                 onNavigate={closeSettingsModal}
               />

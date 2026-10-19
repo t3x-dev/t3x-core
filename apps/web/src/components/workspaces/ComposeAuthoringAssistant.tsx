@@ -22,6 +22,7 @@ import {
   fileToAttachedImage,
 } from '@/components/generation/attachedImageFile';
 import { GenerationModelSelector } from '@/components/generation/GenerationModelSelector';
+import { InferenceAvailabilityNotice } from '@/components/generation/InferenceAvailabilityNotice';
 import { unsupportedChatMaterialSourceMessage } from '@/components/import/documentAcceptTypes';
 import { providerSupports } from '@/domain/providerCapabilities';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
@@ -358,6 +359,14 @@ export function ComposeAuthoringAssistant({
         >
           {publicationError ?? localError ?? chat.error ?? chat.warning}
         </p>
+      ) : null}
+      {!model.isSelectionReady ? (
+        <InferenceAvailabilityNotice
+          loading={model.loading}
+          ready={model.isSelectionReady}
+          error={model.availabilityError}
+          onRetry={model.refresh}
+        />
       ) : null}
       <fieldset className={styles.discussionComposer} aria-label="Message composer">
         {contextLabel ? (

@@ -9,6 +9,7 @@ import {
   insertProject,
   insertStatePresentation,
   listProjectYSchemaVersionHistory,
+  updateProject,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
 import {
@@ -165,6 +166,18 @@ it('pins a verified introduction in the immutable release hash and catalog refer
   });
   const again = await app.request(`/v1/projects/${projectId}/yschema/catalog?publisher=release`);
   expect((await again.json()).data.items[0].presentationRef.commitDigest).toBe(commitDigest);
+});
+it('keeps release hashes and exact presentation references when repository information changes', async () => {
+  const before = await listProjectYSchemaVersionHistory(db, { project_id: projectId });
+  await updateProject(db, projectId, {
+    repositoryProfile: { readme: '# Current repository', tags: ['current'] },
+  });
+  expect(await listProjectYSchemaVersionHistory(db, { project_id: projectId })).toEqual(before);
+  const catalog = await app.request(`/v1/projects/${projectId}/yschema/catalog?publisher=release`);
+  expect((await catalog.json()).data.items[0].presentationRef).toEqual({
+    projectId,
+    ...reference(),
+  });
 });
 it('rejects foreign commits, mismatched digests and unbundled covers before publishing', async () => {
   const before = await listProjectYSchemaVersionHistory(db, { project_id: projectId });

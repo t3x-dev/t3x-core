@@ -1,12 +1,15 @@
 import type { ReactNode } from 'react';
 import { getProjectTabSegment, type ProjectTabId } from '@/components/project/projectTabModel';
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
-import { getProjectIdRepoPath, getProjectRepoPath } from '@/domain/project/repoPath';
+import { getProjectRepoPath } from '@/domain/project/repoPath';
 import type { YSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 
 export interface ProjectShellProject {
   id?: string;
   name: string;
+  namespace?: string | null;
+  canonical_path?: string | null;
+  path_status?: 'ready' | 'pending_migration';
   description?: string;
   status?: 'draft' | 'active' | 'paused';
   drafts?: number;
@@ -35,7 +38,6 @@ export function ProjectShell({
   children,
   immersive = false,
   project,
-  projectIdNavigation = false,
   ownerSlug,
   pullRequestNumber,
   workspaceId,
@@ -46,10 +48,8 @@ export function ProjectShell({
       : project.visibility === 'unlisted'
         ? 'Unlisted'
         : 'Private';
-  const repoPath =
-    project.id && (projectIdNavigation || !ownerSlug)
-      ? getProjectIdRepoPath(project.id)
-      : getProjectRepoPath(project, ownerSlug);
+  const repoPath = getProjectRepoPath(project);
+  const idNavigation = !project.canonical_path;
   const returnParams = new URLSearchParams();
   if (activeTab !== 'state' && activeTab !== 'settings') {
     returnParams.set('tab', getProjectTabSegment(activeTab));
@@ -63,11 +63,10 @@ export function ProjectShell({
   }
   const returnQuery = returnParams.toString();
   const returnTo = returnQuery ? `${repoPath}?${returnQuery}` : repoPath;
-  const settingsHref = project.id
-    ? `/project/${encodeURIComponent(project.id)}/settings?returnTo=${encodeURIComponent(returnTo)}`
-    : '/settings';
-  const ownerLabel = ownerSlug || 'Projects';
-  const newRepositoryHref = ownerSlug ? `/${encodeURIComponent(ownerSlug)}/new` : '/';
+  const settingsHref = `${repoPath}/settings?returnTo=${encodeURIComponent(returnTo)}`;
+  const actualOwner = project.namespace ?? ownerSlug;
+  const ownerLabel = actualOwner || 'Projects';
+  const newRepositoryHref = actualOwner ? `/${encodeURIComponent(actualOwner)}/new` : '/';
   return (
     <div className="flex h-dvh min-h-[680px] flex-col overflow-hidden bg-[var(--surface-app)] text-[var(--text-primary)] [--text-base:14px] [--text-lg:16px] [--text-sm:13px] [--text-xs:12px]">
       <DiscoverHeader
@@ -77,11 +76,17 @@ export function ProjectShell({
         newProjectHref={newRepositoryHref}
         repoPath={repoPath}
         settingsHref={settingsHref}
-        projectIdNavigation={projectIdNavigation}
+        projectIdNavigation={idNavigation}
         branch={branch}
         workspaceId={workspaceId}
         visibility={visibilityLabel}
       />
+      {project.path_status === 'pending_migration' && (
+        <output className="px-4 py-2 text-sm text-[var(--status-warning)]">
+          This repository needs a name or namespace migration. Its Project ID address remains
+          available.
+        </output>
+      )}
       <main
         className={
           immersive || activeTab === 'state' || activeTab === 'workspaces'

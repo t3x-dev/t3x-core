@@ -37,7 +37,8 @@ describe('seedDemoWorkspace', () => {
     const result = await seedDemoWorkspace(db, { ownerId: null });
 
     expect(result.status).toBe('created');
-    expect(result.project?.name).toBe(DEMO_WORKSPACE_FIXTURE.project.name);
+    expect(result.project?.name).toBe('Prompt-Review');
+    expect(DEMO_WORKSPACE_FIXTURE.project.name).toBe('Prompt Review');
 
     const projects = await findProjects(db, {});
     expect(projects).toHaveLength(1);

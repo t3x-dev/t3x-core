@@ -26,12 +26,9 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
-import {
-  DEFAULT_OWNER_SLUG,
-  getProjectIdRepoPath,
-  getProjectRepoPath,
-} from '@/domain/project/repoPath';
+import { DEFAULT_OWNER_SLUG, getProjectRepoPath } from '@/domain/project/repoPath';
 import { useProjects } from '@/hooks/projects/useProjects';
+import { useRepositoryName } from '@/hooks/projects/useRepositoryName';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 import { cn } from '@/utils/cn';
 import {
@@ -40,6 +37,7 @@ import {
   recordRecentProjectOpen,
 } from '@/utils/recentProjects';
 import styles from './ProjectDirectoryPage.module.css';
+import { RepositoryNameFeedback } from './RepositoryNameFeedback';
 
 const repoTones = [
   'bg-[var(--status-info)]',
@@ -167,7 +165,7 @@ function PinnedProjectCard({
       <div className="flex min-w-0 items-start gap-3">
         <RepoMark name={project.name} />
         <Link
-          href={getProjectIdRepoPath(project.id)}
+          href={getProjectRepoPath(project)}
           onClick={() => recordRecentProjectOpen(project.id)}
           className={cn('min-w-0 flex-1 rounded-[var(--radius-md)] pt-0.5', focusRing)}
         >
@@ -208,7 +206,7 @@ function ProjectRow({
     <article className="group flex min-w-0 items-center gap-3 px-4 py-3 transition-colors hover:bg-[var(--hover-bg)]">
       <RepoMark name={project.name} size="row" />
       <Link
-        href={getProjectIdRepoPath(project.id)}
+        href={getProjectRepoPath(project)}
         onClick={() => recordRecentProjectOpen(project.id)}
         className={cn('min-w-0 flex-1 rounded-[var(--radius-md)]', focusRing)}
       >
@@ -415,6 +413,7 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
   const [renameValue, setRenameValue] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
+  const nameCheck = useRepositoryName(renameTarget?.namespace, renameValue, renameTarget?.id);
   const [deleteTarget, setDeleteTarget] = useState<ProjectSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [recentProjectIds] = useState(() => readRecentProjectIds());
@@ -449,11 +448,8 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
     async (event?: FormEvent<HTMLFormElement>) => {
       event?.preventDefault();
       if (!renameTarget || renaming) return;
-      const nextName = renameValue.trim();
-      if (!nextName) {
-        setRenameError('Name is required');
-        return;
-      }
+      if (!nameCheck.canSubmit || !nameCheck.result) return;
+      const nextName = nameCheck.result.name;
       if (nextName === renameTarget.name.trim()) {
         handleRenameDialogOpenChange(false);
         return;
@@ -463,11 +459,11 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
       setRenameError(null);
       try {
         const project = await renameProject(renameTarget.id, nextName);
-        projectStoreUpdate(renameTarget.id, { name: project.name ?? nextName });
+        projectStoreUpdate(renameTarget.id, apiProjectToSummary(project));
         setRenameTarget(null);
         setRenameValue('');
-      } catch {
-        setRenameError('Failed to rename repository');
+      } catch (cause) {
+        setRenameError(cause instanceof Error ? cause.message : 'Failed to rename repository');
       } finally {
         setRenaming(false);
       }
@@ -477,7 +473,8 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
       projectStoreUpdate,
       renameProject,
       renameTarget,
-      renameValue,
+      nameCheck.canSubmit,
+      nameCheck.result,
       renaming,
     ]
   );
@@ -692,6 +689,10 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
                 placeholder={DEFAULT_PROJECT_NAME}
                 value={renameValue}
               />
+              <RepositoryNameFeedback check={nameCheck} />
+              <p className="text-xs text-[var(--text-secondary)]">
+                Previous addresses stay reserved and redirect to the new address.
+              </p>
               {renameError && (
                 <p
                   className="text-xs text-[var(--status-error)]"
@@ -710,7 +711,7 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
               >
                 Cancel
               </Button>
-              <Button disabled={renaming || !renameValue.trim()} type="submit" variant="commit">
+              <Button disabled={renaming || !nameCheck.canSubmit} type="submit" variant="commit">
                 {renaming ? 'Saving...' : 'Save'}
               </Button>
             </DialogFooter>

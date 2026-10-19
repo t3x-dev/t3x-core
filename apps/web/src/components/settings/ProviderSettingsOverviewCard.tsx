@@ -10,7 +10,7 @@ export function ProviderSettingsOverviewCard() {
 
   return (
     <Link
-      href="/settings/providers"
+      href="/settings/provider-credentials"
       aria-label="AI Providers Configure"
       className="group rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-primary)] p-4 transition-colors hover:bg-[var(--hover-bg)]"
     >

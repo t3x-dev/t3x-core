@@ -239,3 +239,15 @@ describe('Workspace assistant route lifetime', () => {
     expect(restored.result.current.workspaceActivity?.phase).toBe('error');
   });
 });
+
+it('preserves unsent Workspace input across a settings round trip without sending', async () => {
+  const initial = options();
+  const first = renderHook(() => useSourceThreadGeneration(initial));
+  await waitFor(() => expect(first.result.current.isLoading).toBe(false));
+  act(() => first.result.current.setInput('Keep this unsent instruction'));
+  first.unmount();
+  const returned = renderHook(() => useSourceThreadGeneration(initial));
+  await waitFor(() => expect(returned.result.current.input).toBe('Keep this unsent instruction'));
+  expect(mocks.appendTurn).not.toHaveBeenCalled();
+  expect(mocks.stream).not.toHaveBeenCalled();
+});

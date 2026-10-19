@@ -2,9 +2,7 @@ import { useRef, useState } from 'react';
 import { createConversation } from '@/commands/conversations';
 import { createProject } from '@/commands/projects';
 import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
-import { API_V1, fetchWithTimeout, handleResponse } from '@/infrastructure/core';
-import { type Material, uploadDocumentMaterial } from '@/infrastructure/materials';
-import { changeProjectVisibility, updateProject } from '@/infrastructure/projects';
+import { changeProjectVisibility } from '@/infrastructure/projects';
 import { saveWorkspaceDraft } from '@/queries/workspaces';
 import { apiProjectToSummary, useProjectStore } from '@/store/projectStore';
 import type { Project } from '@/types/api';
@@ -15,10 +13,8 @@ export interface RepositorySetupInput {
   description: string;
   owner: string;
   visibility: 'private' | 'unlisted' | 'public';
-  provider: string;
-  model: string;
-  files: File[];
-  schema: File | null;
+  initializeReadme?: boolean;
+  tags?: string[];
 }
 
 export function useRepositorySetup() {
@@ -28,11 +24,9 @@ export function useRepositorySetup() {
   const progress = useRef<{
     input?: RepositorySetupInput;
     project?: Project;
-    materials: Material[];
     workspace?: WorkspaceCandidate;
-    schemaBound?: boolean;
     conversation?: string;
-  }>({ materials: [] });
+  }>({});
   const busy = useRef(false);
   async function create(input: RepositorySetupInput) {
     if (busy.current) return;
@@ -42,53 +36,27 @@ export function useRepositorySetup() {
     const state = progress.current;
     state.input ??= input;
     const config = state.input;
-    if (!state.schemaBound) config.schema = input.schema;
     try {
       state.project ??= await createProject(
         config.name.trim(),
         { description: config.description.trim() },
-        config.owner
+        config.owner,
+        undefined,
+        { initialize_readme: config.initializeReadme ?? false, tags: config.tags ?? [] }
       );
       setStarted(true);
       const id = state.project.project_id;
       const store = useProjectStore.getState();
       if (!store.projects.some((project) => project.id === id))
         store.addToProjects(apiProjectToSummary(state.project));
-      await updateProject(id, {
-        default_provider: config.provider || null,
-        default_model: config.model || null,
-      });
-      while (state.materials.length < config.files.length) {
-        state.materials.push(
-          await uploadDocumentMaterial(id, config.files[state.materials.length]!)
-        );
-      }
       if (!state.workspace) {
         state.workspace = (
           await saveWorkspaceDraft(
             id,
             'workspace_branch:main',
-            getProjectWorkspaceStarterCandidate(id, state.materials)
+            getProjectWorkspaceStarterCandidate(id, [])
           )
         ).workspace;
-      }
-      if (config.schema && !state.schemaBound) {
-        await handleResponse(
-          await fetchWithTimeout(
-            `${API_V1}/projects/${encodeURIComponent(id)}/schema-studio/initial-schema`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                workspaceId: state.workspace.id,
-                ifRevision: state.workspace.revision,
-                filename: config.schema.name,
-                yaml: await config.schema.text(),
-              }),
-            }
-          )
-        );
-        state.schemaBound = true;
       }
       if (!state.conversation) {
         const conversation = await createConversation(
