@@ -23,6 +23,7 @@ import { commitTransition, decideTransition } from '../lib/transition-control-pl
 import {
   initializeWorkspaceAuthoring,
   publishWorkspaceAuthoringAction,
+  readWorkspaceAuthoring,
   workspaceAuthoringState,
 } from '../lib/workspace-authoring';
 import { prepareWorkspaceAuthoringReview } from '../lib/workspace-authoring-review';
@@ -72,10 +73,12 @@ vi.mock('@t3x-dev/storage', async (original) => {
 });
 
 import { schemaStudioRoutes } from '../routes/schema-studio.openapi';
+import { workspaceAuthoringRoutes } from '../routes/workspace-authoring.openapi';
 import { yschemaCompositionRoutes } from '../routes/yschema-composition.openapi';
 
 const app = new Hono().route('/', schemaStudioRoutes);
 app.route('/', yschemaCompositionRoutes);
+app.route('/', workspaceAuthoringRoutes);
 const baseSchema = normalizeYSchemaObject({
   yschema: '0.1',
   name: 'base',
@@ -289,6 +292,126 @@ beforeEach(() => {
 });
 
 const reviewer = { kind: 'human' as const, id: 'human:local-user' };
+it('prepares an equivalent explicit repeated:false with empty migration commands and unchanged content', async () => {
+  const id = 'equivalent-repeated-default';
+  await seed(id, true);
+  const next = normalizeYSchemaObject({
+    ...baseSchema,
+    nodes: {
+      requirements: {
+        ...baseSchema.nodes.requirements,
+        repeated: false,
+        slots: { ...baseSchema.nodes.requirements!.slots, advantage: { type: 'string' } },
+      },
+    },
+  });
+  const candidateId = await addSchema('equivalent-repeated-default', next);
+  const before = (await findWorkspaceDraft(db, projectId, id))!;
+  const contentBefore = currentComposition(workspaceAuthoringState(before.workspace_state).ledger);
+  const body = await input(id, candidateId);
+  const response = await post(`${preparationPath(id)}/preview`, body);
+  expect(response.status).toBe(200);
+  const preview = (await response.json()).data;
+  expect(preview).toMatchObject({ canPrepare: true, issues: [] });
+  expect(preview.after).toEqual(preview.before);
+  expect(preview.impact.items.some((item: { kind: string }) => item.kind === 'needs_mapping')).toBe(
+    false
+  );
+  const prepared = await post(preparationPath(id), {
+    ...body,
+    previewHash: preview.previewHash,
+    requestId: 'prepare-equivalent-default',
+  });
+  expect(prepared.status).toBe(200);
+  const after = (await findWorkspaceDraft(db, projectId, id))!;
+  expect(after.revision).toBe(before.revision + 1);
+  expect(currentComposition(workspaceAuthoringState(after.workspace_state).ledger)).toEqual(
+    contentBefore
+  );
+  expect(after.workspace_state.schemaBindings[0].schemaHash).toBe(preview.schemaHash);
+  expect(
+    (await resolveWorkspaceYSchema(after.workspace_state, db, projectId)).schema?.nodes.requirements
+      ?.repeated
+  ).toBe(false);
+  // Reading the adopted contract must work even without studioSources, and
+  // must not rebind, initialize, migrate content, or change the Draft revision.
+  expect(after.workspace_state.schemaBindings[0].compositionId).toMatch(/^prepared:/);
+  expect(after.workspace_state.schemaBindings[0].studioSources).toBeUndefined();
+  const read = await app.request(`/v1/projects/${projectId}/workspaces/${id}/authoring`);
+  expect(read.status).toBe(200);
+  expect((await read.json()).data).toMatchObject({
+    workspaceRevision: after.revision,
+    current: contentBefore,
+    currentSchema: {
+      status: 'bound',
+      schemaHash: preview.schemaHash,
+      definition: next,
+      bindings: after.workspace_state.schemaBindings,
+    },
+  });
+  expect(await findWorkspaceDraft(db, projectId, id)).toEqual(after);
+});
+
+it('reads only the bound composition revision and fails closed on missing or mismatched snapshots without hiding content', async () => {
+  const id = 'exact-authoring-schema';
+  await seed(id);
+  const saved = (await findWorkspaceDraft(db, projectId, id))!;
+  const bindings = saved.workspace_state.schemaBindings;
+  const newer = normalizeYSchemaObject({ ...baseSchema, name: 'newer-unbound-definition' });
+  await saveYSchemaCompositionSnapshot(db, {
+    snapshot_id: `newer:${id}`,
+    project_id: projectId,
+    composition_id: bindings[0].compositionId,
+    composition_revision: 2,
+    composition_hash: await sha256CompositionValue({ newer }),
+    compiled_schema_hash: await sha256CompositionValue(newer),
+    compiler_version: 'test',
+    manifest_json: {},
+    schema_json: { ...newer },
+    render_plan_json: [],
+    origins_json: {},
+  });
+  const view = await readWorkspaceAuthoring(db, { projectId, workspaceId: id });
+  expect(view.currentSchema).toEqual({
+    status: 'bound',
+    schemaHash: bindings[0].schemaHash,
+    definition: baseSchema,
+    bindings,
+  });
+  const inspected = await readWorkspaceAuthoring(db, {
+    projectId,
+    workspaceId: id,
+    actionId: `import:${id}`,
+  });
+  expect(inspected.currentSchema).toEqual(view.currentSchema);
+  expect(inspected.selected?.after).not.toEqual(inspected.current);
+  expect(await findWorkspaceDraft(db, projectId, id)).toEqual(saved);
+  for (const drift of [
+    { compositionRevision: 99 },
+    { compositionHash: `sha256:${'a'.repeat(64)}` },
+    { schemaHash: `sha256:${'b'.repeat(64)}` },
+  ]) {
+    const { draft: changed } = await transactWorkspaceAuthoring(
+      db,
+      { projectId, workspaceId: id, refName: id },
+      async (_tx, current) => ({
+        workspace: { ...current.workspace_state, schemaBindings: [{ ...bindings[0], ...drift }] },
+        value: null,
+      })
+    );
+    const unresolved = await readWorkspaceAuthoring(db, { projectId, workspaceId: id });
+    expect(unresolved.currentSchema).toEqual({
+      status: 'unknown',
+      schemaHash: null,
+      definition: null,
+      bindings: [],
+    });
+    expect(unresolved.current).toEqual(view.current);
+    expect(unresolved.actions).toEqual(view.actions);
+    expect(await findWorkspaceDraft(db, projectId, id)).toEqual(changed);
+  }
+});
+
 async function fullReview(workspaceId: string, requestId = `full-review:${workspaceId}`) {
   const draft = (await findWorkspaceDraft(db, projectId, workspaceId))!;
   const { ledger, basis } = workspaceAuthoringState(draft.workspace_state);

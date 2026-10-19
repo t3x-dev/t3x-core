@@ -1,3 +1,4 @@
+import type { WorkspaceSchemaDefinitionSnapshot } from './schema-studio';
 import type { TransitionControlPlaneView, TransitionProtocolValue } from './types';
 export interface WorkspaceAuthoringActor {
   kind: 'human' | 'agent' | 'service';
@@ -56,6 +57,8 @@ export interface WorkspaceAuthoringView {
   } | null;
   base?: TransitionProtocolValue;
   current?: TransitionProtocolValue;
+  /** Exact effective binding at workspaceRevision, not the latest Studio candidate. */
+  currentSchema?: WorkspaceSchemaDefinitionSnapshot;
   netDiff: WorkspaceAuthoringCard[];
   node: {
     nodeId: string;
