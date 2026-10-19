@@ -2,8 +2,8 @@
 
 import { StudioSchemaEditLocalContributionSchema } from '@t3x-dev/api-client';
 import { dump, JSON_SCHEMA, load } from 'js-yaml';
-import { Plus, Save, Trash2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { ChevronRight, FileText, Folder, FolderOpen, Save } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -14,15 +14,9 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { WorkspaceYOpsEditor } from '@/components/workspaces/WorkspaceYOpsEditor';
+import { SchemaDefinitionStructure } from './SchemaDefinitionStructure';
 
 type LocalContribution = Record<string, unknown>;
-type LocalNode = {
-  required?: boolean;
-  repeated?: boolean;
-  slots?: Record<string, Record<string, unknown>>;
-  requiredSlots?: string[];
-  [key: string]: unknown;
-};
 
 const EMPTY_CONTRIBUTION: LocalContribution = { nodes: {} };
 
@@ -56,16 +50,24 @@ export function SchemaDefinitionWorkbench({
   const [yaml, setYaml] = useState('nodes: {}\n');
   const [intent, setIntent] = useState('Edit the Workspace-local Schema definition.');
   const [error, setError] = useState<string>();
+  const [structureError, setStructureError] = useState<string>();
+  const initialized = useRef(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      initialized.current = false;
+      return;
+    }
+    // Preview echoes the edited definition back through these props. Do not
+    // reinitialize an open editor or clear errors in other unfinished fields.
+    if (initialized.current) return;
+    initialized.current = true;
     const next = structuredClone(initialDefinition ?? initialContribution ?? EMPTY_CONTRIBUTION);
     setContribution(next);
     setYaml(renderYaml(next));
     setError(undefined);
+    setStructureError(undefined);
   }, [initialDefinition, initialContribution, open]);
-
-  const nodes = useMemo(() => localNodes(contribution), [contribution]);
 
   function commit(next: LocalContribution) {
     setContribution(next);
@@ -88,6 +90,7 @@ export function SchemaDefinitionWorkbench({
   }
 
   async function save() {
+    if (structureError) return;
     const next = mode === 'yaml' ? parseYamlDraft() : contribution;
     if (!next) return;
     try {
@@ -119,6 +122,7 @@ export function SchemaDefinitionWorkbench({
               {(['structure', 'yaml'] as const).map((item) => (
                 <button
                   aria-selected={mode === item}
+                  disabled={mode === 'structure' && Boolean(structureError)}
                   className={`rounded px-3 py-1.5 text-xs font-medium ${mode === item ? 'bg-[var(--active-bg)] text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}
                   key={item}
                   onClick={() => {
@@ -133,6 +137,7 @@ export function SchemaDefinitionWorkbench({
               ))}
               <span className="flex-1" />
               <Button
+                disabled={Boolean(structureError)}
                 onClick={() => {
                   const next = mode === 'yaml' ? parseYamlDraft() : contribution;
                   if (next) onPreview(next);
@@ -158,49 +163,17 @@ export function SchemaDefinitionWorkbench({
                 />
               </div>
             ) : (
-              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-                      Schema nodes
-                    </h3>
-                    <p className="text-[11px] text-[var(--text-tertiary)]">
-                      Edit, rename, add or remove nodes and Slots above the immutable Base.
-                    </p>
-                  </div>
-                  <Button
-                    onClick={() => commit(addNode(contribution))}
-                    size="sm"
-                    type="button"
-                    variant="canvas-outline"
-                  >
-                    <Plus className="size-3.5" /> Add node
-                  </Button>
-                </div>
-                {Object.keys(nodes).length ? (
-                  Object.entries(nodes).map(([nodeName, node]) => (
-                    <LocalNodeEditor
-                      key={nodeName}
-                      name={nodeName}
-                      node={node}
-                      onChange={(nextName, nextNode) =>
-                        commit(replaceNode(contribution, nodeName, nextName, nextNode))
-                      }
-                      onRemove={() => commit(removeNode(contribution, nodeName))}
-                    />
-                  ))
-                ) : (
-                  <div className="rounded-lg border border-dashed border-[var(--stroke-strong)] p-8 text-center text-xs text-[var(--text-tertiary)]">
-                    No local nodes yet. The base Schema on the right is unchanged.
-                  </div>
-                )}
-              </div>
+              <SchemaDefinitionStructure
+                value={contribution}
+                onChange={commit}
+                onValidationChange={setStructureError}
+              />
             )}
           </section>
 
           <section className="grid min-h-0 grid-rows-2 bg-[var(--surface-subtle)]">
-            <SchemaYamlPreview label="Base (immutable)" schema={baseSchema} />
-            <SchemaYamlPreview label="Result preview" schema={resultSchema} bordered />
+            <SchemaNodesPreview label="Base (immutable)" schema={baseSchema} />
+            <SchemaNodesPreview label="Result preview" schema={resultSchema} bordered />
           </section>
         </div>
 
@@ -216,16 +189,20 @@ export function SchemaDefinitionWorkbench({
               placeholder="Why are you changing this Schema?"
               value={intent}
             />
-            {error || previewError ? (
+            {error || structureError || previewError ? (
               <p className="mt-1 text-xs text-[var(--destructive)]" role="alert">
-                {error ?? previewError}
+                {error ?? structureError ?? previewError}
               </p>
             ) : null}
           </div>
           <Button disabled={pending} onClick={() => onOpenChange(false)} variant="ghost">
             Cancel
           </Button>
-          <Button disabled={pending} onClick={() => void save()} variant="commit">
+          <Button
+            disabled={pending || Boolean(structureError)}
+            onClick={() => void save()}
+            variant="commit"
+          >
             <Save className="size-4" /> {pending ? 'Saving…' : 'Save candidate'}
           </Button>
         </div>
@@ -234,117 +211,7 @@ export function SchemaDefinitionWorkbench({
   );
 }
 
-function LocalNodeEditor({
-  name,
-  node,
-  onChange,
-  onRemove,
-}: {
-  name: string;
-  node: LocalNode;
-  onChange: (name: string, node: LocalNode) => void;
-  onRemove: () => void;
-}) {
-  const slots = node.slots ?? {};
-  return (
-    <article className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3">
-      <div className="flex items-center gap-2">
-        <Input
-          aria-label={`Node name ${name}`}
-          className="font-mono text-xs"
-          onBlur={(event) => onChange(event.target.value, node)}
-          defaultValue={name}
-        />
-        <label className="flex items-center gap-1.5 text-[11px] text-[var(--text-secondary)]">
-          <input
-            checked={node.required === true}
-            onChange={(event) => onChange(name, { ...node, required: event.target.checked })}
-            type="checkbox"
-          />
-          required
-        </label>
-        <label className="flex items-center gap-1.5 text-[11px] text-[var(--text-secondary)]">
-          <input
-            checked={node.repeated === true}
-            onChange={(event) => onChange(name, { ...node, repeated: event.target.checked })}
-            type="checkbox"
-          />
-          repeated
-        </label>
-        <Button
-          aria-label={`Remove node ${name}`}
-          onClick={onRemove}
-          size="icon-sm"
-          variant="ghost"
-        >
-          <Trash2 className="size-3.5" />
-        </Button>
-      </div>
-      <div className="mt-3 space-y-2">
-        {Object.entries(slots).map(([slotName, slot]) => (
-          <div
-            className="grid grid-cols-[minmax(120px,1fr)_110px_auto_auto] items-center gap-2"
-            key={slotName}
-          >
-            <Input
-              aria-label={`Slot name ${slotName}`}
-              className="font-mono text-xs"
-              onBlur={(event) =>
-                onChange(name, replaceSlot(node, slotName, event.target.value, slot))
-              }
-              defaultValue={slotName}
-            />
-            <select
-              aria-label={`Slot type ${slotName}`}
-              className="h-9 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 text-xs"
-              onChange={(event) =>
-                onChange(
-                  name,
-                  replaceSlot(node, slotName, slotName, { ...slot, type: event.target.value })
-                )
-              }
-              value={typeof slot.type === 'string' ? slot.type : 'string'}
-            >
-              {['string', 'number', 'integer', 'boolean', 'array', 'object', 'null'].map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-            <label className="flex items-center gap-1 text-[11px] text-[var(--text-secondary)]">
-              <input
-                checked={node.requiredSlots?.includes(slotName) ?? false}
-                onChange={(event) =>
-                  onChange(name, setSlotRequired(node, slotName, event.target.checked))
-                }
-                type="checkbox"
-              />
-              required
-            </label>
-            <Button
-              aria-label={`Remove slot ${slotName}`}
-              onClick={() => onChange(name, removeSlot(node, slotName))}
-              size="icon-sm"
-              variant="ghost"
-            >
-              <Trash2 className="size-3.5" />
-            </Button>
-          </div>
-        ))}
-        <Button
-          onClick={() => onChange(name, addSlot(node))}
-          size="sm"
-          type="button"
-          variant="ghost"
-        >
-          <Plus className="size-3.5" /> Add Slot
-        </Button>
-      </div>
-    </article>
-  );
-}
-
-function SchemaYamlPreview({
+function SchemaNodesPreview({
   label,
   schema,
   bordered = false,
@@ -354,15 +221,134 @@ function SchemaYamlPreview({
   bordered?: boolean;
 }) {
   return (
-    <div
+    <section
+      aria-label={label}
       className={`flex min-h-0 flex-col ${bordered ? 'border-t border-[var(--stroke-divider)]' : ''}`}
     >
       <h3 className="shrink-0 px-4 py-2 text-xs font-semibold text-[var(--text-secondary)]">
         {label}
       </h3>
-      <pre className="min-h-0 flex-1 overflow-auto px-4 pb-4 font-mono text-[11px] leading-5 text-[var(--text-primary)]">
-        {schema ? renderYaml(schema) : '# Preview unavailable'}
-      </pre>
+      <div className="min-h-0 flex-1 overflow-auto px-4 pb-4 text-xs text-[var(--text-primary)]">
+        {!schema ? (
+          <p className="py-2 text-[var(--text-tertiary)]">Preview unavailable</p>
+        ) : Object.keys(previewRecord(schema.nodes)).length === 0 ? (
+          <p className="py-2 text-[var(--text-tertiary)]">No nodes defined</p>
+        ) : (
+          <SchemaDefinitionTree schema={schema} />
+        )}
+      </div>
+    </section>
+  );
+}
+
+export function SchemaDefinitionTree({ schema }: { schema: Record<string, unknown> }) {
+  return (
+    <div className="min-w-full w-max">
+      {Object.entries(previewRecord(schema.nodes)).map(([name, node]) => (
+        <SchemaPreviewNode key={name} name={name} node={previewRecord(node)} path={name} />
+      ))}
+    </div>
+  );
+}
+
+function previewRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function SchemaPreviewTags({ value }: { value: Record<string, unknown> }) {
+  return (
+    <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-4">
+      {Object.entries(value).map(([key, property]) => {
+        const text = property === true ? key : `${key}: ${JSON.stringify(property)}`;
+        return (
+          <span
+            key={key}
+            title={text}
+            className="max-w-52 truncate rounded border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-1.5 py-0.5 font-mono text-[10px] font-normal text-[var(--text-secondary)]"
+          >
+            {text}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+function SchemaPreviewNode({
+  name,
+  node,
+  path,
+}: {
+  name: string;
+  node: Record<string, unknown>;
+  path: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const slots = previewRecord(node.slots);
+  const children = previewRecord(node.children);
+  const requiredSlots = Array.isArray(node.requiredSlots) ? node.requiredSlots : [];
+  const attributes = Object.fromEntries(
+    Object.entries(node).filter(
+      ([key]) =>
+        !['slots', 'requiredSlots'].includes(key) && (key !== 'children' || node.children === 'any')
+    )
+  );
+  const FolderIcon = expanded ? FolderOpen : Folder;
+  return (
+    <div>
+      <button
+        type="button"
+        aria-label={`Node ${path}`}
+        aria-expanded={expanded}
+        onClick={() => setExpanded(!expanded)}
+        className="flex h-9 w-full items-center gap-2 whitespace-nowrap rounded px-1 text-left hover:bg-[var(--active-bg)] focus-visible:outline-2 focus-visible:outline-[var(--accent-blue)]"
+      >
+        <ChevronRight
+          aria-hidden="true"
+          className={`size-3.5 shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`}
+        />
+        <FolderIcon aria-hidden="true" className="size-4 shrink-0 text-[var(--text-tertiary)]" />
+        <span className="font-mono font-medium">{name}</span>
+        <SchemaPreviewTags value={attributes} />
+      </button>
+      {expanded ? (
+        <div className="ml-3 border-l border-[var(--stroke-divider)] pl-3">
+          {Object.entries(slots).map(([slotName, slot]) => (
+            <section
+              key={slotName}
+              aria-label={`Slot ${path}/${slotName}`}
+              className="flex h-9 items-center gap-2 whitespace-nowrap px-1"
+            >
+              <FileText
+                aria-hidden="true"
+                className="size-3.5 shrink-0 text-[var(--text-tertiary)]"
+              />
+              <span className="font-mono">{slotName}</span>
+              <SchemaPreviewTags
+                value={{
+                  ...previewRecord(slot),
+                  ...(requiredSlots.includes(slotName) ? { required: true } : {}),
+                }}
+              />
+            </section>
+          ))}
+          {Object.entries(children).map(([childName, child]) => (
+            <SchemaPreviewNode
+              key={childName}
+              name={childName}
+              node={previewRecord(child)}
+              path={`${path}/${childName}`}
+            />
+          ))}
+          {Object.keys(slots).length === 0 && Object.keys(children).length === 0 ? (
+            <p className="py-2 text-[11px] text-[var(--text-tertiary)]">
+              {node.children === 'any' ? 'Any children allowed' : 'No slots or child nodes'}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -374,83 +360,4 @@ function parseContribution(source: string): LocalContribution {
 
 function renderYaml(value: unknown): string {
   return dump(value, { noRefs: true, lineWidth: 100, sortKeys: false });
-}
-
-function localNodes(contribution: LocalContribution): Record<string, LocalNode> {
-  const nodes = contribution.nodes;
-  return nodes && typeof nodes === 'object' && !Array.isArray(nodes)
-    ? (nodes as Record<string, LocalNode>)
-    : {};
-}
-
-function nextKey(existing: Record<string, unknown>, prefix: string): string {
-  if (!Object.hasOwn(existing, prefix)) return prefix;
-  let index = 2;
-  while (Object.hasOwn(existing, `${prefix}_${index}`)) index++;
-  return `${prefix}_${index}`;
-}
-
-function addNode(contribution: LocalContribution): LocalContribution {
-  const nodes = localNodes(contribution);
-  const name = nextKey(nodes, 'new_node');
-  return { ...contribution, nodes: { ...nodes, [name]: { slots: {} } } };
-}
-
-function replaceNode(
-  contribution: LocalContribution,
-  oldName: string,
-  name: string,
-  node: LocalNode
-): LocalContribution {
-  const nodes = localNodes(contribution);
-  if (name !== oldName && Object.hasOwn(nodes, name)) return contribution;
-  const next: Record<string, LocalNode> = {};
-  for (const [key, value] of Object.entries(nodes))
-    next[key === oldName ? name : key] = key === oldName ? node : value;
-  return { ...contribution, nodes: next };
-}
-
-function removeNode(contribution: LocalContribution, name: string): LocalContribution {
-  const nodes = { ...localNodes(contribution) };
-  delete nodes[name];
-  return { ...contribution, nodes };
-}
-
-function addSlot(node: LocalNode): LocalNode {
-  const slots = node.slots ?? {};
-  const name = nextKey(slots, 'new_slot');
-  return { ...node, slots: { ...slots, [name]: { type: 'string' } } };
-}
-
-function replaceSlot(
-  node: LocalNode,
-  oldName: string,
-  name: string,
-  slot: Record<string, unknown>
-): LocalNode {
-  if (name !== oldName && Object.hasOwn(node.slots ?? {}, name)) return node;
-  const slots: Record<string, Record<string, unknown>> = {};
-  for (const [key, value] of Object.entries(node.slots ?? {}))
-    slots[key === oldName ? name : key] = key === oldName ? slot : value;
-  const requiredSlots = (node.requiredSlots ?? []).map((key) => (key === oldName ? name : key));
-  return { ...node, slots, ...(requiredSlots.length ? { requiredSlots } : {}) };
-}
-
-function removeSlot(node: LocalNode, name: string): LocalNode {
-  const slots = { ...(node.slots ?? {}) };
-  delete slots[name];
-  const requiredSlots = (node.requiredSlots ?? []).filter((key) => key !== name);
-  return {
-    ...node,
-    slots,
-    ...(requiredSlots.length ? { requiredSlots } : { requiredSlots: undefined }),
-  };
-}
-
-function setSlotRequired(node: LocalNode, name: string, required: boolean): LocalNode {
-  const values = new Set(node.requiredSlots ?? []);
-  if (required) values.add(name);
-  else values.delete(name);
-  const requiredSlots = [...values].sort();
-  return { ...node, ...(requiredSlots.length ? { requiredSlots } : { requiredSlots: undefined }) };
 }
