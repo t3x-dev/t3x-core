@@ -137,6 +137,7 @@ import { ComposeAuthoringAssistant } from './ComposeAuthoringAssistant';
 import { ComposeFieldDialog } from './ComposeFieldDialog';
 import { ComposeNodeHistoryPanel } from './ComposeNodeHistoryPanel';
 import composeStyles from './WorkspaceComposeSurface.module.css';
+import { WorkspaceCurrentDraft } from './WorkspaceCurrentDraft';
 import checksStyles from './WorkspaceReviewChecks.module.css';
 import { WorkspaceReviewCodeView } from './WorkspaceReviewCodeView';
 import diffStyles from './WorkspaceReviewDiff.module.css';
@@ -539,22 +540,51 @@ function ComposeSurface({
   const [fieldDialog, setFieldDialog] = useState<'structure' | 'yaml' | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const dragOrigin = useRef<{ x: number; width: number } | null>(null);
+  const draftDragOrigin = useRef<{ x: number; width: number } | null>(null);
+  const [draftWidth, setDraftWidth] = useState(260);
   const [discussionWidth, setDiscussionWidth] = useState(440);
   const [resizing, setResizing] = useState(false);
   useEffect(() => {
     try {
       const stored = Number(localStorage.getItem('t3x-workspace-discussion-width'));
       if (stored >= 320 && stored <= 680) setDiscussionWidth(stored);
+      const draftStored = Number(localStorage.getItem('t3x-workspace-draft-width'));
+      if (draftStored >= 180 && draftStored <= 560) setDraftWidth(draftStored);
     } catch {
       /* Storage can be unavailable in private browser contexts. */
     }
   }, []);
   const resizeDiscussion = (width: number) => {
-    const maximum = Math.min(680, Math.max(320, (boardRef.current?.clientWidth ?? 1264) - 400));
+    const actualDraftWidth =
+      boardRef.current?.querySelector<HTMLElement>('[aria-label="Current Draft navigation"]')
+        ?.offsetWidth || draftWidth;
+    const maximum = Math.min(
+      680,
+      Math.max(320, (boardRef.current?.clientWidth || 1680) - actualDraftWidth - 320)
+    );
     const next = Math.round(Math.max(320, Math.min(maximum, width)));
     setDiscussionWidth(next);
     try {
       localStorage.setItem('t3x-workspace-discussion-width', String(next));
+    } catch {
+      /* Resizing still works without storage. */
+    }
+  };
+  const resizeDraft = (width: number) => {
+    const measuredDiscussionWidth = boardRef.current
+      ?.querySelector('[aria-label="Discuss change"]')
+      ?.getBoundingClientRect().width;
+    const actualDiscussionWidth = measuredDiscussionWidth
+      ? measuredDiscussionWidth + 16
+      : discussionWidth;
+    const maximum = Math.min(
+      560,
+      Math.max(180, (boardRef.current?.clientWidth || 1680) - actualDiscussionWidth - 320)
+    );
+    const next = Math.round(Math.max(180, Math.min(maximum, width)));
+    setDraftWidth(next);
+    try {
+      localStorage.setItem('t3x-workspace-draft-width', String(next));
     } catch {
       /* Resizing still works without storage. */
     }
@@ -681,7 +711,12 @@ function ComposeSurface({
   return (
     <div
       ref={boardRef}
-      style={{ '--discussion-width': `${discussionWidth}px` } as CSSProperties}
+      style={
+        {
+          '--draft-width': `${draftWidth}px`,
+          '--discussion-width': `${discussionWidth}px`,
+        } as CSSProperties
+      }
       data-resizing={resizing || undefined}
       className={composeStyles.composeBoard}
     >
@@ -766,6 +801,71 @@ function ComposeSurface({
           }
         }}
       />
+      {/* biome-ignore lint/a11y/useSemanticElements: This is an interactive window splitter, not a thematic break. */}
+      <div
+        role="separator"
+        aria-label="Resize current Draft panel"
+        aria-orientation="vertical"
+        aria-valuemin={180}
+        aria-valuemax={560}
+        aria-valuenow={draftWidth}
+        tabIndex={0}
+        className={`${composeStyles.discussionResize} ${composeStyles.draftResize}`}
+        onPointerDown={(event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          const sidebar = boardRef.current?.querySelector(
+            '[aria-label="Current Draft navigation"]'
+          );
+          draftDragOrigin.current = {
+            x: event.clientX,
+            width: sidebar?.getBoundingClientRect().width || draftWidth,
+          };
+          event.currentTarget.setPointerCapture(event.pointerId);
+          setResizing(true);
+        }}
+        onPointerMove={(event) => {
+          if (draftDragOrigin.current)
+            resizeDraft(draftDragOrigin.current.width + event.clientX - draftDragOrigin.current.x);
+        }}
+        onPointerUp={(event) => {
+          draftDragOrigin.current = null;
+          setResizing(false);
+          if (event.currentTarget.hasPointerCapture(event.pointerId))
+            event.currentTarget.releasePointerCapture(event.pointerId);
+        }}
+        onLostPointerCapture={() => {
+          draftDragOrigin.current = null;
+          setResizing(false);
+        }}
+        onPointerCancel={() => {
+          draftDragOrigin.current = null;
+          setResizing(false);
+        }}
+        onDoubleClick={() => resizeDraft(260)}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+            event.preventDefault();
+            resizeDraft(draftWidth + (event.key === 'ArrowRight' ? 20 : -20));
+          } else if (event.key === 'Home' || event.key === 'End') {
+            event.preventDefault();
+            resizeDraft(event.key === 'Home' ? 180 : 560);
+          }
+        }}
+      />
+      <aside aria-label="Current Draft navigation" className={composeStyles.currentDraftSidebar}>
+        <WorkspaceCurrentDraft
+          key={candidate.id}
+          candidate={candidate}
+          current={workingCurrent}
+          revision={activity.compositionRevision}
+          loading={activity.loading}
+          error={activity.error}
+          enabled={activity.enabled}
+          stagedCount={staged.length}
+          authoring={activity.view}
+        />
+      </aside>
       <main className={composeStyles.composeMain}>
         {activity.newActivity ? (
           <output className={composeStyles.newActivity}>

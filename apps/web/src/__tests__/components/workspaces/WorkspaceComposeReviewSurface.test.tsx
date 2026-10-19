@@ -14,6 +14,12 @@ import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWor
 const activityMocks = vi.hoisted(() => ({
   value: undefined as ReturnType<typeof useComposeActivity> | undefined,
 }));
+vi.mock('@/hooks/schemas/useWorkspaceDraftSchema', () => ({
+  useWorkspaceDraftSchema: () => ({ definition: undefined, loading: false }),
+}));
+vi.mock('@/hooks/schemas/useWorkspaceSchemaPending', () => ({
+  useWorkspaceSchemaPending: () => ({ data: { status: 'none', pending: null }, loading: false }),
+}));
 const bootstrapMocks = vi.hoisted(() => ({
   value: {
     active: false,
@@ -157,6 +163,8 @@ vi.mock('next/navigation', () => ({
 
 describe('WorkspaceComposeReviewSurface composer', () => {
   beforeEach(() => {
+    localStorage.removeItem('t3x-workspace-draft-width');
+    localStorage.removeItem('t3x-workspace-discussion-width');
     snapshotMocks.list.mockReset().mockResolvedValue({ snapshots: [] });
     snapshotMocks.detail.mockReset();
     activityMocks.value = undefined;
@@ -171,6 +179,91 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     navigationMocks.push.mockReset();
     navigationMocks.replace.mockReset();
     navigationMocks.searchParams = new URLSearchParams();
+  });
+
+  function renderResizableCompose() {
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    const view = render(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={
+          {
+            candidate,
+            isBusy: false,
+            materialSources: [],
+          } as unknown as WorkspaceComposeReviewController
+        }
+        mode="compose"
+        onModeChange={vi.fn()}
+      />
+    );
+    return {
+      ...view,
+      splitter: screen.getByRole('separator', { name: 'Resize current Draft panel' }),
+    };
+  }
+
+  it('resizes the Draft rail with keyboard controls, resets it, and restores its saved width', () => {
+    const { splitter, unmount } = renderResizableCompose();
+    expect(splitter).toHaveAttribute('aria-valuenow', '260');
+    fireEvent.keyDown(splitter, { key: 'ArrowRight' });
+    expect(splitter).toHaveAttribute('aria-valuenow', '280');
+    expect(localStorage.getItem('t3x-workspace-draft-width')).toBe('280');
+    expect(splitter.parentElement?.style.getPropertyValue('--draft-width')).toBe('280px');
+    fireEvent.keyDown(splitter, { key: 'End' });
+    expect(splitter).toHaveAttribute('aria-valuenow', '560');
+    fireEvent.keyDown(splitter, { key: 'Home' });
+    expect(splitter).toHaveAttribute('aria-valuenow', '180');
+    fireEvent.doubleClick(splitter);
+    expect(splitter).toHaveAttribute('aria-valuenow', '260');
+    fireEvent.keyDown(splitter, { key: 'ArrowLeft' });
+    unmount();
+    expect(renderResizableCompose().splitter).toHaveAttribute('aria-valuenow', '240');
+  });
+
+  it('drags the Draft divider and stops resizing on release or cancellation', () => {
+    const originalPointerEvent = window.PointerEvent;
+    window.PointerEvent = MouseEvent as typeof PointerEvent;
+    try {
+      const { splitter } = renderResizableCompose();
+      Object.assign(splitter, {
+        setPointerCapture: vi.fn(),
+        hasPointerCapture: () => true,
+        releasePointerCapture: vi.fn(),
+      });
+      fireEvent.pointerDown(splitter, { button: 0, clientX: 300 });
+      expect(splitter.parentElement).toHaveAttribute('data-resizing', 'true');
+      fireEvent.pointerMove(splitter, { clientX: 380 });
+      expect(splitter).toHaveAttribute('aria-valuenow', '340');
+      fireEvent.pointerUp(splitter, { clientX: 380 });
+      expect(splitter.parentElement).not.toHaveAttribute('data-resizing');
+      fireEvent.pointerMove(splitter, { clientX: 450 });
+      expect(splitter).toHaveAttribute('aria-valuenow', '340');
+      fireEvent.pointerDown(splitter, { button: 0, clientX: 380 });
+      fireEvent.pointerCancel(splitter);
+      fireEvent.pointerMove(splitter, { clientX: 450 });
+      expect(splitter).toHaveAttribute('aria-valuenow', '340');
+      expect(splitter.parentElement).not.toHaveAttribute('data-resizing');
+    } finally {
+      window.PointerEvent = originalPointerEvent;
+    }
+  });
+
+  it('limits Draft width so changes and Chat retain room, and ignores invalid saved preferences', () => {
+    localStorage.setItem('t3x-workspace-draft-width', 'not-a-width');
+    const { splitter } = renderResizableCompose();
+    expect(splitter).toHaveAttribute('aria-valuenow', '260');
+    Object.defineProperty(splitter.parentElement, 'clientWidth', {
+      value: 1000,
+      configurable: true,
+    });
+    fireEvent.keyDown(splitter, { key: 'End' });
+    expect(splitter).toHaveAttribute('aria-valuenow', '240');
+    expect(screen.getByRole('separator', { name: 'Resize discussion panel' })).toHaveAttribute(
+      'aria-valuenow',
+      '440'
+    );
+    expect(screen.getByRole('complementary', { name: 'Discuss change' })).toBeVisible();
   });
 
   it('selects list rows directly and keeps Details or Chat permanently visible', async () => {
@@ -280,6 +373,18 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.getByRole('tab', { name: 'Compose' })).toBeInTheDocument();
     expect(screen.queryByRole('tablist', { name: 'Change context' })).not.toBeInTheDocument();
     const discussion = screen.getByRole('complementary', { name: 'Discuss change' });
+    const draftNavigation = screen.getByRole('complementary', { name: 'Current Draft navigation' });
+    expect(draftNavigation).toContainElement(screen.getByRole('region', { name: 'Current Draft' }));
+    expect(
+      within(discussion).queryByRole('region', { name: 'Current Draft' })
+    ).not.toBeInTheDocument();
+    const changes = screen.getByRole('main');
+    expect(
+      draftNavigation.compareDocumentPosition(changes) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(
+      changes.compareDocumentPosition(discussion) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
     expect(within(discussion).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
     expect(within(discussion).getByTitle(candidate.title)).toBeVisible();
     expect(screen.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute(
@@ -474,6 +579,9 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save change' }));
     expect(publish).not.toHaveBeenCalled();
     expect(screen.getByText('Ungrouped manual changes')).toBeInTheDocument();
+    const draftSidebar = screen.getByRole('region', { name: 'Current Draft' });
+    expect(within(draftSidebar).getByText('30')).toBeVisible();
+    expect(within(draftSidebar).getByText(/ungrouped local changes/)).toBeVisible();
     expect(
       screen.getByRole('checkbox', { name: 'Include Allocation in the next P' })
     ).toBeChecked();
