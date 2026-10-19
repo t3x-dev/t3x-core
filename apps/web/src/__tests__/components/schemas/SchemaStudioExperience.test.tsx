@@ -4,6 +4,7 @@ import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { SchemaStudioExperience } from '@/components/schemas/SchemaStudioExperience';
+import type { WorkspaceSchemaBinding } from '@/types/workspaces';
 
 const mocks = vi.hoisted(() => ({
   apply: vi.fn(),
@@ -11,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   data: undefined as unknown,
   pendingSchema: { status: 'none', pending: null } as unknown,
   query: 'candidate=provider',
+  candidatesLoading: false,
   branches: [] as string[],
   refresh: vi.fn(),
   push: vi.fn(),
@@ -29,6 +31,7 @@ const mocks = vi.hoisted(() => ({
     status: string;
     targetBranch: string;
     title: string;
+    schemaBindings?: WorkspaceSchemaBinding[];
   }>,
 }));
 vi.mock('next/navigation', () => ({
@@ -43,10 +46,16 @@ vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
         available: true,
         title: 'Shared foundation',
         kind: 'module',
-        source: { canonicalName: 'team/base', version: '1.0', hash: 'sha256:abc' },
+        source: {
+          projectId: null,
+          artifactVersionId: 'base-v1',
+          canonicalName: 'team/base',
+          version: '1.0',
+          hash: 'sha256:abc',
+        },
       },
     ],
-    loading: false,
+    loading: mocks.candidatesLoading,
   }),
 }));
 vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
@@ -91,6 +100,7 @@ vi.mock('@/hooks/schemas/useWorkspaceSchemaPending', () => ({
 }));
 beforeEach(() => {
   mocks.query = 'candidate=provider';
+  mocks.candidatesLoading = false;
   mocks.apply.mockReset();
   mocks.publish.mockReset();
   mocks.push.mockReset();
@@ -192,6 +202,144 @@ it('keeps a required provider checked and locked while blocking a failed definit
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).not.toBeChecked();
   expect(mocks.apply).not.toHaveBeenCalled();
 });
+
+it.each([
+  '',
+  'workspace=workspace_branch%3Amain&branch=main',
+])('restores bound sources and the canvas without applying again (query: %s)', async (query) => {
+  mocks.query = query;
+  mocks.workspaces = [boundWorkspace()];
+  const { unmount } = render(<SchemaStudioExperience projectId="p" />);
+  await expectBoundSelection();
+  unmount();
+  render(<SchemaStudioExperience projectId="p" />);
+  await expectBoundSelection();
+  expect(mocks.apply).not.toHaveBeenCalled();
+  expect(mocks.saveDraft).not.toHaveBeenCalled();
+});
+
+it('waits for sources before restoring and does not undo an explicit clear', async () => {
+  mocks.query = '';
+  mocks.workspaces = [boundWorkspace()];
+  mocks.candidatesLoading = true;
+  const { rerender } = render(<SchemaStudioExperience projectId="p" />);
+  expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).not.toBeChecked();
+  mocks.candidatesLoading = false;
+  rerender(<SchemaStudioExperience projectId="p" />);
+  await expectBoundSelection();
+  fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }));
+  mocks.workspaces = [{ ...boundWorkspace(), revision: 3 }];
+  rerender(<SchemaStudioExperience projectId="p" />);
+  expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).not.toBeChecked();
+});
+
+it.each([
+  'hash',
+  'artifactVersionId',
+  'projectId',
+  'canonicalName',
+  'version',
+] as const)('does not substitute a different bound source %s', (field) => {
+  mocks.query = '';
+  const workspace = boundWorkspace();
+  workspace.schemaBindings[0]!.studioSources![0]![field] = 'different';
+  mocks.workspaces = [workspace];
+  render(<SchemaStudioExperience projectId="p" />);
+  expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).not.toBeChecked();
+  expect(mocks.apply).not.toHaveBeenCalled();
+});
+
+it('clears the restored canvas when switching to an unbound Workspace', async () => {
+  mocks.query = '';
+  mocks.workspaces = [
+    boundWorkspace(),
+    {
+      id: 'workspace_branch:feature',
+      revision: 1,
+      status: 'draft',
+      targetBranch: 'feature',
+      title: 'Feature workspace',
+      schemaBindings: [],
+    },
+  ];
+  render(<SchemaStudioExperience projectId="p" />);
+  await expectBoundSelection();
+  fireEvent.change(screen.getByLabelText('Target Workspace'), {
+    target: { value: 'workspace_branch:feature' },
+  });
+  await waitFor(() =>
+    expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).not.toBeChecked()
+  );
+  expect(screen.getByRole('heading', { name: 'Compose your structure' })).toBeVisible();
+  expect(mocks.apply).not.toHaveBeenCalled();
+});
+
+it('keeps pending Studio selection ahead of the bound sources', async () => {
+  mocks.query = '';
+  const workspace = boundWorkspace();
+  workspace.schemaBindings[0]!.studioSources![0]!.hash = 'different';
+  mocks.workspaces = [workspace];
+  mocks.pendingSchema = {
+    status: 'pending_preparation',
+    pending: { source: { kind: 'studio', candidateIds: ['provider'] } },
+  };
+  render(<SchemaStudioExperience projectId="p" />);
+  await expectBoundSelection();
+});
+
+it('keeps the saved edit selection ahead of the bound sources', () => {
+  mocks.query = '';
+  mocks.workspaces = [boundWorkspace()];
+  mocks.schemaEditCandidate = {
+    candidateId: 'schema-edit',
+    revision: 1,
+    localContribution: { nodes: {} },
+    origin: { channel: 'studio' },
+  };
+  render(<SchemaStudioExperience projectId="p" />);
+  expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).not.toBeChecked();
+});
+
+function boundWorkspace() {
+  return {
+    id: 'workspace_branch:main',
+    revision: 2,
+    status: 'draft',
+    targetBranch: 'main',
+    title: 'Main workspace',
+    schemaBindings: [
+      {
+        schemaName: 'team/base',
+        version: '1.0',
+        mode: 'draft_override',
+        studioSources: [
+          {
+            projectId: null,
+            artifactVersionId: 'base-v1',
+            canonicalName: 'team/base',
+            version: '1.0',
+            hash: 'sha256:abc',
+          },
+        ],
+      },
+    ] as WorkspaceSchemaBinding[],
+  };
+}
+
+async function expectBoundSelection() {
+  await waitFor(() =>
+    expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).toBeChecked()
+  );
+  expect(
+    within(screen.getByRole('region', { name: 'Composed structure' })).getByRole('button', {
+      name: /Shared foundation/,
+    })
+  ).toBeVisible();
+  expect(mocks.previewInputs).toContainEqual({
+    candidateIds: ['provider'],
+    workspaceId: 'workspace_branch:main',
+  });
+}
 
 it('previews a recovered Schema edit by server-managed candidate revision', async () => {
   mocks.workspaces = [

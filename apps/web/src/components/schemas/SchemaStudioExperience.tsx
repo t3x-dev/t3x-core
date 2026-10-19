@@ -338,6 +338,22 @@ export function SchemaStudioExperience({
         )
         .filter((id): id is string => !!id);
       setSelection(ids);
+    } else {
+      const ids = (persistedTarget.schemaBindings ?? [])
+        .flatMap((binding) => binding.studioSources ?? [])
+        .map(
+          (source) =>
+            candidates.items.find(
+              (candidate) =>
+                candidate.source?.artifactVersionId === source.artifactVersionId &&
+                candidate.source.hash === source.hash &&
+                candidate.source.projectId === source.projectId &&
+                candidate.source.canonicalName === source.canonicalName &&
+                candidate.source.version === source.version
+            )?.id
+        )
+        .filter((id): id is string => !!id);
+      setSelection([...new Set(ids)]);
     }
   }, [
     candidates.items,
