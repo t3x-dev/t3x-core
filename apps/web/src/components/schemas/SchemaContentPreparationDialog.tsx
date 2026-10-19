@@ -6,6 +6,7 @@ import {
   type SchemaPreparationPreview,
   type SchemaPreparationTarget,
 } from '@t3x-dev/api-client';
+import { canonicalJson, type YValue } from '@t3x-dev/yops';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,8 +16,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Textarea } from '@/components/ui/textarea';
+import { walkDraftStructure } from '@/domain/workspaces/draftStructure';
 import { useSchemaContentPreparation } from '@/hooks/schemas/useSchemaContentPreparation';
+import {
+  newPreparationChange,
+  type PreparationChange,
+  PreparationChangeForm,
+  PreparationValueTree,
+  preparationCommands,
+  readablePreparationPath,
+} from './SchemaPreparationFields';
 
 /** Shared Studio/Workspace preparation surface. A preview belongs to one exact form and revision. */
 export function SchemaContentPreparationDialog({
@@ -37,11 +46,12 @@ export function SchemaContentPreparationDialog({
   onPrepared: () => void | Promise<void>;
 }) {
   const scope = JSON.stringify([projectId, workspaceId, revision, target, open]);
-  const commandId = useId();
+  const pathsId = useId();
   const preparation = useSchemaContentPreparation(projectId, workspaceId);
   const epoch = useRef(0);
   const saving = useRef(false);
-  const [commands, setCommands] = useState('[]');
+  const [changes, setChanges] = useState<PreparationChange[]>([]);
+  const [stale, setStale] = useState(false);
   const [confirmedChanges, setConfirmedChanges] = useState<string[]>([]);
   const [context, setContext] = useState<SchemaPreparationPreview>();
   const [review, setReview] = useState<{
@@ -54,7 +64,8 @@ export function SchemaContentPreparationDialog({
 
   useEffect(() => {
     const token = ++epoch.current;
-    setCommands('[]');
+    setChanges([]);
+    setStale(false);
     setConfirmedChanges([]);
     setContext(undefined);
     setReview(undefined);
@@ -98,6 +109,7 @@ export function SchemaContentPreparationDialog({
       if (saving.current) return;
       ++epoch.current;
       setReview(undefined);
+      setStale(true);
       setBusy(false);
       setError('Workspace or source authority may have changed. Preview the migration again.');
     };
@@ -105,9 +117,10 @@ export function SchemaContentPreparationDialog({
     return () => window.removeEventListener('focus', invalidate);
   }, [open]);
 
-  function changeCommands(value: string) {
+  function changeCommands(value: PreparationChange[]) {
     ++epoch.current;
-    setCommands(value);
+    setChanges(value);
+    setStale(true);
     setReview(undefined);
     setBusy(false);
     setError(undefined);
@@ -121,16 +134,16 @@ export function SchemaContentPreparationDialog({
       const input = SchemaPreparationInputSchema.parse({
         target,
         ifRevision: revision,
-        commands: JSON.parse(commands),
+        commands: preparationCommands(changes),
         confirmedChanges,
       });
       const data = await preparation.preview(input);
       if (epoch.current !== token) return;
       setContext(data);
+      setStale(false);
       setReview({ data, input, requestId: `schema-preparation:${crypto.randomUUID()}` });
     } catch (cause) {
-      if (epoch.current === token)
-        setError(cause instanceof Error ? cause.message : 'Migration preview failed.');
+      if (epoch.current === token) setError(preparationError(cause));
     } finally {
       if (epoch.current === token) setBusy(false);
     }
@@ -167,13 +180,7 @@ export function SchemaContentPreparationDialog({
         []
     ),
   ];
-  const example =
-    data?.before &&
-    typeof data.before === 'object' &&
-    !Array.isArray(data.before) &&
-    data.before.domain === 't3x.dev/semantic-content'
-      ? '[{"kind":"rename_node","path":"content/trees/[key=candidate]/children/[key=requirements]","toKey":"features"}]'
-      : '[{"kind":"move","from":"candidate/requirements","to":"candidate/features"},{"kind":"set","path":"candidate/advantage","value":{"title":"Faster"}}]';
+  const differences = data ? contentDifferences(data.before, data.after) : [];
   return (
     <Dialog
       open={open}
@@ -181,12 +188,15 @@ export function SchemaContentPreparationDialog({
         if (!busy) onOpenChange(value);
       }}
     >
-      <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-5xl">
+      <DialogContent
+        className="flex max-h-[92vh] flex-col overflow-hidden sm:max-w-6xl"
+        showCloseButton={!busy}
+      >
         <DialogHeader>
           <DialogTitle>Prepare Schema content</DialogTitle>
           <DialogDescription>
-            Confirm mappings and fill required content. Saving creates one Draft revision containing
-            the Schema binding and content YOps. It does not publish or Commit.
+            Adapt existing content to the new Schema, preview the result, then save both together as
+            one Draft revision. Nothing is published or committed here.
           </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-2">
@@ -196,29 +206,59 @@ export function SchemaContentPreparationDialog({
             </p>
           ) : null}
           {busy ? <output className="text-xs">Checking the complete Draft…</output> : null}
-          <label htmlFor={commandId} className="block space-y-2 text-sm">
-            <span>Content migration commands (JSON)</span>
-            <Textarea
-              id={commandId}
-              aria-label="Content migration commands"
-              className="min-h-36 font-mono text-xs"
-              value={commands}
-              disabled={busy || !context}
-              onChange={(event) => changeCommands(event.target.value)}
-            />
-          </label>
-          <p className="text-xs text-[var(--text-secondary)]">
-            Supported: rename_node (semantic node key), move (path mapping), set (input or explicit
-            conversion), append, remove (explicit deletion). Paths address the full Draft shown
-            below. Update affected relation endpoints explicitly when renaming linked nodes.
-          </p>
-          <details className="text-xs">
-            <summary>Example commands</summary>
-            <pre className="mt-2 whitespace-pre-wrap break-all">{example}</pre>
-          </details>
+          <section aria-label="Content changes" className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-semibold">1 · Plan content changes</h3>
+                <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                  Move or rename existing content, fill missing values, or remove content
+                  explicitly.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                disabled={busy || !context || changes.length >= 200}
+                onClick={() => changeCommands([...changes, newPreparationChange()])}
+              >
+                + Add change
+              </Button>
+            </div>
+            <datalist id={pathsId}>
+              {walkDraftStructure(data?.before).map((node) => (
+                <option key={node.path} value={node.path}>
+                  {readablePreparationPath(node.path)}
+                </option>
+              ))}
+            </datalist>
+            {changes.length ? (
+              <fieldset disabled={busy || !context} className="space-y-3">
+                {changes.map((change, index) => (
+                  <PreparationChangeForm
+                    key={change.id}
+                    change={change}
+                    index={index}
+                    pathsId={pathsId}
+                    onChange={(next) =>
+                      changeCommands(changes.map((item) => (item.id === change.id ? next : item)))
+                    }
+                    onRemove={() => changeCommands(changes.filter((item) => item.id !== change.id))}
+                  />
+                ))}
+              </fieldset>
+            ) : (
+              <p className="rounded-lg border border-dashed p-4 text-sm text-[var(--text-secondary)]">
+                No content edits planned. If the checks pass, your existing content can be kept as
+                it is.
+              </p>
+            )}
+          </section>
           {mappingPaths.length ? (
             <fieldset className="space-y-2 rounded border p-3 text-xs">
-              <legend>Confirm each mapping</legend>
+              <legend>Confirm affected mappings</legend>
+              <p className="text-[var(--text-secondary)]">
+                Confirmations acknowledge your migration plan; they do not replace the required
+                content changes.
+              </p>
               {mappingPaths.map((path) => (
                 <label key={path} className="flex items-center gap-2">
                   <input
@@ -228,6 +268,7 @@ export function SchemaContentPreparationDialog({
                     onChange={(event) => {
                       ++epoch.current;
                       setReview(undefined);
+                      setStale(true);
                       setConfirmedChanges((items) =>
                         event.target.checked
                           ? [...items, path]
@@ -235,41 +276,148 @@ export function SchemaContentPreparationDialog({
                       );
                     }}
                   />
-                  My commands explicitly handle {path}
+                  My changes explicitly handle{' '}
+                  <span title={path}>{readablePreparationPath(path)}</span>
                 </label>
               ))}
             </fieldset>
           ) : null}
           {data ? (
             <>
+              <h3 className="border-t pt-4 text-sm font-semibold">2 · Check and preview</h3>
+              {stale ? (
+                <output className="block rounded border border-[var(--status-warning)] p-3 text-xs">
+                  Changes have not been previewed yet. The results below belong to the previous
+                  preview.
+                </output>
+              ) : null}
               {data.issues.length ? (
-                <section aria-label="Migration checks" className="rounded border p-3 text-xs">
-                  <h3 className="font-medium">Required inputs and mapping checks</h3>
+                <section
+                  aria-label="Migration checks"
+                  className="rounded-lg border border-[var(--status-warning)] p-4 text-xs"
+                >
+                  <h3 className="font-semibold">{data.issues.length} checks need attention</h3>
                   {data.issues.map((issue, index) => (
-                    <p className="mt-1" key={`${issue.code}:${issue.path}:${index}`}>
-                      {issue.path}: {issue.message}
+                    <p className="mt-2 break-words" key={`${issue.code}:${issue.path}:${index}`}>
+                      <span title={issue.path} className="font-medium">
+                        {readablePreparationPath(issue.path)}
+                      </span>{' '}
+                      · {issue.message}
                     </p>
                   ))}
                 </section>
               ) : (
-                <output className="text-sm">Content satisfies the candidate Schema.</output>
+                <output className="block rounded-lg border border-[var(--status-success)] bg-[var(--status-success-muted)] p-4 text-sm">
+                  Content satisfies the candidate Schema.
+                  {!review ? ' Preview once more to confirm before saving.' : ''}
+                </output>
               )}
-              <div className="grid min-w-0 gap-4 md:grid-cols-2">
-                <Document title="Current full Draft" value={data.before} />
-                <Document title="Prepared full Draft" value={data.after} />
-              </div>
-              <details className="text-xs">
-                <summary>Candidate YSchema</summary>
+              <section aria-label="Content comparison" className="rounded-lg border p-4">
+                <h4 className="text-sm font-medium">
+                  Content changes · {differences.length}{' '}
+                  {differences.length === 1 ? 'field' : 'fields'}
+                </h4>
+                {differences.length ? (
+                  <div className="mt-3 max-h-80 overflow-auto">
+                    <table className="w-full table-fixed text-left text-xs">
+                      <thead>
+                        <tr className="border-b text-[var(--text-secondary)]">
+                          <th className="w-1/4 p-2">Field</th>
+                          <th className="p-2">Before</th>
+                          <th className="p-2">After</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {differences.map((row) => (
+                          <tr key={row.path} className="border-b align-top last:border-0">
+                            <th title={row.path} className="break-words p-2 font-medium">
+                              {readablePreparationPath(row.path)}
+                            </th>
+                            <td className="break-words bg-[var(--diff-removed-bg)] p-2">
+                              {row.beforeExists ? (
+                                <PreparationValueTree label="Value" value={row.before} />
+                              ) : (
+                                'Not present'
+                              )}
+                            </td>
+                            <td className="break-words bg-[var(--diff-added-bg)] p-2">
+                              {row.afterExists ? (
+                                <PreparationValueTree label="Value" value={row.after} />
+                              ) : (
+                                'Removed'
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                    Content is unchanged. Only the Schema binding will be updated when you save.
+                  </p>
+                )}
+              </section>
+              <details className="rounded-lg border p-4 text-xs">
+                <summary className="cursor-pointer font-medium">
+                  Browse complete content · before and after
+                </summary>
+                <div className="mt-3 grid min-w-0 gap-4 md:grid-cols-2">
+                  <Document title="Current Draft" value={data.before} />
+                  <Document title="Prepared Draft" value={data.after} />
+                </div>
+              </details>
+              <details className="rounded-lg border p-4 text-xs">
+                <summary className="cursor-pointer font-medium">
+                  Target Schema · {Object.keys(data.schema.nodes ?? {}).length} nodes
+                </summary>
+                <p className="my-2 text-[var(--text-secondary)]">
+                  The structure and constraints the prepared content must satisfy.
+                </p>
                 <Document title="Target Schema definition" value={data.schema} />
               </details>
-              <details className="text-xs">
-                <summary>Generated guarded YOps</summary>
-                <Document title="Content YOps" value={data.operations} />
+              <details className="rounded-lg border p-4 text-xs">
+                <summary className="cursor-pointer font-medium">
+                  Execution plan · {data.operations.length}{' '}
+                  {data.operations.length === 1 ? 'operation' : 'operations'}
+                </summary>
+                <p className="my-2 text-[var(--text-secondary)]">
+                  Generated automatically from your changes. Guard checks prevent applying them to
+                  unexpected content.
+                </p>
+                <ol className="space-y-2">
+                  {data.operations.map((operation, index) => {
+                    const [kind, parameters] = Object.entries(operation)[0] ?? ['operation', {}];
+                    const labels: Record<string, string> = {
+                      assert: 'Check existing content',
+                      set: 'Set value',
+                      move: 'Move content',
+                      append: 'Append item',
+                      unset: 'Remove value',
+                      drop: 'Remove node',
+                      rename: 'Rename node',
+                      define: 'Create node',
+                    };
+                    return (
+                      <li key={`${index}:${kind}`}>
+                        <PreparationValueTree
+                          label={`${index + 1} · ${labels[kind] ?? kind}`}
+                          value={parameters}
+                          depth={2}
+                        />
+                      </li>
+                    );
+                  })}
+                </ol>
+                {!data.operations.length ? <p>No content operations needed.</p> : null}
               </details>
             </>
           ) : null}
         </div>
-        <div className="flex shrink-0 justify-end gap-2 border-t pt-3">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t pt-3">
+          <p className="mr-auto text-xs text-[var(--text-secondary)]">
+            3 · Save to Draft · not a publish or Commit
+          </p>
           <Button variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
@@ -289,9 +437,44 @@ function Document({ title, value }: { title: string; value: unknown }) {
   return (
     <section aria-label={title} className="min-w-0">
       <h3 className="mb-2 text-xs font-medium">{title}</h3>
-      <pre className="max-h-72 overflow-auto rounded bg-[var(--surface-panel)] p-3 text-xs">
-        {JSON.stringify(value, null, 2)}
-      </pre>
+      <div className="max-h-80 overflow-auto rounded bg-[var(--surface-panel)] p-3 text-xs">
+        <PreparationValueTree value={value} label={title} />
+      </div>
     </section>
   );
+}
+
+function contentDifferences(before: unknown, after: unknown) {
+  const leaves = (value: unknown) =>
+    new Map(
+      walkDraftStructure({ document: value })
+        .filter((node) => !node.expandable)
+        .map((node) => [node.path.replace(/^document\/?/, ''), node.value])
+    );
+  const left = leaves(before);
+  const right = leaves(after);
+  return [...new Set([...left.keys(), ...right.keys()])]
+    .filter(
+      (path) =>
+        left.has(path) !== right.has(path) ||
+        canonicalJson(left.get(path) as YValue) !== canonicalJson(right.get(path) as YValue)
+    )
+    .map((path) => ({
+      path,
+      before: left.get(path),
+      after: right.get(path),
+      beforeExists: left.has(path),
+      afterExists: right.has(path),
+    }));
+}
+
+function preparationError(cause: unknown) {
+  if (cause && typeof cause === 'object' && 'issues' in cause && Array.isArray(cause.issues))
+    return cause.issues
+      .map(
+        (issue: { message: string; path?: Array<string | number> }) =>
+          `${issue.path?.join(' › ') || 'Migration'}: ${issue.message}`
+      )
+      .join(' ');
+  return cause instanceof Error ? cause.message : 'Migration preview failed.';
 }
