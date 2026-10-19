@@ -1,0 +1,106 @@
+.section {
+  min-width: 0;
+  scroll-margin-top: 24px;
+  padding-bottom: 36px;
+  border-bottom: 1px solid var(--stroke-divider);
+  color: var(--text-primary);
+}
+.section:focus {
+  outline: none;
+}
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.heading {
+  display: flex;
+  flex: 1 1 240px;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 12px;
+}
+.icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 24px;
+  height: 26px;
+  color: var(--text-secondary);
+}
+.title {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.description {
+  margin-top: 6px;
+  max-width: 64ch;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+.action {
+  max-width: 100%;
+}
+.body {
+  min-width: 0;
+}
+.danger {
+  padding: 24px;
+  border: 1px solid color-mix(in srgb, var(--status-error) 35%, var(--stroke-default));
+  border-radius: var(--radius-lg);
+}
+.danger .icon,
+.danger .title {
+  color: var(--status-error);
+}
+.field {
+  display: grid;
+  grid-template-columns: minmax(140px, 180px) minmax(0, 1fr);
+  gap: 24px;
+}
+.fieldLabel {
+  padding-top: 8px;
+}
+.fieldLabel label {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+.hint {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+.fieldControl {
+  min-width: 0;
+}
+@media (max-width: 1000px) {
+  .field {
+    grid-template-columns: minmax(120px, 150px) minmax(0, 1fr);
+    gap: 16px;
+  }
+}
+@media (max-width: 760px) {
+  .section {
+    padding-bottom: 28px;
+  }
+  .header {
+    margin-bottom: 20px;
+  }
+  .field {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .fieldLabel {
+    padding-top: 0;
+  }
+  .danger {
+    padding: 20px;
+  }
+}

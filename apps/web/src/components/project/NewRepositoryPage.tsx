@@ -5,7 +5,16 @@ import {
   RepositoryReadmeSchema,
   RepositoryTagsSchema,
 } from '@t3x-dev/api-client';
-import { ChevronDown, Globe, Link2, LockKeyhole, UserRound } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  ChevronDown,
+  Globe,
+  Link2,
+  LockKeyhole,
+  UserRound,
+} from 'lucide-react';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
@@ -42,6 +51,11 @@ export function NewRepositoryPage() {
   const owners = Array.from(new Set([routeOwner, ...accounts.map((item) => item.namespace.slug)]));
   const VisibilityIcon =
     visibility === 'private' ? LockKeyhole : visibility === 'public' ? Globe : Link2;
+  const visibilityDescription = {
+    private: 'Only people with permission can access this repository.',
+    unlisted: 'Anyone with the repository address can access it.',
+    public: 'Anyone can discover and access this repository.',
+  }[visibility];
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -61,28 +75,30 @@ export function NewRepositoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--surface-card)] text-[var(--text-primary)]">
+    <div className={styles.shell}>
       <DiscoverHeader
         owner={owner}
         namespaceTab="repositories"
         settingsHref={`/settings/provider-credentials?owner=${encodeURIComponent(owner)}`}
       />
       <main className={styles.page}>
+        <Link href={`/${routeOwner}`} className={styles.backLink}>
+          <ArrowLeft aria-hidden="true" className="size-4" /> Back to repositories
+        </Link>
         <header className={styles.heading}>
+          <p className={styles.eyebrow}>A new place to begin</p>
           <h1>Create a new repository</h1>
           <p>
-            A repository holds your structured state and its history. Add source material later in
-            your Workspace.
+            Keep your structured state and its history together. Start with the essentials; add
+            source material later in your Workspace.
           </p>
           <p className={styles.requiredNote}>Required fields are marked with an asterisk (*).</p>
         </header>
-        <form onSubmit={submit}>
+        <form onSubmit={submit} aria-busy={setup.pending}>
           <section className={styles.section} aria-labelledby="repository-general-heading">
             <div className={styles.sectionHeading}>
-              <span className={styles.step} aria-hidden="true">
-                1
-              </span>
               <h2 id="repository-general-heading">General</h2>
+              <p>Choose where this repository belongs and give it a name.</p>
             </div>
             <div className={styles.sectionBody}>
               <div className={styles.nameRow}>
@@ -156,10 +172,8 @@ export function NewRepositoryPage() {
           </section>
           <section className={styles.section} aria-labelledby="repository-configuration-heading">
             <div className={styles.sectionHeading}>
-              <span className={styles.step} aria-hidden="true">
-                2
-              </span>
               <h2 id="repository-configuration-heading">Configuration</h2>
+              <p>Set access now. README and tags are optional.</p>
             </div>
             <div className={styles.sectionBody}>
               <div className={styles.visibilityCard}>
@@ -167,7 +181,7 @@ export function NewRepositoryPage() {
                   <label htmlFor="repo-visibility">
                     Choose visibility <span aria-hidden="true">*</span>
                   </label>
-                  <p id="repository-visibility-help">Choose who can access this repository.</p>
+                  <p id="repository-visibility-help">{visibilityDescription}</p>
                 </div>
                 <div className={styles.selectControl}>
                   <VisibilityIcon className={styles.selectIcon} size={16} aria-hidden="true" />
@@ -188,7 +202,7 @@ export function NewRepositoryPage() {
               </div>
               <div className={styles.optionGroup}>
                 <div className={styles.reservedOption}>
-                  <div className="space-y-2">
+                  <div className={styles.readmeOption}>
                     <label className="flex items-center gap-2 text-sm font-semibold">
                       <input
                         type="checkbox"
@@ -198,9 +212,7 @@ export function NewRepositoryPage() {
                       />
                       Initialize README
                     </label>
-                    <p className="text-xs text-[var(--text-secondary)]">
-                      Use the confirmed repository name and description. You can edit it later.
-                    </p>
+                    <p>Start with your repository name and description. You can edit it later.</p>
                     {!parsedReadme.success ? (
                       <p role="alert" className="text-sm text-[var(--status-error)]">
                         {parsedReadme.error.issues[0]?.message}
@@ -220,8 +232,14 @@ export function NewRepositoryPage() {
             </p>
           )}
           <footer className={styles.footer}>
-            <Button type="submit" variant="commit" size="sm" disabled={!ready || setup.pending}>
+            <p>
+              {setup.started
+                ? 'Your repository is created. Finish setup to open its Workspace.'
+                : 'Next, you’ll enter a new Workspace where you can add source material.'}
+            </p>
+            <Button type="submit" size="lg" disabled={!ready || setup.pending}>
               {setup.pending ? 'Creating…' : setup.started ? 'Retry setup' : 'Create repository'}
+              {!setup.pending && <ArrowRight aria-hidden="true" className="size-4" />}
             </Button>
           </footer>
         </form>

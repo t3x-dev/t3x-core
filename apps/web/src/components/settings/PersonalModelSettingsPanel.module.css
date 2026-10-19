@@ -1,20 +1,22 @@
 .page {
   width: 100%;
   min-height: 100%;
-  padding: 20px 40px 80px;
-  color: #172554;
-  background: #fff;
+  padding: 32px clamp(20px, 4vw, 48px) 56px;
+  color: var(--text-primary);
+  background: var(--surface-card);
 }
 .inner {
+  margin-inline: auto;
+  min-width: 0;
   width: 100%;
-  max-width: 1100px;
+  max-width: 1120px;
 }
 .breadcrumb {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
-  color: #64748b;
+  margin-bottom: 24px;
+  color: var(--text-secondary);
   font-size: 13px;
   line-height: 20px;
 }
@@ -23,65 +25,67 @@
   text-decoration: none;
 }
 .breadcrumb span {
-  color: #64748b;
+  color: var(--text-secondary);
 }
 .breadcrumb strong {
-  color: #172554;
+  color: var(--text-primary);
   font-weight: 600;
 }
 .titleGroup {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 24px;
 }
 .titleGroup h1 {
   margin: 0;
-  color: #071765;
-  font-size: 28px;
+  color: var(--text-primary);
+  font-size: 24px;
   font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 38px;
+  letter-spacing: normal;
+  line-height: 32px;
 }
 .titleGroup > span {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   padding: 5px 13px;
-  color: #0969ff;
+  color: var(--accent-commit);
   font-size: 12px;
   font-weight: 600;
   line-height: 16px;
-  background: #eaf3ff;
+  background: var(--accent-commit-soft);
   border-radius: 999px;
 }
 .composeCard,
 .switcherCard,
 .fallbackCard {
   width: 100%;
-  background: #fff;
-  border: 1px solid #dbe6f5;
+  background: var(--surface-card);
+  border: 1px solid var(--stroke-default);
   border-radius: 9px;
 }
 .composeCard {
   min-height: 109px;
-  padding: 14px 17px 18px;
-  margin-bottom: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
 }
 .switcherCard {
-  min-height: 268px;
-  padding: 14px 17px 11px;
-  margin-bottom: 12px;
+  overflow-x: auto;
+  min-height: 0;
+  padding: 24px;
+  margin-bottom: 24px;
 }
 .fallbackCard {
   min-height: 110px;
-  padding: 14px 17px 18px;
+  padding: 24px;
 }
 .composeCard h2,
 .switcherCard h2,
 .fallbackCard h2 {
   margin: 0 0 11px;
-  color: #101b4f;
+  color: var(--text-primary);
   font-size: 16px;
   font-weight: 700;
   line-height: 22px;
@@ -90,10 +94,10 @@
   position: relative;
   display: flex;
   width: 100%;
-  height: 38px;
+  min-height: 40px;
   align-items: center;
-  background: #fff;
-  border: 1px solid #cbdcf2;
+  background: var(--surface-card);
+  border: 1px solid var(--stroke-default);
   border-radius: 7px;
 }
 .modelSelect > span {
@@ -109,9 +113,9 @@
   width: 100%;
   height: 100%;
   padding: 0 38px 0 50px;
-  color: #172554;
+  color: var(--text-primary);
   font: inherit;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   background: transparent;
   border: 0;
@@ -125,19 +129,19 @@
 }
 .tableHeader {
   height: 28px;
-  color: #5870ad;
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
-  border-bottom: 1px solid #dbe6f5;
+  border-bottom: 1px solid var(--stroke-default);
 }
 .tableHeader span:first-child {
   padding-left: 8px;
 }
 .modelRow {
   min-height: 45px;
-  color: #172554;
+  color: var(--text-primary);
   font-size: 12px;
-  border-bottom: 1px solid #dbe6f5;
+  border-bottom: 1px solid var(--stroke-default);
 }
 .modelRow:last-child {
   border-bottom: 0;
@@ -149,7 +153,7 @@
   padding-left: 4px;
 }
 .rank svg {
-  color: #5e87dd;
+  color: var(--accent-commit);
   cursor: grab;
 }
 .rank b {
@@ -180,13 +184,13 @@
   font-size: 31px;
 }
 .openAiMark {
-  color: #111;
+  color: var(--text-primary);
   font-size: 31px;
   font-weight: 500;
 }
 .googleMark {
   color: #4285f4;
-  font-family: Arial, sans-serif;
+  font-family: inherit;
   font-size: 30px;
   font-weight: 700;
 }
@@ -194,15 +198,15 @@
   display: flex;
   align-items: center;
   gap: 36px;
-  color: #5870ad;
+  color: var(--text-secondary);
 }
 .providerCell i {
   padding: 3px 9px;
-  color: #7183a6;
-  font-size: 11px;
+  color: var(--text-secondary);
+  font-size: 12px;
   font-style: normal;
   line-height: 16px;
-  background: #e8eef6;
+  background: var(--surface-panel);
   border-radius: 999px;
 }
 .switch {
@@ -210,7 +214,7 @@
   width: 42px;
   height: 23px;
   padding: 0;
-  background: #dbe6f5;
+  background: var(--stroke-default);
   border: 0;
   border-radius: 999px;
   cursor: pointer;
@@ -221,13 +225,13 @@
   left: 3px;
   width: 17px;
   height: 17px;
-  background: #fff;
+  background: var(--on-accent);
   border-radius: 50%;
   box-shadow: 0 1px 3px rgb(15 23 42 / 24%);
   transition: transform 150ms ease;
 }
 .switch[aria-checked="true"] {
-  background: #0878f9;
+  background: var(--accent-commit);
 }
 .switch[aria-checked="true"] i {
   transform: translateX(19px);
@@ -245,11 +249,11 @@
   min-width: 122px;
   height: 37px;
   padding: 0 18px;
-  color: #fff;
+  color: var(--on-accent);
   font: inherit;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
-  background: #0878f9;
+  background: var(--accent-commit);
   border: 0;
   border-radius: 7px;
   box-shadow: 0 1px 2px rgb(15 23 42 / 8%);
@@ -266,13 +270,13 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 13px;
-  border: 1px solid #dbe6f5;
+  border: 1px solid var(--stroke-default);
   border-radius: 9px;
 }
 .error button {
-  color: #0969ff;
+  color: var(--accent-commit);
   font: inherit;
   background: transparent;
   border: 0;
@@ -295,8 +299,8 @@
   align-items: center;
   gap: 4px;
   padding: 6px 12px;
-  background: #fff;
-  border: 1px solid #d7dee9;
+  background: var(--surface-card);
+  border: 1px solid var(--stroke-default);
   border-bottom: 0;
   border-radius: 10px 10px 0 0;
   box-shadow: 0 -2px 8px rgb(15 23 42 / 4%);
@@ -309,27 +313,28 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-  color: #111827;
-  background: #fff;
+  color: var(--text-primary);
+  background: var(--surface-card);
   border: 0;
   border-radius: 8px;
   cursor: pointer;
 }
 .prototypeTools button:hover {
-  background: #f1f5f9;
+  background: var(--surface-panel);
 }
 .prototypeTools > i {
   width: 1px;
   height: 24px;
   margin: 0 4px;
-  background: #e2e8f0;
+  background: var(--stroke-default);
 }
 @media (max-width: 900px) {
   .page {
-    padding-right: 24px;
-    padding-left: 24px;
+    padding-right: 20px;
+    padding-left: 20px;
   }
   .switcherCard {
+    overflow-x: auto;
     overflow-x: auto;
   }
   .tableHeader,

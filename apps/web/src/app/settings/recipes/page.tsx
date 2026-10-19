@@ -15,12 +15,11 @@ import {
   Trash2,
   Webhook,
   Workflow,
-  X,
   XCircle,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { RecipeForm } from '@/components/settings/RecipeForm';
 import { AlertDialog } from '@/components/ui/alert-dialog';
@@ -31,6 +30,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { useRecipeCommands } from '@/hooks/recipes/useRecipeCommands';
@@ -89,6 +89,7 @@ export default function RecipesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const formOpenerRef = useRef<HTMLElement | null>(null);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -146,15 +147,20 @@ export default function RecipesPage() {
     setSelectedProjectId(null);
   }, []);
 
-  const openCreate = useCallback(() => {
-    const targetProjectId = projectId || projects[0]?.id;
-    if (!targetProjectId) return;
-    setSelectedProjectId(targetProjectId);
-    setEditingRecipe(null);
-    setFormOpen(true);
-  }, [projectId, projects]);
+  const openCreate = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
+      formOpenerRef.current = event.currentTarget;
+      const targetProjectId = projectId || projects[0]?.id;
+      if (!targetProjectId) return;
+      setSelectedProjectId(targetProjectId);
+      setEditingRecipe(null);
+      setFormOpen(true);
+    },
+    [projectId, projects]
+  );
 
-  const openEdit = useCallback((recipe: Recipe) => {
+  const openEdit = useCallback((recipe: Recipe, opener: HTMLElement) => {
+    formOpenerRef.current = opener;
     setSelectedProjectId(recipe.project_id);
     setEditingRecipe(recipe);
     setFormOpen(true);
@@ -209,7 +215,7 @@ export default function RecipesPage() {
       <section className={styles.workspace}>
         <header className={styles.pageHeader}>
           <nav className={styles.breadcrumbs} aria-label="Breadcrumb">
-            <Link href={settingsHref}>Project settings</Link>
+            <Link href={settingsHref}>{projectId ? 'Project settings' : 'Settings'}</Link>
             <span aria-hidden="true">/</span>
             <span>Automations</span>
             <span aria-hidden="true">/</span>
@@ -218,7 +224,7 @@ export default function RecipesPage() {
           <div className={styles.titleRow}>
             <div className={styles.titleCluster}>
               <h1>Recipes</h1>
-              <span className={styles.scopeBadge}>Project</span>
+              <span className={styles.scopeBadge}>{projectId ? 'Project' : 'Across projects'}</span>
             </div>
             <Button
               className={styles.newButton}
@@ -268,7 +274,11 @@ export default function RecipesPage() {
                   ) : recipes.length === 0 ? (
                     <tr>
                       <td colSpan={5} className={styles.emptyCell}>
-                        <span>No recipes configured for this project.</span>
+                        <span>
+                          {projectId
+                            ? 'No recipes configured for this project.'
+                            : 'No recipes configured in the loaded projects.'}
+                        </span>
                         <button type="button" onClick={openCreate}>
                           Create your first recipe
                         </button>
@@ -315,7 +325,11 @@ export default function RecipesPage() {
                           <td className={styles.lastRun}>—</td>
                           <td className={styles.actionColumn}>
                             <div className={styles.rowActions}>
-                              <Button variant="outline" size="sm" onClick={() => openEdit(recipe)}>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(event) => openEdit(recipe, event.currentTarget)}
+                              >
                                 <Pencil aria-hidden="true" />
                                 Edit
                               </Button>
@@ -361,13 +375,28 @@ export default function RecipesPage() {
         </div>
       </section>
 
-      {formOpen ? (
-        <aside className={styles.drawer} aria-label={editingRecipe ? 'Edit recipe' : 'New recipe'}>
+      <Sheet
+        open={formOpen}
+        onOpenChange={(open) => {
+          if (!open) closeForm();
+        }}
+      >
+        <SheetContent
+          className={styles.drawer}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            document.getElementById('recipe-name')?.focus();
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            formOpenerRef.current?.focus();
+          }}
+        >
           <div className={styles.drawerHeader}>
-            <h2>{editingRecipe ? 'Edit recipe' : 'New recipe'}</h2>
-            <button type="button" aria-label="Close recipe form" onClick={closeForm}>
-              <X aria-hidden="true" />
-            </button>
+            <SheetTitle>{editingRecipe ? 'Edit recipe' : 'New recipe'}</SheetTitle>
+            <SheetDescription className="sr-only">
+              Configure this recipe's trigger and actions.
+            </SheetDescription>
           </div>
           <RecipeForm
             recipe={editingRecipe}
@@ -377,8 +406,8 @@ export default function RecipesPage() {
             projectName={activeProjectName}
             variant="drawer"
           />
-        </aside>
-      ) : null}
+        </SheetContent>
+      </Sheet>
 
       <AlertDialog
         open={deleteTarget !== null}

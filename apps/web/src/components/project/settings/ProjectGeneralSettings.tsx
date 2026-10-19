@@ -1,14 +1,6 @@
 'use client';
 
-import {
-  Check,
-  ChevronRight,
-  Copy,
-  FileText,
-  GitBranch,
-  GitCommitHorizontal,
-  Pencil,
-} from 'lucide-react';
+import { Check, Copy, FileText, GitBranch, GitCommitHorizontal, Pencil } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -29,9 +21,7 @@ function CopyValue({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className={styles.copyField}>
-      <code className="min-w-0 flex-1 truncate font-mono text-xs text-[var(--text-primary)]">
-        {value}
-      </code>
+      <code className="min-w-0 flex-1 font-mono text-xs text-[var(--text-primary)]">{value}</code>
       <Button
         aria-label={`Copy ${label}`}
         className="size-7"
@@ -132,16 +122,18 @@ export function ProjectGeneralSettings({
   }
 
   return (
-    <section className={styles.general} id="general" aria-labelledby="general-heading">
-      <div className={styles.breadcrumb}>
-        Settings <ChevronRight size={12} aria-hidden="true" /> General
-      </div>
-      <h1 id="general-heading">General</h1>
+    <section
+      className={styles.general}
+      id="general"
+      aria-labelledby="general-heading"
+      tabIndex={-1}
+    >
+      <h2 id="general-heading">General</h2>
       <p className={styles.lead}>
-        Name and describe this project, and find the identifiers other tools use to reach it.
+        Manage your repository's name, description, and stable identifiers.
       </p>
       <form className={styles.details} onSubmit={handleSubmit}>
-        <h2>Project details</h2>
+        <h3>Repository details</h3>
         <SettingsField
           hint="Shown in the header and in links."
           htmlFor="settings-repo-name"
@@ -181,7 +173,7 @@ export function ProjectGeneralSettings({
               placeholder="Add a description"
               value={description}
             />
-            <p className="mt-1 text-right text-[11px] tabular-nums text-[var(--text-tertiary)]">
+            <p className="text-right text-xs tabular-nums text-[var(--text-secondary)]">
               {description.length} / {DESCRIPTION_LIMIT}
             </p>
           </div>
@@ -210,18 +202,14 @@ export function ProjectGeneralSettings({
           >
             Discard
           </Button>
-          <Button
-            disabled={!dirty || saving || (nameEdited && !nameCheck.canSubmit)}
-            type="submit"
-            variant="commit"
-          >
+          <Button disabled={!dirty || saving || (nameEdited && !nameCheck.canSubmit)} type="submit">
             {saving ? 'Saving…' : 'Save changes'}
           </Button>
         </div>
       </form>
 
       <div className={styles.identifiers}>
-        <h2>Identifiers</h2>
+        <h3>Identifiers</h3>
         <SettingsField hint="Stable and read-only." label="Project ID">
           <CopyValue label="project ID" value={project.project_id} />
         </SettingsField>
@@ -230,7 +218,7 @@ export function ProjectGeneralSettings({
         </SettingsField>
       </div>
       <div className={styles.contents}>
-        <h2>Contents</h2>
+        <h3>Contents</h3>
         <p>What this project currently holds.</p>
         <RepositoryStats project={project} />
       </div>

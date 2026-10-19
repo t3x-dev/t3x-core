@@ -15,12 +15,12 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  background: var(--surface-elevated);
+  background: var(--surface-card);
 }
 
 .pageHeader {
   flex: 0 0 auto;
-  padding: 20px 28px 16px;
+  padding: 32px clamp(20px, 4vw, 48px) 24px;
 }
 
 .breadcrumbs {
@@ -45,6 +45,7 @@
 .titleRow,
 .titleCluster {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
 }
 
@@ -60,7 +61,7 @@
 
 .titleCluster h1 {
   margin: 0;
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 700;
   line-height: 32px;
 }
@@ -95,7 +96,7 @@
 .contentScroll {
   flex: 1 1 auto;
   min-height: 0;
-  padding: 0 28px 24px;
+  padding: 0 clamp(20px, 4vw, 48px) 32px;
   overflow: auto;
 }
 
@@ -129,7 +130,7 @@
 .table th {
   height: 42px;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 16px;
 }
@@ -145,7 +146,7 @@
 .table td {
   height: 76px;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 16px;
 }
 
@@ -229,7 +230,7 @@
 
 .nameCell small {
   color: var(--text-tertiary);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 15px;
 }
 
@@ -248,7 +249,7 @@
   padding: 5px 7px;
   overflow: hidden;
   color: var(--text-secondary);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 500;
   line-height: 13px;
   background: var(--hover-bg);
@@ -277,7 +278,7 @@
   gap: 6px;
   height: 24px;
   padding: 0 9px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   border-radius: var(--radius-pill);
 }
@@ -321,7 +322,7 @@
   width: 78px;
   gap: 4px;
   padding-inline: 8px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .rowActions > button svg {
@@ -345,7 +346,7 @@
   background: transparent;
   border: 0;
   border-radius: var(--radius-control);
-  opacity: 0;
+  opacity: 1;
   transform: translateY(-50%);
 }
 
@@ -393,13 +394,16 @@
 }
 
 .drawer {
+  position: fixed;
   display: flex;
-  flex: 0 0 320px;
   flex-direction: column;
-  width: 320px;
-  height: 100%;
+  gap: 0;
+  width: min(360px, 100vw);
+  max-width: none;
+  height: 100dvh;
   min-height: 0;
-  background: var(--surface-elevated);
+  padding: 0;
+  background: var(--surface-card);
   border-left: 1px solid var(--stroke-default);
   box-shadow: var(--fx-shadow-lg);
 }
@@ -450,25 +454,14 @@
   }
 }
 
-@media (max-width: 1080px) {
-  .drawer {
-    position: absolute;
-    z-index: 30;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: min(360px, 100%);
-  }
-}
-
 @media (max-width: 720px) {
   .pageHeader {
-    padding: 16px;
+    padding: 24px 20px;
   }
 
   .breadcrumbs {
-    overflow: hidden;
-    white-space: nowrap;
+    flex-wrap: wrap;
+    overflow-wrap: anywhere;
   }
 
   .titleRow {
@@ -478,8 +471,8 @@
   }
 
   .titleCluster h1 {
-    font-size: 22px;
-    line-height: 28px;
+    font-size: 24px;
+    line-height: 32px;
   }
 
   .newButton {
@@ -487,6 +480,6 @@
   }
 
   .contentScroll {
-    padding: 0 16px 20px;
+    padding: 0 20px 24px;
   }
 }

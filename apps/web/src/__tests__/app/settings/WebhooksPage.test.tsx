@@ -11,9 +11,10 @@ const createWebhook = vi.fn();
 const updateWebhook = vi.fn();
 const deleteWebhook = vi.fn();
 const testWebhook = vi.fn();
+let searchParams = new URLSearchParams('project=proj_test');
 
 vi.mock('next/navigation', () => ({
-  useSearchParams: () => new URLSearchParams('project=proj_test'),
+  useSearchParams: () => searchParams,
 }));
 
 vi.mock('next/link', () => ({
@@ -35,6 +36,7 @@ vi.mock('@/hooks/webhooks/useWebhookCommands', () => ({
 describe('WebhooksPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    searchParams = new URLSearchParams('project=proj_test');
     listWebhooks.mockResolvedValue([]);
   });
 
@@ -57,7 +59,7 @@ describe('WebhooksPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'New webhook' }));
 
-    expect(screen.getByRole('complementary', { name: 'New webhook' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'New webhook' })).toBeInTheDocument();
     expect(screen.getByLabelText('Endpoint URL')).toHaveAttribute(
       'placeholder',
       'https://example.com/webhook'
@@ -66,6 +68,32 @@ describe('WebhooksPage', () => {
     expect(screen.getByRole('checkbox', { name: 'Merge Completed' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Leaf Created' })).not.toBeChecked();
     expect(screen.getByRole('button', { name: 'Create Webhook' })).toBeDisabled();
+  });
+
+  it('describes the unscoped empty list without claiming a current project', async () => {
+    searchParams = new URLSearchParams();
+    listWebhooks.mockResolvedValue([]);
+    render(<WebhooksPage />);
+    expect(await screen.findByText('No webhooks configured.')).toBeInTheDocument();
+  });
+
+  it('moves focus into the webhook dialog, traps Tab, and returns focus after Escape', async () => {
+    render(<WebhooksPage />);
+    await waitFor(() => expect(listWebhooks).toHaveBeenCalledTimes(1));
+    const opener = screen.getByRole('button', { name: 'New webhook' });
+    fireEvent.click(opener);
+
+    const field = screen.getByLabelText('Endpoint URL');
+    await waitFor(() => expect(field).toHaveFocus());
+    expect(screen.queryByRole('heading', { name: 'Webhooks', level: 1 })).not.toBeInTheDocument();
+    const close = screen.getByRole('button', { name: 'Close' });
+    close.focus();
+    fireEvent.keyDown(close, { key: 'Tab' });
+    expect(field).toHaveFocus();
+    fireEvent.keyDown(field, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(opener).toHaveFocus();
   });
 
   it('creates a project-scoped webhook using the real supported event names', async () => {

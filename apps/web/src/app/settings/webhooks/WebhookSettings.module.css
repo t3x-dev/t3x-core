@@ -15,12 +15,12 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  background: var(--surface-elevated);
+  background: var(--surface-card);
 }
 
 .pageHeader {
   flex: 0 0 auto;
-  padding: 20px 28px 16px;
+  padding: 32px clamp(20px, 4vw, 48px) 24px;
 }
 
 .breadcrumbs {
@@ -45,6 +45,7 @@
 .titleRow,
 .titleCluster {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
 }
 
@@ -60,7 +61,7 @@
 
 .titleCluster h1 {
   margin: 0;
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 700;
   letter-spacing: 0;
   line-height: 32px;
@@ -94,7 +95,7 @@
   flex-direction: column;
   gap: 18px;
   min-height: 0;
-  padding: 0 28px 24px;
+  padding: 0 clamp(20px, 4vw, 48px) 32px;
   overflow: auto;
 }
 
@@ -155,14 +156,14 @@
 
 .table th {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 16px;
 }
 
 .table td {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 16px;
 }
 
@@ -250,7 +251,7 @@
   min-height: 20px;
   padding: 2px 6px;
   color: var(--text-secondary);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 500;
   line-height: 14px;
   background: var(--hover-bg-strong);
@@ -264,7 +265,7 @@
   height: 24px;
   gap: 6px;
   padding: 0 9px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   border-radius: var(--radius-pill);
 }
@@ -322,7 +323,7 @@
   height: 28px;
   gap: 5px;
   padding-inline: 10px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .emptyCell {
@@ -354,12 +355,16 @@
 }
 
 .drawer {
+  position: fixed;
   display: flex;
-  flex: 0 0 294px;
   flex-direction: column;
-  width: 294px;
+  gap: 0;
+  width: min(360px, 100vw);
+  max-width: none;
+  height: 100dvh;
   min-height: 0;
-  background: var(--surface-elevated);
+  padding: 0;
+  background: var(--surface-card);
   border-left: 1px solid var(--stroke-default);
   box-shadow: var(--fx-shadow-lg);
 }
@@ -408,17 +413,6 @@
   }
 }
 
-@media (max-width: 1040px) {
-  .drawer {
-    position: absolute;
-    z-index: 30;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: min(360px, 100%);
-  }
-}
-
 @media (max-width: 720px) {
   .titleRow {
     align-items: stretch;
@@ -427,17 +421,17 @@
   }
 
   .pageHeader {
-    padding: 16px;
+    padding: 24px 20px;
   }
 
   .breadcrumbs {
-    overflow: hidden;
-    white-space: nowrap;
+    flex-wrap: wrap;
+    overflow-wrap: anywhere;
   }
 
   .titleCluster h1 {
-    font-size: 22px;
-    line-height: 28px;
+    font-size: 24px;
+    line-height: 32px;
   }
 
   .newButton {
@@ -446,6 +440,6 @@
   }
 
   .contentScroll {
-    padding: 0 16px 20px;
+    padding: 0 20px 24px;
   }
 }

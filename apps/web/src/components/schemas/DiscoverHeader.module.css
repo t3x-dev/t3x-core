@@ -1,0 +1,271 @@
+.header {
+  position: relative;
+  z-index: 3;
+  flex: none;
+  min-width: 0;
+  width: 100%;
+  border-bottom: 1px solid var(--stroke-default);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.topRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  min-height: 64px;
+  padding: 12px 28px;
+}
+
+.identity {
+  display: flex;
+  flex: 1 1 300px;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.brand {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 9px;
+  min-height: 36px;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.separator {
+  flex: none;
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+
+.context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-width: 0;
+}
+
+.owner,
+.repository {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 36px;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+
+.owner {
+  color: var(--text-secondary);
+}
+
+.owner svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.owner span {
+  min-width: 0;
+}
+
+.repository h1 {
+  margin: 0;
+  font-size: inherit;
+  font-weight: 600;
+  line-height: inherit;
+}
+
+.visibility {
+  flex: none;
+  max-width: 100%;
+  padding: 1px 8px;
+  border: 1px solid var(--stroke-default);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.utilities,
+.globalNav,
+.actions {
+  display: flex;
+  align-items: center;
+}
+
+.utilities {
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.globalNav {
+  gap: 16px;
+}
+
+.globalNav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.actions {
+  gap: 6px;
+}
+
+.search,
+.create,
+.account {
+  min-height: 36px;
+}
+
+.search {
+  color: var(--text-secondary);
+}
+
+.shortcut {
+  margin-left: 4px;
+  padding: 0 4px;
+  border: 1px solid var(--stroke-default);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.account {
+  min-width: 36px;
+  color: var(--text-secondary);
+}
+
+.account svg {
+  width: 20px;
+  height: 20px;
+}
+
+.tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 20px;
+  max-width: 100%;
+  padding: 0 28px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.tab {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 9px 2px 10px;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  white-space: nowrap;
+  transition:
+    color var(--motion-fast),
+    border-color var(--motion-fast);
+}
+
+.tab svg {
+  width: 16px;
+  height: 16px;
+}
+
+.tab[aria-current="page"] {
+  border-bottom-color: var(--text-primary);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.globalNav a[aria-current="page"],
+.header a:hover {
+  color: var(--text-primary);
+}
+
+.brand:focus-visible,
+.owner:focus-visible,
+.repository:focus-visible,
+.globalNav a:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -4px;
+  border-radius: 4px;
+}
+
+@media (max-width: 760px) {
+  .topRow {
+    gap: 8px;
+    padding: 12px 16px 8px;
+  }
+
+  .identity {
+    flex-basis: 100%;
+    gap: 10px;
+  }
+
+  .context {
+    gap: 2px 8px;
+  }
+
+  .utilities {
+    flex: 1 1 100%;
+    justify-content: space-between;
+    gap: 8px;
+    margin-left: 0;
+  }
+
+  .globalNav {
+    gap: 14px;
+  }
+
+  .searchLabel,
+  .shortcut,
+  .createLabel {
+    display: none;
+  }
+
+  .search,
+  .create {
+    width: 36px;
+    padding-inline: 0;
+  }
+
+  .tabs {
+    gap: 20px;
+    padding-inline: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab {
+    transition: none;
+  }
+}

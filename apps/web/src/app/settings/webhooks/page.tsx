@@ -12,12 +12,11 @@ import {
   RotateCcw,
   Trash2,
   Webhook,
-  X,
   XCircle,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { WebhookForm } from '@/components/settings/WebhookForm';
 import { AlertDialog } from '@/components/ui/alert-dialog';
@@ -28,6 +27,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { useWebhookCommands } from '@/hooks/webhooks/useWebhookCommands';
 import type { CreateWebhookInput, UpdateWebhookInput, WebhookData } from '@/types/api';
@@ -83,6 +83,7 @@ export default function WebhooksPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const formOpenerRef = useRef<HTMLElement | null>(null);
   const [editingWebhook, setEditingWebhook] = useState<WebhookData | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<WebhookData | null>(null);
@@ -120,7 +121,8 @@ export default function WebhooksPage() {
     setEditingWebhook(null);
   }, []);
 
-  const openCreate = useCallback(() => {
+  const openCreate = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+    formOpenerRef.current = event.currentTarget;
     setEditingWebhook(null);
     setFormOpen(true);
   }, []);
@@ -218,7 +220,7 @@ export default function WebhooksPage() {
       <section className={styles.workspace}>
         <header className={styles.pageHeader}>
           <nav className={styles.breadcrumbs} aria-label="Breadcrumb">
-            <Link href={projectHref}>Project settings</Link>
+            <Link href={projectHref}>{projectId ? 'Project settings' : 'Settings'}</Link>
             <span aria-hidden="true">/</span>
             <span>Automations</span>
             <span aria-hidden="true">/</span>
@@ -227,7 +229,7 @@ export default function WebhooksPage() {
           <div className={styles.titleRow}>
             <div className={styles.titleCluster}>
               <h1>Webhooks</h1>
-              <span className={styles.scopeBadge}>Project</span>
+              <span className={styles.scopeBadge}>{projectId ? 'Project' : 'All webhooks'}</span>
             </div>
             <Button className={styles.newButton} onClick={openCreate}>
               <Plus aria-hidden="true" className="size-4" />
@@ -272,7 +274,11 @@ export default function WebhooksPage() {
                   ) : webhooks.length === 0 ? (
                     <tr>
                       <td colSpan={5} className={styles.emptyCell}>
-                        <span>No webhooks configured for this project.</span>
+                        <span>
+                          {projectId
+                            ? 'No webhooks configured for this project.'
+                            : 'No webhooks configured.'}
+                        </span>
                         <button type="button" onClick={openCreate}>
                           Create your first webhook
                         </button>
@@ -336,6 +342,12 @@ export default function WebhooksPage() {
                                   type="button"
                                   className={styles.moreButton}
                                   aria-label={`Actions for ${webhook.url}`}
+                                  onPointerDown={(event) => {
+                                    formOpenerRef.current = event.currentTarget;
+                                  }}
+                                  onKeyDown={(event) => {
+                                    formOpenerRef.current = event.currentTarget;
+                                  }}
                                 >
                                   <MoreHorizontal aria-hidden="true" />
                                 </button>
@@ -445,16 +457,28 @@ export default function WebhooksPage() {
         </div>
       </section>
 
-      {formOpen ? (
-        <aside
+      <Sheet
+        open={formOpen}
+        onOpenChange={(open) => {
+          if (!open) closeForm();
+        }}
+      >
+        <SheetContent
           className={styles.drawer}
-          aria-label={editingWebhook ? 'Edit webhook' : 'New webhook'}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            document.getElementById('webhook-url')?.focus();
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            formOpenerRef.current?.focus();
+          }}
         >
           <div className={styles.drawerHeader}>
-            <h2>{editingWebhook ? 'Edit webhook' : 'New webhook'}</h2>
-            <button type="button" aria-label="Close webhook form" onClick={closeForm}>
-              <X aria-hidden="true" />
-            </button>
+            <SheetTitle>{editingWebhook ? 'Edit webhook' : 'New webhook'}</SheetTitle>
+            <SheetDescription className="sr-only">
+              Configure the endpoint and events for this webhook.
+            </SheetDescription>
           </div>
           <WebhookForm
             webhook={editingWebhook}
@@ -464,8 +488,8 @@ export default function WebhooksPage() {
             projectId={projectId}
             variant="drawer"
           />
-        </aside>
-      ) : null}
+        </SheetContent>
+      </Sheet>
 
       <AlertDialog
         open={deleteTarget !== null}

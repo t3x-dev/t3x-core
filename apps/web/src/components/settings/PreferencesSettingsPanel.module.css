@@ -2,20 +2,22 @@
   position: relative;
   width: 100%;
   min-height: 100%;
-  padding: 23px 40px 80px;
-  color: #172554;
-  background: #fff;
+  padding: 32px clamp(20px, 4vw, 48px) 56px;
+  color: var(--text-primary);
+  background: var(--surface-card);
 }
 .inner {
+  margin-inline: auto;
+  min-width: 0;
   width: 100%;
-  max-width: 1100px;
+  max-width: 1120px;
 }
 .breadcrumb {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 13px;
   line-height: 20px;
 }
@@ -24,56 +26,57 @@
   text-decoration: none;
 }
 .breadcrumb strong {
-  color: #172554;
+  color: var(--text-primary);
   font-weight: 600;
 }
 .titleGroup {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   margin-bottom: 12px;
 }
 .titleGroup h1 {
   margin: 0;
-  color: #071765;
-  font-size: 28px;
+  color: var(--text-primary);
+  font-size: 24px;
   font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 38px;
+  letter-spacing: normal;
+  line-height: 32px;
 }
 .titleGroup > span {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   padding: 5px 13px;
-  color: #0969ff;
+  color: var(--accent-commit);
   font-size: 12px;
   font-weight: 600;
   line-height: 16px;
-  background: #eaf3ff;
+  background: var(--accent-commit-soft);
   border-radius: 999px;
 }
 .settingsGrid {
   display: grid;
-  grid-template-columns: 0.96fr 1fr;
-  gap: 14px 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
 }
 .themeCard,
 .densityCard,
 .accentCard,
 .motionCard {
-  background: #fff;
-  border: 1px solid #dbe6f5;
+  background: var(--surface-card);
+  border: 1px solid var(--stroke-default);
   border-radius: 9px;
 }
 .themeCard,
 .densityCard {
-  height: 220px;
+  min-height: 220px;
   padding: 14px 16px 21px;
 }
 .accentCard,
 .motionCard {
-  height: 138px;
+  min-height: 138px;
   padding: 14px 16px;
 }
 .themeCard h2,
@@ -81,7 +84,7 @@
 .accentCard h2,
 .motionCard h2 {
   margin: 0 0 9px;
-  color: #101b4f;
+  color: var(--text-primary);
   font-size: 16px;
   font-weight: 700;
   line-height: 22px;
@@ -89,7 +92,7 @@
 .themeOptions,
 .densityOptions {
   display: grid;
-  height: 152px;
+  min-height: 152px;
   gap: 7px;
 }
 .themeOptions {
@@ -105,10 +108,10 @@
   align-items: center;
   justify-content: flex-start;
   padding: 18px 10px 10px;
-  color: #5870ad;
+  color: var(--text-secondary);
   font: inherit;
-  background: #fff;
-  border: 1px solid #dbe6f5;
+  background: var(--surface-card);
+  border: 1px solid var(--stroke-default);
   border-radius: 8px;
   cursor: pointer;
 }
@@ -126,17 +129,17 @@
   width: 17px;
   height: 17px;
   margin-top: 8px;
-  background: #fff;
-  border: 2px solid #c7d4e8;
+  background: var(--surface-card);
+  border: 2px solid var(--stroke-default);
   border-radius: 50%;
 }
 .previewOption[aria-pressed="true"] {
-  color: #071765;
-  border-color: #0878f9;
-  box-shadow: inset 0 0 0 1px #0878f9;
+  color: var(--text-primary);
+  border-color: var(--accent-commit);
+  box-shadow: inset 0 0 0 1px var(--accent-commit);
 }
 .previewOption[aria-pressed="true"] > i {
-  border: 5px solid #0878f9;
+  border: 5px solid var(--accent-commit);
 }
 .densityOptions .previewOption {
   padding-top: 18px;
@@ -147,7 +150,8 @@
 .accentOptions {
   display: flex;
   align-items: flex-start;
-  gap: 25px;
+  gap: 24px;
+  flex-wrap: wrap;
   margin-top: 14px;
 }
 .accentOption {
@@ -157,7 +161,7 @@
   align-items: center;
   gap: 6px;
   padding: 0;
-  color: #172554;
+  color: var(--text-primary);
   font: inherit;
   font-size: 12px;
   background: transparent;
@@ -171,7 +175,7 @@
   border-radius: 50%;
 }
 .accentOption > i[data-color="blue"] {
-  background: #0878f9;
+  background: var(--accent-commit);
 }
 .accentOption > i[data-color="purple"] {
   background: #6d28d9;
@@ -180,7 +184,7 @@
   background: #0ea5a5;
 }
 .accentOption[aria-pressed="true"] > i {
-  outline: 2px solid #0878f9;
+  outline: 2px solid var(--accent-commit);
   outline-offset: 4px;
 }
 .motionRow {
@@ -188,7 +192,8 @@
   align-items: center;
   justify-content: space-between;
   margin-top: 24px;
-  color: #172554;
+  gap: 16px;
+  color: var(--text-primary);
   font-size: 13px;
 }
 .switch {
@@ -196,7 +201,7 @@
   width: 47px;
   height: 25px;
   padding: 0;
-  background: #dbe4f0;
+  background: var(--stroke-default);
   border: 0;
   border-radius: 999px;
   cursor: pointer;
@@ -207,13 +212,13 @@
   left: 3px;
   width: 19px;
   height: 19px;
-  background: #fff;
+  background: var(--on-accent);
   border-radius: 50%;
   box-shadow: 0 1px 3px rgb(15 23 42 / 18%);
   transition: transform 150ms ease;
 }
 .switch[aria-checked="true"] {
-  background: #0878f9;
+  background: var(--accent-commit);
 }
 .switch[aria-checked="true"] i {
   transform: translateX(22px);
@@ -223,16 +228,16 @@
   justify-content: flex-end;
   margin-top: 24px;
   padding-top: 13px;
-  border-top: 1px solid #dbe6f5;
+  border-top: 1px solid var(--stroke-default);
 }
 .saveRow button {
   width: 129px;
   height: 37px;
-  color: #fff;
+  color: var(--on-accent);
   font: inherit;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
-  background: #0878f9;
+  background: var(--accent-commit);
   border: 0;
   border-radius: 7px;
   cursor: pointer;
@@ -247,8 +252,8 @@
   align-items: center;
   gap: 8px;
   padding: 0 14px;
-  background: #fff;
-  border: 1px solid #dbe6f5;
+  background: var(--surface-card);
+  border: 1px solid var(--stroke-default);
   border-bottom: 0;
   border-radius: 10px 10px 0 0;
   transform: translateX(-50%);
@@ -260,25 +265,25 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-  color: #111827;
+  color: var(--text-primary);
   background: transparent;
   border: 0;
   border-radius: 6px;
   cursor: pointer;
 }
 .prototypeTools button:hover {
-  background: #f1f5f9;
+  background: var(--surface-panel);
 }
 .prototypeTools > i {
   width: 1px;
   height: 24px;
   margin: 0 4px;
-  background: #e2e8f0;
+  background: var(--stroke-default);
 }
 @media (max-width: 900px) {
   .page {
-    padding-right: 24px;
-    padding-left: 24px;
+    padding-right: 20px;
+    padding-left: 20px;
   }
   .settingsGrid {
     grid-template-columns: 1fr;

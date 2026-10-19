@@ -11,6 +11,7 @@ const createRecipe = vi.fn();
 const updateRecipe = vi.fn();
 const deleteRecipe = vi.fn();
 const fetchProjects = vi.fn();
+let searchParams = new URLSearchParams('project=proj_test');
 
 const projects = [
   {
@@ -28,7 +29,7 @@ const projects = [
 ];
 
 vi.mock('next/navigation', () => ({
-  useSearchParams: () => new URLSearchParams('project=proj_test'),
+  useSearchParams: () => searchParams,
 }));
 
 vi.mock('next/link', () => ({
@@ -59,6 +60,7 @@ vi.mock('@/hooks/recipes/useRecipeCommands', () => ({
 describe('RecipesPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    searchParams = new URLSearchParams('project=proj_test');
     listRecipes.mockResolvedValue([
       {
         id: 'recipe_1',
@@ -91,11 +93,39 @@ describe('RecipesPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'New recipe' }));
 
-    expect(screen.getByRole('complementary', { name: 'New recipe' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'New recipe' })).toBeInTheDocument();
     expect(screen.getByLabelText('Target project')).toHaveValue('test-bug');
     expect(screen.getByRole('switch', { name: 'Enable this recipe' })).toBeChecked();
     expect(screen.getByRole('button', { name: 'Create recipe' })).toBeDisabled();
     expect(screen.getByText('Recipe preview')).toBeInTheDocument();
+  });
+
+  it('describes the unscoped empty list without claiming a current project', async () => {
+    searchParams = new URLSearchParams();
+    listRecipes.mockResolvedValue([]);
+    render(<RecipesPage />);
+    expect(
+      await screen.findByText('No recipes configured in the loaded projects.')
+    ).toBeInTheDocument();
+  });
+
+  it('moves focus into the recipe dialog, traps Tab, and returns focus after Escape', async () => {
+    render(<RecipesPage />);
+    await screen.findByText('After commit created');
+    const opener = screen.getByRole('button', { name: 'New recipe' });
+    fireEvent.click(opener);
+
+    const field = screen.getByLabelText('Name');
+    await waitFor(() => expect(field).toHaveFocus());
+    expect(screen.queryByRole('heading', { name: 'Recipes', level: 1 })).not.toBeInTheDocument();
+    const close = screen.getByRole('button', { name: 'Close' });
+    close.focus();
+    fireEvent.keyDown(close, { key: 'Tab' });
+    expect(field).toHaveFocus();
+    fireEvent.keyDown(field, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(opener).toHaveFocus();
   });
 
   it('creates a recipe with supported API trigger and action identifiers', async () => {

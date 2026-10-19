@@ -101,6 +101,7 @@ function SortableProviderCard({
       <div className="flex items-center gap-3">
         {isDraggable ? (
           <button
+            aria-label={`Reorder ${provider.name}`}
             type="button"
             className="cursor-grab active:cursor-grabbing text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] touch-none"
             {...attributes}
@@ -401,16 +402,29 @@ function ProjectSettingsPageContent() {
   return (
     <div className={generalStyles.layout}>
       <aside className={generalStyles.sidebar}>
-        <div className="sticky top-8">
-          <ProjectSettingsNav />
-        </div>
+        <p className={generalStyles.sidebarTitle}>Repository settings</p>
+        <ProjectSettingsNav />
       </aside>
 
-      <div className="min-w-0 space-y-6">
+      <div className={generalStyles.content}>
+        <header className={generalStyles.pageHeading}>
+          {project ? (
+            <span className={generalStyles.scope}>
+              {project.namespace ? `${project.namespace} / ` : ''}
+              {project.name}
+            </span>
+          ) : null}
+          <h1>Repository settings</h1>
+          <p>
+            Manage this repository's details, access, and defaults. Changes here apply to this
+            repository.
+          </p>
+        </header>
         {settings.loading ? (
-          <div className="flex h-40 items-center justify-center rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-elevated)]">
-            <Loader2 className="size-5 animate-spin text-[var(--text-tertiary)]" />
-          </div>
+          <output className="flex min-h-32 items-center justify-center gap-2 text-sm text-[var(--text-secondary)]">
+            <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+            Loading repository settings…
+          </output>
         ) : !project ? (
           <p
             className="rounded-xl border border-[var(--status-error)]/25 bg-[var(--surface-elevated)] p-5 text-[13px] text-[var(--status-error)]"

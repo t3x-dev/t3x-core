@@ -1,20 +1,22 @@
 .page {
   width: 100%;
   min-height: 100%;
-  padding: 24px 40px 80px;
-  color: #172554;
-  background: #fff;
+  padding: 32px clamp(20px, 4vw, 48px) 56px;
+  color: var(--text-primary);
+  background: var(--surface-card);
 }
 .inner {
+  margin-inline: auto;
+  min-width: 0;
   width: 100%;
-  max-width: 1100px;
+  max-width: 1120px;
 }
 .breadcrumb {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 14px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 14px;
   line-height: 20px;
 }
@@ -23,54 +25,55 @@
   text-decoration: none;
 }
 .breadcrumb span {
-  color: #94a3b8;
+  color: var(--text-secondary);
 }
 .breadcrumb strong {
-  color: #172554;
+  color: var(--text-primary);
   font-weight: 600;
 }
 .titleGroup {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   margin-bottom: 4px;
 }
 .titleGroup h1 {
   margin: 0 6px 0 0;
-  color: #071765;
-  font-size: 28px;
+  color: var(--text-primary);
+  font-size: 24px;
   font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 42px;
+  letter-spacing: normal;
+  line-height: 32px;
 }
 .titleGroup span {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   padding: 5px 13px;
-  color: #0969ff;
+  color: var(--accent-commit);
   font-size: 12px;
   font-weight: 600;
   line-height: 16px;
-  background: #eaf3ff;
+  background: var(--accent-commit-soft);
   border-radius: 999px;
 }
 .availableCard,
 .defaultCard,
 .taskCard {
-  background: #fff;
-  border: 1px solid #dbe6f5;
+  background: var(--surface-card);
+  border: 1px solid var(--stroke-default);
   border-radius: 10px;
 }
 .availableCard {
-  padding: 10px 18px 14px;
-  margin-bottom: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
 }
 .availableCard h2,
 .defaultCard h2,
 .taskCard h2 {
   margin: 0;
-  color: #101b4f;
+  color: var(--text-primary);
   font-size: 16px;
   font-weight: 700;
   line-height: 24px;
@@ -83,13 +86,13 @@
 }
 .testAll,
 .testButton {
-  height: 28px;
-  padding: 0 10px;
-  color: #0969ff;
+  min-height: 36px;
+  padding: 6px 10px;
+  color: var(--accent-commit);
   font: inherit;
   font-size: 12px;
   font-weight: 600;
-  background: #eaf3ff;
+  background: var(--accent-commit-soft);
   border: 0;
   border-radius: 7px;
   cursor: pointer;
@@ -105,7 +108,7 @@
 .modelList {
   margin-top: 5px;
   overflow: hidden;
-  border: 1px solid #dbe6f5;
+  border: 1px solid var(--stroke-default);
   border-radius: 9px;
 }
 .modelRow {
@@ -114,7 +117,7 @@
   min-height: 53px;
   align-items: center;
   padding: 8px 14px;
-  border-bottom: 1px solid #dbe6f5;
+  border-bottom: 1px solid var(--stroke-default);
 }
 .modelRow:last-child {
   border-bottom: 0;
@@ -125,31 +128,32 @@
   flex-direction: column;
 }
 .modelRow strong {
-  color: #12215a;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
   font-size: 13px;
   font-weight: 600;
   line-height: 18px;
 }
 .modelRow div span {
-  color: #5870ad;
-  font-size: 11px;
+  color: var(--text-secondary);
+  font-size: 12px;
   line-height: 15px;
 }
 .testOk,
 .testError,
 .testPending {
   margin-top: 2px;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 15px;
 }
 .testOk {
-  color: #047857;
+  color: var(--status-success);
 }
 .testError {
-  color: #b42318;
+  color: var(--status-error);
 }
 .testPending {
-  color: #0969ff;
+  color: var(--accent-commit);
 }
 .anthropicMark,
 .openAiMark,
@@ -168,18 +172,18 @@
   font-size: 31px;
 }
 .openAiMark {
-  color: #111;
+  color: var(--text-primary);
   font-size: 31px;
   font-weight: 500;
 }
 .googleMark {
   color: #4285f4;
-  font-family: Arial, sans-serif;
+  font-family: inherit;
   font-size: 30px;
   font-weight: 700;
 }
 .stateLabel {
-  color: #5870ad;
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 500;
 }
@@ -188,7 +192,7 @@
   width: 42px;
   height: 23px;
   padding: 0;
-  background: #dbe6f5;
+  background: var(--stroke-default);
   border: 0;
   border-radius: 999px;
   cursor: pointer;
@@ -200,13 +204,13 @@
   left: 3px;
   width: 17px;
   height: 17px;
-  background: #fff;
+  background: var(--on-accent);
   border-radius: 50%;
   box-shadow: 0 1px 3px rgb(15 23 42 / 24%);
   transition: transform 150ms ease;
 }
 .switch[aria-checked="true"] {
-  background: #0878f9;
+  background: var(--accent-commit);
 }
 .switch[aria-checked="true"] i {
   transform: translateX(19px);
@@ -220,17 +224,18 @@
   grid-template-columns: 260px 1fr;
   align-items: center;
   min-height: 54px;
-  padding: 0 18px;
-  margin-bottom: 12px;
+  padding: 20px 24px;
+  gap: 16px;
+  margin-bottom: 24px;
 }
 .modelSelect {
   position: relative;
   display: flex;
   min-width: 0;
-  height: 32px;
+  min-height: 40px;
   align-items: center;
-  background: #fff;
-  border: 1px solid #cbdcf2;
+  background: var(--surface-card);
+  border: 1px solid var(--stroke-default);
   border-radius: 7px;
 }
 .modelSelect > span {
@@ -246,9 +251,9 @@
   width: 100%;
   height: 100%;
   padding: 0 34px 0 42px;
-  color: #172554;
+  color: var(--text-primary);
   font: inherit;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
   background: transparent;
   border: 0;
@@ -259,7 +264,7 @@
   opacity: 0.7;
 }
 .taskCard {
-  padding: 9px 18px 11px;
+  padding: 24px;
 }
 .taskCard h2 {
   margin-bottom: 7px;
@@ -272,20 +277,20 @@
 }
 .taskHeader {
   min-height: 27px;
-  color: #5870ad;
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
-  border-bottom: 1px solid #dbe6f5;
+  border-bottom: 1px solid var(--stroke-default);
 }
 .taskRow {
   min-height: 43px;
-  border-bottom: 1px solid #dbe6f5;
+  border-bottom: 1px solid var(--stroke-default);
 }
 .taskRow:last-child {
   border-bottom: 0;
 }
 .taskRow strong {
-  color: #172554;
+  color: var(--text-primary);
   font-size: 12px;
   font-weight: 500;
 }
@@ -302,13 +307,13 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 13px;
-  border: 1px solid #dbe6f5;
+  border: 1px solid var(--stroke-default);
   border-radius: 10px;
 }
 .error button {
-  color: #0969ff;
+  color: var(--accent-commit);
   font: inherit;
   background: transparent;
   border: 0;
@@ -331,8 +336,8 @@
   align-items: center;
   gap: 4px;
   padding: 6px 12px;
-  background: #fff;
-  border: 1px solid #d7dee9;
+  background: var(--surface-card);
+  border: 1px solid var(--stroke-default);
   border-bottom: 0;
   border-radius: 10px 10px 0 0;
   box-shadow: 0 -2px 8px rgb(15 23 42 / 4%);
@@ -345,25 +350,25 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-  color: #111827;
-  background: #fff;
+  color: var(--text-primary);
+  background: var(--surface-card);
   border: 0;
   border-radius: 8px;
   cursor: pointer;
 }
 .prototypeTools button:hover {
-  background: #f1f5f9;
+  background: var(--surface-panel);
 }
 .prototypeTools > i {
   width: 1px;
   height: 24px;
   margin: 0 4px;
-  background: #e2e8f0;
+  background: var(--stroke-default);
 }
 @media (max-width: 820px) {
   .page {
-    padding-right: 24px;
-    padding-left: 24px;
+    padding-right: 20px;
+    padding-left: 20px;
   }
   .defaultCard {
     grid-template-columns: 180px 1fr;
@@ -374,5 +379,22 @@
   }
   .taskCard {
     overflow-x: auto;
+  }
+}
+
+@media (max-width: 600px) {
+  .defaultCard {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .modelRow {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+  .modelRow .stateLabel {
+    grid-column: 2;
+  }
+  .modelRow .switch {
+    grid-column: 3;
+    justify-self: end;
   }
 }

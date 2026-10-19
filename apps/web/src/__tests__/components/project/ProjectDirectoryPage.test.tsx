@@ -119,7 +119,8 @@ describe('ProjectDirectoryPage', () => {
     render(<ProjectDirectoryPage />);
 
     expect(screen.getByRole('heading', { name: 't3x-dev' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Pinned repositories' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Recently opened' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Pinned repositories' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Repositories' })).toBeInTheDocument();
     expect(
       screen.queryByRole('link', { name: 'Projects', current: 'page' })
@@ -150,7 +151,9 @@ describe('ProjectDirectoryPage', () => {
     expect(screen.queryByText('People')).not.toBeInTheDocument();
     expect(screen.queryByText('Topics')).not.toBeInTheDocument();
     expect(screen.queryByText('Outputs 2')).not.toBeInTheDocument();
-    expect(screen.getAllByText('Commits 18').length).toBeGreaterThan(0);
+    expect(screen.getByText('18 commits')).toBeInTheDocument();
+    expect(screen.getAllByText(/^Created /).length).toBe(projects.length);
+    expect(screen.queryByText(/^Updated /)).not.toBeInTheDocument();
     expect(screen.queryByText('3 members')).not.toBeInTheDocument();
     expect(screen.queryByText('Outputs 19')).not.toBeInTheDocument();
     expect(screen.queryByText('YSchema pending')).not.toBeInTheDocument();
@@ -166,9 +169,7 @@ describe('ProjectDirectoryPage', () => {
     render(<ProjectDirectoryPage ownerSlug="lqw905" />);
 
     expect(screen.getByRole('heading', { name: 'lqw905' })).toBeInTheDocument();
-    expect(
-      screen.getByText('Personal namespace for structured state repositories.')
-    ).toBeInTheDocument();
+    expect(screen.getByText(/A home for your structured state/)).toBeInTheDocument();
     expect(screen.getByText('Personal namespace')).toBeInTheDocument();
     expect(screen.queryByText('3 members')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
@@ -185,13 +186,13 @@ describe('ProjectDirectoryPage', () => {
     }
   });
 
-  it('orders pinned repositories from local recent-open state', () => {
+  it('shows recently opened repositories only from local recent-open state', () => {
     window.localStorage.setItem('t3x:recent-projects', JSON.stringify(['proj_core', 'proj_prd']));
 
     render(<ProjectDirectoryPage />);
 
     const recentSection = screen
-      .getByRole('heading', { name: 'Pinned repositories' })
+      .getByRole('heading', { name: 'Recently opened' })
       .closest('section');
     expect(recentSection).not.toBeNull();
 
@@ -206,7 +207,7 @@ describe('ProjectDirectoryPage', () => {
     const search = screen.getByPlaceholderText('Find a repository...');
     fireEvent.change(search, { target: { value: 'core' } });
 
-    expect(screen.getAllByRole('link', { name: /t3x-core/i })).toHaveLength(2);
+    expect(screen.getAllByRole('link', { name: /t3x-core/i })).toHaveLength(1);
     expect(screen.queryByRole('link', { name: /prd-workflow/i })).not.toBeInTheDocument();
   });
 
@@ -232,9 +233,8 @@ describe('ProjectDirectoryPage', () => {
     expect(screen.getByRole('heading', { name: "Couldn't load repositories" })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'No repositories yet' })).not.toBeInTheDocument();
-    expect(screen.getByText('— repos')).toBeInTheDocument();
-    expect(screen.getByText('— commits')).toBeInTheDocument();
-    expect(screen.getByText('Repository data is unavailable.')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Repositories' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Recently opened' })).not.toBeInTheDocument();
   });
 
   it('retries a failed initial repository load from the failure state', () => {

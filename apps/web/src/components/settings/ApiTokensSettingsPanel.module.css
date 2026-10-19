@@ -1,12 +1,10 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
-
 .root {
   min-height: 100%;
-  padding: 40px;
+  padding: 32px clamp(20px, 4vw, 48px) 56px;
   overflow-x: hidden;
-  background: #fff;
-  color: #1e293b;
-  font-family: "Inter", sans-serif;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-family: inherit;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -16,8 +14,10 @@
 }
 
 .content {
-  width: calc(100% - 7px);
-  max-width: 1200px;
+  margin-inline: auto;
+  min-width: 0;
+  width: 100%;
+  max-width: 1120px;
 }
 
 .breadcrumbs {
@@ -25,7 +25,7 @@
   align-items: center;
   gap: 8px;
   margin-bottom: 16px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 14px;
   line-height: 20px;
 }
@@ -36,16 +36,17 @@
 }
 
 .breadcrumbs a:hover {
-  color: #1e293b;
+  color: var(--text-primary);
 }
 
 .breadcrumbs strong {
-  color: #0f172a;
+  color: var(--text-primary);
   font-weight: 500;
 }
 
 .titleRow {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 16px;
   margin-bottom: 32px;
@@ -53,11 +54,11 @@
 
 .titleRow h1 {
   margin: 0;
-  color: #0f172a;
-  font-size: 32px;
+  color: var(--text-primary);
+  font-size: 24px;
   font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 48px;
+  letter-spacing: normal;
+  line-height: 32px;
 }
 
 .scopeBadge,
@@ -73,8 +74,8 @@
 
 .scopeBadge {
   padding: 4px 12px;
-  background: #ebf3ff;
-  color: #0d52ff;
+  background: var(--accent-commit-soft);
+  color: var(--accent-commit);
   font-size: 14px;
   line-height: 20px;
 }
@@ -82,9 +83,9 @@
 .card {
   margin-bottom: 32px;
   overflow: hidden;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--stroke-default);
   border-radius: 12px;
-  background: #fff;
+  background: var(--surface-card);
   box-shadow: 0 1px 2px rgb(15 23 42 / 5%);
 }
 
@@ -95,7 +96,7 @@
   gap: 16px;
   min-height: 72px;
   padding: 16px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--stroke-divider);
 }
 
 .primaryButton,
@@ -114,9 +115,9 @@
   gap: 8px;
   border: 0;
   border-radius: 8px;
-  background: #0d52ff;
+  background: var(--accent-commit);
   padding: 8px 16px;
-  color: #fff;
+  color: var(--on-accent);
   font-size: 14px;
   font-weight: 500;
   line-height: 20px;
@@ -124,7 +125,7 @@
 }
 
 .primaryButton:hover {
-  background: #1d4ed8;
+  background: var(--accent-commit);
 }
 
 .primaryButton:disabled {
@@ -147,7 +148,7 @@
   position: absolute;
   top: 50%;
   left: 12px;
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-size: 18px;
   transform: translateY(-50%);
 }
@@ -156,13 +157,13 @@
 .dialogField input {
   width: 100%;
   height: 40px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--stroke-default);
   border-radius: 8px;
   outline: none;
-  background: #fff;
-  color: #0f172a;
+  background: var(--surface-card);
+  color: var(--text-primary);
   font:
-    400 14px / 20px "Inter",
+    400 14px / 20px var(--font-geist-sans),
     sans-serif;
 }
 
@@ -172,7 +173,7 @@
 
 .search input::placeholder,
 .dialogField input::placeholder {
-  color: #94a3b8;
+  color: var(--text-secondary);
 }
 
 .search input:focus,
@@ -182,8 +183,8 @@
 .secondaryButton:focus-visible,
 .iconButton:focus-visible,
 .menuButton:focus-visible {
-  border-color: #3b82f6;
-  outline: 1px solid #3b82f6;
+  border-color: var(--accent-commit);
+  outline: 1px solid var(--accent-commit);
   outline-offset: 1px;
 }
 
@@ -196,7 +197,7 @@
   top: 50%;
   right: 13px;
   pointer-events: none;
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-size: 13px;
   transform: translateY(-50%);
 }
@@ -204,11 +205,11 @@
 .filterSelect {
   height: 40px;
   appearance: none;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--stroke-default);
   border-radius: 8px;
-  background: #fff;
+  background: var(--surface-card);
   padding: 8px 38px 8px 16px;
-  color: #334155;
+  color: var(--text-secondary);
   font-size: 14px;
   line-height: 20px;
 }
@@ -263,8 +264,8 @@
 .table th {
   height: 52px;
   padding: 16px 24px;
-  border-bottom: 1px solid #f1f5f9;
-  color: #64748b;
+  border-bottom: 1px solid var(--stroke-divider);
+  color: var(--text-secondary);
   font-weight: 400;
   white-space: nowrap;
 }
@@ -273,7 +274,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  color: #334155;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
@@ -284,15 +285,15 @@
 }
 
 .sortLabel i {
-  color: #2563eb;
+  color: var(--accent-commit);
   font-size: 14px;
 }
 
 .table td {
   height: 91px;
   padding: 16px 24px;
-  border-bottom: 1px solid #f1f5f9;
-  color: #334155;
+  border-bottom: 1px solid var(--stroke-divider);
+  color: var(--text-secondary);
   vertical-align: middle;
 }
 
@@ -305,7 +306,7 @@
 }
 
 .table td.name {
-  color: #0f172a;
+  color: var(--text-primary);
   font-weight: 500;
 }
 
@@ -313,7 +314,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #334155;
+  color: var(--text-secondary);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   white-space: nowrap;
 }
@@ -325,7 +326,7 @@
   justify-content: center;
   border: 0;
   background: transparent;
-  color: #94a3b8;
+  color: var(--text-secondary);
 }
 
 .iconButton {
@@ -337,7 +338,7 @@
 
 .iconButton:hover,
 .menuButton:hover {
-  color: #475569;
+  color: var(--text-secondary);
 }
 
 .projectBadge {
@@ -349,7 +350,7 @@
 }
 
 .dateCell {
-  color: #334155;
+  color: var(--text-secondary);
 }
 
 .dateCell span {
@@ -359,13 +360,13 @@
 .dateCell small {
   display: block;
   margin-top: 2px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 12px;
   line-height: 16px;
 }
 
 .table td.expiresNever {
-  color: #0f172a;
+  color: var(--text-primary);
   font-weight: 500;
 }
 
@@ -388,9 +389,9 @@
   right: 16px;
   min-width: 140px;
   padding: 6px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--stroke-default);
   border-radius: 8px;
-  background: #fff;
+  background: var(--surface-card);
   box-shadow: 0 10px 24px rgb(15 23 42 / 12%);
 }
 
@@ -400,21 +401,21 @@
   border-radius: 6px;
   background: transparent;
   padding: 8px 10px;
-  color: #dc2626;
+  color: var(--status-error);
   font:
-    500 13px / 18px "Inter",
+    500 13px / 18px var(--font-geist-sans),
     sans-serif;
   text-align: left;
   cursor: pointer;
 }
 
 .actionMenu button:hover {
-  background: #fef2f2;
+  background: var(--status-error-muted);
 }
 
 .empty {
   padding: 52px 24px;
-  color: #64748b;
+  color: var(--text-secondary);
   text-align: center;
 }
 
@@ -424,7 +425,7 @@
 
 .activityHeader h2 {
   margin: 0;
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 18px;
   font-weight: 600;
   line-height: 28px;
@@ -432,7 +433,7 @@
 
 .activityHeader p {
   margin: 4px 0 0;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 14px;
   line-height: 20px;
 }
@@ -449,31 +450,31 @@
 }
 
 .table td.activityTime {
-  color: #0f172a;
+  color: var(--text-primary);
   font-weight: 500;
   white-space: nowrap;
 }
 
 .usedBadge {
   padding: 4px 12px;
-  background: #dcfce7;
-  color: #16a34a;
+  background: var(--status-success-muted);
+  color: var(--status-success);
   font-size: 12px;
   line-height: 16px;
 }
 
 .tokenName {
-  color: #0f172a;
+  color: var(--text-primary);
   font-weight: 500;
 }
 
 .tokenPrefix {
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 .table td.details {
-  color: #0d52ff;
+  color: var(--accent-commit);
   font-weight: 500;
 }
 
@@ -489,23 +490,23 @@
 
 .dialog {
   width: min(480px, 100%);
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--stroke-default);
   border-radius: 12px;
-  background: #fff;
+  background: var(--surface-card);
   padding: 24px;
   box-shadow: 0 20px 50px rgb(15 23 42 / 18%);
 }
 
 .dialog h2 {
   margin: 0;
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 20px;
   line-height: 28px;
 }
 
 .dialog > p {
   margin: 6px 0 20px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 14px;
   line-height: 20px;
 }
@@ -518,7 +519,7 @@
 .dialogField {
   display: grid;
   gap: 7px;
-  color: #334155;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 500;
 }
@@ -536,25 +537,25 @@
 
 .secondaryButton {
   min-height: 40px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--stroke-default);
   border-radius: 8px;
-  background: #fff;
+  background: var(--surface-card);
   padding: 8px 16px;
-  color: #334155;
+  color: var(--text-secondary);
   font-size: 14px;
   font-weight: 500;
 }
 
 .secondaryButton:hover {
-  background: #f8fafc;
+  background: var(--surface-panel);
 }
 
 .createdKey {
   margin-top: 18px;
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--surface-panel);
   padding: 12px;
-  color: #334155;
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -562,7 +563,7 @@
   display: block;
   margin-top: 6px;
   overflow-wrap: anywhere;
-  color: #0f172a;
+  color: var(--text-primary);
 }
 
 @media (max-width: 1040px) {
@@ -587,7 +588,7 @@
 
 @media (max-width: 720px) {
   .root {
-    padding: 24px 16px;
+    padding: 24px 20px;
   }
 
   .titleRow {

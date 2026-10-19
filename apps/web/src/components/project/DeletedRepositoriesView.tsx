@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, RefreshCw, RotateCcw } from 'lucide-react';
+import { ArrowLeft, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { AlertDialog } from '@/components/ui/alert-dialog';
@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { getProjectRepoPath } from '@/domain/project/repoPath';
 import { repositoryMutationError, useDeletedProjects } from '@/hooks/projects/useDeletedProjects';
 import type { Project } from '@/types/api';
+import styles from './DeletedRepositoriesView.module.css';
 
 export function DeletedRepositoriesView({
   namespace,
@@ -75,34 +76,35 @@ export function DeletedRepositoriesView({
   }
 
   return (
-    <div className="space-y-5">
-      <Link
-        href={backHref}
-        scroll={false}
-        className="inline-flex items-center gap-2 text-sm text-[var(--accent-commit)] hover:underline"
-      >
+    <div className={styles.page}>
+      <Link href={backHref} scroll={false} className={styles.backLink}>
         <ArrowLeft aria-hidden="true" className="size-4" /> Back to repositories
       </Link>
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2>Deleted repositories</h2>
-          <p className="mt-2 text-sm text-[var(--text-secondary)]">
+      <header className={styles.heading}>
+        <div className={styles.headingCopy}>
+          <p className={styles.eyebrow}>{namespace}</p>
+          <h1>Deleted repositories</h1>
+          <p>
             Data and all names stay reserved until permanent deletion. Only repositories you can
             manage are shown.
           </p>
         </div>
         <Button
           aria-label="Refresh deleted repositories"
+          title="Refresh deleted repositories"
           disabled={list.loading || list.pending}
           onClick={() => void list.refresh()}
-          size="icon"
+          size="icon-lg"
           variant="canvas-outline"
         >
-          <RefreshCw aria-hidden="true" className="size-4" />
+          <RefreshCw
+            aria-hidden="true"
+            className={list.loading ? 'size-4 animate-spin motion-reduce:animate-none' : 'size-4'}
+          />
         </Button>
-      </div>
+      </header>
       {notice && (
-        <div role="status" className="rounded-md border border-[var(--stroke-divider)] p-3 text-sm">
+        <div role="status" className={styles.notice}>
           {notice.message}{' '}
           {notice.href && (
             <Link href={notice.href} className="text-[var(--accent-commit)] underline">
@@ -112,10 +114,7 @@ export function DeletedRepositoriesView({
         </div>
       )}
       {list.error ? (
-        <div
-          role="alert"
-          className="space-y-3 rounded-md border border-[var(--stroke-divider)] p-4"
-        >
+        <div role="alert" className={styles.errorState}>
           <p>Couldn&apos;t load deleted repositories. {list.error}</p>
           <Button
             disabled={list.loading}
@@ -126,40 +125,42 @@ export function DeletedRepositoriesView({
           </Button>
         </div>
       ) : list.loading ? (
-        <p role="status" className="py-5 text-sm text-[var(--text-secondary)]">
+        <p role="status" className={styles.loading}>
           Loading deleted repositories...
         </p>
       ) : list.projects.length === 0 ? (
-        <p className="py-5 text-sm text-[var(--text-secondary)]">
-          No deleted repositories to manage in this namespace.
-        </p>
+        <div className={styles.emptyState}>
+          <span className={styles.emptyIcon} aria-hidden="true">
+            <Trash2 className="size-5" />
+          </span>
+          <h2>No deleted repositories</h2>
+          <p>No deleted repositories to manage in this namespace.</p>
+          <p>Repositories you delete will appear here while their data is kept.</p>
+        </div>
       ) : (
-        <ul
-          aria-label="Deleted repositories"
-          className="divide-y divide-[var(--stroke-divider)] rounded-md border border-[var(--stroke-divider)]"
-        >
+        <ul aria-label="Deleted repositories" className={styles.list}>
           {list.projects.map((project) => (
-            <li
-              key={project.project_id}
-              className="flex flex-wrap items-center justify-between gap-4 p-4"
-            >
-              <div className="min-w-0 flex-1 basis-48">
-                <p className="break-words text-sm font-semibold">{project.name}</p>
-                <p className="mt-1 break-all text-xs text-[var(--text-secondary)]">
+            <li key={project.project_id} className={styles.repository}>
+              <div className={styles.repositoryCopy}>
+                <h2>{project.name}</h2>
+                <p className={styles.path}>
                   {project.namespace ?? namespace}/{project.name}
                 </p>
-                <p className="mt-2 text-xs text-[var(--text-secondary)]">
-                  Visibility: {project.visibility} · Deleted{' '}
-                  {project.deleted_at ? (
-                    <time dateTime={project.deleted_at}>
-                      {new Date(project.deleted_at).toLocaleString()}
-                    </time>
-                  ) : (
-                    'at an unknown time'
-                  )}
+                <p className={styles.metadata}>
+                  <span className={styles.visibility}>Visibility: {project.visibility}</span>
+                  <span>
+                    Deleted{' '}
+                    {project.deleted_at ? (
+                      <time dateTime={project.deleted_at}>
+                        {new Date(project.deleted_at).toLocaleString()}
+                      </time>
+                    ) : (
+                      'at an unknown time'
+                    )}
+                  </span>
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className={styles.actions}>
                 {project.can_restore && (
                   <Button
                     disabled={list.pending}
@@ -193,10 +194,7 @@ export function DeletedRepositoriesView({
         </ul>
       )}
       {(list.page > 1 || list.hasNext) && (
-        <nav
-          aria-label="Deleted repositories pagination"
-          className="flex items-center justify-end gap-3"
-        >
+        <nav aria-label="Deleted repositories pagination" className={styles.pagination}>
           <Button
             disabled={list.loading || list.pending || list.page === 1}
             variant="canvas-outline"

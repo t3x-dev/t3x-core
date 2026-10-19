@@ -49,7 +49,7 @@ function SourceChip({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium',
+        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium',
         SOURCE_CHIP_CLASS[source]
       )}
       title={source === 'environment' ? 'Loaded from an environment variable' : undefined}
@@ -87,7 +87,7 @@ function ProviderCard({
         configured ? 'bg-[var(--surface-primary)]' : 'bg-[var(--surface-secondary)] opacity-80'
       )}
     >
-      <div className="flex items-center justify-between gap-3 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
         <div className="flex min-w-0 items-center gap-3">
           {configured ? (
             <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--status-success)]" />
@@ -95,7 +95,7 @@ function ProviderCard({
             <Circle className="h-4 w-4 shrink-0 text-[var(--text-tertiary)]" />
           )}
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-medium text-[var(--text-primary)]">
                 {displayName(provider)}
               </span>
