@@ -149,17 +149,6 @@ export function SchemaStudioSurface({
           >
             Review changes
           </button>
-          <button
-            className={`${shared.btn} ${s.b2}`}
-            onClick={() => {
-              setPanel('Checks');
-              onCheck?.();
-            }}
-            disabled={!composition.length || pending || !onCheck}
-          >
-            <Icon name="shield" />
-            Check schema
-          </button>
         </div>
       </SchemaToolbarSlot>
       <div className={s.body}>
@@ -411,11 +400,25 @@ export function SchemaStudioSurface({
                       ? 'Open the Workspace workbench to add local changes above the selected sources.'
                       : 'Select a candidate to inspect its definition.'}
                   </p>
-                  {activeModule && onEditDefinition ? (
-                    <button className={shared.btn} onClick={onEditDefinition} type="button">
-                      Edit definition
+                  <div className={s.moduleActions}>
+                    {activeModule && onEditDefinition ? (
+                      <button className={shared.btn} onClick={onEditDefinition} type="button">
+                        Edit definition
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className={shared.btn}
+                      onClick={() => {
+                        setPanel('Checks');
+                        onCheck?.();
+                      }}
+                      disabled={!composition.length || pending || !onCheck}
+                    >
+                      <Icon name="shield" />
+                      Check schema
                     </button>
-                  ) : null}
+                  </div>
                 </div>
                 <div className={s.sec}>
                   <div className={s['sec-h']}>

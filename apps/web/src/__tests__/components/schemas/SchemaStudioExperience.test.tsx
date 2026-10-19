@@ -193,7 +193,16 @@ it('keeps a required provider checked and locked while blocking a failed definit
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Remove Shared foundation' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Review changes' })).toBeDisabled();
-  fireEvent.click(screen.getByRole('tab', { name: 'Checks', exact: true }));
+  const checkSchema = screen.getByRole('button', { name: 'Check schema' });
+  expect(controls).not.toContainElement(checkSchema);
+  expect(screen.getByRole('complementary', { name: 'Module details' })).toContainElement(
+    checkSchema
+  );
+  fireEvent.click(checkSchema);
+  expect(screen.getByRole('tab', { name: 'Checks', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
   expect(screen.getByText('Missing service capability')).toBeVisible();
   expect(screen.getByText('Composition dependencies')).toBeVisible();
   expect(screen.getByText('Failed')).toBeVisible();
@@ -403,6 +412,10 @@ it('opens the embedded definition workbench and saves one shared Structure/YAML 
     },
   ];
   render(<SchemaStudioExperience projectId="p" />);
+  const editDefinition = screen.getByRole('button', { name: 'Edit definition' });
+  expect(editDefinition.nextElementSibling).toBe(
+    screen.getByRole('button', { name: 'Check schema' })
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Edit definition' }));
   const dialog = screen.getByRole('dialog', { name: 'Edit Schema definition' });
   expect(within(dialog).getByText('Base (immutable)')).toBeVisible();

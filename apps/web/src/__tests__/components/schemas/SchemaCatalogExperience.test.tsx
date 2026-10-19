@@ -190,6 +190,7 @@ describe('Schema catalog journey', () => {
       'true'
     );
     const studio = screen.getByRole('region', { name: 'Schema Studio' });
+    expect(schemaViews.closest('header')).toHaveAttribute('data-view', 'studio');
     expect(studio).not.toContainElement(schemaViews);
     expect(screen.getByRole('region', { name: 'Schema experience' })).toContainElement(schemaViews);
     expect(screen.queryByText('Detailed Studio')).not.toBeInTheDocument();
