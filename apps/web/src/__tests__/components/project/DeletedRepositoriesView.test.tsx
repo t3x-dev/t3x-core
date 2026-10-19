@@ -94,10 +94,16 @@ it('restores the same repository only after confirmation, prevents repeats, then
   window.removeEventListener(PROJECT_RESTORED_EVENT, event);
 });
 
-it('requires the exact namespace/name before permanent deletion and clears stale cache on success', async () => {
+it('requires the exact namespace/name and a final confirmation before permanent deletion', async () => {
   const summary = apiProjectToSummary(project);
   useProjectStore.setState({ projects: [summary], details: { [summary.id]: summary } });
-  vi.mocked(deleteProject).mockResolvedValue({ deleted: true, project_id: project.project_id });
+  let finish!: (value: Awaited<ReturnType<typeof deleteProject>>) => void;
+  vi.mocked(deleteProject).mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+  );
   const event = vi.fn();
   window.addEventListener(PROJECT_DELETED_EVENT, event);
   render(<DeletedRepositoriesView namespace="alice" backHref="/alice" />);
@@ -112,8 +118,22 @@ it('requires the exact namespace/name before permanent deletion and clears stale
     expect(confirm).toBeDisabled();
   }
   fireEvent.change(input, { target: { value: 'alice/test' } });
-  vi.mocked(fetchDeletedProjects).mockResolvedValue(rows([]));
   fireEvent.click(confirm);
+  const finalDialog = screen.getByRole('dialog', { name: 'Confirm permanent deletion' });
+  expect(finalDialog).toHaveTextContent('alice/test');
+  expect(finalDialog).toHaveTextContent('This cannot be undone or restored');
+  expect(deleteProject).not.toHaveBeenCalled();
+  expect(within(finalDialog).getByRole('button', { name: 'Cancel' })).toHaveFocus();
+  const finalConfirm = within(finalDialog).getByRole('button', {
+    name: 'Confirm permanent deletion',
+  });
+  fireEvent.click(finalConfirm);
+  expect(screen.getByRole('button', { name: 'Deleting...' })).toBeDisabled();
+  expect(within(finalDialog).getByRole('button', { name: 'Cancel' })).toBeDisabled();
+  fireEvent.click(finalConfirm);
+  expect(deleteProject).toHaveBeenCalledOnce();
+  vi.mocked(fetchDeletedProjects).mockResolvedValue(rows([]));
+  await act(async () => finish({ deleted: true, project_id: project.project_id }));
   expect(await screen.findByText(/was permanently deleted/)).toBeInTheDocument();
   expect(deleteProject).toHaveBeenCalledExactlyOnceWith('original-id', {
     permanent: true,
@@ -122,7 +142,25 @@ it('requires the exact namespace/name before permanent deletion and clears stale
   expect(useProjectStore.getState().details['original-id']).toBeUndefined();
   expect(useProjectStore.getState().projects).toEqual([]);
   expect(event).toHaveBeenCalledOnce();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   window.removeEventListener(PROJECT_DELETED_EVENT, event);
+});
+
+it('returns to the name confirmation without deleting when final confirmation is cancelled', async () => {
+  render(<DeletedRepositoriesView namespace="alice" backHref="/alice" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Permanently delete' }));
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'alice/test' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Permanently delete repository' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(screen.getByRole('dialog', { name: 'Permanently delete repository?' })).toBeInTheDocument();
+  expect(screen.getByRole('textbox')).toHaveValue('alice/test');
+  expect(deleteProject).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Permanently delete repository' }));
+  expect(screen.getByRole('dialog', { name: 'Confirm permanent deletion' })).toBeInTheDocument();
+  expect(deleteProject).not.toHaveBeenCalled();
+  fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+  expect(screen.getByRole('textbox')).toHaveValue('alice/test');
+  expect(deleteProject).not.toHaveBeenCalled();
 });
 
 it('keeps an authoritative failure in the dialog for correction or retry', async () => {
@@ -152,6 +190,8 @@ it.each([
   fireEvent.click(await screen.findByRole('button', { name: 'Permanently delete' }));
   fireEvent.change(screen.getByRole('textbox'), { target: { value: 'alice/test' } });
   fireEvent.click(screen.getByRole('button', { name: 'Permanently delete repository' }));
+  expect(deleteProject).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm permanent deletion' }));
   expect(await screen.findByRole('button', { name: 'Refresh list' })).toBeEnabled();
   expect(
     screen.queryByRole('button', { name: 'Permanently delete repository' })

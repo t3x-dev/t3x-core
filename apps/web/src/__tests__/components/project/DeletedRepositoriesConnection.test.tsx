@@ -84,6 +84,10 @@ it('rejects an old API active-list response and becomes interactive after retryi
     target: { value: 't3x-dev/deleted-repository' },
   });
   expect(confirm).toBeEnabled();
+  fireEvent.click(confirm);
+  expect(screen.getByRole('dialog', { name: 'Confirm permanent deletion' })).toHaveTextContent(
+    't3x-dev/deleted-repository'
+  );
   expect(fetch).toHaveBeenCalledTimes(2);
 });
 

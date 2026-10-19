@@ -3,6 +3,7 @@
 import { ArrowLeft, RefreshCw, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
+import { AlertDialog } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -29,6 +30,7 @@ export function DeletedRepositoriesView({
     null
   );
   const [confirmation, setConfirmation] = useState('');
+  const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
   const [error, setError] = useState<ReturnType<typeof repositoryMutationError> | null>(null);
   const [notice, setNotice] = useState<{ message: string; href?: string } | null>(null);
   const identity = target ? `${target.project.namespace ?? namespace}/${target.project.name}` : '';
@@ -41,12 +43,14 @@ export function DeletedRepositoriesView({
     }
     setTarget(null);
     setConfirmation('');
+    setDeleteConfirmationOpen(false);
     setError(null);
   }
 
   async function confirm() {
     if (!target || list.pending || error?.refreshRequired) return;
-    if (target.action === 'delete' && confirmation !== identity) return;
+    if (target.action === 'delete' && (confirmation !== identity || !deleteConfirmationOpen))
+      return;
     setError(null);
     try {
       const result = await list.mutate(target.project, target.action);
@@ -63,7 +67,9 @@ export function DeletedRepositoriesView({
       );
       setTarget(null);
       setConfirmation('');
+      setDeleteConfirmationOpen(false);
     } catch (cause) {
+      setDeleteConfirmationOpen(false);
       setError(repositoryMutationError(cause));
     }
   }
@@ -209,7 +215,7 @@ export function DeletedRepositoriesView({
         </nav>
       )}
       <Dialog
-        open={Boolean(target)}
+        open={Boolean(target) && !deleteConfirmationOpen}
         onOpenChange={(open) => {
           if (!open) close();
         }}
@@ -272,7 +278,10 @@ export function DeletedRepositoriesView({
                 disabled={
                   list.pending || (target?.action === 'delete' && confirmation !== identity)
                 }
-                onClick={() => void confirm()}
+                onClick={() => {
+                  if (target?.action === 'delete') setDeleteConfirmationOpen(true);
+                  else void confirm();
+                }}
                 variant={target?.action === 'restore' ? 'commit' : 'destructive'}
               >
                 {list.pending
@@ -285,6 +294,18 @@ export function DeletedRepositoriesView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <AlertDialog
+        open={deleteConfirmationOpen && target?.action === 'delete'}
+        onOpenChange={(open) => {
+          if (!list.pending) setDeleteConfirmationOpen(open);
+        }}
+        title="Confirm permanent deletion"
+        description={`You are about to permanently delete ${identity} and all of its data. This cannot be undone or restored. Its current and historical names will become available for reuse.`}
+        confirmLabel="Confirm permanent deletion"
+        variant="destructive"
+        loading={list.pending}
+        onConfirm={() => void confirm()}
+      />
     </div>
   );
 }
