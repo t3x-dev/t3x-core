@@ -26,6 +26,7 @@ import type { WorkspaceCandidate } from '@/types/workspaces';
 interface ProjectSchemasTabProps {
   projectId: string;
   schemaBindings?: ProjectWorkspaceSchemaBindings;
+  tab?: 'schemas' | 'discover' | 'browse';
 }
 
 interface BindingFeedback {
@@ -35,7 +36,7 @@ interface BindingFeedback {
 
 export function ProjectSchemasTab(props: ProjectSchemasTabProps) {
   return (
-    <SchemaCatalogExperience key={props.projectId} projectId={props.projectId}>
+    <SchemaCatalogExperience key={props.projectId} projectId={props.projectId} tab={props.tab}>
       <ProjectSchemaStudio {...props} />
     </SchemaCatalogExperience>
   );

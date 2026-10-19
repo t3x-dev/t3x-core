@@ -599,7 +599,7 @@ export function SchemaStudioExperience({
 
   const canReview = !!target && data?.workspace?.id === target.id && !applying;
   const repoPath = getProjectIdRepoPath(projectId);
-  const browseParams = new URLSearchParams({ tab: 'schemas', schemaView: 'browse' });
+  const browseParams = new URLSearchParams({ tab: 'browse' });
   const routeBranch = params?.get('branch');
   if (routeBranch) browseParams.set('branch', routeBranch);
   if (workspaceId) browseParams.set('workspace', workspaceId);

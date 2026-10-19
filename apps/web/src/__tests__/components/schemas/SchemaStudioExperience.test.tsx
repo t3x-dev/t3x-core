@@ -159,7 +159,7 @@ it('keeps the selected branch when Studio links to Browse', () => {
   render(<SchemaStudioExperience projectId="p" />);
   expect(screen.getByRole('link', { name: 'Browse source releases' })).toHaveAttribute(
     'href',
-    '/project/p?tab=schemas&schemaView=browse&branch=feature%2Frelease'
+    '/project/p?tab=browse&branch=feature%2Frelease'
   );
 });
 it('does not review another Workspace when the deep-linked target is missing', () => {
@@ -171,7 +171,7 @@ it('does not review another Workspace when the deep-linked target is missing', (
   expect(screen.getByRole('button', { name: 'Review changes' })).toBeDisabled();
   expect(screen.getByRole('link', { name: 'Browse source releases' })).toHaveAttribute(
     'href',
-    '/project/p?tab=schemas&schemaView=browse&workspace=missing'
+    '/project/p?tab=browse&workspace=missing'
   );
 });
 it('keeps a required provider checked and locked while blocking a failed definition review', () => {

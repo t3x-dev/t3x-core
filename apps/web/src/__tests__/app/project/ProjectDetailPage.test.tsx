@@ -78,6 +78,7 @@ vi.mock('@/hooks/pins/usePinsCrud', () => ({
 vi.mock('@/hooks/shared/useBranches', () => ({
   useBranches: () => ({
     branches: ['main'],
+    branchHeads: { main: null },
     create: vi.fn(),
     loading: false,
     refresh: stateHookMocks.refreshBranches,
@@ -107,6 +108,11 @@ vi.mock('@/hooks/projects/useProjectCrud', () => ({
 
 vi.mock('@/queries/project', () => ({
   fetchProject: vi.fn(),
+}));
+
+vi.mock('@/queries/workspaces', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/queries/workspaces')>()),
+  saveWorkspaceDraft: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/queries/yschemaValidation', () => ({
@@ -155,6 +161,7 @@ const STATE_COMMIT: ApiCommit = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.history.replaceState({}, '', '/');
   canvasSurfaceMocks.fetchPins.mockResolvedValue(undefined);
   canvasSurfaceMocks.loadCanvas.mockResolvedValue(undefined);
   stateHookMocks.loadCommits.mockResolvedValue([]);
@@ -198,6 +205,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  window.history.replaceState({}, '', '/');
   useChatStore.setState({ activeProjectId: null, activeConversationId: null });
   useProjectStore.setState({ details: {}, projects: [], initialized: false, loading: false });
   useCanvasStore.setState({
@@ -231,10 +239,18 @@ describe('ProjectDetailPage — project-first shell states', () => {
     );
   });
 
-  it('normalizes legacy tab links under the actual repository owner', async () => {
+  it.each([
+    { schemaView: '', hash: '', tab: 'schemas' },
+    { schemaView: '&schemaView=browse', hash: '#releases', tab: 'browse' },
+  ])('normalizes legacy $tab links under the actual repository owner', async ({
+    schemaView,
+    hash,
+    tab,
+  }) => {
     searchParamsValue = new URLSearchParams(
-      'tab=schemas&branch=feature%2Frelease&workspace=workspace_7'
+      `tab=schemas&branch=feature%2Frelease&workspace=workspace_7${schemaView}`
     );
+    window.history.replaceState({}, '', `/${hash}`);
     pathnameValue = '/orbit-labs/test-project';
     useProjectStore.setState({
       details: {},
@@ -262,7 +278,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     await waitFor(() =>
       expect(replaceMock).toHaveBeenCalledWith(
-        '/orbit-labs/test-project/schemas?branch=feature%2Frelease&workspace=workspace_7',
+        `/orbit-labs/test-project/${tab}?branch=feature%2Frelease&workspace=workspace_7${hash}`,
         { scroll: false }
       )
     );
@@ -302,7 +318,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     );
 
     expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('heading', { name: 'Curated schemas' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Schema Studio' })).toBeInTheDocument();
 
     view.rerender(
       <ProjectDetailPageContent initialTabOverride="workspaces" projectIdOverride="proj_test" />
@@ -590,18 +606,42 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
-  it('opens Schema discovery from the project tab query string', () => {
+  it('opens Studio directly from the Schemas project tab', () => {
     searchParamsValue = new URLSearchParams('tab=schemas');
-
     renderProjectContent();
-
     expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
+    const studio = screen.getByRole('region', { name: 'Schema Studio' });
+    expect(studio.closest('main')).toHaveClass('overflow-hidden');
+    expect(screen.queryByRole('navigation', { name: 'Schema views' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Curated schemas' })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    'tab=discover',
+    'tab=schemas&schemaView=discover',
+  ])('opens Discover with the matching primary navigation for %s', (query) => {
+    searchParamsValue = new URLSearchParams(query);
+    renderProjectContent();
+    expect(screen.getByRole('link', { name: 'Discover' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('heading', { name: 'Curated schemas' })).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Schema views' })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Schema views' })).not.toBeInTheDocument();
     expect(
       screen.getByRole('searchbox', { name: 'Search projects and schemas' })
     ).toBeInTheDocument();
-    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    'tab=browse',
+    'tab=schemas&schemaView=browse',
+  ])('opens Browse with the matching primary navigation for %s', (query) => {
+    searchParamsValue = new URLSearchParams(query);
+    renderProjectContent();
+    expect(screen.getByRole('link', { name: 'Browse', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    expect(screen.getByRole('complementary', { name: 'Catalog filters' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Schema Studio' })).not.toBeInTheDocument();
   });
 
   it('keeps repository State visible while Canvas is loading', async () => {

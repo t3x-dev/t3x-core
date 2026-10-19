@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SchemaCatalogExperience } from '@/components/schemas/SchemaCatalogExperience';
 
@@ -95,9 +95,9 @@ beforeEach(() => {
     retry: vi.fn(),
   });
 });
-function mount() {
+function mount(tab: 'schemas' | 'discover' | 'browse' = 'browse') {
   return render(
-    <SchemaCatalogExperience projectId="p">
+    <SchemaCatalogExperience projectId="p" tab={tab}>
       <div>Detailed Studio</div>
     </SchemaCatalogExperience>
   );
@@ -122,7 +122,7 @@ describe('Schema catalog journey', () => {
   });
   it('renders the shared Explore surface in Discover and sends search to Browse', () => {
     mocks.query = 'workspace=main';
-    mount();
+    mount('discover');
     expect(mocks.catalog).toHaveBeenCalledWith('p', 'limit=48', false);
     expect(screen.getByRole('heading', { name: 'Curated schemas' })).toBeVisible();
     expect(screen.getByText('Ready to use')).toBeVisible();
@@ -134,10 +134,9 @@ describe('Schema catalog journey', () => {
       target: { value: 'dog care' },
     });
     fireEvent.submit(search.closest('form')!);
-    expect(mocks.push).toHaveBeenCalledWith(
-      '/team/project/schemas?workspace=main&schemaView=browse&q=dog+care',
-      { scroll: false }
-    );
+    expect(mocks.push).toHaveBeenCalledWith('/team/project/browse?workspace=main&q=dog+care', {
+      scroll: false,
+    });
   });
   it('opens a dedicated release page instead of stacked drawers', () => {
     mocks.query = 'schemaView=browse';
@@ -145,7 +144,7 @@ describe('Schema catalog journey', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Explore Release definition 1.2.3' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(mocks.push).toHaveBeenCalledWith(
-      '/team/project/schemas?schemaView=release&catalogName=team%2Frelease&catalogVersion=1.2.3&catalogHash=sha256%3Aabc',
+      '/team/project/browse?schemaView=release&catalogName=team%2Frelease&catalogVersion=1.2.3&catalogHash=sha256%3Aabc',
       { scroll: false }
     );
   });
@@ -166,7 +165,7 @@ describe('Schema catalog journey', () => {
     expect(screen.getByText(/canonicalName: team\/release/)).toBeVisible();
     expect(screen.getByRole('button', { name: 'Add & open Studio' })).toBeEnabled();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Schema views' })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Schema views' })).not.toBeInTheDocument();
   });
   it('restores Browse filters and keeps the advanced workbench behind an explicit action', () => {
     mocks.query = 'schemaView=browse&tags=infra&format=yaml';
@@ -176,23 +175,13 @@ describe('Schema catalog journey', () => {
     expect(screen.getByText('Work & Life')).toBeVisible();
     expect(screen.getByText('Data & Visualization')).toBeVisible();
     unmount();
-    mocks.query = 'schemaView=studio';
-    mount();
-    const schemaViews = screen.getByRole('navigation', { name: 'Schema views' });
-    expect(
-      within(schemaViews)
-        .getAllByRole('tab')
-        .map((button) => button.textContent)
-    ).toEqual(['Discover', 'Browse', 'Studio']);
-    expect(within(schemaViews).queryByRole('tab', { name: 'Active' })).not.toBeInTheDocument();
-    expect(within(schemaViews).getByRole('tab', { name: 'Studio' })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
+    mocks.query = '';
+    mount('schemas');
     const studio = screen.getByRole('region', { name: 'Schema Studio' });
-    expect(schemaViews.closest('header')).toHaveAttribute('data-view', 'studio');
-    expect(studio).not.toContainElement(schemaViews);
-    expect(screen.getByRole('region', { name: 'Schema experience' })).toContainElement(schemaViews);
+    expect(screen.queryByRole('navigation', { name: 'Schema views' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Schema experience' })).toContainElement(studio);
+    expect(screen.getByRole('toolbar', { name: 'Studio controls' })).toBeInTheDocument();
     expect(screen.queryByText('Detailed Studio')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Add modules' }));
     expect(screen.queryByText('Detailed Studio')).not.toBeInTheDocument();

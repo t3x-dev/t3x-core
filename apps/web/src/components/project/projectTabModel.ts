@@ -1,6 +1,10 @@
+import { getSchemaProjectTab } from '@/domain/project/repositoryLocation';
+
 export type ProjectTabId =
   | 'state'
   | 'schemas'
+  | 'discover'
+  | 'browse'
   | 'workspaces'
   | 'reviews'
   | 'outputs'
@@ -16,6 +20,8 @@ export interface ProjectTabDefinition {
 export const PROJECT_TABS: ProjectTabDefinition[] = [
   { id: 'state', label: 'State' },
   { id: 'schemas', label: 'Schemas' },
+  { id: 'discover', label: 'Discover' },
+  { id: 'browse', label: 'Browse' },
   { id: 'workspaces', label: 'Workspaces' },
   { id: 'reviews', label: 'Pull requests', segment: 'pull-requests' },
   { id: 'community', label: 'Community' },
@@ -44,4 +50,13 @@ export function isProjectTabSegment(value: string | null): boolean {
 export function parseProjectTab(value: string | null): ProjectTabId {
   if (value) return PROJECT_TAB_ID_BY_SEGMENT.get(value) ?? 'state';
   return 'state';
+}
+
+/** Keep historical Schema catalog links on their promoted project view. */
+export function resolveProjectTab(tab: ProjectTabId, schemaView: string | null): ProjectTabId {
+  return tab === 'schemas' ? getSchemaProjectTab(schemaView) : tab;
+}
+
+export function projectTabKeepsWorkspace(tab: ProjectTabId): boolean {
+  return tab === 'schemas' || tab === 'discover' || tab === 'browse' || tab === 'workspaces';
 }

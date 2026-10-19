@@ -14,7 +14,6 @@ import headerStyles from './SchemaCatalogHeader.module.css';
 import { SchemaReleasePage } from './SchemaReleasePage';
 import { SchemaStudioExperience } from './SchemaStudioExperience';
 import { SchemaToolbarContext } from './SchemaToolbarSlot';
-import { SchemaViewNavigation } from './SchemaViewNavigation';
 
 const filterKeys = [
   'q',
@@ -32,9 +31,11 @@ const releaseKeys = ['catalogName', 'catalogVersion', 'catalogHash'] as const;
 export function SchemaCatalogExperience({
   projectId,
   children,
+  tab = 'schemas',
 }: {
   projectId: string;
   children: ReactNode;
+  tab?: 'schemas' | 'discover' | 'browse';
 }) {
   const search = useSearchParams();
   const pathname = usePathname();
@@ -47,15 +48,13 @@ export function SchemaCatalogExperience({
   const requestedView = params.get('schemaView');
   const workspaces = useProjectWorkspaces(projectId);
   const view: View =
-    requestedView === 'browse' ||
-    requestedView === 'studio' ||
-    requestedView === 'discover' ||
-    requestedView === 'active' ||
-    requestedView === 'release'
-      ? requestedView
-      : params.get('mode') === 'compose'
-        ? 'studio'
-        : 'discover';
+    tab === 'schemas'
+      ? 'studio'
+      : tab === 'discover'
+        ? 'discover'
+        : requestedView === 'active' || requestedView === 'release'
+          ? requestedView
+          : 'browse';
   const filters = new URLSearchParams();
   if (view === 'browse')
     for (const key of filterKeys) {
@@ -75,13 +74,21 @@ export function SchemaCatalogExperience({
   const collections = useSchemaCollections();
   function navigate(nextView: View, updates: Record<string, string | undefined> = {}) {
     const next = new URLSearchParams(search?.toString() ?? '');
-    next.set('schemaView', nextView);
+    const nextTab =
+      nextView === 'studio' ? 'schemas' : nextView === 'discover' ? 'discover' : 'browse';
+    if (nextView === 'active' || nextView === 'release') next.set('schemaView', nextView);
+    else next.delete('schemaView');
     for (const key of ['mode', 'module', 'version', ...releaseKeys]) next.delete(key);
     for (const [key, value] of Object.entries(updates)) {
       if (value) next.set(key, value);
       else next.delete(key);
     }
-    router.push(`${pathname}?${next.toString()}`, { scroll: false });
+    const basePath = pathname.split('/').slice(0, 3).join('/');
+    const idNavigation = pathname.startsWith('/project/');
+    if (idNavigation) next.set('tab', nextTab);
+    else next.delete('tab');
+    const nextPath = idNavigation ? basePath : `${basePath}/${nextTab}`;
+    router.push(`${nextPath}${next.size ? `?${next}` : ''}`, { scroll: false });
   }
   function searchSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -101,8 +108,6 @@ export function SchemaCatalogExperience({
       item.release.version === params.get('catalogVersion') &&
       (!params.get('catalogHash') || item.release.hash === params.get('catalogHash'))
   );
-  const visibleView = view === 'active' || view === 'release' ? 'browse' : view;
-  const viewNavigation = <SchemaViewNavigation value={visibleView} onChange={navigate} />;
   return (
     <SchemaToolbarContext.Provider value={toolbarTarget}>
       <section
@@ -114,7 +119,6 @@ export function SchemaCatalogExperience({
         aria-label="Schema experience"
       >
         <header className={headerStyles.header} data-view={view}>
-          {viewNavigation}
           <form
             className={headerStyles.search}
             hidden={view === 'studio'}
@@ -138,13 +142,28 @@ export function SchemaCatalogExperience({
             role="tablist"
             aria-label="Catalog type"
           >
-            <button role="tab" aria-selected={false} onClick={() => navigate('discover')}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={false}
+              onClick={() => navigate('discover')}
+            >
               All
             </button>
-            <button role="tab" aria-selected={view === 'active'} onClick={() => navigate('active')}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === 'active'}
+              onClick={() => navigate('active')}
+            >
               Projects
             </button>
-            <button role="tab" aria-selected={view !== 'active'} onClick={() => navigate('browse')}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view !== 'active'}
+              onClick={() => navigate('browse')}
+            >
               Schemas
             </button>
           </div>

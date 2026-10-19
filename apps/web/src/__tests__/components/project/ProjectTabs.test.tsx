@@ -64,7 +64,7 @@ describe('ProjectTabs', () => {
     );
   });
 
-  it('keeps branch and Workspace context between State, Schemas, and Workspaces', () => {
+  it('keeps branch and Workspace context across schema and catalog project views', () => {
     render(
       <ProjectTabs
         activeTab="workspaces"
@@ -83,6 +83,14 @@ describe('ProjectTabs', () => {
       'href',
       '/project/proj_123?tab=schemas&branch=feature%2Frelease&workspace=workspace_42'
     );
+    expect(screen.getByRole('link', { name: 'Discover' })).toHaveAttribute(
+      'href',
+      '/project/proj_123?tab=discover&branch=feature%2Frelease&workspace=workspace_42'
+    );
+    expect(screen.getByRole('link', { name: 'Browse' })).toHaveAttribute(
+      'href',
+      '/project/proj_123?tab=browse&branch=feature%2Frelease&workspace=workspace_42'
+    );
     expect(screen.getByRole('link', { name: 'Workspaces' })).toHaveAttribute(
       'href',
       '/project/proj_123?tab=workspaces&branch=feature%2Frelease&workspace=workspace_42'
@@ -97,10 +105,12 @@ describe('ProjectTabs', () => {
     );
   });
 
-  it('keeps tab labels stable for shared A0/W1/S1 ownership', () => {
+  it('places Discover and Browse beside Schemas while retaining historical route aliases', () => {
     expect(PROJECT_TABS.map((tab) => tab.id)).toEqual([
       'state',
       'schemas',
+      'discover',
+      'browse',
       'workspaces',
       'reviews',
       'community',
@@ -115,5 +125,7 @@ describe('ProjectTabs', () => {
     expect(parseProjectTab('outputs')).toBe('outputs');
     expect(isProjectTabSegment('outputs')).toBe(true);
     expect(getProjectTabSegment('outputs')).toBe('outputs');
+    expect(parseProjectTab('discover')).toBe('discover');
+    expect(parseProjectTab('browse')).toBe('browse');
   });
 });

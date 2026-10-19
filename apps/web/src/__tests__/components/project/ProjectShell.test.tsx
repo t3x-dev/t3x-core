@@ -21,7 +21,7 @@ describe('ProjectShell', () => {
       </ProjectShell>
     );
 
-    for (const activeTab of ['workspaces'] as const) {
+    for (const activeTab of ['schemas', 'discover', 'browse', 'workspaces'] as const) {
       view.rerender(
         <ProjectShell activeTab={activeTab} project={project}>
           <div>{activeTab} content</div>
@@ -122,5 +122,32 @@ describe('ProjectShell', () => {
       'flex-1',
       'overflow-hidden'
     );
+  });
+
+  it.each([
+    'discover',
+    'browse',
+  ] as const)('returns from Settings to the same %s view, branch, and Workspace', (activeTab) => {
+    render(
+      <ProjectShell
+        activeTab={activeTab}
+        branch="feature/release"
+        workspaceId="workspace_branch:feature/release"
+        project={{ ...project, namespace: 'orbit', canonical_path: '/orbit/Repo' }}
+      >
+        <div>Catalog content</div>
+      </ProjectShell>
+    );
+
+    const settingsUrl = new URL(
+      screen.getByRole('link', { name: 'Settings' }).getAttribute('href')!,
+      'http://localhost'
+    );
+    expect(settingsUrl.pathname).toBe('/orbit/Repo/settings');
+    const returnUrl = new URL(settingsUrl.searchParams.get('returnTo')!, 'http://localhost');
+    expect(returnUrl.pathname).toBe('/orbit/Repo');
+    expect(returnUrl.searchParams.get('tab')).toBe(activeTab);
+    expect(returnUrl.searchParams.get('branch')).toBe('feature/release');
+    expect(returnUrl.searchParams.get('workspace')).toBe('workspace_branch:feature/release');
   });
 });

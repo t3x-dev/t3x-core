@@ -5,6 +5,7 @@ import {
   Boxes,
   Braces,
   CircleUserRound,
+  Compass,
   Database,
   FileText,
   FolderGit2,
@@ -20,6 +21,7 @@ import {
   getProjectTabSegment,
   PROJECT_TABS,
   type ProjectTabId,
+  projectTabKeepsWorkspace,
 } from '@/components/project/projectTabModel';
 import { Button } from '@/components/ui/button';
 import palette from '@/styles/management-palette.module.css';
@@ -28,6 +30,8 @@ import styles from './DiscoverHeader.module.css';
 const tabIcons: Record<ProjectTabId, LucideIcon> = {
   state: Database,
   schemas: Braces,
+  discover: Compass,
+  browse: BookOpen,
   workspaces: Boxes,
   reviews: GitPullRequest,
   community: LayoutGrid,
@@ -70,8 +74,7 @@ export function DiscoverHeader({
     const params = new URLSearchParams();
     if (projectIdNavigation && tab !== 'state') params.set('tab', getProjectTabSegment(tab));
     if (branch) params.set('branch', branch);
-    if (workspaceId && (tab === 'schemas' || tab === 'workspaces'))
-      params.set('workspace', workspaceId);
+    if (workspaceId && projectTabKeepsWorkspace(tab)) params.set('workspace', workspaceId);
     const path =
       projectIdNavigation || tab === 'state'
         ? repoPath
@@ -142,9 +145,7 @@ export function DiscoverHeader({
             >
               <Search aria-hidden="true" />
               <span className={styles.searchLabel}>Search</span>
-              <kbd className={styles.shortcut} aria-hidden="true">
-                ⌘K
-              </kbd>
+              <kbd className={styles.shortcut}>⌘K</kbd>
             </Button>
             {newProjectHref ? (
               <Button asChild variant="outline" size="sm" className={styles.create}>

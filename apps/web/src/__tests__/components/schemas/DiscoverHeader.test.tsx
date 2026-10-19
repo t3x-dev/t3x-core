@@ -7,8 +7,7 @@ import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 
 describe('DiscoverHeader navigation', () => {
   it('preserves the current branch and Workspace on canonical repository tabs', () => {
-    const settingsHref =
-      '/orbit/release/settings?returnTo=%2Forbit%2Frelease%3Ftab%3Dworkspaces';
+    const settingsHref = '/orbit/release/settings?returnTo=%2Forbit%2Frelease%3Ftab%3Dworkspaces';
     render(
       <DiscoverHeader
         owner="orbit"
@@ -22,7 +21,17 @@ describe('DiscoverHeader navigation', () => {
     );
 
     const tabs = within(screen.getByRole('navigation', { name: 'Project views' }));
-    for (const label of ['Schemas', 'Workspaces']) {
+    expect(tabs.getAllByRole('link').map((link) => link.getAttribute('aria-label'))).toEqual([
+      'State',
+      'Schemas',
+      'Discover',
+      'Browse',
+      'Workspaces',
+      'Pull requests',
+      'Community',
+      'Settings',
+    ]);
+    for (const label of ['Schemas', 'Discover', 'Browse', 'Workspaces']) {
       const link = tabs.getByRole('link', { name: label });
       const target = new URL(link.getAttribute('href')!, 'http://localhost');
       expect(target.pathname).toBe(`/orbit/release/${label.toLowerCase()}`);
@@ -38,6 +47,34 @@ describe('DiscoverHeader navigation', () => {
     expect(pullRequests.searchParams.has('workspace')).toBe(false);
     expect(tabs.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', settingsHref);
     expect(tabs.getByRole('link', { name: 'Workspaces' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it.each([
+    ['discover', 'Discover'],
+    ['browse', 'Browse'],
+  ] as const)('opens the %s project view by ID without losing its Workspace', (activeTab, label) => {
+    render(
+      <DiscoverHeader
+        owner="orbit"
+        projectName="release"
+        repoPath="/project/proj_123"
+        projectIdNavigation
+        branch="feature/release"
+        workspaceId="workspace_branch:feature/release"
+        activeTab={activeTab}
+      />
+    );
+
+    const tabs = within(screen.getByRole('navigation', { name: 'Project views' }));
+    const activeLink = tabs.getByRole('link', { name: label });
+    const target = new URL(activeLink.getAttribute('href')!, 'http://localhost');
+    expect(target.pathname).toBe('/project/proj_123');
+    expect(target.searchParams.get('tab')).toBe(activeTab);
+    expect(target.searchParams.get('branch')).toBe('feature/release');
+    expect(target.searchParams.get('workspace')).toBe('workspace_branch:feature/release');
+    expect(target.searchParams.has('schemaView')).toBe(false);
+    expect(activeLink).toHaveAttribute('aria-current', 'page');
+    expect(tabs.getByRole('link', { name: 'Schemas' })).not.toHaveAttribute('aria-current');
   });
 
   it('keeps namespace settings and repository creation under the supplied owner', () => {
@@ -58,7 +95,10 @@ describe('DiscoverHeader navigation', () => {
       '/settings/provider-credentials?owner=orbit-labs'
     );
     expect(tabs.getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: 'Create new' })).toHaveAttribute('href', '/orbit-labs/new');
+    expect(screen.getByRole('link', { name: 'Create new' })).toHaveAttribute(
+      'href',
+      '/orbit-labs/new'
+    );
     expect(screen.getByRole('link', { name: 'Account settings' })).toHaveAttribute(
       'href',
       '/settings/profile'

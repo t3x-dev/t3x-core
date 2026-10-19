@@ -10,12 +10,15 @@ import {
 import { useProjectDetail } from '@/hooks/projects/useProjectDetail';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 import { ProjectShell } from './ProjectShell';
-import { type ProjectTabId, parseProjectTab } from './projectTabModel';
+import { type ProjectTabId, parseProjectTab, resolveProjectTab } from './projectTabModel';
 
 function activeProjectTab(pathname: string, searchParams: URLSearchParams): ProjectTabId {
   if (pathname.includes('/changes/')) return 'workspaces';
   if (pathname.includes('/settings')) return 'settings';
-  return parseProjectTab(searchParams.get('tab'));
+  return resolveProjectTab(
+    parseProjectTab(searchParams.get('tab')),
+    searchParams.get('schemaView')
+  );
 }
 
 function isProjectIndex(pathname: string): boolean {

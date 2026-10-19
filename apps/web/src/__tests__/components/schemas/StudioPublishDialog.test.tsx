@@ -72,7 +72,7 @@ it('publishes only on explicit submit, pins the checked revision and opens the e
   });
   const url = new URL(screen.getByRole('link').getAttribute('href')!, 'http://localhost');
   expect(Object.fromEntries(url.searchParams)).toEqual({
-    tab: 'schemas',
+    tab: 'browse',
     schemaView: 'release',
     catalogName: receipt.source.canonicalName,
     catalogVersion: '1.0.0',

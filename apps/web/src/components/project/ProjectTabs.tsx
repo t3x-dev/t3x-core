@@ -3,6 +3,7 @@ import {
   getProjectTabSegment,
   PROJECT_TABS,
   type ProjectTabId,
+  projectTabKeepsWorkspace,
 } from '@/components/project/projectTabModel';
 import { cn } from '@/utils/cn';
 
@@ -49,7 +50,7 @@ export function ProjectTabs({
         if (branch && tab.id !== 'settings') {
           context.set('branch', branch);
         }
-        if (workspaceId && (tab.id === 'schemas' || tab.id === 'workspaces')) {
+        if (workspaceId && projectTabKeepsWorkspace(tab.id)) {
           context.set('workspace', workspaceId);
         }
         const contextQuery = context.toString();

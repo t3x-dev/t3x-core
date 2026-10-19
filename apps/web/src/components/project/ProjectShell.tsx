@@ -1,5 +1,9 @@
 import type { ReactNode } from 'react';
-import { getProjectTabSegment, type ProjectTabId } from '@/components/project/projectTabModel';
+import {
+  getProjectTabSegment,
+  type ProjectTabId,
+  projectTabKeepsWorkspace,
+} from '@/components/project/projectTabModel';
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 import { getProjectRepoPath } from '@/domain/project/repoPath';
 import type { YSchemaValidationSummary } from '@/domain/project/yschemaValidation';
@@ -55,7 +59,7 @@ export function ProjectShell({
     returnParams.set('tab', getProjectTabSegment(activeTab));
   }
   if (branch) returnParams.set('branch', branch);
-  if (workspaceId && (activeTab === 'workspaces' || activeTab === 'schemas')) {
+  if (workspaceId && projectTabKeepsWorkspace(activeTab)) {
     returnParams.set('workspace', workspaceId);
   }
   if (pullRequestNumber && activeTab === 'reviews') {
