@@ -465,7 +465,7 @@ it('adopts a Module composition without activating a draft override and invalida
     workspace_state: {
       title: 'Composition binding',
       targetBranch: workspaceId,
-      schemaBindings: [],
+      schemaBindings: [{ canonicalName: 't3x/prd', version: 'v2', mode: 'pinned' }],
       yopsDraft: { operations: [] },
     },
   });
@@ -481,7 +481,9 @@ it('adopts a Module composition without activating a draft override and invalida
   const adopted = (await response.json()).data;
   expect(adopted.outcome).toBe('pending_preparation');
   const saved = (await findWorkspaceDraft(db, target, workspaceId))!;
-  expect(saved.workspace_state.schemaBindings).toEqual([]);
+  expect(saved.workspace_state.schemaBindings).toEqual([
+    { canonicalName: 't3x/prd', version: 'v2', mode: 'pinned' },
+  ]);
   const pendingUrl = `/v1/projects/${target}/schema-studio/pending/${workspaceId}`;
   expect((await (await app.request(pendingUrl)).json()).data.status).toBe('pending_preparation');
   await upsertWorkspaceDraft(
@@ -511,7 +513,7 @@ it('adopts a saved local candidate on an Authoring Ledger Workspace without muta
     title: workspaceId,
     workspace_state: {
       targetBranch: workspaceId,
-      schemaBindings: [],
+      schemaBindings: [{ canonicalName: 't3x/prd', version: 'v2', mode: 'pinned' }],
       yopsDraft: { operations: [] },
     },
   });
@@ -689,6 +691,120 @@ it('validates exact author and local samples against the selection without writi
   let nested: Record<string, unknown> = {};
   for (let i = 0; i < 30; i++) nested = { child: nested };
   expect((await request('preview', { ...input, sample: nested })).status).toBe(400);
+});
+
+it('uses the existing Apply to bind empty unbound Workspaces directly, even with required content gaps', async () => {
+  const schema = normalizeYSchemaObject(builtInPrdCoreArtifact.schema);
+  const wholeId = await candidate(
+    'initial-whole',
+    {
+      apiVersion: 't3x.dev/yschema-blueprint/v1',
+      schema,
+      registry: {
+        schemaHash: await sha256CompositionValue(schema),
+        renderPlan: [],
+        originsByPath: {},
+      },
+    },
+    'schema'
+  );
+  for (const initialized of [false, true]) {
+    for (const [id, mode] of [
+      [coreId, 'draft_override'],
+      [wholeId, 'pinned'],
+    ]) {
+      const workspaceId = `first-bind-${initialized}-${mode}`;
+      await insertBranch(db, { projectId: target, name: workspaceId });
+      const draft = await upsertWorkspaceDraft(db, {
+        project_id: target,
+        workspace_id: workspaceId,
+        target_branch: workspaceId,
+        title: workspaceId,
+        workspace_state: {
+          title: workspaceId,
+          targetBranch: workspaceId,
+          schemaBindings: [],
+          yopsDraft: { operations: [] },
+        },
+      });
+      if (initialized)
+        await initializeWorkspaceAuthoring(db, {
+          projectId: target,
+          workspaceId,
+          expectedWorkspaceRevision: draft.revision,
+          expectedRefHead: null,
+          actionId: `initialize:${workspaceId}`,
+          actor: { kind: 'human', id: 'test' },
+        });
+      const preview = (await (await request('preview', { candidateIds: [id], workspaceId })).json())
+        .data;
+      expect(preview.workspace.canBind).toBe(true);
+      expect(preview.impact.content.ready).toBe(false);
+      const before = (await findWorkspaceDraft(db, target, workspaceId))!;
+      const input = {
+        candidateIds: [id],
+        workspaceId,
+        ifRevision: before.revision,
+        reviewHash: preview.reviewHash,
+      };
+      expect(
+        (await request('apply', { ...input, reviewHash: `sha256:${'0'.repeat(64)}` })).status
+      ).toBe(409);
+      denied.add(`${source}:project:edit`);
+      expect((await request('apply', input)).status).toBe(403);
+      denied.clear();
+      expect(await findWorkspaceDraft(db, target, workspaceId)).toEqual(before);
+      const response = await request('apply', input);
+      expect(response.status).toBe(200);
+      const result = (await response.json()).data;
+      expect(result).toMatchObject({
+        outcome: 'bound',
+        binding: { mode, schemaHash: preview.schemaHash },
+      });
+      const saved = (await findWorkspaceDraft(db, target, workspaceId))!;
+      expect(saved.workspace_state.schemaBindings).toEqual([result.binding]);
+      expect(saved.workspace_state.schemaPending).toBeUndefined();
+      expect({ ...saved.workspace_state, schemaBindings: [] }).toEqual(before.workspace_state);
+      expect(saved.workspace_state.authoringLedger).toEqual(before.workspace_state.authoringLedger);
+      const resolved = await resolveWorkspaceYSchema(saved.workspace_state, db, target);
+      expect(await sha256CompositionValue(resolved.schema)).toBe(preview.schemaHash);
+      expect(
+        (await (await request('preview', { candidateIds: [id], workspaceId })).json()).data
+          .workspace.canBind
+      ).toBe(false);
+    }
+  }
+});
+
+it('keeps unbound Workspaces with existing content on the pending evolution path', async () => {
+  const workspaceId = 'unbound-with-data';
+  const fields = [{ path: 'summary.problem', value: 'Keep this existing problem.' }];
+  await upsertWorkspaceDraft(db, {
+    project_id: target,
+    workspace_id: workspaceId,
+    title: workspaceId,
+    target_branch: workspaceId,
+    workspace_state: {
+      targetBranch: workspaceId,
+      schemaBindings: [],
+      schemaCandidate: { fields },
+      yopsDraft: { operations: [] },
+    },
+  });
+  const preview = (await (await request('preview', { candidateIds: [coreId], workspaceId })).json())
+    .data;
+  expect(preview.workspace.canBind).toBe(false);
+  const response = await request('apply', {
+    candidateIds: [coreId],
+    workspaceId,
+    ifRevision: preview.workspace.revision,
+    reviewHash: preview.reviewHash,
+  });
+  expect(response.status).toBe(200);
+  expect((await response.json()).data.outcome).toBe('pending_preparation');
+  const saved = (await findWorkspaceDraft(db, target, workspaceId))!;
+  expect(saved.workspace_state.schemaBindings).toEqual([]);
+  expect(saved.workspace_state.schemaCandidate.fields).toEqual(fields);
 });
 
 it('imports an initial YAML definition, resolves its immutable binding, and safely retries', async () => {

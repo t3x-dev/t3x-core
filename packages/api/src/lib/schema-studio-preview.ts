@@ -23,8 +23,9 @@ import {
   type YSchemaLocalContributionV2,
 } from '@t3x-dev/yschema';
 import type { Context } from 'hono';
-import { assessWorkspaceSchemaImpact } from './schema-evolution-impact';
+import { assessWorkspaceSchemaImpact, workspaceContent } from './schema-evolution-impact';
 import { resolveStudioSource, schemaSourceAdoptionReason } from './schema-studio';
+import { workspaceAuthoringState } from './workspace-authoring';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
 import { artifactViewToOpenModule } from './yschema-artifact-registry';
 export class StudioError extends Error {
@@ -363,6 +364,7 @@ export async function previewStudio(
     id: string;
     revision: number;
     binding: Record<string, unknown> | null;
+    canBind: boolean;
     changes: ReturnType<typeof diffYSchemas>;
   } | null = null;
   let impact: Awaited<ReturnType<typeof assessWorkspaceSchemaImpact>> | null = null;
@@ -390,6 +392,32 @@ export async function previewStudio(
     workspace = {
       id: input.workspaceId,
       revision: draft.revision,
+      canBind: (() => {
+        const state = draft.workspace_state!;
+        const operations = (state.yopsDraft as { operations?: unknown[] } | undefined)?.operations;
+        if (
+          (Array.isArray(bindings) && bindings.length) ||
+          state.schemaPending ||
+          state.baseCommitHash ||
+          state.lastCommitHash ||
+          draft.parent_commit_hash ||
+          operations?.length ||
+          state.extractionProposal ||
+          draft.nodes?.length ||
+          draft.semantic_points?.length
+        )
+          return false;
+        try {
+          const content = workspaceContent(state);
+          if (state.authoringLedger) {
+            const { ledger, basis } = workspaceAuthoringState(state);
+            if (ledger.actions.length || basis.refHead) return false;
+          }
+          return Object.keys(content.tree).length === 0 && content.relations.length === 0;
+        } catch {
+          return false;
+        }
+      })(),
       binding: Array.isArray(bindings)
         ? ((bindings[0] ?? null) as Record<string, unknown> | null)
         : null,

@@ -201,6 +201,7 @@ export const StudioPreviewSchema = z.object({
       id: z.string(),
       revision: z.number(),
       binding: z.record(z.string(), z.unknown()).nullable(),
+      canBind: z.boolean().optional(),
       changes: z.array(change),
     })
     .nullable(),
@@ -284,11 +285,18 @@ export const WorkspaceSchemaPendingViewSchema = z.object({
   reason: z.string().nullable(),
   impact: SchemaEvolutionImpactSchema.nullable(),
 });
-export const StudioAdoptResultSchema = z.object({
-  workspaceRevision: z.number().int().positive(),
-  outcome: z.literal('pending_preparation'),
-  pending: WorkspaceSchemaPendingSchema,
-});
+export const StudioAdoptResultSchema = z.discriminatedUnion('outcome', [
+  z.object({
+    workspaceRevision: z.number().int().positive(),
+    outcome: z.literal('pending_preparation'),
+    pending: WorkspaceSchemaPendingSchema,
+  }),
+  z.object({
+    workspaceRevision: z.number().int().positive(),
+    outcome: z.literal('bound'),
+    binding: z.record(z.string(), z.unknown()),
+  }),
+]);
 export type WorkspaceSchemaPending = z.infer<typeof WorkspaceSchemaPendingSchema>;
 export type WorkspaceSchemaPendingView = z.infer<typeof WorkspaceSchemaPendingViewSchema>;
 

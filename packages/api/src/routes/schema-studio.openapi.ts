@@ -22,14 +22,18 @@ import {
 } from '@t3x-dev/application';
 import { compileWorkspaceSchemaDefinition, WorkspaceSchemaYOpsError } from '@t3x-dev/core';
 import {
+  type AnyDB,
   addSchemaStudioCandidate,
   ConflictError,
+  DraftAuthoringConflictError,
   findWorkspaceDraft,
+  getTransitionRefHead,
   listSchemaStudioCandidates,
   listYSchemaCatalogReleases,
   removeSchemaStudioCandidate,
   saveWorkspaceSchemaPreparation,
   saveYSchemaCompositionSnapshot,
+  transactWorkspaceAuthoring,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
 import { parseYSchema, sha256CompositionValue } from '@t3x-dev/yschema';
@@ -38,6 +42,7 @@ import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess, getProjectAccessPrincipal } from '../lib/project-access';
 import { projectStudioCandidate, resolveStudioSource } from '../lib/schema-studio';
 import { compileStudioSelection, previewStudio, StudioError } from '../lib/schema-studio-preview';
+import { workspaceAuthoringState } from '../lib/workspace-authoring';
 import {
   readPendingWorkspaceSchema,
   savePendingWorkspaceSchema,
@@ -470,7 +475,8 @@ const applyRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'Schema candidate adopted as pending preparation; effective Workspace unchanged',
+      description:
+        'Empty unbound Workspace bound directly; otherwise adopted as pending preparation',
       content: {
         'application/json': {
           schema: SuccessResponseSchema(StudioAdoptResultSchema),
@@ -527,6 +533,85 @@ schemaStudioRoutes.openapi(applyRoute, async (c) => {
     const draft = await findWorkspaceDraft(db, projectId, input.workspaceId);
     if (!draft?.workspace_state || draft.revision !== input.ifRevision)
       throw new StudioError('CONFLICT', 'The target Workspace changed.');
+    // Restore dev's direct Apply only for a first, empty binding. Never clear proposals or edits.
+    if (preview.workspace.canBind) {
+      const compositionHash = await sha256CompositionValue({
+        selectionHash: preview.selectionHash,
+        schemaHash: preview.schemaHash,
+      });
+      const compositionId = `studio:${compositionHash}`;
+      const binding = {
+        rootKey: 'candidate',
+        canonicalName: compositionId,
+        schemaName:
+          preview.sources.length === 1 ? preview.sources[0]!.canonicalName : 'Studio selection',
+        version: preview.sources.length === 1 ? preview.sources[0]!.version : '1',
+        mode: resolveWorkspaceSchemaBindingMode({
+          source:
+            !preview.modules.length && !input.schemaEditCandidate
+              ? 'published_schema'
+              : 'workspace_schema',
+        }),
+        schemaHash: preview.schemaHash,
+        compositionId,
+        compositionRevision: 1,
+        compositionHash,
+        studioSources: preview.sources,
+      };
+      const saveSnapshot = (tx: AnyDB) =>
+        saveYSchemaCompositionSnapshot(tx, {
+          snapshot_id: `studio_${projectId}_${compositionHash.slice(7)}`,
+          project_id: projectId,
+          composition_id: compositionId,
+          composition_revision: 1,
+          composition_hash: compositionHash,
+          compiled_schema_hash: preview.schemaHash,
+          compiler_version: 'studio-selection@1',
+          manifest_json: { apiVersion: 't3x.dev/studio-selection/v1', sources: preview.sources },
+          schema_json: preview.schema,
+          render_plan_json: preview.renderPlan,
+          origins_json: preview.origins,
+        });
+      const state = { ...draft.workspace_state, schemaBindings: [binding] };
+      const saved = draft.workspace_state.authoringLedger
+        ? (
+            await transactWorkspaceAuthoring(
+              db,
+              { projectId, workspaceId: input.workspaceId, refName: draft.target_branch ?? 'main' },
+              async (tx, current) => {
+                if (current.revision !== input.ifRevision)
+                  throw new ConflictError(current.id, input.ifRevision);
+                const { basis } = workspaceAuthoringState(current.workspace_state!);
+                const head = await getTransitionRefHead(tx, { projectId, refName: basis.refName });
+                if (head.head !== basis.refHead || current.target_branch !== basis.refName)
+                  throw new StudioError('CONFLICT', 'The branch changed. Review it again.');
+                await saveSnapshot(tx);
+                return { workspace: state, value: null };
+              }
+            )
+          ).draft
+        : await db.transaction(async (tx) => {
+            await saveSnapshot(tx);
+            return upsertWorkspaceDraft(
+              tx,
+              {
+                project_id: projectId,
+                workspace_id: input.workspaceId,
+                title: draft.title,
+                target_branch: draft.target_branch ?? 'main',
+                workspace_state: state,
+              },
+              input.ifRevision
+            );
+          });
+      return c.json(
+        {
+          success: true as const,
+          data: { outcome: 'bound' as const, workspaceRevision: saved.revision, binding },
+        },
+        200
+      );
+    }
     const saved = await savePendingWorkspaceSchema(db, projectId, draft, {
       workspaceId: input.workspaceId,
       ifRevision: input.ifRevision,
@@ -543,7 +628,7 @@ schemaStudioRoutes.openapi(applyRoute, async (c) => {
     return c.json({ success: true as const, data: saved }, 200);
   } catch (error) {
     if (error instanceof StudioError) return errorResponse(c, error.code, error.message);
-    if (error instanceof ConflictError)
+    if (error instanceof ConflictError || error instanceof DraftAuthoringConflictError)
       return errorResponse(c, 'CONFLICT', 'The Workspace changed. Review it again.');
     throw error;
   }

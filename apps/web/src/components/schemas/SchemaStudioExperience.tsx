@@ -752,12 +752,20 @@ export function SchemaStudioExperience({
       >
         <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden sm:max-w-4xl">
           <DialogHeader className="shrink-0">
-            <DialogTitle>Review Schema changes</DialogTitle>
+            <DialogTitle>
+              {review?.workspace?.canBind ? 'Apply exact definition' : 'Review Schema changes'}
+            </DialogTitle>
             <DialogDescription>
-              {target?.title} · revision {review?.workspace?.revision}. Review definition changes
-              and their effect on current Workspace content. Adopt saves a pending preparation task
-              and returns to this Workspace. Your current Schema, content and proposals remain
-              unchanged.
+              {review?.workspace?.canBind ? (
+                `${target?.title} · revision ${review.workspace.revision}. Bind this exact Schema to the empty Workspace. Fill required content later; Review and Commit still validate it.`
+              ) : (
+                <>
+                  {target?.title} · revision {review?.workspace?.revision}. Review definition
+                  changes and their effect on current Workspace content. Adopt saves a pending
+                  preparation task and returns to this Workspace. Your current Schema, content and
+                  proposals remain unchanged.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           {review ? (
@@ -795,6 +803,7 @@ export function SchemaStudioExperience({
                   Cancel
                 </Button>
                 <Button
+                  hidden={review.workspace?.canBind}
                   variant="outline"
                   disabled={
                     applying ||
@@ -812,6 +821,7 @@ export function SchemaStudioExperience({
                   Publish private Schema
                 </Button>
                 <Button
+                  hidden={review.workspace?.canBind}
                   variant="outline"
                   disabled={
                     applying ||
@@ -850,7 +860,11 @@ export function SchemaStudioExperience({
                   }
                   onClick={() => void apply()}
                 >
-                  {applying ? 'Saving…' : 'Adopt & return to Workspace'}
+                  {applying
+                    ? 'Saving…'
+                    : review.workspace?.canBind
+                      ? 'Confirm & apply'
+                      : 'Adopt & return to Workspace'}
                 </Button>
               </div>
             </>

@@ -473,6 +473,61 @@ it('shows unsafe content impact while preventing confirmation, then discards a s
   expect(mocks.apply).not.toHaveBeenCalled();
 });
 
+it('reuses Confirm & apply for an empty first binding without opening content migration', async () => {
+  mocks.query = 'workspace=workspace_branch%3Amain&candidate=provider';
+  mocks.workspaces = [
+    {
+      id: 'workspace_branch:main',
+      revision: 3,
+      status: 'draft',
+      targetBranch: 'main',
+      title: 'Main workspace',
+    },
+  ];
+  mocks.data = {
+    ...(mocks.data as object),
+    sources: [],
+    report: { valid: true, issues: [] },
+    impact: {
+      status: 'needs_input',
+      canAdopt: true,
+      canPublish: false,
+      items: [],
+      content: { source: 'empty', valid: true, ready: false, issues: [] },
+    },
+    workspace: {
+      id: 'workspace_branch:main',
+      revision: 3,
+      binding: null,
+      canBind: true,
+      changes: [],
+    },
+  };
+  mocks.apply.mockResolvedValue({ outcome: 'bound', workspaceRevision: 4, binding: {} });
+  render(<SchemaStudioExperience projectId="p" />);
+  expect(screen.queryByRole('button', { name: 'Bind Schema' })).not.toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Review changes' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
+  const dialog = screen.getByRole('dialog', { name: 'Apply exact definition' });
+  expect(
+    within(dialog).queryByRole('button', { name: 'Prepare content & mappings' })
+  ).not.toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm & apply' }));
+  await waitFor(() =>
+    expect(mocks.apply).toHaveBeenCalledWith({
+      candidateIds: ['provider'],
+      workspaceId: 'workspace_branch:main',
+      ifRevision: 3,
+      reviewHash: 'review',
+    })
+  );
+  await waitFor(() =>
+    expect(mocks.push).toHaveBeenCalledWith(
+      expect.stringContaining('workspace=workspace_branch%3Amain')
+    )
+  );
+});
+
 it('opens private publication from the checked saved candidate without applying or navigating the Workspace', async () => {
   mocks.query = 'workspace=workspace_branch%3Amain&candidate=provider';
   mocks.workspaces = [
