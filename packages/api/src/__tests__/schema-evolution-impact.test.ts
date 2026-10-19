@@ -41,6 +41,59 @@ beforeEach(() => {
 });
 
 describe('Schema evolution impact', () => {
+  it('does not require content migration for explicit repeated:false alongside safe additions', async () => {
+    const current = workspace();
+    const before = structuredClone(current);
+    const next = target((schema) => {
+      schema.nodes.product!.repeated = false;
+      schema.nodes.product!.contentKind = 'structured';
+      schema.nodes.requirements!.slots!.advantage = { type: 'string' };
+    });
+    const impact = await assessWorkspaceSchemaImpact(db, 'project', current, next);
+    expect(impact).toMatchObject({
+      status: 'safe',
+      canAdopt: true,
+      canPublish: true,
+      content: { valid: true, ready: true, issues: [] },
+    });
+    expect(impact.changes.map((change) => change.path)).toEqual([
+      'nodes.product.contentKind',
+      'nodes.requirements.slots.advantage',
+    ]);
+    expect(impact.items.some((item) => item.kind === 'needs_mapping')).toBe(false);
+    expect(impact.content.hash).toBe(
+      (await assessWorkspaceSchemaImpact(db, 'project', current, base)).content.hash
+    );
+    expect(current).toEqual(before);
+  });
+
+  it('does not require migration when removing an explicit repeated:false', async () => {
+    const explicit = target((schema) => {
+      schema.nodes.product!.repeated = false;
+    });
+    vi.mocked(resolveWorkspaceYSchema).mockResolvedValueOnce({
+      canonicalName: 'team/product',
+      schema: explicit,
+    });
+    const impact = await assessWorkspaceSchemaImpact(db, 'project', workspace(), base);
+    expect(impact).toMatchObject({ status: 'safe', changes: [], canAdopt: true, canPublish: true });
+  });
+
+  it('still requires conversion when a single product really becomes repeated', async () => {
+    const next = target((schema) => {
+      schema.nodes.product!.repeated = true;
+    });
+    const impact = await assessWorkspaceSchemaImpact(db, 'project', workspace(), next);
+    expect(impact).toMatchObject({ status: 'needs_mapping', canAdopt: false });
+    expect(impact.items).toContainEqual(
+      expect.objectContaining({
+        code: 'SHAPE_CHANGE_REQUIRES_MAPPING',
+        path: 'nodes.product.repeated',
+        affectedPaths: expect.arrayContaining(['product', 'product/title']),
+      })
+    );
+  });
+
   it('allows optional additions and deterministically reports the same content hash', async () => {
     const next = target((schema) => {
       schema.nodes.advantage = { slots: { title: { type: 'string' } } };
