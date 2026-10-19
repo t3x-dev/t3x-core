@@ -186,6 +186,10 @@ describe('YSchema Registry storage', () => {
       });
 
     await publishVersion('1.0.0', 'b');
+    // A lost response may retry the exact published version, not just an active Module.
+    const retried = await publishVersion('1.0.0', 'b');
+    expect(retried.artifactHash).toBe(`sha256:${'b'.repeat(64)}`);
+    await expect(publishVersion('1.0.0', 'd')).rejects.toThrow('is immutable');
     await publishVersion('1.1.0', 'c');
 
     const history = await listProjectYSchemaVersionHistory(db, {
@@ -197,6 +201,61 @@ describe('YSchema Registry storage', () => {
       ['1.1.0', 'published'],
       ['1.0.0', 'published'],
     ]);
+  });
+
+  it('serializes first publication across owners and versions without mixing private identities', async () => {
+    const otherProject = await insertProject(db, testData.project({ name: 'Other publisher' }));
+    const canonicalName = `projects/${projectId}/concurrent-schema`;
+    const input = {
+      artifact_id: `ysa_concurrent_${projectId}`,
+      artifact_version_id: `ysav_concurrent_${projectId}`,
+      canonical_name: canonicalName,
+      family: 'open',
+      kind: 'schema',
+      owner_project_id: projectId,
+      visibility: 'private',
+      version: '1.0.0',
+      status: 'published',
+      manifest_json: { owner: projectId },
+      artifact_hash: `sha256:${'e'.repeat(64)}`,
+      path_count: 0,
+      provides: [],
+      requires: [],
+    } as const;
+    const contenders = [
+      input,
+      {
+        ...input,
+        owner_project_id: otherProject.projectId,
+        artifact_version_id: `${input.artifact_version_id}_foreign`,
+        version: '1.1.0',
+      },
+    ];
+    const results = await Promise.allSettled(
+      contenders.map((contender) =>
+        publishYSchemaArtifactVersion(db, { ...contender, provides: [], requires: [] })
+      )
+    );
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const failure = results.find((result) => result.status === 'rejected');
+    expect(failure).toMatchObject({
+      reason: expect.objectContaining({ message: expect.stringContaining('identity conflict') }),
+    });
+    const winnerIndex = results.findIndex((result) => result.status === 'fulfilled');
+    const winner = contenders[winnerIndex]!;
+    const history = await listProjectYSchemaVersionHistory(db, {
+      project_id: winner.owner_project_id,
+      kind: 'schema',
+    });
+    expect(history.filter((item) => item.canonicalName === canonicalName)).toHaveLength(1);
+    const loser = contenders[1 - winnerIndex]!;
+    expect(
+      await findYSchemaArtifactVersion(db, {
+        canonical_name: canonicalName,
+        version: loser.version,
+        project_id: loser.owner_project_id,
+      })
+    ).toBeNull();
   });
 
   it('updates and archives Schema identity metadata without mutating its version', async () => {

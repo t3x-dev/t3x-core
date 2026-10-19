@@ -35,7 +35,6 @@ import {
 import {
   type AnyDB,
   ConflictError,
-  findMaterialsByIds,
   findWorkspaceDraft,
   getTransitionRefHead,
   resolveTransitionProposalGraph,
@@ -47,7 +46,11 @@ import {
   type TransitionStatementMembership,
 } from '@t3x-dev/storage';
 import type { CanonicalTimestamp } from '@t3x-dev/transition';
-import type { ProvenanceIndex, YSchema, YSchemaRelation } from '@t3x-dev/yschema';
+import type { YSchema, YSchemaRelation } from '@t3x-dev/yschema';
+import { workspaceProvenance } from './workspace-provenance';
+
+export { workspaceProvenance } from './workspace-provenance';
+
 import { createProposalGenerationPostureProvider } from './proposal-generation-posture-provider';
 import {
   PROPOSAL_GENERATION_POSTURE_PROVIDER_SOURCE,
@@ -75,6 +78,7 @@ import {
   persistWorkspaceReviewArtifacts,
   reviewSnapshotCreatedAt,
 } from './workspace-review-artifacts';
+import { buildWorkspaceSchemaReview } from './workspace-schema-review';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
 import { schemaRootKeyFromBinding } from './yschema-registry';
 
@@ -320,10 +324,6 @@ function asCanonicalTimestamp(value: string): CanonicalTimestamp {
   return new Date(value).toISOString() as CanonicalTimestamp;
 }
 
-function isMapping(value: ProtocolValue): value is Record<string, ProtocolValue> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
 async function resolveWorkspaceSchema(
   workspace: Record<string, unknown>,
   db: AnyDB,
@@ -345,56 +345,6 @@ async function resolveWorkspaceSchema(
     throw new WorkspaceTransitionSchemaUnavailableError(canonicalName, version);
   }
   return { canonicalName, rootKey: schemaRootKeyFromBinding(binding), schema };
-}
-
-function protocolLeafPaths(value: ProtocolValue, prefix = ''): string[] {
-  if (!isMapping(value)) return prefix ? [prefix] : [];
-  return Object.entries(value).flatMap(([key, child]) =>
-    protocolLeafPaths(child, prefix ? `${prefix}/${key}` : key)
-  );
-}
-
-/** Bind YSchema provenance only to source materials re-resolved inside the project boundary. */
-export async function workspaceProvenance(
-  db: AnyDB,
-  projectId: string,
-  workspace: Record<string, unknown>,
-  validationTree: ProtocolValue
-): Promise<ProvenanceIndex> {
-  const sources = Array.isArray(workspace.sourceBundle) ? workspace.sourceBundle : [];
-  const requested = sources.flatMap((source) => {
-    if (source === null || typeof source !== 'object' || Array.isArray(source)) return [];
-    const record = source as Record<string, unknown>;
-    return typeof record.materialId === 'string' && record.materialId.trim()
-      ? [{ materialId: record.materialId.trim(), claimedHash: record.contentHash }]
-      : [];
-  });
-  const materials = await findMaterialsByIds(db, [
-    ...new Set(requested.map((source) => source.materialId)),
-  ]);
-  const materialById = new Map(materials.map((material) => [material.id, material]));
-  const resolvedRefs = requested.flatMap((source) => {
-    const material = materialById.get(source.materialId);
-    if (
-      material?.project_id !== projectId ||
-      (typeof source.claimedHash === 'string' && source.claimedHash !== material.content_hash)
-    ) {
-      return [];
-    }
-    return [
-      {
-        origin: 'user_evidence' as const,
-        sourceId: `material:${material.id}@${material.content_hash}`,
-      },
-    ];
-  });
-  const refs = [...new Map(resolvedRefs.map((ref) => [ref.sourceId, ref])).values()].sort(
-    (left, right) => (left.sourceId < right.sourceId ? -1 : left.sourceId > right.sourceId ? 1 : 0)
-  );
-  if (refs.length === 0) return {};
-  return Object.fromEntries(
-    protocolLeafPaths(validationTree).map((path) => [path, refs.map((ref) => ({ ...ref }))])
-  );
 }
 
 function samePrecondition(
@@ -748,9 +698,14 @@ async function materializePreparedWorkspaceTransition(
     },
     ...(prepared.workspace.authoringLedger
       ? {
-          preparationFacts: buildAuthoringPreparation(
-            prepared.workspace
-          ) as unknown as ProtocolValue,
+          preparationFacts: {
+            ...buildAuthoringPreparation(prepared.workspace),
+            schemaReview: await buildWorkspaceSchemaReview(
+              db,
+              prepared.projectId,
+              prepared.workspace
+            ),
+          } as unknown as ProtocolValue,
         }
       : {}),
     requestId,

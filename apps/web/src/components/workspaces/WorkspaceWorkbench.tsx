@@ -18,6 +18,7 @@ import type {
   ProposalGenerationAction,
   ProposalGenerationReviewState,
 } from './ProposalGenerationReviewView';
+import { WorkspaceSchemaPendingNotice } from './WorkspaceSchemaPendingNotice';
 import { type WorkspaceTabId, WorkspaceTabs } from './WorkspaceTabs';
 
 type WorkspaceWorkbenchViewState = 'ready' | 'loading' | 'error';
@@ -461,6 +462,20 @@ export function WorkspaceWorkbench({
       className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--surface-panel)]"
       data-project-id={projectId}
     >
+      {selectedWorkspace?.revision ? (
+        <WorkspaceSchemaPendingNotice
+          projectId={projectId}
+          workspaceId={selectedWorkspace.id}
+          revision={selectedWorkspace.revision}
+          branch={selectedWorkspace.targetBranch}
+          onPrepared={async () => {
+            const refreshed = await refreshWorkspaces(projectId);
+            const remote = refreshed.find((workspace) => workspace.id === selectedWorkspace.id);
+            if (!remote) throw new Error('The prepared Workspace could not be reloaded.');
+            await hydrateAndRefreshWorkspaces(remote);
+          }}
+        />
+      ) : null}
       <div className="flex min-h-0 flex-1 flex-col">
         {candidates.length === 0 ? (
           <WorkspaceEmptyState message="No workspaces yet." />

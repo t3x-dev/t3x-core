@@ -1,6 +1,6 @@
 'use client';
 
-import type { StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
+import type { SchemaPreparationTarget, StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
 import { ArrowRight, Layers } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -22,12 +22,17 @@ import {
 } from '@/domain/workspaces/studioTargets';
 import { useStudioCandidates } from '@/hooks/schemas/useStudioCandidates';
 import { useApplyStudioSelection, useStudioPreview } from '@/hooks/schemas/useStudioPreview';
+import { useStudioSchemaEditCandidate } from '@/hooks/schemas/useStudioSchemaEditCandidate';
+import { useWorkspaceSchemaPending } from '@/hooks/schemas/useWorkspaceSchemaPending';
 import { useBranches } from '@/hooks/shared/useBranches';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import moduleStyles from './AddModulesDialog.module.css';
+import { SchemaContentPreparationDialog } from './SchemaContentPreparationDialog';
+import { SchemaDefinitionWorkbench } from './SchemaDefinitionWorkbench';
 import { SchemaStudioSurface } from './SchemaStudioSurface';
-import { StudioChanges } from './StudioDefinitionPreview';
+import { StudioChanges, StudioImpactPreview } from './StudioDefinitionPreview';
+import { StudioPublishDialog } from './StudioPublishDialog';
 
 type ModuleTone = 'blue' | 'purple' | 'orange' | 'green' | 'rose' | 'slate' | 'amber';
 
@@ -165,7 +170,6 @@ function candidateIcon(index: number) {
 
 export function SchemaStudioExperience({
   projectId,
-  children,
   navigation,
 }: {
   projectId: string;
@@ -184,8 +188,26 @@ export function SchemaStudioExperience({
   const [workspaceId, setWorkspaceId] = useState(params?.get('workspace') ?? '');
   const requestedWorkspaceId = params?.get('workspace') ?? '';
   const [activeModuleId, setActiveModuleId] = useState('requirements');
-  const [advanced, setAdvanced] = useState(false);
+  const [advanced, setAdvanced] = useState(params?.get('mode') === 'compose');
+  const [definitionOpen, setDefinitionOpen] = useState(false);
+  const [editorBase, setEditorBase] = useState<{
+    schema: Record<string, unknown>;
+    hash: string;
+    initial: Record<string, unknown>;
+  }>();
+  const [localContribution, setLocalContribution] = useState<Record<string, unknown>>({});
+  const [schemaDefinition, setSchemaDefinition] = useState<Record<string, unknown>>();
+  const [savedCandidateRef, setSavedCandidateRef] = useState<{
+    candidateId: string;
+    revision: number;
+  }>();
   const [review, setReview] = useState<StudioPreview>();
+  const [publishReview, setPublishReview] = useState<StudioPreview>();
+  const [preparation, setPreparation] = useState<{
+    workspaceId: string;
+    revision: number;
+    target: SchemaPreparationTarget;
+  }>();
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string>();
   const mounted = useRef(true);
@@ -274,14 +296,124 @@ export function SchemaStudioExperience({
   const persistedTarget = listStudioDraftWorkspaces(workspaces.workspaces).find(
     (item) => item.id === workspaceId
   );
-  const preview = useStudioPreview(
+  const schemaEdit = useStudioSchemaEditCandidate(
     projectId,
-    {
-      candidateIds: selection,
-      ...(persistedTarget ? { workspaceId: persistedTarget.id } : {}),
-    },
+    persistedTarget?.id ?? '',
     persistedTarget?.revision
   );
+  const recoveredCandidateKey = schemaEdit.candidate
+    ? `${schemaEdit.candidate.candidateId}:${schemaEdit.candidate.revision}`
+    : schemaEdit.loading
+      ? 'loading'
+      : 'none';
+  const pendingSchema = useWorkspaceSchemaPending(
+    projectId,
+    persistedTarget?.id ?? '',
+    persistedTarget?.revision
+  );
+  const recoveredSelection = useRef('');
+  const recoveredEditIdentity = useRef('');
+  const recoveryKey = `${projectId}:${persistedTarget?.id ?? ''}`;
+  useEffect(() => {
+    if (
+      !persistedTarget ||
+      candidates.loading ||
+      schemaEdit.loading ||
+      pendingSchema.loading ||
+      recoveredSelection.current === recoveryKey
+    )
+      return;
+    recoveredSelection.current = recoveryKey;
+    if (requested) return;
+    const source = pendingSchema.data?.pending?.source;
+    if (source?.kind === 'studio') {
+      setSelection([...source.candidateIds]);
+    } else if (schemaEdit.candidate) {
+      const ids = (schemaEdit.candidate.baseSources ?? [])
+        .map(
+          (base) =>
+            candidates.items.find(
+              (candidate) => candidate.source?.artifactVersionId === base.artifactVersionId
+            )?.id
+        )
+        .filter((id): id is string => !!id);
+      setSelection(ids);
+    } else {
+      const ids = (persistedTarget.schemaBindings ?? [])
+        .flatMap((binding) => binding.studioSources ?? [])
+        .map(
+          (source) =>
+            candidates.items.find(
+              (candidate) =>
+                candidate.source?.artifactVersionId === source.artifactVersionId &&
+                candidate.source.hash === source.hash &&
+                candidate.source.projectId === source.projectId &&
+                candidate.source.canonicalName === source.canonicalName &&
+                candidate.source.version === source.version
+            )?.id
+        )
+        .filter((id): id is string => !!id);
+      setSelection([...new Set(ids)]);
+    }
+  }, [
+    candidates.items,
+    candidates.loading,
+    schemaEdit.candidate,
+    schemaEdit.loading,
+    pendingSchema.data,
+    pendingSchema.loading,
+    persistedTarget,
+    recoveryKey,
+    requested,
+  ]);
+  useEffect(() => {
+    if (schemaEdit.loading) return;
+    const identity = `${projectId}:${workspaceId}:${recoveredCandidateKey}`;
+    if (recoveredEditIdentity.current === identity) return;
+    recoveredEditIdentity.current = identity;
+    setLocalContribution(structuredClone(schemaEdit.candidate?.localContribution ?? {}));
+    setSchemaDefinition(undefined);
+    setSavedCandidateRef(
+      schemaEdit.candidate
+        ? {
+            candidateId: schemaEdit.candidate.candidateId,
+            revision: schemaEdit.candidate.revision,
+          }
+        : undefined
+    );
+  }, [projectId, recoveredCandidateKey, schemaEdit.loading, workspaceId]);
+
+  useEffect(() => {
+    setDefinitionOpen(false);
+    setEditorBase(undefined);
+    setSchemaDefinition(undefined);
+  }, [workspaceId]);
+
+  const previewInput = {
+    candidateIds: selection,
+    ...(persistedTarget ? { workspaceId: persistedTarget.id } : {}),
+  };
+  const basePreview = useStudioPreview(projectId, previewInput, persistedTarget?.revision);
+  const hasLocalContribution = contributionHasContent(localContribution);
+  const hasSchemaEdit = hasLocalContribution || !!savedCandidateRef || !!schemaDefinition;
+  const localPreview = useStudioPreview(
+    projectId,
+    hasSchemaEdit
+      ? {
+          ...previewInput,
+          ...(savedCandidateRef
+            ? { schemaEditCandidate: savedCandidateRef }
+            : schemaDefinition
+              ? {
+                  schemaDefinition,
+                  baseSchemaHash: editorBase?.hash ?? basePreview.data?.schemaHash,
+                }
+              : { localContribution }),
+        }
+      : { candidateIds: [] },
+    persistedTarget?.revision
+  );
+  const preview = hasSchemaEdit ? localPreview : basePreview;
   const data = preview.data;
   const locked = new Set(
     data?.modules.filter((item) => item.requiredBy.length).map((item) => item.candidateId)
@@ -291,6 +423,10 @@ export function SchemaStudioExperience({
   useEffect(() => {
     setReview(undefined);
     setError(undefined);
+  }, [candidateSelectionKey, workspaceId, data?.reviewHash]);
+
+  useEffect(() => {
+    setPublishReview(undefined);
   }, [candidateSelectionKey, workspaceId]);
 
   const liveSources = useMemo<StudioSource[]>(() => {
@@ -342,9 +478,12 @@ export function SchemaStudioExperience({
     (workspaceId ? 'Workspace unavailable' : (draftWorkspaces[0]?.title ?? 'No draft workspace'));
 
   function choose(module: StudioModule) {
+    recoveredSelection.current = recoveryKey;
     setActiveModuleId(module.id);
     if (!module.candidate) return;
     const candidate = module.candidate;
+    setSavedCandidateRef(undefined);
+    setSchemaDefinition(undefined);
     setSelection((current) =>
       current.includes(candidate.id)
         ? current.filter((value) => value !== candidate.id)
@@ -363,6 +502,12 @@ export function SchemaStudioExperience({
     const reviewWorkspace = review?.workspace;
     if (!review || !reviewWorkspace || !target || reviewWorkspace.id !== target.id || applying)
       return;
+    if (
+      (hasSchemaEdit && !savedCandidateRef) ||
+      review.reviewHash !== data?.reviewHash ||
+      !review.impact?.canAdopt
+    )
+      return;
     setApplying(true);
     setError(undefined);
     try {
@@ -371,6 +516,7 @@ export function SchemaStudioExperience({
         workspaceId: reviewWorkspace.id,
         ifRevision: reviewWorkspace.revision,
         reviewHash: review.reviewHash,
+        ...(savedCandidateRef ? { schemaEditCandidate: savedCandidateRef } : {}),
       });
       if (!mounted.current) return;
       const applied = draftWorkspaces.find((item) => item.id === reviewWorkspace.id) ?? target;
@@ -380,7 +526,7 @@ export function SchemaStudioExperience({
       router.push(href);
     } catch (cause) {
       if (mounted.current) {
-        setError(cause instanceof Error ? cause.message : 'Apply failed');
+        setError(cause instanceof Error ? cause.message : 'Adoption failed');
         setReview(undefined);
         preview.refresh();
       }
@@ -390,8 +536,7 @@ export function SchemaStudioExperience({
   }
 
   function openReview() {
-    if (target && data?.workspace?.id === target.id && data?.report.valid && data?.adoption.allowed)
-      setReview(data);
+    if (target && data?.workspace?.id === target.id) setReview(data);
   }
 
   function downloadDefinition() {
@@ -407,12 +552,52 @@ export function SchemaStudioExperience({
     URL.revokeObjectURL(url);
   }
 
-  const canReview =
-    !!target &&
-    data?.workspace?.id === target.id &&
-    !!data?.report.valid &&
-    !!data?.adoption.allowed &&
-    !applying;
+  async function saveDefinition(contribution: Record<string, unknown>, intent: string) {
+    if (!persistedTarget)
+      throw new Error('Create or select a persisted Workspace before saving a Schema candidate.');
+    if (!selection.length) throw new Error('Select at least one base Schema or Module.');
+    const saved = await schemaEdit.save({
+      workspaceId: persistedTarget.id,
+      candidateIds: [...selection],
+      ifRevision: schemaEdit.candidate?.revision ?? 0,
+      retryKey: `studio:${persistedTarget.id}:${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+      intent,
+      origin: 'studio',
+      localContribution: contribution.yschema === '0.1' ? {} : contribution,
+      ...(contribution.yschema === '0.1'
+        ? {
+            schemaDefinition: contribution,
+            baseSchemaHash: editorBase?.hash ?? basePreview.data?.schemaHash,
+          }
+        : {}),
+    });
+    setLocalContribution(structuredClone(saved.candidate.localContribution));
+    setSchemaDefinition(undefined);
+    setSavedCandidateRef({
+      candidateId: saved.candidate.candidateId,
+      revision: saved.candidate.revision,
+    });
+    setDefinitionOpen(false);
+    await workspaces.refresh();
+  }
+
+  function changeDefinitionOpen(open: boolean) {
+    if (!open) {
+      setSchemaDefinition(undefined);
+      setLocalContribution(structuredClone(schemaEdit.candidate?.localContribution ?? {}));
+      setSavedCandidateRef(
+        schemaEdit.candidate
+          ? {
+              candidateId: schemaEdit.candidate.candidateId,
+              revision: schemaEdit.candidate.revision,
+            }
+          : undefined
+      );
+    }
+    setDefinitionOpen(open);
+  }
+
+  const canReview = !!target && data?.workspace?.id === target.id && !applying;
   const repoPath = getProjectIdRepoPath(projectId);
   const browseParams = new URLSearchParams({ tab: 'schemas', schemaView: 'browse' });
   const routeBranch = params?.get('branch');
@@ -463,17 +648,59 @@ export function SchemaStudioExperience({
         locked={locked}
         pending={applying || preview.loading || candidates.pending}
         loading={candidates.loading}
-        error={candidates.error || preview.error || workspaces.error || undefined}
+        error={
+          candidates.error || schemaEdit.error || preview.error || workspaces.error || undefined
+        }
         data={data}
         onCheck={() => {
           preview.refresh();
+          pendingSchema.refresh();
           void workspaces.refresh();
         }}
         onAdd={() => setAdvanced(true)}
+        onEditDefinition={
+          activeModule && persistedTarget && selection.length
+            ? () => {
+                if (!basePreview.data || !data) return;
+                setEditorBase({
+                  schema: structuredClone(basePreview.data.schema),
+                  hash: basePreview.data.schemaHash,
+                  initial: structuredClone(data.schema),
+                });
+                setDefinitionOpen(true);
+              }
+            : undefined
+        }
         onReview={openReview}
         canReview={canReview}
         onDownload={downloadDefinition}
-        onClear={() => setSelection([])}
+        onClear={() => {
+          recoveredSelection.current = recoveryKey;
+          setSelection([]);
+        }}
+      />
+      <SchemaDefinitionWorkbench
+        baseSchema={definitionOpen ? editorBase?.schema : basePreview.data?.schema}
+        initialContribution={localContribution}
+        initialDefinition={schemaDefinition ?? (definitionOpen ? editorBase?.initial : undefined)}
+        onOpenChange={changeDefinitionOpen}
+        onPreview={(contribution) => {
+          if (contribution.yschema === '0.1') setSchemaDefinition(contribution);
+          else setLocalContribution(contribution);
+          setSavedCandidateRef(undefined);
+        }}
+        onSave={saveDefinition}
+        open={definitionOpen}
+        pending={schemaEdit.pending}
+        previewError={preview.error}
+        recoveryLabel={
+          schemaEdit.candidate
+            ? `Recovered candidate revision ${schemaEdit.candidate.revision} · ${schemaEdit.candidate.origin.channel}`
+            : schemaEdit.loading
+              ? 'Recovering the Workspace candidate…'
+              : 'New Workspace-local candidate'
+        }
+        resultSchema={data?.schema}
       />
       <Dialog open={advanced} onOpenChange={setAdvanced}>
         <DialogContent className={moduleStyles.dialog}>
@@ -488,7 +715,48 @@ export function SchemaStudioExperience({
               </DialogDescription>
             </div>
           </DialogHeader>
-          <div className={moduleStyles.body}>{children}</div>
+          <div className={`${moduleStyles.body} space-y-3 p-5`}>
+            <p className="text-sm">
+              Choose sources for this Studio candidate. No separate Composition draft is created.
+            </p>
+            {candidates.items.map((candidate) => (
+              <label key={candidate.id} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={selection.includes(candidate.id)}
+                  disabled={!candidate.available || !!schemaEdit.candidate?.authoringDraft}
+                  onChange={() => choose({ id: candidate.id, candidate } as StudioModule)}
+                />
+                {candidate.title ?? 'Unavailable source'} · {candidate.source?.version}
+              </label>
+            ))}
+            {schemaEdit.candidate?.authoringDraft ? (
+              <p className="text-sm">
+                This edited candidate pins its exact Base. Edit its definition without replacing the
+                source selection.
+              </p>
+            ) : null}
+            <Link href={browseHref}>Browse more source releases</Link>
+            <Button
+              disabled={
+                !persistedTarget ||
+                !selection.length ||
+                schemaEdit.pending ||
+                !!schemaEdit.candidate?.authoringDraft
+              }
+              onClick={() =>
+                void saveDefinition(localContribution, 'Select Schema sources')
+                  .then(() => setAdvanced(false))
+                  .catch((cause) =>
+                    setError(
+                      cause instanceof Error ? cause.message : 'Candidate could not be saved.'
+                    )
+                  )
+              }
+            >
+              Save selected modules
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -498,37 +766,121 @@ export function SchemaStudioExperience({
           if (!open && !applying) setReview(undefined);
         }}
       >
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Apply exact definition</DialogTitle>
+        <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden sm:max-w-4xl">
+          <DialogHeader className="shrink-0">
+            <DialogTitle>
+              {review?.workspace?.canBind ? 'Apply exact definition' : 'Review Schema changes'}
+            </DialogTitle>
             <DialogDescription>
-              {target?.title} · revision {review?.workspace?.revision}. Previous checks and proposed
-              operations will be invalidated.
+              {review?.workspace?.canBind ? (
+                `${target?.title} · revision ${review.workspace.revision}. Bind this exact Schema to the empty Workspace. Fill required content later; Review and Commit still validate it.`
+              ) : (
+                <>
+                  {target?.title} · revision {review?.workspace?.revision}. Review definition
+                  changes and their effect on current Workspace content. Adopt saves a pending
+                  preparation task and returns to this Workspace. Your current Schema, content and
+                  proposals remain unchanged.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           {review ? (
             <>
-              <div className="space-y-1 text-xs">
-                {review.sources.map((source) => (
-                  <p className="font-mono" key={source.artifactVersionId}>
-                    {source.canonicalName} · {source.version}
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-2">
+                <div className="space-y-1 text-xs">
+                  {review.sources.map((source) => (
+                    <p className="font-mono" key={source.artifactVersionId}>
+                      {source.canonicalName} · {source.version}
+                    </p>
+                  ))}
+                </div>
+                <div className="grid min-w-0 gap-6 sm:grid-cols-2">
+                  <section aria-label="Schema definition changes" className="min-w-0">
+                    <h3 className="text-sm font-medium">Definition changes</h3>
+                    <StudioChanges changes={review.workspace?.changes ?? []} />
+                  </section>
+                  <div className="min-w-0">
+                    <h3 className="mb-3 text-sm font-medium">Content impact</h3>
+                    <StudioImpactPreview impact={review.impact ?? null} />
+                  </div>
+                </div>
+                {hasSchemaEdit && !savedCandidateRef ? (
+                  <p className="text-xs text-[var(--text-secondary)]">
+                    Save the local candidate before adopting it.
                   </p>
-                ))}
+                ) : null}
+                <details className="text-xs">
+                  <summary className="cursor-pointer">Reviewed definition hash</summary>
+                  <p className="mt-2 break-all font-mono">{review.schemaHash}</p>
+                </details>
               </div>
-              <StudioChanges changes={review.workspace?.changes ?? []} />
-              <details className="text-xs">
-                <summary className="cursor-pointer">Reviewed definition hash</summary>
-                <p className="mt-2 break-all font-mono">{review.schemaHash}</p>
-              </details>
-              <div className="flex justify-end gap-3">
+              <div className="flex shrink-0 flex-wrap justify-end gap-3 border-t border-[var(--stroke-divider)] pt-3">
                 <Button disabled={applying} onClick={() => setReview(undefined)} variant="outline">
                   Cancel
                 </Button>
                 <Button
-                  disabled={applying || review.reviewHash !== data?.reviewHash}
+                  hidden={review.workspace?.canBind}
+                  variant="outline"
+                  disabled={
+                    applying ||
+                    !savedCandidateRef ||
+                    !review.impact?.canPublish ||
+                    !review.report.valid ||
+                    !review.adoption.allowed ||
+                    review.reviewHash !== data?.reviewHash
+                  }
+                  onClick={() => {
+                    setPublishReview(review);
+                    setReview(undefined);
+                  }}
+                >
+                  Publish private Schema
+                </Button>
+                <Button
+                  hidden={review.workspace?.canBind}
+                  variant="outline"
+                  disabled={
+                    applying ||
+                    !review.report.valid ||
+                    !review.adoption.allowed ||
+                    review.impact?.status === 'blocked' ||
+                    (hasSchemaEdit && !savedCandidateRef) ||
+                    review.reviewHash !== data?.reviewHash ||
+                    !review.workspace
+                  }
+                  onClick={() => {
+                    if (!review.workspace) return;
+                    setPreparation({
+                      workspaceId: review.workspace.id,
+                      revision: review.workspace.revision,
+                      target: {
+                        kind: 'studio',
+                        candidateIds: [...selection],
+                        reviewHash: review.reviewHash,
+                        ...(savedCandidateRef ? { schemaEditCandidate: savedCandidateRef } : {}),
+                      },
+                    });
+                    setReview(undefined);
+                  }}
+                >
+                  Prepare content & mappings
+                </Button>
+                <Button
+                  disabled={
+                    applying ||
+                    (hasSchemaEdit && !savedCandidateRef) ||
+                    !review.impact?.canAdopt ||
+                    !review.report.valid ||
+                    !review.adoption.allowed ||
+                    review.reviewHash !== data?.reviewHash
+                  }
                   onClick={() => void apply()}
                 >
-                  {applying ? 'Applying…' : 'Confirm & apply'}
+                  {applying
+                    ? 'Saving…'
+                    : review.workspace?.canBind
+                      ? 'Confirm & apply'
+                      : 'Adopt & return to Workspace'}
                 </Button>
               </div>
             </>
@@ -540,6 +892,45 @@ export function SchemaStudioExperience({
           Review in Workspace <ArrowRight />
         </Link>
       ) : null}
+      {preparation ? (
+        <SchemaContentPreparationDialog
+          projectId={projectId}
+          workspaceId={preparation.workspaceId}
+          revision={preparation.revision}
+          target={preparation.target}
+          open
+          onOpenChange={(open) => {
+            if (!open) setPreparation(undefined);
+          }}
+          onPrepared={async () => {
+            await workspaces.refresh();
+            router.push(workspaceLink);
+          }}
+        />
+      ) : null}
+      {publishReview && publishReview.workspace?.id === workspaceId ? (
+        <StudioPublishDialog
+          key={`${workspaceId}:${publishReview.reviewHash}`}
+          projectId={projectId}
+          workspaceId={workspaceId}
+          candidateIds={[...selection]}
+          preview={publishReview}
+          currentReviewHash={data?.reviewHash}
+          onOpenChange={(open) => {
+            if (!open) setPublishReview(undefined);
+          }}
+        />
+      ) : null}
     </section>
+  );
+}
+
+function contributionHasContent(contribution: Record<string, unknown>): boolean {
+  return (
+    ['nodes', 'relationTypes'].some((key) => {
+      const value = contribution[key];
+      return Boolean(value && typeof value === 'object' && Object.keys(value).length);
+    }) ||
+    (Array.isArray(contribution.rules) && contribution.rules.length > 0)
   );
 }

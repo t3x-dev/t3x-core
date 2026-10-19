@@ -16,6 +16,7 @@ import {
   getTransitionProposalPreparation,
 } from '@t3x-dev/storage';
 import type { ProtocolValue, State } from '@t3x-dev/transition';
+import { normalizeYSchemaObject } from '@t3x-dev/yschema';
 import { createProposalGenerationPostureProvider } from './proposal-generation-posture-provider';
 import { verifyTransition } from './transition-control-plane';
 import { materializeTransitionProposal } from './transition-control-plane/materialize';
@@ -29,6 +30,7 @@ import {
   persistWorkspaceReviewArtifacts,
   reviewSnapshotCreatedAt,
 } from './workspace-review-artifacts';
+import { buildWorkspaceSchemaReview } from './workspace-schema-review';
 import { resolveWorkspaceTransitionContext, workspaceProvenance } from './workspace-transition';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
 import { schemaRootKeyFromBinding } from './yschema-registry';
@@ -76,7 +78,12 @@ export async function prepareWorkspaceAuthoringReview(input: {
   const schema = await resolveWorkspaceYSchema(context.workspace, input.db, input.projectId);
   if (!schema.schema || !schema.canonicalName)
     throw new TypeError('A resolved Workspace schema is required for Review');
-  const frozen = buildAuthoringPreparation(context.workspace);
+  const schemaReview = await buildWorkspaceSchemaReview(
+    input.db,
+    input.projectId,
+    context.workspace
+  );
+  const frozen = { ...buildAuthoringPreparation(context.workspace), schemaReview };
   const membership = await materializeTransitionProposal({
     db: input.db,
     projectId: input.projectId,
@@ -109,7 +116,7 @@ export async function prepareWorkspaceAuthoringReview(input: {
       ? context.workspace.schemaBindings[0]
       : undefined
   );
-  const schemaValue = schema.schema;
+  const schemaValue = normalizeYSchemaObject(schemaReview.draft.definition);
   const issuer = { kind: 'service' as const, id: 'service:t3x-workspace-yschema' };
   const result = await verifyTransition({
     db: input.db,
@@ -188,5 +195,6 @@ export async function prepareWorkspaceAuthoringReview(input: {
       ))!.digest,
     },
     reused: membership.reused,
+    schemaReview,
   };
 }

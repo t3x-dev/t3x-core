@@ -91,6 +91,14 @@ export function useWorkspaceReviewSnapshot(
         }));
         return null;
       }
+      if (state.deciding) return null;
+      if (outcome !== 'rejected' && state.data?.schema_review?.base.status === 'unknown') {
+        setState((current) => ({
+          ...current,
+          error: 'Recover the exact Base Schema before accepting or committing.',
+        }));
+        return null;
+      }
 
       const decisionReason = optionalText(decisionReasonInput);
       if (outcome === 'overridden' && !decisionReason) {
@@ -110,7 +118,10 @@ export function useWorkspaceReviewSnapshot(
           ...(decisionReason === undefined ? {} : { decisionReason }),
           precondition: preconditionFromSnapshot(snapshot),
         });
-        const nextSnapshot = decisionResponseToSnapshotEnvelope(decided);
+        const nextSnapshot = {
+          ...decisionResponseToSnapshotEnvelope(decided),
+          schema_review: state.data?.schema_review,
+        };
         const commitId = committedTransitionId(decided.transition);
         if (commitId && !decided.workspace) {
           throw new Error('Committed Workspace response did not include the latest revision.');
@@ -139,7 +150,7 @@ export function useWorkspaceReviewSnapshot(
         return null;
       }
     },
-    [projectId, state.data?.snapshot, workspaceId]
+    [projectId, state.data, state.deciding, workspaceId]
   );
 
   return { decide, load, overrideReason, setOverrideReason, state };

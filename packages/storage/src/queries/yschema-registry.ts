@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, inArray, lt, or } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, lt, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import {
   yschemaArtifactCapabilities,
@@ -316,6 +316,11 @@ export async function publishYSchemaArtifactVersion(
 ): Promise<YSchemaArtifactVersionView> {
   // biome-ignore lint/suspicious/noExplicitAny: AnyDB intentionally abstracts the supported drivers.
   return (db as any).transaction(async (tx: AnyDB) => {
+    // Canonical identity can be absent. Serialize first publication too, across owners/versions.
+    // A row lock alone cannot protect that absent-row case.
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(${0x5953}::int, hashtext(${input.canonical_name})::int)`
+    );
     const [existingArtifact] = await tx
       .select()
       .from(yschemaArtifacts)
@@ -345,7 +350,7 @@ export async function publishYSchemaArtifactVersion(
       if (existingVersion) {
         if (
           existingVersion.artifactHash === input.artifact_hash &&
-          existingVersion.status === 'active'
+          existingVersion.status === input.status
         ) {
           return joinedArtifactView(existingArtifact, existingVersion);
         }

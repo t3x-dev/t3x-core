@@ -457,6 +457,12 @@
 .sec {
   padding: 4px 0 16px;
 }
+.moduleActions {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
 .sec-h {
   font-size: 11.5px;
   font-weight: 600;

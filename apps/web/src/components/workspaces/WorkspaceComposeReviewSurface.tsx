@@ -62,6 +62,7 @@ import { OutputTargetsTab } from '@/components/workspaces/OutputTargetsTab';
 import { SourceArtifactRoleEditor } from '@/components/workspaces/SourceArtifactRoleEditor';
 import { SourceTransitionTab } from '@/components/workspaces/SourceTransitionTab';
 import { WorkspaceContentEditor } from '@/components/workspaces/WorkspaceContentEditor';
+import { WorkspaceSchemaReviewPanel } from '@/components/workspaces/WorkspaceSchemaReviewPanel';
 import type { WorkspaceYOpsFlowView } from '@/components/workspaces/YOpsDraftTab';
 import { getSchemaRegistryPreview } from '@/data/schemaReleases';
 import {
@@ -287,6 +288,7 @@ export function WorkspaceComposeReviewSurface({
                 onPaneChange={setReviewPane}
                 pane={reviewPane}
               />
+              <WorkspaceSchemaReviewPanel review={controller.review.schemaReview} />
               <ReviewSurface
                 activity={activity}
                 compareScenarioId=""
@@ -1366,7 +1368,19 @@ function ReviewSurface({
   setPane: (pane: ReviewPane) => void;
 }) {
   const authoringReview = useMemo(
-    () => buildAuthoringReviewProjection(controller.candidate, activity.view, controller.review),
+    () =>
+      buildAuthoringReviewProjection(
+        controller.candidate,
+        activity.view
+          ? {
+              ...activity.view,
+              selected: null,
+              base: controller.review.schemaReview?.baseContent ?? activity.view.base,
+              current: controller.review.schemaReview?.draftContent ?? activity.view.current,
+            }
+          : null,
+        controller.review
+      ),
     [activity.view, controller.candidate, controller.review]
   );
   const candidate = authoringReview?.candidate ?? controller.candidate;
@@ -2284,6 +2298,9 @@ function WorkspaceReviewChecksView({
             </section>
           ) : null}
 
+          {activeSnapshot?.schema_review ? (
+            <WorkspaceSchemaReviewPanel review={activeSnapshot.schema_review} historical />
+          ) : null}
           {gaps.length > 0 ? (
             <section className={checksStyles.detailCard}>
               <h3>Gap ({gaps.length})</h3>

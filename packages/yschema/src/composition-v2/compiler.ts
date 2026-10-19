@@ -5,8 +5,10 @@ import type {
   CompiledYSchemaCompositionV2,
   CompileYSchemaCompositionV2Input,
   YSchemaCompositionIssueV2,
+  YSchemaCompositionLocalOriginV2,
   YSchemaCompositionOriginV2,
   YSchemaCompositionPolicyV2,
+  YSchemaCompositionSourceOriginV2,
   YSchemaModuleArtifactV2,
 } from './types';
 
@@ -32,6 +34,153 @@ function recordNodeOrigins(
       recordNodeOrigins(node.children, origin, target, path);
     }
   }
+}
+
+function originLabel(origin: YSchemaCompositionOriginV2 | undefined): string {
+  if (!origin) return 'an unknown source';
+  if (origin.kind === 'module') return `${origin.artifact}@${origin.version}`;
+  if (origin.kind === 'local') return `local:${origin.contributionId}@${origin.revision}`;
+  return origin.sources.map(originLabel).join(' + ');
+}
+
+function sourceOrigins(origin: YSchemaCompositionOriginV2): YSchemaCompositionSourceOriginV2[] {
+  return origin.kind === 'derived' ? origin.sources : [origin];
+}
+
+function originIncludesModule(
+  origin: YSchemaCompositionOriginV2 | undefined,
+  artifact: string
+): boolean {
+  return origin
+    ? sourceOrigins(origin).some(
+        (source) => source.kind === 'module' && source.artifact === artifact
+      )
+    : false;
+}
+
+function derivedOrigin(
+  current: YSchemaCompositionOriginV2,
+  added: YSchemaCompositionSourceOriginV2
+): YSchemaCompositionOriginV2 {
+  const unique = new Map<string, YSchemaCompositionSourceOriginV2>();
+  for (const source of [...sourceOrigins(current), added]) {
+    const key =
+      source.kind === 'module'
+        ? `module:${source.artifact}@${source.version}`
+        : `local:${source.contributionId}@${source.revision}`;
+    unique.set(key, source);
+  }
+  const sources = [...unique.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([, source]) => source);
+  return sources.length === 1 ? sources[0] : { kind: 'derived', sources };
+}
+
+const NODE_SCALAR_FIELDS = [
+  'required',
+  'contentKind',
+  'repeated',
+  'description',
+  'contentGuidance',
+] as const;
+
+function clone<T>(value: T): T {
+  return structuredClone(value);
+}
+
+function mergeLocalNode(input: {
+  path: string;
+  base: NodeSchema;
+  local: NodeSchema;
+  localOrigin: YSchemaCompositionLocalOriginV2;
+  originsByPath: Record<string, YSchemaCompositionOriginV2>;
+  issues: YSchemaCompositionIssueV2[];
+}): NodeSchema {
+  const { path, base, local, localOrigin, originsByPath, issues } = input;
+  const merged = clone(base);
+  let changed = false;
+  const conflict = (conflictPath: string) =>
+    issues.push({
+      code: 'PATH_OWNERSHIP_CONFLICT',
+      blocking: true,
+      path: conflictPath,
+      message: `${conflictPath} is already owned by ${originLabel(originsByPath[conflictPath] ?? originsByPath[path])}.`,
+      details: { contributionId: localOrigin.contributionId },
+    });
+
+  for (const field of NODE_SCALAR_FIELDS) {
+    if (local[field] === undefined) continue;
+    if (base[field] !== undefined) {
+      conflict(`${path}/${field}`);
+      continue;
+    }
+    Object.assign(merged, { [field]: clone(local[field]) });
+    changed = true;
+  }
+
+  if (local.slots) {
+    const slots = { ...(merged.slots ?? {}) };
+    for (const [slot, definition] of Object.entries(local.slots)) {
+      const slotPath = `${path}/${slot}`;
+      if (base.slots && Object.hasOwn(base.slots, slot)) {
+        conflict(slotPath);
+        continue;
+      }
+      slots[slot] = clone(definition);
+      originsByPath[slotPath] = localOrigin;
+      changed = true;
+    }
+    merged.slots = slots;
+  }
+
+  if (local.requiredSlots) {
+    const next = [...new Set([...(base.requiredSlots ?? []), ...local.requiredSlots])].sort();
+    if (JSON.stringify(next) !== JSON.stringify(base.requiredSlots ?? [])) changed = true;
+    merged.requiredSlots = next;
+  }
+
+  if (local.children !== undefined) {
+    if (base.children === 'any' || local.children === 'any') {
+      if (base.children !== undefined) conflict(`${path}/children`);
+      else {
+        merged.children = clone(local.children);
+        changed = true;
+      }
+    } else if (base.children === undefined) {
+      merged.children = clone(local.children);
+      recordNodeOrigins(local.children, localOrigin, originsByPath, path);
+      changed = true;
+    } else {
+      const children = { ...base.children };
+      for (const [child, definition] of Object.entries(local.children)) {
+        const childPath = `${path}/${child}`;
+        if (!base.children[child]) {
+          children[child] = clone(definition);
+          recordNodeOrigins({ [child]: definition }, localOrigin, originsByPath, path);
+          changed = true;
+          continue;
+        }
+        const mergedChild = mergeLocalNode({
+          path: childPath,
+          base: base.children[child],
+          local: definition,
+          localOrigin,
+          originsByPath,
+          issues,
+        });
+        children[child] = mergedChild;
+        if (JSON.stringify(mergedChild) !== JSON.stringify(base.children[child])) {
+          changed = true;
+        }
+      }
+      merged.children = children;
+    }
+  }
+
+  if (changed && originsByPath[path]) {
+    originsByPath[path] = derivedOrigin(originsByPath[path], localOrigin);
+  }
+  return merged;
 }
 
 function matchesNamespace(value: string, patterns: string[]): boolean {
@@ -271,7 +420,7 @@ export async function compileYSchemaCompositionV2(
           blocking: true,
           module: key,
           path,
-          message: `${path} is already owned by ${originsByPath[path]?.artifact}.`,
+          message: `${path} is already owned by ${originLabel(originsByPath[path])}.`,
         });
         continue;
       }
@@ -309,6 +458,72 @@ export async function compileYSchemaCompositionV2(
     for (const policy of module.contribution.policies ?? []) policies.push({ module, policy });
   }
 
+  const local = input.localContribution;
+  if (local) {
+    if (
+      local.apiVersion !== 't3x.dev/yschema-local-contribution/v2' ||
+      !local.id.trim() ||
+      !Number.isInteger(local.revision) ||
+      local.revision < 0
+    ) {
+      issues.push({
+        code: 'INVALID_LOCAL_CONTRIBUTION',
+        blocking: true,
+        message:
+          'Local Contribution requires its v2 apiVersion, a non-empty id, and a non-negative revision.',
+      });
+    } else {
+      const localOrigin: YSchemaCompositionLocalOriginV2 = {
+        kind: 'local',
+        contributionId: local.id,
+        revision: local.revision,
+      };
+      for (const [path, node] of Object.entries(local.contribution.nodes ?? {})) {
+        if (!rawSchema.nodes[path]) {
+          rawSchema.nodes[path] = clone(node);
+          recordNodeOrigins({ [path]: node }, localOrigin, originsByPath);
+          continue;
+        }
+        rawSchema.nodes[path] = mergeLocalNode({
+          path,
+          base: rawSchema.nodes[path],
+          local: node,
+          localOrigin,
+          originsByPath,
+          issues,
+        });
+      }
+      for (const [type, relation] of Object.entries(local.contribution.relationTypes ?? {})) {
+        if (rawSchema.relationTypes?.[type]) {
+          issues.push({
+            code: 'RELATION_TYPE_CONFLICT',
+            blocking: true,
+            path: `relationTypes/${type}`,
+            message: `Relation type ${type} is already owned by ${originLabel(originsByRelationType[type])}.`,
+            details: { contributionId: local.id },
+          });
+          continue;
+        }
+        rawSchema.relationTypes = { ...rawSchema.relationTypes, [type]: clone(relation) };
+        originsByRelationType[type] = localOrigin;
+      }
+      for (const rule of local.contribution.rules ?? []) {
+        if (originsByRule[rule.id]) {
+          issues.push({
+            code: 'RULE_ID_CONFLICT',
+            blocking: true,
+            path: `rules/${rule.id}`,
+            message: `Rule ${rule.id} is already owned by ${originLabel(originsByRule[rule.id])}.`,
+            details: { contributionId: local.id },
+          });
+          continue;
+        }
+        rawSchema.rules?.push(clone(rule));
+        originsByRule[rule.id] = localOrigin;
+      }
+    }
+  }
+
   issues.push(
     ...collectPolicyIssues(
       policies,
@@ -340,8 +555,8 @@ export async function compileYSchemaCompositionV2(
       version: module.version,
       order: presentationOrder,
       slot: 'module' as const,
-      nodePaths: Object.keys(module.contribution.nodes ?? {}).filter(
-        (path) => originsByPath[path]?.artifact === module.canonicalName
+      nodePaths: Object.keys(module.contribution.nodes ?? {}).filter((path) =>
+        originIncludesModule(originsByPath[path], module.canonicalName)
       ),
     }));
   const report = {

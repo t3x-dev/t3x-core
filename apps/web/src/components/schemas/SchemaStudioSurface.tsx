@@ -7,7 +7,7 @@ import { ReferenceIcon as Icon } from './DiscoverReference';
 import shared from './ExploreDiscoverySurface.module.css';
 import s from './SchemaStudioExperience.module.css';
 import { SchemaToolbarSlot } from './SchemaToolbarSlot';
-import { StudioChanges } from './StudioDefinitionPreview';
+import { StudioChanges, StudioImpactPreview } from './StudioDefinitionPreview';
 
 export type StudioVisualModule = {
   id: string;
@@ -37,6 +37,7 @@ export function SchemaStudioSurface({
   data,
   onCheck,
   onAdd,
+  onEditDefinition,
   onReview,
   canReview = false,
   onDownload,
@@ -61,6 +62,7 @@ export function SchemaStudioSurface({
   data?: StudioPreview;
   onCheck?: () => void;
   onAdd?: () => void;
+  onEditDefinition?: () => void;
   onReview?: () => void;
   canReview?: boolean;
   onDownload?: () => void;
@@ -132,7 +134,7 @@ export function SchemaStudioSurface({
           </div>
           <button
             className={`${shared.btn} ${s.b2}`}
-            aria-label="Advanced definition workbench"
+            aria-label="Add modules"
             onClick={onAdd}
             disabled={!onAdd}
           >
@@ -141,22 +143,11 @@ export function SchemaStudioSurface({
           </button>
           <button
             className={`${shared.btn} ${shared.primary} ${s.b2}`}
-            aria-label="Review & apply"
+            aria-label="Review changes"
             disabled={!canReview}
             onClick={onReview}
           >
             Review changes
-          </button>
-          <button
-            className={`${shared.btn} ${s.b2}`}
-            onClick={() => {
-              setPanel('Checks');
-              onCheck?.();
-            }}
-            disabled={!composition.length || pending || !onCheck}
-          >
-            <Icon name="shield" />
-            Check schema
           </button>
         </div>
       </SchemaToolbarSlot>
@@ -406,14 +397,28 @@ export function SchemaStudioSurface({
                   <div className={s['sec-h']}>MODULE SETTINGS</div>
                   <p className={s.explanation}>
                     {activeModule
-                      ? 'Open the module workbench to edit its exact definition.'
+                      ? 'Open the Workspace workbench to add local changes above the selected sources.'
                       : 'Select a candidate to inspect its definition.'}
                   </p>
-                  {activeModule && onAdd ? (
-                    <button className={shared.btn} onClick={onAdd}>
-                      Edit definition
+                  <div className={s.moduleActions}>
+                    {activeModule && onEditDefinition ? (
+                      <button className={shared.btn} onClick={onEditDefinition} type="button">
+                        Edit definition
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className={shared.btn}
+                      onClick={() => {
+                        setPanel('Checks');
+                        onCheck?.();
+                      }}
+                      disabled={!composition.length || pending || !onCheck}
+                    >
+                      <Icon name="shield" />
+                      Check schema
                     </button>
-                  ) : null}
+                  </div>
                 </div>
                 <div className={s.sec}>
                   <div className={s['sec-h']}>
@@ -438,30 +443,54 @@ export function SchemaStudioSurface({
                 </div>
                 {!workspaces.length ? (
                   <p className={s.explanation}>
-                    Create a Workspace to review and apply this definition.
+                    Create a Workspace to review and adopt this definition.
                   </p>
                 ) : null}
               </>
             ) : panel === 'Checks' ? (
-              <div className={s.sec}>
-                <div className={s['sec-h']}>SCHEMA CHECKS</div>
-                <p>
-                  {data
-                    ? data.report.valid
-                      ? 'Schema valid'
-                      : 'Changes require attention'
-                    : 'Not run'}
-                </p>
-                {data?.report.issues.map((issue, index) => (
-                  <p className={s.issue} key={`${issue.code}-${index}`}>
-                    {issue.message}
+              <>
+                <div className={s.sec}>
+                  <div className={s['sec-h']}>SCHEMA CHECKS</div>
+                  <p>
+                    {data
+                      ? data.report.valid &&
+                        data.adoption.allowed &&
+                        data.impact?.canAdopt !== false
+                        ? 'All blocking checks passed'
+                        : 'Changes require attention'
+                      : 'Not run'}
                   </p>
+                </div>
+                {(data?.report.layers ?? []).map((layer) => (
+                  <div className={s.sec} key={layer.id}>
+                    <div className={s['sec-h']}>
+                      {layer.label}
+                      <span className={shared.grow} />
+                      <span className={layer.status === 'passed' ? shared.ok : shared.warn}>
+                        {layer.status === 'not_run'
+                          ? 'Not run'
+                          : layer.status === 'passed'
+                            ? 'Passed'
+                            : layer.status === 'warning'
+                              ? 'Warning'
+                              : 'Failed'}
+                      </span>
+                    </div>
+                    {layer.summary ? <p className={s.explanation}>{layer.summary}</p> : null}
+                    {layer.issues.map((issue, index) => (
+                      <p className={s.issue} key={`${layer.id}-${issue.code}-${index}`}>
+                        {issue.message}
+                      </p>
+                    ))}
+                  </div>
                 ))}
-              </div>
+              </>
             ) : (
               <div className={s.sec}>
                 <div className={s['sec-h']}>WORKSPACE CHANGES</div>
                 <StudioChanges changes={data?.workspace?.changes ?? []} />
+                <div className={s['sec-h']}>CONTENT IMPACT</div>
+                <StudioImpactPreview impact={data?.impact ?? null} />
               </div>
             )}
           </div>

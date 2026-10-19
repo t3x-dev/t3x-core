@@ -74,6 +74,7 @@ const storageMock = vi.hoisted(() => {
       )
     ),
     getLatestTransitionReviewSnapshot: vi.fn(),
+    getTransitionProposalPreparation: vi.fn().mockResolvedValue(null),
     getTransitionReviewSnapshot: vi.fn(),
     listWorkspaceDrafts: vi.fn((_db, projectId: string) =>
       Promise.resolve(
@@ -164,6 +165,7 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
     findBranchByName: storageMock.findBranchByName,
     findWorkspaceDraft: storageMock.findWorkspaceDraft,
     getLatestTransitionReviewSnapshot: storageMock.getLatestTransitionReviewSnapshot,
+    getTransitionProposalPreparation: storageMock.getTransitionProposalPreparation,
     getTransitionPolicyBinding: vi.fn(() => Promise.resolve(null)),
     getTransitionReviewSnapshot: storageMock.getTransitionReviewSnapshot,
     insertYOpsLogEntry: storageMock.insertYOpsLogEntry,
@@ -593,6 +595,37 @@ describe('Workspace routes', () => {
     expect(transitionMock.decideWorkspaceTransition).not.toHaveBeenCalled();
   });
 
+  it('recovers the complete Schema/content Review from immutable preparation, not the current Draft', async () => {
+    const stored = mockStoredReviewSnapshot('committed');
+    const schemaReview = {
+      schema: 't3x.application/workspace-schema-review/v1',
+      base: { status: 'unbound', schemaHash: null, definition: null, bindings: [] },
+      draft: {
+        status: 'bound',
+        schemaHash: `sha256:${'a'.repeat(64)}`,
+        definition: { nodes: { advantage: {} } },
+        bindings: [],
+      },
+      actionCount: 2,
+      changes: [],
+      baseContent: {},
+      draftContent: { advantage: 'Frozen content' },
+    };
+    storageMock.getTransitionReviewSnapshot.mockResolvedValueOnce(stored);
+    storageMock.getTransitionProposalPreparation.mockResolvedValueOnce({
+      canonicalJson: JSON.stringify({ schemaReview }),
+    });
+    const response = await app.request(
+      `/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/review-snapshots/${stored.snapshotId}`
+    );
+    expect(response.status).toBe(200);
+    expect((await response.json()).data.schema_review).toEqual(schemaReview);
+    expect(storageMock.getTransitionProposalPreparation).toHaveBeenCalledWith(
+      expect.anything(),
+      stored.transitionId
+    );
+  });
+
   it('does not expose a ReviewSnapshot through a different Workspace route', async () => {
     const stored = mockStoredReviewSnapshot('reviewing');
     storageMock.getTransitionReviewSnapshot.mockResolvedValueOnce({
@@ -799,6 +832,56 @@ describe('Workspace routes', () => {
     const body: ApiResponse = await res.json();
     expect(body.data.workspace.status).toBe('schema_review');
     expect(body.data.workspace.lastCommitHash).toBeUndefined();
+  });
+
+  it('does not let generic Workspace saves replace server-managed Schema candidates or pending tasks', async () => {
+    const serverCandidate = {
+      candidateId: 'schema-edit:server',
+      revision: 2,
+      retryKey: 'server-retry',
+    };
+    const serverPending = { pendingId: 'server-pending', workspaceRevision: 1 };
+    const serverPreparations = [{ requestId: 'server-request', previewHash: 'server-hash' }];
+    const serverSchemaBase = { refHead: 'server-commit', snapshot: { status: 'bound' } };
+    storageMock.seedWorkspaceDraft({
+      id: 'workspace_prd_handoff',
+      projectId: 'proj_sources',
+      title: 'Schema editing workspace',
+      targetBranch: 'main',
+      status: 'draft',
+      schemaEditCandidate: serverCandidate,
+      schemaPending: serverPending,
+      schemaPreparations: serverPreparations,
+      workspaceSchemaBase: serverSchemaBase,
+    });
+    const response = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff',
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          if_revision: 1,
+          workspace: {
+            title: 'Renamed workspace',
+            targetBranch: 'main',
+            schemaEditCandidate: { candidateId: 'schema-edit:forged', revision: 999 },
+            schemaPending: { pendingId: 'forged' },
+            schemaPreparations: [{ requestId: 'forged' }],
+            workspaceSchemaBase: { refHead: 'forged-commit', snapshot: { status: 'unbound' } },
+          },
+        }),
+      }
+    );
+
+    expect(response.status).toBe(200);
+    const body: ApiResponse = await response.json();
+    expect(body.data.workspace.schemaEditCandidate).toEqual(serverCandidate);
+    expect(body.data.workspace.schemaPending).toEqual(serverPending);
+    expect(body.data.workspace.schemaPreparations).toEqual(serverPreparations);
+    expect(body.data.workspace.workspaceSchemaBase).toEqual(serverSchemaBase);
+    expect(
+      storageMock.upsertWorkspaceDraft.mock.calls.at(-1)?.[1].workspace_state.schemaEditCandidate
+    ).toEqual(serverCandidate);
   });
 
   it('normalizes invalid review save statuses before persisting', async () => {
