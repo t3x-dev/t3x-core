@@ -151,7 +151,7 @@ export function useWorkspaceComposeReviewController({
         reviewGenerationRef.current += 1;
       setReview(EMPTY_REVIEW);
       setDecisionReason('');
-      if (busyAction !== 'review.prepare')
+      if (busyAction !== 'review.prepare' && review.transitionId)
         setNotice('Draft changed; prepare a complete Review again.');
     }
     setWorkingCandidate((current) =>
@@ -159,7 +159,7 @@ export function useWorkspaceComposeReviewController({
         ? candidate
         : current
     );
-  }, [candidate, candidateVersion, busyAction]);
+  }, [candidate, candidateVersion, busyAction, review.transitionId]);
 
   useEffect(() => {
     void refreshPins(candidate.projectId);

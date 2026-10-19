@@ -88,10 +88,21 @@ it('freezes the complete application Review and invalidates it on a same-Workspa
   expect(result.current.review.content?.trees).toEqual(document.content.trees);
   rerender({ workspace: candidate(3) });
   expect(result.current.review.transitionId).toBeNull();
+  expect(result.current.notice).toBe('Draft changed; prepare a complete Review again.');
   await act(async () => {
     await result.current.decide('accepted');
   });
   expect(mocks.decide).not.toHaveBeenCalled();
+});
+it('does not announce an obsolete Review when an unreviewed Draft revision changes', () => {
+  const { result, rerender } = renderHook(
+    ({ workspace }) => useWorkspaceComposeReviewController({ candidate: workspace }),
+    { initialProps: { workspace: candidate() } }
+  );
+  rerender({ workspace: candidate(3) });
+  expect(result.current.candidate.revision).toBe(3);
+  expect(result.current.review.transitionId).toBeNull();
+  expect(result.current.notice).toBeNull();
 });
 it('discards a delayed snapshot after a concurrent edit of the same Workspace', async () => {
   let resolve!: (value: unknown) => void;
