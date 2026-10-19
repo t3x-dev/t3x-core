@@ -17,6 +17,7 @@ import {
   formatSlotValue,
   isNodeResolved,
   isPresenceConflict,
+  summarizeMergeReview,
   type MergeChoices,
   type MergeNodeChoice,
   type MergeSlotChoice,
@@ -29,6 +30,13 @@ export interface MergeResolutionProgress {
   total: number;
   unresolved: number;
 }
+
+export interface MergeReviewLoadState {
+  review: ApiPullRequestMergeReview | null;
+  loading: boolean;
+  error: string | null;
+}
+export type MergeDecisionSaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 export interface PullRequestMergeReviewPanelProps {
   projectId: string;
@@ -47,6 +55,9 @@ export interface PullRequestMergeReviewPanelProps {
     expectedRevision: number
   ) => Promise<number>;
   onResolutionChange: (decision: MergeDecision | null, progress: MergeResolutionProgress) => void;
+  onReviewChange?: (state: MergeReviewLoadState) => void;
+  onSaveStateChange?: (state: MergeDecisionSaveState) => void;
+  readOnly?: boolean;
   onRerun: () => void;
   rerunning: boolean;
 }
@@ -70,6 +81,9 @@ export function PullRequestMergeReviewPanel({
   fetchMergeReview,
   saveMergeDecision,
   onResolutionChange,
+  onReviewChange,
+  onSaveStateChange,
+  readOnly = false,
   onRerun,
   rerunning,
 }: PullRequestMergeReviewPanelProps) {
@@ -80,6 +94,12 @@ export function PullRequestMergeReviewPanel({
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [conflictsOnly, setConflictsOnly] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [saveState, setSaveState] = useState<MergeDecisionSaveState>('idle');
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [saveAttempt, setSaveAttempt] = useState(0);
+  const inspectorRef = useRef<HTMLElement>(null);
+  const tableRef = useRef<HTMLDivElement>(null);
+  const editVersion = useRef(0);
   const revision = useRef(0);
   const dirty = useRef(false);
   const saving = useRef<Promise<unknown>>(Promise.resolve());
@@ -88,6 +108,8 @@ export function PullRequestMergeReviewPanel({
   useEffect(() => {
     if (!draftId) return;
     let cancelled = false;
+    setLoadError(null);
+    setReview(null);
     fetchMergeReview(projectId, pullRequest.number)
       .then((loaded) => {
         if (cancelled) return;
@@ -111,7 +133,18 @@ export function PullRequestMergeReviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [draftId, fetchMergeReview, projectId, pullRequest.number]);
+  }, [draftId, fetchMergeReview, projectId, pullRequest.number, loadAttempt]);
+
+  useEffect(() => {
+    onReviewChange?.({
+      review,
+      loading: Boolean(draftId && !review && !loadError),
+      error: loadError,
+    });
+  }, [draftId, review, loadError, onReviewChange]);
+  useEffect(() => {
+    onSaveStateChange?.(saveState);
+  }, [saveState, onSaveStateChange]);
 
   const conflicts = useMemo(
     () => review?.nodes.filter((node) => node.status === 'conflict') ?? [],
@@ -131,26 +164,45 @@ export function PullRequestMergeReviewPanel({
   }, [conflicts.length, onResolutionChange, outcome]);
 
   useEffect(() => {
-    if (!outcome || !draftId || !dirty.current) return;
+    if (!outcome || !draftId || !dirty.current || readOnly) return;
+    const version = editVersion.current;
     const timer = window.setTimeout(() => {
       saving.current = saving.current
         .then(() => saveMergeDecision(draftId, outcome.decision, revision.current))
         .then((next) => {
           revision.current = next;
+          if (version !== editVersion.current) return;
+          dirty.current = false;
           setSaveError(null);
+          setSaveState('saved');
         })
         .catch((error) => {
+          if (version !== editVersion.current) return;
           setSaveError(
             error instanceof Error ? error.message : 'Could not save the conflict decisions.'
           );
+          setSaveState('error');
         });
     }, 400);
     return () => window.clearTimeout(timer);
-  }, [draftId, outcome, saveMergeDecision]);
+  }, [draftId, outcome, readOnly, saveAttempt, saveMergeDecision]);
 
   const updateChoices = (next: MergeChoices) => {
+    if (readOnly) return;
     dirty.current = true;
+    editVersion.current += 1;
+    setSaveError(null);
+    setSaveState('saving');
     setChoices(next);
+  };
+  const selectNode = (path: string) => {
+    setSelectedPath(path);
+    if (window.matchMedia?.('(max-width: 1050px)').matches) {
+      window.requestAnimationFrame(() => {
+        inspectorRef.current?.scrollIntoView({ block: 'start' });
+        inspectorRef.current?.focus({ preventScroll: true });
+      });
+    }
   };
   const updateNode = (path: string, update: (current: MergeNodeChoice) => MergeNodeChoice) =>
     updateChoices({ ...choices, [path]: update(choices[path] ?? { slots: {} }) });
@@ -159,38 +211,49 @@ export function PullRequestMergeReviewPanel({
     return (
       <div className={styles.emptyState}>
         <p>The merge has not been prepared for these commits yet.</p>
-        <button
-          className={styles.primaryButton}
-          disabled={rerunning}
-          onClick={onRerun}
-          type="button"
-        >
-          <RefreshCw aria-hidden="true" className={rerunning ? 'animate-spin' : undefined} />
-          {rerunning ? 'Preparing…' : 'Prepare merge'}
-        </button>
+        {!readOnly ? (
+          <button
+            className={styles.primaryButton}
+            disabled={rerunning}
+            onClick={onRerun}
+            type="button"
+          >
+            <RefreshCw aria-hidden="true" className={rerunning ? 'animate-spin' : undefined} />
+            {rerunning ? 'Preparing…' : 'Prepare merge'}
+          </button>
+        ) : null}
       </div>
     );
   }
-  if (loadError) return <div className={styles.emptyState}>{loadError}</div>;
+  if (loadError)
+    return (
+      <div className={styles.emptyState}>
+        <p role="alert">{loadError}</p>
+        <button
+          className={styles.secondaryButton}
+          onClick={() => setLoadAttempt((value) => value + 1)}
+          type="button"
+        >
+          Retry comparison
+        </button>
+      </div>
+    );
   if (!review || !outcome) return <div className={styles.emptyState}>Loading merge review…</div>;
   if (review.nodes.length === 0) {
     return <div className={styles.emptyState}>These commits merge without any field changes.</div>;
   }
 
   const visibleNodes = conflictsOnly ? conflicts : review.nodes;
-  const selected = review.nodes.find((node) => node.path === selectedPath) ?? visibleNodes[0];
+  const selected = visibleNodes.find((node) => node.path === selectedPath) ?? visibleNodes[0];
   const unresolved = new Set(outcome.unresolved);
   const conflictIndex = selected ? conflicts.findIndex((node) => node.path === selected.path) : -1;
-  const added = review.nodes.filter((node) => node.status === 'source_only').length;
-  const autoMerged = review.nodes.filter(
-    (node) => node.status === 'auto' || node.status === 'target_only'
-  ).length;
+  const summary = summarizeMergeReview(review);
 
   const goToConflict = (direction: 1 | -1) => {
     if (conflicts.length === 0) return;
     const start = conflictIndex === -1 ? (direction === 1 ? -1 : 0) : conflictIndex;
     const next = conflicts[(start + direction + conflicts.length) % conflicts.length];
-    if (next) setSelectedPath(next.path);
+    if (next) selectNode(next.path);
   };
 
   return (
@@ -198,33 +261,13 @@ export function PullRequestMergeReviewPanel({
       <section className={detailStyles.diffPanel}>
         <div className={cn(detailStyles.diffToolbar, styles.toolbar)}>
           <div>
-            <span className={detailStyles.addedCount}>＋ {added} added</span>
-            <span className={detailStyles.modifiedCount}>∿ {autoMerged} auto-merged</span>
+            <span className={detailStyles.addedCount}>＋ {summary.added} added</span>
+            <span className={detailStyles.modifiedCount}>∿ {summary.autoMerged} auto-merged</span>
             <span className={detailStyles.conflictCount}>
               ! {conflicts.length} conflict{conflicts.length === 1 ? '' : 's'}
               {conflicts.length > 0 ? ` · ${unresolved.size} open` : ''}
             </span>
           </div>
-          {conflicts.length > 0 ? (
-            <div className={styles.bulkActions}>
-              <span>Remaining conflicts:</span>
-              <button
-                onClick={() => updateChoices(chooseSideForRemaining(review, choices, 'target'))}
-                type="button"
-              >
-                Keep {pullRequest.targetBranch}
-              </button>
-              <button
-                onClick={() => updateChoices(chooseSideForRemaining(review, choices, 'source'))}
-                type="button"
-              >
-                Use {pullRequest.sourceBranch}
-              </button>
-              <button onClick={() => updateChoices({})} type="button">
-                Reset
-              </button>
-            </div>
-          ) : null}
           <div className={detailStyles.viewSwitch}>
             <button
               aria-pressed={!conflictsOnly}
@@ -245,7 +288,36 @@ export function PullRequestMergeReviewPanel({
             </button>
           </div>
         </div>
-        <div className={detailStyles.treeWrap}>
+        {conflicts.length > 0 && !readOnly ? (
+          <div className={styles.bulkActions}>
+            <span>{unresolved.size} unresolved</span>
+            <button
+              onClick={() => updateChoices(chooseSideForRemaining(review, choices, 'target'))}
+              type="button"
+            >
+              Keep {pullRequest.targetBranch}
+            </button>
+            <button
+              onClick={() => updateChoices(chooseSideForRemaining(review, choices, 'source'))}
+              type="button"
+            >
+              Use {pullRequest.sourceBranch}
+            </button>
+            <button
+              disabled={Object.keys(choices).length === 0}
+              onClick={() => updateChoices({})}
+              type="button"
+            >
+              Reset
+            </button>
+          </div>
+        ) : null}
+        <div
+          aria-label="Changes comparison"
+          className={detailStyles.treeWrap}
+          ref={tableRef}
+          tabIndex={0}
+        >
           <table className={detailStyles.tree}>
             <colgroup>
               <col className={detailStyles.pathColumn} />
@@ -273,7 +345,7 @@ export function PullRequestMergeReviewPanel({
                   choice={choices[node.path]}
                   key={node.path}
                   node={node}
-                  onSelect={() => setSelectedPath(node.path)}
+                  onSelect={() => selectNode(node.path)}
                   selected={node.path === selected?.path}
                   sourceBranch={pullRequest.sourceBranch}
                   targetBranch={pullRequest.targetBranch}
@@ -285,11 +357,35 @@ export function PullRequestMergeReviewPanel({
         </div>
       </section>
 
-      <aside className={detailStyles.inspector}>
+      <aside
+        aria-label="Change inspector"
+        className={detailStyles.inspector}
+        ref={inspectorRef}
+        tabIndex={-1}
+      >
         {selected ? (
           <section className={detailStyles.inspectorCard}>
+            <button
+              className={styles.backToChanges}
+              onClick={() => {
+                tableRef.current?.scrollIntoView({ block: 'start' });
+                tableRef.current
+                  ?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')
+                  ?.focus({ preventScroll: true });
+              }}
+              type="button"
+            >
+              <ChevronLeft aria-hidden="true" />
+              Back to changes
+            </button>
             <div className={detailStyles.inspectorHeader}>
-              <h2>{selected.status === 'conflict' ? 'Resolve conflict' : 'Selected change'}</h2>
+              <h2>
+                {selected.status === 'conflict'
+                  ? readOnly
+                    ? 'Recorded decision'
+                    : 'Resolve conflict'
+                  : 'Selected change'}
+              </h2>
               <button
                 onClick={() => {
                   void navigator.clipboard?.writeText(displayPath(selected.path));
@@ -314,8 +410,12 @@ export function PullRequestMergeReviewPanel({
                 <PhTilde aria-hidden="true" />
                 {selected.status === 'conflict'
                   ? unresolved.has(selected.path)
-                    ? 'Needs decision'
-                    : 'Decided'
+                    ? readOnly
+                      ? 'No recorded decision'
+                      : 'Needs decision'
+                    : readOnly
+                      ? 'Recorded'
+                      : 'Decided'
                   : statusLabel(
                       selected.status,
                       pullRequest.sourceBranch,
@@ -323,13 +423,16 @@ export function PullRequestMergeReviewPanel({
                     )}
               </span>
               {selected.status === 'conflict' ? (
-                <ConflictEditor
-                  choice={choices[selected.path] ?? { slots: {} }}
-                  node={selected}
-                  onChange={(update) => updateNode(selected.path, update)}
-                  sourceBranch={pullRequest.sourceBranch}
-                  targetBranch={pullRequest.targetBranch}
-                />
+                <div>
+                  <ConflictEditor
+                    choice={choices[selected.path] ?? { slots: {} }}
+                    node={selected}
+                    readOnly={readOnly}
+                    onChange={(update) => updateNode(selected.path, update)}
+                    sourceBranch={pullRequest.sourceBranch}
+                    targetBranch={pullRequest.targetBranch}
+                  />
+                </div>
               ) : (
                 <AutoMergedFields
                   node={selected}
@@ -353,9 +456,20 @@ export function PullRequestMergeReviewPanel({
                 </div>
               ) : null}
               {saveError ? (
-                <p className={styles.saveError} role="alert">
-                  {saveError}
-                </p>
+                <div className={styles.saveError} role="alert">
+                  <p>{saveError}</p>
+                  <button
+                    className={styles.secondaryButton}
+                    onClick={() => {
+                      setSaveError(null);
+                      setSaveState('saving');
+                      setSaveAttempt((value) => value + 1);
+                    }}
+                    type="button"
+                  >
+                    Retry saving
+                  </button>
+                </div>
               ) : null}
             </div>
           </section>
@@ -401,14 +515,23 @@ function MergeNodeRows({
             <span className={detailStyles.typeIcon} data-type="object">
               {'{ }'}
             </span>
-            <b>{displayPath(node.path)}</b>
+            <button
+              aria-label={`Inspect ${displayPath(node.path)}`}
+              aria-pressed={selected}
+              className={styles.nodeButton}
+              type="button"
+            >
+              {displayPath(node.path)}
+            </button>
           </span>
         </td>
         <td className={styles.muted}>{nodeValue(node.presence.target)}</td>
         <td className={styles.muted}>{nodeValue(node.presence.source)}</td>
         <td>
           <span className={styles.statusTag} data-status={node.status}>
-            {statusLabel(node.status, sourceBranch, targetBranch)}
+            {node.status === 'conflict' && !unresolved
+              ? 'Decided'
+              : statusLabel(node.status, sourceBranch, targetBranch)}
           </span>
           {presence && choice?.node ? (
             <span className={styles.muted}>
@@ -469,11 +592,28 @@ function slotType(slot: ApiPullRequestMergeReviewSlot) {
 }
 
 function ValueText({ value }: { value: unknown }) {
+  const [expanded, setExpanded] = useState(false);
   if (value === undefined) return <span className={styles.muted}>(empty)</span>;
   const text = formatSlotValue(value);
+  const long = text.length > 160 || text.split('\n').length > 3;
+  const preview = text.split('\n').slice(0, 3).join('\n').slice(0, 160);
   return (
-    <span className={styles.valueText} title={text}>
-      {text}
+    <span className={styles.valueBlock}>
+      <span className={styles.valueText}>{long && !expanded ? `${preview}…` : text}</span>
+      {long ? (
+        <button
+          aria-expanded={expanded}
+          className={styles.expandValue}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setExpanded(!expanded);
+          }}
+          type="button"
+        >
+          {expanded ? 'Show less' : 'Show full value'}
+        </button>
+      ) : null}
     </span>
   );
 }
@@ -489,12 +629,14 @@ function ValueCell({ value }: { value: unknown }) {
 function ConflictEditor({
   choice,
   node,
+  readOnly,
   onChange,
   sourceBranch,
   targetBranch,
 }: {
   choice: MergeNodeChoice;
   node: ApiPullRequestMergeReviewNode;
+  readOnly: boolean;
   onChange: (update: (current: MergeNodeChoice) => MergeNodeChoice) => void;
   sourceBranch: string;
   targetBranch: string;
@@ -510,6 +652,7 @@ function ConflictEditor({
           {(['target', 'source'] as const).map((side) => (
             <label className={cn(choice.node === side && styles.optionActive)} key={side}>
               <input
+                disabled={readOnly}
                 checked={choice.node === side}
                 name={`node:${node.path}`}
                 onChange={() => onChange((current) => ({ ...current, node: side }))}
@@ -549,6 +692,7 @@ function ConflictEditor({
               <div className={styles.options} role="radiogroup" aria-label={`Resolve ${slot.key}`}>
                 <label className={cn(current?.kind === 'target' && styles.optionActive)}>
                   <input
+                    disabled={readOnly}
                     aria-label={`Keep ${targetBranch} for ${slot.key}`}
                     checked={current?.kind === 'target'}
                     name={`${node.path}:${slot.key}`}
@@ -562,6 +706,7 @@ function ConflictEditor({
                 </label>
                 <label className={cn(current?.kind === 'source' && styles.optionActive)}>
                   <input
+                    disabled={readOnly}
                     aria-label={`Use ${sourceBranch} for ${slot.key}`}
                     checked={current?.kind === 'source'}
                     name={`${node.path}:${slot.key}`}
@@ -575,6 +720,7 @@ function ConflictEditor({
                 </label>
                 <label className={cn(current?.kind === 'custom' && styles.optionActive)}>
                   <input
+                    disabled={readOnly}
                     aria-label={`Write a value for ${slot.key}`}
                     checked={current?.kind === 'custom'}
                     name={`${node.path}:${slot.key}`}
@@ -590,6 +736,7 @@ function ConflictEditor({
                     Write my own
                     {current?.kind === 'custom' ? (
                       <textarea
+                        readOnly={readOnly}
                         aria-label={`Custom value for ${slot.key}`}
                         className={styles.customInput}
                         onChange={(event) =>
