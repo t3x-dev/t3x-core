@@ -50,8 +50,8 @@ import {
   fetchProviderRoles,
   fetchProviders,
 } from '@/queries/providers';
-import type { ProviderInfo, RoleAssignment } from '@/types/api';
 import palette from '@/styles/management-palette.module.css';
+import type { ProviderInfo, RoleAssignment } from '@/types/api';
 import { cn } from '@/utils/cn';
 
 type RoleGroup = 'generation' | 'embedding' | 'extraction' | 'merge';

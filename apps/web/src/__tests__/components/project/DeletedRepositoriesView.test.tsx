@@ -152,7 +152,9 @@ it('returns to the name confirmation without deleting when final confirmation is
   fireEvent.change(screen.getByRole('textbox'), { target: { value: 'alice/test' } });
   fireEvent.click(screen.getByRole('button', { name: 'Permanently delete repository' }));
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-  expect(screen.getByRole('dialog', { name: 'Permanently delete repository?' })).toBeInTheDocument();
+  expect(
+    screen.getByRole('dialog', { name: 'Permanently delete repository?' })
+  ).toBeInTheDocument();
   expect(screen.getByRole('textbox')).toHaveValue('alice/test');
   expect(deleteProject).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Permanently delete repository' }));

@@ -151,8 +151,12 @@ describe('ProjectReviewsTab', () => {
     expect(screen.getByText('Release note cleanup')).toBeInTheDocument();
     expect(screen.getByText('PRD Schema v3 rollout')).toBeInTheDocument();
     expect(screen.getByText('Audience handoff updates')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /View PR #17:/ })).toHaveTextContent('Ready to merge');
-    expect(screen.getByRole('button', { name: /View PR #18:/ })).toHaveTextContent('Needs decision');
+    expect(screen.getByRole('button', { name: /View PR #17:/ })).toHaveTextContent(
+      'Ready to merge'
+    );
+    expect(screen.getByRole('button', { name: /View PR #18:/ })).toHaveTextContent(
+      'Needs decision'
+    );
     expect(screen.queryByRole('button', { name: 'Dismiss' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Owners/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Release lane/ })).not.toBeInTheDocument();
@@ -211,13 +215,18 @@ describe('ProjectReviewsTab', () => {
       target: { value: 'checking' },
     });
     expect(screen.getByRole('heading', { name: 'No matching pull requests' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'No open pull requests' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'No open pull requests' })
+    ).not.toBeInTheDocument();
   });
 
   it('shows loading and failure separately from empty data and retries the list request', async () => {
     let rejectList!: (error: Error) => void;
     pullRequestApi.fetchPullRequests.mockImplementationOnce(
-      () => new Promise((_, reject) => { rejectList = reject; })
+      () =>
+        new Promise((_, reject) => {
+          rejectList = reject;
+        })
     );
     render(<ProjectReviewsTab projectId="proj_real" />);
     expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-busy', 'true');
@@ -229,7 +238,9 @@ describe('ProjectReviewsTab', () => {
     expect(screen.queryByText('Propose your first change')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
-    expect(await screen.findByRole('heading', { name: 'Propose your first change' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Propose your first change' })
+    ).toBeInTheDocument();
     expect(pullRequestApi.fetchPullRequests).toHaveBeenCalledTimes(2);
     expect(screen.getByRole('button', { name: 'New pull request' })).toBeInTheDocument();
     expect(screen.getByRole('searchbox')).toBeEnabled();
@@ -750,7 +761,9 @@ describe('ProjectReviewsTab', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /^View PR #/ })[1]);
     fireEvent.click(screen.getByText('Changes'));
 
-    expect(screen.getByText('Review the blocked checks and unresolved changes.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Review the blocked checks and unresolved changes.')
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Merge PR' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Apply resolution' })).not.toBeInTheDocument();
 

@@ -106,14 +106,14 @@ export function DeletedRepositoriesView({
         </Button>
       </header>
       {notice && (
-        <div role="status" className={styles.notice}>
+        <output className={cn('block', styles.notice)}>
           {notice.message}{' '}
           {notice.href && (
             <Link href={notice.href} className="text-[var(--accent-commit)] underline">
               Open repository
             </Link>
           )}
-        </div>
+        </output>
       )}
       {list.error ? (
         <div role="alert" className={styles.errorState}>
@@ -127,9 +127,7 @@ export function DeletedRepositoriesView({
           </Button>
         </div>
       ) : list.loading ? (
-        <p role="status" className={styles.loading}>
-          Loading deleted repositories...
-        </p>
+        <output className={cn('block', styles.loading)}>Loading deleted repositories...</output>
       ) : list.projects.length === 0 ? (
         <div className={styles.emptyState}>
           <span className={styles.emptyIcon} aria-hidden="true">

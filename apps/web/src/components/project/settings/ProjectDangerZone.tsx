@@ -15,8 +15,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { getDeletedRepositoriesPath } from '@/domain/project/repoPath';
 import { repositoryMutationError } from '@/hooks/projects/useDeletedProjects';
-import type { ProjectDetail } from '@/types/api';
 import palette from '@/styles/management-palette.module.css';
+import type { ProjectDetail } from '@/types/api';
 import { SettingsSection } from './SettingsSection';
 
 export function ProjectDangerZone({

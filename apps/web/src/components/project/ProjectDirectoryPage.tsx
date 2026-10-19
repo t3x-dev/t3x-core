@@ -28,8 +28,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
 import { DEFAULT_OWNER_SLUG, getProjectRepoPath } from '@/domain/project/repoPath';
-import { useProjects } from '@/hooks/projects/useProjects';
 import { repositoryMutationError } from '@/hooks/projects/useDeletedProjects';
+import { useProjects } from '@/hooks/projects/useProjects';
 import { useRepositoryName } from '@/hooks/projects/useRepositoryName';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 import palette from '@/styles/management-palette.module.css';
@@ -39,8 +39,8 @@ import {
   readRecentProjectIds,
   recordRecentProjectOpen,
 } from '@/utils/recentProjects';
-import styles from './ProjectDirectoryPage.module.css';
 import { DeletedRepositoriesView } from './DeletedRepositoriesView';
+import styles from './ProjectDirectoryPage.module.css';
 import { RepositoryNameFeedback } from './RepositoryNameFeedback';
 
 const focusRing =
@@ -464,7 +464,7 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
             </div>
 
             {deletedName && (
-              <p role="status" className={styles.notice}>
+              <output className={cn('block', styles.notice)}>
                 {deletedName} was deleted. Its data and names are kept.{' '}
                 <Link
                   href={deletedHref}
@@ -473,7 +473,7 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
                 >
                   Manage deleted repositories
                 </Link>
-              </p>
+              </output>
             )}
 
             {error && hasLoadedProjects && (

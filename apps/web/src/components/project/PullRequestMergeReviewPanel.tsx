@@ -17,10 +17,10 @@ import {
   formatSlotValue,
   isNodeResolved,
   isPresenceConflict,
-  summarizeMergeReview,
   type MergeChoices,
   type MergeNodeChoice,
   type MergeSlotChoice,
+  summarizeMergeReview,
 } from '@/domain/project/pullRequestMergeReview';
 import { cn } from '@/utils/cn';
 import detailStyles from './ProjectReviewsDetail.module.css';
@@ -98,7 +98,7 @@ export function PullRequestMergeReviewPanel({
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [saveAttempt, setSaveAttempt] = useState(0);
   const inspectorRef = useRef<HTMLElement>(null);
-  const tableRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLElement>(null);
   const editVersion = useRef(0);
   const revision = useRef(0);
   const dirty = useRef(false);
@@ -312,10 +312,11 @@ export function PullRequestMergeReviewPanel({
             </button>
           </div>
         ) : null}
-        <div
+        <section
           aria-label="Changes comparison"
           className={detailStyles.treeWrap}
           ref={tableRef}
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users must be able to focus and scroll this comparison region.
           tabIndex={0}
         >
           <table className={detailStyles.tree}>
@@ -354,7 +355,7 @@ export function PullRequestMergeReviewPanel({
               ))}
             </tbody>
           </table>
-        </div>
+        </section>
       </section>
 
       <aside

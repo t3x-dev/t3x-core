@@ -679,7 +679,9 @@ export function ProjectReviewsTab({
       })
       .catch((err) => {
         if (!cancelled) {
-          setCompareError(err instanceof Error ? err.message : 'Could not load comparable branches');
+          setCompareError(
+            err instanceof Error ? err.message : 'Could not load comparable branches'
+          );
         }
       })
       .finally(() => {
@@ -1348,7 +1350,9 @@ export function ProjectReviewsTab({
               <select
                 aria-label="Pull request status"
                 disabled={listUnavailable}
-                onChange={(event) => setStatusFilter(event.target.value as 'all' | PullRequestStatus)}
+                onChange={(event) =>
+                  setStatusFilter(event.target.value as 'all' | PullRequestStatus)
+                }
                 value={statusFilter}
               >
                 <option value="all">All statuses</option>
@@ -1399,7 +1403,11 @@ export function ProjectReviewsTab({
             <CircleAlert aria-hidden="true" />
             <h2>Could not load pull requests</h2>
             <p>{listError}</p>
-            <Button onClick={() => setListRefreshKey((key) => key + 1)} type="button" variant="outline">
+            <Button
+              onClick={() => setListRefreshKey((key) => key + 1)}
+              type="button"
+              variant="outline"
+            >
               Try again
             </Button>
           </section>
@@ -1417,7 +1425,11 @@ export function ProjectReviewsTab({
           </ul>
         ) : (
           <section className={listStyles.empty}>
-            {hasListFilters ? <SearchX aria-hidden="true" /> : <GitPullRequestArrow aria-hidden="true" />}
+            {hasListFilters ? (
+              <SearchX aria-hidden="true" />
+            ) : (
+              <GitPullRequestArrow aria-hidden="true" />
+            )}
             <h2>
               {hasListFilters
                 ? 'No matching pull requests'
@@ -1508,7 +1520,9 @@ function PullRequestRow({
       onClick={onOpen}
       type="button"
     >
-      <span className={cn(listStyles.rowIcon, pullRequest.status === 'merged' && listStyles.mergedIcon)}>
+      <span
+        className={cn(listStyles.rowIcon, pullRequest.status === 'merged' && listStyles.mergedIcon)}
+      >
         {pullRequest.status === 'merged' ? (
           <GitMerge aria-hidden="true" />
         ) : pullRequest.status === 'closed' ? (
@@ -1918,14 +1932,14 @@ function PullRequestCreateView({
                 : 'Select a source branch to preview the structured comparison.'}
             </p>
             {fieldPreview.loading ? (
-              <p className={createStyles.inlineMessage} role="status">
+              <output className={cn('block', createStyles.inlineMessage)}>
                 Loading field changes…
-              </p>
+              </output>
             ) : null}
             {fieldPreview.error ? (
-              <p className={createStyles.inlineMessage} role="status">
+              <output className={cn('block', createStyles.inlineMessage)}>
                 {fieldPreview.error}
-              </p>
+              </output>
             ) : null}
             {fieldPreview.changes && !fieldPreview.error && selectedCandidate ? (
               <PullRequestChangePreview
@@ -2250,7 +2264,7 @@ function PullRequestDetailView({
         </div>
       ) : null}
       {closeConfirmationActive ? (
-        <div className={detailStyles.notice} role="status">
+        <output className={detailStyles.notice}>
           <span>
             Close without merging? This moves the PR to Closed and leaves the target branch
             unchanged.
@@ -2258,7 +2272,7 @@ function PullRequestDetailView({
           <button disabled={closing} onClick={onCancelClose} type="button">
             Cancel
           </button>
-        </div>
+        </output>
       ) : null}
 
       <div aria-label="Pull request detail" className={detailStyles.tabs} role="tablist">
@@ -2303,6 +2317,7 @@ function PullRequestDetailView({
             id={`${tabsId}-panel-${tab.id}`}
             key={tab.id}
             role="tabpanel"
+            // biome-ignore lint/a11y/noNoninteractiveTabindex: Tab panels must remain keyboard reachable when their content has no focusable controls.
             tabIndex={0}
           >
             {detailLoading ? (
