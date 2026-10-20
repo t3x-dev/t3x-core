@@ -21,7 +21,7 @@ export type AssistantEvent =
       status: 'started' | 'completed';
       result?: unknown;
     }
-  | { type: 'done'; reason: 'completed' | 'step_limit' | 'cancelled' };
+  | { type: 'done'; reason: 'completed' | 'step_limit' | 'cancelled' | 'awaiting_confirmation' };
 
 /** Bounded loop. Each upstream call is separately admitted and metered through the existing runtime. */
 export async function runAssistantProvider(
@@ -160,6 +160,11 @@ export async function runAssistantProvider(
     }
     if (!hasTools || response.tool_calls.length > 8)
       throw new TypeError('Invalid Assistant tool response');
+    if (
+      response.tool_calls.some((call) => call.name === 'showSchemaSettings') &&
+      response.tool_calls.length !== 1
+    )
+      throw new TypeError('Show settings in a separate tool step before any other action.');
     prompt.messages.push({
       role: 'assistant',
       content: blocks.length
@@ -194,6 +199,30 @@ export async function runAssistantProvider(
         status: 'completed',
         result,
       });
+      if (call.name === 'showSchemaSettings') {
+        await input.emit({
+          type: 'text',
+          content:
+            'A Schema structure candidate is shown in the changes area. Review its attributes, then click Save Schema to Draft. This explicit human action saves the snapshot, updates the Draft binding and syncs Studio without filling content or committing. Nothing has been applied yet.',
+        });
+        await input.emit({ type: 'done', reason: 'awaiting_confirmation' });
+        return;
+      }
+      if (
+        call.name === 'requestProposal' &&
+        result &&
+        typeof result === 'object' &&
+        'kind' in result &&
+        result.kind === 'schema'
+      ) {
+        await input.emit({
+          type: 'text',
+          content:
+            'Schema candidate saved. Open Schema Studio to review the difference and prepare content before adding it to the Draft.',
+        });
+        await input.emit({ type: 'done', reason: 'completed' });
+        return;
+      }
       if (call.name === 'applyUserEdit') {
         await input.emit({ type: 'done', reason: 'completed' });
         return;

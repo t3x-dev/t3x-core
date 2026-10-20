@@ -1513,6 +1513,7 @@ export class T3xClient {
         workspaceId
       )}/schema-composition/publish`,
       {
+        visibility: 'community',
         composition_revision: input.compositionRevision,
         composition_hash: input.compositionHash,
         canonical_name: input.canonicalName,
@@ -1520,6 +1521,7 @@ export class T3xClient {
         title: input.title,
         ...(input.description ? { description: input.description } : {}),
         ...(input.releaseNotes ? { release_notes: input.releaseNotes } : {}),
+        ...(input.license ? { license: input.license } : {}),
         ...(input.tags?.length ? { tags: input.tags } : {}),
       }
     );

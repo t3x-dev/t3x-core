@@ -80,6 +80,14 @@ describe('durable Draft authoring commands', () => {
   it('repairs missing Schema with revision protection and leaves immutable history intact', async () => {
     const init = await initialize('unbound', true);
     const input = { projectId, workspaceId: 'unbound', expectedRevision: init.draft.revision };
+    const unbound = await readWorkspaceAuthoring(setup.db, input);
+    expect(unbound.currentSchema).toEqual({
+      status: 'unbound',
+      schemaHash: null,
+      definition: null,
+      bindings: [],
+    });
+    expect(await findWorkspaceDraft(setup.db, projectId, 'unbound')).toEqual(init.draft);
     await expect(
       ensureWorkspaceAuthoringSchema(setup.db, { ...input, expectedRevision: 0 })
     ).rejects.toThrow();

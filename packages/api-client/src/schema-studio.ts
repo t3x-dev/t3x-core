@@ -221,6 +221,7 @@ export type StudioApplyInput = z.infer<typeof StudioApplyInputSchema>;
 /** Publish a saved, checked Studio candidate as a private immutable Schema, never a Module. */
 export const StudioPublishInputSchema = z
   .object({
+    visibility: z.literal('community'),
     candidateIds: ids,
     schemaEditCandidate: StudioSchemaEditCandidateRefSchema,
     ifRevision: z.number().int().positive(),
@@ -235,6 +236,9 @@ export const StudioPublishInputSchema = z
     title: z.string().trim().min(1).max(80),
     description: z.string().trim().max(500).default(''),
     releaseNotes: z.string().trim().max(1000).default(''),
+    license: z
+      .enum(['Apache-2.0', 'MIT', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC', 'CC0-1.0'])
+      .optional(),
     tags: z.array(z.string().trim().min(1).max(80)).max(40).default([]),
   })
   .strict();
@@ -242,7 +246,7 @@ export const StudioPublishResultSchema = z.object({
   source: StudioSourceSchema,
   schemaHash: digest,
   kind: z.literal('schema'),
-  visibility: z.literal('private'),
+  visibility: z.literal('community'),
 });
 export type StudioPublishInput = z.infer<typeof StudioPublishInputSchema>;
 export type StudioPublishResult = z.infer<typeof StudioPublishResultSchema>;
@@ -433,6 +437,8 @@ export const StudioSchemaEditCandidateSchema = z.object({
   revision: z.number().int().positive(),
   baseSources: z.array(StudioSourceSchema).min(1),
   localContribution: StudioSchemaEditLocalContributionSchema,
+  /** Read-only exact editing Base, projected by the server; never persisted as client input. */
+  baseDefinition: z.record(z.string(), z.unknown()).optional(),
   authoringDraft: z
     .object({
       schema: z.literal('t3x.application/workspace-schema-authoring-draft/v1'),

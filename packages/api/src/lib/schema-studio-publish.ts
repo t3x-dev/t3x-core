@@ -9,6 +9,7 @@ import {
 import { type NodeSchema, normalizeYSchemaObject, sha256CompositionValue } from '@t3x-dev/yschema';
 import type { Context } from 'hono';
 import { assertProjectAccess } from './project-access';
+import { resolveSchemaPublisher } from './schema-publisher';
 import { resolveStudioSource } from './schema-studio';
 import { previewStudio, StudioError } from './schema-studio-preview';
 
@@ -30,6 +31,7 @@ export async function publishStudioSchema(
     async (tx, draft) => {
       if ((await assertProjectAccess(c, tx, projectId, 'project:edit')) instanceof Response)
         throw new StudioError('FORBIDDEN', 'Workspace edit authority changed.');
+      const publisherNamespaceId = await resolveSchemaPublisher(c, tx, projectId);
       if (
         draft.revision !== input.ifRevision ||
         (draft.target_branch ?? String(draft.workspace_state?.targetBranch ?? 'main')) !== refName
@@ -95,7 +97,8 @@ export async function publishStudioSchema(
         title: input.title,
         description: input.description,
         status: 'published',
-        source: 'team',
+        source: 'community',
+        license: input.license ?? 'Apache-2.0',
         tags,
         blueprint: {
           compositionApiVersion: 't3x.dev/yschema-composition/v2',
@@ -111,25 +114,21 @@ export async function publishStudioSchema(
             })),
           // A whole-Schema base is not relabelled as a Module; keep all exact original source references.
           baseSources: preview.sources,
-          ...(candidate.authoringDraft ? { authoringDraft: candidate.authoringDraft } : {}),
-          localContribution: {
-            apiVersion: 't3x.dev/yschema-local-contribution/v2',
-            id: candidate.candidateId,
-            revision: candidate.revision,
-            contribution: candidate.localContribution,
-          },
+          // Publish the checked result, not guarded edit preimages, chat intent or raw
+          // local inputs: those may retain private/removed definitions from the Workspace.
           authoring: {
             workspaceId,
             candidateId: candidate.candidateId,
             revision: candidate.revision,
             requestDigest: candidate.requestDigest,
-            intent: candidate.intent,
-            origin: candidate.origin,
           },
         },
         schema,
         registry: {
           origin: 'composition',
+          publisherNamespaceId,
+          // Historical provenance only; it must not confer access or cascade ownership.
+          sourceProjectId: projectId,
           studio: true,
           compilerVersion: 'yschema-v2',
           compositionHash,
@@ -149,8 +148,8 @@ export async function publishStudioSchema(
         canonical_name: input.canonicalName,
         family: 'open',
         kind: 'schema',
-        owner_project_id: projectId,
-        visibility: 'private',
+        publisher_namespace_id: publisherNamespaceId,
+        visibility: 'community',
         version: input.version,
         status: 'published',
         manifest_json: manifest,
@@ -167,7 +166,7 @@ export async function publishStudioSchema(
         workspace: null,
         value: {
           source: {
-            projectId,
+            projectId: null,
             canonicalName: published.canonicalName,
             version: published.version,
             artifactVersionId: published.artifactVersionId,
@@ -175,7 +174,7 @@ export async function publishStudioSchema(
           },
           schemaHash,
           kind: 'schema' as const,
-          visibility: 'private' as const,
+          visibility: 'community' as const,
         },
       };
     }

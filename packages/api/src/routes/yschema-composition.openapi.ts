@@ -39,6 +39,7 @@ import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
 import { readSchemaEditorPicks } from '../lib/schema-editor-picks';
 import { assessWorkspaceSchemaImpact } from '../lib/schema-evolution-impact';
+import { resolveSchemaPublisher } from '../lib/schema-publisher';
 import { SchemaSourceUnavailableError } from '../lib/schema-studio';
 import { StudioError } from '../lib/schema-studio-preview';
 import { savePendingWorkspaceSchema } from '../lib/workspace-schema-pending';
@@ -186,6 +187,10 @@ const PublishWorkspaceCompositionRequestSchema = z
     title: z.string().trim().min(1).max(80),
     description: z.string().trim().max(500).optional(),
     release_notes: z.string().trim().max(1000).optional(),
+    visibility: z.literal('community'),
+    license: z
+      .enum(['Apache-2.0', 'MIT', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC', 'CC0-1.0'])
+      .optional(),
     presentation_ref: PublishPresentationReferenceSchema.optional(),
     tags: z.array(z.string().trim().min(1).max(80)).max(40).optional(),
   })
@@ -654,7 +659,7 @@ const publishWorkspaceCompositionRoute = createRoute({
   method: 'post',
   path: '/v1/projects/{projectId}/workspaces/{workspaceId}/schema-composition/publish',
   tags: ['YSchema'],
-  summary: 'Publish a saved Composition as an immutable project Schema version',
+  summary: 'Publish a saved Composition as a public, repository-independent Schema version',
   request: {
     params: WorkspaceCompositionParamsSchema,
     body: {
@@ -1052,6 +1057,13 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
   const db = await getDB();
   const access = await assertProjectAccess(c, db, projectId, 'project:edit');
   if (access instanceof Response) return access;
+  let publisherNamespaceId: string;
+  try {
+    publisherNamespaceId = await resolveSchemaPublisher(c, db, projectId);
+  } catch (error) {
+    if (error instanceof StudioError) return errorResponse(c, error.code, error.message);
+    throw error;
+  }
 
   let presentationRef: z.infer<typeof SchemaReleasePresentationReferenceSchema> | undefined;
   if (input.presentation_ref) {
@@ -1171,7 +1183,7 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
       description: input.description || preview.schema.description,
     });
     const schemaHash = await sha256CompositionValue(schema);
-    const schemaTags = projectSchemaTags(input.tags);
+    const schemaTags = projectSchemaTags(input.tags, 'community');
     const comparison = await findCompositionComparison({
       canonicalName: input.canonical_name,
       compositionId: persisted.composition.id,
@@ -1187,7 +1199,8 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
       title: input.title,
       description: input.description || `Published from ${persisted.composition.id}.`,
       status: 'published',
-      source: 'team',
+      source: 'community',
+      license: input.license ?? 'Apache-2.0',
       tags: schemaTags,
       blueprint: {
         compositionApiVersion: persisted.composition.apiVersion,
@@ -1198,6 +1211,8 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
       schema,
       registry: {
         origin: 'composition',
+        publisherNamespaceId,
+        sourceProjectId: projectId,
         ...(presentationRef ? { presentationRef } : {}),
         compilerVersion: 'yschema-v2',
         compositionHash: preview.compositionHash,
@@ -1221,8 +1236,8 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
         display_name: input.title,
         description: input.description ?? '',
         tags: schemaTags,
-        owner_project_id: projectId,
-        visibility: 'private',
+        publisher_namespace_id: publisherNamespaceId,
+        visibility: 'community',
         version: input.version,
         status: 'published',
         manifest_json: manifest as unknown as Record<string, unknown>,
@@ -1294,7 +1309,7 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
     description: input.description || preview.schema.description,
   });
   const schemaHash = await sha256CompositionValue(schema);
-  const schemaTags = projectSchemaTags(input.tags);
+  const schemaTags = projectSchemaTags(input.tags, 'community');
   const comparison = await findCompositionComparison({
     canonicalName: input.canonical_name,
     compositionId: persisted.composition.id,
@@ -1306,7 +1321,11 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
   const provides = Array.from(
     new Set([...artifacts.core.provides, ...artifacts.modules.flatMap((module) => module.provides)])
   ).sort();
-  const manifest: YSchemaCoreArtifact & { tags: string[]; registry: Record<string, unknown> } = {
+  const manifest: YSchemaCoreArtifact & {
+    license: string;
+    tags: string[];
+    registry: Record<string, unknown>;
+  } = {
     apiVersion: 't3x.dev/yschema-core/v1',
     canonicalName: input.canonical_name,
     version: input.version,
@@ -1314,7 +1333,8 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
     title: input.title,
     description: input.description || `Published from ${persisted.composition.id}.`,
     status: 'published',
-    source: 'team',
+    source: 'community',
+    license: input.license ?? 'Apache-2.0',
     tags: schemaTags,
     provides,
     extensionSlots: artifacts.core.extensionSlots,
@@ -1322,6 +1342,8 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
     schema,
     registry: {
       origin: 'composition',
+      publisherNamespaceId,
+      sourceProjectId: projectId,
       ...(presentationRef ? { presentationRef } : {}),
       compositionId: persisted.composition.id,
       compositionRevision: persisted.composition.revision,
@@ -1347,8 +1369,8 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
       display_name: input.title,
       description: input.description ?? '',
       tags: schemaTags,
-      owner_project_id: projectId,
-      visibility: 'private',
+      publisher_namespace_id: publisherNamespaceId,
+      visibility: 'community',
       version: input.version,
       status: 'published',
       manifest_json: manifest as unknown as Record<string, unknown>,
@@ -1565,11 +1587,11 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function projectSchemaTags(tags: string[] | undefined): string[] {
+function projectSchemaTags(tags: string[] | undefined, source = 'team'): string[] {
   return Array.from(
     new Set([
       ...(tags ?? []).filter((tag) => !tag.toLowerCase().startsWith('source:')),
-      'source:team',
+      `source:${source}`,
     ])
   ).sort();
 }

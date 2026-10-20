@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { AssistantSchemaSettingsInputSchema } from '@t3x-dev/api-client';
 import { type DraftYOp, DraftYOpSchema } from '@t3x-dev/application';
 import type { LLMProvider } from '@t3x-dev/core';
 import {
+  ConflictError,
   findApiKeyById,
   findConversationById,
   findTransitionProposalByRequest,
@@ -32,6 +34,7 @@ import {
   defaultGenerationProviderRuntime,
   getGenerationProviderRuntime,
 } from '../lib/provider-runtime';
+import { StudioError } from '../lib/schema-studio-preview';
 import {
   requireTransitionAuthority,
   TransitionProjectScopeDeniedError,
@@ -41,6 +44,10 @@ import {
 import { chatWithWorkspace } from '../lib/workspace-assistant';
 import { createWorkspaceProposalModel } from '../lib/workspace-assistant/adapters/generation-model';
 import type { AssistantModelBinding } from '../lib/workspace-assistant/adapters/provider-tools';
+import {
+  createAssistantSchemaSettingsService,
+  schemaSettingsView,
+} from '../lib/workspace-assistant/schema-settings';
 import { workspaceAuthoringState } from '../lib/workspace-authoring';
 import { ErrorResponseSchema } from '../schemas/common';
 
@@ -75,12 +82,17 @@ const Request = z
     reasoning_effort: z.enum(['low', 'medium', 'high']).optional(),
     context_mode: z.enum(['auto', 'compact', 'expanded']).default('auto'),
     fast: z.boolean().default(false),
+    confirmed_settings_id: z.string().min(1).max(200).optional(),
   })
   .strict();
 const Params = z.object({ projectId: z.string().min(1), workspaceId: z.string().min(1) });
 export const workspaceAssistantRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 workspaceAssistantRoutes.onError((error, c) => {
   if (error instanceof HTTPException) return error.getResponse();
+  if (error instanceof StudioError)
+    return errorResponse(c, error.code, error.message, error.details);
+  if (error instanceof ConflictError)
+    return errorResponse(c, 'CONFLICT', 'Workspace changed. Refresh the settings card.');
   if (
     error instanceof TransitionScopeDeniedError ||
     error instanceof TransitionProjectScopeDeniedError
@@ -169,7 +181,12 @@ workspaceAssistantRoutes.post(
           scope: capability === 'read' ? 'transition:inspect' : 'transition:propose',
         });
       }
-      const access = await assertProjectAccess(c, db, projectId);
+      const access = await assertProjectAccess(
+        c,
+        db,
+        projectId,
+        capability === 'read' ? 'project:read' : 'project:edit'
+      );
       if (access instanceof Response) throw new HTTPException(403, { res: access });
       requireTransitionAuthority({
         apiKey: transitionApiKey(c),
@@ -220,6 +237,15 @@ workspaceAssistantRoutes.post(
           inference,
           operationNamespace,
           authorize,
+          schemaSettings: createAssistantSchemaSettingsService(
+            c,
+            db,
+            projectId,
+            workspaceId,
+            principal.actor,
+            body.conversation_id
+          ),
+          confirmedSettingsId: body.confirmed_settings_id,
           exactEdit: body.exact_edit
             ? { ...body.exact_edit, operations: body.exact_edit.operations as DraftYOp[] }
             : undefined,
@@ -291,6 +317,72 @@ workspaceAssistantRoutes.post(
     });
   }
 );
+const settingsPath =
+  '/v1/projects/:projectId/workspaces/:workspaceId/source-chat/assistant/schema-settings';
+workspaceAssistantRoutes.get(settingsPath, async (c) => {
+  const { projectId, workspaceId } = Params.parse(c.req.param());
+  const conversationId = z.string().min(1).parse(c.req.query('conversation_id'));
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+  const principal = requireTransitionAuthority({
+    apiKey: transitionApiKey(c),
+    projectId,
+    scope: 'transition:inspect',
+  });
+  const record = await createAssistantSchemaSettingsService(
+    c,
+    db,
+    projectId,
+    workspaceId,
+    principal.actor,
+    conversationId
+  ).read();
+  c.header('Cache-Control', 'private, no-store');
+  return c.json({ success: true, data: record ? schemaSettingsView(record) : null });
+});
+workspaceAssistantRoutes.post(settingsPath, async (c) => {
+  const { projectId, workspaceId } = Params.parse(c.req.param());
+  const input = z
+    .object({
+      conversationId: z.string().min(1),
+      settingsId: z.string().min(1),
+      ifRevision: z.number().int().positive(),
+      settings: AssistantSchemaSettingsInputSchema.nullable(),
+      generateSnapshot: z.boolean().default(false),
+      applyToDraft: z.boolean().default(false),
+      discardStudioCandidate: z.boolean().default(false),
+    })
+    .strict()
+    .parse(await c.req.json());
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId, 'project:edit');
+  if (access instanceof Response) return access;
+  const principal = requireTransitionAuthority({
+    apiKey: transitionApiKey(c),
+    projectId,
+    scope: 'transition:propose',
+  });
+  if (principal.actor.kind !== 'human')
+    return errorResponse(c, 'FORBIDDEN', 'Settings confirmation requires a human principal.');
+  const service = createAssistantSchemaSettingsService(
+    c,
+    db,
+    projectId,
+    workspaceId,
+    principal.actor,
+    input.conversationId
+  );
+  if ((input.generateSnapshot || input.applyToDraft) && !input.settings)
+    return errorResponse(c, 'INVALID_REQUEST', 'Snapshot generation requires confirmed settings.');
+  await service.confirm(input.settingsId, input.ifRevision, input.settings, {
+    discardStudioCandidate: input.discardStudioCandidate,
+  });
+  if (input.generateSnapshot || input.applyToDraft) await service.propose(input.settingsId);
+  if (input.applyToDraft) await service.applyToDraft(input.settingsId);
+  const record = await service.read();
+  return c.json({ success: true, data: record ? schemaSettingsView(record) : null });
+});
 const recovery = createRoute({
   method: 'get',
   path: '/v1/projects/{projectId}/workspaces/{workspaceId}/source-chat/assistant/operations/{operationId}',

@@ -17,6 +17,34 @@ afterEach(async () => {
 });
 
 describe('PostgreSQL schema migrations', () => {
+  it('upgrades v76 with independent public publisher ownership without publishing historical private data', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+    await setup.sql.unsafe(`
+      ALTER TABLE yschema_artifacts DROP COLUMN publisher_namespace_id;
+      INSERT INTO projects(project_id, name, namespace_id, created_at)
+        VALUES ('legacy-schema-owner', 'Legacy-schema-owner', 'ns_t3x_dev', NOW());
+      INSERT INTO yschema_artifacts(artifact_id, canonical_name, family, kind, owner_project_id, visibility)
+        VALUES ('legacy-private', 'legacy/private', 'open', 'schema', 'legacy-schema-owner', 'private');
+      UPDATE _schema_version SET version = 76;
+    `);
+    await closePostgresStorage();
+    await createPostgresBootstrapStorage({ connectionString: setup.connectionString });
+    expect(
+      await setup.sql.unsafe(
+        "SELECT owner_project_id, publisher_namespace_id, visibility FROM yschema_artifacts WHERE artifact_id = 'legacy-private'"
+      )
+    ).toMatchObject([
+      {
+        owner_project_id: 'legacy-schema-owner',
+        publisher_namespace_id: null,
+        visibility: 'private',
+      },
+    ]);
+    expect(
+      await setup.sql.unsafe('SELECT version FROM _schema_version WHERE singleton = TRUE')
+    ).toMatchObject([{ version: POSTGRES_SCHEMA_VERSION }]);
+  });
   it('repairs an early v76 path table without changing names or releasing blocked claims', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;
@@ -239,6 +267,7 @@ describe('PostgreSQL schema migrations', () => {
       DROP TABLE namespace_memberships;
       ALTER TABLE projects DROP CONSTRAINT IF EXISTS uq_projects_id_namespace;
       ALTER TABLE projects DROP CONSTRAINT IF EXISTS fk_projects_namespace;
+      ALTER TABLE yschema_artifacts DROP COLUMN publisher_namespace_id;
       DROP TABLE namespaces;
       CREATE TABLE namespaces (incompatible INTEGER);
       DROP TABLE rate_limit_buckets;
@@ -522,6 +551,7 @@ describe('PostgreSQL schema migrations', () => {
       ALTER TABLE projects DROP CONSTRAINT IF EXISTS uq_projects_id_namespace;
       ALTER TABLE projects DROP CONSTRAINT IF EXISTS fk_projects_namespace;
       ALTER TABLE projects DROP COLUMN namespace_id;
+      ALTER TABLE yschema_artifacts DROP COLUMN publisher_namespace_id;
       DROP TABLE namespaces;
       UPDATE _schema_version SET version = 67 WHERE singleton = TRUE;
     `);

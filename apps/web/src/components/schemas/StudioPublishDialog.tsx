@@ -46,6 +46,10 @@ export function StudioPublishDialog({
   const [title, setTitle] = useState('My Schema');
   const [description, setDescription] = useState('');
   const [notes, setNotes] = useState('');
+  const [license, setLicense] =
+    useState<NonNullable<import('@t3x-dev/api-client').StudioPublishInput['license']>>(
+      'Apache-2.0'
+    );
   const canPublish =
     preview.reviewHash === currentReviewHash &&
     preview.report.valid &&
@@ -64,6 +68,7 @@ export function StudioPublishDialog({
     event.preventDefault();
     if (submitting.current || !canPublish) return;
     const parsed = StudioPublishInputSchema.safeParse({
+      visibility: 'community',
       candidateIds,
       schemaEditCandidate: {
         candidateId: preview.freshness.candidateId,
@@ -76,6 +81,7 @@ export function StudioPublishDialog({
       title,
       description,
       releaseNotes: notes,
+      license,
     });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'Invalid release metadata.');
@@ -112,17 +118,17 @@ export function StudioPublishDialog({
     >
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Publish private Schema</DialogTitle>
+          <DialogTitle>Publish public Schema</DialogTitle>
           <DialogDescription>
-            Freeze this verified definition as an immutable Schema version. Base sources and local
-            contributions are retained. No Module publication is required; upstream and Workspace
-            remain unchanged.
+            Publish this definition to the shared catalog alongside Starters. Anyone can read and
+            reuse it without access to this repository. The immutable release survives repository
+            deletion; Workspace content is not published and remains unchanged.
           </DialogDescription>
         </DialogHeader>
         {result ? (
           <section className="space-y-3" aria-label="Published Schema">
             <output>
-              Published {result.source.canonicalName}@{result.source.version} · Private Schema
+              Published {result.source.canonicalName}@{result.source.version} · Public Schema
             </output>
             <p className="break-all font-mono text-xs">Artifact Hash: {result.source.hash}</p>
             <p className="break-all font-mono text-xs">Schema Hash: {result.schemaHash}</p>
@@ -183,6 +189,28 @@ export function StudioPublishDialog({
                 maxLength={1000}
               />
             </label>
+            <label htmlFor={`${id}-license`} className="grid gap-1 text-sm">
+              Reuse license
+              <select
+                id={`${id}-license`}
+                className="h-9 rounded-md border bg-transparent px-3 text-sm"
+                value={license}
+                onChange={(event) => setLicense(event.target.value as typeof license)}
+                disabled={busy}
+              >
+                {['Apache-2.0', 'MIT', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC', 'CC0-1.0'].map(
+                  (item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  )
+                )}
+              </select>
+            </label>
+            <p className="text-xs text-[var(--text-secondary)]">
+              Publish only definitions you are authorized to share under the selected license.
+              Existing private releases are not made public by this action.
+            </p>
             <p className="break-all text-xs text-[var(--text-secondary)]">
               Reviewed Schema Hash: {preview.schemaHash}
             </p>
@@ -207,7 +235,7 @@ export function StudioPublishDialog({
                 Cancel
               </Button>
               <Button type="submit" disabled={busy || !canPublish}>
-                {busy ? 'Publishing…' : 'Publish private version'}
+                {busy ? 'Publishing…' : 'Publish public version'}
               </Button>
             </div>
           </form>

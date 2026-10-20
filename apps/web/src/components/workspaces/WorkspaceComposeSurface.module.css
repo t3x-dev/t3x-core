@@ -6,6 +6,8 @@
   overflow: hidden;
 }
 .workspaceContent {
+  /* Keep both stages and their shared header on the same page grid. */
+  --project-page-max-width: 1680px;
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -2551,17 +2553,24 @@
   white-space: nowrap;
 }
 .composeBoard .composeMain {
+  grid-column: 2;
   grid-row: 3;
 }
 .composeBoard .discussionSidebar {
+  grid-column: 3;
   grid-row: 3;
 }
 @media (max-width: 760px) {
   .composeBoard {
-    grid-template-rows: auto auto minmax(440px, 1fr) minmax(340px, 1fr);
+    grid-template-rows: auto auto minmax(180px, 280px) minmax(440px, 1fr) minmax(340px, 1fr);
+  }
+  .composeBoard .composeMain {
+    grid-column: 1;
+    grid-row: 4;
   }
   .composeBoard .discussionSidebar {
-    grid-row: 4;
+    grid-column: 1;
+    grid-row: 5;
   }
 }
 .composeMain {
@@ -2570,15 +2579,23 @@
 
 @media (min-width: 761px) {
   .composeBoard {
-    grid-template-columns: minmax(0, 1fr) clamp(
+    --draft-effective-width: clamp(
+      180px,
+      var(--draft-width, 260px),
+      min(560px, calc(100% - 640px))
+    );
+    grid-template-columns: var(--draft-effective-width) minmax(0, 1fr) clamp(
         320px,
         var(--discussion-width, 440px),
-        calc(100% - 400px)
+        calc(100% - var(--draft-effective-width) - 320px)
       );
+  }
+  .composeBoard[data-draft-collapsed] {
+    --draft-effective-width: 48px;
   }
 }
 .discussionResize {
-  grid-column: 2;
+  grid-column: 3;
   grid-row: 3;
   position: relative;
   left: -7px;
@@ -2599,6 +2616,15 @@
   border-radius: 999px;
   background: transparent;
   transition: background 120ms ease;
+}
+.draftResize {
+  grid-column: 2;
+  margin-block: 0 16px;
+}
+.draftResize::after {
+  top: 0;
+  bottom: 0;
+  background: var(--stroke-divider);
 }
 .discussionResize:hover::after,
 .discussionResize:focus-visible::after,
@@ -2621,4 +2647,212 @@
   min-width: 0;
   gap: 4px;
   padding: 4px 24px 16px;
+}
+
+.currentDraftSidebar {
+  grid-column: 1;
+  grid-row: 3;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--stroke-divider);
+  padding: 8px 0 16px 12px;
+}
+.currentDraft {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--surface-panel);
+}
+.currentDraftHeader {
+  display: flex;
+  min-height: 42px;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.currentDraftHeader > button {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+  color: var(--text-primary);
+  text-align: left;
+}
+.currentDraftHeader h2 {
+  font-size: 12px;
+  font-weight: 600;
+}
+.currentDraftHeader svg,
+.currentDraftRow svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+.currentDraftHeader > .currentDraftCollapse {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  place-items: center;
+  margin-right: -6px;
+  border-radius: 4px;
+  color: var(--text-tertiary);
+}
+.currentDraftHeader > .currentDraftCollapse:hover {
+  background: var(--surface-app);
+  color: var(--text-primary);
+}
+.currentDraftRail {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  border-radius: 6px;
+  padding: 10px 0;
+  background: var(--surface-panel);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+}
+.currentDraftRail:hover {
+  color: var(--text-primary);
+}
+.currentDraftRail svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+.currentDraftRail > span {
+  writing-mode: vertical-rl;
+  white-space: nowrap;
+}
+.composeBoard[data-draft-collapsed] .currentDraftSidebar {
+  padding-right: 4px;
+}
+.currentDraftHeader > span,
+.currentDraftHeader > small {
+  white-space: nowrap;
+  font-size: 10px;
+}
+.currentDraftHeader > small {
+  flex-basis: 100%;
+  padding-left: 32px;
+}
+.currentDraftBody {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 0 14px 12px;
+  font-size: 11px;
+}
+.currentDraftSection + .currentDraftSection {
+  margin-top: 12px;
+}
+.currentDraftSection > summary {
+  cursor: pointer;
+  padding-block: 6px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.currentDraftSection p {
+  margin-block: 4px 8px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+.currentDraftSection > a {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--accent-commit);
+}
+.currentDraftTree {
+  min-width: 0;
+}
+.currentDraftRow {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 4px;
+  padding-right: 4px;
+  font-size: 11px;
+  text-align: left;
+  white-space: nowrap;
+}
+button.currentDraftRow:hover {
+  background: var(--surface-app);
+}
+.currentDraftRow > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.currentDraftRow > small {
+  max-width: 55%;
+  overflow: hidden;
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  text-overflow: ellipsis;
+}
+.currentDraftChevron[data-visible="false"] {
+  visibility: hidden;
+}
+.currentDraftChevron[data-expanded="true"] {
+  transform: rotate(90deg);
+}
+.currentDraftSchema {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.currentDraftSchema button,
+.currentDraftSchema section {
+  height: 28px;
+  font-size: 11px;
+}
+.currentDraftBinding {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.currentDraftBinding > span {
+  margin-left: 4px;
+  color: var(--status-success);
+  font-size: 10px;
+}
+.currentDraft .currentDraftNotice {
+  border-left: 2px solid var(--accent-pending);
+  padding-left: 8px;
+  color: var(--status-warning);
+  line-height: 1.5;
+}
+@media (max-width: 760px) {
+  .currentDraftSidebar {
+    grid-column: 1;
+    grid-row: 3;
+    border-right: 0;
+    border-bottom: 1px solid var(--stroke-divider);
+    padding-left: 12px;
+  }
+  .composeBoard[data-draft-collapsed] {
+    grid-template-rows: auto auto auto minmax(440px, 1fr) minmax(340px, 1fr);
+  }
+  .currentDraftRail {
+    flex-direction: row;
+    justify-content: flex-start;
+    padding: 8px 12px;
+  }
+  .currentDraftRail > span {
+    writing-mode: horizontal-tb;
+  }
 }

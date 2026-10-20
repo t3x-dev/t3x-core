@@ -185,12 +185,14 @@ export async function listYSchemaCatalogReleases(
       // A catalog request never exposes another project's introduction reference.
       presentationRef: options.project_id
         ? sql<YSchemaCatalogRelease['presentationRef']>`case
-        when ${a.ownerProjectId} = ${options.project_id}
+        when (${a.ownerProjectId} = ${options.project_id}
+          or (${a.publisherNamespaceId} is not null
+            and ${v.manifestJson}#>>'{registry,sourceProjectId}' = ${options.project_id}))
         and ${v.manifestJson}#>>'{registry,presentationRef,projectId}' = ${options.project_id}
         and ${v.manifestJson}#>>'{registry,presentationRef,commitDigest}' ~ '^sha256:[0-9a-f]{64}$'
         and ${v.manifestJson}#>>'{registry,presentationRef,presentationDigest}' ~ '^sha256:[0-9a-f]{64}$'
         then jsonb_strip_nulls(jsonb_build_object(
-          'projectId', ${a.ownerProjectId},
+          'projectId', ${options.project_id}::text,
           'commitDigest', ${v.manifestJson}#>>'{registry,presentationRef,commitDigest}',
           'presentationDigest', ${v.manifestJson}#>>'{registry,presentationRef,presentationDigest}',
           'coverPath', case when jsonb_typeof(${v.manifestJson}#>'{registry,presentationRef,coverPath}') = 'string'

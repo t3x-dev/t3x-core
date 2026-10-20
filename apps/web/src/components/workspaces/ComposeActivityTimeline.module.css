@@ -98,6 +98,13 @@
   background: var(--surface-app);
   color: var(--text-secondary);
 }
+.icon[data-kind="schema"] {
+  background: var(--color-brand, #7354da);
+  color: white;
+}
+.schemaBody > section {
+  margin: 0 0 12px;
+}
 .icon[data-latest="true"] {
   box-shadow:
     0 0 0 4px var(--surface-panel),
@@ -496,6 +503,10 @@
   border: 1px solid var(--stroke-default);
   border-radius: var(--radius-lg);
   background: var(--accent-commit-soft);
+}
+.event[data-latest="true"] .schemaBody {
+  border: 0;
+  background: transparent;
 }
 .eventBody {
   padding: 12px 12px 16px;

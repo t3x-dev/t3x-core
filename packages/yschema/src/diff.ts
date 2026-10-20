@@ -9,6 +9,7 @@ export interface YSchemaContractChange {
 }
 
 const IGNORED_ROOT_KEYS = new Set(['description', 'name', 'version']);
+const NODE_REPEATED_PATH = /^nodes\.[^.]+(?:\.children\.[^.]+)*\.repeated$/;
 
 /** Compare two normalized Schemas without treating release metadata as contract changes. */
 export function diffYSchemas(base: YSchema, target: YSchema): YSchemaContractChange[] {
@@ -49,6 +50,10 @@ function compareProperty(
   path: string,
   changes: YSchemaContractChange[]
 ): void {
+  // Node repetition defaults to false. Compare its meaning without rewriting
+  // either immutable definition; Slot/Node keys named "repeated" are not flags.
+  if (NODE_REPEATED_PATH.test(path) && (base[key] === true) === (target[key] === true)) return;
+
   if (!(key in base)) {
     changes.push({ kind: 'ADD', path, summary: 'Contract path added.' });
     return;

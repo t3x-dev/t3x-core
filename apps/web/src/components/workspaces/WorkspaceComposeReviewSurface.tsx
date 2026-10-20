@@ -28,6 +28,7 @@ import {
   ListTree,
   MessageSquare,
   Minus,
+  PanelLeftOpen,
   Pencil,
   Percent,
   Play,
@@ -117,6 +118,7 @@ import {
   listWorkspaceSchemaChoices,
   workspaceSchemaChoiceId,
 } from '@/domain/workspaces/schemaBindings';
+import { useAssistantSchemaSettings } from '@/hooks/schemas/useAssistantSchemaSettings';
 import { useProjectYSchemaVersions } from '@/hooks/schemas/useProjectYSchemaVersions';
 import { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import { useWorkspaceAuthoringBootstrap } from '@/hooks/workspaces/useWorkspaceAuthoringBootstrap';
@@ -131,12 +133,17 @@ import type {
 } from '@/types/workspaces';
 import type { WorkspaceYOpsValue } from '@/types/workspaceYops';
 import { cn } from '@/utils/cn';
+import { AssistantSchemaSettingsContent } from './AssistantSchemaSettingsCard';
 import { ComposeActivityChangeRow } from './ComposeActivityChangeRow';
-import { ComposeActivityTimeline } from './ComposeActivityTimeline';
+import {
+  ComposeActivityTimeline,
+  type ComposeSchemaTimelineEvent,
+} from './ComposeActivityTimeline';
 import { ComposeAuthoringAssistant } from './ComposeAuthoringAssistant';
 import { ComposeFieldDialog } from './ComposeFieldDialog';
 import { ComposeNodeHistoryPanel } from './ComposeNodeHistoryPanel';
 import composeStyles from './WorkspaceComposeSurface.module.css';
+import { WorkspaceCurrentDraft } from './WorkspaceCurrentDraft';
 import checksStyles from './WorkspaceReviewChecks.module.css';
 import { WorkspaceReviewCodeView } from './WorkspaceReviewCodeView';
 import diffStyles from './WorkspaceReviewDiff.module.css';
@@ -539,22 +546,61 @@ function ComposeSurface({
   const [fieldDialog, setFieldDialog] = useState<'structure' | 'yaml' | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const dragOrigin = useRef<{ x: number; width: number } | null>(null);
+  const draftDragOrigin = useRef<{ x: number; width: number } | null>(null);
+  const [draftWidth, setDraftWidth] = useState(260);
+  const [draftCollapsed, setDraftCollapsed] = useState(false);
   const [discussionWidth, setDiscussionWidth] = useState(440);
   const [resizing, setResizing] = useState(false);
   useEffect(() => {
     try {
       const stored = Number(localStorage.getItem('t3x-workspace-discussion-width'));
       if (stored >= 320 && stored <= 680) setDiscussionWidth(stored);
+      const draftStored = Number(localStorage.getItem('t3x-workspace-draft-width'));
+      if (draftStored >= 180 && draftStored <= 560) setDraftWidth(draftStored);
+      if (localStorage.getItem('t3x-workspace-draft-collapsed') === 'true') setDraftCollapsed(true);
     } catch {
       /* Storage can be unavailable in private browser contexts. */
     }
   }, []);
+  const toggleDraft = (collapsed: boolean) => {
+    setDraftCollapsed(collapsed);
+    try {
+      localStorage.setItem('t3x-workspace-draft-collapsed', String(collapsed));
+    } catch {
+      /* Collapsing still works without storage. */
+    }
+  };
   const resizeDiscussion = (width: number) => {
-    const maximum = Math.min(680, Math.max(320, (boardRef.current?.clientWidth ?? 1264) - 400));
+    const actualDraftWidth =
+      boardRef.current?.querySelector<HTMLElement>('[aria-label="Current Draft navigation"]')
+        ?.offsetWidth || draftWidth;
+    const maximum = Math.min(
+      680,
+      Math.max(320, (boardRef.current?.clientWidth || 1680) - actualDraftWidth - 320)
+    );
     const next = Math.round(Math.max(320, Math.min(maximum, width)));
     setDiscussionWidth(next);
     try {
       localStorage.setItem('t3x-workspace-discussion-width', String(next));
+    } catch {
+      /* Resizing still works without storage. */
+    }
+  };
+  const resizeDraft = (width: number) => {
+    const measuredDiscussionWidth = boardRef.current
+      ?.querySelector('[aria-label="Discuss change"]')
+      ?.getBoundingClientRect().width;
+    const actualDiscussionWidth = measuredDiscussionWidth
+      ? measuredDiscussionWidth + 16
+      : discussionWidth;
+    const maximum = Math.min(
+      560,
+      Math.max(180, (boardRef.current?.clientWidth || 1680) - actualDiscussionWidth - 320)
+    );
+    const next = Math.round(Math.max(180, Math.min(maximum, width)));
+    setDraftWidth(next);
+    try {
+      localStorage.setItem('t3x-workspace-draft-width', String(next));
     } catch {
       /* Resizing still works without storage. */
     }
@@ -564,6 +610,8 @@ function ComposeSurface({
   const [changeScope, setChangeScope] = useState<'latest' | 'all'>('latest');
   const [activitySelection, setActivitySelection] = useState<ComposeActivitySelection | null>(null);
   const [structurePending, setStructurePending] = useState(false);
+  const [schemaCandidateEpoch, setSchemaCandidateEpoch] = useState(0);
+  const [schemaConversationId, setSchemaConversationId] = useState<string>();
   const [structureError, setStructureError] = useState<string | null>(null);
   const [staged, setStaged] = useState<StagedManualCard[]>([]);
   const publishedCurrent = activity.view?.current;
@@ -646,6 +694,7 @@ function ComposeSurface({
     setStructureError(null);
     setFieldDialog(null);
     setSidePanel('chat');
+    setSchemaConversationId(undefined);
   }, [candidate.id]);
   const selectActivity = useCallback(
     (selection: ComposeActivitySelection, panel: 'history' | 'chat' | 'preserve' = 'history') => {
@@ -670,6 +719,12 @@ function ComposeSurface({
     (source) =>
       source.type === 'chat' && source.title === 'Compose assistant' && source.conversationId
   )?.conversationId;
+  const schemaSettings = useAssistantSchemaSettings(
+    candidate.projectId,
+    candidate.id,
+    schemaConversationId ?? sourceConversationId,
+    String(activity.view?.workspaceRevision ?? candidate.revision) + ':' + schemaCandidateEpoch
+  );
   const sourceMaterialIds = controller.materialSources
     .filter((source) => source.included)
     .map((source) => source.materialId);
@@ -681,8 +736,14 @@ function ComposeSurface({
   return (
     <div
       ref={boardRef}
-      style={{ '--discussion-width': `${discussionWidth}px` } as CSSProperties}
+      style={
+        {
+          '--draft-width': `${draftWidth}px`,
+          '--discussion-width': `${discussionWidth}px`,
+        } as CSSProperties
+      }
       data-resizing={resizing || undefined}
+      data-draft-collapsed={draftCollapsed || undefined}
       className={composeStyles.composeBoard}
     >
       <WorkspaceStageHeader
@@ -766,7 +827,94 @@ function ComposeSurface({
           }
         }}
       />
+      {draftCollapsed ? null : (
+        // biome-ignore lint/a11y/useSemanticElements: This is an interactive window splitter, not a thematic break.
+        <div
+          role="separator"
+          aria-label="Resize current Draft panel"
+          aria-orientation="vertical"
+          aria-valuemin={180}
+          aria-valuemax={560}
+          aria-valuenow={draftWidth}
+          tabIndex={0}
+          className={`${composeStyles.discussionResize} ${composeStyles.draftResize}`}
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            const sidebar = boardRef.current?.querySelector(
+              '[aria-label="Current Draft navigation"]'
+            );
+            draftDragOrigin.current = {
+              x: event.clientX,
+              width: sidebar?.getBoundingClientRect().width || draftWidth,
+            };
+            event.currentTarget.setPointerCapture(event.pointerId);
+            setResizing(true);
+          }}
+          onPointerMove={(event) => {
+            if (draftDragOrigin.current)
+              resizeDraft(
+                draftDragOrigin.current.width + event.clientX - draftDragOrigin.current.x
+              );
+          }}
+          onPointerUp={(event) => {
+            draftDragOrigin.current = null;
+            setResizing(false);
+            if (event.currentTarget.hasPointerCapture(event.pointerId))
+              event.currentTarget.releasePointerCapture(event.pointerId);
+          }}
+          onLostPointerCapture={() => {
+            draftDragOrigin.current = null;
+            setResizing(false);
+          }}
+          onPointerCancel={() => {
+            draftDragOrigin.current = null;
+            setResizing(false);
+          }}
+          onDoubleClick={() => resizeDraft(260)}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+              event.preventDefault();
+              resizeDraft(draftWidth + (event.key === 'ArrowRight' ? 20 : -20));
+            } else if (event.key === 'Home' || event.key === 'End') {
+              event.preventDefault();
+              resizeDraft(event.key === 'Home' ? 180 : 560);
+            }
+          }}
+        />
+      )}
+      <aside aria-label="Current Draft navigation" className={composeStyles.currentDraftSidebar}>
+        {draftCollapsed ? (
+          <button
+            type="button"
+            aria-label="Expand current Draft panel"
+            title="Expand current Draft"
+            className={composeStyles.currentDraftRail}
+            onClick={() => toggleDraft(false)}
+          >
+            <PanelLeftOpen aria-hidden="true" />
+            <Layers aria-hidden="true" />
+            <span>Current Draft</span>
+          </button>
+        ) : (
+          <WorkspaceCurrentDraft
+            key={candidate.id}
+            candidate={candidate}
+            current={workingCurrent}
+            revision={activity.compositionRevision}
+            loading={activity.loading}
+            error={activity.error}
+            enabled={activity.enabled}
+            stagedCount={staged.length}
+            authoring={activity.view}
+            onCollapse={() => toggleDraft(true)}
+          />
+        )}
+      </aside>
       <main className={composeStyles.composeMain}>
+        {schemaSettings.error && !schemaSettings.record ? (
+          <p role="alert">{schemaSettings.error}</p>
+        ) : null}
         {activity.newActivity ? (
           <output className={composeStyles.newActivity}>
             <span>
@@ -787,6 +935,26 @@ function ComposeSurface({
           changeFilter="all"
           changeScope={changeScope}
           staging={stagingControls}
+          schemaEvent={
+            schemaSettings.record && schemaSettings.record.status !== 'cancelled'
+              ? {
+                  id: schemaSettings.record.settingsId,
+                  timestamp: schemaSettings.record.createdAt ?? candidate.updatedAt,
+                  content: (
+                    <AssistantSchemaSettingsContent
+                      projectId={candidate.projectId}
+                      workspaceId={candidate.id}
+                      state={schemaSettings}
+                      disabled={staged.length > 0}
+                      onChanged={() => {
+                        setSchemaCandidateEpoch((value) => value + 1);
+                        activity.refresh();
+                      }}
+                    />
+                  ),
+                }
+              : undefined
+          }
         />
       </main>
 
@@ -843,6 +1011,10 @@ function ComposeSurface({
             activityActions={activity.actions}
             activityCards={activity.cards}
             projectId={candidate.projectId}
+            onSchemaCandidateChange={(id) => {
+              if (id) setSchemaConversationId(id);
+              setSchemaCandidateEpoch((value) => value + 1);
+            }}
             prefill={controller.assistantPrefill}
             onPrefillApplied={controller.clearAssistantPrefill}
             proposalBlockedHint={staged.length ? UNGROUPED_MANUAL_HINT : undefined}
@@ -1097,6 +1269,7 @@ function ProposedDraftPanel({
   changeFilter,
   changeScope,
   staging,
+  schemaEvent,
 }: {
   activity: ReturnType<typeof useComposeActivity>;
   activitySelection: ComposeActivitySelection | null;
@@ -1108,6 +1281,7 @@ function ProposedDraftPanel({
   changeFilter: ComposeChangeFilter;
   changeScope: 'latest' | 'all';
   staging?: ManualStagingControls;
+  schemaEvent?: ComposeSchemaTimelineEvent;
 }) {
   const operations = candidate.yopsDraft.operations;
   const editRequest = useRef(0);
@@ -1264,6 +1438,7 @@ function ProposedDraftPanel({
         filter={changeFilter}
         scope={changeScope}
         staging={staging}
+        schemaEvent={schemaEvent}
         updatedAt={candidate.updatedAt}
         renderRow={renderChangeRow}
         fallback={

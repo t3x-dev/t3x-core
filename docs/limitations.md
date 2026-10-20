@@ -72,6 +72,19 @@ YSchema is a public alpha validation candidate. It is useful for schema-backed
 state validation, but its API and supported schema profile may still change
 during alpha. Keep compatibility-sensitive changes documented with changesets.
 
+New Studio and Composition Schema publications explicitly opt into the shared
+community catalog, alongside Starter definitions. Releases contain the checked
+definition, license and provenance, not Workspace content. They belong to the
+publisher namespace rather than the originating repository: deleting that
+repository does not remove a public release or require its permission to reuse
+the release. Publication still requires repository edit and namespace publishing
+authority; a name/version remains immutable and another namespace cannot take
+over its identity. Drafts and compiled Workspace snapshots remain project-scoped.
+Existing private releases are not automatically made public and keep their
+existing project ownership and deletion behavior. Historical publishing clients
+must explicitly send `visibility: community`; omission is rejected rather than
+silently exposing a previously private workflow.
+
 ## Transition Limitations
 
 Transition is a public alpha protocol package for State, Effect, Statement, and

@@ -9,10 +9,14 @@ const mocks = vi.hoisted(() => ({
   appendTurn: vi.fn(),
   stream: vi.fn(),
   recover: vi.fn(),
+  workspace: vi.fn(),
 }));
 vi.mock('@/infrastructure/sourceThreads', () => ({
   sourceThreadApi: { listTurns: mocks.listTurns, appendTurn: mocks.appendTurn },
   isSourceThreadRequestAborted: () => false,
+}));
+vi.mock('@/infrastructure/sharedApiClient', () => ({
+  getSharedApiClient: () => ({ workspaces: { get: mocks.workspace } }),
 }));
 vi.mock('@/infrastructure/workspaceAssistant', () => ({
   streamWorkspaceAssistant: mocks.stream,
@@ -85,6 +89,7 @@ beforeEach(() => {
   mocks.listTurns.mockResolvedValue({ turns: [] });
   mocks.appendTurn.mockResolvedValue({ turn_hash: 'user-turn' });
   mocks.recover.mockResolvedValue({ status: 'unknown' });
+  mocks.workspace.mockResolvedValue({ workspace: { revision: 7 } });
 });
 afterEach(cleanup);
 

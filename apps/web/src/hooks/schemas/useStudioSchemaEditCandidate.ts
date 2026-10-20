@@ -50,6 +50,32 @@ export function useStudioSchemaEditCandidate(
     };
   }, [refresh]);
 
+  useEffect(() => {
+    const updated = (event: Event) => {
+      const detail = (event as CustomEvent<{ projectId: string; workspaceId: string }>).detail;
+      if (detail?.projectId === projectId && detail.workspaceId === workspaceId) void refresh();
+    };
+    const storage = (event: StorageEvent) => {
+      if (event.key !== 't3x-schema-candidate-updated' || !event.newValue) return;
+      try {
+        updated(
+          new CustomEvent('t3x-schema-candidate-updated', { detail: JSON.parse(event.newValue) })
+        );
+      } catch {
+        /* Ignore unrelated malformed notifications. */
+      }
+    };
+    const focus = () => void refresh();
+    window.addEventListener('focus', focus);
+    window.addEventListener('t3x-schema-candidate-updated', updated);
+    window.addEventListener('storage', storage);
+    return () => {
+      window.removeEventListener('focus', focus);
+      window.removeEventListener('t3x-schema-candidate-updated', updated);
+      window.removeEventListener('storage', storage);
+    };
+  }, [projectId, workspaceId, refresh]);
+
   const current = result?.key === key ? result : undefined;
   return {
     candidate: current?.candidate ?? null,

@@ -188,7 +188,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-export const POSTGRES_SCHEMA_VERSION = 76;
+export const POSTGRES_SCHEMA_VERSION = 77;
 
 function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
   if (!tableExists) return 'missing';
@@ -293,7 +293,7 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
   }
 
   if (rows.length > 0 && rows[0].version >= POSTGRES_SCHEMA_VERSION) {
-    if (rows[0].version === 76) {
+    if (rows[0].version === POSTGRES_SCHEMA_VERSION) {
       // A development bootstrap may already have recorded v76 before its
       // resolvability flag was added. Repair only this known shape, under the
       // migration lock; the read-only runtime path never performs this DDL.
@@ -2620,6 +2620,13 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS schema_studio_candidates_project
       ON schema_studio_candidates(project_id, created_at, id);
+  `);
+
+  // Public releases retain namespace ownership independently of their source repository.
+  // Existing project-owned/private releases are deliberately not made public.
+  await sql.unsafe(`
+    ALTER TABLE yschema_artifacts ADD COLUMN IF NOT EXISTS publisher_namespace_id TEXT
+      REFERENCES namespaces(namespace_id) ON DELETE RESTRICT;
   `);
 
   // Schema v76 only reserves addresses; abnormal historical names stay untouched.

@@ -61,8 +61,10 @@ export function ComposeAuthoringAssistant({
   allowProposal = true,
   proposalBlockedHint,
   contextLabel,
+  onSchemaCandidateChange,
 }: {
   projectId: string;
+  onSchemaCandidateChange?: (conversationId?: string) => void;
   conversationId?: string;
   context: WorkspaceAssistantContext;
   onCreateConversation: () => Promise<string>;
@@ -179,6 +181,7 @@ export function ComposeAuthoringAssistant({
       ...context,
       allowProposal,
       posture,
+      onSchemaSettings: (id) => onSchemaCandidateChange?.(id ?? conversationId),
       onCandidate: (transitionId, turnId) => {
         if (!allowProposal) return;
         setPublicationError(null);

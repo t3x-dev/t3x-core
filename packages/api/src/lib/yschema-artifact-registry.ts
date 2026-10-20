@@ -234,6 +234,7 @@ export function artifactViewToManifest(view: YSchemaArtifactVersionView): Record
     updatedAt: view.createdAt.toISOString(),
     visibility: view.visibility,
     ownerProjectId: view.ownerProjectId,
+    publisherNamespaceId: view.publisherNamespaceId,
     displayName: view.displayName ?? manifest.title ?? view.canonicalName,
     catalogDescription: view.description ?? manifest.description ?? '',
     catalogTags: view.tags,

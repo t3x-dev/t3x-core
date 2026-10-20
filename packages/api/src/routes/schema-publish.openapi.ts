@@ -16,14 +16,15 @@ const publishRoute = createRoute({
   method: 'post',
   path: '/v1/projects/{projectId}/schema-studio/publish/{workspaceId}',
   tags: ['YSchema'],
-  summary: 'Publish the exact checked local candidate as a private immutable Schema',
+  summary: 'Publish the exact checked candidate as a public, repository-independent Schema',
   request: {
     params: z.object({ projectId: z.string().min(1), workspaceId: z.string().min(1) }),
     body: { content: { 'application/json': { schema: StudioPublishInputSchema } } },
   },
   responses: {
     200: {
-      description: 'Private Blueprint release; Workspace and upstream unchanged',
+      description:
+        'Public Blueprint release retained independently; Workspace and upstream unchanged',
       content: {
         'application/json': { schema: SuccessResponseSchema(StudioPublishResultSchema) },
       },

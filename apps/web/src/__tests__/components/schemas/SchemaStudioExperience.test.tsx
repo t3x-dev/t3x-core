@@ -1,6 +1,7 @@
 import moduleStyles from '@/components/schemas/AddModulesDialog.module.css';
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
+import type { StudioSchemaEditCandidate } from '@t3x-dev/api-client';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { SchemaStudioExperience } from '@/components/schemas/SchemaStudioExperience';
@@ -23,6 +24,7 @@ const mocks = vi.hoisted(() => ({
     revision: number;
     localContribution: Record<string, unknown>;
     origin: { channel: string };
+    baseSources?: StudioSchemaEditCandidate['baseSources'];
   },
   previewInputs: [] as unknown[],
   workspaces: [] as Array<{
@@ -161,6 +163,37 @@ it('keeps the selected branch when Studio links to Browse', () => {
     'href',
     '/project/p?tab=schemas&schemaView=browse&branch=feature%2Frelease'
   );
+});
+it('synchronizes exact sources and revision when an assistant snapshot replaces the open candidate', async () => {
+  mocks.query = 'workspace=saved';
+  mocks.workspaces = [
+    { id: 'saved', revision: 2, status: 'draft', targetBranch: 'main', title: 'Saved' },
+  ];
+  const { rerender } = render(<SchemaStudioExperience projectId="p" />);
+  mocks.schemaEditCandidate = {
+    candidateId: 'assistant-schema',
+    revision: 3,
+    localContribution: {},
+    origin: { channel: 'assistant' },
+    baseSources: [
+      {
+        projectId: null,
+        artifactVersionId: 'base-v1',
+        canonicalName: 'team/base',
+        version: '1.0',
+        hash: 'sha256:abc',
+      },
+    ],
+  };
+  rerender(<SchemaStudioExperience projectId="p" />);
+  await waitFor(() =>
+    expect(mocks.previewInputs).toContainEqual({
+      candidateIds: ['provider'],
+      workspaceId: 'saved',
+      schemaEditCandidate: { candidateId: 'assistant-schema', revision: 3 },
+    })
+  );
+  expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).toBeChecked();
 });
 it('does not review another Workspace when the deep-linked target is missing', () => {
   mocks.query = 'candidate=provider&workspace=missing';
@@ -730,9 +763,9 @@ it('opens private publication from the checked saved candidate without applying 
   render(<SchemaStudioExperience projectId="p" />);
   await waitFor(() => expect(screen.getByRole('button', { name: 'Review changes' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Publish private Schema' }));
-  expect(screen.getByRole('dialog', { name: 'Publish private Schema' })).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Publish private version' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Publish public Schema' }));
+  expect(screen.getByRole('dialog', { name: 'Publish public Schema' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Publish public version' })).toBeEnabled();
   expect(mocks.apply).not.toHaveBeenCalled();
   expect(mocks.publish).not.toHaveBeenCalled();
   expect(mocks.push).not.toHaveBeenCalled();
