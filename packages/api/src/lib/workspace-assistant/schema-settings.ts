@@ -7,23 +7,30 @@ import {
   currentComposition,
   type DraftActionActor,
   parseWorkspaceSchemaEditCandidate,
+  resolveWorkspaceSchemaBindingMode,
 } from '@t3x-dev/application';
 import { executeWorkspaceSchemaEditCommand, type WorkspaceSchemaEditCommand } from '@t3x-dev/core';
 import {
   type AnyDB,
+  addSchemaStudioCandidate,
   findWorkspaceDraft,
+  findYSchemaCompositionSnapshot,
   getTransitionRefHead,
-  listSchemaStudioCandidates,
   saveWorkspaceSchemaPreparation,
+  saveYSchemaCompositionSnapshot,
+  transactWorkspaceAuthoring,
 } from '@t3x-dev/storage';
 import { diffYSchemas, normalizeYSchemaObject, sha256CompositionValue } from '@t3x-dev/yschema';
 import type { Context } from 'hono';
 import { z } from 'zod';
+import { assertProjectAccess } from '../project-access';
 import { saveStudioEditCandidate } from '../schema-edit-candidate-save';
 import { assessWorkspaceSchemaImpact } from '../schema-evolution-impact';
-import { compileStudioSelection, StudioError } from '../schema-studio-preview';
+import { compileStudioSelection, previewStudio, StudioError } from '../schema-studio-preview';
 import { workspaceAuthoringState } from '../workspace-authoring';
+import { resolveWorkspaceSchemaEditBasis } from '../workspace-schema-edit-basis';
 import { resolveWorkspaceYSchema } from '../workspace-yschema';
+import { schemaRootKeyFromBinding } from '../yschema-registry';
 
 const Stored = AssistantSchemaSettingsViewSchema.extend({
   actor: z.object({ kind: z.string(), id: z.string() }),
@@ -36,6 +43,7 @@ const Stored = AssistantSchemaSettingsViewSchema.extend({
   baseCandidateRevision: z.number().int().nonnegative(),
   confirmationDigest: z.string().optional(),
   requestDigest: z.string(),
+  replaceStudioCandidate: z.boolean().default(false),
 });
 type StoredSettings = z.infer<typeof Stored>;
 function owned(value: unknown, actor: DraftActionActor, conversationId?: string) {
@@ -162,43 +170,26 @@ export function createAssistantSchemaSettingsService(
       if (previous && ['pending', 'confirmed'].includes(previous.status))
         throw new StudioError('CONFLICT', 'Confirm or cancel the open Schema settings first.');
       const live = await currentBasis(db, projectId, workspaceId);
-      await applySchemaSettings(live.schema, settings);
-      const rows = await listSchemaStudioCandidates(db, projectId);
-      const bindings = live.draft.workspace_state!.schemaBindings as Array<Record<string, unknown>>;
-      const binding = bindings?.[0];
-      const sources = Array.isArray(binding?.studioSources)
-        ? (binding.studioSources as Array<Record<string, unknown>>)
-        : null;
-      const ids = sources
-        ? sources.map(
-            (source) =>
-              rows.find(
-                (row) =>
-                  row.artifactVersionId === source.artifactVersionId &&
-                  row.artifactHash === source.hash &&
-                  row.sourceProjectId === source.projectId
-              )?.id
-          )
-        : [
-            rows.find(
-              (row) =>
-                row.canonicalName === (binding?.canonicalName ?? binding?.schemaName) &&
-                row.version === binding?.version
-            )?.id,
-          ];
-      if (!ids.length || ids.some((id) => !id))
-        throw new StudioError(
-          'CONFLICT',
-          'Open Schema Studio and select the exact bound sources first.'
-        );
-      const candidateIds = [...new Set(ids as string[])];
-      const selection = await compileStudioSelection(c, db, projectId, candidateIds);
-      if (!selection.report.valid || !selection.adoption.allowed)
-        throw new StudioError('FORBIDDEN', 'The bound sources are unavailable or not authorized.');
+      const applied = await applySchemaSettings(live.schema, settings);
+      const basis = await resolveWorkspaceSchemaEditBasis(
+        c,
+        db,
+        projectId,
+        live.draft.workspace_state!,
+        live.schema
+      );
+      const candidateIds = await Promise.all(
+        basis.sources.map(
+          async (source) =>
+            `sc_${(await sha256CompositionValue({ projectId, artifactVersionId: source.artifactVersionId, hash: source.hash })).slice(7)}`
+        )
+      );
       const storedCandidate = live.draft.workspace_state!.schemaEditCandidate;
       const edit = storedCandidate ? parseWorkspaceSchemaEditCandidate(storedCandidate) : null;
-      if (edit && edit.authoringDraft?.resultSchemaHash !== live.schemaHash)
-        throw new StudioError('CONFLICT', 'Review or discard the existing Studio candidate first.');
+      const conflict =
+        edit && edit.authoringDraft?.resultSchemaHash !== live.schemaHash
+          ? { candidateId: edit.candidateId, revision: edit.revision }
+          : undefined;
       const record = Stored.parse({
         settingsId: operationId,
         revision: 1,
@@ -214,8 +205,11 @@ export function createAssistantSchemaSettingsService(
         contentHash: live.contentHash,
         refHead: live.refHead,
         candidateIds,
-        selectionHash: selection.selectionHash,
+        selectionHash: basis.selectionHash,
         baseCandidateRevision: edit?.revision ?? 0,
+        studioConflict: conflict,
+        changes: diffYSchemas(live.schema, applied.schema),
+        createdAt: new Date().toISOString(),
       });
       await saveWorkspaceSchemaPreparation(db, {
         projectId,
@@ -228,14 +222,18 @@ export function createAssistantSchemaSettingsService(
     confirm: async (
       id: string,
       revision: number,
-      settings: AssistantSchemaSettingsInput | null
+      settings: AssistantSchemaSettingsInput | null,
+      options: { discardStudioCandidate?: boolean } = {}
     ) => {
       const record = await read();
       if (!record || record.settingsId !== id)
         throw new StudioError('NOT_FOUND', 'Settings not found.');
       const digest = settings ? await sha256CompositionValue(settings) : null;
-      if (record.status === 'confirmed' && digest === record.confirmationDigest) {
-        await assertFresh(db, projectId, workspaceId, record);
+      if (
+        ['confirmed', 'generated', 'applied'].includes(record.status) &&
+        digest === record.confirmationDigest
+      ) {
+        if (record.status === 'confirmed') await assertFresh(db, projectId, workspaceId, record);
         return schemaSettingsView(record);
       }
       if (
@@ -248,6 +246,15 @@ export function createAssistantSchemaSettingsService(
         : { draft: await findWorkspaceDraft(db, projectId, workspaceId) };
       if (!live.draft) throw new StudioError('NOT_FOUND', 'Workspace is unavailable.');
       if (settings) {
+        if (
+          record.studioConflict &&
+          !options.discardStudioCandidate &&
+          !record.replaceStudioCandidate
+        )
+          throw new StudioError(
+            'REVIEW_REQUIRED',
+            'Keep the Studio candidate or explicitly confirm discarding it before generating this snapshot.'
+          );
         if (
           settings.action !== record.settings.action ||
           settings.nodePath !== record.settings.nodePath
@@ -264,6 +271,13 @@ export function createAssistantSchemaSettingsService(
         status: settings ? 'confirmed' : 'cancelled',
         settings: settings ?? record.settings,
         confirmationDigest: digest ?? undefined,
+        replaceStudioCandidate: options.discardStudioCandidate ?? record.replaceStudioCandidate,
+        changes: settings
+          ? diffYSchemas(
+              normalizeYSchemaObject(record.baseDefinition),
+              (await applySchemaSettings(record.baseDefinition, settings)).schema
+            )
+          : record.changes,
         workspaceRevision: live.draft.revision + 1,
       });
       await saveWorkspaceSchemaPreparation(db, {
@@ -279,13 +293,13 @@ export function createAssistantSchemaSettingsService(
       if (
         !record ||
         record.settingsId !== id ||
-        !['confirmed', 'generated'].includes(record.status)
+        !['confirmed', 'generated', 'applied'].includes(record.status)
       )
         throw new StudioError(
           'CONFLICT',
           'Confirm the settings card before generating a candidate.'
         );
-      if (record.status === 'generated') {
+      if (record.status === 'generated' || record.status === 'applied') {
         const draft = await findWorkspaceDraft(db, projectId, workspaceId);
         const candidate = parseWorkspaceSchemaEditCandidate(
           draft?.workspace_state?.schemaEditCandidate
@@ -297,14 +311,40 @@ export function createAssistantSchemaSettingsService(
           throw new StudioError('CONFLICT', 'The saved candidate changed. Open Studio.');
         return {
           kind: 'schema' as const,
-          status: 'candidate',
+          status: record.status === 'applied' ? 'applied' : 'candidate',
           candidateId: candidate.candidateId,
           candidateRevision: candidate.revision,
           workspaceRevision: draft!.revision,
+          snapshot: record.snapshot,
           reused: true,
         };
       }
       const live = await assertFresh(db, projectId, workspaceId, record);
+      if (record.studioConflict && !record.replaceStudioCandidate)
+        throw new StudioError(
+          'REVIEW_REQUIRED',
+          'Explicit confirmation is required to replace the Studio candidate.'
+        );
+      const basis = await resolveWorkspaceSchemaEditBasis(
+        c,
+        db,
+        projectId,
+        live.draft.workspace_state!,
+        live.schema
+      );
+      if (basis.selectionHash !== record.selectionHash)
+        throw new StudioError('CONFLICT', 'The bound snapshot’s exact provenance changed.');
+      // Restore exact source picks for Studio, without making them the edit Base.
+      for (const [index, source] of basis.sources.entries())
+        await addSchemaStudioCandidate(db, {
+          id: record.candidateIds[index]!,
+          projectId,
+          sourceProjectId: source.projectId,
+          canonicalName: source.canonicalName,
+          version: source.version,
+          artifactVersionId: source.artifactVersionId,
+          artifactHash: source.hash,
+        });
       const selection = await compileStudioSelection(c, db, projectId, record.candidateIds);
       if (
         !selection.report.valid ||
@@ -313,6 +353,35 @@ export function createAssistantSchemaSettingsService(
       )
         throw new StudioError('CONFLICT', 'The exact source selection changed.');
       const applied = await applySchemaSettings(record.baseDefinition, record.settings);
+      const snapshotHash = await sha256CompositionValue({
+        profile: 'assistant-schema-snapshot/v1',
+        settingsId: record.settingsId,
+        baseSchemaHash: record.schemaHash,
+        schemaHash: applied.schemaHash,
+      });
+      const snapshot = {
+        compositionId: `assistant:${snapshotHash}`,
+        compositionRevision: 1,
+        compositionHash: snapshotHash,
+        schemaHash: applied.schemaHash,
+      };
+      await saveYSchemaCompositionSnapshot(db, {
+        snapshot_id: `assistant-schema:${projectId}:${snapshotHash}`,
+        project_id: projectId,
+        composition_id: snapshot.compositionId,
+        composition_revision: 1,
+        composition_hash: snapshotHash,
+        compiled_schema_hash: applied.schemaHash,
+        compiler_version: 'assistant-schema-snapshot@1',
+        manifest_json: {
+          sources: basis.sources,
+          selectionHash: basis.selectionHash,
+          base: basis.reference,
+        },
+        schema_json: { ...applied.schema },
+        render_plan_json: basis.renderPlan,
+        origins_json: basis.origins,
+      });
       // Candidate identity uses the same canonical hash as Studio, not the model's ID.
       const canonicalId = `sec_${(await sha256CompositionValue({ projectId, workspaceId })).slice(7)}`;
       const next = {
@@ -321,6 +390,7 @@ export function createAssistantSchemaSettingsService(
         candidateId: canonicalId,
         candidateRevision: record.baseCandidateRevision + 1,
         workspaceRevision: live.draft.revision + 1,
+        snapshot,
       };
       const impact = await assessWorkspaceSchemaImpact(
         db,
@@ -337,14 +407,14 @@ export function createAssistantSchemaSettingsService(
           ifRevision: record.baseCandidateRevision,
           localContribution: {},
           schemaDefinition: applied.schema as unknown as Record<string, unknown>,
-          baseSchemaHash: selection.schemaHash,
+          baseSchemaHash: basis.schemaHash,
           intent: record.settings.intent,
           origin: 'assistant',
           retryKey: record.settingsId,
         },
         selection,
         { channel: 'assistant', actor },
-        { workspaceRevision: live.draft.revision, assistantSchemaSettings: next }
+        { workspaceRevision: live.draft.revision, assistantSchemaSettings: next, basis }
       );
       return {
         kind: 'schema' as const,
@@ -355,8 +425,156 @@ export function createAssistantSchemaSettingsService(
         schemaHash: applied.schemaHash,
         changes: diffYSchemas(live.schema, applied.schema),
         impact,
+        snapshot,
         reused: result.outcome === 'reused',
       };
+    },
+    /** Human-only confirmation applies structure, never content or a Commit. */
+    applyToDraft: async (id: string) => {
+      if (actor.kind !== 'human')
+        throw new StudioError('FORBIDDEN', 'Saving Schema to Draft requires a human principal.');
+      const initial = await findWorkspaceDraft(db, projectId, workspaceId);
+      if (!initial?.workspace_state)
+        throw new StudioError('NOT_FOUND', 'Workspace is unavailable.');
+      const { basis } = workspaceAuthoringState(initial.workspace_state);
+      const saved = await transactWorkspaceAuthoring(
+        db,
+        { projectId, workspaceId, refName: basis.refName },
+        async (tx, draft) => {
+          if ((await assertProjectAccess(c, tx, projectId, 'project:edit')) instanceof Response)
+            throw new StudioError('FORBIDDEN', 'Workspace edit authority changed.');
+          const workspace = draft.workspace_state!;
+          const record = owned(workspace.assistantSchemaSettings, actor, conversationId);
+          if (
+            record.settingsId !== id ||
+            !['generated', 'applied'].includes(record.status) ||
+            !record.snapshot
+          )
+            throw new StudioError(
+              'CONFLICT',
+              'Generate the confirmed Schema snapshot before saving.'
+            );
+          const binding = (workspace.schemaBindings as Record<string, unknown>[] | undefined)?.[0];
+          if (record.status === 'applied') {
+            if (
+              binding?.compositionId !== record.snapshot.compositionId ||
+              binding?.compositionRevision !== record.snapshot.compositionRevision ||
+              binding?.compositionHash !== record.snapshot.compositionHash ||
+              binding?.schemaHash !== record.snapshot.schemaHash
+            )
+              throw new StudioError(
+                'CONFLICT',
+                'The Schema binding changed after saving. Refresh the candidate.'
+              );
+            return { workspace: null, value: schemaSettingsView(record) };
+          }
+          const live = await currentBasis(tx, projectId, workspaceId);
+          const candidate = parseWorkspaceSchemaEditCandidate(workspace.schemaEditCandidate);
+          if (
+            live.schemaHash !== record.schemaHash ||
+            live.bindingHash !== record.bindingHash ||
+            live.contentHash !== record.contentHash ||
+            live.refHead !== record.refHead ||
+            candidate.candidateId !== record.candidateId ||
+            candidate.revision !== record.candidateRevision
+          )
+            throw new StudioError(
+              'CONFLICT',
+              'Schema, content or candidate changed. Refresh before saving to Draft.'
+            );
+          const source = {
+            kind: 'studio' as const,
+            candidateIds: record.candidateIds,
+            schemaEditCandidate: {
+              candidateId: candidate.candidateId,
+              revision: candidate.revision,
+            },
+          };
+          const preview = await previewStudio(c, tx, projectId, {
+            workspaceId,
+            candidateIds: source.candidateIds,
+            schemaEditCandidate: source.schemaEditCandidate,
+          });
+          if (!preview.adoption.allowed)
+            throw new StudioError('FORBIDDEN', 'Schema sources are no longer authorized.');
+          if (!preview.report.valid || !preview.impact?.canAdopt)
+            throw new StudioError(
+              'REVIEW_REQUIRED',
+              'Resolve incompatible content or migration requirements before saving to Draft.',
+              { impact: preview.impact }
+            );
+          const snapshot = await findYSchemaCompositionSnapshot(tx, {
+            project_id: projectId,
+            composition_id: record.snapshot.compositionId,
+            composition_revision: record.snapshot.compositionRevision,
+            compiled_schema_hash: record.snapshot.schemaHash,
+          });
+          if (
+            !snapshot ||
+            snapshot.compositionHash !== record.snapshot.compositionHash ||
+            preview.schemaHash !== record.snapshot.schemaHash ||
+            (await sha256CompositionValue(normalizeYSchemaObject(snapshot.schemaJson))) !==
+              record.snapshot.schemaHash
+          )
+            throw new StudioError(
+              'CONFLICT',
+              'The exact generated Schema snapshot failed verification.'
+            );
+          const next = Stored.parse({
+            ...record,
+            status: 'applied',
+            workspaceRevision: draft.revision + 1,
+            application: {
+              workspaceRevision: draft.revision + 1,
+              ready: preview.impact.content.ready === true,
+              issues: preview.impact.content.issues,
+            },
+          });
+          const { schemaPending: _pending, ...unchanged } = workspace;
+          return {
+            workspace: {
+              ...unchanged,
+              updatedAt: new Date().toISOString(),
+              assistantSchemaSettings: next,
+              schemaBindings: [
+                {
+                  canonicalName: record.snapshot.compositionId,
+                  schemaName: preview.schema.name,
+                  version: String(record.snapshot.compositionRevision),
+                  rootKey: schemaRootKeyFromBinding(binding),
+                  mode: resolveWorkspaceSchemaBindingMode({ source: 'workspace_schema' }),
+                  ...record.snapshot,
+                  studioSources: preview.sources,
+                },
+              ],
+              schemaPreparations: [
+                ...(Array.isArray(workspace.schemaPreparations)
+                  ? workspace.schemaPreparations
+                  : []),
+                {
+                  requestId: `assistant-schema:${record.settingsId}`,
+                  source,
+                  requestDigest: await sha256CompositionValue({
+                    settingsId: record.settingsId,
+                    confirmationDigest: record.confirmationDigest,
+                    snapshot: record.snapshot,
+                    actor,
+                  }),
+                  schemaHash: record.snapshot.schemaHash,
+                  workspaceRevision: draft.revision + 1,
+                  compositionRevision:
+                    workspaceAuthoringState(workspace).ledger.compositionRevision,
+                  actor,
+                  kind: 'schema_only',
+                  ready: next.application!.ready,
+                },
+              ],
+            },
+            value: schemaSettingsView(next),
+          };
+        }
+      );
+      return saved.value;
     },
   };
 }

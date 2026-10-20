@@ -203,7 +203,7 @@ export async function runAssistantProvider(
         await input.emit({
           type: 'text',
           content:
-            'Review the Schema settings above the composer, then confirm to generate a candidate. Nothing has been applied.',
+            'A Schema structure candidate is shown in the changes area. Review its attributes, then click Save Schema to Draft. This explicit human action saves the snapshot, updates the Draft binding and syncs Studio without filling content or committing. Nothing has been applied yet.',
         });
         await input.emit({ type: 'done', reason: 'awaiting_confirmation' });
         return;

@@ -4,10 +4,14 @@ import { applyWorkspaceSchemaYOps } from '@t3x-dev/core';
 import {
   type AnyDB,
   findWorkspaceDraft,
+  findYSchemaCompositionSnapshot,
   insertBranch,
   insertConversation,
   insertProject,
   insertTurn,
+  listSchemaStudioCandidates,
+  saveYSchemaCompositionSnapshot,
+  transactWorkspaceAuthoring,
   upsertWorkspaceDraft,
   upsertYSchemaArtifactVersion,
 } from '@t3x-dev/storage';
@@ -48,6 +52,7 @@ vi.mock('../lib/project-access', () => ({
     denied.has(id) ? new Response('denied', { status: 403 }) : { projectId: id },
 }));
 
+import { resolveWorkspaceYSchema } from '../lib/workspace-yschema';
 import { schemaStudioRoutes } from '../routes/schema-studio.openapi';
 import { workspaceAssistantRoutes } from '../routes/workspace-assistant.openapi';
 
@@ -94,7 +99,9 @@ async function fixture() {
     target_branch: workspaceId,
     workspace_state: {
       targetBranch: workspaceId,
-      schemaBindings: [{ canonicalName: base.name, version: base.version, mode: 'pinned' }],
+      schemaBindings: [
+        { canonicalName: base.name, version: base.version, mode: 'pinned', rootKey: 'candidate' },
+      ],
     },
   });
   await initializeWorkspaceAuthoring(db, {
@@ -178,7 +185,358 @@ beforeAll(async () => {
 });
 afterAll(async () => cleanup?.());
 
+it('uses the bound prepared snapshot, asks before discarding a newer Studio edit, and synchronizes a real snapshot', async () => {
+  const ws = await fixture();
+  const source = (await listSchemaStudioCandidates(db, projectId))[0]!;
+  const bound = normalizeYSchemaObject({
+    ...base,
+    nodes: {
+      ...base.nodes,
+      requirements: {
+        repeated: true,
+        slots: {
+          title: { type: 'string', maxLength: 80 },
+          inherited: { type: 'string', gapQuestion: 'Preserve this' },
+        },
+        requiredSlots: ['title'],
+      },
+    },
+  });
+  const boundHash = await sha256CompositionValue(bound);
+  const compositionHash = await sha256CompositionValue({ boundHash, ws });
+  const binding = {
+    compositionId: 'prepared:' + compositionHash,
+    compositionRevision: 1,
+    compositionHash,
+    schemaHash: boundHash,
+    canonicalName: 'prepared:' + compositionHash,
+    version: '1',
+  };
+  const sourceDescriptor = { kind: 'studio', candidateIds: [source.id] };
+  const selectionHash = await sha256CompositionValue({
+    apiVersion: 't3x.dev/studio-selection/v1',
+    projectId,
+    sources: [
+      {
+        projectId: source.sourceProjectId,
+        canonicalName: source.canonicalName,
+        version: source.version,
+        artifactVersionId: source.artifactVersionId,
+        hash: source.artifactHash,
+      },
+    ],
+  });
+  await saveYSchemaCompositionSnapshot(db, {
+    snapshot_id: 'bound-' + ws,
+    project_id: projectId,
+    composition_id: binding.compositionId,
+    composition_revision: 1,
+    composition_hash: compositionHash,
+    compiled_schema_hash: boundHash,
+    compiler_version: 'test',
+    // Legacy snapshots did not persist sources: recover the matching receipt, not the latest one.
+    manifest_json: { selectionHash },
+    schema_json: { ...bound },
+    render_plan_json: [],
+    origins_json: {},
+  });
+  // Bind using the normal Workspace persistence fixture, retaining its exact preparation receipt.
+  await transactWorkspaceAuthoring(
+    db,
+    { projectId, workspaceId: ws, refName: ws },
+    async (_tx, current) => ({
+      workspace: {
+        ...current.workspace_state,
+        schemaBindings: [binding],
+        schemaPreparations: [
+          { schemaHash: boundHash, source: sourceDescriptor },
+          {
+            schemaHash: 'sha256:' + '0'.repeat(64),
+            source: { kind: 'studio', candidateIds: ['unrelated-latest-source'] },
+          },
+        ],
+      },
+      value: null,
+    })
+  );
+  const studio = await app.request(
+    '/v1/projects/' + projectId + '/schema-studio/edit-candidates/' + ws,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspaceId: ws,
+        candidateIds: [source.id],
+        ifRevision: 0,
+        retryKey: 'newer-studio-' + ws,
+        intent: 'Unrelated unadopted Studio work',
+        origin: 'studio',
+        localContribution: { nodes: { unrelated: { slots: {} } } },
+      }),
+    }
+  );
+  expect(studio.status).toBe(200);
+  const existing = (await studio.json()).data.candidate;
+  const before = (await findWorkspaceDraft(db, projectId, ws))!;
+  const owner = {
+    ...slot,
+    nodePath: 'requirements',
+    name: 'owner',
+    definition: { type: 'string' },
+    required: true,
+  };
+  const shown = await run(ws, (service) => service.show(owner, 'prepared-owner-' + ws));
+  expect(shown.studioConflict).toEqual({
+    candidateId: existing.candidateId,
+    revision: existing.revision,
+  });
+  expect(
+    (await findWorkspaceDraft(db, projectId, ws))!.workspace_state!.schemaEditCandidate
+  ).toEqual(existing);
+  await expect(
+    run(ws, (service) => service.confirm(shown.settingsId, shown.revision, owner))
+  ).rejects.toThrow('explicitly confirm');
+  const endpoint =
+    '/v1/projects/' + projectId + '/workspaces/' + ws + '/source-chat/assistant/schema-settings';
+  const request = {
+    conversationId: 'conversation',
+    settingsId: shown.settingsId,
+    ifRevision: shown.revision,
+    settings: owner,
+    generateSnapshot: true,
+  };
+  const declined = await app.request(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  expect(declined.status).toBe(409);
+  const response = await app.request(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...request, discardStudioCandidate: true }),
+  });
+  expect(response.status, await response.clone().text()).toBe(200);
+  const generated = (await response.json()).data;
+  expect(generated.status).toBe('generated');
+  expect(generated.snapshot).toBeDefined();
+  const after = (await findWorkspaceDraft(db, projectId, ws))!;
+  const edit = after.workspace_state!.schemaEditCandidate as typeof existing;
+  expect(edit.authoringDraft.base.compositionId).toBe(binding.compositionId);
+  const replayed = await applyWorkspaceSchemaYOps(bound, edit.authoringDraft.effect.operations);
+  expect(replayed.schema.nodes.requirements.slots!.owner).toEqual({ type: 'string' });
+  expect(replayed.schema.nodes.requirements.requiredSlots).toContain('owner');
+  expect(replayed.schema.nodes.requirements.slots!.inherited).toEqual(
+    bound.nodes.requirements.slots!.inherited
+  );
+  expect(replayed.schema.nodes.unrelated).toBeUndefined();
+  const frozen = await findYSchemaCompositionSnapshot(db, {
+    project_id: projectId,
+    composition_id: generated.snapshot!.compositionId,
+    composition_revision: 1,
+    compiled_schema_hash: replayed.schemaHash,
+  });
+  expect(frozen?.schemaJson).toEqual(replayed.schema);
+  expect(after.workspace_state!.schemaBindings).toEqual(before.workspace_state!.schemaBindings);
+  expect(currentComposition(workspaceAuthoringState(after.workspace_state!).ledger)).toEqual(
+    currentComposition(workspaceAuthoringState(before.workspace_state!).ledger)
+  );
+  const preview = await app.request('/v1/projects/' + projectId + '/schema-studio/preview', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      workspaceId: ws,
+      candidateIds: [source.id],
+      schemaEditCandidate: { candidateId: edit.candidateId, revision: edit.revision },
+    }),
+  });
+  expect(preview.status, await preview.clone().text()).toBe(200);
+  expect((await preview.json()).data.schemaHash).toBe(generated.snapshot!.schemaHash);
+  // Lost responses may retry the original button request, without another revision/write.
+  const revision = after.revision;
+  const repeated = await app.request(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...request, discardStudioCandidate: true }),
+  });
+  expect(repeated.status).toBe(200);
+  expect((await findWorkspaceDraft(db, projectId, ws))!.revision).toBe(revision);
+  const restored = await app.request(
+    '/v1/projects/' + projectId + '/schema-studio/edit-candidates/' + ws
+  );
+  expect(restored.status).toBe(200);
+  expect((await restored.json()).data.baseDefinition).toEqual(bound);
+  // Further Studio edits must keep replaying against the bound snapshot, not the original Starter.
+  const nextSchema = structuredClone(replayed.schema);
+  nextSchema.nodes.requirements.slots!.owner.maxLength = 40;
+  const saved = await app.request(
+    '/v1/projects/' + projectId + '/schema-studio/edit-candidates/' + ws,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspaceId: ws,
+        candidateIds: [source.id],
+        ifRevision: edit.revision,
+        retryKey: 'studio-after-snapshot-' + ws,
+        origin: 'studio',
+        intent: 'Constrain owner length',
+        localContribution: {},
+        schemaDefinition: nextSchema,
+        baseSchemaHash: boundHash,
+      }),
+    }
+  );
+  expect(saved.status, await saved.clone().text()).toBe(200);
+  const savedEdit = (await saved.json()).data.candidate;
+  expect(savedEdit.authoringDraft.base.compositionId).toBe(binding.compositionId);
+  expect(savedEdit.baseDefinition).toEqual(bound);
+  const edited = await applyWorkspaceSchemaYOps(bound, savedEdit.authoringDraft.effect.operations);
+  expect(edited.schema.nodes.requirements.slots!.owner.maxLength).toBe(40);
+  expect(edited.schema.nodes.requirements.slots!.inherited).toEqual(
+    bound.nodes.requirements.slots!.inherited
+  );
+});
+
 describe('Assistant Schema settings using Studio', () => {
+  async function seedProduct(ws: string, extra: Record<string, unknown> = {}) {
+    const draft = (await findWorkspaceDraft(db, projectId, ws))!;
+    await publishWorkspaceAuthoringAction(db, {
+      projectId,
+      workspaceId: ws,
+      actor,
+      channel: 'manual',
+      actionId: 'product-content',
+      operations: [
+        { set: { path: 'candidate', value: { product: { title: 'Product', ...extra } } } },
+      ],
+      expectedRevision: workspaceAuthoringState(draft.workspace_state!).ledger.compositionRevision,
+      expectedWorkspaceRevision: draft.revision,
+      expectedRefHead: null,
+    });
+  }
+  it('saves and binds the exact snapshot directly, retaining content and reporting required gaps', async () => {
+    const ws = await fixture();
+    await seedProduct(ws);
+    const before = (await findWorkspaceDraft(db, projectId, ws))!;
+    const owner = { ...slot, name: 'owner', required: true, definition: { type: 'string' } };
+    const shown = await run(ws, (s) => s.show(owner, 'direct-save-' + ws));
+    const endpoint =
+      '/v1/projects/' + projectId + '/workspaces/' + ws + '/source-chat/assistant/schema-settings';
+    const payload = {
+      conversationId: 'conversation',
+      settingsId: shown.settingsId,
+      ifRevision: shown.revision,
+      settings: owner,
+      applyToDraft: true,
+    };
+    const response = await app.request(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    const saved = (await response.json()).data;
+    expect(saved.status).toBe('applied');
+    expect(saved.application.ready).toBe(false);
+    expect(saved.application.issues).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: 'product/owner' })])
+    );
+    const after = (await findWorkspaceDraft(db, projectId, ws))!;
+    expect(after.workspace_state!.schemaBindings).toEqual([
+      expect.objectContaining(saved.snapshot),
+    ]);
+    expect(after.workspace_state!.authoringLedger).toEqual(before.workspace_state!.authoringLedger);
+    expect(after.workspace_state!.authoringBasis).toEqual(before.workspace_state!.authoringBasis);
+    expect(after.status).toBe('editing');
+    const resolved = await resolveWorkspaceYSchema(after.workspace_state!, db, projectId);
+    expect(resolved.schema!.nodes.product.requiredSlots).toContain('owner');
+    expect(resolved.schema!.nodes.product.slots!.title).toEqual(base.nodes.product.slots!.title);
+    const retry = await app.request(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    expect(retry.status, await retry.clone().text()).toBe(200);
+    expect((await findWorkspaceDraft(db, projectId, ws))!.revision).toBe(after.revision);
+    // Subsequent requests use the newly bound snapshot, not the initial Starter.
+    const next = await run(ws, (s) => s.show({ ...slot, name: 'next_slot' }, 'after-apply-' + ws));
+    expect(next.schemaHash).toBe(saved.snapshot.schemaHash);
+    expect(next.studioConflict).toBeUndefined();
+  });
+  it('requires explicit Studio replacement and then saves the replacement directly to Draft', async () => {
+    const ws = await fixture();
+    const first = await run(ws, (s) => s.show(slot, 'first-' + ws));
+    await run(ws, (s) => s.confirm(first.settingsId, first.revision, slot));
+    await run(ws, (s) => s.propose(first.settingsId));
+    const owner = { ...slot, name: 'owner' };
+    const shown = await run(ws, (s) => s.show(owner, 'replace-' + ws));
+    const endpoint =
+      '/v1/projects/' + projectId + '/workspaces/' + ws + '/source-chat/assistant/schema-settings';
+    const payload = {
+      conversationId: 'conversation',
+      settingsId: shown.settingsId,
+      ifRevision: shown.revision,
+      settings: owner,
+      applyToDraft: true,
+    };
+    const before = (await findWorkspaceDraft(db, projectId, ws))!;
+    expect(
+      (
+        await app.request(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      ).status
+    ).toBe(409);
+    expect((await findWorkspaceDraft(db, projectId, ws))!.revision).toBe(before.revision);
+    const response = await app.request(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, discardStudioCandidate: true }),
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    const after = (await findWorkspaceDraft(db, projectId, ws))!;
+    const resolved = await resolveWorkspaceYSchema(after.workspace_state!, db, projectId);
+    expect(resolved.schema!.nodes.product.slots!.owner).toBeDefined();
+    expect(resolved.schema!.nodes.product.slots!.advantage).toBeUndefined();
+    expect(after.workspace_state!.authoringLedger).toEqual(before.workspace_state!.authoringLedger);
+  });
+  it('does not bind incompatible content, stale content or lost authority', async () => {
+    for (const kind of ['incompatible', 'stale', 'permission']) {
+      const ws = await fixture();
+      await seedProduct(ws, kind === 'incompatible' ? { advantage: 'not a number' } : {});
+      const settings = kind === 'incompatible' ? { ...slot, definition: { type: 'number' } } : slot;
+      const shown = await run(ws, (s) => s.show(settings, kind + ws));
+      await run(ws, (s) => s.confirm(shown.settingsId, shown.revision, settings));
+      await run(ws, (s) => s.propose(shown.settingsId));
+      const before = (await findWorkspaceDraft(db, projectId, ws))!;
+      if (kind === 'stale')
+        await publishWorkspaceAuthoringAction(db, {
+          projectId,
+          workspaceId: ws,
+          actor,
+          channel: 'manual',
+          actionId: 'later-content',
+          operations: [{ set: { path: 'candidate/product/title', value: 'New title' } }],
+          expectedRevision: workspaceAuthoringState(before.workspace_state!).ledger
+            .compositionRevision,
+          expectedWorkspaceRevision: before.revision,
+          expectedRefHead: null,
+        });
+      if (kind === 'permission') denied.add(projectId);
+      try {
+        await expect(run(ws, (s) => s.applyToDraft(shown.settingsId))).rejects.toThrow();
+      } finally {
+        denied.delete(projectId);
+      }
+      expect(
+        (await findWorkspaceDraft(db, projectId, ws))!.workspace_state!.schemaBindings
+      ).toEqual(before.workspace_state!.schemaBindings);
+      expect((await run(ws, (s) => s.read()))!.status).toBe('generated');
+    }
+  });
   it('streams a settings card, accepts human confirmation, then resumes the AI with the confirmed ID', async () => {
     const ws = await fixture();
     const conversation = await insertConversation(db, { projectId, title: 'Schema conversation' });

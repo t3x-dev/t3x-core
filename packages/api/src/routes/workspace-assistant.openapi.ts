@@ -349,6 +349,9 @@ workspaceAssistantRoutes.post(settingsPath, async (c) => {
       settingsId: z.string().min(1),
       ifRevision: z.number().int().positive(),
       settings: AssistantSchemaSettingsInputSchema.nullable(),
+      generateSnapshot: z.boolean().default(false),
+      applyToDraft: z.boolean().default(false),
+      discardStudioCandidate: z.boolean().default(false),
     })
     .strict()
     .parse(await c.req.json());
@@ -362,15 +365,23 @@ workspaceAssistantRoutes.post(settingsPath, async (c) => {
   });
   if (principal.actor.kind !== 'human')
     return errorResponse(c, 'FORBIDDEN', 'Settings confirmation requires a human principal.');
-  const record = await createAssistantSchemaSettingsService(
+  const service = createAssistantSchemaSettingsService(
     c,
     db,
     projectId,
     workspaceId,
     principal.actor,
     input.conversationId
-  ).confirm(input.settingsId, input.ifRevision, input.settings);
-  return c.json({ success: true, data: record });
+  );
+  if ((input.generateSnapshot || input.applyToDraft) && !input.settings)
+    return errorResponse(c, 'INVALID_REQUEST', 'Snapshot generation requires confirmed settings.');
+  await service.confirm(input.settingsId, input.ifRevision, input.settings, {
+    discardStudioCandidate: input.discardStudioCandidate,
+  });
+  if (input.generateSnapshot || input.applyToDraft) await service.propose(input.settingsId);
+  if (input.applyToDraft) await service.applyToDraft(input.settingsId);
+  const record = await service.read();
+  return c.json({ success: true, data: record ? schemaSettingsView(record) : null });
 });
 const recovery = createRoute({
   method: 'get',
