@@ -1,7 +1,7 @@
 'use client';
 
 import type { WorkspaceAuthoringView } from '@t3x-dev/api-client';
-import { ChevronDown, ChevronRight, FileText, Folder, Layers } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileText, Folder, Layers, PanelLeftClose } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { SchemaDefinitionTree } from '@/components/schemas/SchemaDefinitionWorkbench';
@@ -25,6 +25,7 @@ export function WorkspaceCurrentDraft({
   enabled,
   stagedCount = 0,
   authoring,
+  onCollapse,
 }: {
   candidate: WorkspaceCandidate;
   current: unknown;
@@ -34,6 +35,7 @@ export function WorkspaceCurrentDraft({
   enabled: boolean;
   stagedCount?: number;
   authoring?: Pick<WorkspaceAuthoringView, 'workspaceRevision' | 'currentSchema'> | null;
+  onCollapse?: () => void;
 }) {
   const [expanded, setExpanded] = useState(true);
   const schema = useWorkspaceDraftSchema(candidate, authoring);
@@ -60,6 +62,17 @@ export function WorkspaceCurrentDraft({
           <h2>Current Draft</h2>
         </button>
         {revision !== undefined ? <span>r{revision}</span> : null}
+        {onCollapse ? (
+          <button
+            type="button"
+            aria-label="Collapse current Draft panel"
+            title="Collapse current Draft"
+            className={styles.currentDraftCollapse}
+            onClick={onCollapse}
+          >
+            <PanelLeftClose aria-hidden="true" />
+          </button>
+        ) : null}
         <small>Read-only</small>
       </header>
       {expanded ? (

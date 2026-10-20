@@ -2590,6 +2590,9 @@
         calc(100% - var(--draft-effective-width) - 320px)
       );
   }
+  .composeBoard[data-draft-collapsed] {
+    --draft-effective-width: 48px;
+  }
 }
 .discussionResize {
   grid-column: 3;
@@ -2693,6 +2696,48 @@
   width: 13px;
   height: 13px;
   flex: none;
+}
+.currentDraftHeader > .currentDraftCollapse {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  place-items: center;
+  margin-right: -6px;
+  border-radius: 4px;
+  color: var(--text-tertiary);
+}
+.currentDraftHeader > .currentDraftCollapse:hover {
+  background: var(--surface-app);
+  color: var(--text-primary);
+}
+.currentDraftRail {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  border-radius: 6px;
+  padding: 10px 0;
+  background: var(--surface-panel);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+}
+.currentDraftRail:hover {
+  color: var(--text-primary);
+}
+.currentDraftRail svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+.currentDraftRail > span {
+  writing-mode: vertical-rl;
+  white-space: nowrap;
+}
+.composeBoard[data-draft-collapsed] .currentDraftSidebar {
+  padding-right: 4px;
 }
 .currentDraftHeader > span,
 .currentDraftHeader > small {
@@ -2798,5 +2843,16 @@ button.currentDraftRow:hover {
     border-right: 0;
     border-bottom: 1px solid var(--stroke-divider);
     padding-left: 12px;
+  }
+  .composeBoard[data-draft-collapsed] {
+    grid-template-rows: auto auto auto minmax(440px, 1fr) minmax(340px, 1fr);
+  }
+  .currentDraftRail {
+    flex-direction: row;
+    justify-content: flex-start;
+    padding: 8px 12px;
+  }
+  .currentDraftRail > span {
+    writing-mode: horizontal-tb;
   }
 }

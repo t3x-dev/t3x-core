@@ -28,6 +28,7 @@ import {
   ListTree,
   MessageSquare,
   Minus,
+  PanelLeftOpen,
   Pencil,
   Percent,
   Play,
@@ -542,6 +543,7 @@ function ComposeSurface({
   const dragOrigin = useRef<{ x: number; width: number } | null>(null);
   const draftDragOrigin = useRef<{ x: number; width: number } | null>(null);
   const [draftWidth, setDraftWidth] = useState(260);
+  const [draftCollapsed, setDraftCollapsed] = useState(false);
   const [discussionWidth, setDiscussionWidth] = useState(440);
   const [resizing, setResizing] = useState(false);
   useEffect(() => {
@@ -550,10 +552,19 @@ function ComposeSurface({
       if (stored >= 320 && stored <= 680) setDiscussionWidth(stored);
       const draftStored = Number(localStorage.getItem('t3x-workspace-draft-width'));
       if (draftStored >= 180 && draftStored <= 560) setDraftWidth(draftStored);
+      if (localStorage.getItem('t3x-workspace-draft-collapsed') === 'true') setDraftCollapsed(true);
     } catch {
       /* Storage can be unavailable in private browser contexts. */
     }
   }, []);
+  const toggleDraft = (collapsed: boolean) => {
+    setDraftCollapsed(collapsed);
+    try {
+      localStorage.setItem('t3x-workspace-draft-collapsed', String(collapsed));
+    } catch {
+      /* Collapsing still works without storage. */
+    }
+  };
   const resizeDiscussion = (width: number) => {
     const actualDraftWidth =
       boardRef.current?.querySelector<HTMLElement>('[aria-label="Current Draft navigation"]')
@@ -718,6 +729,7 @@ function ComposeSurface({
         } as CSSProperties
       }
       data-resizing={resizing || undefined}
+      data-draft-collapsed={draftCollapsed || undefined}
       className={composeStyles.composeBoard}
     >
       <WorkspaceStageHeader
@@ -801,70 +813,89 @@ function ComposeSurface({
           }
         }}
       />
-      {/* biome-ignore lint/a11y/useSemanticElements: This is an interactive window splitter, not a thematic break. */}
-      <div
-        role="separator"
-        aria-label="Resize current Draft panel"
-        aria-orientation="vertical"
-        aria-valuemin={180}
-        aria-valuemax={560}
-        aria-valuenow={draftWidth}
-        tabIndex={0}
-        className={`${composeStyles.discussionResize} ${composeStyles.draftResize}`}
-        onPointerDown={(event) => {
-          if (event.button !== 0) return;
-          event.preventDefault();
-          const sidebar = boardRef.current?.querySelector(
-            '[aria-label="Current Draft navigation"]'
-          );
-          draftDragOrigin.current = {
-            x: event.clientX,
-            width: sidebar?.getBoundingClientRect().width || draftWidth,
-          };
-          event.currentTarget.setPointerCapture(event.pointerId);
-          setResizing(true);
-        }}
-        onPointerMove={(event) => {
-          if (draftDragOrigin.current)
-            resizeDraft(draftDragOrigin.current.width + event.clientX - draftDragOrigin.current.x);
-        }}
-        onPointerUp={(event) => {
-          draftDragOrigin.current = null;
-          setResizing(false);
-          if (event.currentTarget.hasPointerCapture(event.pointerId))
-            event.currentTarget.releasePointerCapture(event.pointerId);
-        }}
-        onLostPointerCapture={() => {
-          draftDragOrigin.current = null;
-          setResizing(false);
-        }}
-        onPointerCancel={() => {
-          draftDragOrigin.current = null;
-          setResizing(false);
-        }}
-        onDoubleClick={() => resizeDraft(260)}
-        onKeyDown={(event) => {
-          if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      {draftCollapsed ? null : (
+        // biome-ignore lint/a11y/useSemanticElements: This is an interactive window splitter, not a thematic break.
+        <div
+          role="separator"
+          aria-label="Resize current Draft panel"
+          aria-orientation="vertical"
+          aria-valuemin={180}
+          aria-valuemax={560}
+          aria-valuenow={draftWidth}
+          tabIndex={0}
+          className={`${composeStyles.discussionResize} ${composeStyles.draftResize}`}
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
             event.preventDefault();
-            resizeDraft(draftWidth + (event.key === 'ArrowRight' ? 20 : -20));
-          } else if (event.key === 'Home' || event.key === 'End') {
-            event.preventDefault();
-            resizeDraft(event.key === 'Home' ? 180 : 560);
-          }
-        }}
-      />
-      <aside aria-label="Current Draft navigation" className={composeStyles.currentDraftSidebar}>
-        <WorkspaceCurrentDraft
-          key={candidate.id}
-          candidate={candidate}
-          current={workingCurrent}
-          revision={activity.compositionRevision}
-          loading={activity.loading}
-          error={activity.error}
-          enabled={activity.enabled}
-          stagedCount={staged.length}
-          authoring={activity.view}
+            const sidebar = boardRef.current?.querySelector(
+              '[aria-label="Current Draft navigation"]'
+            );
+            draftDragOrigin.current = {
+              x: event.clientX,
+              width: sidebar?.getBoundingClientRect().width || draftWidth,
+            };
+            event.currentTarget.setPointerCapture(event.pointerId);
+            setResizing(true);
+          }}
+          onPointerMove={(event) => {
+            if (draftDragOrigin.current)
+              resizeDraft(
+                draftDragOrigin.current.width + event.clientX - draftDragOrigin.current.x
+              );
+          }}
+          onPointerUp={(event) => {
+            draftDragOrigin.current = null;
+            setResizing(false);
+            if (event.currentTarget.hasPointerCapture(event.pointerId))
+              event.currentTarget.releasePointerCapture(event.pointerId);
+          }}
+          onLostPointerCapture={() => {
+            draftDragOrigin.current = null;
+            setResizing(false);
+          }}
+          onPointerCancel={() => {
+            draftDragOrigin.current = null;
+            setResizing(false);
+          }}
+          onDoubleClick={() => resizeDraft(260)}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+              event.preventDefault();
+              resizeDraft(draftWidth + (event.key === 'ArrowRight' ? 20 : -20));
+            } else if (event.key === 'Home' || event.key === 'End') {
+              event.preventDefault();
+              resizeDraft(event.key === 'Home' ? 180 : 560);
+            }
+          }}
         />
+      )}
+      <aside aria-label="Current Draft navigation" className={composeStyles.currentDraftSidebar}>
+        {draftCollapsed ? (
+          <button
+            type="button"
+            aria-label="Expand current Draft panel"
+            title="Expand current Draft"
+            className={composeStyles.currentDraftRail}
+            onClick={() => toggleDraft(false)}
+          >
+            <PanelLeftOpen aria-hidden="true" />
+            <Layers aria-hidden="true" />
+            <span>Current Draft</span>
+          </button>
+        ) : (
+          <WorkspaceCurrentDraft
+            key={candidate.id}
+            candidate={candidate}
+            current={workingCurrent}
+            revision={activity.compositionRevision}
+            loading={activity.loading}
+            error={activity.error}
+            enabled={activity.enabled}
+            stagedCount={staged.length}
+            authoring={activity.view}
+            onCollapse={() => toggleDraft(true)}
+          />
+        )}
       </aside>
       <main className={composeStyles.composeMain}>
         {activity.newActivity ? (

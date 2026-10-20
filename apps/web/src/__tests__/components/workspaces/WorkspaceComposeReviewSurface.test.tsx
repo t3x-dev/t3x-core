@@ -164,6 +164,7 @@ vi.mock('next/navigation', () => ({
 describe('WorkspaceComposeReviewSurface composer', () => {
   beforeEach(() => {
     localStorage.removeItem('t3x-workspace-draft-width');
+    localStorage.removeItem('t3x-workspace-draft-collapsed');
     localStorage.removeItem('t3x-workspace-discussion-width');
     snapshotMocks.list.mockReset().mockResolvedValue({ snapshots: [] });
     snapshotMocks.detail.mockReset();
@@ -182,8 +183,15 @@ describe('WorkspaceComposeReviewSurface composer', () => {
   });
 
   function renderResizableCompose() {
+    return {
+      ...renderCompose(),
+      splitter: screen.getByRole('separator', { name: 'Resize current Draft panel' }),
+    };
+  }
+
+  function renderCompose() {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
-    const view = render(
+    return render(
       <WorkspaceComposeReviewSurface
         candidate={candidate}
         controller={
@@ -197,10 +205,6 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         onModeChange={vi.fn()}
       />
     );
-    return {
-      ...view,
-      splitter: screen.getByRole('separator', { name: 'Resize current Draft panel' }),
-    };
   }
 
   it('resizes the Draft rail with keyboard controls, resets it, and restores its saved width', () => {
@@ -219,6 +223,23 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     fireEvent.keyDown(splitter, { key: 'ArrowLeft' });
     unmount();
     expect(renderResizableCompose().splitter).toHaveAttribute('aria-valuenow', '240');
+  });
+
+  it('collapses the Draft rail to a narrow strip and remembers the choice', () => {
+    const { splitter, unmount } = renderResizableCompose();
+    const board = splitter.parentElement!;
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse current Draft panel' }));
+    expect(board).toHaveAttribute('data-draft-collapsed', 'true');
+    expect(screen.queryByRole('region', { name: 'Current Draft' })).toBeNull();
+    expect(screen.queryByRole('separator', { name: 'Resize current Draft panel' })).toBeNull();
+    expect(localStorage.getItem('t3x-workspace-draft-collapsed')).toBe('true');
+    unmount();
+    renderCompose();
+    expect(screen.queryByRole('region', { name: 'Current Draft' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Expand current Draft panel' }));
+    expect(screen.getByRole('region', { name: 'Current Draft' })).toBeVisible();
+    expect(screen.getByRole('separator', { name: 'Resize current Draft panel' })).toBeVisible();
+    expect(localStorage.getItem('t3x-workspace-draft-collapsed')).toBe('false');
   });
 
   it('drags the Draft divider and stops resizing on release or cancellation', () => {
