@@ -130,7 +130,13 @@ describe('ProjectDirectoryPage', () => {
       '/settings/provider-credentials?owner=t3x-dev'
     );
     expect(screen.queryByRole('link', { name: 'Docs' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Templates' })).not.toBeInTheDocument();
+    const header = within(screen.getByRole('link', { name: 'T3X home' }).closest('header')!);
+    expect(header.getByRole('link', { name: 'Explore' })).toHaveAttribute('href', '/templates');
+    expect(header.queryByRole('link', { name: 'New repository' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'New repository' })).toHaveAttribute(
+      'href',
+      '/t3x-dev/new'
+    );
     expect(screen.queryByText('hi@t3x.dev')).not.toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /prd-workflow/i })[0]).toHaveAttribute(
       'href',

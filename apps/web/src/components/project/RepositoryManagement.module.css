@@ -39,10 +39,18 @@
 }
 
 .shell {
+  display: flex;
+  flex-direction: column;
   height: 100dvh;
-  overflow: auto;
+  overflow: hidden;
   background: var(--surface-panel);
   color: var(--text-primary);
+}
+
+.content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .container {

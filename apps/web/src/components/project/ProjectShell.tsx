@@ -69,13 +69,12 @@ export function ProjectShell({
   const returnTo = returnQuery ? `${repoPath}?${returnQuery}` : repoPath;
   const settingsHref = `${repoPath}/settings?returnTo=${encodeURIComponent(returnTo)}`;
   const actualOwner = project.namespace ?? ownerSlug;
-  const ownerLabel = actualOwner || 'Projects';
   const newRepositoryHref = actualOwner ? `/${encodeURIComponent(actualOwner)}/new` : '/';
   return (
     <div className="flex h-dvh min-h-[680px] flex-col overflow-hidden bg-[var(--surface-app)] text-[var(--text-primary)] [--text-base:14px] [--text-lg:16px] [--text-sm:13px] [--text-xs:12px]">
       <DiscoverHeader
         activeTab={activeTab}
-        owner={ownerLabel}
+        owner={actualOwner || undefined}
         projectName={project.name}
         newProjectHref={newRepositoryHref}
         repoPath={repoPath}

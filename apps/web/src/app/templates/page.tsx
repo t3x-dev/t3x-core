@@ -1,9 +1,10 @@
-import { Suspense } from 'react';
-import { TemplatesCatalogExperience } from '@/components/schemas/TemplatesCatalogExperience';
-export default function TemplatesPage() {
+import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
+
+export default function ExplorePage() {
   return (
-    <Suspense fallback={null}>
-      <TemplatesCatalogExperience />
-    </Suspense>
+    <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-[var(--surface-card)]">
+      <DiscoverHeader />
+      <main aria-label="Explore" className="min-h-0 flex-1" />
+    </div>
   );
 }

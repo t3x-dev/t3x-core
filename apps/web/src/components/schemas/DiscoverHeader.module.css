@@ -70,6 +70,11 @@
   color: var(--text-secondary);
 }
 
+.currentContext {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
 .owner svg {
   flex: none;
   width: 16px;
@@ -87,7 +92,7 @@
   line-height: inherit;
 }
 
-.visibility {
+.contextBadge {
   flex: none;
   max-width: 100%;
   padding: 1px 8px;
@@ -106,8 +111,7 @@
 }
 
 .utilities {
-  flex: 0 1 auto;
-  flex-wrap: wrap;
+  flex: none;
   gap: 8px 20px;
   min-width: 0;
   margin-left: auto;
@@ -135,6 +139,8 @@
 .create,
 .account {
   min-height: 36px;
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .search {
@@ -242,9 +248,14 @@
 
   .utilities {
     flex: 1 1 100%;
-    justify-content: space-between;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 8px;
     margin-left: 0;
+  }
+
+  .create {
+    margin-right: auto;
   }
 
   .globalNav {

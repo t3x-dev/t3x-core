@@ -395,188 +395,190 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
   const hasLoadedProjects = projectSummaries.length > 0;
 
   return (
-    <div className={cn(palette.scope, management.shell)} ref={pageRef}>
+    <div className={cn(palette.scope, management.shell)}>
       <DiscoverHeader
         owner={ownerSlug}
         namespaceTab="repositories"
         settingsHref={`/settings/provider-credentials?owner=${encodeURIComponent(ownerSlug)}`}
-        visibility={isPersonalNamespace ? 'Personal' : 'Organization'}
+        contextLabel={isPersonalNamespace ? 'Personal' : 'Organization'}
       />
 
-      <main className={cn(management.scope, management.container)}>
-        {deletedView ? (
-          <DeletedRepositoriesView namespace={ownerSlug} backHref={activeHref} />
-        ) : (
-          <>
-            <DirectoryIntroduction
-              isPersonalNamespace={isPersonalNamespace}
-              ownerSlug={ownerSlug}
-            />
-            <div className={styles.toolbar}>
-              <label className={styles.search}>
-                <span className="sr-only">Find a repository</span>
-                <Search aria-hidden="true" className="size-4" />
-                <Input
-                  type="search"
-                  aria-controls="repository-list"
-                  aria-describedby={
-                    projectSummaries.length === 50 ? 'repository-list-scope' : undefined
-                  }
-                  onChange={(event) => {
-                    setQuery(event.target.value);
-                    setRepositoriesExpanded(false);
-                  }}
-                  placeholder="Find a repository..."
-                  value={query}
-                />
-              </label>
-              <Button
-                aria-label="Refresh repositories"
-                title="Refresh repositories"
-                disabled={loading}
-                onClick={handleRefreshProjects}
-                size="icon"
-                variant="outline"
-              >
-                <RefreshCw
-                  className={cn('size-4', loading && 'animate-spin motion-reduce:animate-none')}
-                />
-              </Button>
-              <Link href={deletedHref} scroll={false} className={cn(styles.deletedLink, focusRing)}>
-                <Trash2 aria-hidden="true" className="size-4" /> Deleted repositories
-              </Link>
-              <Button asChild>
-                <Link href={newRepositoryPath} className={styles.primaryLink}>
-                  <Plus className="size-4" /> New repository
-                </Link>
-              </Button>
-            </div>
-
-            {notice && (
-              <div className={cn(management.notice, styles.notice)}>
-                <CheckCircle2 aria-hidden="true" className={cn('size-4', management.successIcon)} />
-                <output>
-                  {notice.message}{' '}
-                  {notice.deleted && (
-                    <Link href={deletedHref} scroll={false}>
-                      Manage deleted repositories
-                    </Link>
-                  )}
-                </output>
-              </div>
-            )}
-
-            {error && hasLoadedProjects && (
-              <div className={cn(management.notice, styles.refreshError)} role="alert">
-                <span>Couldn&apos;t refresh repositories. Showing the last loaded data.</span>
+      <div className={management.content} ref={pageRef}>
+        <main className={cn(management.scope, management.container)}>
+          {deletedView ? (
+            <DeletedRepositoriesView namespace={ownerSlug} backHref={activeHref} />
+          ) : (
+            <>
+              <DirectoryIntroduction
+                isPersonalNamespace={isPersonalNamespace}
+                ownerSlug={ownerSlug}
+              />
+              <div className={styles.toolbar}>
+                <label className={styles.search}>
+                  <span className="sr-only">Find a repository</span>
+                  <Search aria-hidden="true" className="size-4" />
+                  <Input
+                    type="search"
+                    aria-controls="repository-list"
+                    aria-describedby={
+                      projectSummaries.length === 50 ? 'repository-list-scope' : undefined
+                    }
+                    onChange={(event) => {
+                      setQuery(event.target.value);
+                      setRepositoriesExpanded(false);
+                    }}
+                    placeholder="Find a repository..."
+                    value={query}
+                  />
+                </label>
                 <Button
+                  aria-label="Refresh repositories"
+                  title="Refresh repositories"
                   disabled={loading}
                   onClick={handleRefreshProjects}
-                  size="sm"
-                  type="button"
+                  size="icon"
                   variant="outline"
                 >
                   <RefreshCw
                     className={cn('size-4', loading && 'animate-spin motion-reduce:animate-none')}
                   />
-                  Retry
+                </Button>
+                <Link href={deletedHref} scroll={false} className={cn(styles.deletedLink, focusRing)}>
+                  <Trash2 aria-hidden="true" className="size-4" /> Deleted repositories
+                </Link>
+                <Button asChild>
+                  <Link href={newRepositoryPath} className={styles.primaryLink}>
+                    <Plus className="size-4" /> New repository
+                  </Link>
                 </Button>
               </div>
-            )}
 
-            {loading && projectSummaries.length === 0 ? (
-              <output className={styles.loading}>Loading repositories...</output>
-            ) : error && projectSummaries.length === 0 ? (
-              <DirectoryLoadFailure
-                error={error}
-                onRetry={handleRefreshProjects}
-                retrying={loading}
-              />
-            ) : projectSummaries.length === 0 ? (
-              <EmptyDirectory newRepositoryPath={newRepositoryPath} />
-            ) : (
-              <>
-                {recentProjects.length > 0 && !query.trim() && (
-                  <section className={styles.section} aria-labelledby="recent-repositories-heading">
-                    <div className={styles.sectionHeading}>
-                      <h2 id="recent-repositories-heading">
-                        <Clock3 aria-hidden="true" className="size-4" /> Recently opened
-                      </h2>
-                      <span>On this browser</span>
-                    </div>
-                    <div className={styles.recentGrid}>
-                      {recentProjects.map((project) => (
-                        <RecentProjectCard key={project.id} project={project} />
-                      ))}
-                    </div>
-                  </section>
-                )}
+              {notice && (
+                <div className={cn(management.notice, styles.notice)}>
+                  <CheckCircle2 aria-hidden="true" className={cn('size-4', management.successIcon)} />
+                  <output>
+                    {notice.message}{' '}
+                    {notice.deleted && (
+                      <Link href={deletedHref} scroll={false}>
+                        Manage deleted repositories
+                      </Link>
+                    )}
+                  </output>
+                </div>
+              )}
 
-                <section className={styles.section}>
-                  <SectionHeading
-                    count={
-                      query.trim()
-                        ? `${filteredProjects.length} matches`
-                        : `${projectSummaries.length} loaded`
-                    }
-                    title="Repositories"
-                  />
-                  {projectSummaries.length === 50 && (
-                    <p className={styles.listScope} id="repository-list-scope">
-                      Showing the first 50 repositories. Search filters this loaded list.
-                    </p>
-                  )}
-                  <div className={styles.repositories} id="repository-list" aria-busy={loading}>
-                    {filteredProjects.length > 0 ? (
-                      <div>
-                        {(repositoriesExpanded
-                          ? filteredProjects
-                          : filteredProjects.slice(0, 6)
-                        ).map((project) => (
-                          <ProjectRow
-                            key={project.id}
-                            onDelete={openDeleteDialog}
-                            onRename={openRenameDialog}
-                            ownerSlug={ownerSlug}
-                            project={project}
-                          />
+              {error && hasLoadedProjects && (
+                <div className={cn(management.notice, styles.refreshError)} role="alert">
+                  <span>Couldn&apos;t refresh repositories. Showing the last loaded data.</span>
+                  <Button
+                    disabled={loading}
+                    onClick={handleRefreshProjects}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    <RefreshCw
+                      className={cn('size-4', loading && 'animate-spin motion-reduce:animate-none')}
+                    />
+                    Retry
+                  </Button>
+                </div>
+              )}
+
+              {loading && projectSummaries.length === 0 ? (
+                <output className={styles.loading}>Loading repositories...</output>
+              ) : error && projectSummaries.length === 0 ? (
+                <DirectoryLoadFailure
+                  error={error}
+                  onRetry={handleRefreshProjects}
+                  retrying={loading}
+                />
+              ) : projectSummaries.length === 0 ? (
+                <EmptyDirectory newRepositoryPath={newRepositoryPath} />
+              ) : (
+                <>
+                  {recentProjects.length > 0 && !query.trim() && (
+                    <section className={styles.section} aria-labelledby="recent-repositories-heading">
+                      <div className={styles.sectionHeading}>
+                        <h2 id="recent-repositories-heading">
+                          <Clock3 aria-hidden="true" className="size-4" /> Recently opened
+                        </h2>
+                        <span>On this browser</span>
+                      </div>
+                      <div className={styles.recentGrid}>
+                        {recentProjects.map((project) => (
+                          <RecentProjectCard key={project.id} project={project} />
                         ))}
                       </div>
-                    ) : (
-                      <div className={styles.noResults}>
-                        <Search aria-hidden="true" className="size-5" />
-                        <h3>No repositories match this filter.</h3>
-                        <p>Try another name or description, or clear your search.</p>
-                        <Button onClick={() => setQuery('')} type="button" variant="canvas-outline">
-                          Clear
-                        </Button>
-                      </div>
+                    </section>
+                  )}
+
+                  <section className={styles.section}>
+                    <SectionHeading
+                      count={
+                        query.trim()
+                          ? `${filteredProjects.length} matches`
+                          : `${projectSummaries.length} loaded`
+                      }
+                      title="Repositories"
+                    />
+                    {projectSummaries.length === 50 && (
+                      <p className={styles.listScope} id="repository-list-scope">
+                        Showing the first 50 repositories. Search filters this loaded list.
+                      </p>
                     )}
-                  </div>
-                  {filteredProjects.length > 6 ? (
-                    <button
-                      className={styles.expand}
-                      aria-expanded={repositoriesExpanded}
-                      aria-controls="repository-list"
-                      onClick={() => setRepositoriesExpanded((value) => !value)}
-                      type="button"
-                    >
-                      {repositoriesExpanded ? (
-                        <ChevronUp aria-hidden="true" />
+                    <div className={styles.repositories} id="repository-list" aria-busy={loading}>
+                      {filteredProjects.length > 0 ? (
+                        <div>
+                          {(repositoriesExpanded
+                            ? filteredProjects
+                            : filteredProjects.slice(0, 6)
+                          ).map((project) => (
+                            <ProjectRow
+                              key={project.id}
+                              onDelete={openDeleteDialog}
+                              onRename={openRenameDialog}
+                              ownerSlug={ownerSlug}
+                              project={project}
+                            />
+                          ))}
+                        </div>
                       ) : (
-                        <ChevronDown aria-hidden="true" />
+                        <div className={styles.noResults}>
+                          <Search aria-hidden="true" className="size-5" />
+                          <h3>No repositories match this filter.</h3>
+                          <p>Try another name or description, or clear your search.</p>
+                          <Button onClick={() => setQuery('')} type="button" variant="canvas-outline">
+                            Clear
+                          </Button>
+                        </div>
                       )}
-                      {repositoriesExpanded
-                        ? 'Show less'
-                        : `Show all ${filteredProjects.length} repositories`}
-                    </button>
-                  ) : null}
-                </section>
-              </>
-            )}
-          </>
-        )}
-      </main>
+                    </div>
+                    {filteredProjects.length > 6 ? (
+                      <button
+                        className={styles.expand}
+                        aria-expanded={repositoriesExpanded}
+                        aria-controls="repository-list"
+                        onClick={() => setRepositoriesExpanded((value) => !value)}
+                        type="button"
+                      >
+                        {repositoriesExpanded ? (
+                          <ChevronUp aria-hidden="true" />
+                        ) : (
+                          <ChevronDown aria-hidden="true" />
+                        )}
+                        {repositoriesExpanded
+                          ? 'Show less'
+                          : `Show all ${filteredProjects.length} repositories`}
+                      </button>
+                    ) : null}
+                  </section>
+                </>
+              )}
+            </>
+          )}
+        </main>
+      </div>
 
       <Dialog open={Boolean(renameTarget)} onOpenChange={handleRenameDialogOpenChange}>
         <DialogContent

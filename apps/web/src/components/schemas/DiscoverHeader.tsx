@@ -4,7 +4,9 @@ import {
   BookOpen,
   Boxes,
   Braces,
+  Building2,
   CircleUserRound,
+  Command,
   Compass,
   Database,
   FileText,
@@ -13,8 +15,8 @@ import {
   LayoutGrid,
   type LucideIcon,
   Plus,
-  Search,
   Settings,
+  UsersRound,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -46,6 +48,7 @@ export function DiscoverHeader({
   branch,
   workspaceId,
   visibility,
+  contextLabel,
   activeTab = 'schemas',
   owner,
   projectName,
@@ -58,15 +61,22 @@ export function DiscoverHeader({
   projectIdNavigation?: boolean;
   branch?: string | null;
   workspaceId?: string | null;
-  visibility?: string;
+  visibility?: 'Private' | 'Unlisted' | 'Public';
+  contextLabel?: 'Personal' | 'Organization' | 'Account';
   activeTab?: ProjectTabId;
   owner?: string;
   projectName?: string;
   newProjectHref?: string;
 }) {
-  const isCatalog = !namespaceTab && !repoPath;
+  const isExplore = !namespaceTab && !repoPath;
   const ownerHref = owner ? `/${encodeURIComponent(owner)}` : '/';
-  const createLabel = newProjectHref === '/' ? 'Browse projects' : 'Create new';
+  const createLabel = newProjectHref === '/' ? 'Browse repositories' : 'New repository';
+  const OwnerIcon =
+    contextLabel === 'Organization'
+      ? Building2
+      : contextLabel === 'Personal' || contextLabel === 'Account'
+        ? CircleUserRound
+        : UsersRound;
 
   function tabHref(tab: ProjectTabId) {
     if (tab === 'settings') return settingsHref;
@@ -86,7 +96,7 @@ export function DiscoverHeader({
     <header className={`${palette.scope} ${styles.header}`}>
       <div className={styles.topRow}>
         <div className={styles.identity}>
-          <Link className={styles.brand} href="/" aria-label="Back to projects">
+          <Link className={styles.brand} href="/" aria-label="T3X home">
             <svg aria-hidden="true" width="28" height="28" viewBox="0 0 26 26">
               <rect width="26" height="26" rx="7" fill="var(--text-primary)" />
               <path
@@ -103,9 +113,18 @@ export function DiscoverHeader({
             /
           </span>
           <div className={styles.context}>
-            <Link className={styles.owner} href={isCatalog ? '/templates' : ownerHref}>
-              {isCatalog ? <BookOpen aria-hidden="true" /> : <FolderGit2 aria-hidden="true" />}
-              <span>{isCatalog ? 'Templates' : owner || 'Projects'}</span>
+            <Link
+              className={`${styles.owner}${!projectName ? ` ${styles.currentContext}` : ''}`}
+              href={isExplore ? '/templates' : ownerHref}
+            >
+              {isExplore ? (
+                <Compass aria-hidden="true" />
+              ) : owner ? (
+                <OwnerIcon aria-hidden="true" />
+              ) : (
+                <FolderGit2 aria-hidden="true" />
+              )}
+              <span>{isExplore ? 'Explore' : owner || 'Repositories'}</span>
             </Link>
             {projectName ? (
               <>
@@ -117,16 +136,29 @@ export function DiscoverHeader({
                 </Link>
               </>
             ) : null}
-            {visibility ? <span className={styles.visibility}>{visibility}</span> : null}
+            {contextLabel ? <span className={styles.contextBadge}>{contextLabel}</span> : null}
+            {visibility ? <span className={styles.contextBadge}>{visibility}</span> : null}
           </div>
         </div>
 
         <div className={styles.utilities}>
+          {newProjectHref ? (
+            <Button asChild variant="outline" size="sm" className={styles.create}>
+              <Link href={newProjectHref} aria-label={createLabel} title={createLabel}>
+                {newProjectHref === '/' ? (
+                  <FolderGit2 aria-hidden="true" />
+                ) : (
+                  <Plus aria-hidden="true" />
+                )}
+                <span className={styles.createLabel}>{createLabel}</span>
+              </Link>
+            </Button>
+          ) : null}
           <nav aria-label="Global" className={styles.globalNav}>
-            <Link href="/templates" aria-current={isCatalog ? 'page' : undefined}>
+            <Link href="/templates" aria-current={isExplore ? 'page' : undefined}>
               Explore
             </Link>
-            <Link href="/">Your projects</Link>
+            <Link href="/">Your repositories</Link>
           </nav>
           <div className={styles.actions}>
             <Button
@@ -134,7 +166,7 @@ export function DiscoverHeader({
               variant="ghost"
               size="sm"
               className={styles.search}
-              aria-label="Search commands"
+              aria-label="Commands"
               aria-keyshortcuts="Meta+K Control+K"
               title="Search commands (⌘K / Ctrl+K)"
               onClick={() =>
@@ -143,22 +175,10 @@ export function DiscoverHeader({
                 )
               }
             >
-              <Search aria-hidden="true" />
-              <span className={styles.searchLabel}>Search</span>
+              <Command aria-hidden="true" />
+              <span className={styles.searchLabel}>Commands</span>
               <kbd className={styles.shortcut}>⌘K</kbd>
             </Button>
-            {newProjectHref ? (
-              <Button asChild variant="outline" size="sm" className={styles.create}>
-                <Link href={newProjectHref} aria-label={createLabel} title={createLabel}>
-                  {newProjectHref === '/' ? (
-                    <FolderGit2 aria-hidden="true" />
-                  ) : (
-                    <Plus aria-hidden="true" />
-                  )}
-                  <span className={styles.createLabel}>{createLabel}</span>
-                </Link>
-              </Button>
-            ) : null}
             <Button asChild variant="ghost" size="icon-sm" className={styles.account}>
               <Link href="/settings/profile" aria-label="Account settings" title="Account settings">
                 <CircleUserRound aria-hidden="true" />

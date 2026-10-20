@@ -85,7 +85,7 @@ describe('DiscoverHeader navigation', () => {
         namespaceTab="settings"
         settingsHref="/settings/provider-credentials?owner=orbit-labs"
         newProjectHref="/orbit-labs/new"
-        visibility="Organization"
+        contextLabel="Organization"
       />
     );
 
@@ -96,7 +96,7 @@ describe('DiscoverHeader navigation', () => {
       '/settings/provider-credentials?owner=orbit-labs'
     );
     expect(tabs.getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: 'Create new' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'New repository' })).toHaveAttribute(
       'href',
       '/orbit-labs/new'
     );
@@ -106,12 +106,19 @@ describe('DiscoverHeader navigation', () => {
     );
   });
 
-  it('gives the global template catalog real navigation without invented repository state', () => {
+  it('gives Explore global navigation without invented repository state', () => {
     render(<DiscoverHeader />);
 
-    expect(screen.getByRole('link', { name: 'Templates' })).toHaveAttribute('href', '/templates');
-    expect(screen.getByRole('link', { name: 'Explore' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('button', { name: 'Search commands' })).toBeInTheDocument();
+    const globalNavigation = within(screen.getByRole('navigation', { name: 'Global' }));
+    expect(globalNavigation.getByRole('link', { name: 'Explore' })).toHaveAttribute(
+      'href',
+      '/templates'
+    );
+    expect(globalNavigation.getByRole('link', { name: 'Explore' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    expect(screen.getByRole('button', { name: 'Commands' })).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Project views' })).not.toBeInTheDocument();
     expect(screen.queryByText('Private')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Notifications preview')).not.toBeInTheDocument();

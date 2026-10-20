@@ -169,7 +169,7 @@ function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
         namespaceTab="settings"
         settingsHref={withSettingsContext('/settings/provider-credentials', context)}
         newProjectHref={headerOwner ? `/${encodeURIComponent(headerOwner)}/new` : '/'}
-        visibility="Account"
+        contextLabel="Account"
       />
       <div className={styles.mobileNavigation}>
         <label htmlFor="settings-destination">Settings</label>

@@ -68,8 +68,8 @@ export function useCommandRegistry({
               ]
             : []),
           {
-            id: 'browse-templates',
-            title: 'Browse Templates',
+            id: 'go-explore',
+            title: 'Explore',
             icon: 'layout-grid' as const,
             run: routeTo('/templates'),
           },

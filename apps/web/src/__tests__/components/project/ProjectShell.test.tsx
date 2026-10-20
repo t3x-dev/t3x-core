@@ -71,7 +71,7 @@ describe('ProjectShell', () => {
         <div>State content</div>
       </ProjectShell>
     );
-    expect(screen.getByRole('link', { name: 'Create new' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'New repository' })).toHaveAttribute(
       'href',
       '/orbit-labs/new'
     );
@@ -84,7 +84,7 @@ describe('ProjectShell', () => {
         <div>State content</div>
       </ProjectShell>
     );
-    expect(screen.getByRole('link', { name: 'Browse projects' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: 'Browse repositories' })).toHaveAttribute('href', '/');
     expect(screen.queryByText('orbit-labs')).not.toBeInTheDocument();
   });
 
@@ -115,7 +115,7 @@ describe('ProjectShell', () => {
     );
 
     expect(screen.getByRole('banner')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to projects' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'T3X home' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByText('Studio content').closest('main')).toHaveClass(
       'min-h-0',

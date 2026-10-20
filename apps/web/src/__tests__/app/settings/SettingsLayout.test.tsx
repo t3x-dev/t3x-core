@@ -112,7 +112,10 @@ describe('SettingsLayout', () => {
 
     expect(screen.getByRole('link', { name: 'team-a' })).toHaveAttribute('href', '/team-a');
     expect(screen.queryByRole('link', { name: 'team-b' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Create new' })).toHaveAttribute('href', '/team-a/new');
+    expect(screen.getByRole('link', { name: 'New repository' })).toHaveAttribute(
+      'href',
+      '/team-a/new'
+    );
     expect(screen.getByRole('link', { name: 'Members' })).toHaveAttribute(
       'href',
       '/settings/members'

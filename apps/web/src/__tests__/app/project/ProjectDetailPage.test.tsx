@@ -547,7 +547,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     const projectNavigation = screen.getByRole('navigation', { name: 'Project views' });
     const projectBanner = projectNavigation.closest('header')!;
     const projectHeader = within(projectBanner);
-    expect(screen.getByRole('link', { name: 'Back to projects' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: 'T3X home' })).toHaveAttribute('href', '/');
     expect(projectHeader.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
     expect(projectBanner).toHaveRole('banner');
     expect(screen.queryByText('/t3x-dev/test-project')).not.toBeInTheDocument();
