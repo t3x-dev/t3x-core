@@ -2,7 +2,7 @@
   position: relative;
   width: 100%;
   min-height: 100%;
-  padding: 32px clamp(20px, 4vw, 48px) 56px;
+  padding: 40px clamp(20px, 4vw, 48px) 64px;
   color: var(--text-primary);
   background: var(--surface-card);
 }
@@ -10,13 +10,14 @@
   margin-inline: auto;
   min-width: 0;
   width: 100%;
-  max-width: 1120px;
+  max-width: 840px;
 }
 .breadcrumb {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 20px;
@@ -34,7 +35,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 32px;
 }
 .titleGroup h1 {
   margin: 0;
@@ -58,32 +59,25 @@
 }
 .settingsGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 32px;
 }
 .themeCard,
 .densityCard,
 .accentCard,
 .motionCard {
-  background: var(--surface-card);
-  border: 1px solid var(--stroke-default);
-  border-radius: 9px;
-}
-.themeCard,
-.densityCard {
-  min-height: 220px;
-  padding: 14px 16px 21px;
-}
-.accentCard,
-.motionCard {
-  min-height: 138px;
-  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: 144px minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid var(--stroke-divider);
 }
 .themeCard h2,
 .densityCard h2,
 .accentCard h2,
 .motionCard h2 {
-  margin: 0 0 9px;
+  margin: 0;
   color: var(--text-primary);
   font-size: 16px;
   font-weight: 700;
@@ -92,14 +86,15 @@
 .themeOptions,
 .densityOptions {
   display: grid;
-  min-height: 152px;
-  gap: 7px;
+  max-width: 480px;
+  gap: 12px;
 }
 .themeOptions {
   grid-template-columns: repeat(3, 1fr);
 }
 .densityOptions {
   grid-template-columns: repeat(2, 1fr);
+  max-width: 320px;
 }
 .previewOption {
   display: flex;
@@ -107,7 +102,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  padding: 18px 10px 10px;
+  padding: 16px 10px;
   color: var(--text-secondary);
   font: inherit;
   background: var(--surface-card);
@@ -117,6 +112,8 @@
 }
 .previewOption img {
   flex: 0 0 auto;
+  max-width: 100%;
+  height: auto;
   object-fit: contain;
 }
 .previewOption strong {
@@ -152,7 +149,7 @@
   align-items: flex-start;
   gap: 24px;
   flex-wrap: wrap;
-  margin-top: 14px;
+  margin-top: 4px;
 }
 .accentOption {
   display: flex;
@@ -191,7 +188,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 24px;
+  margin-top: 0;
   gap: 16px;
   color: var(--text-primary);
   font-size: 13px;
@@ -225,10 +222,11 @@
 }
 .saveRow {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
+  gap: 16px;
   margin-top: 24px;
-  padding-top: 13px;
-  border-top: 1px solid var(--stroke-default);
 }
 .saveRow button {
   width: 129px;
@@ -285,12 +283,22 @@
     padding-right: 20px;
     padding-left: 20px;
   }
-  .settingsGrid {
-    grid-template-columns: 1fr;
-  }
   .themeCard,
-  .densityCard {
-    height: auto;
-    min-height: 220px;
+  .densityCard,
+  .accentCard,
+  .motionCard {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+}
+@media (max-width: 480px) {
+  .page {
+    padding-top: 28px;
+  }
+  .themeOptions {
+    gap: 8px;
+  }
+  .previewOption {
+    padding-inline: 8px;
   }
 }

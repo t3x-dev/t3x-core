@@ -129,11 +129,7 @@ export function ProjectGeneralSettings({
       tabIndex={-1}
     >
       <h2 id="general-heading">General</h2>
-      <p className={styles.lead}>
-        Manage your repository's name, description, and stable identifiers.
-      </p>
       <form className={styles.details} onSubmit={handleSubmit}>
-        <h3>Repository details</h3>
         <SettingsField
           hint="Shown in the header and in links."
           htmlFor="settings-repo-name"
@@ -150,7 +146,7 @@ export function ProjectGeneralSettings({
             }}
             value={name}
           />
-          <RepositoryNameFeedback check={nameCheck} />
+          {nameEdited ? <RepositoryNameFeedback check={nameCheck} /> : null}
           {slugChanges && (
             <p className="mt-1.5 text-xs text-[var(--status-warning)]">
               Previous repository addresses will remain reserved and redirect to this repository.
@@ -208,19 +204,20 @@ export function ProjectGeneralSettings({
         </div>
       </form>
 
-      <div className={styles.identifiers}>
-        <h3>Identifiers</h3>
-        <SettingsField hint="Stable and read-only." label="Project ID">
-          <CopyValue label="project ID" value={project.project_id} />
-        </SettingsField>
-        <SettingsField hint="Keeps working if the project is renamed." label="Stable link">
-          <CopyValue label="stable link" value={stableLink} />
-        </SettingsField>
-      </div>
-      <div className={styles.contents}>
-        <h3>Contents</h3>
-        <p>What this project currently holds.</p>
-        <RepositoryStats project={project} />
+      <div className={styles.referenceInfo}>
+        <div className={styles.identifiers}>
+          <h3>Identifiers</h3>
+          <SettingsField hint="Stable and read-only." label="Project ID">
+            <CopyValue label="project ID" value={project.project_id} />
+          </SettingsField>
+          <SettingsField hint="Keeps working if the project is renamed." label="Stable link">
+            <CopyValue label="stable link" value={stableLink} />
+          </SettingsField>
+        </div>
+        <div className={styles.contents}>
+          <h3>Contents</h3>
+          <RepositoryStats project={project} />
+        </div>
       </div>
     </section>
   );

@@ -141,11 +141,7 @@ export function ProjectSettingsNav() {
       <nav aria-label="Settings sections" className={styles.desktop}>
         {groups.map((group) => (
           <div className={styles.group} key={group.label || 'danger'}>
-            {group.label ? (
-              <p className={styles.groupTitle}>{group.label}</p>
-            ) : (
-              <div className={styles.divider} />
-            )}
+            {group.label ? <p className={styles.groupTitle}>{group.label}</p> : null}
             {group.items.map(({ icon: Icon, id, label }) => {
               const selected = active === id;
               const danger = id === 'danger';

@@ -62,9 +62,11 @@ export function SettingsField({
     <div className={styles.field}>
       <div className={styles.fieldLabel}>
         <label htmlFor={htmlFor}>{label}</label>
+      </div>
+      <div className={styles.fieldControl}>
+        {children}
         {hint ? <p className={styles.hint}>{hint}</p> : null}
       </div>
-      <div className={styles.fieldControl}>{children}</div>
     </div>
   );
 }

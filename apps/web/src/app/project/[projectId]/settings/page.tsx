@@ -403,7 +403,6 @@ function ProjectSettingsPageContent() {
   return (
     <div className={`${palette.scope} ${generalStyles.layout}`}>
       <aside className={generalStyles.sidebar}>
-        <p className={generalStyles.sidebarTitle}>Repository settings</p>
         <ProjectSettingsNav />
       </aside>
 
@@ -416,10 +415,7 @@ function ProjectSettingsPageContent() {
             </span>
           ) : null}
           <h1>Repository settings</h1>
-          <p>
-            Manage this repository's details, access, and defaults. Changes here apply to this
-            repository.
-          </p>
+          <p>Manage details, access, and defaults for this repository.</p>
         </header>
         {settings.loading ? (
           <output className="flex min-h-32 items-center justify-center gap-2 text-sm text-[var(--text-secondary)]">

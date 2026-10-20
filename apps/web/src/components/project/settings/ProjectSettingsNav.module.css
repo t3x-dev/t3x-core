@@ -1,36 +1,39 @@
 .desktop {
   display: grid;
-  gap: 24px;
+  gap: 12px;
 }
 .group {
   display: grid;
-  gap: 4px;
+  gap: 2px;
+}
+.group + .group {
+  padding-top: 12px;
+  border-top: 1px solid var(--stroke-divider);
 }
 .groupTitle {
   margin: 0 12px 4px;
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.5;
-  font-weight: 500;
-}
-.divider {
-  margin-bottom: 8px;
-  border-top: 1px solid var(--stroke-divider);
+  font-weight: 600;
 }
 .link {
   position: relative;
   display: flex;
-  min-height: 38px;
+  min-height: 36px;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
+  padding: 7px 12px;
   border-radius: var(--radius-md);
-  color: var(--text-secondary);
+  color: var(--text-primary);
   font-size: 14px;
   line-height: 1.5;
   transition:
     background var(--transition-fast),
     color var(--transition-fast);
+}
+.link svg {
+  color: var(--text-secondary);
 }
 .link:hover {
   background: var(--hover-bg);
@@ -57,6 +60,9 @@
 }
 .danger {
   color: var(--status-error);
+}
+.danger svg {
+  color: inherit;
 }
 .mobile {
   display: none;

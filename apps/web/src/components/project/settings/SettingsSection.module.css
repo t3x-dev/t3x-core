@@ -1,8 +1,7 @@
 .section {
   min-width: 0;
   scroll-margin-top: 24px;
-  padding-bottom: 36px;
-  border-bottom: 1px solid var(--stroke-divider);
+  padding-bottom: 8px;
   color: var(--text-primary);
 }
 .section:focus {
@@ -14,32 +13,34 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--stroke-divider);
 }
 .heading {
   display: flex;
   flex: 1 1 240px;
   min-width: 0;
   align-items: flex-start;
-  gap: 12px;
+  gap: 8px;
 }
 .icon {
   display: grid;
   flex-shrink: 0;
   place-items: center;
-  width: 24px;
+  width: 20px;
   height: 26px;
   color: var(--text-secondary);
 }
 .title {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 500;
   line-height: 1.4;
 }
 .description {
   margin-top: 6px;
   max-width: 64ch;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.65;
   color: var(--text-secondary);
 }
@@ -49,8 +50,21 @@
 .body {
   min-width: 0;
 }
+.body :is(input:not([type="checkbox"]), textarea, select, [data-slot="select-trigger"]) {
+  background: var(--surface-canvas);
+  box-shadow: none;
+}
+.body
+  :is(input:not([type="checkbox"]), textarea, select, [data-slot="select-trigger"]):not(
+    [aria-invalid="true"]
+  ) {
+  border-color: var(--stroke-default);
+}
+.body :is(input, textarea, select, [data-slot="select-trigger"]):focus-visible {
+  border-color: var(--ring);
+}
 .danger {
-  padding: 24px;
+  padding: 20px;
   border: 1px solid color-mix(in srgb, var(--status-error) 35%, var(--stroke-default));
   border-radius: var(--radius-lg);
 }
@@ -60,15 +74,16 @@
 }
 .field {
   display: grid;
-  grid-template-columns: minmax(140px, 180px) minmax(0, 1fr);
-  gap: 24px;
+  max-width: 560px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
 }
 .fieldLabel {
-  padding-top: 8px;
+  color: var(--text-primary);
 }
 .fieldLabel label {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.5;
 }
 .hint {
@@ -80,25 +95,9 @@
 .fieldControl {
   min-width: 0;
 }
-@media (max-width: 1000px) {
-  .field {
-    grid-template-columns: minmax(120px, 150px) minmax(0, 1fr);
-    gap: 16px;
-  }
-}
 @media (max-width: 760px) {
-  .section {
-    padding-bottom: 28px;
-  }
   .header {
-    margin-bottom: 20px;
-  }
-  .field {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
-  }
-  .fieldLabel {
-    padding-top: 0;
+    margin-bottom: 16px;
   }
   .danger {
     padding: 20px;

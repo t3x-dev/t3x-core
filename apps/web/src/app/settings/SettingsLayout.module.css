@@ -4,12 +4,15 @@
   height: 100dvh;
   overflow: hidden;
   color: var(--text-primary);
-  background: var(--surface-panel);
+  background: var(--surface-card);
 }
 
 .shell {
   display: flex;
   width: 100%;
+  max-width: 1280px;
+  margin-inline: auto;
+  padding-inline: 32px;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -17,13 +20,12 @@
 
 .sidebar {
   display: flex;
-  flex: 0 0 248px;
+  flex: 0 0 216px;
   flex-direction: column;
-  gap: 28px;
+  gap: 32px;
   min-width: 0;
-  padding: 28px 16px 20px;
+  padding: 40px 8px 32px 0;
   overflow-y: auto;
-  border-right: 1px solid var(--stroke-divider);
 }
 
 .groupTitle {
@@ -144,6 +146,10 @@
 }
 
 @media (max-width: 760px) {
+  .shell {
+    padding-inline: 0;
+  }
+
   .sidebar {
     display: none;
   }

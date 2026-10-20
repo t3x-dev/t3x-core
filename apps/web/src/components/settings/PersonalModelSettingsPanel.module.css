@@ -1,7 +1,7 @@
 .page {
   width: 100%;
   min-height: 100%;
-  padding: 32px clamp(20px, 4vw, 48px) 56px;
+  padding: 40px clamp(20px, 4vw, 48px) 64px;
   color: var(--text-primary);
   background: var(--surface-card);
 }
@@ -9,13 +9,14 @@
   margin-inline: auto;
   min-width: 0;
   width: 100%;
-  max-width: 1120px;
+  max-width: 840px;
 }
 .breadcrumb {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 20px;
@@ -36,7 +37,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  margin-bottom: 24px;
+  margin-bottom: 32px;
 }
 .titleGroup h1 {
   margin: 0;
@@ -62,29 +63,19 @@
 .switcherCard,
 .fallbackCard {
   width: 100%;
-  background: var(--surface-card);
-  border: 1px solid var(--stroke-default);
-  border-radius: 9px;
+  min-width: 0;
+  padding: 0 0 32px;
+  margin-bottom: 32px;
+  border-bottom: 1px solid var(--stroke-divider);
 }
-.composeCard {
-  min-height: 109px;
-  padding: 24px;
-  margin-bottom: 24px;
-}
-.switcherCard {
-  overflow-x: auto;
-  min-height: 0;
-  padding: 24px;
-  margin-bottom: 24px;
-}
-.fallbackCard {
-  min-height: 110px;
-  padding: 24px;
+.composeCard .modelSelect,
+.fallbackCard .modelSelect {
+  max-width: 420px;
 }
 .composeCard h2,
 .switcherCard h2,
 .fallbackCard h2 {
-  margin: 0 0 11px;
+  margin: 0 0 20px;
   color: var(--text-primary);
   font-size: 16px;
   font-weight: 700;
@@ -111,8 +102,9 @@
 }
 .modelSelect select {
   width: 100%;
-  height: 100%;
-  padding: 0 38px 0 50px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 38px 8px 50px;
   color: var(--text-primary);
   font: inherit;
   font-size: 14px;
@@ -124,11 +116,13 @@
 .tableHeader,
 .modelRow {
   display: grid;
-  grid-template-columns: 68px minmax(260px, 1.2fr) minmax(220px, 0.9fr) minmax(190px, 0.8fr);
+  grid-template-columns: 44px minmax(120px, 1.2fr) minmax(100px, 1fr) 144px;
+  gap: 16px;
   align-items: center;
 }
 .tableHeader {
-  height: 28px;
+  min-height: 32px;
+  padding-bottom: 8px;
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
@@ -138,7 +132,8 @@
   padding-left: 8px;
 }
 .modelRow {
-  min-height: 45px;
+  min-height: 60px;
+  padding-block: 12px;
   color: var(--text-primary);
   font-size: 12px;
   border-bottom: 1px solid var(--stroke-default);
@@ -149,7 +144,7 @@
 .rank {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 8px;
   padding-left: 4px;
 }
 .rank svg {
@@ -162,10 +157,12 @@
 .modelIdentity {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   min-width: 0;
 }
 .modelIdentity strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 12px;
   font-weight: 600;
 }
@@ -173,6 +170,7 @@
 .openAiMark,
 .googleMark {
   display: flex;
+  flex: 0 0 34px;
   width: 34px;
   height: 34px;
   align-items: center;
@@ -196,8 +194,10 @@
 }
 .providerCell {
   display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 36px;
+  gap: 8px;
   color: var(--text-secondary);
 }
 .providerCell i {
@@ -212,6 +212,7 @@
 .switch {
   position: relative;
   width: 42px;
+  flex-shrink: 0;
   height: 23px;
   padding: 0;
   background: var(--stroke-default);
@@ -242,8 +243,7 @@
 }
 .saveRow {
   display: flex;
-  justify-content: flex-end;
-  padding-top: 13px;
+  justify-content: flex-start;
 }
 .saveRow button {
   min-width: 122px;
@@ -266,14 +266,15 @@
 .loading,
 .error {
   display: flex;
-  min-height: 180px;
+  min-height: 80px;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
+  padding-block: 24px;
   gap: 8px;
   color: var(--text-secondary);
   font-size: 13px;
-  border: 1px solid var(--stroke-default);
-  border-radius: 9px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--stroke-divider);
 }
 .error button {
   color: var(--accent-commit);
@@ -328,17 +329,38 @@
   margin: 0 4px;
   background: var(--stroke-default);
 }
-@media (max-width: 900px) {
+@media (max-width: 1000px) {
   .page {
     padding-right: 20px;
     padding-left: 20px;
   }
-  .switcherCard {
-    overflow-x: auto;
-    overflow-x: auto;
+  .tableHeader {
+    display: none;
   }
-  .tableHeader,
   .modelRow {
-    min-width: 820px;
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    gap: 8px 12px;
+    padding-block: 16px;
+  }
+  .rank {
+    grid-row: 1 / 3;
+    padding-left: 0;
+  }
+  .modelIdentity {
+    grid-column: 2;
+  }
+  .providerCell {
+    grid-column: 2;
+    grid-row: 2;
+    padding-left: 44px;
+  }
+  .modelRow > .switch {
+    grid-column: 3;
+    grid-row: 1 / 3;
+  }
+}
+@media (max-width: 480px) {
+  .page {
+    padding-top: 28px;
   }
 }

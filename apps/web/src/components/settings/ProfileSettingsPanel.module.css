@@ -2,7 +2,7 @@
   position: relative;
   width: 100%;
   min-height: 100%;
-  padding: 32px clamp(20px, 4vw, 48px) 56px;
+  padding: 40px clamp(20px, 4vw, 48px) 64px;
   color: var(--text-primary);
   background: var(--surface-card);
 }
@@ -10,13 +10,14 @@
   margin-inline: auto;
   min-width: 0;
   width: 100%;
-  max-width: 1120px;
+  max-width: 840px;
 }
 .breadcrumb {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 20px;
@@ -34,7 +35,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 32px;
 }
 .titleGroup h1 {
   margin: 0;
@@ -61,23 +62,22 @@
 .sessionsCard {
   width: 100%;
   background: var(--surface-card);
-  border: 1px solid var(--stroke-default);
-  border-radius: 9px;
+  border: 0;
+  border-bottom: 1px solid var(--stroke-divider);
 }
 .identityCard {
   display: flex;
-  min-height: 104px;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 20px;
   align-items: center;
-  padding: 15px 18px;
-  margin-bottom: 24px;
+  padding: 0 0 32px;
+  margin-bottom: 32px;
 }
 .avatar {
   display: flex;
-  width: 70px;
-  height: 70px;
-  flex: 0 0 70px;
+  width: 80px;
+  height: 80px;
+  flex: 0 0 80px;
   align-items: center;
   justify-content: center;
   overflow: hidden;
@@ -130,8 +130,8 @@
 }
 .detailsCard {
   min-height: 0;
-  padding: 24px;
-  margin-bottom: 24px;
+  padding: 0 0 32px;
+  margin-bottom: 32px;
 }
 .detailsCard h2,
 .sessionsCard h2 {
@@ -144,19 +144,19 @@
 .formGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
+  gap: 24px;
   align-items: end;
-  margin-top: 11px;
+  margin-top: 24px;
 }
 .formGrid label {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
-  line-height: 16px;
+  line-height: 20px;
 }
 .formGrid input,
 .formGrid select {
@@ -182,14 +182,16 @@
   cursor: not-allowed;
 }
 .timezoneField {
-  grid-column: 1 / 2;
+  grid-column: 1 / -1;
   min-width: 0;
   width: 100%;
+  max-width: 420px;
 }
 .saveButton {
   width: 122px;
   height: 36px;
-  justify-self: end;
+  grid-column: 1 / -1;
+  justify-self: start;
   color: var(--primary-foreground);
   font: inherit;
   font-size: 14px;
@@ -206,27 +208,28 @@
 }
 .sessionsCard {
   min-height: 0;
-  padding: 24px;
+  padding: 0;
+  border-bottom: 0;
 }
 .sessionHeader,
 .sessionRow {
   display: grid;
-  grid-template-columns: 32% 33% 23% 12%;
+  grid-template-columns: minmax(180px, 1.5fr) minmax(110px, 1fr) minmax(90px, 1fr) 86px;
+  gap: 16px;
   align-items: center;
 }
 .sessionHeader {
   height: 34px;
-  margin-top: 9px;
-  padding: 0 10px;
+  margin-top: 20px;
+  padding: 0 0 8px;
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
-  background: var(--surface-panel);
   border-bottom: 1px solid var(--stroke-default);
 }
 .sessionRow {
-  min-height: 50px;
-  padding: 5px 10px;
+  min-height: 64px;
+  padding: 12px 0;
   color: var(--text-primary);
   font-size: 12px;
   border-bottom: 1px solid var(--stroke-default);
@@ -238,7 +241,7 @@
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 18px;
+  gap: 12px;
 }
 .deviceCell svg {
   flex: 0 0 auto;
@@ -299,7 +302,8 @@
 }
 .emptySessions {
   display: flex;
-  height: 110px;
+  min-height: 80px;
+  padding-block: 24px;
   align-items: center;
   justify-content: center;
   color: var(--text-secondary);
@@ -308,14 +312,15 @@
 .loading,
 .error {
   display: flex;
-  min-height: 180px;
+  min-height: 80px;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
+  padding-block: 24px;
   gap: 8px;
   color: var(--text-secondary);
   font-size: 13px;
-  border: 1px solid var(--stroke-default);
-  border-radius: 9px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--stroke-divider);
 }
 .error button {
   color: var(--accent-commit);
@@ -386,11 +391,29 @@
     justify-self: start;
     transform: none;
   }
-  .sessionsCard {
-    overflow-x: auto;
+  .sessionHeader {
+    display: none;
   }
-  .sessionHeader,
   .sessionRow {
-    min-width: 760px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    padding-block: 20px;
+  }
+  .deviceCell {
+    grid-column: 1 / -1;
+  }
+  .activity {
+    justify-self: end;
+  }
+  .sessionRow > button {
+    grid-column: 2;
+  }
+}
+@media (max-width: 480px) {
+  .page {
+    padding-top: 28px;
+  }
+  .editAvatar {
+    margin-left: 0;
   }
 }
