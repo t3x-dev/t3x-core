@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { fetchProjectWorkspaces } from '@/queries/workspaces';
@@ -69,5 +69,40 @@ describe('useProjectWorkspaces', () => {
 
     await waitFor(() => expect(fetchProjectWorkspaces).toHaveBeenCalledTimes(2));
     unmount();
+  });
+
+  it('refreshes the effective binding after a local or cross-window Schema save', async () => {
+    const { unmount } = renderHook(() => useProjectWorkspaces('proj_1'));
+    await waitFor(() => expect(fetchProjectWorkspaces).toHaveBeenCalledTimes(1));
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent('t3x-schema-candidate-updated', {
+          detail: { projectId: 'proj_other', workspaceId: 'workspace_1' },
+        })
+      );
+    });
+    expect(fetchProjectWorkspaces).toHaveBeenCalledTimes(1);
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent('t3x-schema-candidate-updated', {
+          detail: { projectId: 'proj_1', workspaceId: 'workspace_1' },
+        })
+      );
+    });
+    await waitFor(() => expect(fetchProjectWorkspaces).toHaveBeenCalledTimes(2));
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 't3x-schema-candidate-updated',
+          newValue: JSON.stringify({ projectId: 'proj_1' }),
+        })
+      );
+    });
+    await waitFor(() => expect(fetchProjectWorkspaces).toHaveBeenCalledTimes(3));
+    unmount();
+    window.dispatchEvent(
+      new CustomEvent('t3x-schema-candidate-updated', { detail: { projectId: 'proj_1' } })
+    );
+    expect(fetchProjectWorkspaces).toHaveBeenCalledTimes(3);
   });
 });

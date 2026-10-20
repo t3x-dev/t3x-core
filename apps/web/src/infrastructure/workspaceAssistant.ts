@@ -14,7 +14,7 @@ export interface WorkspaceAssistantContext {
   allowProposal?: boolean;
   posture?: 'source_only' | 'guided' | 'recommend';
   onCandidate?: (transitionId: string, turnId?: string) => void;
-  onSchemaSettings?: () => void;
+  onSchemaSettings?: (conversationId?: string) => void;
 }
 export type WorkspaceAssistantEvent = {
   type: 'context' | 'capabilities' | 'text' | 'operation' | 'done' | 'error';
@@ -118,7 +118,12 @@ export async function confirmAssistantSchemaSettings(
   projectId: string,
   workspaceId: string,
   record: AssistantSchemaSettingsView,
-  settings: AssistantSchemaSettingsInput | null
+  settings: AssistantSchemaSettingsInput | null,
+  options: {
+    generateSnapshot?: boolean;
+    discardStudioCandidate?: boolean;
+    applyToDraft?: boolean;
+  } = {}
 ) {
   const response = await fetch(schemaSettingsUrl(projectId, workspaceId), {
     method: 'POST',
@@ -128,6 +133,7 @@ export async function confirmAssistantSchemaSettings(
       settingsId: record.settingsId,
       ifRevision: record.revision,
       settings,
+      ...options,
     }),
   });
   return AssistantSchemaSettingsViewSchema.parse(await handleResponse<unknown>(response));

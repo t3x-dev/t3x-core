@@ -37,7 +37,6 @@ import type { WorkspaceAssistantContext } from '@/hooks/workspaces/useWorkspaceA
 import { useChatSessionStore } from '@/store/chatSessionStore';
 import type { AttachedImage } from '@/types/generation';
 import type { WorkspaceProposalPosture } from '@/types/workspaces';
-import { AssistantSchemaSettingsCard } from './AssistantSchemaSettingsCard';
 import { PROPOSAL_POSTURE_OPTIONS, proposalPostureOption } from './ProposalPostureSelector';
 import type { AssistantActivityRecord, AssistantPublication } from './WorkspaceAssistantActivity';
 import {
@@ -62,8 +61,10 @@ export function ComposeAuthoringAssistant({
   allowProposal = true,
   proposalBlockedHint,
   contextLabel,
+  onSchemaCandidateChange,
 }: {
   projectId: string;
+  onSchemaCandidateChange?: (conversationId?: string) => void;
   conversationId?: string;
   context: WorkspaceAssistantContext;
   onCreateConversation: () => Promise<string>;
@@ -110,7 +111,6 @@ export function ComposeAuthoringAssistant({
   );
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
-  const [schemaSettingsEpoch, setSchemaSettingsEpoch] = useState(0);
   const publication = useSourceThreadSessionRef<{
     transitionId: string;
     requestId: string;
@@ -181,7 +181,7 @@ export function ComposeAuthoringAssistant({
       ...context,
       allowProposal,
       posture,
-      onSchemaSettings: () => setSchemaSettingsEpoch((value) => value + 1),
+      onSchemaSettings: (id) => onSchemaCandidateChange?.(id ?? conversationId),
       onCandidate: (transitionId, turnId) => {
         if (!allowProposal) return;
         setPublicationError(null);
@@ -371,18 +371,6 @@ export function ComposeAuthoringAssistant({
           onRetry={model.refresh}
         />
       ) : null}
-      <AssistantSchemaSettingsCard
-        projectId={projectId}
-        workspaceId={context.workspaceId}
-        conversationId={conversationId}
-        refreshKey={`${context.workspaceRevision}:${schemaSettingsEpoch}:${chat.turnsSavedCounter}`}
-        disabled={!allowProposal || chat.isStreaming || chat.isLoading || !model.isSelectionReady}
-        onConfirmed={(confirmedSettingsId, intent) =>
-          chat.sendMessage(`Generate the Schema candidate from my confirmed settings: ${intent}`, {
-            confirmedSettingsId,
-          })
-        }
-      />
       <fieldset className={styles.discussionComposer} aria-label="Message composer">
         {contextLabel ? (
           <div className={styles.chatContext}>

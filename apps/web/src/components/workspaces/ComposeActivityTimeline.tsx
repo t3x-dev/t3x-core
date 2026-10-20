@@ -1,6 +1,6 @@
 import type { WorkspaceAuthoringCard } from '@t3x-dev/api-client';
 import { parsePath } from '@t3x-dev/yops';
-import { GitCompareArrows, History, Minus, Pencil, Plus } from 'lucide-react';
+import { Braces, GitCompareArrows, History, Minus, Pencil, Plus } from 'lucide-react';
 import { Fragment, type ReactNode } from 'react';
 import {
   activityChangeKind,
@@ -64,6 +64,53 @@ const dayLabel = (value: string) => {
 
 type ComposeChangeFilter = 'all' | 'modified' | 'added' | 'attention';
 
+export interface ComposeSchemaTimelineEvent {
+  id: string;
+  timestamp: string;
+  content: ReactNode;
+}
+
+function SchemaTimelineEntry({
+  event,
+  latest,
+}: {
+  event: ComposeSchemaTimelineEvent;
+  latest?: boolean;
+}) {
+  return (
+    <section
+      className={styles.event}
+      data-latest={latest || undefined}
+      aria-label="Event: Schema structure change"
+    >
+      <time className={styles.eventTime} dateTime={event.timestamp}>
+        {time(event.timestamp)}
+      </time>
+      <span
+        className={styles.icon}
+        data-kind="schema"
+        role="img"
+        aria-label="Schema structure change"
+      >
+        <Braces size={13} aria-hidden="true" />
+      </span>
+      <div className={`${styles.eventBody} ${styles.schemaBody}`}>{event.content}</div>
+    </section>
+  );
+}
+
+function SchemaTimeline({ event }: { event?: ComposeSchemaTimelineEvent }) {
+  if (!event) return null;
+  return (
+    <section className={styles.timeline} aria-label="Schema change timeline">
+      <p className={styles.date} title={day(event.timestamp)}>
+        <span>{dayLabel(event.timestamp)}</span>
+      </p>
+      <SchemaTimelineEntry event={event} latest />
+    </section>
+  );
+}
+
 function matchesFilter(card: WorkspaceAuthoringCard, filter: ComposeChangeFilter) {
   if (filter === 'all') return true;
   const kind = activityChangeKind([card]);
@@ -80,6 +127,7 @@ export function ComposeActivityTimeline({
   fallback,
   updatedAt,
   staging,
+  schemaEvent,
 }: {
   activity: ReturnType<typeof useComposeActivity>;
   filter?: ComposeChangeFilter;
@@ -88,12 +136,24 @@ export function ComposeActivityTimeline({
   fallback: ReactNode;
   updatedAt: string;
   staging?: ManualStagingControls;
+  schemaEvent?: ComposeSchemaTimelineEvent;
 }) {
   if (!activity.enabled)
     return scope === 'all' ? (
-      fallback
+      <>
+        <SchemaTimeline event={schemaEvent} />
+        {fallback}
+      </>
     ) : (
       <div className={styles.timeline}>
+        {schemaEvent ? (
+          <>
+            <p className={styles.date} title={day(schemaEvent.timestamp)}>
+              <span>{dayLabel(schemaEvent.timestamp)}</span>
+            </p>
+            <SchemaTimelineEntry event={schemaEvent} latest />
+          </>
+        ) : null}
         <p className={styles.date} title={day(updatedAt)}>
           <span data-compact={dayLabel(updatedAt).length > 9 || undefined}>
             {dayLabel(updatedAt)}
@@ -126,15 +186,24 @@ export function ComposeActivityTimeline({
         </section>
       </div>
     );
-  if (activity.loading) return <p className={styles.message}>Loading change activity…</p>;
+  if (activity.loading)
+    return (
+      <>
+        <SchemaTimeline event={schemaEvent} />
+        <p className={styles.message}>Loading change activity…</p>
+      </>
+    );
   if (activity.error)
     return (
-      <div className={styles.message} role="alert">
-        {activity.error}{' '}
-        <button onClick={activity.refresh} type="button">
-          Retry
-        </button>
-      </div>
+      <>
+        <SchemaTimeline event={schemaEvent} />
+        <div className={styles.message} role="alert">
+          {activity.error}{' '}
+          <button onClick={activity.refresh} type="button">
+            Retry
+          </button>
+        </div>
+      </>
     );
   if (scope === 'all') {
     const changes = composeDraftChangeCards(
@@ -143,25 +212,28 @@ export function ComposeActivityTimeline({
       activity.view?.current
     ).filter((card) => matchesFilter(card, filter));
     return (
-      <section className={draftStyles.panel} aria-label="All draft changes">
-        <header className={draftStyles.header}>
-          <div>
-            <h2>All draft changes</h2>
-            <p>The combined result of every saved action.</p>
-          </div>
-          <span>Base → Draft r{activity.compositionRevision ?? '—'}</span>
-        </header>
-        <ul className={draftStyles.list}>
-          {changes.map((card) =>
-            renderRow(activityOperation(card), { eventId: 'all', comparison: 'draft' })
-          )}
-        </ul>
-        {!changes.length ? (
-          <p className={draftStyles.empty}>
-            Current draft matches Base. Event history is retained.
-          </p>
-        ) : null}
-      </section>
+      <>
+        <SchemaTimeline event={schemaEvent} />
+        <section className={draftStyles.panel} aria-label="All draft changes">
+          <header className={draftStyles.header}>
+            <div>
+              <h2>All draft changes</h2>
+              <p>The combined result of every saved action.</p>
+            </div>
+            <span>Base → Draft r{activity.compositionRevision ?? '—'}</span>
+          </header>
+          <ul className={draftStyles.list}>
+            {changes.map((card) =>
+              renderRow(activityOperation(card), { eventId: 'all', comparison: 'draft' })
+            )}
+          </ul>
+          {!changes.length ? (
+            <p className={draftStyles.empty}>
+              Current draft matches Base. Event history is retained.
+            </p>
+          ) : null}
+        </section>
+      </>
     );
   }
   const events = groupComposeActivity(activity.actions);
@@ -171,6 +243,16 @@ export function ComposeActivityTimeline({
       cards: composeEventCards(event, activity.cards).filter((card) => matchesFilter(card, filter)),
     }))
     .filter(({ cards }) => cards.length > 0);
+  const entries = [
+    ...visibleEvents.map((item) => ({
+      ...item,
+      timestamp: item.event.endedAt,
+      schema: undefined as ComposeSchemaTimelineEvent | undefined,
+    })),
+    ...(schemaEvent
+      ? [{ event: null, cards: [], timestamp: schemaEvent.timestamp, schema: schemaEvent }]
+      : []),
+  ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   const stagedItems = staging?.items ?? [];
   const stagedGroups = stagedObjectGroups(stagedItems, staging?.current);
   const showStaging = stagedItems.length > 0;
@@ -180,7 +262,7 @@ export function ComposeActivityTimeline({
   const StagingIcon = changeMarkers[stagingKind].Icon;
   return (
     <section className={styles.timeline} aria-label="Change activity timeline">
-      {!visibleEvents.length && !showStaging ? (
+      {!entries.length && !showStaging ? (
         <p className={styles.message}>No matching changes.</p>
       ) : null}
       {showStaging ? (
@@ -281,7 +363,29 @@ export function ComposeActivityTimeline({
           </section>
         </>
       ) : null}
-      {visibleEvents.map(({ event, cards: eventCards }, index) => {
+      {entries.map(({ event, cards: eventCards, timestamp, schema }, index) => {
+        const previousDay =
+          index === 0
+            ? showStaging
+              ? day(stagingEndedAt)
+              : null
+            : day(entries[index - 1]!.timestamp);
+        const dateHeading =
+          previousDay === null || day(timestamp) !== previousDay ? (
+            <p className={styles.date} title={day(timestamp)}>
+              <span data-compact={dayLabel(timestamp).length > 9 || undefined}>
+                {dayLabel(timestamp)}
+              </span>
+            </p>
+          ) : null;
+        if (schema)
+          return (
+            <Fragment key={`schema:${schema.id}`}>
+              {dateHeading}
+              <SchemaTimelineEntry event={schema} latest={!showStaging && index === 0} />
+            </Fragment>
+          );
+        if (!event) return null;
         const latest = event.actions.at(-1)!;
         // Keep the event node consistent with the concrete rows the user can inspect.
         const kind = activityChangeKind(eventCards);
@@ -293,21 +397,9 @@ export function ComposeActivityTimeline({
         const actor =
           latest.actor.id === 'human:local-user' ? 'You' : composeActorLabel(latest.actor.id);
         const isLatest = !showStaging && index === 0;
-        const previousDay =
-          index === 0
-            ? showStaging
-              ? day(stagingEndedAt)
-              : null
-            : day(visibleEvents[index - 1]!.event.endedAt);
         return (
           <Fragment key={event.id}>
-            {previousDay === null || day(event.endedAt) !== previousDay ? (
-              <p className={styles.date} title={day(event.endedAt)}>
-                <span data-compact={dayLabel(event.endedAt).length > 9 || undefined}>
-                  {dayLabel(event.endedAt)}
-                </span>
-              </p>
-            ) : null}
+            {dateHeading}
             <section
               className={styles.event}
               data-latest={isLatest || undefined}

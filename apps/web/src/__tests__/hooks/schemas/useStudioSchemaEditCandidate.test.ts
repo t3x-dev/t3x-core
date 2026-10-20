@@ -44,3 +44,46 @@ it('recovers and replaces the server-managed candidate for the selected Workspac
   await waitFor(() => expect(result.current.candidate).toEqual(saved.candidate));
   expect(mocks.save).toHaveBeenCalledWith('project', 'workspace', expect.any(Object));
 });
+
+it('synchronizes generated snapshots only for the matching Workspace and removes listeners', async () => {
+  const original = { candidateId: 'schema-edit', revision: 2 };
+  const generated = { ...original, revision: 3 };
+  mocks.read.mockResolvedValue(original);
+  const { result, unmount } = renderHook(() =>
+    useStudioSchemaEditCandidate('project', 'workspace', 7)
+  );
+  await waitFor(() => expect(result.current.candidate).toBe(original));
+  const calls = mocks.read.mock.calls.length;
+  act(() => {
+    window.dispatchEvent(
+      new CustomEvent('t3x-schema-candidate-updated', {
+        detail: { projectId: 'project', workspaceId: 'another-workspace' },
+      })
+    );
+  });
+  expect(mocks.read).toHaveBeenCalledTimes(calls);
+  mocks.read.mockResolvedValue(generated);
+  act(() => {
+    window.dispatchEvent(
+      new CustomEvent('t3x-schema-candidate-updated', {
+        detail: { projectId: 'project', workspaceId: 'workspace' },
+      })
+    );
+  });
+  await waitFor(() => expect(result.current.candidate).toBe(generated));
+  const next = { ...generated, revision: 4 };
+  mocks.read.mockResolvedValue(next);
+  act(() => {
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: 't3x-schema-candidate-updated',
+        newValue: JSON.stringify({ projectId: 'project', workspaceId: 'workspace' }),
+      })
+    );
+  });
+  await waitFor(() => expect(result.current.candidate).toBe(next));
+  unmount();
+  const after = mocks.read.mock.calls.length;
+  window.dispatchEvent(new Event('focus'));
+  expect(mocks.read).toHaveBeenCalledTimes(after);
+});

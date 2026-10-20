@@ -91,6 +91,87 @@ describe('ComposeActivityTimeline', () => {
       {meta.comparison}: {String(operation.beforeValue)} → {String(operation.afterValue)}
     </div>
   );
+  it('orders Schema cards alongside content events with the same date groups and rail', () => {
+    render(
+      <ComposeActivityTimeline
+        activity={fixture()}
+        scope="latest"
+        renderRow={renderRow}
+        fallback={null}
+        updatedAt="2026-09-21"
+        schemaEvent={{
+          id: 'schema-one',
+          timestamp: '2026-09-21T11:30:00Z',
+          content: <section aria-label="Schema saved to Draft">Add Slot · owner</section>,
+        }}
+      />
+    );
+    const timeline = screen.getByRole('region', { name: 'Change activity timeline' });
+    const events = within(timeline).getAllByRole('region', { name: /^Event:/ });
+    expect(events.map((event) => event.getAttribute('aria-label'))).toEqual([
+      'Event: Refine release controls',
+      'Event: Schema structure change',
+      'Event: Adjust pilot allocation',
+      'Event: Sync rollout regions',
+      'Event: Prepare the pilot',
+    ]);
+    expect(
+      within(events[1]!).getByRole('region', { name: 'Schema saved to Draft' })
+    ).toHaveTextContent('Add Slot · owner');
+    expect(events[1]!.querySelector('time')).toHaveAttribute('dateTime', '2026-09-21T11:30:00Z');
+    expect(screen.getAllByText(/Sep 21/)).toHaveLength(1);
+    expect(events[1]).not.toHaveAttribute('data-latest');
+  });
+  it('shows a Schema-only event as the latest activity without an empty-content message', () => {
+    render(
+      <ComposeActivityTimeline
+        activity={{ ...fixture(), actions: [], cards: {} }}
+        scope="latest"
+        renderRow={renderRow}
+        fallback={null}
+        updatedAt="2026-09-21"
+        schemaEvent={{
+          id: 'schema-only',
+          timestamp: '2026-09-22T12:00:00Z',
+          content: <div>Schema candidate</div>,
+        }}
+      />
+    );
+    expect(screen.getByRole('region', { name: 'Event: Schema structure change' })).toHaveAttribute(
+      'data-latest',
+      'true'
+    );
+    expect(screen.queryByText('No matching changes.')).not.toBeInTheDocument();
+  });
+  it('keeps the Schema card available in all-changes view and when content activity is loading', () => {
+    const props = {
+      activity: fixture(),
+      scope: 'all' as const,
+      renderRow,
+      fallback: null,
+      updatedAt: '2026-09-21',
+      schemaEvent: {
+        id: 'schema',
+        timestamp: '2026-09-22T12:00:00Z',
+        content: <div>Schema candidate</div>,
+      },
+    };
+    const { rerender } = render(<ComposeActivityTimeline {...props} />);
+    expect(screen.getByRole('region', { name: 'Schema change timeline' })).toHaveTextContent(
+      'Schema candidate'
+    );
+    expect(screen.getByRole('region', { name: 'All draft changes' })).toBeVisible();
+    rerender(
+      <ComposeActivityTimeline
+        {...props}
+        scope="latest"
+        activity={{ ...fixture(), loading: true }}
+      />
+    );
+    expect(screen.getByRole('region', { name: 'Schema change timeline' })).toHaveTextContent(
+      'Schema candidate'
+    );
+  });
   it('keeps event rows visible without expandable cards', () => {
     render(
       <ComposeActivityTimeline

@@ -42,6 +42,49 @@ export function useAssistantSchemaSettings(
   return {
     record,
     error,
+    generate: async (settings: AssistantSchemaSettingsInput, discardStudioCandidate = false) => {
+      const started = epoch.current;
+      if (!record) throw new Error('Settings are unavailable.');
+      setError(undefined);
+      try {
+        const saved = await confirmAssistantSchemaSettings(
+          projectId,
+          workspaceId,
+          record,
+          settings,
+          {
+            generateSnapshot: true,
+            applyToDraft: true,
+            discardStudioCandidate,
+          }
+        );
+        if (started !== epoch.current) return;
+        setRecord(saved);
+        window.dispatchEvent(
+          new CustomEvent('t3x-schema-candidate-updated', { detail: { projectId, workspaceId } })
+        );
+        try {
+          localStorage.setItem(
+            't3x-schema-candidate-updated',
+            JSON.stringify({ projectId, workspaceId, at: Date.now() })
+          );
+        } catch {
+          /* Focus refresh remains available. */
+        }
+        return saved;
+      } catch (failure) {
+        const latest = conversationId
+          ? await readAssistantSchemaSettings(projectId, workspaceId, conversationId).catch(
+              () => null
+            )
+          : null;
+        if (started === epoch.current) {
+          if (latest) setRecord(latest);
+          setError(failure instanceof Error ? failure.message : 'Could not save Schema to Draft.');
+        }
+        throw failure;
+      }
+    },
     save: async (settings: AssistantSchemaSettingsInput | null) => {
       const started = epoch.current;
       if (!record) throw new Error('Settings are unavailable.');

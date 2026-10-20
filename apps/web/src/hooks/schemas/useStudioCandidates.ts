@@ -37,6 +37,15 @@ export function useStudioCandidates(projectId: string) {
       ++epoch.current;
     };
   }, [refresh]);
+  useEffect(() => {
+    const reload = () => void refresh();
+    window.addEventListener('focus', reload);
+    window.addEventListener('t3x-schema-candidate-updated', reload);
+    return () => {
+      window.removeEventListener('focus', reload);
+      window.removeEventListener('t3x-schema-candidate-updated', reload);
+    };
+  }, [refresh]);
   async function mutate<T>(action: () => Promise<T>) {
     const current = epoch.current;
     setPending(true);

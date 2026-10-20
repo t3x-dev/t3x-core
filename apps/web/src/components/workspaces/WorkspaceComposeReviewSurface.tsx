@@ -118,6 +118,7 @@ import {
   listWorkspaceSchemaChoices,
   workspaceSchemaChoiceId,
 } from '@/domain/workspaces/schemaBindings';
+import { useAssistantSchemaSettings } from '@/hooks/schemas/useAssistantSchemaSettings';
 import { useProjectYSchemaVersions } from '@/hooks/schemas/useProjectYSchemaVersions';
 import { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import { useWorkspaceAuthoringBootstrap } from '@/hooks/workspaces/useWorkspaceAuthoringBootstrap';
@@ -132,8 +133,12 @@ import type {
 } from '@/types/workspaces';
 import type { WorkspaceYOpsValue } from '@/types/workspaceYops';
 import { cn } from '@/utils/cn';
+import { AssistantSchemaSettingsContent } from './AssistantSchemaSettingsCard';
 import { ComposeActivityChangeRow } from './ComposeActivityChangeRow';
-import { ComposeActivityTimeline } from './ComposeActivityTimeline';
+import {
+  ComposeActivityTimeline,
+  type ComposeSchemaTimelineEvent,
+} from './ComposeActivityTimeline';
 import { ComposeAuthoringAssistant } from './ComposeAuthoringAssistant';
 import { ComposeFieldDialog } from './ComposeFieldDialog';
 import { ComposeNodeHistoryPanel } from './ComposeNodeHistoryPanel';
@@ -605,6 +610,8 @@ function ComposeSurface({
   const [changeScope, setChangeScope] = useState<'latest' | 'all'>('latest');
   const [activitySelection, setActivitySelection] = useState<ComposeActivitySelection | null>(null);
   const [structurePending, setStructurePending] = useState(false);
+  const [schemaCandidateEpoch, setSchemaCandidateEpoch] = useState(0);
+  const [schemaConversationId, setSchemaConversationId] = useState<string>();
   const [structureError, setStructureError] = useState<string | null>(null);
   const [staged, setStaged] = useState<StagedManualCard[]>([]);
   const publishedCurrent = activity.view?.current;
@@ -687,6 +694,7 @@ function ComposeSurface({
     setStructureError(null);
     setFieldDialog(null);
     setSidePanel('chat');
+    setSchemaConversationId(undefined);
   }, [candidate.id]);
   const selectActivity = useCallback(
     (selection: ComposeActivitySelection, panel: 'history' | 'chat' | 'preserve' = 'history') => {
@@ -711,6 +719,12 @@ function ComposeSurface({
     (source) =>
       source.type === 'chat' && source.title === 'Compose assistant' && source.conversationId
   )?.conversationId;
+  const schemaSettings = useAssistantSchemaSettings(
+    candidate.projectId,
+    candidate.id,
+    schemaConversationId ?? sourceConversationId,
+    String(activity.view?.workspaceRevision ?? candidate.revision) + ':' + schemaCandidateEpoch
+  );
   const sourceMaterialIds = controller.materialSources
     .filter((source) => source.included)
     .map((source) => source.materialId);
@@ -898,6 +912,9 @@ function ComposeSurface({
         )}
       </aside>
       <main className={composeStyles.composeMain}>
+        {schemaSettings.error && !schemaSettings.record ? (
+          <p role="alert">{schemaSettings.error}</p>
+        ) : null}
         {activity.newActivity ? (
           <output className={composeStyles.newActivity}>
             <span>
@@ -918,6 +935,26 @@ function ComposeSurface({
           changeFilter="all"
           changeScope={changeScope}
           staging={stagingControls}
+          schemaEvent={
+            schemaSettings.record && schemaSettings.record.status !== 'cancelled'
+              ? {
+                  id: schemaSettings.record.settingsId,
+                  timestamp: schemaSettings.record.createdAt ?? candidate.updatedAt,
+                  content: (
+                    <AssistantSchemaSettingsContent
+                      projectId={candidate.projectId}
+                      workspaceId={candidate.id}
+                      state={schemaSettings}
+                      disabled={staged.length > 0}
+                      onChanged={() => {
+                        setSchemaCandidateEpoch((value) => value + 1);
+                        activity.refresh();
+                      }}
+                    />
+                  ),
+                }
+              : undefined
+          }
         />
       </main>
 
@@ -974,6 +1011,10 @@ function ComposeSurface({
             activityActions={activity.actions}
             activityCards={activity.cards}
             projectId={candidate.projectId}
+            onSchemaCandidateChange={(id) => {
+              if (id) setSchemaConversationId(id);
+              setSchemaCandidateEpoch((value) => value + 1);
+            }}
             prefill={controller.assistantPrefill}
             onPrefillApplied={controller.clearAssistantPrefill}
             proposalBlockedHint={staged.length ? UNGROUPED_MANUAL_HINT : undefined}
@@ -1228,6 +1269,7 @@ function ProposedDraftPanel({
   changeFilter,
   changeScope,
   staging,
+  schemaEvent,
 }: {
   activity: ReturnType<typeof useComposeActivity>;
   activitySelection: ComposeActivitySelection | null;
@@ -1239,6 +1281,7 @@ function ProposedDraftPanel({
   changeFilter: ComposeChangeFilter;
   changeScope: 'latest' | 'all';
   staging?: ManualStagingControls;
+  schemaEvent?: ComposeSchemaTimelineEvent;
 }) {
   const operations = candidate.yopsDraft.operations;
   const editRequest = useRef(0);
@@ -1395,6 +1438,7 @@ function ProposedDraftPanel({
         filter={changeFilter}
         scope={changeScope}
         staging={staging}
+        schemaEvent={schemaEvent}
         updatedAt={candidate.updatedAt}
         renderRow={renderChangeRow}
         fallback={

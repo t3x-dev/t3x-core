@@ -635,7 +635,9 @@ export function useSourceThreadGeneration({
                 }
                 if (event.status === 'completed') {
                   if (event.name === 'showSchemaSettings' || event.result?.kind === 'schema')
-                    assistantRef.current?.onSchemaSettings?.();
+                    assistantRef.current?.onSchemaSettings?.(
+                      event.result?.settings?.conversationId
+                    );
                   unfinished.delete(event.operationId);
                   if (event.result?.transitionId)
                     completedCandidates.add(event.result.transitionId);
