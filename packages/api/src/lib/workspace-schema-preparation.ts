@@ -390,7 +390,11 @@ export async function prepareWorkspaceSchema(
       composition_hash: snapshotHash,
       compiled_schema_hash: prepared.target.schemaHash,
       compiler_version: 'schema-content-preparation@1',
-      manifest_json: { source: prepared.source, selectionHash: prepared.target.selectionHash },
+      manifest_json: {
+        source: prepared.source,
+        selectionHash: prepared.target.selectionHash,
+        ...('sources' in prepared.target ? { sources: prepared.target.sources } : {}),
+      },
       schema_json: { ...prepared.target.schema },
       render_plan_json: prepared.target.renderPlan,
       origins_json: prepared.target.origins,

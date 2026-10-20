@@ -13,11 +13,13 @@ import {
   type AnyDB,
   ConflictError,
   findWorkspaceDraft,
+  findYSchemaCompositionSnapshot,
   saveWorkspaceSchemaPreparation,
   saveYSchemaCompositionSnapshot,
 } from '@t3x-dev/storage';
-import { sha256CompositionValue } from '@t3x-dev/yschema';
+import { normalizeYSchemaObject, sha256CompositionValue } from '@t3x-dev/yschema';
 import { type compileStudioSelection, StudioError } from './schema-studio-preview';
+import type { WorkspaceSchemaEditBasis } from './workspace-schema-edit-basis';
 
 /** Shared Studio/Chat application service. Callers must authorize the exact source selection. */
 export async function saveStudioEditCandidate(
@@ -26,18 +28,57 @@ export async function saveStudioEditCandidate(
   input: SaveStudioSchemaEditCandidateInput,
   selection: Awaited<ReturnType<typeof compileStudioSelection>>,
   origin: WorkspaceSchemaEditOrigin,
-  guard?: { workspaceRevision: number; assistantSchemaSettings: unknown }
+  guard?: {
+    workspaceRevision: number;
+    assistantSchemaSettings: unknown;
+    basis?: WorkspaceSchemaEditBasis;
+  }
 ) {
+  let base = guard?.basis;
+  if (!base && input.schemaDefinition) {
+    const previous = await findWorkspaceDraft(db, projectId, input.workspaceId);
+    const stored = previous?.workspace_state?.schemaEditCandidate;
+    const edit = stored ? parseWorkspaceSchemaEditCandidate(stored) : null;
+    const reference = edit?.authoringDraft?.base;
+    if (reference?.kind === 'composition') {
+      const snapshot = await findYSchemaCompositionSnapshot(db, {
+        project_id: projectId,
+        composition_id: reference.compositionId,
+        composition_revision: reference.compositionRevision,
+        compiled_schema_hash: reference.schemaHash,
+      });
+      if (
+        !snapshot ||
+        snapshot.compositionHash !== reference.compositionHash ||
+        (await sha256CompositionValue(normalizeYSchemaObject(snapshot.schemaJson))) !==
+          reference.schemaHash ||
+        (await sha256CompositionValue(edit!.baseSources)) !==
+          (await sha256CompositionValue(selection.sources))
+      )
+        throw new StudioError('CONFLICT', 'Reload the exact saved Schema editing Base.');
+      base = {
+        reference,
+        schema: normalizeYSchemaObject(snapshot.schemaJson),
+        schemaHash: reference.schemaHash,
+        sources: selection.sources,
+        selectionHash: selection.selectionHash,
+        renderPlan: snapshot.renderPlanJson as Record<string, unknown>[],
+        origins: snapshot.originsJson,
+      };
+    }
+  }
+  const baseSchema = base?.schema ?? selection.schema;
+  const baseHash = base?.schemaHash ?? selection.schemaHash;
   if (
     input.schemaDefinition &&
-    (input.baseSchemaHash !== selection.schemaHash || Object.keys(input.localContribution).length)
+    (input.baseSchemaHash !== baseHash || Object.keys(input.localContribution).length)
   )
     throw new StudioError(
       'CONFLICT',
       'Reload the exact Base and submit either a Schema Effect or a local contribution.'
     );
   const applied = input.schemaDefinition
-    ? await compileWorkspaceSchemaDefinition(selection.schema, input.schemaDefinition)
+    ? await compileWorkspaceSchemaDefinition(baseSchema, input.schemaDefinition)
     : null;
   if (applied && selection.modules.length) {
     await saveYSchemaCompositionSnapshot(db, {
@@ -55,6 +96,20 @@ export async function saveStudioEditCandidate(
     });
   }
   const candidateId = `sec_${(await sha256CompositionValue({ projectId, workspaceId: input.workspaceId })).slice(7)}`;
+  if (base)
+    await saveYSchemaCompositionSnapshot(db, {
+      snapshot_id: `schema-edit-base:${projectId}:${base.reference.compositionId}:${base.reference.compositionRevision}`,
+      project_id: projectId,
+      composition_id: base.reference.compositionId,
+      composition_revision: base.reference.compositionRevision,
+      composition_hash: base.reference.compositionHash,
+      compiled_schema_hash: base.schemaHash,
+      compiler_version: 'workspace-schema-edit-base@1',
+      manifest_json: { sources: base.sources, selectionHash: base.selectionHash },
+      schema_json: { ...base.schema },
+      render_plan_json: base.renderPlan,
+      origins_json: base.origins,
+    });
   for (let attempt = 0; attempt < 2; attempt++) {
     const draft = await findWorkspaceDraft(db, projectId, input.workspaceId);
     if (!draft?.workspace_state)
@@ -77,7 +132,8 @@ export async function saveStudioEditCandidate(
                 schema: 't3x.application/workspace-schema-authoring-draft/v1' as const,
                 revision: input.ifRevision + 1,
                 base:
-                  selection.modules.length === 0 && selection.sources.length === 1
+                  base?.reference ??
+                  (selection.modules.length === 0 && selection.sources.length === 1
                     ? {
                         kind: 'published_schema' as const,
                         projectId: selection.sources[0]!.projectId,
@@ -93,7 +149,7 @@ export async function saveStudioEditCandidate(
                         compositionRevision: 1,
                         compositionHash: selection.selectionHash as `sha256:${string}`,
                         schemaHash: selection.schemaHash as `sha256:${string}`,
-                      },
+                      }),
                 effect: { profile: 'yops.ops.v1' as const, operations: applied.operations },
                 resultSchemaHash: applied.schemaHash,
               },
@@ -113,7 +169,12 @@ export async function saveStudioEditCandidate(
       return {
         outcome: result.kind,
         workspaceRevision: draft.revision,
-        candidate: StudioSchemaEditCandidateSchema.parse(result.candidate),
+        candidate: StudioSchemaEditCandidateSchema.parse({
+          ...result.candidate,
+          ...(result.candidate.authoringDraft?.base.kind === 'composition'
+            ? { baseDefinition: { ...baseSchema } }
+            : {}),
+        }),
       };
     try {
       const saved = await saveWorkspaceSchemaPreparation(db, {
@@ -126,7 +187,12 @@ export async function saveStudioEditCandidate(
       return {
         outcome: result.kind,
         workspaceRevision: saved.revision,
-        candidate: StudioSchemaEditCandidateSchema.parse(result.candidate),
+        candidate: StudioSchemaEditCandidateSchema.parse({
+          ...result.candidate,
+          ...(result.candidate.authoringDraft?.base.kind === 'composition'
+            ? { baseDefinition: { ...baseSchema } }
+            : {}),
+        }),
       };
     } catch (error) {
       if (error instanceof ConflictError && attempt === 0 && !guard) continue;

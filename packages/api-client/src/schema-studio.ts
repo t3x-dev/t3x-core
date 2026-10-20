@@ -437,6 +437,8 @@ export const StudioSchemaEditCandidateSchema = z.object({
   revision: z.number().int().positive(),
   baseSources: z.array(StudioSourceSchema).min(1),
   localContribution: StudioSchemaEditLocalContributionSchema,
+  /** Read-only exact editing Base, projected by the server; never persisted as client input. */
+  baseDefinition: z.record(z.string(), z.unknown()).optional(),
   authoringDraft: z
     .object({
       schema: z.literal('t3x.application/workspace-schema-authoring-draft/v1'),

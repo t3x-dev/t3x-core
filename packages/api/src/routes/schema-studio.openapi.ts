@@ -24,6 +24,7 @@ import {
   ConflictError,
   DraftAuthoringConflictError,
   findWorkspaceDraft,
+  findYSchemaCompositionSnapshot,
   getTransitionRefHead,
   listSchemaStudioCandidates,
   listYSchemaCatalogReleases,
@@ -32,7 +33,7 @@ import {
   transactWorkspaceAuthoring,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
-import { parseYSchema, sha256CompositionValue } from '@t3x-dev/yschema';
+import { normalizeYSchemaObject, parseYSchema, sha256CompositionValue } from '@t3x-dev/yschema';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess, getProjectAccessPrincipal } from '../lib/project-access';
@@ -294,8 +295,29 @@ schemaStudioRoutes.openapi(readSchemaEditCandidateRoute, async (c) => {
       return errorResponse(c, 'NOT_FOUND', 'A Schema edit source is no longer available.');
   }
   c.header('Cache-Control', 'private, no-store');
+  let baseDefinition: Record<string, unknown> | undefined;
+  if (candidate.authoringDraft?.base.kind === 'composition') {
+    const base = candidate.authoringDraft.base;
+    const snapshot = await findYSchemaCompositionSnapshot(db, {
+      project_id: projectId,
+      composition_id: base.compositionId,
+      composition_revision: base.compositionRevision,
+      compiled_schema_hash: base.schemaHash,
+    });
+    if (
+      !snapshot ||
+      snapshot.compositionHash !== base.compositionHash ||
+      (await sha256CompositionValue(normalizeYSchemaObject(snapshot.schemaJson))) !==
+        base.schemaHash
+    )
+      return errorResponse(c, 'CONFLICT', 'The exact saved Schema Base is unavailable.');
+    baseDefinition = { ...normalizeYSchemaObject(snapshot.schemaJson) };
+  }
   return c.json(
-    { success: true as const, data: StudioSchemaEditCandidateSchema.parse(candidate) },
+    {
+      success: true as const,
+      data: StudioSchemaEditCandidateSchema.parse({ ...candidate, baseDefinition }),
+    },
     200
   );
 });

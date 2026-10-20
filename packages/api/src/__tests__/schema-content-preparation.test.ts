@@ -266,7 +266,9 @@ beforeAll(async () => {
   const setup = await setupTestDB();
   db = setup.db;
   cleanup = setup.cleanup;
-  projectId = (await insertProject(db, { name: 'Schema preparation' })).projectId;
+  projectId = (
+    await insertProject(db, { name: 'Schema preparation', ownerId: 'schema-preparation-owner' })
+  ).projectId;
   sourceId = (await insertProject(db, { name: 'Preparation sources' })).projectId;
   renameId = await addSchema('renamed', migratedSchema);
   inputId = await addSchema(
@@ -645,6 +647,7 @@ it('edits an existing strict Schema through guarded YOps, adopts, prepares evide
   expect(committed.commit).toBeDefined();
   preview = (await (await studio('preview', previewInput)).json()).data;
   const publishInput = {
+    visibility: 'community',
     candidateIds: [candidateId],
     schemaEditCandidate: candidateRef,
     ifRevision: preview.workspace.revision,
@@ -665,14 +668,14 @@ it('edits an existing strict Schema through guarded YOps, adopts, prepares evide
     project_id: projectId,
   });
   expect(stored!.manifest.schema).toMatchObject({ strict: true, nodes: definition.nodes });
-  expect(stored!.manifest.blueprint).toMatchObject({ authoringDraft: saved.authoringDraft });
+  expect(stored!.manifest.blueprint).not.toHaveProperty('authoringDraft');
   const catalog = await app.request(
     `/v1/projects/${projectId}/yschema/catalog?${new URLSearchParams({ canonical_name: publishInput.canonicalName })}`
   );
   expect(catalog.status).toBe(200);
   expect((await catalog.json()).data.items[0].release.hash).toBe(release.source.hash);
   const reading = await app.request(
-    `/v1/projects/${projectId}/schema-studio/source?${new URLSearchParams({ sourceProjectId: projectId, canonicalName: publishInput.canonicalName, version: '1.0.0', expectedHash: release.source.hash })}`
+    `/v1/projects/${projectId}/schema-studio/source?${new URLSearchParams({ canonicalName: publishInput.canonicalName, version: '1.0.0', expectedHash: release.source.hash })}`
   );
   expect(reading.status).toBe(200);
   expect((await reading.json()).data.manifest).toEqual(stored!.manifest);

@@ -12,7 +12,12 @@ import {
   compileWorkspaceSchemaDefinition,
   WorkspaceSchemaYOpsError,
 } from '@t3x-dev/core';
-import { type AnyDB, findSchemaStudioCandidate, findWorkspaceDraft } from '@t3x-dev/storage';
+import {
+  type AnyDB,
+  findSchemaStudioCandidate,
+  findWorkspaceDraft,
+  findYSchemaCompositionSnapshot,
+} from '@t3x-dev/storage';
 import {
   compileYSchemaCompositionV2,
   diffYSchemas,
@@ -288,6 +293,29 @@ export async function previewStudio(
       );
     try {
       const authoring = editCandidate?.authoringDraft;
+      if (authoring?.base.kind === 'composition') {
+        const base = authoring.base;
+        const snapshot = await findYSchemaCompositionSnapshot(db, {
+          project_id: projectId,
+          composition_id: base.compositionId,
+          composition_revision: base.compositionRevision,
+          compiled_schema_hash: base.schemaHash,
+        });
+        if (
+          !snapshot ||
+          snapshot.compositionHash !== base.compositionHash ||
+          (await sha256CompositionValue(normalizeYSchemaObject(snapshot.schemaJson))) !==
+            base.schemaHash
+        )
+          throw new StudioError('CONFLICT', 'The exact Schema edit Base snapshot is unavailable.');
+        selected = {
+          ...selected,
+          schema: normalizeYSchemaObject(snapshot.schemaJson),
+          schemaHash: base.schemaHash,
+          renderPlan: snapshot.renderPlanJson as typeof selected.renderPlan,
+          origins: snapshot.originsJson as typeof selected.origins,
+        } as typeof selected;
+      }
       const expected = authoring?.base.schemaHash ?? input.baseSchemaHash;
       if (!expected || expected !== selected.schemaHash)
         throw new StudioError(
