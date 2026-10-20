@@ -9,7 +9,7 @@ import { NewRepositoryPage } from '@/components/project/NewRepositoryPage';
 import { OrganizationSettingsPage } from '@/components/project/OrganizationSettingsPage';
 import { ProjectDirectoryPage } from '@/components/project/ProjectDirectoryPage';
 import { ProjectShell } from '@/components/project/ProjectShell';
-import { parseProjectTab, resolveProjectTab } from '@/components/project/projectTabModel';
+import { parseProjectTab, resolveProjectRouteTab } from '@/components/project/projectTabModel';
 import { RepositoryNestedPage } from '@/components/project/RepositoryNestedPage';
 import { getProjectIdRepoPath } from '@/domain/project/repoPath';
 import {
@@ -67,11 +67,9 @@ function OwnerRepoProjectPageContent() {
     // waits for a fresh address lookup and its access checks.
     return knownProject ? (
       <ProjectShell
-        activeTab={
-          view === 'changes'
-            ? 'workspaces'
-            : resolveProjectTab(parseProjectTab(view), new URLSearchParams(query).get('schemaView'))
-        }
+        activeTab={resolveProjectRouteTab(segments[1] ?? null, new URLSearchParams(query))}
+        branch={new URLSearchParams(query).get('branch')}
+        settingsReturnTo={`${pathname}${query ? `?${query}` : ''}`}
         project={knownProject}
       >
         {loading}

@@ -632,6 +632,31 @@ describe('ProjectStateTab', () => {
     expect(hookMocks.loadCommits).toHaveBeenCalledTimes(calls);
   });
 
+  it('labels a historical revision and returns to the originating History detail', async () => {
+    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
+    hookMocks.loadCommit.mockImplementation(async (hash: string) =>
+      hash === PRD_COMMIT.hash ? PRD_COMMIT : PARENT_COMMIT
+    );
+    const returnTo = `/team/repo/history?view=list&q=title&commit=${encodeURIComponent(PRD_COMMIT.hash)}`;
+    navigationMocks.search = new URLSearchParams({
+      commit: PRD_COMMIT.hash,
+      branch: 'main',
+      returnTo,
+    }).toString();
+    renderStateTab();
+    expect(await screen.findByText(/Historical version/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to previous page' })).toHaveAttribute(
+      'href',
+      returnTo
+    );
+    const traceLink = await screen.findByRole('link', { name: 'View in history' });
+    const destination = new URL(traceLink.getAttribute('href')!, 'http://localhost');
+    expect(destination.searchParams.get('commit')).toBe(PRD_COMMIT.hash);
+    expect(destination.searchParams.get('returnTo')).toBe(
+      `${navigationMocks.pathname}?${navigationMocks.search}`
+    );
+  });
+
   it('loads the branch HEAD into the restored Structure layout and navigation', async () => {
     renderStateTab();
     await screen.findByRole('region', { name: 'Structured state tree' });

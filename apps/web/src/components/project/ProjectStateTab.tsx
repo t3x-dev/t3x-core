@@ -50,7 +50,11 @@ import {
   type StructuredDiffKind,
 } from '@/domain/diff/structuredStateDiff';
 import { shortHash } from '@/domain/format/formatters';
-import { getProjectIdRepoPath, getProjectIdWorkspacePath } from '@/domain/project/repoPath';
+import {
+  getProjectIdHistoryPath,
+  getProjectIdRepoPath,
+  getProjectIdWorkspacePath,
+} from '@/domain/project/repoPath';
 import {
   buildCanonicalStateYaml,
   buildStatePointRows,
@@ -82,7 +86,7 @@ import { useCanvasStore } from '@/store/canvasStore';
 import type { ApiCommit } from '@/types/api';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
-import { buildReturnTo, withReturnTo } from '@/utils/navigationReturn';
+import { buildReturnTo, safeInternalReturnTo } from '@/utils/navigationReturn';
 import inspectionStyles from './StateInspection.module.css';
 import navigationStyles from './StateNavigationControls.module.css';
 import overviewStyles from './StateOverviewView.module.css';
@@ -476,10 +480,11 @@ export function ProjectStateTab({
     validationError
   );
   const currentStateReturnTo = buildReturnTo(pathname, routeQuery);
-  const historyHref = withReturnTo(
-    `/project/${encodeURIComponent(projectId)}/history?branch=${encodeURIComponent(branchFocus)}`,
-    currentStateReturnTo
-  );
+  const historyHref = getProjectIdHistoryPath(projectId, {
+    branch: branchFocus,
+    returnTo: currentStateReturnTo,
+  });
+  const historicalReturnHref = safeInternalReturnTo(searchParams.get('returnTo'), '');
   const schemaHref = `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ tab: 'schemas', branch: branchFocus }).toString()}`;
   const workspaceHref = getProjectIdWorkspacePath(projectId, { branch: branchFocus });
   const mainHeadCommitHash = branchHeads.main ?? null;
@@ -640,6 +645,18 @@ export function ProjectStateTab({
                 onViewChange={updateActiveView}
                 workspaceHref={workspaceHref}
               />
+              {focusedCommitHash ? (
+                <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-[var(--stroke-divider)] px-4 py-2 text-xs text-[var(--text-secondary)]">
+                  <span>
+                    Historical version · <code>{shortHash(focusedCommitHash)}</code> · Read-only
+                  </span>
+                  {historicalReturnHref ? (
+                    <Link href={historicalReturnHref} className="text-[var(--accent-commit)]">
+                      Back to previous page
+                    </Link>
+                  ) : null}
+                </div>
+              ) : null}
 
               {activeView === 'structure' ? (
                 <div className="sr-only">
@@ -698,6 +715,7 @@ export function ProjectStateTab({
                   hideHeader
                   navigation={null}
                   historyHref={historyHref}
+                  historyReturnTo={currentStateReturnTo}
                   workspaceHref={workspaceHref}
                   commits={snapshot.commits}
                   projectId={projectId}
@@ -1689,6 +1707,8 @@ function StateFieldTracePanel({
   row: StateStructureRow | null;
   schemaName: string;
 }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   if (!row) {
     return (
       <aside className="rounded-[5px] border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4">
@@ -1778,7 +1798,11 @@ function StateFieldTracePanel({
       ) : null}
       <Link
         className={inspectionStyles.lnk}
-        href={`/project/${encodeURIComponent(headCommit.project_id)}/history?branch=${encodeURIComponent(branch)}`}
+        href={getProjectIdHistoryPath(headCommit.project_id, {
+          branch,
+          commit: headCommit.hash,
+          returnTo: buildReturnTo(pathname, searchParams),
+        })}
       >
         View in history <ExternalLink />
       </Link>

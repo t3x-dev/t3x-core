@@ -101,6 +101,7 @@ export function ProjectDetailPageContent({
     searchParams.get('schemaView')
   );
   const isSettingsRedirect = activeTab === 'settings';
+  const isHistoryRedirect = activeTab === 'history';
   const isSchemaStudio = activeTab === 'schemas';
   const isSchemaRelease = activeTab === 'browse' && searchParams.get('schemaView') === 'release';
   const isEmbeddedCanvasSurface =
@@ -119,13 +120,13 @@ export function ProjectDetailPageContent({
   }, [showIntroDemo]);
 
   useEffect(() => {
-    if (!isSettingsRedirect) return;
+    if (!isSettingsRedirect && !isHistoryRedirect) return;
     const query = new URLSearchParams(searchParams.toString());
     query.delete('tab');
     router.replace(
-      `/project/${encodeURIComponent(projectId)}/settings${query.size ? `?${query}` : ''}${window.location.hash}`
+      `/project/${encodeURIComponent(projectId)}/${isHistoryRedirect ? 'history' : 'settings'}${query.size ? `?${query}` : ''}${window.location.hash}`
     );
-  }, [isSettingsRedirect, projectId, router, searchParams]);
+  }, [isHistoryRedirect, isSettingsRedirect, projectId, router, searchParams]);
 
   const projectFromStore = useProjectStore(
     (state) => state.details?.[projectId] ?? state.projects.find((item) => item.id === projectId)
@@ -347,7 +348,7 @@ export function ProjectDetailPageContent({
   // direct/new project URL that is not present in the list cache yet.
   const projectLookupPending = !projectFromStore && !fetchedProject && !projectLookupError;
 
-  if (isSettingsRedirect) {
+  if (isSettingsRedirect || isHistoryRedirect) {
     return null;
   }
 

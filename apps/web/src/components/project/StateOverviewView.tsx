@@ -25,6 +25,7 @@ import { StateSemanticReader, StateValueReader } from '@/components/project/Stat
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { getProjectIdHistoryPath } from '@/domain/project/repoPath';
 import { useStateOverview } from '@/hooks/commits/useStateOverview';
 import type { ApiCommit } from '@/types/api';
 import { RepositoryProfileEditor } from './RepositoryProfileEditor';
@@ -67,6 +68,7 @@ export function StateOverviewView({
   headerOnly = false,
   hideHeader = false,
   historyHref,
+  historyReturnTo,
   workspaceHref,
   commits = [],
   introductionSource = 'repository',
@@ -86,6 +88,7 @@ export function StateOverviewView({
   headerOnly?: boolean;
   hideHeader?: boolean;
   historyHref?: string;
+  historyReturnTo?: string;
   workspaceHref?: string;
   commits?: ApiCommit[];
   projectId: string;
@@ -500,7 +503,11 @@ export function StateOverviewView({
                       <span className={styles.commitDot} />
                       <div>
                         <Link
-                          href={`/project/${encodeURIComponent(projectId)}?view=overview&branch=${encodeURIComponent(commit.branch)}&commit=${encodeURIComponent(commit.hash)}`}
+                          href={getProjectIdHistoryPath(projectId, {
+                            branch: commit.branch,
+                            commit: commit.hash,
+                            returnTo: historyReturnTo,
+                          })}
                         >
                           {commit.message || 'Committed state'}
                         </Link>

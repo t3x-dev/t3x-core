@@ -5,6 +5,11 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectCommunityTab } from '@/components/project/ProjectCommunityTab';
 
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/team/repo/community',
+  useSearchParams: () => new URLSearchParams('branch=feature%2Frelease'),
+}));
+
 const mocks = vi.hoisted(() => ({
   guests: { data: undefined as unknown, error: null as Error | null, isLoading: false },
   members: { data: undefined as unknown, error: null as Error | null, isLoading: false },
@@ -53,7 +58,7 @@ describe('ProjectCommunityTab', () => {
     );
     expect(screen.getByRole('link', { name: 'Commit history' })).toHaveAttribute(
       'href',
-      '/project/project%20one/history?branch=feature%2Frelease&view=list'
+      '/project/project%20one/history?branch=feature%2Frelease&view=list&returnTo=%2Fteam%2Frepo%2Fcommunity%3Fbranch%3Dfeature%252Frelease'
     );
   });
 

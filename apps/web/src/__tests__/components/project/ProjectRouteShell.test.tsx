@@ -138,4 +138,64 @@ describe('ProjectRouteShell', () => {
       'page'
     );
   });
+
+  it.each([
+    '/project/proj_test/history',
+    '/team/Test-Project/history',
+    '/team/Test-Project/diff',
+  ])('owns %s in History and preserves the exact Settings return destination', async (pathname) => {
+    navigation.pathname = pathname;
+    navigation.search = 'branch=feature%2Frelease&view=list&commit=sha256%3Aabc&q=fix';
+    render(
+      <ProjectRouteShell projectId="proj_test">
+        <div>History content</div>
+      </ProjectRouteShell>
+    );
+    expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'State' })).not.toHaveAttribute('aria-current');
+    await waitFor(() => {
+      const settings = new URL(
+        screen.getByRole('link', { name: 'Settings' }).getAttribute('href')!,
+        'http://localhost'
+      );
+      expect(settings.searchParams.get('returnTo')).toBe(`${pathname}?${navigation.search}`);
+      expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute(
+        'href',
+        '/team/Test-Project?branch=feature%2Frelease'
+      );
+    });
+  });
+
+  it('does not mistake a repository name for the active route', () => {
+    navigation.pathname = '/team/history/settings';
+    navigation.search = 'returnTo=%2Fteam%2Fhistory%2Fhistory%3Fcommit%3Dsha256%253Aabc';
+    render(
+      <ProjectRouteShell projectId="proj_test">
+        <div>Settings content</div>
+      </ProjectRouteShell>
+    );
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'href',
+      `${navigation.pathname}?${navigation.search}`
+    );
+    expect(screen.getByRole('link', { name: 'History' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('canonicalizes History query links with their full detail context', async () => {
+    navigation.pathname = '/project/proj_test';
+    navigation.search =
+      'tab=history&branch=feature%2Frelease&commit=sha256%3Aabc&view=list&author=Maya&q=fix&returnTo=%2Fteam%2FTest-Project%2Fcommunity';
+    render(
+      <ProjectRouteShell projectId="proj_test">
+        <div>History</div>
+      </ProjectRouteShell>
+    );
+    await waitFor(() =>
+      expect(navigation.replace).toHaveBeenCalledWith(
+        `/team/Test-Project/history?${navigation.search.replace('tab=history&', '')}`,
+        { scroll: false }
+      )
+    );
+  });
 });

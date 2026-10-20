@@ -7,6 +7,7 @@ export type ProjectTabId =
   | 'browse'
   | 'workspaces'
   | 'reviews'
+  | 'history'
   | 'outputs'
   | 'community'
   | 'settings';
@@ -23,6 +24,7 @@ export const PROJECT_TABS: ProjectTabDefinition[] = [
   { id: 'schemas', label: 'Schemas' },
   { id: 'workspaces', label: 'Workspaces' },
   { id: 'reviews', label: 'Pull requests', segment: 'pull-requests' },
+  { id: 'history', label: 'History' },
   { id: 'community', label: 'Community' },
   { id: 'settings', label: 'Settings' },
 ];
@@ -59,4 +61,17 @@ export function resolveProjectTab(tab: ProjectTabId, schemaView: string | null):
 
 export function projectTabKeepsWorkspace(tab: ProjectTabId): boolean {
   return tab === 'schemas' || tab === 'discover' || tab === 'browse' || tab === 'workspaces';
+}
+
+/** Resolve the page within a repository, including detail routes owned by a tab. */
+export function resolveProjectRouteTab(
+  view: string | null,
+  searchParams: URLSearchParams
+): ProjectTabId {
+  if (view === 'history' || view === 'diff') return 'history';
+  if (view === 'changes') return 'workspaces';
+  return resolveProjectTab(
+    parseProjectTab(view || searchParams.get('tab')),
+    searchParams.get('schemaView')
+  );
 }

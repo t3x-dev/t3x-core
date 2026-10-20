@@ -168,6 +168,62 @@ it('opens canonical settings and nested changes without bouncing to an ID URL', 
   expect(mocks.replace).not.toHaveBeenCalled();
 });
 it.each([
+  'history',
+  'diff',
+])('keeps %s under History while loading and opens its nested route', async (view) => {
+  mocks.params.repoPath = ['Repo', view];
+  mocks.query = 'branch=feature%2Frelease&commit=sha256%3Aabc&view=list';
+  useProjectStore.setState({
+    projects: [
+      {
+        id: 'proj_outside_list',
+        name: 'Repo',
+        canonical_path: '/alice/Repo',
+        namespace: 'alice',
+        status: 'active',
+      } as ProjectSummary,
+    ],
+  });
+  let resolveAddress!: (value: unknown) => void;
+  mocks.resolve.mockReturnValue(
+    new Promise((resolve) => {
+      resolveAddress = resolve;
+    })
+  );
+  render(<OwnerRepoProjectPage />);
+  expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute('aria-current', 'page');
+  await act(async () =>
+    resolveAddress({
+      project_id: 'proj_outside_list',
+      namespace: 'alice',
+      name: 'Repo',
+      canonical_path: '/alice/Repo',
+      path_status: 'ready',
+      redirect: false,
+    })
+  );
+  expect(await screen.findByTestId('nested')).toHaveTextContent(`proj_outside_list ${view}`);
+  expect(mocks.replace).not.toHaveBeenCalled();
+});
+it('canonicalizes History bookmarks without losing filters or nested return context', async () => {
+  const context = new URLSearchParams({
+    branch: 'feature/100%',
+    commit: 'sha256:abc',
+    view: 'list',
+    q: 'retry payment',
+    author: 'Maya Chen',
+    returnTo: '/alice/Repo/community?branch=feature%2F100%25',
+  }).toString();
+  mocks.query = `tab=history&${context}`;
+  window.location.hash = '#changes';
+  render(<OwnerRepoProjectPage />);
+  await waitFor(() =>
+    expect(mocks.replace).toHaveBeenCalledWith(`/alice/Repo/history?${context}#changes`, {
+      scroll: false,
+    })
+  );
+});
+it.each([
   'workspace_branch:main',
   'workspace_branch%3Amain',
 ])('keeps the canonical review URL stable when route params contain %s', async (workspaceId) => {

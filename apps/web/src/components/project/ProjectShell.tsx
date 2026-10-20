@@ -34,6 +34,7 @@ export interface ProjectShellProps {
   children: ReactNode;
   project: ProjectShellProject;
   workspaceId?: string | null;
+  settingsReturnTo?: string;
 }
 
 export function ProjectShell({
@@ -45,6 +46,7 @@ export function ProjectShell({
   ownerSlug,
   pullRequestNumber,
   workspaceId,
+  settingsReturnTo,
 }: ProjectShellProps) {
   const visibilityLabel =
     project.visibility === 'public'
@@ -66,8 +68,11 @@ export function ProjectShell({
     returnParams.set('pr', String(pullRequestNumber));
   }
   const returnQuery = returnParams.toString();
-  const returnTo = returnQuery ? `${repoPath}?${returnQuery}` : repoPath;
-  const settingsHref = `${repoPath}/settings?returnTo=${encodeURIComponent(returnTo)}`;
+  const returnTo = settingsReturnTo ?? (returnQuery ? `${repoPath}?${returnQuery}` : repoPath);
+  const settingsHref =
+    activeTab === 'settings' && settingsReturnTo
+      ? settingsReturnTo
+      : `${repoPath}/settings?returnTo=${encodeURIComponent(returnTo)}`;
   const actualOwner = project.namespace ?? ownerSlug;
   const newRepositoryHref = actualOwner ? `/${encodeURIComponent(actualOwner)}/new` : '/';
   return (
@@ -92,7 +97,10 @@ export function ProjectShell({
       )}
       <main
         className={
-          immersive || activeTab === 'state' || activeTab === 'workspaces'
+          immersive ||
+          activeTab === 'state' ||
+          activeTab === 'workspaces' ||
+          activeTab === 'history'
             ? 'relative min-h-0 flex-1 overflow-hidden'
             : activeTab === 'reviews' || activeTab === 'community' || activeTab === 'settings'
               ? 'relative min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable_both-edges] bg-[var(--surface-card)]'

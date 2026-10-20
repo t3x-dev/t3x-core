@@ -764,4 +764,19 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.queryByText(/Project not found/i)).toBeNull();
     expect(replaceMock).not.toHaveBeenCalled();
   });
+
+  it('redirects the History query entry to its standalone page without rendering State', async () => {
+    searchParamsValue = new URLSearchParams(
+      'tab=history&branch=feature%2Frelease&commit=sha256%3Aabc&view=list&q=fix'
+    );
+    pathnameValue = '/project/proj_test';
+    renderProjectContent();
+    await waitFor(() =>
+      expect(replaceMock).toHaveBeenCalledWith(
+        '/project/proj_test/history?branch=feature%2Frelease&commit=sha256%3Aabc&view=list&q=fix'
+      )
+    );
+    expect(screen.queryByRole('tab', { name: 'Structure' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
+  });
 });

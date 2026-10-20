@@ -9,17 +9,9 @@ import {
 } from '@/domain/project/repositoryLocation';
 import { useProjectDetail } from '@/hooks/projects/useProjectDetail';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
+import { buildReturnTo } from '@/utils/navigationReturn';
 import { ProjectShell } from './ProjectShell';
-import { type ProjectTabId, parseProjectTab, resolveProjectTab } from './projectTabModel';
-
-function activeProjectTab(pathname: string, searchParams: URLSearchParams): ProjectTabId {
-  if (pathname.includes('/changes/')) return 'workspaces';
-  if (pathname.includes('/settings')) return 'settings';
-  return resolveProjectTab(
-    parseProjectTab(searchParams.get('tab')),
-    searchParams.get('schemaView')
-  );
-}
+import { resolveProjectRouteTab } from './projectTabModel';
 
 function isProjectIndex(pathname: string): boolean {
   return /^\/project\/[^/]+\/?$/.test(pathname);
@@ -99,9 +91,14 @@ export function ProjectRouteShell({
 
   return (
     <ProjectShell
-      activeTab={activeProjectTab(pathname, new URLSearchParams(searchParams.toString()))}
+      activeTab={resolveProjectRouteTab(
+        pathname.split('/').filter(Boolean)[2] ?? null,
+        new URLSearchParams(query)
+      )}
+      branch={searchParams.get('branch') === 'all' ? null : searchParams.get('branch')}
       project={project}
       projectIdNavigation={Boolean(projectId)}
+      settingsReturnTo={buildReturnTo(pathname, query)}
     >
       {children}
     </ProjectShell>

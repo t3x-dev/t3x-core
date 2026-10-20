@@ -16,11 +16,14 @@ import {
   type Users,
 } from 'lucide-react';
 import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { getProjectTabSegment } from '@/components/project/projectTabModel';
+import { getProjectIdHistoryPath } from '@/domain/project/repoPath';
 import { useNamespaceCollaboration } from '@/hooks/accounts/useNamespaceCollaboration';
 import { useProjectCollaboration } from '@/hooks/accounts/useProjectCollaboration';
 import { useProjectCommunityActivity } from '@/hooks/project/useProjectCommunityActivity';
+import { buildReturnTo } from '@/utils/navigationReturn';
 import styles from './ProjectCommunityTab.module.css';
 
 interface ProjectCommunityTabProps {
@@ -37,6 +40,8 @@ interface CommunityDestination {
 }
 
 export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabProps) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [filter, setFilter] = useState<'all' | 'prs' | 'workspaces'>('all');
   const [pullRequestsExpanded, setPullRequestsExpanded] = useState(false);
   const [workspacesExpanded, setWorkspacesExpanded] = useState(false);
@@ -92,7 +97,11 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
     },
     {
       description: 'Inspect accepted changes.',
-      href: `${projectPath}/history?${new URLSearchParams({ branch: focusedBranch, view: 'list' }).toString()}`,
+      href: getProjectIdHistoryPath(projectId, {
+        branch: branch?.trim(),
+        view: 'list',
+        returnTo: buildReturnTo(pathname, searchParams),
+      }),
       icon: List,
       label: 'Commit history',
       tone: 'commit',

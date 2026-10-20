@@ -76,6 +76,7 @@ it('uses actual metadata and committed values for the release layout and handles
       projectVisibility="private"
       schemaName="Actual schema"
       historyHref="/history"
+      historyReturnTo="/team/repo?branch=release%2Fcandidate"
       workspaceHref="/workspace"
       commits={[
         {
@@ -94,7 +95,7 @@ it('uses actual metadata and committed values for the release layout and handles
   expect(screen.getByText(/Author not recorded/)).toBeVisible();
   expect(screen.getByRole('link', { name: 'Actual commit' })).toHaveAttribute(
     'href',
-    expect.stringContaining('branch=release%2Fcandidate')
+    `/project/p/history?branch=release%2Fcandidate&commit=${encodeURIComponent(props.commitDigest)}&returnTo=%2Fteam%2Frepo%3Fbranch%3Drelease%252Fcandidate`
   );
   expect(screen.getByRole('link', { name: 'Propose change' })).toHaveAttribute(
     'href',

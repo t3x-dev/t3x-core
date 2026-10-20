@@ -109,6 +109,7 @@ describe('ProjectTabs', () => {
       'schemas',
       'workspaces',
       'reviews',
+      'history',
       'community',
       'settings',
     ]);
@@ -123,5 +124,25 @@ describe('ProjectTabs', () => {
     expect(getProjectTabSegment('outputs')).toBe('outputs');
     expect(parseProjectTab('discover')).toBe('discover');
     expect(parseProjectTab('browse')).toBe('browse');
+  });
+
+  it('places History beside PRs with branch context and without Workspace selection', () => {
+    render(
+      <ProjectTabs
+        activeTab="history"
+        branch="feature/release"
+        workspaceId="workspace_42"
+        projectIdNavigation
+        repoPath="/project/proj_123"
+      />
+    );
+    const history = screen.getByRole('link', { name: 'History' });
+    expect(history).toHaveAttribute('aria-current', 'page');
+    expect(history).toHaveAttribute(
+      'href',
+      '/project/proj_123?tab=history&branch=feature%2Frelease'
+    );
+    expect(history.previousElementSibling).toHaveAttribute('aria-label', 'Pull requests');
+    expect(parseProjectTab('history')).toBe('history');
   });
 });

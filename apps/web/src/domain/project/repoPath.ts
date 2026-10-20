@@ -28,6 +28,23 @@ export function getProjectIdRepoPath(projectId: string): string {
   return `/project/${encodeURIComponent(projectId)}`;
 }
 
+export function getProjectIdHistoryPath(
+  projectId: string,
+  options: {
+    branch?: string | null;
+    commit?: string | null;
+    view?: 'list' | 'canvas';
+    returnTo?: string | null;
+  } = {}
+): string {
+  const params = new URLSearchParams();
+  if (options.branch && options.branch !== 'all') params.set('branch', options.branch);
+  if (options.commit) params.set('commit', options.commit);
+  if (options.view) params.set('view', options.view);
+  if (options.returnTo) params.set('returnTo', options.returnTo);
+  return `${getProjectIdRepoPath(projectId)}/history${params.size ? `?${params}` : ''}`;
+}
+
 export function getProjectIdCanvasPath(projectId: string): string {
   return `${getProjectIdRepoPath(projectId)}?view=canvas`;
 }

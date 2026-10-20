@@ -18,6 +18,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
+  ArrowLeft,
   Bot,
   CheckCircle2,
   Circle,
@@ -26,7 +27,8 @@ import {
   RotateCcw,
   Sparkles,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { AutopilotSettings } from '@/components/autopilot/AutopilotSettings';
 import { ProjectCollaborationPanel } from '@/components/project/ProjectCollaborationPanel';
@@ -53,6 +55,7 @@ import {
 import palette from '@/styles/management-palette.module.css';
 import type { ProviderInfo, RoleAssignment } from '@/types/api';
 import { cn } from '@/utils/cn';
+import { safeInternalReturnTo } from '@/utils/navigationReturn';
 
 type RoleGroup = 'generation' | 'embedding' | 'extraction' | 'merge';
 
@@ -237,6 +240,8 @@ export default function ProjectSettingsPage() {
 function ProjectSettingsPageContent() {
   const { projectId } = useParams<{ projectId: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnHref = safeInternalReturnTo(searchParams.get('returnTo'), '');
   const settings = useProjectSettings(projectId);
   const { saveProjectProviderConfig } = useProviderCommands();
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
@@ -408,6 +413,15 @@ function ProjectSettingsPageContent() {
 
       <div className={generalStyles.content}>
         <header className={generalStyles.pageHeading}>
+          {returnHref ? (
+            <Link
+              className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)] hover:underline"
+              href={returnHref}
+            >
+              <ArrowLeft aria-hidden="true" className="size-3.5" />
+              Back to previous page
+            </Link>
+          ) : null}
           {project ? (
             <span className={generalStyles.scope}>
               {project.namespace ? `${project.namespace} / ` : ''}
