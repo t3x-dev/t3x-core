@@ -1,55 +1,16 @@
-.shell {
-  min-height: 100dvh;
-  background: var(--surface-panel);
-  color: var(--text-primary);
-}
-
 .page {
   --field-internal-gap: 6px;
   --field-gap: 20px;
-  --section-gap: 32px;
   width: 100%;
   max-width: 800px;
-  margin: 0 auto;
-  padding: 20px 32px 48px;
+  min-width: 0;
+  margin-inline: auto;
+  padding: 24px 32px 48px;
 }
 
-.backLink {
-  display: inline-flex;
-  min-height: 32px;
-  align-items: center;
-  gap: 8px;
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-.backLink:hover {
-  color: var(--text-primary);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.backLink:focus-visible {
-  outline: 2px solid var(--accent-commit);
-  outline-offset: 3px;
-}
-
-.heading {
-  margin: 12px 0 28px;
-}
-
-.heading h1 {
-  font-size: 24px;
-  font-weight: 600;
-  line-height: 1.35;
-}
-
-.heading p {
-  margin-top: var(--field-internal-gap);
-  color: var(--text-secondary);
-  font-size: 14px;
-  line-height: 1.5;
+.page .requiredNote {
+  margin-top: 4px;
+  font-size: 12px;
 }
 
 .section {
@@ -57,17 +18,11 @@
 }
 
 .section + .section {
-  margin-top: calc(var(--section-gap) / 2);
-  padding-top: calc(var(--section-gap) / 2);
-  border-top: 1px solid var(--stroke-divider);
+  margin-top: 28px;
 }
 
 .sectionHeading {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 4px 16px;
+  min-width: 0;
   margin-bottom: 16px;
 }
 
@@ -78,8 +33,9 @@
 }
 
 .sectionHeading p {
+  margin-top: 4px;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -89,9 +45,22 @@
   min-width: 0;
 }
 
+.configuration {
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+}
+
+.configuration > div {
+  padding: 16px;
+}
+
+.configuration > div + div {
+  border-top: 1px solid var(--stroke-divider);
+}
+
 .nameRow {
   display: grid;
-  grid-template-columns: minmax(140px, 200px) 12px minmax(0, 1fr);
+  grid-template-columns: minmax(140px, 180px) 12px minmax(0, 1fr);
   align-items: end;
   gap: 12px;
 }
@@ -120,8 +89,8 @@
 .field input,
 .tagsField input,
 .selectControl select {
-  height: 40px;
-  min-height: 40px;
+  height: 36px;
+  min-height: 36px;
   border: 1px solid var(--stroke-default);
   border-radius: var(--radius-md);
   background: var(--surface-card);
@@ -131,7 +100,7 @@
 }
 
 .field input {
-  padding: 8px 12px;
+  padding: 6px 12px;
 }
 
 .field input:hover:not(:disabled),
@@ -142,11 +111,16 @@
 .field input:focus-visible,
 .tagsField input:focus-visible {
   border-color: var(--accent-commit);
-  outline: none;
-  box-shadow: 0 0 0 3px var(--accent-commit-soft);
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  box-shadow: none;
 }
 
 .tagsField input[aria-invalid="true"] {
+  border-color: var(--status-error);
+}
+
+.field input[aria-invalid="true"] {
   border-color: var(--status-error);
 }
 
@@ -159,7 +133,7 @@
   width: 100%;
   min-width: 0;
   appearance: none;
-  padding: 8px 32px 8px 36px;
+  padding: 6px 32px 6px 36px;
   background: var(--management-control-bg);
   cursor: pointer;
 }
@@ -170,8 +144,9 @@
 
 .selectControl select:focus-visible {
   border-color: var(--accent-commit);
-  outline: none;
-  box-shadow: 0 0 0 3px var(--accent-commit-soft);
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  box-shadow: none;
 }
 
 .selectControl select:disabled {
@@ -197,13 +172,14 @@
 }
 
 .pathSeparator {
-  padding-bottom: 8px;
+  padding-bottom: 6px;
   color: var(--text-secondary);
   font-size: 20px;
   line-height: 24px;
 }
 
 .nameHelp {
+  min-height: 20px;
   margin-top: var(--field-internal-gap);
   color: var(--text-secondary);
   font-size: 13px;
@@ -286,7 +262,7 @@
 }
 
 .tagsField :global([data-slot="button"]) {
-  height: 40px;
+  height: 36px;
 }
 
 .tagsField > div > p {
@@ -299,12 +275,14 @@
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  margin-top: var(--section-gap);
-  padding-top: 20px;
-  border-top: 1px solid var(--stroke-divider);
+  margin-top: 24px;
 }
 
-.footer p {
+.footer button {
+  min-width: 168px;
+}
+
+.progress {
   max-width: 420px;
   color: var(--text-secondary);
   font-size: 13px;
@@ -312,23 +290,12 @@
 }
 
 .error {
-  margin-top: var(--field-gap);
-  padding: 12px 16px;
-  border: 1px solid var(--status-error);
-  border-radius: var(--radius-lg);
-  color: var(--status-error);
-  font-size: 13px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
+  margin-top: 20px;
 }
 
 @media (max-width: 600px) {
   .page {
-    padding: 16px 20px 32px;
-  }
-
-  .heading h1 {
-    font-size: 22px;
+    padding: 20px 20px 32px;
   }
 
   .nameRow {

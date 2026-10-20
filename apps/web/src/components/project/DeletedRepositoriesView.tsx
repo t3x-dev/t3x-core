@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Info, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { AlertDialog } from '@/components/ui/alert-dialog';
@@ -20,6 +20,7 @@ import palette from '@/styles/management-palette.module.css';
 import type { Project } from '@/types/api';
 import { cn } from '@/utils/cn';
 import styles from './DeletedRepositoriesView.module.css';
+import management from './RepositoryManagement.module.css';
 
 export function DeletedRepositoriesView({
   namespace,
@@ -35,13 +36,17 @@ export function DeletedRepositoriesView({
   const [confirmation, setConfirmation] = useState('');
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
   const [error, setError] = useState<ReturnType<typeof repositoryMutationError> | null>(null);
-  const [notice, setNotice] = useState<{ message: string; href?: string } | null>(null);
+  const [notice, setNotice] = useState<{
+    message: string;
+    href?: string;
+    uncertain?: boolean;
+  } | null>(null);
   const identity = target ? `${target.project.namespace ?? namespace}/${target.project.name}` : '';
 
   function close() {
     if (list.pending) return;
     if (error?.refreshRequired) {
-      setNotice({ message: error.message });
+      setNotice({ message: error.message, uncertain: true });
       void list.refresh();
     }
     setTarget(null);
@@ -78,121 +83,149 @@ export function DeletedRepositoriesView({
   }
 
   return (
-    <div className={cn(palette.scope, styles.page)}>
-      <Link href={backHref} scroll={false} className={styles.backLink}>
+    <div className={cn(palette.scope, management.scope, styles.page)}>
+      <Link href={backHref} scroll={false} className={management.backLink}>
         <ArrowLeft aria-hidden="true" className="size-4" /> Back to repositories
       </Link>
-      <header className={styles.heading}>
-        <div className={styles.headingCopy}>
-          <p className={styles.eyebrow}>{namespace}</p>
-          <h1>Deleted repositories</h1>
-          <p>
-            Data and all names stay reserved until permanent deletion. Only repositories you can
-            manage are shown.
-          </p>
+      <header className={management.heading}>
+        <p className={management.context}>{namespace}</p>
+        <h1>Deleted repositories</h1>
+        <p>
+          Restore repositories you still need, or permanently delete them to release their names.
+        </p>
+      </header>
+      <div className={cn(management.notice, styles.retentionNote)}>
+        <Info aria-hidden="true" className="size-4" />
+        <p>
+          Data and all names stay reserved until permanent deletion. Only repositories you can
+          manage are shown.
+        </p>
+      </div>
+      <div className={styles.toolbar}>
+        <div>
+          <h2>Repositories</h2>
+          <output className={styles.listStatus} aria-live="polite">
+            {list.loading
+              ? 'Loading deleted repositories…'
+              : list.error
+                ? 'List unavailable'
+                : `${list.projects.length} on this page`}
+          </output>
         </div>
         <Button
           aria-label="Refresh deleted repositories"
           title="Refresh deleted repositories"
           disabled={list.loading || list.pending}
           onClick={() => void list.refresh()}
-          size="icon-lg"
-          variant="canvas-outline"
+          size="icon"
+          variant="outline"
         >
           <RefreshCw
             aria-hidden="true"
             className={list.loading ? 'size-4 animate-spin motion-reduce:animate-none' : 'size-4'}
           />
         </Button>
-      </header>
+      </div>
       {notice && (
-        <output className={cn('block', styles.notice)}>
-          {notice.message}{' '}
-          {notice.href && (
-            <Link href={notice.href} className="text-[var(--accent-commit)] underline">
-              Open repository
-            </Link>
+        <div className={cn(management.notice, styles.notice)}>
+          {notice.uncertain ? (
+            <Info aria-hidden="true" className="size-4" />
+          ) : (
+            <CheckCircle2 aria-hidden="true" className={cn('size-4', management.successIcon)} />
           )}
-        </output>
+          <output>
+            {notice.message}{' '}
+            {notice.href && <Link href={notice.href}>Open repository</Link>}
+          </output>
+        </div>
       )}
-      {list.error ? (
-        <div role="alert" className={styles.errorState}>
+      {list.error && (
+        <div role="alert" className={cn(management.notice, styles.errorState)}>
           <p>Couldn&apos;t load deleted repositories. {list.error}</p>
           <Button
             disabled={list.loading}
             onClick={() => void list.refresh()}
-            variant="canvas-outline"
+            variant="outline"
           >
             Retry
           </Button>
         </div>
-      ) : list.loading ? (
-        <output className={cn('block', styles.loading)}>Loading deleted repositories...</output>
-      ) : list.projects.length === 0 ? (
-        <div className={styles.emptyState}>
-          <span className={styles.emptyIcon} aria-hidden="true">
-            <Trash2 className="size-5" />
-          </span>
-          <h2>No deleted repositories</h2>
-          <p>No deleted repositories to manage in this namespace.</p>
-          <p>Repositories you delete will appear here while their data is kept.</p>
-        </div>
-      ) : (
-        <ul aria-label="Deleted repositories" className={styles.list}>
-          {list.projects.map((project) => (
-            <li key={project.project_id} className={styles.repository}>
-              <div className={styles.repositoryCopy}>
-                <h2>{project.name}</h2>
-                <p className={styles.path}>
-                  {project.namespace ?? namespace}/{project.name}
-                </p>
-                <p className={styles.metadata}>
-                  <span className={styles.visibility}>Visibility: {project.visibility}</span>
-                  <span>
-                    Deleted{' '}
-                    {project.deleted_at ? (
-                      <time dateTime={project.deleted_at}>
-                        {new Date(project.deleted_at).toLocaleString()}
-                      </time>
-                    ) : (
-                      'at an unknown time'
-                    )}
-                  </span>
-                </p>
-              </div>
-              <div className={styles.actions}>
-                {project.can_restore && (
-                  <Button
-                    disabled={list.pending}
-                    variant="canvas-outline"
-                    onClick={() => {
-                      setTarget({ project, action: 'restore' });
-                      setError(null);
-                      setConfirmation('');
-                    }}
-                  >
-                    <RotateCcw aria-hidden="true" className="size-4" /> Restore
-                  </Button>
-                )}
-                {project.can_permanently_delete && (
-                  <Button
-                    disabled={list.pending}
-                    className="text-[var(--status-error)]"
-                    variant="ghost"
-                    onClick={() => {
-                      setTarget({ project, action: 'delete' });
-                      setError(null);
-                      setConfirmation('');
-                    }}
-                  >
-                    Permanently delete
-                  </Button>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
       )}
+      <div className={styles.listFrame} aria-busy={list.loading}>
+        <div className={styles.columnHeadings} aria-hidden="true">
+          <span>Repository</span>
+          <span>Deleted</span>
+          <span>Actions</span>
+        </div>
+        {list.loading && list.projects.length === 0 ? (
+          <output className={cn('block', styles.loading)}>Loading deleted repositories...</output>
+        ) : !list.error && list.projects.length === 0 ? (
+          <div className={styles.emptyState}>
+            <span className={styles.emptyIcon} aria-hidden="true">
+              <Trash2 className="size-5" />
+            </span>
+            <h2>No deleted repositories</h2>
+            <p>No deleted repositories to manage in this namespace.</p>
+            <p>Repositories you delete will appear here while their data is kept.</p>
+          </div>
+        ) : list.projects.length > 0 ? (
+          <ul aria-label="Deleted repositories">
+            {list.projects.map((project) => (
+              <li key={project.project_id} className={styles.repository}>
+                <div className={styles.repositoryCopy}>
+                  <h3>{project.name}</h3>
+                  <p className={styles.path}>
+                    {project.namespace ?? namespace}/{project.name}
+                  </p>
+                  <p className={styles.visibility}>Visibility: {project.visibility}</p>
+                </div>
+                <p className={styles.deletedAt}>
+                  <span className="sr-only">Deleted </span>
+                  <span className={styles.mobileLabel} aria-hidden="true">
+                    Deleted{' '}
+                  </span>
+                  {project.deleted_at ? (
+                    <time dateTime={project.deleted_at}>
+                      {new Date(project.deleted_at).toLocaleString()}
+                    </time>
+                  ) : (
+                    'at an unknown time'
+                  )}
+                </p>
+                <div className={styles.actions}>
+                  {project.can_restore && (
+                    <Button
+                      disabled={list.pending || list.loading || Boolean(list.error)}
+                      variant="outline"
+                      onClick={() => {
+                        setTarget({ project, action: 'restore' });
+                        setError(null);
+                        setConfirmation('');
+                      }}
+                    >
+                      <RotateCcw aria-hidden="true" className="size-4" /> Restore
+                    </Button>
+                  )}
+                  {project.can_permanently_delete && (
+                    <Button
+                      disabled={list.pending || list.loading || Boolean(list.error)}
+                      className={styles.permanentDelete}
+                      variant="ghost"
+                      onClick={() => {
+                        setTarget({ project, action: 'delete' });
+                        setError(null);
+                        setConfirmation('');
+                      }}
+                    >
+                      Permanently delete
+                    </Button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
       {(list.page > 1 || list.hasNext) && (
         <nav aria-label="Deleted repositories pagination" className={styles.pagination}>
           <Button
@@ -218,7 +251,10 @@ export function DeletedRepositoriesView({
           if (!open) close();
         }}
       >
-        <DialogContent className={cn(palette.scope, 'sm:max-w-[480px]')}>
+        <DialogContent
+          className={cn(palette.scope, management.scope, management.dialog, 'sm:max-w-[480px]')}
+          showCloseButton={!list.pending}
+        >
           <DialogHeader>
             <DialogTitle>
               {target?.action === 'restore'
@@ -293,7 +329,7 @@ export function DeletedRepositoriesView({
         </DialogContent>
       </Dialog>
       <AlertDialog
-        contentClassName={palette.scope}
+        contentClassName={cn(palette.scope, management.scope, management.dialog)}
         open={deleteConfirmationOpen && target?.action === 'delete'}
         onOpenChange={(open) => {
           if (!list.pending) setDeleteConfirmationOpen(open);

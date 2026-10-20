@@ -2,84 +2,43 @@
   min-width: 0;
 }
 
-.backLink {
-  display: inline-flex;
-  min-height: 36px;
-  align-items: center;
-  gap: 8px;
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-.backLink:hover {
-  color: var(--text-primary);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.backLink:focus-visible {
-  outline: 2px solid var(--accent-commit);
-  outline-offset: 3px;
-}
-
-.heading {
+.toolbar {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  margin: 28px 0 36px;
+  gap: 16px;
+  margin: 24px 0 12px;
 }
 
-.headingCopy {
-  min-width: 0;
-}
-
-.heading h1 {
-  font-size: 26px;
+.toolbar h2 {
+  font-size: 16px;
   font-weight: 600;
-  line-height: 1.35;
 }
 
-.heading p {
-  max-width: 620px;
-  margin-top: 12px;
+.listStatus {
+  display: block;
+  min-height: 20px;
+  margin-top: 4px;
   color: var(--text-secondary);
-  font-size: 14px;
-  line-height: 1.7;
-  overflow-wrap: anywhere;
-}
-
-.heading .eyebrow {
-  margin: 0 0 8px;
   font-size: 12px;
 }
 
 .notice,
 .errorState {
-  margin-bottom: 24px;
-  padding: 16px 18px;
-  border: 1px solid var(--stroke-default);
-  border-radius: var(--radius-lg);
-  background: var(--surface-card);
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.7;
-  overflow-wrap: anywhere;
+  margin-bottom: 16px;
 }
 
-.notice a {
-  color: var(--accent-commit);
+.retentionNote {
+  color: var(--text-secondary);
 }
 
 .errorState {
-  display: grid;
-  justify-items: start;
-  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .loading {
-  padding-block: 40px;
+  padding: 40px 20px;
   color: var(--text-secondary);
   font-size: 14px;
 }
@@ -118,26 +77,42 @@
   line-height: 1.65;
 }
 
-.list {
-  border-top: 1px solid var(--stroke-divider);
+.listFrame {
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+}
+
+.columnHeadings,
+.repository {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 160px 280px;
+  align-items: center;
+  gap: 20px;
+}
+
+.columnHeadings {
+  padding: 10px 16px;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background: var(--surface-app);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.columnHeadings > :last-child {
+  text-align: right;
 }
 
 .repository {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px 32px;
-  padding: 24px 4px;
-  border-bottom: 1px solid var(--stroke-divider);
+  padding: 16px;
+  border-top: 1px solid var(--stroke-divider);
 }
 
 .repositoryCopy {
-  flex: 1 1 240px;
   min-width: 0;
 }
 
-.repository h2 {
+.repository h3 {
   font-size: 15px;
   font-weight: 600;
   line-height: 1.5;
@@ -147,34 +122,44 @@
 .path {
   margin-top: 4px;
   color: var(--text-tertiary);
-  font-family: var(--font-geist-mono), monospace;
   font-size: 12px;
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
 
-.metadata {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 16px;
-  margin-top: 12px;
-  color: var(--text-tertiary);
-  font-size: 12px;
+.deletedAt {
+  color: var(--text-secondary);
+  font-size: 13px;
   line-height: 1.6;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.mobileLabel {
+  display: none;
 }
 
 .visibility {
-  padding: 2px 8px;
-  border: 1px solid var(--stroke-default);
-  border-radius: var(--radius-full);
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
+}
+
+.permanentDelete {
+  color: var(--status-error);
+}
+
+.permanentDelete:hover:not(:disabled),
+.permanentDelete:focus-visible {
+  color: var(--status-error);
 }
 
 .pagination {
@@ -187,22 +172,49 @@
   color: var(--text-secondary);
 }
 
-@media (max-width: 600px) {
-  .heading {
-    gap: 16px;
-    margin-bottom: 28px;
-  }
-
-  .heading h1 {
-    font-size: 24px;
+@media (max-width: 880px) {
+  .columnHeadings {
+    display: none;
   }
 
   .repository {
-    gap: 16px;
-    padding-block: 20px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 16px;
+  }
+
+  .repository:first-child {
+    border-top: 0;
+  }
+
+  .deletedAt {
+    grid-column: 1;
+  }
+
+  .mobileLabel {
+    display: inline;
   }
 
   .actions {
-    flex-basis: 100%;
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
+}
+
+@media (max-width: 600px) {
+  .repository {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .actions {
+    grid-column: 1;
+    grid-row: auto;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    margin-top: 4px;
+  }
+
+  .errorState {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

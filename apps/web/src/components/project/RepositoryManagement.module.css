@@ -1,0 +1,176 @@
+/* Shared only by the repository directory, creation form, deleted list and
+   their portals. Existing management neutrals and dark tokens remain intact. */
+:global(:root:not(.dark)) .scope {
+  --accent-commit-soft: #ddf4ff;
+  --color-brand-hover: #0860ca;
+  --repository-action-active: #0757ba;
+  --repository-action-disabled: #818b98;
+  --status-success-muted: #dafbe1;
+}
+
+.scope :global([data-slot="button"]) {
+  box-shadow: none;
+}
+
+.scope :global([data-slot="button"][data-variant="default"]) {
+  border: 1px solid var(--color-brand);
+}
+
+.scope :global([data-slot="button"][data-variant="default"]:hover:not(:disabled)) {
+  border-color: var(--color-brand-hover);
+}
+
+.scope :global([data-slot="button"][data-variant="default"]:active:not(:disabled)) {
+  background: var(--repository-action-active, var(--color-brand-hover));
+  border-color: var(--repository-action-active, var(--color-brand-hover));
+}
+
+:global(:root:not(.dark)) .scope :global([data-slot="button"][data-variant="default"]:disabled) {
+  background: var(--repository-action-disabled);
+  border-color: var(--repository-action-disabled);
+  color: var(--primary-foreground);
+  opacity: 1;
+}
+
+.scope :global([data-slot="button"]:focus-visible) {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+.shell {
+  height: 100dvh;
+  overflow: auto;
+  background: var(--surface-panel);
+  color: var(--text-primary);
+}
+
+.container {
+  width: 100%;
+  max-width: 1120px;
+  min-width: 0;
+  margin-inline: auto;
+  padding: 32px 40px 64px;
+}
+
+.backLink {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.backLink:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.backLink:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.heading {
+  margin-bottom: 28px;
+  min-width: 0;
+}
+
+.heading h1 {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.heading > p {
+  max-width: 680px;
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.heading .context {
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-app);
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.notice > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.notice a {
+  color: var(--accent-commit);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.successIcon {
+  color: var(--status-success);
+}
+
+.error {
+  color: var(--status-error);
+}
+
+.dialog {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+
+.dialog :global([data-slot="dialog-header"]) {
+  text-align: left;
+}
+
+.dialog :global([data-slot="dialog-title"]) {
+  padding-right: 20px;
+  line-height: 1.4;
+}
+
+.dialog :global([data-slot="dialog-description"]) {
+  line-height: 1.6;
+}
+
+.dialog :global([data-slot="dialog-footer"]) {
+  flex-wrap: wrap;
+}
+
+.dialog :global([data-slot="dialog-footer"] [data-slot="button"]) {
+  height: auto;
+  min-height: 36px;
+  white-space: normal;
+}
+
+@media (max-width: 720px) {
+  .container {
+    padding: 24px 24px 48px;
+  }
+}
+
+@media (max-width: 420px) {
+  .container {
+    padding-inline: 16px;
+  }
+}

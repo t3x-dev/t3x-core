@@ -292,13 +292,15 @@ describe('ProjectDirectoryPage', () => {
     ).toHaveAttribute('href', '/?view=deleted');
   });
 
-  it.each(['empty', 'error'])('keeps a bottom entry when the active list is %s', (state) => {
+  it.each(['empty', 'error'])('keeps a toolbar entry when the active list is %s', (state) => {
     hookProjects = [];
     if (state === 'error') hookError = 'Offline';
     currentPath = '/alice';
     render(<ProjectDirectoryPage ownerSlug="alice" />);
     const entry = screen.getByRole('link', { name: 'Deleted repositories' });
-    expect(entry.closest('footer')).not.toBeNull();
+    expect(entry.parentElement).toContainElement(
+      screen.getByRole('button', { name: 'Refresh repositories' })
+    );
     expect(entry).toHaveAttribute('href', '/alice?view=deleted');
   });
 

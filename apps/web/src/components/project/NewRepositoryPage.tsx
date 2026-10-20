@@ -11,6 +11,7 @@ import {
   ChevronDown,
   Globe,
   Link2,
+  Loader2,
   LockKeyhole,
   UserRound,
 } from 'lucide-react';
@@ -27,6 +28,7 @@ import { useRepositorySetup } from '@/hooks/projects/useRepositorySetup';
 import palette from '@/styles/management-palette.module.css';
 import { cn } from '@/utils/cn';
 import styles from './NewRepositoryPage.module.css';
+import management from './RepositoryManagement.module.css';
 import { RepositoryNameFeedback } from './RepositoryNameFeedback';
 import { type RepositoryTagsDraft, RepositoryTagsInput } from './RepositoryTagsInput';
 
@@ -61,7 +63,7 @@ export function NewRepositoryPage() {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!ready) return;
+    if (!ready || setup.pending) return;
     const result = await setup.create({
       name: nameCheck.result?.name ?? name,
       description,
@@ -77,25 +79,25 @@ export function NewRepositoryPage() {
   }
 
   return (
-    <div className={cn(palette.scope, styles.shell)}>
+    <div className={cn(palette.scope, management.shell)}>
       <DiscoverHeader
         owner={owner}
         namespaceTab="repositories"
         settingsHref={`/settings/provider-credentials?owner=${encodeURIComponent(owner)}`}
       />
-      <main className={styles.page}>
-        <Link href={`/${routeOwner}`} className={styles.backLink}>
+      <main className={cn(management.scope, styles.page)}>
+        <Link href={`/${routeOwner}`} className={management.backLink}>
           <ArrowLeft aria-hidden="true" className="size-4" /> Back to repositories
         </Link>
-        <header className={styles.heading}>
+        <header className={management.heading}>
           <h1>Create a new repository</h1>
           <p>Keep your structured state and its history together.</p>
+          <p className={styles.requiredNote}>Required fields are marked *</p>
         </header>
         <form onSubmit={submit} aria-busy={setup.pending}>
           <section className={styles.section} aria-labelledby="repository-general-heading">
             <div className={styles.sectionHeading}>
               <h2 id="repository-general-heading">General</h2>
-              <p>Required fields are marked *</p>
             </div>
             <div className={styles.sectionBody}>
               <div>
@@ -135,6 +137,9 @@ export function NewRepositoryPage() {
                       autoFocus
                       autoComplete="off"
                       aria-describedby="repository-name-help repository-name-feedback"
+                      aria-invalid={
+                        name.length > 0 && Boolean(nameCheck.result && !nameCheck.result.available)
+                      }
                       disabled={locked}
                       value={name}
                       onChange={(event) => setName(event.target.value)}
@@ -172,8 +177,9 @@ export function NewRepositoryPage() {
           <section className={styles.section} aria-labelledby="repository-configuration-heading">
             <div className={styles.sectionHeading}>
               <h2 id="repository-configuration-heading">Configuration</h2>
+              <p>README and tags are optional. You can add or edit them later.</p>
             </div>
-            <div className={styles.sectionBody}>
+            <div className={styles.configuration}>
               <div className={styles.visibilityRow}>
                 <div className={styles.optionCopy}>
                   <label htmlFor="repo-visibility">
@@ -204,11 +210,15 @@ export function NewRepositoryPage() {
                     type="checkbox"
                     checked={initializeReadme}
                     disabled={locked}
+                    aria-describedby="repository-readme-help"
                     onChange={(event) => setInitializeReadme(event.target.checked)}
                   />
                   Initialize README
                 </label>
-                <p>Start with your repository name and description. You can edit it later.</p>
+                <p id="repository-readme-help">
+                  Start with your repository name and description. Leave unchecked to begin without
+                  a README.
+                </p>
                 {!parsedReadme.success ? (
                   <p role="alert" className="text-sm text-[var(--status-error)]">
                     {parsedReadme.error.issues[0]?.message}
@@ -221,17 +231,27 @@ export function NewRepositoryPage() {
             </div>
           </section>
           {setup.error && (
-            <p role="alert" className={styles.error}>
+            <p role="alert" className={cn(management.notice, management.error, styles.error)}>
               {setup.error}
             </p>
           )}
           <footer className={styles.footer}>
-            <p>
-              {setup.started
-                ? 'Your repository is created. Finish setup to open its Workspace.'
-                : 'Next: add source material in your new Workspace.'}
-            </p>
-            <Button type="submit" size="lg" disabled={!ready || setup.pending}>
+            <output className={styles.progress} aria-live="polite">
+              {setup.pending
+                ? setup.started
+                  ? 'Repository created. Finishing setup…'
+                  : 'Creating your repository…'
+                : setup.started
+                  ? 'Your repository is created. Retry to finish setup and open its Workspace.'
+                  : 'A Workspace will be prepared for your source material after creation.'}
+            </output>
+            <Button type="submit" disabled={!ready || setup.pending}>
+              {setup.pending && (
+                <Loader2
+                  aria-hidden="true"
+                  className="size-4 animate-spin motion-reduce:animate-none"
+                />
+              )}
               {setup.pending ? 'Creating…' : setup.started ? 'Retry setup' : 'Create repository'}
               {!setup.pending && <ArrowRight aria-hidden="true" className="size-4" />}
             </Button>
