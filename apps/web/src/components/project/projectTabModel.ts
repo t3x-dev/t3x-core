@@ -19,18 +19,18 @@ export interface ProjectTabDefinition {
 
 export const PROJECT_TABS: ProjectTabDefinition[] = [
   { id: 'state', label: 'State' },
-  { id: 'schemas', label: 'Schemas' },
   { id: 'discover', label: 'Discover' },
-  { id: 'browse', label: 'Browse' },
+  { id: 'schemas', label: 'Schemas' },
   { id: 'workspaces', label: 'Workspaces' },
   { id: 'reviews', label: 'Pull requests', segment: 'pull-requests' },
   { id: 'community', label: 'Community' },
   { id: 'settings', label: 'Settings' },
 ];
 
-// Retained for bookmarks and historical artifacts, not primary navigation.
+// Browse is reached within Discover; legacy outputs remain routable for historical artifacts.
 const ROUTABLE_PROJECT_TABS: ProjectTabDefinition[] = [
   ...PROJECT_TABS,
+  { id: 'browse', label: 'Browse' },
   { id: 'outputs', label: 'Legacy outputs' },
 ];
 const PROJECT_TAB_BY_ID = new Map(ROUTABLE_PROJECT_TABS.map((tab) => [tab.id, tab]));

@@ -196,6 +196,10 @@
   height: 16px;
 }
 
+.settingsTab {
+  margin-inline-start: auto;
+}
+
 .tab[aria-current="page"] {
   border-bottom-color: var(--accent-commit);
   color: var(--text-primary);

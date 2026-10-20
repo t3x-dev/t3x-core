@@ -23,15 +23,15 @@ describe('DiscoverHeader navigation', () => {
     const tabs = within(screen.getByRole('navigation', { name: 'Project views' }));
     expect(tabs.getAllByRole('link').map((link) => link.getAttribute('aria-label'))).toEqual([
       'State',
-      'Schemas',
       'Discover',
-      'Browse',
+      'Schemas',
       'Workspaces',
       'Pull requests',
       'Community',
       'Settings',
     ]);
-    for (const label of ['Schemas', 'Discover', 'Browse', 'Workspaces']) {
+    expect(tabs.queryByRole('link', { name: 'Browse' })).not.toBeInTheDocument();
+    for (const label of ['Schemas', 'Discover', 'Workspaces']) {
       const link = tabs.getByRole('link', { name: label });
       const target = new URL(link.getAttribute('href')!, 'http://localhost');
       expect(target.pathname).toBe(`/orbit/release/${label.toLowerCase()}`);
@@ -50,9 +50,9 @@ describe('DiscoverHeader navigation', () => {
   });
 
   it.each([
-    ['discover', 'Discover'],
-    ['browse', 'Browse'],
-  ] as const)('opens the %s project view by ID without losing its Workspace', (activeTab, label) => {
+    'discover',
+    'browse',
+  ] as const)('keeps Discover active on %s and preserves its project-id context', (activeTab) => {
     render(
       <DiscoverHeader
         owner="orbit"
@@ -66,15 +66,16 @@ describe('DiscoverHeader navigation', () => {
     );
 
     const tabs = within(screen.getByRole('navigation', { name: 'Project views' }));
-    const activeLink = tabs.getByRole('link', { name: label });
+    const activeLink = tabs.getByRole('link', { name: 'Discover' });
     const target = new URL(activeLink.getAttribute('href')!, 'http://localhost');
     expect(target.pathname).toBe('/project/proj_123');
-    expect(target.searchParams.get('tab')).toBe(activeTab);
+    expect(target.searchParams.get('tab')).toBe('discover');
     expect(target.searchParams.get('branch')).toBe('feature/release');
     expect(target.searchParams.get('workspace')).toBe('workspace_branch:feature/release');
     expect(target.searchParams.has('schemaView')).toBe(false);
     expect(activeLink).toHaveAttribute('aria-current', 'page');
     expect(tabs.getByRole('link', { name: 'Schemas' })).not.toHaveAttribute('aria-current');
+    expect(tabs.queryByRole('link', { name: 'Browse' })).not.toBeInTheDocument();
   });
 
   it('keeps namespace settings and repository creation under the supplied owner', () => {

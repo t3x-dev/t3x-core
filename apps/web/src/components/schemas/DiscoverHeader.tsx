@@ -199,14 +199,16 @@ export function DiscoverHeader({
               })
             : PROJECT_TABS.map((tab) => {
                 const Icon = tabIcons[tab.id];
+                const selected =
+                  tab.id === activeTab || (tab.id === 'discover' && activeTab === 'browse');
                 return (
                   <Link
                     key={tab.id}
                     href={tabHref(tab.id)}
                     scroll={false}
-                    className={styles.tab}
+                    className={`${styles.tab}${tab.id === 'settings' ? ` ${styles.settingsTab}` : ''}`}
                     aria-label={tab.label}
-                    aria-current={tab.id === activeTab ? 'page' : undefined}
+                    aria-current={selected ? 'page' : undefined}
                   >
                     <Icon aria-hidden="true" />
                     {tab.label}

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SchemaCatalogExperience } from '@/components/schemas/SchemaCatalogExperience';
 
@@ -20,12 +20,13 @@ vi.mock('@/hooks/projects/useProjects', () => ({
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   query: '',
+  pathname: '/team/project/schemas',
   catalog: vi.fn(),
   introduction: vi.fn(),
 }));
 vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(mocks.query),
-  usePathname: () => '/team/project/schemas',
+  usePathname: () => mocks.pathname,
   useRouter: () => ({ push: mocks.push }),
 }));
 vi.mock('@/hooks/schemas/useSchemaCatalog', () => ({
@@ -87,6 +88,7 @@ const item = {
 };
 beforeEach(() => {
   mocks.query = '';
+  mocks.pathname = '/team/project/schemas';
   mocks.introduction.mockReturnValue({ loading: false });
   mocks.push.mockReset();
   mocks.catalog.mockReturnValue({
@@ -103,6 +105,34 @@ function mount(tab: 'schemas' | 'discover' | 'browse' = 'browse') {
   );
 }
 describe('Schema catalog journey', () => {
+  it.each([
+    ['discover', 'Browse', '/team/project/discover', '/team/project/browse'],
+    ['browse', 'Discover', '/team/project/browse', '/team/project/discover'],
+    ['discover', 'Browse', '/project/p', '/project/p'],
+    ['browse', 'Discover', '/project/p', '/project/p'],
+  ] as const)('switches from %s to %s within %s without losing context', (tab, label, path, target) => {
+    mocks.pathname = path;
+    mocks.query = `tab=${tab}&branch=feature%2Frelease&workspace=workspace_42&q=service&tags=infra`;
+    mount(tab);
+
+    const views = within(screen.getByRole('navigation', { name: 'Schema views' }));
+    expect(
+      views.getByRole('tab', { name: tab === 'discover' ? 'Discover' : 'Browse' })
+    ).toHaveAttribute('aria-selected', 'true');
+    expect(views.queryByRole('tab', { name: 'Studio' })).not.toBeInTheDocument();
+    fireEvent.click(views.getByRole('tab', { name: label }));
+
+    const [href, options] = mocks.push.mock.calls.at(-1)!;
+    const url = new URL(href, 'http://localhost');
+    expect(url.pathname).toBe(target);
+    expect(url.searchParams.get('tab')).toBe(path === '/project/p' ? label.toLowerCase() : null);
+    expect(url.searchParams.get('branch')).toBe('feature/release');
+    expect(url.searchParams.get('workspace')).toBe('workspace_42');
+    expect(url.searchParams.get('q')).toBe('service');
+    expect(url.searchParams.get('tags')).toBe('infra');
+    expect(options).toEqual({ scroll: false });
+  });
+
   it('uses the project avatar in Browse when no separate cover exists', () => {
     mocks.query = 'schemaView=browse';
     mocks.introduction.mockReturnValue({
@@ -165,7 +195,11 @@ describe('Schema catalog journey', () => {
     expect(screen.getByText(/canonicalName: team\/release/)).toBeVisible();
     expect(screen.getByRole('button', { name: 'Add & open Studio' })).toBeEnabled();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.queryByRole('navigation', { name: 'Schema views' })).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole('navigation', { name: 'Schema views' })).getByRole('tab', {
+        name: 'Browse',
+      })
+    ).toHaveAttribute('aria-selected', 'true');
   });
   it('restores Browse filters and keeps the advanced workbench behind an explicit action', () => {
     mocks.query = 'schemaView=browse&tags=infra&format=yaml';

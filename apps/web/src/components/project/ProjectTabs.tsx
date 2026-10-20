@@ -31,12 +31,12 @@ export function ProjectTabs({
       aria-label="Project views"
       className={cn(
         'flex min-h-10 min-w-0 items-center gap-1 overflow-x-auto pb-1',
-        !stacked &&
-          'min-[1200px]:flex-1 min-[1200px]:justify-center min-[1200px]:gap-2 min-[1200px]:pb-0'
+        !stacked && 'min-[1200px]:flex-1 min-[1200px]:gap-2 min-[1200px]:pb-0'
       )}
     >
       {PROJECT_TABS.map((tab) => {
-        const selected = activeTab === tab.id;
+        const selected =
+          activeTab === tab.id || (tab.id === 'discover' && activeTab === 'browse');
         const visibleLabel = tab.id === 'reviews' ? 'PRs' : tab.label;
         const baseHref =
           tab.id === 'settings'
@@ -64,6 +64,7 @@ export function ProjectTabs({
             className={cn(
               'relative inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--radius-md)] px-3.5 text-[14px] font-medium leading-5 transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50',
+              tab.id === 'settings' && 'ml-auto',
               selected
                 ? 'bg-[var(--accent-commit-soft)] font-semibold !text-[var(--accent-commit)]'
                 : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'

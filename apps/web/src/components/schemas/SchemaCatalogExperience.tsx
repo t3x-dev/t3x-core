@@ -14,6 +14,7 @@ import headerStyles from './SchemaCatalogHeader.module.css';
 import { SchemaReleasePage } from './SchemaReleasePage';
 import { SchemaStudioExperience } from './SchemaStudioExperience';
 import { SchemaToolbarContext } from './SchemaToolbarSlot';
+import { SchemaViewNavigation } from './SchemaViewNavigation';
 
 const filterKeys = [
   'q',
@@ -119,6 +120,13 @@ export function SchemaCatalogExperience({
         aria-label="Schema experience"
       >
         <header className={headerStyles.header} data-view={view}>
+          {view !== 'studio' ? (
+            <SchemaViewNavigation
+              value={view === 'discover' ? 'discover' : 'browse'}
+              onChange={navigate}
+              views={['discover', 'browse']}
+            />
+          ) : null}
           <form
             className={headerStyles.search}
             hidden={view === 'studio'}

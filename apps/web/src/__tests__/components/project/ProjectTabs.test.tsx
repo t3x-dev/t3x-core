@@ -87,10 +87,7 @@ describe('ProjectTabs', () => {
       'href',
       '/project/proj_123?tab=discover&branch=feature%2Frelease&workspace=workspace_42'
     );
-    expect(screen.getByRole('link', { name: 'Browse' })).toHaveAttribute(
-      'href',
-      '/project/proj_123?tab=browse&branch=feature%2Frelease&workspace=workspace_42'
-    );
+    expect(screen.queryByRole('link', { name: 'Browse' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Workspaces' })).toHaveAttribute(
       'href',
       '/project/proj_123?tab=workspaces&branch=feature%2Frelease&workspace=workspace_42'
@@ -105,12 +102,11 @@ describe('ProjectTabs', () => {
     );
   });
 
-  it('places Discover and Browse beside Schemas while retaining historical route aliases', () => {
+  it('places Discover before Schemas and retains the nested Browse route', () => {
     expect(PROJECT_TABS.map((tab) => tab.id)).toEqual([
       'state',
-      'schemas',
       'discover',
-      'browse',
+      'schemas',
       'workspaces',
       'reviews',
       'community',
