@@ -88,71 +88,68 @@ export function NewRepositoryPage() {
           <ArrowLeft aria-hidden="true" className="size-4" /> Back to repositories
         </Link>
         <header className={styles.heading}>
-          <p className={styles.eyebrow}>A new place to begin</p>
           <h1>Create a new repository</h1>
-          <p>
-            Keep your structured state and its history together. Start with the essentials; add
-            source material later in your Workspace.
-          </p>
-          <p className={styles.requiredNote}>Required fields are marked with an asterisk (*).</p>
+          <p>Keep your structured state and its history together.</p>
         </header>
         <form onSubmit={submit} aria-busy={setup.pending}>
           <section className={styles.section} aria-labelledby="repository-general-heading">
             <div className={styles.sectionHeading}>
               <h2 id="repository-general-heading">General</h2>
-              <p>Choose where this repository belongs and give it a name.</p>
+              <p>Required fields are marked *</p>
             </div>
             <div className={styles.sectionBody}>
-              <div className={styles.nameRow}>
-                <div className={styles.field}>
-                  <label htmlFor="repo-owner">
-                    Owner <span aria-hidden="true">*</span>
-                  </label>
-                  <div className={styles.selectControl}>
-                    <UserRound className={styles.selectIcon} size={16} aria-hidden="true" />
-                    <select
-                      id="repo-owner"
-                      aria-label="Owner"
+              <div>
+                <div className={styles.nameRow}>
+                  <div className={styles.field}>
+                    <label htmlFor="repo-owner">
+                      Owner <span aria-hidden="true">*</span>
+                    </label>
+                    <div className={styles.selectControl}>
+                      <UserRound className={styles.selectIcon} size={16} aria-hidden="true" />
+                      <select
+                        id="repo-owner"
+                        aria-label="Owner"
+                        required
+                        disabled={locked}
+                        value={owner}
+                        onChange={(event) => setOwner(event.target.value)}
+                      >
+                        {owners.map((value) => (
+                          <option key={value}>{value}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className={styles.selectChevron} size={14} aria-hidden="true" />
+                    </div>
+                  </div>
+                  <span className={styles.pathSeparator} aria-hidden="true">
+                    /
+                  </span>
+                  <div className={styles.field}>
+                    <label htmlFor="repo-name">
+                      Repository name <span aria-hidden="true">*</span>
+                    </label>
+                    <Input
+                      id="repo-name"
+                      aria-label="Repository name"
                       required
+                      autoFocus
+                      autoComplete="off"
+                      aria-describedby="repository-name-help repository-name-feedback"
                       disabled={locked}
-                      value={owner}
-                      onChange={(event) => setOwner(event.target.value)}
-                    >
-                      {owners.map((value) => (
-                        <option key={value}>{value}</option>
-                      ))}
-                    </select>
-                    <ChevronDown className={styles.selectChevron} size={14} aria-hidden="true" />
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                    />
                   </div>
                 </div>
-                <span className={styles.pathSeparator} aria-hidden="true">
-                  /
-                </span>
-                <div className={styles.field}>
-                  <label htmlFor="repo-name">
-                    Repository name <span aria-hidden="true">*</span>
-                  </label>
-                  <Input
-                    id="repo-name"
-                    aria-label="Repository name"
-                    required
-                    autoFocus
-                    autoComplete="off"
-                    aria-describedby="repository-name-help repository-name-feedback"
-                    disabled={locked}
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                  />
-                </div>
-              </div>
-              <div className={styles.nameHelp}>
-                <p id="repository-name-help">
-                  Choose a short, descriptive name for your repository.
-                </p>
-                <div id="repository-name-feedback">
-                  {(name.length > 0 || nameCheck.error) && (
-                    <RepositoryNameFeedback check={nameCheck} />
-                  )}
+                <div className={styles.nameHelp}>
+                  <p id="repository-name-help" hidden={name.length > 0 || Boolean(nameCheck.error)}>
+                    Choose a short, descriptive name for your repository.
+                  </p>
+                  <div id="repository-name-feedback">
+                    {(name.length > 0 || nameCheck.error) && (
+                      <RepositoryNameFeedback check={nameCheck} />
+                    )}
+                  </div>
                 </div>
               </div>
               <div className={styles.field}>
@@ -175,13 +172,12 @@ export function NewRepositoryPage() {
           <section className={styles.section} aria-labelledby="repository-configuration-heading">
             <div className={styles.sectionHeading}>
               <h2 id="repository-configuration-heading">Configuration</h2>
-              <p>Set access now. README and tags are optional.</p>
             </div>
             <div className={styles.sectionBody}>
-              <div className={styles.visibilityCard}>
+              <div className={styles.visibilityRow}>
                 <div className={styles.optionCopy}>
                   <label htmlFor="repo-visibility">
-                    Choose visibility <span aria-hidden="true">*</span>
+                    Visibility <span aria-hidden="true">*</span>
                   </label>
                   <p id="repository-visibility-help">{visibilityDescription}</p>
                 </div>
@@ -202,29 +198,25 @@ export function NewRepositoryPage() {
                   <ChevronDown className={styles.selectChevron} size={14} aria-hidden="true" />
                 </div>
               </div>
-              <div className={styles.optionGroup}>
-                <div className={styles.reservedOption}>
-                  <div className={styles.readmeOption}>
-                    <label className="flex items-center gap-2 text-sm font-semibold">
-                      <input
-                        type="checkbox"
-                        checked={initializeReadme}
-                        disabled={locked}
-                        onChange={(event) => setInitializeReadme(event.target.checked)}
-                      />
-                      Initialize README
-                    </label>
-                    <p>Start with your repository name and description. You can edit it later.</p>
-                    {!parsedReadme.success ? (
-                      <p role="alert" className="text-sm text-[var(--status-error)]">
-                        {parsedReadme.error.issues[0]?.message}
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-                <div className={styles.reservedOption}>
-                  <RepositoryTagsInput value={tags} onChange={setTags} disabled={locked} />
-                </div>
+              <div className={styles.readmeOption}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={initializeReadme}
+                    disabled={locked}
+                    onChange={(event) => setInitializeReadme(event.target.checked)}
+                  />
+                  Initialize README
+                </label>
+                <p>Start with your repository name and description. You can edit it later.</p>
+                {!parsedReadme.success ? (
+                  <p role="alert" className="text-sm text-[var(--status-error)]">
+                    {parsedReadme.error.issues[0]?.message}
+                  </p>
+                ) : null}
+              </div>
+              <div className={styles.tagsField}>
+                <RepositoryTagsInput value={tags} onChange={setTags} disabled={locked} />
               </div>
             </div>
           </section>
@@ -237,7 +229,7 @@ export function NewRepositoryPage() {
             <p>
               {setup.started
                 ? 'Your repository is created. Finish setup to open its Workspace.'
-                : 'Next, you’ll enter a new Workspace where you can add source material.'}
+                : 'Next: add source material in your new Workspace.'}
             </p>
             <Button type="submit" size="lg" disabled={!ready || setup.pending}>
               {setup.pending ? 'Creating…' : setup.started ? 'Retry setup' : 'Create repository'}

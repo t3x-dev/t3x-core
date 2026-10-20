@@ -5,15 +5,18 @@
 }
 
 .page {
+  --field-internal-gap: 6px;
+  --field-gap: 20px;
+  --section-gap: 32px;
   width: 100%;
   max-width: 800px;
   margin: 0 auto;
-  padding: 32px 32px 72px;
+  padding: 20px 32px 48px;
 }
 
 .backLink {
   display: inline-flex;
-  min-height: 36px;
+  min-height: 32px;
   align-items: center;
   gap: 8px;
   border-radius: var(--radius-sm);
@@ -33,41 +36,39 @@
 }
 
 .heading {
-  margin: 28px 0 36px;
-}
-
-.heading .eyebrow {
-  margin: 0 0 8px;
-  color: var(--text-secondary);
-  font-size: 12px;
+  margin: 12px 0 28px;
 }
 
 .heading h1 {
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 600;
   line-height: 1.35;
 }
 
 .heading p {
-  max-width: 600px;
-  margin-top: 12px;
+  margin-top: var(--field-internal-gap);
   color: var(--text-secondary);
   font-size: 14px;
-  line-height: 1.7;
-}
-
-.heading .requiredNote {
-  margin-top: 16px;
-  font-size: 12px;
+  line-height: 1.5;
 }
 
 .section {
-  padding: 28px 0;
+  min-width: 0;
+}
+
+.section + .section {
+  margin-top: calc(var(--section-gap) / 2);
+  padding-top: calc(var(--section-gap) / 2);
   border-top: 1px solid var(--stroke-divider);
 }
 
 .sectionHeading {
-  margin-bottom: 24px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  margin-bottom: 16px;
 }
 
 .sectionHeading h2 {
@@ -77,13 +78,14 @@
 }
 
 .sectionHeading p {
-  margin-top: 6px;
   color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.65;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .sectionBody {
+  display: grid;
+  gap: var(--field-gap);
   min-width: 0;
 }
 
@@ -98,7 +100,7 @@
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--field-internal-gap);
 }
 
 .field label,
@@ -116,9 +118,11 @@
 }
 
 .field input,
+.tagsField input,
 .selectControl select {
+  height: 40px;
   min-height: 40px;
-  border: 1px solid var(--stroke-strong);
+  border: 1px solid var(--stroke-default);
   border-radius: var(--radius-md);
   background: var(--surface-card);
   color: var(--text-primary);
@@ -128,6 +132,22 @@
 
 .field input {
   padding: 8px 12px;
+}
+
+.field input:hover:not(:disabled),
+.tagsField input:hover:not(:disabled) {
+  border-color: var(--stroke-strong);
+}
+
+.field input:focus-visible,
+.tagsField input:focus-visible {
+  border-color: var(--accent-commit);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-commit-soft);
+}
+
+.tagsField input[aria-invalid="true"] {
+  border-color: var(--status-error);
 }
 
 .selectControl {
@@ -150,8 +170,8 @@
 
 .selectControl select:focus-visible {
   border-color: var(--accent-commit);
-  outline: 2px solid var(--accent-commit);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-commit-soft);
 }
 
 .selectControl select:disabled {
@@ -184,25 +204,27 @@
 }
 
 .nameHelp {
-  margin: 12px 0 24px;
+  margin-top: var(--field-internal-gap);
   color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
-.visibilityCard {
+.nameHelp > div > div {
+  margin-top: 0;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.visibilityRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding: 20px;
-  border: 1px solid var(--stroke-default);
-  border-radius: var(--radius-lg);
-  background: var(--surface-card);
 }
 
-.visibilityCard .selectControl {
+.visibilityRow .selectControl {
   flex: 0 0 140px;
 }
 
@@ -211,28 +233,24 @@
 }
 
 .optionCopy p {
-  margin-top: 6px;
+  margin-top: 4px;
   color: var(--text-secondary);
   font-size: 13px;
-  line-height: 1.6;
-}
-
-.optionGroup {
-  margin-top: 28px;
-}
-
-.reservedOption {
-  min-width: 0;
-  padding-block: 20px;
-}
-
-.reservedOption + .reservedOption {
-  border-top: 1px solid var(--stroke-divider);
+  line-height: 1.5;
 }
 
 .readmeOption {
   display: grid;
+  gap: 4px;
+}
+
+.readmeOption label {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
 }
 
 .readmeOption input {
@@ -251,11 +269,29 @@
   padding-left: 24px;
   color: var(--text-secondary);
   font-size: 13px;
-  line-height: 1.65;
+  line-height: 1.5;
 }
 
 .readmeOption > p[role="alert"] {
   color: var(--status-error);
+}
+
+.tagsField > div {
+  display: grid;
+  gap: var(--field-internal-gap);
+}
+
+.tagsField > div > * {
+  margin-block: 0;
+}
+
+.tagsField :global([data-slot="button"]) {
+  height: 40px;
+}
+
+.tagsField > div > p {
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .footer {
@@ -263,57 +299,54 @@
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding-top: 24px;
+  margin-top: var(--section-gap);
+  padding-top: 20px;
   border-top: 1px solid var(--stroke-divider);
 }
 
 .footer p {
-  max-width: 370px;
+  max-width: 420px;
   color: var(--text-secondary);
   font-size: 13px;
-  line-height: 1.65;
+  line-height: 1.5;
 }
 
 .error {
-  margin-bottom: 24px;
-  padding: 16px 18px;
+  margin-top: var(--field-gap);
+  padding: 12px 16px;
   border: 1px solid var(--status-error);
   border-radius: var(--radius-lg);
   color: var(--status-error);
   font-size: 13px;
-  line-height: 1.65;
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
 @media (max-width: 600px) {
   .page {
-    padding: 24px 20px 48px;
-  }
-
-  .heading {
-    margin-top: 24px;
+    padding: 16px 20px 32px;
   }
 
   .heading h1 {
-    font-size: 24px;
+    font-size: 22px;
   }
 
   .nameRow {
     grid-template-columns: minmax(0, 1fr);
-    gap: 20px;
+    gap: var(--field-gap);
   }
 
   .pathSeparator {
     display: none;
   }
 
-  .visibilityCard {
+  .visibilityRow {
     align-items: stretch;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--field-internal-gap);
   }
 
-  .visibilityCard .selectControl {
+  .visibilityRow .selectControl {
     flex-basis: auto;
     width: 100%;
   }
