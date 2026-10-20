@@ -8,11 +8,12 @@ const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
   replace: vi.fn(),
   params: { owner: 'alice', repoPath: ['Repo'] } as { owner: string; repoPath: string[] },
+  pathname: undefined as string | undefined,
   query: 'workspace=w&conversation=c&branch=main&pr=9',
 }));
 vi.mock('next/navigation', () => ({
   useParams: () => mocks.params,
-  usePathname: () => `/${mocks.params.owner}/${mocks.params.repoPath.join('/')}`,
+  usePathname: () => mocks.pathname ?? `/${mocks.params.owner}/${mocks.params.repoPath.join('/')}`,
   useSearchParams: () => new URLSearchParams(mocks.query),
   useRouter: () => ({ replace: mocks.replace }),
 }));
@@ -53,6 +54,7 @@ vi.mock('@/components/project/OrganizationSettingsPage', () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.params = { owner: 'alice', repoPath: ['Repo'] };
+  mocks.pathname = undefined;
   mocks.query = 'workspace=w&conversation=c&branch=main&pr=9';
   window.location.hash = '';
   mocks.resolve.mockResolvedValue({
@@ -120,6 +122,49 @@ it('opens canonical settings and nested changes without bouncing to an ID URL', 
   render(<OwnerRepoProjectPage />);
   expect(await screen.findByTestId('nested')).toHaveTextContent('proj_outside_list settings');
   expect(mocks.replace).not.toHaveBeenCalled();
+});
+it.each([
+  ['workspace_branch%3Amain', 'workspace_branch%3Amain'],
+  ['workspace_branch:main', 'workspace_branch%3Amain'],
+  ['workspace_branch:feature/owner', 'workspace_branch%3Afeature%2Fowner'],
+  ['workspace_branch:feature%2Fowner', 'workspace_branch%3Afeature%252Fowner'],
+  ['workspace_branch%3A100%25', 'workspace_branch%3A100%25'],
+  ['workspace_branch:计划', 'workspace_branch%3A%E8%AE%A1%E5%88%92'],
+  ['workspace_branch%2525253Amain', 'workspace_branch%2525253Amain'],
+])('keeps an encoded review URL stable with route param %s', async (workspaceId, pathSegment) => {
+  mocks.params.repoPath = ['Repo', 'changes', workspaceId, 'rvs_snapshot'];
+  mocks.pathname = `/alice/Repo/changes/${pathSegment}/rvs_snapshot`;
+  const view = render(<OwnerRepoProjectPage />);
+  expect(await screen.findByTestId('nested')).toHaveTextContent(
+    `proj_outside_list changes/${workspaceId}/rvs_snapshot`
+  );
+  view.rerender(<OwnerRepoProjectPage />);
+  expect(mocks.replace).not.toHaveBeenCalled();
+});
+it('redirects an encoded review URL only once when its repository address changes', async () => {
+  mocks.params = {
+    owner: 'ALICE',
+    repoPath: ['Old', 'changes', 'workspace_branch%3Afeature%252Fowner', 'rvs_snapshot'],
+  };
+  mocks.pathname = '/ALICE/Old/changes/workspace_branch%3Afeature%252Fowner/rvs_snapshot';
+  window.location.hash = '#diff';
+  const view = render(<OwnerRepoProjectPage />);
+  await waitFor(() =>
+    expect(mocks.replace).toHaveBeenCalledWith(
+      '/alice/Repo/changes/workspace_branch%3Afeature%252Fowner/rvs_snapshot?workspace=w&conversation=c&branch=main&pr=9#diff',
+      { scroll: false }
+    )
+  );
+  mocks.params = {
+    ...mocks.params,
+    owner: 'alice',
+    repoPath: ['Repo', ...mocks.params.repoPath.slice(1)],
+  };
+  mocks.pathname = '/alice/Repo/changes/workspace_branch%3Afeature%252Fowner/rvs_snapshot';
+  view.rerender(<OwnerRepoProjectPage />);
+  await waitFor(() => expect(mocks.resolve).toHaveBeenLastCalledWith('alice', 'Repo'));
+  expect(await screen.findByTestId('nested')).toBeInTheDocument();
+  expect(mocks.replace).toHaveBeenCalledTimes(1);
 });
 it('does not guess a page for unsupported suffixes', async () => {
   mocks.params.repoPath = ['Repo', 'changes', 'missing-snapshot'];
