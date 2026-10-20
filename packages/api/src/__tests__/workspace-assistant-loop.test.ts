@@ -40,6 +40,64 @@ function fixture() {
   };
 }
 describe('metered Assistant loop', () => {
+  it('ends the model loop after showing settings, without executing another model step', async () => {
+    const { input, events } = fixture();
+    const execute = vi.fn(async () => ({
+      status: 'awaiting_confirmation',
+      settings: { settingsId: 's' },
+    }));
+    const generateWithTools = vi.fn(async () => ({
+      tool_calls: [{ id: 'settings', name: 'showSchemaSettings', input: {} }],
+      stop_reason: 'tool_use',
+      usage,
+    }));
+    await runAssistantProvider({
+      ...input,
+      provider: { id: 'test', generateWithTools } as unknown as LLMProvider,
+      capabilities: {
+        showSchemaSettings: {
+          definition: {
+            name: 'showSchemaSettings',
+            description: 'settings',
+            input_schema: { type: 'object' },
+          },
+          execute,
+        },
+      },
+    });
+    expect(generateWithTools).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(events.at(-1)).toEqual({ type: 'done', reason: 'awaiting_confirmation' });
+  });
+  it('rejects a batch combining settings with a write before executing either tool', async () => {
+    const { input } = fixture();
+    const execute = vi.fn();
+    const generateWithTools = vi.fn(async () => ({
+      tool_calls: [
+        { id: 'write', name: 'requestProposal', input: {} },
+        { id: 'settings', name: 'showSchemaSettings', input: {} },
+      ],
+      stop_reason: 'tool_use',
+      usage,
+    }));
+    await expect(
+      runAssistantProvider({
+        ...input,
+        provider: { id: 'test', generateWithTools } as unknown as LLMProvider,
+        capabilities: {
+          showSchemaSettings: {
+            definition: { name: 'showSchemaSettings', description: 'settings', input_schema: {} },
+            execute,
+          },
+          requestProposal: {
+            definition: { name: 'requestProposal', description: 'proposal', input_schema: {} },
+            execute,
+          },
+        },
+      })
+    ).rejects.toThrow('separate tool step');
+    expect(execute).not.toHaveBeenCalled();
+  });
   it.each([
     true,
     false,

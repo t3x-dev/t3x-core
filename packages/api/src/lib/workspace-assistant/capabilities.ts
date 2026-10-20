@@ -1,3 +1,4 @@
+import { AssistantSchemaSettingsInputSchema } from '@t3x-dev/api-client';
 import {
   type DraftActionActor,
   type DraftYOp,
@@ -12,6 +13,7 @@ import { defaultProposalGenerationModel } from '../proposal-generation-model';
 import { publishWorkspaceAuthoringAction } from '../workspace-authoring';
 import { assertAssistantContextCurrent } from './context';
 import type { AssistantInference, PreparedAssistantContext } from './contracts';
+import type { createAssistantSchemaSettingsService } from './schema-settings';
 
 export interface AssistantCapability {
   definition: Parameters<NonNullable<LLMProvider['generateWithTools']>>[1][number];
@@ -45,6 +47,8 @@ export function createAssistantCapabilities(input: {
   inference: AssistantInference;
   authorize: (capability: 'read' | 'propose') => Promise<void>;
   exactEdit?: { operations: DraftYOp[]; reason?: string };
+  schemaSettings?: ReturnType<typeof createAssistantSchemaSettingsService>;
+  confirmedSettingsId?: string;
   proposal?: {
     posture: 'source_only' | 'guided' | 'recommend';
     requestedProvider?: string;
@@ -208,13 +212,49 @@ export function createAssistantCapabilities(input: {
   };
   if (input.proposal) {
     const proposal = input.proposal;
+    if (input.schemaSettings) {
+      capabilities.showSchemaSettings = capability(
+        'showSchemaSettings',
+        'Show a Studio Node/Slot settings card for an explicitly requested Schema addition. Only stage settings; stop and wait for user confirmation. Never changes the bound Schema or content.',
+        AssistantSchemaSettingsInputSchema,
+        async (settings, operationId) => {
+          await input.authorize('propose');
+          await guard();
+          if (input.confirmedSettingsId)
+            throw new TypeError('Use the confirmed settings instead of opening another card.');
+          return {
+            status: 'awaiting_confirmation',
+            settings: await input.schemaSettings!.show(settings, operationId),
+          };
+        }
+      );
+    }
     capabilities.requestProposal = capability(
       'requestProposal',
-      'Generate a governed candidate only when explicitly requested. This does not publish, apply, decide or commit. Sources and posture are server-bound.',
-      z.object({ instruction: z.string().trim().min(1).max(5000) }).strict(),
-      async ({ instruction }, operationId) => {
+      'Generate a governed candidate only when explicitly requested. target=content edits content (default); target=schema requires the confirmedSettingsId from the current confirmed settings card and uses those exact attributes. This does not publish, apply, decide or commit. Sources and posture are server-bound.',
+      z
+        .object({
+          instruction: z.string().trim().min(1).max(5000),
+          target: z.enum(['content', 'schema']).default('content'),
+          confirmedSettingsId: z.string().max(200).optional(),
+        })
+        .strict(),
+      async ({ instruction, target, confirmedSettingsId }, operationId) => {
         await input.authorize('propose');
         await guard();
+        if (target === 'schema') {
+          if (
+            !input.schemaSettings ||
+            !confirmedSettingsId ||
+            confirmedSettingsId !== input.confirmedSettingsId
+          )
+            throw new TypeError('Schema edits require the settings confirmed for this request.');
+          return input.schemaSettings.propose(confirmedSettingsId);
+        }
+        if (input.confirmedSettingsId)
+          throw new TypeError(
+            'This confirmation authorizes a Schema candidate, not a content edit.'
+          );
         const request = {
           workspaceId: prepared.input.workspaceId,
           expectedRevision: prepared.workspaceRevision,
@@ -250,6 +290,7 @@ export function createAssistantCapabilities(input: {
           },
         });
         return {
+          kind: 'content',
           status: 'candidate',
           operationId,
           transitionId: generated.view.transitionId,

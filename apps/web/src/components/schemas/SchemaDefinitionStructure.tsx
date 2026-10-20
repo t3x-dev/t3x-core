@@ -186,6 +186,56 @@ export function SchemaDefinitionStructure({
   );
 }
 
+/** Same property controls and input validation in Studio and the Assistant confirmation card. */
+export function SchemaAdditionSettingsEditor({
+  value,
+  onChange,
+  onValidationChange,
+  onCancel,
+}: {
+  value: import('@t3x-dev/api-client').AssistantSchemaSettingsInput;
+  onChange: (value: import('@t3x-dev/api-client').AssistantSchemaSettingsInput) => void;
+  onValidationChange: (error?: string) => void;
+  onCancel: () => void;
+}) {
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const reportError = useCallback((id: string, error?: string) => {
+    setErrors((current) =>
+      current[id] === error ? current : (withField(current, id, error) as Record<string, string>)
+    );
+  }, []);
+  useEffect(() => {
+    onValidationChange(Object.values(errors)[0]);
+  }, [errors, onValidationChange]);
+  const path = [value.nodePath, value.name].filter(Boolean).join('/');
+  return (
+    <reportErrorContext.Provider value={reportError}>
+      {value.action === 'add_slot' ? (
+        <SlotEditor
+          name={value.name}
+          path={path}
+          slot={value.definition}
+          names={[value.name]}
+          required={value.required}
+          initiallyExpanded
+          onRequired={(required) => onChange({ ...value, required })}
+          onChange={(name, definition) => onChange({ ...value, name, definition })}
+          onRemove={onCancel}
+        />
+      ) : (
+        <NodeEditor
+          name={value.name}
+          path={path}
+          node={value.definition}
+          names={[value.name]}
+          onChange={(name, definition) => onChange({ ...value, name, definition })}
+          onRemove={onCancel}
+        />
+      )}
+    </reportErrorContext.Provider>
+  );
+}
+
 function SectionHeader({
   title,
   action,
@@ -451,6 +501,7 @@ function SlotEditor({
   onRequired,
   onChange,
   onRemove,
+  initiallyExpanded = false,
 }: {
   name: string;
   path: string;
@@ -460,8 +511,9 @@ function SlotEditor({
   onRequired: (required: boolean) => void;
   onChange: (name: string, slot: Definition) => void;
   onRemove: () => void;
+  initiallyExpanded?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(initiallyExpanded);
   const settingsId = useId();
   return (
     <section

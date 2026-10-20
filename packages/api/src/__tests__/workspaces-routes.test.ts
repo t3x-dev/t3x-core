@@ -843,6 +843,11 @@ describe('Workspace routes', () => {
     const serverPending = { pendingId: 'server-pending', workspaceRevision: 1 };
     const serverPreparations = [{ requestId: 'server-request', previewHash: 'server-hash' }];
     const serverSchemaBase = { refHead: 'server-commit', snapshot: { status: 'bound' } };
+    const serverSettings = {
+      settingsId: 'server-only',
+      status: 'pending',
+      baseDefinition: { private: true },
+    };
     storageMock.seedWorkspaceDraft({
       id: 'workspace_prd_handoff',
       projectId: 'proj_sources',
@@ -850,6 +855,7 @@ describe('Workspace routes', () => {
       targetBranch: 'main',
       status: 'draft',
       schemaEditCandidate: serverCandidate,
+      assistantSchemaSettings: serverSettings,
       schemaPending: serverPending,
       schemaPreparations: serverPreparations,
       workspaceSchemaBase: serverSchemaBase,
@@ -865,6 +871,7 @@ describe('Workspace routes', () => {
             title: 'Renamed workspace',
             targetBranch: 'main',
             schemaEditCandidate: { candidateId: 'schema-edit:forged', revision: 999 },
+            assistantSchemaSettings: { settingsId: 'forged', status: 'confirmed' },
             schemaPending: { pendingId: 'forged' },
             schemaPreparations: [{ requestId: 'forged' }],
             workspaceSchemaBase: { refHead: 'forged-commit', snapshot: { status: 'unbound' } },
@@ -876,6 +883,11 @@ describe('Workspace routes', () => {
     expect(response.status).toBe(200);
     const body: ApiResponse = await response.json();
     expect(body.data.workspace.schemaEditCandidate).toEqual(serverCandidate);
+    expect(body.data.workspace.assistantSchemaSettings).toBeUndefined();
+    expect(
+      storageMock.upsertWorkspaceDraft.mock.calls.at(-1)?.[1].workspace_state
+        .assistantSchemaSettings
+    ).toEqual(serverSettings);
     expect(body.data.workspace.schemaPending).toEqual(serverPending);
     expect(body.data.workspace.schemaPreparations).toEqual(serverPreparations);
     expect(body.data.workspace.workspaceSchemaBase).toEqual(serverSchemaBase);

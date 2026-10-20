@@ -789,6 +789,7 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
     backendCandidateId: _storedBackendCandidateId,
     lastCommitHash: _storedLastCommitHash,
     schemaEditCandidate: storedSchemaEditCandidate,
+    assistantSchemaSettings: storedAssistantSchemaSettings,
     schemaPending: storedSchemaPending,
     schemaPreparations: storedSchemaPreparations,
     workspaceSchemaBase: storedWorkspaceSchemaBase,
@@ -799,6 +800,7 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
     backendCandidateId: _ignoredBackendCandidateId,
     lastCommitHash: _ignoredLastCommitHash,
     schemaEditCandidate: _ignoredSchemaEditCandidate,
+    assistantSchemaSettings: _ignoredAssistantSchemaSettings,
     schemaPending: _ignoredSchemaPending,
     schemaPreparations: _ignoredSchemaPreparations,
     workspaceSchemaBase: _ignoredWorkspaceSchemaBase,
@@ -818,6 +820,9 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
     ...(storedBackendCandidateId ? { backendCandidateId: storedBackendCandidateId } : {}),
     ...(storedSchemaEditCandidate !== undefined
       ? { schemaEditCandidate: storedSchemaEditCandidate }
+      : {}),
+    ...(storedAssistantSchemaSettings !== undefined
+      ? { assistantSchemaSettings: storedAssistantSchemaSettings }
       : {}),
     ...(storedSchemaPending !== undefined ? { schemaPending: storedSchemaPending } : {}),
     ...(storedSchemaPreparations !== undefined
@@ -1100,8 +1105,13 @@ function envelopeFromWorkspace(
 }
 
 function workspaceFromDraft(draft: Draft, workspaceId: string): Record<string, unknown> {
+  // Confirmation records are server-owned and scoped to their user/conversation.
+  const { assistantSchemaSettings: _settings, ...workspace } = draft.workspace_state ?? {
+    id: workspaceId,
+    projectId: draft.project_id,
+  };
   return {
-    ...(draft.workspace_state ?? { id: workspaceId, projectId: draft.project_id }),
+    ...workspace,
     revision: draft.revision,
   };
 }
