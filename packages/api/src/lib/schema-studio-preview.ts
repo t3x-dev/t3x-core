@@ -31,7 +31,8 @@ import { artifactViewToOpenModule } from './yschema-artifact-registry';
 export class StudioError extends Error {
   constructor(
     public code: 'NOT_FOUND' | 'INVALID_REQUEST' | 'CONFLICT' | 'FORBIDDEN' | 'REVIEW_REQUIRED',
-    message: string
+    message: string,
+    public details?: Record<string, unknown>
   ) {
     super(message);
   }

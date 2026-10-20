@@ -460,6 +460,7 @@ export async function saveWorkspaceSchemaPreparation(
     schemaEditCandidate?: unknown;
     schemaPending?: unknown;
     schemaComposition?: unknown;
+    assistantSchemaSettings?: unknown;
   }
 ): Promise<Draft> {
   const current = await findWorkspaceDraft(db, input.projectId, input.workspaceId);
@@ -468,6 +469,9 @@ export async function saveWorkspaceSchemaPreparation(
     throw new ConflictError(current.id, input.expectedRevision);
   const state = {
     ...current.workspace_state,
+    ...(input.assistantSchemaSettings !== undefined
+      ? { assistantSchemaSettings: input.assistantSchemaSettings }
+      : {}),
     ...(input.schemaEditCandidate !== undefined
       ? { schemaEditCandidate: input.schemaEditCandidate }
       : {}),
