@@ -7,6 +7,14 @@ import {
   type SchemaPreparationTarget,
 } from '@t3x-dev/api-client';
 import { canonicalJson, type YValue } from '@t3x-dev/yops';
+import {
+  ChevronRight,
+  CircleAlert,
+  CircleCheck,
+  GitCompareArrows,
+  LoaderCircle,
+  TriangleAlert,
+} from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -26,6 +34,15 @@ import {
   preparationCommands,
   readablePreparationPath,
 } from './SchemaPreparationFields';
+
+const stepClass =
+  'space-y-3 rounded-xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4 shadow-[var(--shadow-xs)]';
+const stepTitleClass = 'text-sm font-semibold text-[var(--text-primary)]';
+const panelClass = 'rounded-lg border border-[var(--stroke-divider)] p-4';
+const detailsClass = 'group rounded-lg border border-[var(--stroke-divider)] px-4 py-3 text-xs';
+const summaryClass =
+  'flex cursor-pointer list-none select-none items-center gap-2 font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] [&::-webkit-details-marker]:hidden';
+const chevronClass = 'size-3.5 shrink-0 transition-transform group-open:rotate-90';
 
 /** Shared Studio/Workspace preparation surface. A preview belongs to one exact form and revision. */
 export function SchemaContentPreparationDialog({
@@ -189,33 +206,53 @@ export function SchemaContentPreparationDialog({
       }}
     >
       <DialogContent
-        className="flex max-h-[92vh] flex-col overflow-hidden sm:max-w-6xl"
+        className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-6xl"
         showCloseButton={!busy}
       >
-        <DialogHeader>
-          <DialogTitle>Prepare Schema content</DialogTitle>
-          <DialogDescription>
-            Adapt existing content to the new Schema, preview the result, then save both together as
-            one Draft revision. Nothing is published or committed here.
-          </DialogDescription>
+        <DialogHeader className="shrink-0 border-b border-[var(--stroke-divider)] bg-[var(--surface-elevated)] px-6 py-4 pr-12 text-left">
+          <div className="flex items-start gap-3">
+            <span
+              aria-hidden="true"
+              className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]"
+            >
+              <GitCompareArrows className="size-4" />
+            </span>
+            <div className="min-w-0 space-y-1">
+              <DialogTitle>Prepare Schema content</DialogTitle>
+              <DialogDescription className="max-w-3xl text-xs leading-relaxed">
+                Adapt existing content to the new Schema, preview the result, then save both
+                together as one Draft revision. Nothing is published or committed here.
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-2">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-[var(--surface-app)] px-6 py-5">
           {error ? (
-            <p role="alert" className="text-sm text-[var(--status-error)]">
-              {error}
+            <p
+              role="alert"
+              className="flex items-start gap-2 rounded-lg border border-[var(--status-error)] bg-[var(--status-error-muted)] px-3 py-2 text-sm text-[var(--status-error)]"
+            >
+              <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+              <span className="min-w-0 break-words">{error}</span>
             </p>
           ) : null}
-          {busy ? <output className="text-xs">Checking the complete Draft…</output> : null}
-          <section aria-label="Content changes" className="space-y-3">
+          {busy ? (
+            <output className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+              <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" />
+              Checking the complete Draft…
+            </output>
+          ) : null}
+          <section aria-label="Content changes" className={stepClass}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h3 className="text-sm font-semibold">1 · Plan content changes</h3>
+                <h3 className={stepTitleClass}>1 · Plan content changes</h3>
                 <p className="mt-1 text-xs text-[var(--text-secondary)]">
                   Move or rename existing content, fill missing values, or remove content
                   explicitly.
                 </p>
               </div>
               <Button
+                size="sm"
                 variant="outline"
                 disabled={busy || !context || changes.length >= 200}
                 onClick={() => changeCommands([...changes, newPreparationChange()])}
@@ -246,15 +283,15 @@ export function SchemaContentPreparationDialog({
                 ))}
               </fieldset>
             ) : (
-              <p className="rounded-lg border border-dashed p-4 text-sm text-[var(--text-secondary)]">
+              <p className="rounded-lg border border-dashed border-[var(--stroke-strong)] bg-[var(--surface-panel)] px-4 py-5 text-center text-sm text-[var(--text-secondary)]">
                 No content edits planned. If the checks pass, your existing content can be kept as
                 it is.
               </p>
             )}
           </section>
           {mappingPaths.length ? (
-            <fieldset className="space-y-2 rounded border p-3 text-xs">
-              <legend>Confirm affected mappings</legend>
+            <fieldset className="space-y-2 rounded-xl border border-[var(--status-warning)] bg-[var(--status-warning-muted)] p-4 text-xs">
+              <legend className="px-1 font-semibold">Confirm affected mappings</legend>
               <p className="text-[var(--text-secondary)]">
                 Confirmations acknowledge your migration plan; they do not replace the required
                 content changes.
@@ -283,10 +320,14 @@ export function SchemaContentPreparationDialog({
             </fieldset>
           ) : null}
           {data ? (
-            <>
-              <h3 className="border-t pt-4 text-sm font-semibold">2 · Check and preview</h3>
+            <div className={stepClass}>
+              <h3 className={stepTitleClass}>2 · Check and preview</h3>
               {stale ? (
-                <output className="block rounded border border-[var(--status-warning)] p-3 text-xs">
+                <output className="flex items-start gap-2 rounded-lg border border-[var(--status-warning)] bg-[var(--status-warning-muted)] px-3 py-2.5 text-xs">
+                  <TriangleAlert
+                    aria-hidden="true"
+                    className="mt-0.5 size-3.5 shrink-0 text-[var(--status-warning)]"
+                  />
                   Changes have not been previewed yet. The results below belong to the previous
                   preview.
                 </output>
@@ -294,53 +335,76 @@ export function SchemaContentPreparationDialog({
               {data.issues.length ? (
                 <section
                   aria-label="Migration checks"
-                  className="rounded-lg border border-[var(--status-warning)] p-4 text-xs"
+                  className="rounded-lg border border-[var(--status-warning)] bg-[var(--status-warning-muted)] p-4 text-xs"
                 >
-                  <h3 className="font-semibold">{data.issues.length} checks need attention</h3>
-                  {data.issues.map((issue, index) => (
-                    <p className="mt-2 break-words" key={`${issue.code}:${issue.path}:${index}`}>
-                      <span title={issue.path} className="font-medium">
-                        {readablePreparationPath(issue.path)}
-                      </span>{' '}
-                      · {issue.message}
-                    </p>
-                  ))}
+                  <h3 className="flex items-center gap-2 font-semibold">
+                    <TriangleAlert
+                      aria-hidden="true"
+                      className="size-3.5 text-[var(--status-warning)]"
+                    />
+                    {data.issues.length} checks need attention
+                  </h3>
+                  <ul className="mt-2 space-y-1.5">
+                    {data.issues.map((issue, index) => (
+                      <li
+                        className="break-words rounded-md bg-[var(--surface-card)] px-2.5 py-1.5"
+                        key={`${issue.code}:${issue.path}:${index}`}
+                      >
+                        <span title={issue.path} className="font-mono font-medium">
+                          {readablePreparationPath(issue.path)}
+                        </span>{' '}
+                        · {issue.message}
+                      </li>
+                    ))}
+                  </ul>
                 </section>
               ) : (
-                <output className="block rounded-lg border border-[var(--status-success)] bg-[var(--status-success-muted)] p-4 text-sm">
-                  Content satisfies the candidate Schema.
-                  {!review ? ' Preview once more to confirm before saving.' : ''}
+                <output className="flex items-start gap-2 rounded-lg border border-[var(--status-success)] bg-[var(--status-success-muted)] px-3 py-2.5 text-sm">
+                  <CircleCheck
+                    aria-hidden="true"
+                    className="mt-0.5 size-4 shrink-0 text-[var(--status-success)]"
+                  />
+                  <span>
+                    Content satisfies the candidate Schema.
+                    {!review ? ' Preview once more to confirm before saving.' : ''}
+                  </span>
                 </output>
               )}
-              <section aria-label="Content comparison" className="rounded-lg border p-4">
-                <h4 className="text-sm font-medium">
+              <section aria-label="Content comparison" className={panelClass}>
+                <h4 className="flex items-center gap-2 text-sm font-medium">
                   Content changes · {differences.length}{' '}
                   {differences.length === 1 ? 'field' : 'fields'}
                 </h4>
                 {differences.length ? (
-                  <div className="mt-3 max-h-80 overflow-auto">
+                  <div className="mt-3 max-h-80 overflow-auto rounded-lg border border-[var(--stroke-divider)]">
                     <table className="w-full table-fixed text-left text-xs">
-                      <thead>
-                        <tr className="border-b text-[var(--text-secondary)]">
-                          <th className="w-1/4 p-2">Field</th>
-                          <th className="p-2">Before</th>
-                          <th className="p-2">After</th>
+                      <thead className="sticky top-0 bg-[var(--surface-panel)]">
+                        <tr className="border-b border-[var(--stroke-divider)] text-[11px] uppercase tracking-wide text-[var(--text-tertiary)]">
+                          <th className="w-1/4 px-3 py-2 font-medium">Field</th>
+                          <th className="px-3 py-2 font-medium">Before</th>
+                          <th className="px-3 py-2 font-medium">After</th>
                         </tr>
                       </thead>
                       <tbody>
                         {differences.map((row) => (
-                          <tr key={row.path} className="border-b align-top last:border-0">
-                            <th title={row.path} className="break-words p-2 font-medium">
+                          <tr
+                            key={row.path}
+                            className="border-b border-[var(--stroke-divider)] align-top last:border-0"
+                          >
+                            <th
+                              title={row.path}
+                              className="break-words px-3 py-2 font-mono font-medium"
+                            >
                               {readablePreparationPath(row.path)}
                             </th>
-                            <td className="break-words bg-[var(--diff-removed-bg)] p-2">
+                            <td className="break-words border-l-2 border-[var(--diff-removed-accent)] bg-[var(--diff-removed-bg)] px-3 py-2">
                               {row.beforeExists ? (
                                 <PreparationValueTree label="Value" value={row.before} />
                               ) : (
                                 'Not present'
                               )}
                             </td>
-                            <td className="break-words bg-[var(--diff-added-bg)] p-2">
+                            <td className="break-words border-l-2 border-[var(--diff-added-accent)] bg-[var(--diff-added-bg)] px-3 py-2">
                               {row.afterExists ? (
                                 <PreparationValueTree label="Value" value={row.after} />
                               ) : (
@@ -358,8 +422,9 @@ export function SchemaContentPreparationDialog({
                   </p>
                 )}
               </section>
-              <details className="rounded-lg border p-4 text-xs">
-                <summary className="cursor-pointer font-medium">
+              <details className={detailsClass}>
+                <summary className={summaryClass}>
+                  <ChevronRight aria-hidden="true" className={chevronClass} />
                   Browse complete content · before and after
                 </summary>
                 <div className="mt-3 grid min-w-0 gap-4 md:grid-cols-2">
@@ -367,8 +432,9 @@ export function SchemaContentPreparationDialog({
                   <Document title="Prepared Draft" value={data.after} />
                 </div>
               </details>
-              <details className="rounded-lg border p-4 text-xs">
-                <summary className="cursor-pointer font-medium">
+              <details className={detailsClass}>
+                <summary className={summaryClass}>
+                  <ChevronRight aria-hidden="true" className={chevronClass} />
                   Target Schema · {Object.keys(data.schema.nodes ?? {}).length} nodes
                 </summary>
                 <p className="my-2 text-[var(--text-secondary)]">
@@ -376,8 +442,9 @@ export function SchemaContentPreparationDialog({
                 </p>
                 <Document title="Target Schema definition" value={data.schema} />
               </details>
-              <details className="rounded-lg border p-4 text-xs">
-                <summary className="cursor-pointer font-medium">
+              <details className={detailsClass}>
+                <summary className={summaryClass}>
+                  <ChevronRight aria-hidden="true" className={chevronClass} />
                   Execution plan · {data.operations.length}{' '}
                   {data.operations.length === 1 ? 'operation' : 'operations'}
                 </summary>
@@ -399,7 +466,10 @@ export function SchemaContentPreparationDialog({
                       define: 'Create node',
                     };
                     return (
-                      <li key={`${index}:${kind}`}>
+                      <li
+                        className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 py-2"
+                        key={`${index}:${kind}`}
+                      >
                         <PreparationValueTree
                           label={`${index + 1} · ${labels[kind] ?? kind}`}
                           value={parameters}
@@ -411,11 +481,11 @@ export function SchemaContentPreparationDialog({
                 </ol>
                 {!data.operations.length ? <p>No content operations needed.</p> : null}
               </details>
-            </>
+            </div>
           ) : null}
         </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t pt-3">
-          <p className="mr-auto text-xs text-[var(--text-secondary)]">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-[var(--stroke-divider)] bg-[var(--surface-elevated)] px-6 py-3">
+          <p className="mr-auto text-xs text-[var(--text-tertiary)]">
             3 · Save to Draft · not a publish or Commit
           </p>
           <Button variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>
@@ -424,7 +494,11 @@ export function SchemaContentPreparationDialog({
           <Button variant="outline" disabled={busy} onClick={() => void preview()}>
             Preview migration
           </Button>
-          <Button disabled={busy || !review?.data.canPrepare} onClick={() => void prepare()}>
+          <Button
+            disabled={busy || !review?.data.canPrepare}
+            onClick={() => void prepare()}
+            variant="commit"
+          >
             Save prepared Draft
           </Button>
         </div>
@@ -436,8 +510,10 @@ export function SchemaContentPreparationDialog({
 function Document({ title, value }: { title: string; value: unknown }) {
   return (
     <section aria-label={title} className="min-w-0">
-      <h3 className="mb-2 text-xs font-medium">{title}</h3>
-      <div className="max-h-80 overflow-auto rounded bg-[var(--surface-panel)] p-3 text-xs">
+      <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">
+        {title}
+      </h3>
+      <div className="max-h-80 overflow-auto rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3 text-xs">
         <PreparationValueTree value={value} label={title} />
       </div>
     </section>

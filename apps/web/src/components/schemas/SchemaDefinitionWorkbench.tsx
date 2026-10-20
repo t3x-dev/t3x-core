@@ -2,7 +2,16 @@
 
 import { StudioSchemaEditLocalContributionSchema } from '@t3x-dev/api-client';
 import { dump, JSON_SCHEMA, load } from 'js-yaml';
-import { ChevronRight, FileText, Folder, FolderOpen, Save } from 'lucide-react';
+import {
+  ChevronRight,
+  Eye,
+  FileText,
+  Folder,
+  FolderOpen,
+  Lock,
+  PencilRuler,
+  Save,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -104,37 +113,55 @@ export function SchemaDefinitionWorkbench({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[min(860px,92dvh)] max-w-[min(1480px,96vw)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1480px,96vw)]">
-        <DialogHeader className="shrink-0 border-b border-[var(--stroke-divider)] px-6 py-4 pr-12 text-left">
-          <DialogTitle>Edit Schema definition</DialogTitle>
-          <DialogDescription>
-            Edit the complete Workspace-local definition. Changes replay as guarded Schema YOps;
-            published sources and root constraints remain unchanged. Structure and YAML edit the
-            same candidate.
-          </DialogDescription>
-          {recoveryLabel ? (
-            <p className="text-[11px] text-[var(--text-tertiary)]">{recoveryLabel}</p>
-          ) : null}
+        <DialogHeader className="shrink-0 border-b border-[var(--stroke-divider)] bg-[var(--surface-elevated)] px-6 py-4 pr-12 text-left">
+          <div className="flex items-start gap-3">
+            <span
+              aria-hidden="true"
+              className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]"
+            >
+              <PencilRuler className="size-4" />
+            </span>
+            <div className="min-w-0 space-y-1">
+              <DialogTitle>Edit Schema definition</DialogTitle>
+              <DialogDescription className="max-w-3xl text-xs leading-relaxed">
+                Edit the complete Workspace-local definition. Changes replay as guarded Schema YOps;
+                published sources and root constraints remain unchanged. Structure and YAML edit the
+                same candidate.
+              </DialogDescription>
+              {recoveryLabel ? (
+                <p className="inline-flex rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-2 py-0.5 text-[11px] text-[var(--text-tertiary)]">
+                  {recoveryLabel}
+                </p>
+              ) : null}
+            </div>
+          </div>
         </DialogHeader>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(420px,0.9fr)_minmax(520px,1.1fr)]">
-          <section className="flex min-h-0 flex-col border-r border-[var(--stroke-divider)]">
-            <div className="flex shrink-0 items-center gap-1 border-b border-[var(--stroke-divider)] px-4 py-2">
-              {(['structure', 'yaml'] as const).map((item) => (
-                <button
-                  aria-selected={mode === item}
-                  disabled={mode === 'structure' && Boolean(structureError)}
-                  className={`rounded px-3 py-1.5 text-xs font-medium ${mode === item ? 'bg-[var(--active-bg)] text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}
-                  key={item}
-                  onClick={() => {
-                    if (item === 'structure' && mode === 'yaml' && !parseYamlDraft()) return;
-                    setMode(item);
-                  }}
-                  role="tab"
-                  type="button"
-                >
-                  {item === 'structure' ? 'Structure' : 'YAML'}
-                </button>
-              ))}
+          <section className="flex min-h-0 flex-col border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)]">
+            <div className="flex shrink-0 items-center gap-2 border-b border-[var(--stroke-divider)] bg-[var(--surface-elevated)] px-4 py-2.5">
+              <div
+                role="tablist"
+                aria-label="Definition editor mode"
+                className="inline-flex rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-0.5"
+              >
+                {(['structure', 'yaml'] as const).map((item) => (
+                  <button
+                    aria-selected={mode === item}
+                    disabled={mode === 'structure' && Boolean(structureError)}
+                    className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${mode === item ? 'bg-[var(--surface-elevated)] text-[var(--text-primary)] shadow-[var(--shadow-xs)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                    key={item}
+                    onClick={() => {
+                      if (item === 'structure' && mode === 'yaml' && !parseYamlDraft()) return;
+                      setMode(item);
+                    }}
+                    role="tab"
+                    type="button"
+                  >
+                    {item === 'structure' ? 'Structure' : 'YAML'}
+                  </button>
+                ))}
+              </div>
               <span className="flex-1" />
               <Button
                 disabled={Boolean(structureError)}
@@ -146,6 +173,7 @@ export function SchemaDefinitionWorkbench({
                 type="button"
                 variant="canvas-outline"
               >
+                <Eye className="size-3.5" />
                 Preview
               </Button>
             </div>
@@ -171,19 +199,19 @@ export function SchemaDefinitionWorkbench({
             )}
           </section>
 
-          <section className="grid min-h-0 grid-rows-2 bg-[var(--surface-subtle)]">
-            <SchemaNodesPreview label="Base (immutable)" schema={baseSchema} />
-            <SchemaNodesPreview label="Result preview" schema={resultSchema} bordered />
+          <section className="grid min-h-0 grid-rows-2 gap-3 bg-[var(--surface-app)] p-4">
+            <SchemaNodesPreview label="Base (immutable)" schema={baseSchema} tone="base" />
+            <SchemaNodesPreview label="Result preview" schema={resultSchema} tone="result" />
           </section>
         </div>
 
-        <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-[var(--stroke-divider)] px-6 py-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
+        <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-[var(--stroke-divider)] bg-[var(--surface-elevated)] px-6 py-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
           <div className="col-span-2 min-w-0 sm:col-span-1">
             <label className="sr-only" htmlFor="schema-edit-intent">
               Change intent
             </label>
             <Input
-              className="max-w-xl"
+              className="max-w-xl bg-[var(--surface-panel)] text-xs"
               id="schema-edit-intent"
               onChange={(event) => setIntent(event.target.value)}
               placeholder="Why are you changing this Schema?"
@@ -214,21 +242,28 @@ export function SchemaDefinitionWorkbench({
 function SchemaNodesPreview({
   label,
   schema,
-  bordered = false,
+  tone,
 }: {
   label: string;
   schema?: Record<string, unknown>;
-  bordered?: boolean;
+  tone: 'base' | 'result';
 }) {
+  const Icon = tone === 'base' ? Lock : Eye;
   return (
     <section
       aria-label={label}
-      className={`flex min-h-0 flex-col ${bordered ? 'border-t border-[var(--stroke-divider)]' : ''}`}
+      className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] shadow-[var(--shadow-xs)]"
     >
-      <h3 className="shrink-0 px-4 py-2 text-xs font-semibold text-[var(--text-secondary)]">
+      <h3 className="flex shrink-0 items-center gap-2 border-b border-[var(--stroke-divider)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
+        <span
+          aria-hidden="true"
+          className={`inline-flex size-5 items-center justify-center rounded-md ${tone === 'base' ? 'bg-[var(--surface-panel)] text-[var(--text-tertiary)]' : 'bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]'}`}
+        >
+          <Icon className="size-3" />
+        </span>
         {label}
       </h3>
-      <div className="min-h-0 flex-1 overflow-auto px-4 pb-4 text-xs text-[var(--text-primary)]">
+      <div className="min-h-0 flex-1 overflow-auto px-3 py-2 text-xs text-[var(--text-primary)]">
         {!schema ? (
           <p className="py-2 text-[var(--text-tertiary)]">Preview unavailable</p>
         ) : Object.keys(previewRecord(schema.nodes)).length === 0 ? (
@@ -262,11 +297,17 @@ function SchemaPreviewTags({ value }: { value: Record<string, unknown> }) {
     <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-4">
       {Object.entries(value).map(([key, property]) => {
         const text = property === true ? key : `${key}: ${JSON.stringify(property)}`;
+        const tone =
+          property === true && key === 'required'
+            ? 'border-transparent bg-[var(--accent-pending-soft)] text-[var(--accent-pending)]'
+            : property === true && key === 'repeated'
+              ? 'border-transparent bg-[var(--accent-leaf-soft)] text-[var(--accent-leaf)]'
+              : 'border-[var(--stroke-divider)] bg-[var(--surface-panel)] text-[var(--text-secondary)]';
         return (
           <span
             key={key}
             title={text}
-            className="max-w-52 truncate rounded border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-1.5 py-0.5 font-mono text-[10px] font-normal text-[var(--text-secondary)]"
+            className={`max-w-52 truncate rounded-full border px-2 py-0.5 font-mono text-[10px] font-normal ${tone}`}
           >
             {text}
           </span>
@@ -303,23 +344,23 @@ function SchemaPreviewNode({
         aria-label={`Node ${path}`}
         aria-expanded={expanded}
         onClick={() => setExpanded(!expanded)}
-        className="flex h-9 w-full items-center gap-2 whitespace-nowrap rounded px-1 text-left hover:bg-[var(--active-bg)] focus-visible:outline-2 focus-visible:outline-[var(--accent-blue)]"
+        className="flex h-9 w-full items-center gap-2 whitespace-nowrap rounded-md px-1.5 text-left transition-colors hover:bg-[var(--hover-bg)] focus-visible:outline-2 focus-visible:outline-[var(--accent-commit)]"
       >
         <ChevronRight
           aria-hidden="true"
-          className={`size-3.5 shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`}
+          className={`size-3.5 shrink-0 text-[var(--text-tertiary)] transition-transform ${expanded ? 'rotate-90' : ''}`}
         />
-        <FolderIcon aria-hidden="true" className="size-4 shrink-0 text-[var(--text-tertiary)]" />
+        <FolderIcon aria-hidden="true" className="size-4 shrink-0 text-[var(--accent-commit)]" />
         <span className="font-mono font-medium">{name}</span>
         <SchemaPreviewTags value={attributes} />
       </button>
       {expanded ? (
-        <div className="ml-3 border-l border-[var(--stroke-divider)] pl-3">
+        <div className="ml-3.5 border-l border-[var(--stroke-default)] pl-3">
           {Object.entries(slots).map(([slotName, slot]) => (
             <section
               key={slotName}
               aria-label={`Slot ${path}/${slotName}`}
-              className="flex h-9 items-center gap-2 whitespace-nowrap px-1"
+              className="flex h-8 items-center gap-2 whitespace-nowrap rounded-md px-1.5 hover:bg-[var(--hover-bg)]"
             >
               <FileText
                 aria-hidden="true"
