@@ -7,6 +7,7 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
   getDB: vi.fn(() => Promise.resolve({})),
 }));
+vi.mock('../lib/schema-publisher', () => ({ resolveSchemaPublisher: async () => 'ns_publisher' }));
 
 const storageMock = vi.hoisted(() => {
   let workspaceState: Record<string, unknown> = {};
@@ -44,7 +45,7 @@ const storageMock = vi.hoisted(() => {
       workspaceRevision = 4;
     },
     findProjectById: vi.fn((_db, projectId: string) =>
-      Promise.resolve({ projectId, ownerId: null })
+      Promise.resolve({ projectId, ownerId: null, namespaceId: 'ns_publisher' })
     ),
     findWorkspaceDraft: vi.fn(() => Promise.resolve(draft())),
     saveWorkspaceSchemaPreparation: vi.fn((_db, input) => {
@@ -250,6 +251,7 @@ describe('Workspace YSchema Composition persistence', () => {
         body: JSON.stringify({
           composition_revision: 1,
           composition_hash: saved.data.preview.compositionHash,
+          visibility: 'community',
           canonical_name: 'projects/proj_modules/prd',
           version: '1.0.0',
           title: 'Module Workspace PRD',
@@ -270,8 +272,8 @@ describe('Workspace YSchema Composition persistence', () => {
     expect(storageMock.publishYSchemaArtifactVersion).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        owner_project_id: 'proj_modules',
-        visibility: 'private',
+        publisher_namespace_id: 'ns_publisher',
+        visibility: 'community',
         version: '1.0.0',
         status: 'published',
       })
@@ -298,6 +300,7 @@ describe('Workspace YSchema Composition persistence', () => {
         body: JSON.stringify({
           composition_revision: 1,
           composition_hash: saved.data.preview.compositionHash,
+          visibility: 'community',
           canonical_name: 'projects/proj_modules/product-schema',
           version: '1.0.0',
           title: 'Product Schema',
@@ -312,7 +315,7 @@ describe('Workspace YSchema Composition persistence', () => {
       apiVersion: 't3x.dev/yschema-blueprint/v1',
       canonicalName: 'projects/proj_modules/product-schema',
       version: '1.0.0',
-      tags: ['product', 'source:team', 'team'],
+      tags: ['product', 'source:community', 'team'],
       blueprint: {
         compositionApiVersion: 't3x.dev/yschema-composition/v2',
         modules: [
@@ -330,7 +333,7 @@ describe('Workspace YSchema Composition persistence', () => {
         kind: 'schema',
         family: 'open',
         status: 'published',
-        tags: ['product', 'source:team', 'team'],
+        tags: ['product', 'source:community', 'team'],
       })
     );
   });
@@ -379,6 +382,7 @@ describe('Workspace YSchema Composition persistence', () => {
         body: JSON.stringify({
           composition_revision: 1,
           composition_hash: saved.data.preview.compositionHash,
+          visibility: 'community',
           canonical_name: 'projects/proj_modules/product-schema',
           version: '1.1.0',
           title: 'Product Schema',
@@ -440,6 +444,7 @@ describe('Workspace YSchema Composition persistence', () => {
         body: JSON.stringify({
           composition_revision: 1,
           composition_hash: saved.data.preview.compositionHash,
+          visibility: 'community',
           canonical_name: 'projects/proj_modules/unsafe-schema',
           version: '1.0.0',
           title: 'Unsafe schema',

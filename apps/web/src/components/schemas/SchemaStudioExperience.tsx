@@ -834,7 +834,7 @@ export function SchemaStudioExperience({
                     setReview(undefined);
                   }}
                 >
-                  Publish private Schema
+                  Publish public Schema
                 </Button>
                 <Button
                   hidden={review.workspace?.canBind}

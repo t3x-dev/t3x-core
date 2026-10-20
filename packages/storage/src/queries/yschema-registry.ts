@@ -20,6 +20,7 @@ export interface UpsertYSchemaArtifactVersionInput {
   description?: string;
   tags?: string[];
   owner_project_id?: string;
+  publisher_namespace_id?: string;
   visibility: YSchemaArtifactVisibility;
   version: string;
   status: 'active' | 'published' | 'deprecated' | 'draft';
@@ -44,6 +45,7 @@ export interface YSchemaArtifactVersionView {
   archivedAt: Date | null;
   metadataRevision: number;
   ownerProjectId: string | null;
+  publisherNamespaceId: string | null;
   visibility: string;
   version: string;
   status: string;
@@ -77,11 +79,12 @@ export interface ListProjectYSchemaVersionHistoryOptions {
   kind?: 'core' | 'module' | 'schema';
 }
 
-export interface PublishYSchemaArtifactVersionInput extends UpsertYSchemaArtifactVersionInput {
-  owner_project_id: string;
-  visibility: 'private' | 'team';
+export type PublishYSchemaArtifactVersionInput = UpsertYSchemaArtifactVersionInput & {
   status: 'active' | 'published';
-}
+} & (
+    | { owner_project_id: string; publisher_namespace_id?: never; visibility: 'private' | 'team' }
+    | { owner_project_id?: never; publisher_namespace_id: string; visibility: 'community' }
+  );
 
 export interface UpdateYSchemaArtifactIdentityInput {
   artifact_id: string;
@@ -109,6 +112,7 @@ export async function upsertYSchemaArtifactVersion(
       description: input.description ?? null,
       tags: input.tags ?? [],
       ownerProjectId: input.owner_project_id ?? null,
+      publisherNamespaceId: input.publisher_namespace_id ?? null,
       visibility: input.visibility,
       createdAt: now,
       updatedAt: now,
@@ -307,8 +311,8 @@ export async function listYSchemaArtifactVersions(
 }
 
 /**
- * Publish one immutable project Artifact version and make it the active version
- * for that Artifact. Older versions remain addressable and are only deprecated.
+ * Publish an immutable private/project or public/namespace Artifact version.
+ * Public release ownership survives deletion of the originating repository.
  */
 export async function publishYSchemaArtifactVersion(
   db: AnyDB,
@@ -329,7 +333,9 @@ export async function publishYSchemaArtifactVersion(
     if (
       existingArtifact &&
       (existingArtifact.artifactId !== input.artifact_id ||
-        existingArtifact.ownerProjectId !== input.owner_project_id ||
+        existingArtifact.ownerProjectId !== (input.owner_project_id ?? null) ||
+        existingArtifact.publisherNamespaceId !== (input.publisher_namespace_id ?? null) ||
+        existingArtifact.visibility !== input.visibility ||
         existingArtifact.kind !== input.kind ||
         existingArtifact.family !== input.family)
     ) {
@@ -383,12 +389,20 @@ export async function publishYSchemaArtifactVersion(
   });
 }
 
-/** Return every immutable project-owned version with its full manifest. */
+/** Private owned versions plus public releases explicitly originating in this project. */
 export async function listProjectYSchemaVersionHistory(
   db: AnyDB,
   options: ListProjectYSchemaVersionHistoryOptions
 ): Promise<YSchemaArtifactVersionView[]> {
-  const conditions = [eq(yschemaArtifacts.ownerProjectId, options.project_id)];
+  const conditions = [
+    or(
+      eq(yschemaArtifacts.ownerProjectId, options.project_id),
+      and(
+        eq(yschemaArtifacts.visibility, 'community'),
+        sql`${yschemaArtifactVersions.manifestJson}->'registry'->>'sourceProjectId' = ${options.project_id}`
+      )
+    ),
+  ];
   if (options.family) conditions.push(eq(yschemaArtifacts.family, options.family));
   if (options.kind) conditions.push(eq(yschemaArtifacts.kind, options.kind));
   const rows = await db
@@ -541,6 +555,7 @@ function joinedArtifactView(
     archivedAt: artifact.archivedAt,
     metadataRevision: artifact.metadataRevision,
     ownerProjectId: artifact.ownerProjectId,
+    publisherNamespaceId: artifact.publisherNamespaceId,
     visibility: artifact.visibility,
     version: version.version,
     status: version.status,

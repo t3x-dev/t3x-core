@@ -730,9 +730,9 @@ it('opens private publication from the checked saved candidate without applying 
   render(<SchemaStudioExperience projectId="p" />);
   await waitFor(() => expect(screen.getByRole('button', { name: 'Review changes' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Publish private Schema' }));
-  expect(screen.getByRole('dialog', { name: 'Publish private Schema' })).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Publish private version' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Publish public Schema' }));
+  expect(screen.getByRole('dialog', { name: 'Publish public Schema' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Publish public version' })).toBeEnabled();
   expect(mocks.apply).not.toHaveBeenCalled();
   expect(mocks.publish).not.toHaveBeenCalled();
   expect(mocks.push).not.toHaveBeenCalled();

@@ -190,7 +190,8 @@ export interface PublishedYSchemaBlueprintV1 {
   title: string;
   description: string;
   status: 'published' | 'deprecated';
-  source: 'team';
+  source: 'team' | 'community';
+  license?: string;
   tags: string[];
   blueprint: {
     compositionApiVersion: 't3x.dev/yschema-composition/v2';
@@ -201,6 +202,8 @@ export interface PublishedYSchemaBlueprintV1 {
   schema: YSchema;
   registry: {
     origin: 'composition';
+    publisherNamespaceId?: string;
+    sourceProjectId?: string;
     /** Exact author introduction; not the schema content identity. */
     presentationRef?: {
       projectId: string;

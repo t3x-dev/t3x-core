@@ -128,6 +128,7 @@ const reference = () => ({
   coverPath: image.path,
 });
 const input = (version = '1.0.0') => ({
+  visibility: 'community',
   composition_revision: 1,
   composition_hash: compositionHash,
   canonical_name: 'release/demo',
@@ -348,7 +349,7 @@ it('does not expose a private introduction reference through public or another p
   } finally {
     await db
       .update(yschemaArtifacts)
-      .set({ visibility: 'private' })
+      .set({ visibility: 'community' })
       .where(eq(yschemaArtifacts.artifactId, artifactId));
   }
 });

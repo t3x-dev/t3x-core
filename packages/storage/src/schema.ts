@@ -780,6 +780,10 @@ export const yschemaArtifacts = pgTable(
     ownerProjectId: text('owner_project_id').references(() => projects.projectId, {
       onDelete: 'cascade',
     }),
+    // Public releases belong to a publisher namespace, never to a disposable repository.
+    publisherNamespaceId: text('publisher_namespace_id').references(() => namespaces.namespaceId, {
+      onDelete: 'restrict',
+    }),
     visibility: text('visibility').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
