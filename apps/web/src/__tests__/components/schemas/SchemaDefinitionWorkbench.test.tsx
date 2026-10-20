@@ -60,10 +60,13 @@ function setup(initial: Record<string, unknown> = structuredClone(definition)) {
     );
   }
   const view = render(<Harness />);
+  // The dialog footer survives editor updates. Reuse its control rather than
+  // recomputing accessible names across every (including collapsed) field.
+  const saveButton = screen.getByRole('button', { name: 'Save candidate' });
   const change = (label: string, value: string) =>
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
   const saved = () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Save candidate' }));
+    fireEvent.click(saveButton);
     return save.mock.lastCall?.[0] as Record<string, unknown>;
   };
   return { ...view, change, saved, save, preview };
@@ -361,20 +364,34 @@ describe('complete Schema Structure settings', () => {
     expect(screen.getByRole('button', { name: 'Save candidate' })).toBeEnabled();
   });
 
-  it('edits nested child nodes and synchronizes requiredSlots on rename and removal', () => {
-    const { change, saved } = setup();
-    change('Children mode product', 'defined');
-    fireEvent.click(screen.getByRole('button', { name: 'Add child node' }));
-    change('Node name product/new_node', 'details');
-    fireEvent.blur(screen.getByLabelText('Node name product/new_node'));
-    const child = screen.getByRole('article', { name: 'Node product/details' });
-    fireEvent.click(within(child).getByRole('button', { name: 'Add Slot' }));
-    change('Slot name new_slot', 'summary');
-    fireEvent.blur(screen.getByLabelText('Slot name new_slot'));
-    fireEvent.click(screen.getByLabelText('required for slot product/details/summary'));
-    change('maxWords for slot product/details/summary', '30');
-    change('Slot name title', 'heading');
-    fireEvent.blur(screen.getByLabelText('Slot name title'));
+  it('preserves a newly added nested node and required Slot when a parent Slot is renamed', () => {
+    const { saved } = setup();
+    const product = within(screen.getByRole('article', { name: 'Node product' }));
+    fireEvent.click(product.getByText('Node settings', { selector: 'summary' }));
+    fireEvent.change(product.getByLabelText('Children mode product'), {
+      target: { value: 'defined' },
+    });
+    const children = within(product.getByRole('region', { name: 'Children of product' }));
+    fireEvent.click(children.getByRole('button', { name: 'Add child node' }));
+    const nodeName = children.getByLabelText('Node name product/new_node');
+    fireEvent.change(nodeName, { target: { value: 'details' } });
+    fireEvent.blur(nodeName);
+    const child = within(children.getByRole('article', { name: 'Node product/details' }));
+    fireEvent.click(child.getByRole('button', { name: 'Add Slot' }));
+    const slotName = child.getByLabelText('Slot name new_slot');
+    fireEvent.change(slotName, { target: { value: 'summary' } });
+    fireEvent.blur(slotName);
+    const slot = within(child.getByRole('region', { name: 'Slot product/details/summary' }));
+    fireEvent.click(
+      slot.getByRole('button', { name: 'Expand settings for slot product/details/summary' })
+    );
+    fireEvent.click(slot.getByLabelText('required for slot product/details/summary'));
+    fireEvent.change(slot.getByLabelText('maxWords for slot product/details/summary'), {
+      target: { value: '30' },
+    });
+    const parentSlotName = product.getByLabelText('Slot name title');
+    fireEvent.change(parentSlotName, { target: { value: 'heading' } });
+    fireEvent.blur(parentSlotName);
     expect(saved()).toMatchObject({
       nodes: {
         product: {
@@ -388,12 +405,52 @@ describe('complete Schema Structure settings', () => {
         },
       },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Remove slot heading' }));
+  });
+
+  it('synchronizes requiredSlots when a required Slot is renamed and removed', () => {
+    const { saved } = setup();
+    const product = within(screen.getByRole('article', { name: 'Node product' }));
+    const name = product.getByLabelText('Slot name title');
+    fireEvent.change(name, { target: { value: 'heading' } });
+    fireEvent.blur(name);
+    const renamed = saved().nodes as Record<string, Record<string, unknown>>;
+    expect(renamed.product.requiredSlots).toEqual(['heading']);
+    expect(renamed.product.slots).toEqual({
+      heading: { type: 'string' },
+      untouched: { type: 'boolean', default: false },
+    });
+    fireEvent.click(product.getByRole('button', { name: 'Remove slot heading' }));
     const result = saved().nodes as Record<string, Record<string, unknown>>;
     expect(result.product).not.toHaveProperty('requiredSlots');
-    fireEvent.click(screen.getByRole('button', { name: 'Remove node product/details' }));
+    expect(result.product.slots).toEqual({ untouched: { type: 'boolean', default: false } });
+  });
+
+  it('removes a nested child node and switches from defined to unrestricted children', () => {
+    const { saved } = setup({
+      ...structuredClone(definition),
+      nodes: {
+        product: {
+          children: {
+            details: {
+              requiredSlots: ['summary'],
+              slots: { summary: { type: 'string', maxWords: 30 } },
+            },
+          },
+        },
+      },
+    });
+    const product = within(screen.getByRole('article', { name: 'Node product' }));
+    // The parent disclosure precedes its nested child's settings.
+    fireEvent.click(product.getAllByText('Node settings', { selector: 'summary' })[0]);
+    const child = within(product.getByRole('article', { name: 'Node product/details' }));
+    fireEvent.click(child.getByRole('button', { name: 'Remove node product/details' }));
     expect(saved()).toMatchObject({ nodes: { product: { children: {} } } });
-    change('Children mode product', 'any');
+    expect(
+      product.queryByRole('article', { name: 'Node product/details' })
+    ).not.toBeInTheDocument();
+    fireEvent.change(product.getByLabelText('Children mode product'), {
+      target: { value: 'any' },
+    });
     expect(saved()).toMatchObject({ nodes: { product: { children: 'any' } } });
   });
 
