@@ -18,7 +18,7 @@ import { resolveWorkspaceYSchema } from './workspace-yschema';
 
 /** Older Commits may predate the local Base cache. Recover only a definition whose
  * bytes match the Schema resource in the verified Commit's validation evidence. */
-async function recoverCommittedSchema(
+export async function recoverCommittedSchema(
   db: AnyDB,
   projectId: string,
   refName: string,
@@ -38,6 +38,7 @@ async function recoverCommittedSchema(
     const canonicalName = decodeURIComponent(path.slice(0, separator));
     const version = decodeURIComponent(path.slice(separator + 1));
     let definition = draft.schemaHash === resource.digest ? draft.definition : null;
+    let compositionBinding: Record<string, unknown> | null = null;
     if (!definition && /^r[1-9]\d*$/.test(version)) {
       const snapshot = await findYSchemaCompositionSnapshot(db, {
         project_id: projectId,
@@ -45,7 +46,17 @@ async function recoverCommittedSchema(
         composition_revision: Number(version.slice(1)),
         compiled_schema_hash: resource.digest,
       });
-      if (snapshot) definition = { ...normalizeYSchemaObject(snapshot.schemaJson) };
+      if (snapshot) {
+        definition = { ...normalizeYSchemaObject(snapshot.schemaJson) };
+        compositionBinding = {
+          compositionId: snapshot.compositionId,
+          compositionRevision: snapshot.compositionRevision,
+          compositionHash: snapshot.compositionHash,
+          ...(Array.isArray(snapshot.manifestJson.sources)
+            ? { studioSources: snapshot.manifestJson.sources }
+            : {}),
+        };
+      }
     }
     if (!definition) {
       const resolved = await resolveWorkspaceYSchema(
@@ -64,7 +75,13 @@ async function recoverCommittedSchema(
         schemaHash: resource.digest,
         definition,
         bindings: [
-          { canonicalName, version, schemaHash: resource.digest, recoveredFromCommit: refHead },
+          {
+            canonicalName,
+            version,
+            schemaHash: resource.digest,
+            recoveredFromCommit: refHead,
+            ...compositionBinding,
+          },
         ],
       };
   }

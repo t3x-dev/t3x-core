@@ -31,6 +31,7 @@ import type { Context } from 'hono';
 import { assessWorkspaceSchemaImpact, workspaceContent } from './schema-evolution-impact';
 import { resolveStudioSource, schemaSourceAdoptionReason } from './schema-studio';
 import { workspaceAuthoringState } from './workspace-authoring';
+import { resolveWorkspaceSchemaEditBasis } from './workspace-schema-edit-basis';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
 import { artifactViewToOpenModule } from './yschema-artifact-registry';
 export class StudioError extends Error {
@@ -285,6 +286,35 @@ export async function previewStudio(
       'CONFLICT',
       'The selected base sources changed after this Schema edit candidate was saved.'
     );
+  let boundSchema: Record<string, unknown> | undefined;
+  if (!editCandidate && !input.localContribution && draft?.workspace_state) {
+    const resolved = await resolveWorkspaceYSchema(draft.workspace_state, db, projectId);
+    if (resolved.schema) {
+      try {
+        const basis = await resolveWorkspaceSchemaEditBasis(
+          c,
+          db,
+          projectId,
+          draft.workspace_state,
+          resolved.schema
+        );
+        if (basis.selectionHash === selected.selectionHash) {
+          boundSchema = { ...basis.schema };
+          if (!input.schemaDefinition || input.baseSchemaHash === basis.schemaHash)
+            selected = {
+              ...selected,
+              schema: basis.schema,
+              schemaHash: basis.schemaHash,
+              renderPlan: basis.renderPlan,
+              origins: basis.origins,
+            } as typeof selected;
+        }
+      } catch (error) {
+        if (!(error instanceof StudioError) || input.schemaDefinition) throw error;
+        // An unrelated selection may still be reviewed; never substitute its bytes for the bound Base.
+      }
+    }
+  }
   if (editCandidate?.authoringDraft || input.schemaDefinition) {
     if (!selected.report.valid)
       throw new StudioError(
@@ -395,6 +425,7 @@ export async function previewStudio(
     binding: Record<string, unknown> | null;
     canBind: boolean;
     changes: ReturnType<typeof diffYSchemas>;
+    boundSchema?: Record<string, unknown>;
   } | null = null;
   let impact: Awaited<ReturnType<typeof assessWorkspaceSchemaImpact>> | null = null;
   let baseSchemaHash: string | null = null;
@@ -420,6 +451,7 @@ export async function previewStudio(
     baseSchemaHash = await sha256CompositionValue(base);
     workspace = {
       id: input.workspaceId,
+      ...(boundSchema ? { boundSchema } : {}),
       revision: draft.revision,
       canBind: (() => {
         const state = draft.workspace_state!;
