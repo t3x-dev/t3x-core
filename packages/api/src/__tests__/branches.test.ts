@@ -3,7 +3,12 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { bindTransitionPolicy, getTransitionPolicyBinding, insertProject } from '@t3x-dev/storage';
+import {
+  bindTransitionPolicy,
+  findWorkspaceDraft,
+  getTransitionPolicyBinding,
+  insertProject,
+} from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -99,6 +104,15 @@ describe('Branches Routes', () => {
       expect(data.data.name).toBe('feature-test');
       expect(data.data.description).toBe('A test branch');
       expect(data.data.branch_id).toBeDefined();
+      const inherited = await findWorkspaceDraft(
+        mockDB,
+        testProjectId,
+        'workspace_branch:feature-test'
+      );
+      expect(inherited?.workspace_state?.authoringBasis).toMatchObject({
+        refName: 'feature-test',
+        refHead: null,
+      });
     });
 
     it('returns 400 for missing fields', async () => {
@@ -126,6 +140,11 @@ describe('Branches Routes', () => {
     });
 
     it('returns the existing branch for an identical create intent', async () => {
+      const before = await findWorkspaceDraft(
+        mockDB,
+        testProjectId,
+        'workspace_branch:feature-test'
+      );
       const res = await app.request('/v1/branches', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -136,6 +155,25 @@ describe('Branches Routes', () => {
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
       expect(data.data.name).toBe('feature-test');
+      expect(
+        await findWorkspaceDraft(mockDB, testProjectId, 'workspace_branch:feature-test')
+      ).toEqual(before);
+    });
+
+    it('rejects a missing parent without creating an empty branch', async () => {
+      const res = await app.request('/v1/branches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: testProjectId,
+          name: 'invalid-parent-child',
+          parent_branch: 'missing-parent',
+        }),
+      });
+      expect(res.status).toBe(404);
+      expect(
+        await findWorkspaceDraft(mockDB, testProjectId, 'workspace_branch:invalid-parent-child')
+      ).toBeNull();
     });
 
     it('returns 400 for invalid JSON', async () => {

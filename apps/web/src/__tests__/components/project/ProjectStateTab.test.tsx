@@ -524,6 +524,24 @@ function renderStateTab(validation: YSchemaValidationSummary | null = VALIDATION
 }
 
 describe('ProjectStateTab', () => {
+  it('creates a branch through the server without overwriting its inherited Schema with a client Draft', async () => {
+    renderStateTab();
+    await screen.findByRole('heading', { name: 'PRD audience handoff committed' });
+    fireEvent.click(screen.getByRole('button', { name: /Switch branches\/tags/ }));
+    fireEvent.change(screen.getByPlaceholderText('Find or create branch'), {
+      target: { value: 'feature/new-schema' },
+    });
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: /Create branch feature\/new-schema from main/ })
+    );
+    await waitFor(() =>
+      expect(hookMocks.createBranch).toHaveBeenCalledWith('feature/new-schema', 'main')
+    );
+    expect(hookMocks.saveDraft).not.toHaveBeenCalled();
+    expect(navigationMocks.router.push).toHaveBeenCalledWith(
+      '/project/proj_test?branch=feature%2Fnew-schema&tab=workspaces'
+    );
+  });
   it('defaults to Overview and keeps legacy Render links on the same revision', async () => {
     navigationMocks.search = `view=render&commit=${encodeURIComponent(PRD_COMMIT.hash)}`;
     render(<ProjectStateTab projectId="fresh-project" projectName="Fresh" />);
