@@ -134,19 +134,14 @@ export function DeletedRepositoriesView({
             <CheckCircle2 aria-hidden="true" className={cn('size-4', management.successIcon)} />
           )}
           <output>
-            {notice.message}{' '}
-            {notice.href && <Link href={notice.href}>Open repository</Link>}
+            {notice.message} {notice.href && <Link href={notice.href}>Open repository</Link>}
           </output>
         </div>
       )}
       {list.error && (
         <div role="alert" className={cn(management.notice, styles.errorState)}>
           <p>Couldn&apos;t load deleted repositories. {list.error}</p>
-          <Button
-            disabled={list.loading}
-            onClick={() => void list.refresh()}
-            variant="outline"
-          >
+          <Button disabled={list.loading} onClick={() => void list.refresh()} variant="outline">
             Retry
           </Button>
         </div>

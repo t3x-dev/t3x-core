@@ -153,9 +153,7 @@ function ProjectRow({
           >
             <h3>{project.name}</h3>
           </Link>
-          {project.visibility && (
-            <span className={styles.visibility}>{project.visibility}</span>
-          )}
+          {project.visibility && <span className={styles.visibility}>{project.visibility}</span>}
         </div>
         <p className={styles.repositoryPath}>{getProjectRepoPath(project, ownerSlug)}</p>
         {project.description && <p className={styles.description}>{project.description}</p>}
@@ -443,7 +441,11 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
                     className={cn('size-4', loading && 'animate-spin motion-reduce:animate-none')}
                   />
                 </Button>
-                <Link href={deletedHref} scroll={false} className={cn(styles.deletedLink, focusRing)}>
+                <Link
+                  href={deletedHref}
+                  scroll={false}
+                  className={cn(styles.deletedLink, focusRing)}
+                >
                   <Trash2 aria-hidden="true" className="size-4" /> Deleted repositories
                 </Link>
                 <Button asChild>
@@ -455,7 +457,10 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
 
               {notice && (
                 <div className={cn(management.notice, styles.notice)}>
-                  <CheckCircle2 aria-hidden="true" className={cn('size-4', management.successIcon)} />
+                  <CheckCircle2
+                    aria-hidden="true"
+                    className={cn('size-4', management.successIcon)}
+                  />
                   <output>
                     {notice.message}{' '}
                     {notice.deleted && (
@@ -498,7 +503,10 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
               ) : (
                 <>
                   {recentProjects.length > 0 && !query.trim() && (
-                    <section className={styles.section} aria-labelledby="recent-repositories-heading">
+                    <section
+                      className={styles.section}
+                      aria-labelledby="recent-repositories-heading"
+                    >
                       <div className={styles.sectionHeading}>
                         <h2 id="recent-repositories-heading">
                           <Clock3 aria-hidden="true" className="size-4" /> Recently opened
@@ -548,7 +556,11 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
                           <Search aria-hidden="true" className="size-5" />
                           <h3>No repositories match this filter.</h3>
                           <p>Try another name or description, or clear your search.</p>
-                          <Button onClick={() => setQuery('')} type="button" variant="canvas-outline">
+                          <Button
+                            onClick={() => setQuery('')}
+                            type="button"
+                            variant="canvas-outline"
+                          >
                             Clear
                           </Button>
                         </div>

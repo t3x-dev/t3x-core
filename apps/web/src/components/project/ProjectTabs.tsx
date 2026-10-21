@@ -35,8 +35,7 @@ export function ProjectTabs({
       )}
     >
       {PROJECT_TABS.map((tab) => {
-        const selected =
-          activeTab === tab.id || (tab.id === 'discover' && activeTab === 'browse');
+        const selected = activeTab === tab.id || (tab.id === 'discover' && activeTab === 'browse');
         const visibleLabel = tab.id === 'reviews' ? 'PRs' : tab.label;
         const baseHref =
           tab.id === 'settings'

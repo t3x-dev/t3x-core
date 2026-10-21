@@ -121,7 +121,11 @@ export function NewRepositoryPage() {
                             <option key={value}>{value}</option>
                           ))}
                         </select>
-                        <ChevronDown className={styles.selectChevron} size={14} aria-hidden="true" />
+                        <ChevronDown
+                          className={styles.selectChevron}
+                          size={14}
+                          aria-hidden="true"
+                        />
                       </div>
                     </div>
                     <span className={styles.pathSeparator} aria-hidden="true">
@@ -139,7 +143,8 @@ export function NewRepositoryPage() {
                         autoComplete="off"
                         aria-describedby="repository-name-help repository-name-feedback"
                         aria-invalid={
-                          name.length > 0 && Boolean(nameCheck.result && !nameCheck.result.available)
+                          name.length > 0 &&
+                          Boolean(nameCheck.result && !nameCheck.result.available)
                         }
                         disabled={locked}
                         value={name}
@@ -148,7 +153,10 @@ export function NewRepositoryPage() {
                     </div>
                   </div>
                   <div className={styles.nameHelp}>
-                    <p id="repository-name-help" hidden={name.length > 0 || Boolean(nameCheck.error)}>
+                    <p
+                      id="repository-name-help"
+                      hidden={name.length > 0 || Boolean(nameCheck.error)}
+                    >
                       Choose a short, descriptive name for your repository.
                     </p>
                     <div id="repository-name-feedback">
@@ -217,8 +225,8 @@ export function NewRepositoryPage() {
                     Initialize README
                   </label>
                   <p id="repository-readme-help">
-                    Start with your repository name and description. Leave unchecked to begin without
-                    a README.
+                    Start with your repository name and description. Leave unchecked to begin
+                    without a README.
                   </p>
                   {!parsedReadme.success ? (
                     <p role="alert" className="text-sm text-[var(--status-error)]">
