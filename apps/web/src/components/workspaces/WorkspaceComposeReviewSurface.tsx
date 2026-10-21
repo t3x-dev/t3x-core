@@ -936,7 +936,7 @@ function ComposeSurface({
           changeScope={changeScope}
           staging={stagingControls}
           schemaEvent={
-            schemaSettings.record && schemaSettings.record.status !== 'cancelled'
+            schemaSettings.record && ['generated', 'applied'].includes(schemaSettings.record.status)
               ? {
                   id: schemaSettings.record.settingsId,
                   timestamp: schemaSettings.record.createdAt ?? candidate.updatedAt,
@@ -993,6 +993,23 @@ function ComposeSurface({
           />
         ) : activity.view ? (
           <ComposeAuthoringAssistant
+            beforeComposer={
+              schemaSettings.record &&
+              ['pending', 'confirmed'].includes(schemaSettings.record.status) ? (
+                <div className="max-h-[50vh] shrink-0 overflow-y-auto border-t border-[var(--stroke-divider)] p-3">
+                  <AssistantSchemaSettingsContent
+                    projectId={candidate.projectId}
+                    workspaceId={candidate.id}
+                    state={schemaSettings}
+                    disabled={staged.length > 0}
+                    onChanged={() => {
+                      setSchemaCandidateEpoch((value) => value + 1);
+                      activity.refresh();
+                    }}
+                  />
+                </div>
+              ) : undefined
+            }
             allowProposal={staged.length === 0}
             context={{
               workspaceId: candidate.id,

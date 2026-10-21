@@ -35,13 +35,18 @@ let projectId: string;
 let counter = 0;
 const actor = { kind: 'human' as const, id: 'human:local-user' };
 const denied = new Set<string>();
-const model = vi.hoisted(() => ({ tools: vi.fn() }));
+const model = vi.hoisted(() => ({ tools: vi.fn(), structured: vi.fn() }));
 vi.mock('../lib/provider-resolver', () => ({
   resolveProviderAndModel: async () => ({
     ok: true,
     model: 'test',
     providerId: 'test',
-    provider: { id: 'test', generate: vi.fn(), generateWithTools: model.tools },
+    provider: {
+      id: 'test',
+      generate: vi.fn(),
+      generateWithTools: model.tools,
+      generateStructured: model.structured,
+    },
   }),
 }));
 vi.mock('../lib/db', () => ({ getDB: async () => db }));
@@ -145,6 +150,14 @@ async function run<T>(
   return result!;
 }
 beforeAll(async () => {
+  model.structured.mockImplementation(async (prompt) => {
+    const payload = JSON.parse(prompt.messages[0].content);
+    const applied = await applySchemaSettings(payload.baseSchema, payload.confirmedSettings);
+    return {
+      data: { operations: applied.operations },
+      usage: { inputTokens: 20, outputTokens: 15 },
+    };
+  });
   const setup = await setupTestDB();
   db = setup.db;
   cleanup = setup.cleanup;
@@ -184,6 +197,212 @@ beforeAll(async () => {
   expect(add.status).toBe(200);
 });
 afterAll(async () => cleanup?.());
+
+it.each([
+  { action: 'add_slot', name: 'owner', definition: { type: 'string' }, required: true },
+  { action: 'edit_slot', name: 'title', definition: { maxWords: 50 } },
+  { action: 'edit_slot', name: 'title', definition: { enum: ['draft', 'ready'] }, required: false },
+  { action: 'remove_slot', name: 'title', definition: {} },
+  { action: 'rename_slot', name: 'title', newName: 'headline', definition: {} },
+  {
+    action: 'edit_node',
+    name: 'product',
+    definition: { description: 'Updated product' },
+    nodePath: '',
+  },
+  { action: 'remove_node', name: 'product', definition: {}, nodePath: '' },
+  { action: 'rename_node', name: 'product', newName: 'overview', definition: {}, nodePath: '' },
+  {
+    action: 'add_node',
+    name: 'experiments',
+    definition: { slots: { title: { type: 'string' } } },
+    nodePath: '',
+  },
+  {
+    action: 'move_slot',
+    name: 'title',
+    newName: 'headline',
+    definition: {},
+    targetNodePath: 'product',
+  },
+  {
+    action: 'move_node',
+    name: 'product',
+    newName: 'overview',
+    definition: {},
+    nodePath: '',
+    targetNodePath: '',
+  },
+  {
+    action: 'add_relation',
+    name: 'links',
+    definition: { from: 'product', to: 'product' },
+    nodePath: '',
+  },
+  {
+    action: 'add_rule',
+    name: 'review',
+    definition: { description: 'Review required' },
+    nodePath: '',
+  },
+  {
+    action: 'edit_slot',
+    name: 'title',
+    definition: { type: 'number' },
+    unsetAttributes: ['minLength', 'maxWords'],
+    required: false,
+  },
+])('human confirmation gates AI generation and never applies content or a binding: $action $name', async (change) => {
+  const ws = await fixture();
+  const settings = {
+    nodePath: 'product',
+    intent: 'Requested Schema change',
+    ...change,
+  } as AssistantSchemaSettingsInput;
+  const before = (await findWorkspaceDraft(db, projectId, ws))!;
+  const calls = model.structured.mock.calls.length;
+  const shown = await run(ws, (service) => service.show(settings, `generic-${ws}`));
+  expect(shown.generationMode).toBe('schema_yops_v1');
+  expect(shown.impact).toMatchObject({
+    items: expect.any(Array),
+    content: { hash: expect.any(String) },
+  });
+  expect(model.structured).toHaveBeenCalledTimes(calls);
+  await expect(run(ws, (service) => service.propose(shown.settingsId))).rejects.toThrow('Confirm');
+  const confirmed = await run(ws, (service) =>
+    service.confirm(shown.settingsId, shown.revision, shown.settings)
+  );
+  expect(model.structured).toHaveBeenCalledTimes(calls);
+  const generated = await run(ws, (service) => service.propose(confirmed.settingsId));
+  expect(model.structured).toHaveBeenCalledTimes(calls + 1);
+  const after = (await findWorkspaceDraft(db, projectId, ws))!;
+  expect(after.workspace_state!.schemaBindings).toEqual(before.workspace_state!.schemaBindings);
+  expect(currentComposition(workspaceAuthoringState(after.workspace_state!).ledger)).toEqual(
+    currentComposition(workspaceAuthoringState(before.workspace_state!).ledger)
+  );
+  expect(generated.kind).toBe('schema');
+  const candidate = after.workspace_state!.schemaEditCandidate as {
+    authoringDraft: { effect: { operations: Parameters<typeof applyWorkspaceSchemaYOps>[1] } };
+  };
+  const replayed = (
+    await applyWorkspaceSchemaYOps(base, candidate.authoringDraft.effect.operations)
+  ).schema;
+  expect(replayed).toEqual((await applySchemaSettings(base, shown.settings)).schema);
+  const response = await app.request(
+    `/v1/projects/${projectId}/workspaces/${ws}/source-chat/assistant/schema-settings`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversationId: 'conversation',
+        settingsId: shown.settingsId,
+        ifRevision: confirmed.revision,
+        settings: shown.settings,
+        generateSnapshot: true,
+        applyToDraft: true,
+      }),
+    }
+  );
+  if (shown.impact!.canAdopt) {
+    expect(response.status, await response.clone().text()).toBe(200);
+    const bound = await resolveWorkspaceYSchema(
+      (await findWorkspaceDraft(db, projectId, ws))!.workspace_state!,
+      db,
+      projectId
+    );
+    expect(bound.schema).toEqual(replayed);
+  } else {
+    // Generating a valid Schema candidate must not bypass the existing content migration gate.
+    expect(response.status, await response.clone().text()).toBe(409);
+    expect((await findWorkspaceDraft(db, projectId, ws))!.workspace_state!.schemaBindings).toEqual(
+      before.workspace_state!.schemaBindings
+    );
+    expect((await run(ws, (service) => service.read()))!.status).toBe('generated');
+  }
+  await run(ws, (service) => service.propose(confirmed.settingsId));
+  expect(model.structured).toHaveBeenCalledTimes(calls + 1);
+});
+
+it('rejects out-of-scope AI output and keeps confirmed settings recoverable without publishing a candidate', async () => {
+  const ws = await fixture();
+  const shown = await run(ws, (service) => service.show(slot, `bad-ai-${ws}`));
+  await run(ws, (service) => service.confirm(shown.settingsId, 1, slot));
+  const before = (await findWorkspaceDraft(db, projectId, ws))!;
+  model.structured.mockResolvedValueOnce({
+    data: { operations: [{ set: { path: 'strict', value: true } }] },
+    usage: { inputTokens: 1, outputTokens: 1 },
+  });
+  await expect(run(ws, (service) => service.propose(shown.settingsId))).rejects.toThrow();
+  expect(await findWorkspaceDraft(db, projectId, ws)).toEqual(before);
+  expect((await run(ws, (service) => service.read()))!.status).toBe('confirmed');
+});
+
+it('passes the server-pinned original user text, not only the model summary, to Schema generation', async () => {
+  const ws = await fixture();
+  const original = 'Add advantage, keep every existing attribute and do not fill any YAML content.';
+  const shown = await run(ws, (service) => service.show(slot, `original-${ws}`, original));
+  await run(ws, (service) => service.confirm(shown.settingsId, 1, shown.settings));
+  await run(ws, (service) => service.propose(shown.settingsId));
+  const prompt = model.structured.mock.calls.at(-1)![0];
+  expect(JSON.parse(prompt.messages[0].content).instruction).toBe(original);
+});
+
+it('rejects combining first confirmation with Draft application for the new Schema flow', async () => {
+  const ws = await fixture();
+  const shown = await run(ws, (service) => service.show(slot, `no-combined-save-${ws}`));
+  const before = (await findWorkspaceDraft(db, projectId, ws))!;
+  const response = await app.request(
+    `/v1/projects/${projectId}/workspaces/${ws}/source-chat/assistant/schema-settings`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversationId: 'conversation',
+        settingsId: shown.settingsId,
+        ifRevision: 1,
+        settings: shown.settings,
+        generateSnapshot: true,
+        applyToDraft: true,
+      }),
+    }
+  );
+  expect(response.status).toBe(409);
+  expect((await findWorkspaceDraft(db, projectId, ws))!.workspace_state!.schemaBindings).toEqual(
+    before.workspace_state!.schemaBindings
+  );
+  expect((await run(ws, (service) => service.read()))!.status).toBe('pending');
+});
+
+it('does not publish a candidate after the user cancels while AI generation is in flight', async () => {
+  const ws = await fixture();
+  const shown = await run(ws, (service) => service.show(slot, `cancel-generation-${ws}`));
+  const confirmed = await run(ws, (service) => service.confirm(shown.settingsId, 1, slot));
+  const implementation = model.structured.getMockImplementation()!;
+  model.structured.mockImplementationOnce(async (...args) => {
+    await run(ws, (service) => service.confirm(shown.settingsId, confirmed.revision, null));
+    return implementation(...args);
+  });
+  await expect(run(ws, (service) => service.propose(shown.settingsId))).rejects.toThrow();
+  expect((await run(ws, (service) => service.read()))!.status).toBe('cancelled');
+  expect(
+    (await findWorkspaceDraft(db, projectId, ws))!.workspace_state!.schemaEditCandidate
+  ).toBeUndefined();
+});
+
+it('coalesces simultaneous Confirm generation retries into one model invocation and one saved candidate', async () => {
+  const ws = await fixture();
+  const shown = await run(ws, (service) => service.show(slot, `concurrent-generate-${ws}`));
+  await run(ws, (service) => service.confirm(shown.settingsId, 1, slot));
+  const calls = model.structured.mock.calls.length;
+  const results = await Promise.allSettled([
+    run(ws, (service) => service.propose(shown.settingsId)),
+    run(ws, (service) => service.propose(shown.settingsId)),
+  ]);
+  expect(model.structured).toHaveBeenCalledTimes(calls + 1);
+  expect(results.every((result) => result.status === 'fulfilled')).toBe(true);
+  const after = (await findWorkspaceDraft(db, projectId, ws))!;
+  expect((after.workspace_state!.schemaEditCandidate as { revision: number }).revision).toBe(1);
+});
 
 it('uses the bound prepared snapshot, asks before discarding a newer Studio edit, and synchronizes a real snapshot', async () => {
   const ws = await fixture();
@@ -415,7 +634,7 @@ describe('Assistant Schema settings using Studio', () => {
       expectedRefHead: null,
     });
   }
-  it('saves and binds the exact snapshot directly, retaining content and reporting required gaps', async () => {
+  it('generates then separately binds the exact snapshot, retaining content and reporting required gaps', async () => {
     const ws = await fixture();
     await seedProduct(ws);
     const before = (await findWorkspaceDraft(db, projectId, ws))!;
@@ -430,6 +649,13 @@ describe('Assistant Schema settings using Studio', () => {
       settings: owner,
       applyToDraft: true,
     };
+    const preview = await app.request(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, applyToDraft: false, generateSnapshot: true }),
+    });
+    expect(preview.status, await preview.clone().text()).toBe(200);
+    expect((await preview.json()).data.status).toBe('generated');
     const response = await app.request(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -464,7 +690,7 @@ describe('Assistant Schema settings using Studio', () => {
     expect(next.schemaHash).toBe(saved.snapshot.schemaHash);
     expect(next.studioConflict).toBeUndefined();
   });
-  it('requires explicit Studio replacement and then saves the replacement directly to Draft', async () => {
+  it('requires explicit Studio replacement, generates a candidate and then separately saves to Draft', async () => {
     const ws = await fixture();
     const first = await run(ws, (s) => s.show(slot, 'first-' + ws));
     await run(ws, (s) => s.confirm(first.settingsId, first.revision, slot));
@@ -491,6 +717,17 @@ describe('Assistant Schema settings using Studio', () => {
       ).status
     ).toBe(409);
     expect((await findWorkspaceDraft(db, projectId, ws))!.revision).toBe(before.revision);
+    const preview = await app.request(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...payload,
+        applyToDraft: false,
+        generateSnapshot: true,
+        discardStudioCandidate: true,
+      }),
+    });
+    expect(preview.status, await preview.clone().text()).toBe(200);
     const response = await app.request(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -554,7 +791,7 @@ describe('Assistant Schema settings using Studio', () => {
         body: JSON.stringify(body),
       });
     model.tools.mockResolvedValueOnce({
-      tool_calls: [{ id: 'model-card', name: 'showSchemaSettings', input: slot }],
+      tool_calls: [{ id: 'model-card', name: 'showSchemaChangeCard', input: slot }],
       stop_reason: 'tool_use',
       usage: { inputTokens: 1, outputTokens: 1 },
     });

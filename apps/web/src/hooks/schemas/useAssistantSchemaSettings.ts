@@ -54,7 +54,10 @@ export function useAssistantSchemaSettings(
           settings,
           {
             generateSnapshot: true,
-            applyToDraft: true,
+            applyToDraft:
+              record.status === 'generated' ||
+              record.status === 'applied' ||
+              !record.generationMode,
             discardStudioCandidate,
           }
         );

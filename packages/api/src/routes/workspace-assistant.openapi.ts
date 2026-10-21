@@ -243,7 +243,8 @@ workspaceAssistantRoutes.post(
             projectId,
             workspaceId,
             principal.actor,
-            body.conversation_id
+            body.conversation_id,
+            { requestedModel: selectedModel, requestedProvider: selectedProvider }
           ),
           confirmedSettingsId: body.confirmed_settings_id,
           exactEdit: body.exact_edit
@@ -375,6 +376,17 @@ workspaceAssistantRoutes.post(settingsPath, async (c) => {
   );
   if ((input.generateSnapshot || input.applyToDraft) && !input.settings)
     return errorResponse(c, 'INVALID_REQUEST', 'Snapshot generation requires confirmed settings.');
+  const previous = await service.read();
+  if (
+    input.applyToDraft &&
+    previous?.generationMode === 'schema_yops_v1' &&
+    !['generated', 'applied'].includes(previous.status)
+  )
+    return errorResponse(
+      c,
+      'CONFLICT',
+      'Confirm and generate the Schema candidate first. Review it before saving to Draft.'
+    );
   await service.confirm(input.settingsId, input.ifRevision, input.settings, {
     discardStudioCandidate: input.discardStudioCandidate,
   });

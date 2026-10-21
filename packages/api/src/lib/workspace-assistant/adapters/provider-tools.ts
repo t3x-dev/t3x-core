@@ -161,7 +161,7 @@ export async function runAssistantProvider(
     if (!hasTools || response.tool_calls.length > 8)
       throw new TypeError('Invalid Assistant tool response');
     if (
-      response.tool_calls.some((call) => call.name === 'showSchemaSettings') &&
+      response.tool_calls.some((call) => call.name === 'showSchemaChangeCard') &&
       response.tool_calls.length !== 1
     )
       throw new TypeError('Show settings in a separate tool step before any other action.');
@@ -199,11 +199,11 @@ export async function runAssistantProvider(
         status: 'completed',
         result,
       });
-      if (call.name === 'showSchemaSettings') {
+      if (call.name === 'showSchemaChangeCard') {
         await input.emit({
           type: 'text',
           content:
-            'A Schema structure candidate is shown in the changes area. Review its attributes, then click Save Schema to Draft. This explicit human action saves the snapshot, updates the Draft binding and syncs Studio without filling content or committing. Nothing has been applied yet.',
+            'A Schema change confirmation card is shown above the message composer. Review the target, attributes and impact, then click Confirm to generate a candidate. Nothing is applied to the Draft, content or Commit until you explicitly save it.',
         });
         await input.emit({ type: 'done', reason: 'awaiting_confirmation' });
         return;

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import type { AssistantSchemaSettingsView } from '@t3x-dev/api-client';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import {
   AssistantSchemaSettingsCard,
@@ -40,6 +40,67 @@ const record: AssistantSchemaSettingsView = {
   },
 };
 describe('Assistant settings reuse the Studio property controls', () => {
+  it('shows edited confirmation parameters instead of a stale server change summary', () => {
+    const editing = {
+      ...record,
+      generationMode: 'schema_yops_v1',
+      changes: [{ kind: 'CHANGE', path: 'owner/maxWords', summary: 'Maximum words: 24 → 40' }],
+    } as AssistantSchemaSettingsView;
+    render(<SettingsForm record={editing} disabled={false} onSave={vi.fn()} onResume={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit attributes' }));
+    fireEvent.change(screen.getByLabelText('maxWords for slot requirements/advantage'), {
+      target: { value: '75' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit attributes' }));
+    expect(screen.queryByText('Maximum words: 24 → 40')).not.toBeInTheDocument();
+    expect(within(screen.getByLabelText('Parameters to confirm')).getByText('75')).toBeVisible();
+  });
+  it('edits only the confirmed rule and offers relationships from the exact Base', () => {
+    const rule = {
+      ...record,
+      generationMode: 'schema_yops_v1',
+      referenceRelations: {
+        depends_on: { from: 'requirements/*', to: 'requirements/*' },
+        blocks: { from: 'requirements/*', to: 'requirements/*' },
+      },
+      settings: {
+        ...record.settings,
+        action: 'edit_rule',
+        nodePath: '',
+        name: 'dependency',
+        definition: {
+          id: 'dependency',
+          kind: 'required_relation',
+          relationType: 'depends_on',
+          from: 'requirements/*',
+          to: 'requirements/*',
+        },
+      },
+    } as unknown as AssistantSchemaSettingsView;
+    render(<SettingsForm record={rule} disabled={false} onSave={vi.fn()} onResume={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit attributes' }));
+    expect(screen.getByRole('textbox', { name: 'Rule id dependency' })).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: 'relationType for rule dependency' })).toHaveValue(
+      'depends_on'
+    );
+    expect(screen.getByRole('option', { name: 'blocks' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add node' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add rule' })).not.toBeInTheDocument();
+  });
+  it('shows a deletion confirmation card, not an addition editor, and confirms without applying', async () => {
+    const onSave = vi.fn(async () => {});
+    const deletion = {
+      ...record,
+      settings: { ...record.settings, action: 'remove_slot', name: 'owner', definition: {} },
+      currentDefinition: { type: 'string' },
+    } as unknown as AssistantSchemaSettingsView;
+    render(<SettingsForm record={deletion} disabled={false} onSave={onSave} onResume={vi.fn()} />);
+    expect(screen.getByRole('heading', { name: /Remove Slot.*owner/ })).toBeVisible();
+    expect(screen.getByText(/YAML content.*unchanged/i)).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Edit attributes' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(deletion.settings));
+  });
   it('offers direct Draft saving for an already generated snapshot', async () => {
     hook.record = {
       ...record,
@@ -96,8 +157,131 @@ describe('Assistant settings reuse the Studio property controls', () => {
     );
     expect(screen.getByRole('region', { name: 'Schema saved to Draft' })).toBeVisible();
     expect(screen.getByText(/YAML content is unchanged/)).toBeVisible();
-    expect(screen.getByText(/Owner is required/)).toBeVisible();
+    expect(screen.getByText('1 required value to fill')).toBeVisible();
+    expect(screen.getByText(/Owner is required/)).not.toBeVisible();
     expect(screen.queryByRole('button', { name: 'Save Schema to Draft' })).not.toBeInTheDocument();
+  });
+  it('summarizes repeated content gaps and discloses readable items separately from technical details', () => {
+    const keys = [
+      'content_recommendation',
+      'learning_plan',
+      'mistake_review',
+      'practice_feedback',
+      'progress_tracking',
+      'qa_tutoring',
+    ];
+    const hash = `sha256:${'a'.repeat(64)}`;
+    hook.record = {
+      ...record,
+      status: 'applied',
+      candidateRevision: 16,
+      settings: {
+        ...record.settings,
+        name: 'owner_phone',
+        required: true,
+        definition: { type: 'string' },
+      },
+      snapshot: {
+        compositionId: 'snapshot',
+        compositionRevision: 1,
+        compositionHash: 'composition',
+        schemaHash: hash,
+      },
+      application: {
+        workspaceRevision: 5,
+        ready: false,
+        issues: keys.map((key) => ({
+          code: 'REQUIRED_SLOT_MISSING',
+          path: `requirements/${key}/owner_phone`,
+          message: `requirements/${key}/owner_phone is required before commit.`,
+        })),
+      },
+    };
+    render(
+      <AssistantSchemaSettingsCard projectId="p" workspaceId="w" refreshKey="1" disabled={false} />
+    );
+    expect(screen.getByRole('heading', { name: 'Owner phone' })).toBeVisible();
+    expect(screen.getByText('Added field in Requirements')).toBeVisible();
+    expect(screen.getByText('Required', { exact: true })).toBeVisible();
+    expect(screen.getByText('6 required values to fill')).toBeVisible();
+    expect(screen.getByText(hash)).not.toBeVisible();
+    expect(screen.getByText('Requirements / Learning plan')).not.toBeVisible();
+    fireEvent.click(screen.getByText('View affected items (6)'));
+    for (const name of [
+      'Content recommendation',
+      'Learning plan',
+      'Mistake review',
+      'Practice feedback',
+      'Progress tracking',
+      'Qa tutoring',
+    ]) {
+      expect(screen.getByText(`Requirements / ${name}`)).toBeVisible();
+    }
+    expect(screen.getByText('requirements/learning_plan/owner_phone')).not.toBeVisible();
+    fireEvent.click(screen.getByText('Technical details'));
+    expect(screen.getByText(hash)).toBeVisible();
+    expect(screen.getByText('r16')).toBeVisible();
+    expect(screen.getByText('requirements/learning_plan/owner_phone')).toBeVisible();
+    expect(screen.getByRole('list', { name: 'Validation details' }).children).toHaveLength(6);
+    expect(screen.getByRole('link', { name: 'Open Schema Studio' })).toHaveAttribute(
+      'href',
+      '/project/p?tab=schemas&schemaView=studio&workspace=w'
+    );
+  });
+  it('does not describe other validation failures as missing required values', () => {
+    hook.record = {
+      ...record,
+      status: 'applied',
+      application: {
+        workspaceRevision: 5,
+        ready: false,
+        issues: [
+          {
+            code: 'SLOT_TYPE_MISMATCH',
+            path: 'requirements/plan/owner',
+            message: 'Expected a string.',
+          },
+        ],
+      },
+    };
+    render(
+      <AssistantSchemaSettingsCard projectId="p" workspaceId="w" refreshKey="1" disabled={false} />
+    );
+    expect(screen.getByRole('region', { name: 'Content needs attention' })).toBeVisible();
+    expect(screen.queryByText(/required values? to fill/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('View affected items (1)'));
+    expect(
+      within(screen.getByRole('region', { name: 'Content needs attention' })).getByText(
+        'Expected a string.'
+      )
+    ).toBeVisible();
+  });
+  it('keeps a generated Node distinct from an applied Draft and handles absent optional metadata', () => {
+    hook.record = {
+      ...record,
+      status: 'generated',
+      settings: {
+        ...record.settings,
+        action: 'add_node',
+        nodePath: '',
+        name: 'experiments',
+        definition: { repeated: true },
+        required: false,
+      },
+    };
+    render(
+      <AssistantSchemaSettingsCard projectId="p" workspaceId="w" refreshKey="1" disabled={false} />
+    );
+    expect(screen.getByText('Candidate saved')).toBeVisible();
+    expect(screen.getByText('Added Node')).toBeVisible();
+    expect(screen.getByText('Repeated')).toBeVisible();
+    expect(screen.getByText(/has not been applied to the Draft/)).toBeVisible();
+    expect(screen.queryByText('Saved to Draft')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('region', { name: 'Content needs attention' })
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Studio revision')).not.toBeInTheDocument();
+    expect(screen.queryByText(/undefined/)).not.toBeInTheDocument();
   });
   it('confirms the exact user settings and preserves advanced attributes', async () => {
     const save = vi.fn(async () => {});

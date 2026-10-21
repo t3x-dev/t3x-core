@@ -26,6 +26,9 @@ function fixture(confirmedSettingsId?: string) {
       manifestDigest: 'hash',
       sources: [],
       images: [],
+      turns: [
+        { hash: 'turn', role: 'user', content: 'Delete owner and leave all content unchanged.' },
+      ],
     },
     actor: { kind: 'human', id: 'h' },
     inference: { runId: 'r' },
@@ -40,6 +43,26 @@ function fixture(confirmedSettingsId?: string) {
   return { capabilities, show, propose, authorize };
 }
 describe('Schema tool confirmation boundary', () => {
+  it('exposes one generic confirmation tool for deletion without generating or mutating anything', async () => {
+    const { capabilities, show, propose } = fixture();
+    expect(capabilities.showSchemaChangeCard).toBeDefined();
+    const settings = {
+      action: 'remove_slot',
+      nodePath: 'requirements',
+      name: 'owner',
+      definition: {},
+      intent: 'Delete owner, do not change content',
+    };
+    expect(await capabilities.showSchemaChangeCard.execute(settings, 'delete-card')).toMatchObject({
+      status: 'awaiting_confirmation',
+    });
+    expect(show).toHaveBeenCalledWith(
+      settings,
+      'delete-card',
+      'Delete owner and leave all content unchanged.'
+    );
+    expect(propose).not.toHaveBeenCalled();
+  });
   it('exposes settings as a tool, stages only and requires proposal authorization', async () => {
     const { capabilities, show, propose, authorize } = fixture();
     const settings = {
@@ -50,13 +73,17 @@ describe('Schema tool confirmation boundary', () => {
       required: false,
       intent: 'Add advantage',
     };
-    expect(capabilities.showSchemaSettings.definition.input_schema).toMatchObject({
+    expect(capabilities.showSchemaChangeCard.definition.input_schema).toMatchObject({
       type: 'object',
     });
-    expect(await capabilities.showSchemaSettings.execute(settings, 'op')).toMatchObject({
+    expect(await capabilities.showSchemaChangeCard.execute(settings, 'op')).toMatchObject({
       status: 'awaiting_confirmation',
     });
-    expect(show).toHaveBeenCalledWith(settings, 'op');
+    expect(show).toHaveBeenCalledWith(
+      settings,
+      'op',
+      'Delete owner and leave all content unchanged.'
+    );
     expect(authorize).toHaveBeenCalledWith('propose');
     expect(propose).not.toHaveBeenCalled();
   });

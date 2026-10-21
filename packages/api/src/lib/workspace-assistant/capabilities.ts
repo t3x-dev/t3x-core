@@ -213,9 +213,9 @@ export function createAssistantCapabilities(input: {
   if (input.proposal) {
     const proposal = input.proposal;
     if (input.schemaSettings) {
-      capabilities.showSchemaSettings = capability(
-        'showSchemaSettings',
-        'Show a Studio Node/Slot settings card for an explicitly requested Schema addition. Only stage settings; stop and wait for user confirmation. Never changes the bound Schema or content.',
+      capabilities.showSchemaChangeCard = capability(
+        'showSchemaChangeCard',
+        'Show a confirmation card for a Schema addition, edit, removal, rename or move. nodePath is the semantic parent path; name identifies the target. For edit supply only changed attributes in definition; omitted attributes remain unchanged. Set unsetAttributes to explicitly remove optional constraints. Rename uses newName; moving a Node/Slot uses targetNodePath and optionally newName. Removals use an empty definition. Also supports adding/editing/removing relation types and rules. Only stage a card and stop; no generation, Schema binding, content edit or Commit before human confirmation.',
         AssistantSchemaSettingsInputSchema,
         async (settings, operationId) => {
           await input.authorize('propose');
@@ -224,7 +224,17 @@ export function createAssistantCapabilities(input: {
             throw new TypeError('Use the confirmed settings instead of opening another card.');
           return {
             status: 'awaiting_confirmation',
-            settings: await input.schemaSettings!.show(settings, operationId),
+            settings: await input.schemaSettings!.show(
+              settings,
+              operationId,
+              prepared.turns?.find(
+                (turn) => turn.hash === prepared.input.userTurnHash && turn.role === 'user'
+              )?.content ??
+                prepared.turns
+                  ?.slice()
+                  .reverse()
+                  .find((turn) => turn.role === 'user')?.content
+            ),
           };
         }
       );

@@ -47,7 +47,7 @@ describe('metered Assistant loop', () => {
       settings: { settingsId: 's' },
     }));
     const generateWithTools = vi.fn(async () => ({
-      tool_calls: [{ id: 'settings', name: 'showSchemaSettings', input: {} }],
+      tool_calls: [{ id: 'settings', name: 'showSchemaChangeCard', input: {} }],
       stop_reason: 'tool_use',
       usage,
     }));
@@ -55,9 +55,9 @@ describe('metered Assistant loop', () => {
       ...input,
       provider: { id: 'test', generateWithTools } as unknown as LLMProvider,
       capabilities: {
-        showSchemaSettings: {
+        showSchemaChangeCard: {
           definition: {
-            name: 'showSchemaSettings',
+            name: 'showSchemaChangeCard',
             description: 'settings',
             input_schema: { type: 'object' },
           },
@@ -75,7 +75,7 @@ describe('metered Assistant loop', () => {
     const generateWithTools = vi.fn(async () => ({
       tool_calls: [
         { id: 'write', name: 'requestProposal', input: {} },
-        { id: 'settings', name: 'showSchemaSettings', input: {} },
+        { id: 'settings', name: 'showSchemaChangeCard', input: {} },
       ],
       stop_reason: 'tool_use',
       usage,
@@ -85,8 +85,8 @@ describe('metered Assistant loop', () => {
         ...input,
         provider: { id: 'test', generateWithTools } as unknown as LLMProvider,
         capabilities: {
-          showSchemaSettings: {
-            definition: { name: 'showSchemaSettings', description: 'settings', input_schema: {} },
+          showSchemaChangeCard: {
+            definition: { name: 'showSchemaChangeCard', description: 'settings', input_schema: {} },
             execute,
           },
           requestProposal: {

@@ -1,9 +1,29 @@
 import { z } from 'zod';
-import { StudioSchemaEditLocalContributionSchema } from './schema-studio';
+import {
+  SchemaEvolutionImpactSchema,
+  StudioSchemaEditLocalContributionSchema,
+} from './schema-studio';
 
 export const AssistantSchemaSettingsInputSchema = z
   .object({
-    action: z.enum(['add_node', 'add_slot']),
+    action: z.enum([
+      'add_node',
+      'add_slot',
+      'edit_node',
+      'edit_slot',
+      'remove_node',
+      'remove_slot',
+      'rename_node',
+      'rename_slot',
+      'add_relation',
+      'edit_relation',
+      'remove_relation',
+      'add_rule',
+      'edit_rule',
+      'remove_rule',
+      'move_node',
+      'move_slot',
+    ]),
     /** Parent node path; empty for a root Node. Slot always needs a parent. */
     nodePath: z.string().max(1000),
     name: z
@@ -11,7 +31,18 @@ export const AssistantSchemaSettingsInputSchema = z
       .regex(/^[a-z][a-z0-9_]*$/)
       .max(100),
     definition: StudioSchemaEditLocalContributionSchema,
-    required: z.boolean().default(false),
+    definitionMode: z.enum(['patch', 'replace']).optional(),
+    required: z.boolean().optional(),
+    newName: z
+      .string()
+      .regex(/^[a-z][a-z0-9_]*$/)
+      .max(100)
+      .optional(),
+    targetNodePath: z.string().max(1000).optional(),
+    unsetAttributes: z
+      .array(z.string().regex(/^[a-zA-Z][a-zA-Z0-9]*$/))
+      .max(40)
+      .optional(),
     intent: z.string().trim().min(1).max(2000),
   })
   .strict();
@@ -23,6 +54,10 @@ export const AssistantSchemaSettingsViewSchema = z.object({
   workspaceRevision: z.number().int().positive(),
   schemaHash: z.string(),
   settings: AssistantSchemaSettingsInputSchema,
+  currentDefinition: z.record(z.string(), z.unknown()).optional(),
+  referenceRelations: z.record(z.string(), z.unknown()).optional(),
+  generationMode: z.literal('schema_yops_v1').optional(),
+  impact: SchemaEvolutionImpactSchema.optional(),
   candidateId: z.string().optional(),
   candidateRevision: z.number().int().positive().optional(),
   application: z

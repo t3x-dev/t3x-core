@@ -1,6 +1,5 @@
 import {
   type AssistantSchemaSettingsInput,
-  AssistantSchemaSettingsInputSchema,
   AssistantSchemaSettingsViewSchema,
 } from '@t3x-dev/api-client';
 import {
@@ -9,10 +8,10 @@ import {
   parseWorkspaceSchemaEditCandidate,
   resolveWorkspaceSchemaBindingMode,
 } from '@t3x-dev/application';
-import { executeWorkspaceSchemaEditCommand, type WorkspaceSchemaEditCommand } from '@t3x-dev/core';
 import {
   type AnyDB,
   addSchemaStudioCandidate,
+  findProjectById,
   findWorkspaceDraft,
   findYSchemaCompositionSnapshot,
   getTransitionRefHead,
@@ -23,14 +22,32 @@ import {
 import { diffYSchemas, normalizeYSchemaObject, sha256CompositionValue } from '@t3x-dev/yschema';
 import type { Context } from 'hono';
 import { z } from 'zod';
+import {
+  createInferenceRuntime,
+  getInferenceRuntime,
+  resolveInferenceActor,
+  resolveInferenceIngressChannel,
+  resolveInferenceProjectScope,
+  resolveInferenceRunId,
+  toGenerationModelScope,
+} from '../inference';
 import { assertProjectAccess } from '../project-access';
+import { generateTransitionProposal } from '../proposal-generation';
+import { resolveProviderAndModel } from '../provider-resolver';
+import {
+  defaultGenerationProviderRuntime,
+  getGenerationProviderRuntime,
+} from '../provider-runtime';
+import { compileConfirmedSchemaChange, schemaChangeTarget } from '../schema-change-contract';
 import { saveStudioEditCandidate } from '../schema-edit-candidate-save';
 import { assessWorkspaceSchemaImpact } from '../schema-evolution-impact';
+import { createDirectSchemaProposalModel } from '../schema-proposal-generation';
 import { compileStudioSelection, previewStudio, StudioError } from '../schema-studio-preview';
 import { workspaceAuthoringState } from '../workspace-authoring';
 import { resolveWorkspaceSchemaEditBasis } from '../workspace-schema-edit-basis';
 import { resolveWorkspaceYSchema } from '../workspace-yschema';
 import { schemaRootKeyFromBinding } from '../yschema-registry';
+import { createWorkspaceSchemaProposalModel } from './adapters/generation-model';
 
 const Stored = AssistantSchemaSettingsViewSchema.extend({
   actor: z.object({ kind: z.string(), id: z.string() }),
@@ -44,8 +61,30 @@ const Stored = AssistantSchemaSettingsViewSchema.extend({
   confirmationDigest: z.string().optional(),
   requestDigest: z.string(),
   replaceStudioCandidate: z.boolean().default(false),
+  requestedModel: z.string().optional(),
+  requestedProvider: z.string().optional(),
+  originalInstruction: z.string().max(64000).optional(),
 });
 type StoredSettings = z.infer<typeof Stored>;
+const schemaInferenceRuntime = createInferenceRuntime();
+const generationFlights = new WeakMap<object, Map<string, Promise<unknown>>>();
+function schemaGenerationFlight<T>(db: AnyDB, key: string, work: () => Promise<T>): Promise<T> {
+  let flights = generationFlights.get(db);
+  if (!flights) {
+    flights = new Map();
+    generationFlights.set(db, flights);
+  }
+  const current = flights.get(key);
+  if (current) return current as Promise<T>;
+  const promise = work();
+  flights.set(key, promise);
+  void promise
+    .finally(() => {
+      if (flights.get(key) === promise) flights.delete(key);
+    })
+    .catch(() => {});
+  return promise;
+}
 function owned(value: unknown, actor: DraftActionActor, conversationId?: string) {
   const record = Stored.parse(value);
   if (
@@ -59,47 +98,9 @@ function owned(value: unknown, actor: DraftActionActor, conversationId?: string)
 export function schemaSettingsView(record: StoredSettings) {
   return AssistantSchemaSettingsViewSchema.parse(record);
 }
-function nodeAt(schema: ReturnType<typeof normalizeYSchemaObject>, path: string) {
-  let nodes = schema.nodes;
-  let node;
-  for (const key of path.split('/').filter(Boolean)) {
-    if (!Object.hasOwn(nodes, key))
-      throw new StudioError('INVALID_REQUEST', `Node ${path} does not exist.`);
-    node = nodes[key]!;
-    nodes = node.children && node.children !== 'any' ? node.children : {};
-  }
-  return node;
-}
 /** Typed form input compiles through the same guarded native Schema adapter as Studio. */
 export async function applySchemaSettings(base: unknown, raw: AssistantSchemaSettingsInput) {
-  const input = AssistantSchemaSettingsInputSchema.parse(raw);
-  const schema = normalizeYSchemaObject(base);
-  const parent = input.nodePath ? nodeAt(schema, input.nodePath) : null;
-  let command: WorkspaceSchemaEditCommand;
-  if (input.action === 'add_slot') {
-    if (!parent) throw new StudioError('INVALID_REQUEST', 'Select the Slot parent Node.');
-    if (Object.hasOwn(parent.slots ?? {}, input.name))
-      throw new StudioError('CONFLICT', 'This Slot already exists.');
-    command = {
-      kind: 'put_slot',
-      nodePath: input.nodePath,
-      slot: input.name,
-      definition: input.definition,
-      required: input.required,
-    };
-  } else {
-    if (parent?.repeated || parent?.children === 'any')
-      throw new StudioError('INVALID_REQUEST', 'This Node cannot own child definitions.');
-    const siblings = parent ? (parent.children ?? {}) : schema.nodes;
-    if (Object.hasOwn(siblings, input.name))
-      throw new StudioError('CONFLICT', 'This Node already exists.');
-    command = {
-      kind: 'put_node',
-      nodePath: [input.nodePath, input.name].filter(Boolean).join('/'),
-      definition: input.definition,
-    };
-  }
-  return executeWorkspaceSchemaEditCommand(schema, command);
+  return compileConfirmedSchemaChange(base, raw);
 }
 async function currentBasis(db: AnyDB, projectId: string, workspaceId: string) {
   const draft = await findWorkspaceDraft(db, projectId, workspaceId);
@@ -148,7 +149,8 @@ export function createAssistantSchemaSettingsService(
   projectId: string,
   workspaceId: string,
   actor: DraftActionActor,
-  conversationId: string
+  conversationId: string,
+  selection: { requestedModel?: string; requestedProvider?: string } = {}
 ) {
   const read = async () => {
     const draft = await findWorkspaceDraft(db, projectId, workspaceId);
@@ -157,7 +159,11 @@ export function createAssistantSchemaSettingsService(
   };
   return {
     read,
-    show: async (settings: AssistantSchemaSettingsInput, operationId: string) => {
+    show: async (
+      settings: AssistantSchemaSettingsInput,
+      operationId: string,
+      originalInstruction?: string
+    ) => {
       const previous = await read();
       if (previous?.settingsId === operationId) {
         if (previous.requestDigest !== (await sha256CompositionValue(settings)))
@@ -171,6 +177,20 @@ export function createAssistantSchemaSettingsService(
         throw new StudioError('CONFLICT', 'Confirm or cancel the open Schema settings first.');
       const live = await currentBasis(db, projectId, workspaceId);
       const applied = await applySchemaSettings(live.schema, settings);
+      const { currentDefinition, currentRequired, proposedDefinition } = schemaChangeTarget(
+        live.schema,
+        settings
+      );
+      const confirmedInput = settings.action.startsWith('edit_')
+        ? {
+            ...settings,
+            definition: proposedDefinition,
+            definitionMode: 'replace' as const,
+            ...(settings.action === 'edit_slot'
+              ? { required: settings.required ?? currentRequired }
+              : {}),
+          }
+        : settings;
       const basis = await resolveWorkspaceSchemaEditBasis(
         c,
         db,
@@ -196,7 +216,19 @@ export function createAssistantSchemaSettingsService(
         status: 'pending',
         conversationId,
         workspaceRevision: live.draft.revision + 1,
-        settings,
+        settings: confirmedInput,
+        originalInstruction,
+        requestedModel: selection.requestedModel,
+        requestedProvider: selection.requestedProvider,
+        generationMode: 'schema_yops_v1',
+        currentDefinition,
+        referenceRelations: live.schema.relationTypes ?? {},
+        impact: await assessWorkspaceSchemaImpact(
+          db,
+          projectId,
+          live.draft.workspace_state!,
+          applied.schema
+        ),
         requestDigest: await sha256CompositionValue(settings),
         actor,
         schemaHash: live.schemaHash,
@@ -257,7 +289,9 @@ export function createAssistantSchemaSettingsService(
           );
         if (
           settings.action !== record.settings.action ||
-          settings.nodePath !== record.settings.nodePath
+          settings.nodePath !== record.settings.nodePath ||
+          (!settings.action.startsWith('add_') && settings.name !== record.settings.name) ||
+          settings.intent !== record.settings.intent
         )
           throw new StudioError(
             'INVALID_REQUEST',
@@ -288,147 +322,212 @@ export function createAssistantSchemaSettingsService(
       });
       return schemaSettingsView(next);
     },
-    propose: async (id: string) => {
-      const record = await read();
-      if (
-        !record ||
-        record.settingsId !== id ||
-        !['confirmed', 'generated', 'applied'].includes(record.status)
-      )
-        throw new StudioError(
-          'CONFLICT',
-          'Confirm the settings card before generating a candidate.'
-        );
-      if (record.status === 'generated' || record.status === 'applied') {
-        const draft = await findWorkspaceDraft(db, projectId, workspaceId);
-        const candidate = parseWorkspaceSchemaEditCandidate(
-          draft?.workspace_state?.schemaEditCandidate
-        );
-        if (
-          candidate.candidateId !== record.candidateId ||
-          candidate.revision !== record.candidateRevision
-        )
-          throw new StudioError('CONFLICT', 'The saved candidate changed. Open Studio.');
-        return {
-          kind: 'schema' as const,
-          status: record.status === 'applied' ? 'applied' : 'candidate',
-          candidateId: candidate.candidateId,
-          candidateRevision: candidate.revision,
-          workspaceRevision: draft!.revision,
-          snapshot: record.snapshot,
-          reused: true,
-        };
-      }
-      const live = await assertFresh(db, projectId, workspaceId, record);
-      if (record.studioConflict && !record.replaceStudioCandidate)
-        throw new StudioError(
-          'REVIEW_REQUIRED',
-          'Explicit confirmation is required to replace the Studio candidate.'
-        );
-      const basis = await resolveWorkspaceSchemaEditBasis(
-        c,
+    propose: (id: string) =>
+      schemaGenerationFlight(
         db,
-        projectId,
-        live.draft.workspace_state!,
-        live.schema
-      );
-      if (basis.selectionHash !== record.selectionHash)
-        throw new StudioError('CONFLICT', 'The bound snapshot’s exact provenance changed.');
-      // Restore exact source picks for Studio, without making them the edit Base.
-      for (const [index, source] of basis.sources.entries())
-        await addSchemaStudioCandidate(db, {
-          id: record.candidateIds[index]!,
-          projectId,
-          sourceProjectId: source.projectId,
-          canonicalName: source.canonicalName,
-          version: source.version,
-          artifactVersionId: source.artifactVersionId,
-          artifactHash: source.hash,
-        });
-      const selection = await compileStudioSelection(c, db, projectId, record.candidateIds);
-      if (
-        !selection.report.valid ||
-        !selection.adoption.allowed ||
-        selection.selectionHash !== record.selectionHash
-      )
-        throw new StudioError('CONFLICT', 'The exact source selection changed.');
-      const applied = await applySchemaSettings(record.baseDefinition, record.settings);
-      const snapshotHash = await sha256CompositionValue({
-        profile: 'assistant-schema-snapshot/v1',
-        settingsId: record.settingsId,
-        baseSchemaHash: record.schemaHash,
-        schemaHash: applied.schemaHash,
-      });
-      const snapshot = {
-        compositionId: `assistant:${snapshotHash}`,
-        compositionRevision: 1,
-        compositionHash: snapshotHash,
-        schemaHash: applied.schemaHash,
-      };
-      await saveYSchemaCompositionSnapshot(db, {
-        snapshot_id: `assistant-schema:${projectId}:${snapshotHash}`,
-        project_id: projectId,
-        composition_id: snapshot.compositionId,
-        composition_revision: 1,
-        composition_hash: snapshotHash,
-        compiled_schema_hash: applied.schemaHash,
-        compiler_version: 'assistant-schema-snapshot@1',
-        manifest_json: {
-          sources: basis.sources,
-          selectionHash: basis.selectionHash,
-          base: basis.reference,
-        },
-        schema_json: { ...applied.schema },
-        render_plan_json: basis.renderPlan,
-        origins_json: basis.origins,
-      });
-      // Candidate identity uses the same canonical hash as Studio, not the model's ID.
-      const canonicalId = `sec_${(await sha256CompositionValue({ projectId, workspaceId })).slice(7)}`;
-      const next = {
-        ...record,
-        status: 'generated',
-        candidateId: canonicalId,
-        candidateRevision: record.baseCandidateRevision + 1,
-        workspaceRevision: live.draft.revision + 1,
-        snapshot,
-      };
-      const impact = await assessWorkspaceSchemaImpact(
-        db,
-        projectId,
-        live.draft.workspace_state!,
-        applied.schema
-      );
-      const result = await saveStudioEditCandidate(
-        db,
-        projectId,
-        {
-          workspaceId,
-          candidateIds: record.candidateIds,
-          ifRevision: record.baseCandidateRevision,
-          localContribution: {},
-          schemaDefinition: applied.schema as unknown as Record<string, unknown>,
-          baseSchemaHash: basis.schemaHash,
-          intent: record.settings.intent,
-          origin: 'assistant',
-          retryKey: record.settingsId,
-        },
-        selection,
-        { channel: 'assistant', actor },
-        { workspaceRevision: live.draft.revision, assistantSchemaSettings: next, basis }
-      );
-      return {
-        kind: 'schema' as const,
-        status: 'candidate',
-        candidateId: result.candidate.candidateId,
-        candidateRevision: result.candidate.revision,
-        workspaceRevision: result.workspaceRevision,
-        schemaHash: applied.schemaHash,
-        changes: diffYSchemas(live.schema, applied.schema),
-        impact,
-        snapshot,
-        reused: result.outcome === 'reused',
-      };
-    },
+        JSON.stringify([projectId, workspaceId, actor, conversationId, id]),
+        async () => {
+          const record = await read();
+          if (
+            !record ||
+            record.settingsId !== id ||
+            !['confirmed', 'generated', 'applied'].includes(record.status)
+          )
+            throw new StudioError(
+              'CONFLICT',
+              'Confirm the settings card before generating a candidate.'
+            );
+          if (record.status === 'generated' || record.status === 'applied') {
+            const draft = await findWorkspaceDraft(db, projectId, workspaceId);
+            const candidate = parseWorkspaceSchemaEditCandidate(
+              draft?.workspace_state?.schemaEditCandidate
+            );
+            if (
+              candidate.candidateId !== record.candidateId ||
+              candidate.revision !== record.candidateRevision
+            )
+              throw new StudioError('CONFLICT', 'The saved candidate changed. Open Studio.');
+            return {
+              kind: 'schema' as const,
+              status: record.status === 'applied' ? 'applied' : 'candidate',
+              candidateId: candidate.candidateId,
+              candidateRevision: candidate.revision,
+              workspaceRevision: draft!.revision,
+              snapshot: record.snapshot,
+              reused: true,
+            };
+          }
+          const live = await assertFresh(db, projectId, workspaceId, record);
+          if (record.studioConflict && !record.replaceStudioCandidate)
+            throw new StudioError(
+              'REVIEW_REQUIRED',
+              'Explicit confirmation is required to replace the Studio candidate.'
+            );
+          const basis = await resolveWorkspaceSchemaEditBasis(
+            c,
+            db,
+            projectId,
+            live.draft.workspace_state!,
+            live.schema
+          );
+          if (basis.selectionHash !== record.selectionHash)
+            throw new StudioError('CONFLICT', 'The bound snapshot’s exact provenance changed.');
+          // Restore exact source picks for Studio, without making them the edit Base.
+          for (const [index, source] of basis.sources.entries())
+            await addSchemaStudioCandidate(db, {
+              id: record.candidateIds[index]!,
+              projectId,
+              sourceProjectId: source.projectId,
+              canonicalName: source.canonicalName,
+              version: source.version,
+              artifactVersionId: source.artifactVersionId,
+              artifactHash: source.hash,
+            });
+          const selection = await compileStudioSelection(c, db, projectId, record.candidateIds);
+          if (
+            !selection.report.valid ||
+            !selection.adoption.allowed ||
+            selection.selectionHash !== record.selectionHash
+          )
+            throw new StudioError('CONFLICT', 'The exact source selection changed.');
+          const project = await findProjectById(db, projectId);
+          if (!project) throw new StudioError('NOT_FOUND', 'Project is unavailable.');
+          const inference = {
+            runtime: getInferenceRuntime(c) ?? schemaInferenceRuntime,
+            runId: `${resolveInferenceRunId(c)}:schema:${record.settingsId}`,
+            scope: {
+              actor: resolveInferenceActor(c),
+              ingressChannel: resolveInferenceIngressChannel(c),
+              ...resolveInferenceProjectScope(project),
+            },
+          };
+          const applied =
+            record.generationMode === 'schema_yops_v1'
+              ? await generateTransitionProposal({
+                  target: 'schema',
+                  baseSchema: record.baseDefinition,
+                  confirmedSettings: record.settings,
+                  instruction: record.originalInstruction ?? record.settings.intent,
+                  inference,
+                  resolveModel: async () => {
+                    const runtime = getGenerationProviderRuntime(c);
+                    if (runtime !== defaultGenerationProviderRuntime) {
+                      if (record.requestedProvider && record.requestedProvider !== 'managed')
+                        throw new StudioError(
+                          'INVALID_REQUEST',
+                          'Select a model from the managed catalog.'
+                        );
+                      const resolved = await runtime.resolve({
+                        requestedModel: record.requestedModel,
+                        scope: toGenerationModelScope(inference.scope, { conversationId }),
+                        requiredCapabilities: ['structured_output'],
+                      });
+                      if (!resolved.ok) throw new StudioError('INVALID_REQUEST', resolved.message);
+                      return createWorkspaceSchemaProposalModel(resolved.model);
+                    }
+                    const resolved = await resolveProviderAndModel({
+                      db,
+                      projectId,
+                      conversationId,
+                      requestedProvider: record.requestedProvider,
+                      requestedModel: record.requestedModel,
+                    });
+                    if (!resolved.ok) throw new StudioError('INVALID_REQUEST', resolved.message);
+                    if (!('generate' in resolved.provider))
+                      throw new StudioError(
+                        'INVALID_REQUEST',
+                        'Selected model cannot generate Schema operations.'
+                      );
+                    return createDirectSchemaProposalModel(
+                      resolved.provider,
+                      resolved.providerId,
+                      resolved.model
+                    );
+                  },
+                })
+              : await applySchemaSettings(record.baseDefinition, record.settings);
+          await assertFresh(db, projectId, workspaceId, record);
+          const snapshotHash = await sha256CompositionValue({
+            profile: 'assistant-schema-snapshot/v1',
+            settingsId: record.settingsId,
+            baseSchemaHash: record.schemaHash,
+            schemaHash: applied.schemaHash,
+          });
+          const snapshot = {
+            compositionId: `assistant:${snapshotHash}`,
+            compositionRevision: 1,
+            compositionHash: snapshotHash,
+            schemaHash: applied.schemaHash,
+          };
+          await saveYSchemaCompositionSnapshot(db, {
+            snapshot_id: `assistant-schema:${projectId}:${snapshotHash}`,
+            project_id: projectId,
+            composition_id: snapshot.compositionId,
+            composition_revision: 1,
+            composition_hash: snapshotHash,
+            compiled_schema_hash: applied.schemaHash,
+            compiler_version: 'assistant-schema-snapshot@1',
+            manifest_json: {
+              sources: basis.sources,
+              selectionHash: basis.selectionHash,
+              base: basis.reference,
+            },
+            schema_json: { ...applied.schema },
+            render_plan_json: basis.renderPlan,
+            origins_json: basis.origins,
+          });
+          // Candidate identity uses the same canonical hash as Studio, not the model's ID.
+          const canonicalId = `sec_${(await sha256CompositionValue({ projectId, workspaceId })).slice(7)}`;
+          const next = {
+            ...record,
+            status: 'generated',
+            candidateId: canonicalId,
+            candidateRevision: record.baseCandidateRevision + 1,
+            workspaceRevision: live.draft.revision + 1,
+            snapshot,
+          };
+          const impact = await assessWorkspaceSchemaImpact(
+            db,
+            projectId,
+            live.draft.workspace_state!,
+            applied.schema
+          );
+          const result = await saveStudioEditCandidate(
+            db,
+            projectId,
+            {
+              workspaceId,
+              candidateIds: record.candidateIds,
+              ifRevision: record.baseCandidateRevision,
+              localContribution: {},
+              schemaDefinition: applied.schema as unknown as Record<string, unknown>,
+              baseSchemaHash: basis.schemaHash,
+              intent: record.settings.intent,
+              origin: 'assistant',
+              retryKey: record.settingsId,
+            },
+            selection,
+            { channel: 'assistant', actor },
+            {
+              workspaceRevision: live.draft.revision,
+              assistantSchemaSettings: { ...next, impact },
+              basis,
+            }
+          );
+          return {
+            kind: 'schema' as const,
+            status: 'candidate',
+            candidateId: result.candidate.candidateId,
+            candidateRevision: result.candidate.revision,
+            workspaceRevision: result.workspaceRevision,
+            schemaHash: applied.schemaHash,
+            changes: diffYSchemas(live.schema, applied.schema),
+            impact,
+            snapshot,
+            reused: result.outcome === 'reused',
+          };
+        }
+      ),
     /** Human-only confirmation applies structure, never content or a Commit. */
     applyToDraft: async (id: string) => {
       if (actor.kind !== 'human')
