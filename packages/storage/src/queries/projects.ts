@@ -12,7 +12,19 @@ import {
   projectGrantRoleAllows,
 } from '@t3x-dev/application';
 import { generateProjectId } from '@t3x-dev/core';
-import { and, desc, eq, inArray, isNotNull, isNull, lt, or, type SQL, sql } from 'drizzle-orm';
+import {
+  and,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  or,
+  type SQL,
+  sql,
+} from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import {
   agentDrafts,
@@ -41,6 +53,11 @@ export interface CreateProjectInput {
 export interface ListProjectsOptions {
   /** Deleted repositories remain private management resources. Defaults to active. */
   status?: 'active' | 'deleted';
+  visibility?: 'public';
+  q?: string;
+  tag?: string;
+  /** Server-selected capability, applied before pagination. */
+  required_action?: 'project:edit';
   limit?: number;
   offset?: number;
   /** Opaque cursor for keyset pagination. Empty string = first page in cursor mode. */
@@ -153,21 +170,23 @@ export async function findProjects(
     : undefined;
   const deleted = options.status === 'deleted';
   const statusCondition = deleted ? isNotNull(projects.deletedAt) : isNull(projects.deletedAt);
-  const namespaceRoles = NAMESPACE_ROLES.filter(
-    (role) =>
-      namespaceRoleAllows(role, 'project:restore') || namespaceRoleAllows(role, 'project:delete')
+  const namespaceRoles = NAMESPACE_ROLES.filter((role) =>
+    options.required_action
+      ? namespaceRoleAllows(role, options.required_action)
+      : namespaceRoleAllows(role, 'project:restore') || namespaceRoleAllows(role, 'project:delete')
   );
-  const grantRoles = PROJECT_GRANT_ROLES.filter(
-    (role) =>
-      projectGrantRoleAllows(role, 'project:restore') ||
-      projectGrantRoleAllows(role, 'project:delete')
+  const grantRoles = PROJECT_GRANT_ROLES.filter((role) =>
+    options.required_action
+      ? projectGrantRoleAllows(role, options.required_action)
+      : projectGrantRoleAllows(role, 'project:restore') ||
+        projectGrantRoleAllows(role, 'project:delete')
   );
   const authorityCondition = options.authority
     ? sql<boolean>`(
-        ${deleted && options.authority.principal_kind !== 'human' && !options.authority.project_id ? sql`FALSE` : sql`TRUE`}
+        ${(deleted || options.required_action) && options.authority.principal_kind !== 'human' && !options.authority.project_id ? sql`FALSE` : sql`TRUE`}
         AND ${options.authority.project_id ? eq(projects.projectId, options.authority.project_id) : sql`TRUE`}
         AND ${
-          deleted
+          deleted || options.required_action
             ? sql`NOT EXISTS (
           SELECT 1 FROM namespace_memberships AS inactive_membership
           WHERE inactive_membership.namespace_id = ${projects.namespaceId}
@@ -186,7 +205,7 @@ export async function findProjects(
             AND membership.principal_id = ${options.authority.principal_id}
             AND membership.status = 'active'
             AND ${
-              deleted
+              deleted || options.required_action
                 ? sql`membership.role IN (${sql.join(
                     namespaceRoles.map((role) => sql`${role}`),
                     sql`, `
@@ -203,7 +222,7 @@ export async function findProjects(
             AND project_grant.principal_id = ${options.authority.principal_id}
             AND project_grant.status = 'active'
             AND ${
-              deleted
+              deleted || options.required_action
                 ? sql`project_grant.role IN (${sql.join(
                     grantRoles.map((role) => sql`${role}`),
                     sql`, `
@@ -216,9 +235,23 @@ export async function findProjects(
       )`
     : undefined;
 
+  const escapedSearch = options.q?.replace(/[\\%_]/g, '\\$&');
+  const discoveryConditions = [
+    options.visibility ? eq(projects.visibility, options.visibility) : undefined,
+    escapedSearch
+      ? or(
+          ilike(projects.name, `%${escapedSearch}%`),
+          sql<boolean>`${projects.metadataJson}::jsonb->>'description' ILIKE ${`%${escapedSearch}%`}`
+        )
+      : undefined,
+    options.tag
+      ? sql<boolean>`coalesce(${projects.metadataJson}::jsonb->'repository_profile'->'tags', '[]'::jsonb) @> ${JSON.stringify([options.tag])}::jsonb`
+      : undefined,
+  ].filter((condition): condition is SQL => !!condition);
+
   if (options.cursor !== undefined) {
     // Cursor pagination mode
-    const conditions = [statusCondition];
+    const conditions = [statusCondition, ...discoveryConditions];
 
     if (ownerCondition) conditions.push(ownerCondition);
     if (namespaceCondition) conditions.push(namespaceCondition);
@@ -251,7 +284,7 @@ export async function findProjects(
 
   // Legacy offset/limit mode
   const offset = options.offset ?? 0;
-  const conditions = [statusCondition];
+  const conditions = [statusCondition, ...discoveryConditions];
   if (ownerCondition) conditions.push(ownerCondition);
   if (namespaceCondition) conditions.push(namespaceCondition);
   if (authorityCondition) conditions.push(authorityCondition);

@@ -41,7 +41,7 @@ it.each(PROJECT_TABS)('accepts the public route generated for $label', ({ id }) 
 it.each([
   { view: 'discover', path: '/discover', retainedView: null },
   { view: 'browse', path: '/browse', retainedView: null },
-  { view: 'active', path: '/browse', retainedView: 'active' },
+  { view: 'active', path: '/schemas', retainedView: 'active' },
   { view: 'release', path: '/browse', retainedView: 'release' },
 ])('migrates legacy Schema $view links without losing their context', ({
   view,

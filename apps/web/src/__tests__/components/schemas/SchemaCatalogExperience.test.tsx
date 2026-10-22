@@ -1,255 +1,64 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { beforeEach, expect, it, vi } from 'vitest';
 import { SchemaCatalogExperience } from '@/components/schemas/SchemaCatalogExperience';
 
+const mocks = vi.hoisted(() => ({ replace: vi.fn(), query: '' }));
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => new URLSearchParams(mocks.query),
+  usePathname: () => '/team/project/schemas',
+  useRouter: () => ({ replace: mocks.replace }),
+}));
 vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
   useProjectWorkspaces: () => ({ workspaces: [], refresh: vi.fn(), error: null }),
 }));
-vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
-  useStudioCandidates: () => ({ items: [], loading: false, pending: false, add: vi.fn() }),
+vi.mock('@/components/schemas/SchemaStudioExperience', () => ({
+  SchemaStudioExperience: () => <div>Project Studio</div>,
 }));
-vi.mock('@/hooks/projects/useProjects', () => ({
-  useProjects: () => ({ projects: [{ project_id: 'p', name: 'Project' }] }),
+vi.mock('@/components/schemas/ActiveSchemaBindings', () => ({
+  ActiveSchemaBindings: () => <div>Workspace bindings</div>,
 }));
-vi.mock('@/hooks/projects/useProjects', () => ({
-  useProjects: () => ({ projects: [{ project_id: 'p', name: 'Current' }] }),
-}));
-
-const mocks = vi.hoisted(() => ({
-  push: vi.fn(),
-  query: '',
-  pathname: '/team/project/schemas',
-  catalog: vi.fn(),
-  introduction: vi.fn(),
-}));
-vi.mock('next/navigation', () => ({
-  useSearchParams: () => new URLSearchParams(mocks.query),
-  usePathname: () => mocks.pathname,
-  useRouter: () => ({ push: mocks.push }),
-}));
-vi.mock('@/hooks/schemas/useSchemaCatalog', () => ({
-  useSchemaCatalog: mocks.catalog,
-  useSchemaCollections: () => [
-    { id: 'infrastructure', title: 'Infrastructure', tags: ['infrastructure'] },
-    { id: 'ai-agents', title: 'AI & Agents', tags: ['ai', 'agents'] },
-    { id: 'science', title: 'Science & Research', tags: ['science'] },
-    { id: 'security', title: 'Security', tags: ['security'] },
-    { id: 'devices', title: 'Devices & Automation', tags: ['devices'] },
-    { id: 'data', title: 'Data & Visualization', tags: ['data'] },
-    { id: 'work-life', title: 'Work & Life', tags: ['planning', 'work', 'care'] },
-  ],
-  useSchemaIntroduction: mocks.introduction,
-  useSchemaReleaseReading: () => ({
-    loading: false,
-    data: {
-      artifactHash: 'sha256:abc',
-      readme: '# Release definition\n\nKeep configuration changes reviewable.',
-      manifest: {
-        apiVersion: 't3x.dev/yschema-module/v2',
-        canonicalName: 'team/release',
-        contribution: {
-          nodes: {
-            services: {
-              required: true,
-              repeated: true,
-              slots: { image: { type: 'string' } },
-              requiredSlots: ['image'],
-            },
-          },
-        },
-        starter: { services: { web: { image: 'nginx:1.28-alpine' } } },
-      },
-    },
-  }),
-}));
-const item = {
-  identity: {
-    canonicalName: 'team/release',
-    displayName: 'Release definition',
-    description: 'Review your service configuration.',
-    tags: ['infrastructure'],
-    family: 'open',
-    publisher: 'team',
-    ownerProjectId: 'p',
-    visibility: 'team',
-  },
-  release: { artifactVersionId: 'v1', version: '1.2.3', kind: 'schema', hash: 'sha256:abc' },
-  definition: {
-    pathCount: 4,
-    provides: [],
-    requires: [],
-    nodes: [{ path: 'services', slots: ['image'] }],
-  },
-  presentationRef: null,
-  formats: ['yaml', 'json'],
-  license: 'Apache-2.0',
-};
 beforeEach(() => {
   mocks.query = '';
-  mocks.pathname = '/team/project/schemas';
-  mocks.introduction.mockReturnValue({ loading: false });
-  mocks.push.mockReset();
-  mocks.catalog.mockReturnValue({
-    data: { items: [item], has_more: false },
-    loading: false,
-    retry: vi.fn(),
-  });
+  mocks.replace.mockReset();
 });
-function mount(tab: 'schemas' | 'discover' | 'browse' = 'browse') {
-  return render(
+it.each([
+  'discover',
+  'browse',
+] as const)('migrates legacy %s with release, filters and destination context', (tab) => {
+  mocks.query =
+    'schemaView=release&catalogName=team%2Fexample&catalogVersion=1.0.0&catalogHash=sha256%3Aabc&q=care&workspace=workspace_branch%3Amain&branch=main';
+  render(
     <SchemaCatalogExperience projectId="p" tab={tab}>
-      <div>Detailed Studio</div>
+      {null}
     </SchemaCatalogExperience>
   );
-}
-describe('Schema catalog journey', () => {
-  it.each([
-    ['discover', 'Browse', '/team/project/discover', '/team/project/browse'],
-    ['browse', 'Discover', '/team/project/browse', '/team/project/discover'],
-    ['discover', 'Browse', '/project/p', '/project/p'],
-    ['browse', 'Discover', '/project/p', '/project/p'],
-  ] as const)('switches from %s to %s within %s without losing context', (tab, label, path, target) => {
-    mocks.pathname = path;
-    mocks.query = `tab=${tab}&branch=feature%2Frelease&workspace=workspace_42&q=service&tags=infra`;
-    mount(tab);
-
-    const views = within(screen.getByRole('navigation', { name: 'Schema views' }));
-    expect(
-      views.getByRole('tab', { name: tab === 'discover' ? 'Discover' : 'Browse' })
-    ).toHaveAttribute('aria-selected', 'true');
-    expect(views.queryByRole('tab', { name: 'Studio' })).not.toBeInTheDocument();
-    fireEvent.click(views.getByRole('tab', { name: label }));
-
-    const [href, options] = mocks.push.mock.calls.at(-1)!;
-    const url = new URL(href, 'http://localhost');
-    expect(url.pathname).toBe(target);
-    expect(url.searchParams.get('tab')).toBe(path === '/project/p' ? label.toLowerCase() : null);
-    expect(url.searchParams.get('branch')).toBe('feature/release');
-    expect(url.searchParams.get('workspace')).toBe('workspace_42');
-    expect(url.searchParams.get('q')).toBe('service');
-    expect(url.searchParams.get('tags')).toBe('infra');
-    expect(options).toEqual({ scroll: false });
-  });
-
-  it('uses the project avatar in Browse when no separate cover exists', () => {
-    mocks.query = 'schemaView=browse';
-    mocks.introduction.mockReturnValue({
-      data: {
-        document: {
-          avatarPath: 'avatar.png',
-          resources: [
-            { path: 'avatar.png', mediaType: 'image/png', base64: 'YXJ0', alt: 'Author art' },
-          ],
-        },
-      },
-      loading: false,
-    });
-    mount();
-    const card = screen.getByRole('button', { name: 'Explore Release definition 1.2.3' });
-    expect(card.querySelector('img')).toHaveAttribute('src', 'data:image/png;base64,YXJ0');
-  });
-  it('renders the shared Explore surface in Discover and sends search to Browse', () => {
-    mocks.query = 'workspace=main';
-    mount('discover');
-    expect(mocks.catalog).toHaveBeenCalledWith('p', 'limit=48', false);
-    expect(screen.getByRole('heading', { name: 'Curated schemas' })).toBeVisible();
-    expect(screen.getByText('Ready to use')).toBeVisible();
-    expect(screen.queryByText('Detailed Studio')).not.toBeInTheDocument();
-    const search = screen.getByRole('searchbox', {
-      name: 'Search projects and schemas',
-    });
-    fireEvent.change(search, {
-      target: { value: 'dog care' },
-    });
-    fireEvent.submit(search.closest('form')!);
-    expect(mocks.push).toHaveBeenCalledWith('/team/project/browse?workspace=main&q=dog+care', {
-      scroll: false,
-    });
-  });
-  it('opens a dedicated release page instead of stacked drawers', () => {
-    mocks.query = 'schemaView=browse';
-    mount();
-    fireEvent.click(screen.getByRole('button', { name: 'Explore Release definition 1.2.3' }));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(mocks.push).toHaveBeenCalledWith(
-      '/team/project/browse?schemaView=release&catalogName=team%2Frelease&catalogVersion=1.2.3&catalogHash=sha256%3Aabc',
-      { scroll: false }
-    );
-  });
-  it('renders the selected release as a page with structured definition', () => {
-    mocks.query =
-      'schemaView=release&catalogName=team%2Frelease&catalogVersion=1.2.3&catalogHash=sha256%3Aabc';
-    mount();
-    expect(screen.getByRole('heading', { name: 'Release definition' })).toBeVisible();
-    expect(screen.getByRole('region', { name: 'Definition' })).toHaveTextContent('services');
-    expect(screen.getByRole('region', { name: 'Definition' })).toHaveTextContent('image');
-    expect(screen.getByRole('region', { name: 'Example' })).toHaveTextContent('nginx:1.28-alpine');
-    expect(screen.getByRole('region', { name: 'Author README' })).toHaveTextContent(
-      'Keep configuration changes reviewable'
-    );
-    fireEvent.click(screen.getByText('Exact source'));
-    expect(screen.getAllByText('sha256:abc').length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByText('Inspect source YAML'));
-    expect(screen.getByText(/canonicalName: team\/release/)).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Add & open Studio' })).toBeEnabled();
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(
-      within(screen.getByRole('navigation', { name: 'Schema views' })).getByRole('tab', {
-        name: 'Browse',
-      })
-    ).toHaveAttribute('aria-selected', 'true');
-  });
-  it('restores Browse filters and keeps the advanced workbench behind an explicit action', () => {
-    mocks.query = 'schemaView=browse&tags=infra&format=yaml';
-    const { unmount } = mount();
-    expect(mocks.catalog).toHaveBeenLastCalledWith('p', 'tags=infra&format=yaml&limit=48', true);
-    expect(screen.getByRole('complementary', { name: 'Catalog filters' })).toBeInTheDocument();
-    expect(screen.getByText('Work & Life')).toBeVisible();
-    expect(screen.getByText('Data & Visualization')).toBeVisible();
-    unmount();
-    mocks.query = '';
-    mount('schemas');
-    const studio = screen.getByRole('region', { name: 'Schema Studio' });
-    expect(screen.queryByRole('navigation', { name: 'Schema views' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Schema experience' })).toContainElement(studio);
-    expect(screen.getByRole('toolbar', { name: 'Studio controls' })).toBeInTheDocument();
-    expect(screen.queryByText('Detailed Studio')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Add modules' }));
-    expect(screen.queryByText('Detailed Studio')).not.toBeInTheDocument();
-    expect(screen.getByText(/No separate Composition draft is created/)).toBeVisible();
-    expect(mocks.catalog).toHaveBeenLastCalledWith('p', 'limit=48', false);
-  });
+  const destination = new URL(mocks.replace.mock.calls[0][0], 'http://local');
+  expect(destination.pathname).toBe('/explore');
+  expect(destination.searchParams.get('view')).toBe(tab);
+  expect(destination.searchParams.get('catalogHash')).toBe('sha256:abc');
+  expect(destination.searchParams.get('workspace')).toBe('workspace_branch:main');
+  expect(destination.searchParams.get('studioTarget')).toBe('p');
+  expect(destination.searchParams.get('catalogProjectId')).toBe('p');
+  expect(destination.searchParams.get('q')).toBe('care');
 });
-
-it('keeps a project introduction link on the release page', () => {
-  mocks.query =
-    'schemaView=release&catalogName=team%2Frelease&catalogVersion=1.2.3&catalogHash=sha256%3Aabc';
-  mocks.catalog.mockReturnValue({
-    data: {
-      items: [
-        {
-          ...item,
-          presentationRef: {
-            projectId: 'source',
-            commitDigest: 'sha256:exact',
-            presentationDigest: 'sha256:presentation',
-          },
-        },
-      ],
-    },
-    loading: false,
-  });
-  mount();
-  const href = new URL(
-    screen.getByRole('link', { name: 'Project introduction' }).getAttribute('href')!,
-    'https://t3x.test'
+it('keeps Studio and Bindings inside the project with a global Explore handoff', () => {
+  mocks.query = 'workspace=w&branch=release';
+  render(<SchemaCatalogExperience projectId="p">{null}</SchemaCatalogExperience>);
+  expect(screen.getByText('Project Studio')).toBeInTheDocument();
+  const target = new URL(
+    screen.getByRole('link', { name: 'Explore' }).getAttribute('href')!,
+    'http://local'
   );
-  expect(href.pathname).toBe('/project/source');
-  expect(href.searchParams.get('view')).toBe('overview');
-  expect(href.searchParams.get('commit')).toBe('sha256:exact');
-  expect(href.searchParams.get('studioTarget')).toBe('p');
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(target.pathname).toBe('/explore');
+  expect(target.searchParams.get('studioTarget')).toBe('p');
+  expect(target.searchParams.get('workspace')).toBe('w');
+});
+it('renders active schema bindings as Bindings, not public Projects', () => {
+  mocks.query = 'schemaView=active';
+  render(<SchemaCatalogExperience projectId="p">{null}</SchemaCatalogExperience>);
+  expect(screen.getByText('Workspace bindings')).toBeInTheDocument();
+  expect(screen.queryByText('Project Studio')).not.toBeInTheDocument();
+  expect(screen.queryByText('Projects')).not.toBeInTheDocument();
 });

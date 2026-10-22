@@ -16,11 +16,12 @@ import {
   UserRound,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { safeExploreReturn } from '@/domain/project/exploreLocation';
 import { getProjectRepoPath } from '@/domain/project/repoPath';
 import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
 import { useRepositoryName } from '@/hooks/projects/useRepositoryName';
@@ -39,6 +40,8 @@ export function NewRepositoryPage() {
   const { accounts } = useNamespaceAccounts();
   const setup = useRepositorySetup();
   const router = useRouter();
+  const search = useSearchParams();
+  const returnTo = safeExploreReturn(search?.get('returnTo'));
   const [name, setName] = useState('');
   const nameCheck = useRepositoryName(owner, name);
   const [description, setDescription] = useState('');
@@ -72,7 +75,13 @@ export function NewRepositoryPage() {
       initializeReadme,
       tags: parsedTags.success ? parsedTags.data : [],
     });
-    if (result)
+    if (result && returnTo) {
+      const target = new URL(returnTo, 'http://local');
+      target.searchParams.set('studioTarget', result.project.project_id);
+      target.searchParams.set('workspace', result.workspaceId);
+      target.searchParams.set('branch', 'main');
+      router.push(`${target.pathname}?${target.searchParams}`);
+    } else if (result)
       router.push(
         `${getProjectRepoPath(result.project, owner)}/workspaces?workspace=${encodeURIComponent(result.workspaceId)}&conversation=${encodeURIComponent(result.conversationId)}`
       );
@@ -87,8 +96,9 @@ export function NewRepositoryPage() {
       />
       <div className={management.content}>
         <main className={cn(management.scope, styles.page)}>
-          <Link href={`/${routeOwner}`} className={management.backLink}>
-            <ArrowLeft aria-hidden="true" className="size-4" /> Back to repositories
+          <Link href={returnTo ?? `/${routeOwner}`} className={management.backLink}>
+            <ArrowLeft aria-hidden="true" className="size-4" />{' '}
+            {returnTo ? 'Back to Explore' : 'Back to repositories'}
           </Link>
           <header className={management.heading}>
             <h1>Create a new repository</h1>

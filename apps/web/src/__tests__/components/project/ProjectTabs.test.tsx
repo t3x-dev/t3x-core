@@ -83,10 +83,6 @@ describe('ProjectTabs', () => {
       'href',
       '/project/proj_123?tab=schemas&branch=feature%2Frelease&workspace=workspace_42'
     );
-    expect(screen.getByRole('link', { name: 'Discover' })).toHaveAttribute(
-      'href',
-      '/project/proj_123?tab=discover&branch=feature%2Frelease&workspace=workspace_42'
-    );
     expect(screen.queryByRole('link', { name: 'Browse' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Workspaces' })).toHaveAttribute(
       'href',
@@ -105,7 +101,6 @@ describe('ProjectTabs', () => {
   it('keeps the current primary navigation and legacy catalog routes', () => {
     expect(PROJECT_TABS.map((tab) => tab.id)).toEqual([
       'state',
-      'discover',
       'schemas',
       'workspaces',
       'reviews',

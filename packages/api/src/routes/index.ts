@@ -21,6 +21,7 @@ export { deployAgentRoutes } from './deploy-agents.openapi';
 export { deploymentCapabilitiesRoutes } from './deployment-capabilities.openapi';
 export { diffRoutes } from './diff.openapi';
 export { docsYopsRoutes } from './docs-yops.openapi';
+export { exploreRoutes } from './explore.openapi';
 export { exportRoutes } from './export.openapi';
 export { extractionFeedbackRoutes } from './extraction-feedback.openapi';
 export { gateRoutes } from './gate.openapi';

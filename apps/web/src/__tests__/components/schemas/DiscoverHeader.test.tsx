@@ -23,7 +23,6 @@ describe('DiscoverHeader navigation', () => {
     const tabs = within(screen.getByRole('navigation', { name: 'Project views' }));
     expect(tabs.getAllByRole('link').map((link) => link.getAttribute('aria-label'))).toEqual([
       'State',
-      'Discover',
       'Schemas',
       'Workspaces',
       'Pull requests',
@@ -31,7 +30,7 @@ describe('DiscoverHeader navigation', () => {
       'Settings',
     ]);
     expect(tabs.queryByRole('link', { name: 'Browse' })).not.toBeInTheDocument();
-    for (const label of ['Schemas', 'Discover', 'Workspaces']) {
+    for (const label of ['Schemas', 'Workspaces']) {
       const link = tabs.getByRole('link', { name: label });
       const target = new URL(link.getAttribute('href')!, 'http://localhost');
       expect(target.pathname).toBe(`/orbit/release/${label.toLowerCase()}`);
@@ -47,35 +46,6 @@ describe('DiscoverHeader navigation', () => {
     expect(pullRequests.searchParams.has('workspace')).toBe(false);
     expect(tabs.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', settingsHref);
     expect(tabs.getByRole('link', { name: 'Workspaces' })).toHaveAttribute('aria-current', 'page');
-  });
-
-  it.each([
-    'discover',
-    'browse',
-  ] as const)('keeps Discover active on %s and preserves its project-id context', (activeTab) => {
-    render(
-      <DiscoverHeader
-        owner="orbit"
-        projectName="release"
-        repoPath="/project/proj_123"
-        projectIdNavigation
-        branch="feature/release"
-        workspaceId="workspace_branch:feature/release"
-        activeTab={activeTab}
-      />
-    );
-
-    const tabs = within(screen.getByRole('navigation', { name: 'Project views' }));
-    const activeLink = tabs.getByRole('link', { name: 'Discover' });
-    const target = new URL(activeLink.getAttribute('href')!, 'http://localhost');
-    expect(target.pathname).toBe('/project/proj_123');
-    expect(target.searchParams.get('tab')).toBe('discover');
-    expect(target.searchParams.get('branch')).toBe('feature/release');
-    expect(target.searchParams.get('workspace')).toBe('workspace_branch:feature/release');
-    expect(target.searchParams.has('schemaView')).toBe(false);
-    expect(activeLink).toHaveAttribute('aria-current', 'page');
-    expect(tabs.getByRole('link', { name: 'Schemas' })).not.toHaveAttribute('aria-current');
-    expect(tabs.queryByRole('link', { name: 'Browse' })).not.toBeInTheDocument();
   });
 
   it('keeps namespace settings and repository creation under the supplied owner', () => {
@@ -112,7 +82,7 @@ describe('DiscoverHeader navigation', () => {
     const globalNavigation = within(screen.getByRole('navigation', { name: 'Global' }));
     expect(globalNavigation.getByRole('link', { name: 'Explore' })).toHaveAttribute(
       'href',
-      '/templates'
+      '/explore'
     );
     expect(globalNavigation.getByRole('link', { name: 'Explore' })).toHaveAttribute(
       'aria-current',

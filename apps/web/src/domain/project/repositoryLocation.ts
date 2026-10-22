@@ -1,7 +1,6 @@
 export function getSchemaProjectTab(schemaView: string | null): 'schemas' | 'discover' | 'browse' {
   if (schemaView === 'discover') return 'discover';
-  if (schemaView === 'browse' || schemaView === 'active' || schemaView === 'release')
-    return 'browse';
+  if (schemaView === 'browse' || schemaView === 'release') return 'browse';
   return 'schemas';
 }
 
@@ -47,6 +46,7 @@ export function repositoryLocation(base: string, suffix: string, query: string, 
     }
   }
   if (/^\/schemas\/?$/.test(tail)) {
+    tail = '/schemas';
     const tab = getSchemaProjectTab(params.get('schemaView'));
     if (tab !== 'schemas') {
       tail = `/${tab}`;

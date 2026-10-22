@@ -80,7 +80,7 @@ export function DiscoverHeader({
 
   function tabHref(tab: ProjectTabId) {
     if (tab === 'settings') return settingsHref;
-    if (!repoPath) return tab === 'schemas' ? '/templates' : '/';
+    if (!repoPath) return tab === 'schemas' ? '/explore' : '/';
     const params = new URLSearchParams();
     if (projectIdNavigation && tab !== 'state') params.set('tab', getProjectTabSegment(tab));
     if (branch) params.set('branch', branch);
@@ -115,7 +115,7 @@ export function DiscoverHeader({
           <div className={styles.context}>
             <Link
               className={`${styles.owner}${!projectName ? ` ${styles.currentContext}` : ''}`}
-              href={isExplore ? '/templates' : ownerHref}
+              href={isExplore ? '/explore' : ownerHref}
             >
               {isExplore ? (
                 <Compass aria-hidden="true" />
@@ -155,7 +155,7 @@ export function DiscoverHeader({
             </Button>
           ) : null}
           <nav aria-label="Global" className={styles.globalNav}>
-            <Link href="/templates" aria-current={isExplore ? 'page' : undefined}>
+            <Link href="/explore" aria-current={isExplore ? 'page' : undefined}>
               Explore
             </Link>
             <Link href="/">Your repositories</Link>

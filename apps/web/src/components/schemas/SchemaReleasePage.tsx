@@ -15,12 +15,18 @@ export function SchemaReleasePage({
   error,
   projectId,
   returnTo,
+  targetProjectId,
+  workspaceId,
+  branch,
   onBack,
 }: {
   item?: SchemaCatalogItem;
   loading: boolean;
   error?: string;
-  projectId: string;
+  projectId: string | null;
+  targetProjectId?: string;
+  workspaceId?: string;
+  branch?: string;
   returnTo: string;
   onBack: () => void;
 }) {
@@ -30,7 +36,7 @@ export function SchemaReleasePage({
       <header className={styles.topbar}>
         <button className={styles.back} onClick={onBack} type="button">
           <ArrowLeft aria-hidden="true" className="size-4" />
-          Browse schemas
+          {projectId ? 'Browse schemas' : 'Back to Explore'}
         </button>
       </header>
       <div className={styles.scroll}>
@@ -47,6 +53,9 @@ export function SchemaReleasePage({
             onAdded={onBack}
             projectId={projectId}
             returnTo={returnTo}
+            targetProjectId={targetProjectId}
+            workspaceId={workspaceId}
+            branch={branch}
           />
         ) : null}
       </div>
@@ -60,11 +69,17 @@ function ReleaseReading({
   onAdded,
   projectId,
   returnTo,
+  targetProjectId,
+  workspaceId,
+  branch,
 }: {
   item: SchemaCatalogItem;
   name: string;
   onAdded: () => void;
-  projectId: string;
+  projectId: string | null;
+  targetProjectId?: string;
+  workspaceId?: string;
+  branch?: string;
   returnTo: string;
 }) {
   const intro = useSchemaIntroduction(item.presentationRef);
@@ -263,12 +278,17 @@ function ReleaseReading({
 
       <aside className={styles.aside}>
         <section className={styles.panel}>
-          <h2>Add to Studio</h2>
+          <h2>Use this schema</h2>
           <p>Save this exact release as a candidate. Compare it before applying to a Workspace.</p>
           <AddToStudio
-            layout="inline"
+            layout="sheet"
+            returnTo={returnTo}
+            defaultWorkspaceId={workspaceId}
+            branch={branch}
+            requireSelection={!projectId}
+            disabled={!reading.data || !!reading.error}
             onAdded={onAdded}
-            defaultProjectId={projectId}
+            defaultProjectId={projectId ?? targetProjectId ?? ''}
             title={name}
             source={{
               ...(item.identity.ownerProjectId
@@ -318,7 +338,7 @@ function ReleaseReading({
           {reference ? (
             <Link
               className={styles.introLink}
-              href={`/project/${encodeURIComponent(reference.projectId)}?${new URLSearchParams({ view: 'overview', commit: reference.commitDigest, returnTo, schemaRelease: item.identity.canonicalName, schemaVersion: item.release.version, schemaHash: item.release.hash, studioTarget: projectId }).toString()}`}
+              href={`/project/${encodeURIComponent(reference.projectId)}?${new URLSearchParams({ view: 'overview', commit: reference.commitDigest, returnTo, schemaRelease: item.identity.canonicalName, schemaVersion: item.release.version, schemaHash: item.release.hash, studioTarget: projectId ?? targetProjectId ?? '' }).toString()}`}
             >
               Project introduction
             </Link>

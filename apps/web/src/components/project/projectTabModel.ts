@@ -19,7 +19,6 @@ export interface ProjectTabDefinition {
 
 export const PROJECT_TABS: ProjectTabDefinition[] = [
   { id: 'state', label: 'State' },
-  { id: 'discover', label: 'Discover' },
   { id: 'schemas', label: 'Schemas' },
   { id: 'workspaces', label: 'Workspaces' },
   { id: 'reviews', label: 'Pull requests', segment: 'pull-requests' },
@@ -27,10 +26,11 @@ export const PROJECT_TABS: ProjectTabDefinition[] = [
   { id: 'settings', label: 'Settings' },
 ];
 
-// Browse is reached within Discover; History is reached within State.
+// Discover and Browse remain routable for migration to global Explore; historical routes stay valid.
 const ROUTABLE_PROJECT_TABS: ProjectTabDefinition[] = [
   ...PROJECT_TABS,
   { id: 'history', label: 'History' },
+  { id: 'discover', label: 'Discover' },
   { id: 'browse', label: 'Browse' },
 ];
 const PROJECT_TAB_BY_ID = new Map(ROUTABLE_PROJECT_TABS.map((tab) => [tab.id, tab]));

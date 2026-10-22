@@ -172,7 +172,7 @@ export function usePublishIntroduction(projectId: string | undefined, enabled: b
 }
 
 export function useSchemaReleaseReading(
-  projectId: string,
+  projectId: string | null,
   source: { canonicalName: string; version: string; hash: string; sourceProjectId?: string },
   enabled: boolean
 ) {
@@ -192,7 +192,7 @@ export function useSchemaReleaseReading(
   useEffect(() => {
     let active = true;
     const [project, name, version, hash, shouldLoad, sourceProject] = JSON.parse(key) as [
-      string,
+      string | null,
       string,
       string,
       string,

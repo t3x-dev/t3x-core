@@ -14,11 +14,13 @@ vi.mock('@/queries/projects', () => ({
   }),
 }));
 const mocks = vi.hoisted(() => ({
+  query: '',
   create: vi.fn(),
   push: vi.fn(),
   setup: { pending: false, started: false, error: null as string | null },
 }));
 vi.mock('next/navigation', () => ({
+  useSearchParams: () => new URLSearchParams(mocks.query),
   useParams: () => ({ owner: 't3x-dev' }),
   useRouter: () => ({ push: mocks.push }),
 }));
@@ -40,6 +42,7 @@ vi.mock('@/hooks/projects/useRepositorySetup', () => ({
 }));
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.query = '';
   mocks.setup = { pending: false, started: false, error: null };
 });
 it('shows General and Configuration with optional README and tags inputs but no uploads', () => {
@@ -152,4 +155,29 @@ it('keeps IME confirmation separate from adding tags and validates the pending t
   expect(screen.getByRole('button', { name: 'Create repository' })).toBeDisabled();
   fireEvent.change(input, { target: { value: '中'.repeat(64) } });
   expect(screen.getByRole('button', { name: 'Create repository' })).toBeEnabled();
+});
+
+it('returns a newly created project to the exact Explore release without applying it', async () => {
+  mocks.query = new URLSearchParams({
+    returnTo:
+      '/explore?catalogName=team%2Fschema&catalogVersion=1.0.0&catalogHash=sha256%3Aabc&type=schemas',
+  }).toString();
+  mocks.create.mockResolvedValue({
+    project: { project_id: 'new-project', name: 'new-project' },
+    workspaceId: 'workspace:main',
+    conversationId: 'chat',
+  });
+  render(<NewRepositoryPage />);
+  fireEvent.change(screen.getByLabelText(/Repository name/), { target: { value: 'new-project' } });
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: /Create repository/ })).toBeEnabled()
+  );
+  fireEvent.click(screen.getByRole('button', { name: /Create repository/ }));
+  await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+  const destination = new URL(mocks.push.mock.calls[0][0], 'http://local');
+  expect(destination.pathname).toBe('/explore');
+  expect(destination.searchParams.get('catalogName')).toBe('team/schema');
+  expect(destination.searchParams.get('catalogHash')).toBe('sha256:abc');
+  expect(destination.searchParams.get('studioTarget')).toBe('new-project');
+  expect(destination.searchParams.get('workspace')).toBe('workspace:main');
 });

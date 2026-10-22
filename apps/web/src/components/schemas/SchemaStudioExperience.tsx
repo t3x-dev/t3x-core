@@ -14,7 +14,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
-import { getProjectIdRepoPath, getProjectIdWorkspacePath } from '@/domain/project/repoPath';
+import { safeExploreReturn } from '@/domain/project/exploreLocation';
+import { getProjectIdWorkspacePath } from '@/domain/project/repoPath';
 import {
   listStudioDraftWorkspaces,
   listStudioWorkspacesForBranches,
@@ -598,12 +599,16 @@ export function SchemaStudioExperience({
   }
 
   const canReview = !!target && data?.workspace?.id === target.id && !applying;
-  const repoPath = getProjectIdRepoPath(projectId);
-  const browseParams = new URLSearchParams({ tab: 'browse' });
+  const browseParams = new URLSearchParams({
+    view: 'browse',
+    type: 'schemas',
+    studioTarget: projectId,
+  });
   const routeBranch = params?.get('branch');
   if (routeBranch) browseParams.set('branch', routeBranch);
   if (workspaceId) browseParams.set('workspace', workspaceId);
-  const browseHref = `${repoPath}?${browseParams.toString()}`;
+  const browseHref =
+    safeExploreReturn(params?.get('returnTo')) ?? `/explore?${browseParams.toString()}`;
   const workspaceLink = target
     ? `${getProjectIdWorkspacePath(projectId, { branch: target.targetBranch })}&workspace=${encodeURIComponent(target.id)}`
     : getProjectIdWorkspacePath(projectId);
