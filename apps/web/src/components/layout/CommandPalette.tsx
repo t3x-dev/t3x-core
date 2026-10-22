@@ -115,7 +115,7 @@ export function CommandPalette({ repositoryPath, onCreateConversation }: Command
                   <Command.Group
                     key={group.id}
                     heading={group.title}
-                    className="text-[var(--text-tertiary)]"
+                    className="text-[var(--text-tertiary)] [&>[cmdk-group-heading]]:text-xs"
                   >
                     {group.commands.map((command) => (
                       <CommandItem
