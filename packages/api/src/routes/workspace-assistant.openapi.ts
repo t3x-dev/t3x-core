@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { AssistantSchemaSettingsInputSchema } from '@t3x-dev/api-client';
 import { type DraftYOp, DraftYOpSchema } from '@t3x-dev/application';
-import type { LLMProvider } from '@t3x-dev/core';
+import { type LLMProvider, WorkspaceSchemaYOpsError } from '@t3x-dev/core';
 import {
   ConflictError,
   findApiKeyById,
@@ -243,8 +243,7 @@ workspaceAssistantRoutes.post(
             projectId,
             workspaceId,
             principal.actor,
-            body.conversation_id,
-            { requestedModel: selectedModel, requestedProvider: selectedProvider }
+            body.conversation_id
           ),
           confirmedSettingsId: body.confirmed_settings_id,
           exactEdit: body.exact_edit
@@ -376,24 +375,34 @@ workspaceAssistantRoutes.post(settingsPath, async (c) => {
   );
   if ((input.generateSnapshot || input.applyToDraft) && !input.settings)
     return errorResponse(c, 'INVALID_REQUEST', 'Snapshot generation requires confirmed settings.');
-  const previous = await service.read();
-  if (
-    input.applyToDraft &&
-    previous?.generationMode === 'schema_yops_v1' &&
-    !['generated', 'applied'].includes(previous.status)
-  )
-    return errorResponse(
-      c,
-      'CONFLICT',
-      'Confirm and generate the Schema candidate first. Review it before saving to Draft.'
-    );
   await service.confirm(input.settingsId, input.ifRevision, input.settings, {
     discardStudioCandidate: input.discardStudioCandidate,
   });
-  if (input.generateSnapshot || input.applyToDraft) await service.propose(input.settingsId);
-  if (input.applyToDraft) await service.applyToDraft(input.settingsId);
+  let failure: unknown;
+  try {
+    if (input.generateSnapshot || input.applyToDraft) await service.propose(input.settingsId);
+    if (input.applyToDraft) await service.applyToDraft(input.settingsId);
+  } catch (error) {
+    failure = error;
+  }
   const record = await service.read();
-  return c.json({ success: true, data: record ? schemaSettingsView(record) : null });
+  if (failure instanceof StudioError)
+    return errorResponse(c, failure.code, failure.message, failure.details);
+  if (failure instanceof TypeError || failure instanceof WorkspaceSchemaYOpsError)
+    return errorResponse(c, 'INVALID_REQUEST', failure.message);
+  if (failure instanceof ConflictError)
+    return errorResponse(c, 'CONFLICT', 'Workspace changed. Refresh the settings card.');
+  if (failure instanceof HTTPException) return failure.getResponse();
+  if (failure)
+    return errorResponse(
+      c,
+      'INTERNAL_ERROR',
+      failure instanceof Error ? failure.message : 'Schema operation failed.'
+    );
+  return c.json({
+    success: true,
+    data: record ? schemaSettingsView(record) : null,
+  });
 });
 const recovery = createRoute({
   method: 'get',

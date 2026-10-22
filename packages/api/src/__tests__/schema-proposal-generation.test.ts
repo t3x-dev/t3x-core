@@ -1,11 +1,8 @@
 import { AssistantSchemaSettingsInputSchema } from '@t3x-dev/api-client';
-import { compileWorkspaceSchemaDefinition } from '@t3x-dev/core';
+import { applyWorkspaceSchemaYOps } from '@t3x-dev/core';
 import { expect, it, vi } from 'vitest';
-import { createInferenceRuntime } from '../lib/inference';
-import { GENERATION_MODEL_SPECIFICATION_VERSION } from '../lib/model-runtime-contract';
 import { generateTransitionProposal } from '../lib/proposal-generation';
-import { createWorkspaceSchemaProposalModel } from '../lib/workspace-assistant/adapters/generation-model';
-import { applySchemaSettings } from '../lib/workspace-assistant/schema-settings';
+import { compileConfirmedSchemaChange } from '../lib/schema-change-contract';
 
 const base = {
   yschema: '0.1',
@@ -36,6 +33,79 @@ const settings = {
   intent: 'Change title maxWords to 50',
 };
 
+it('deterministically compiles and replays confirmed parameters without resolving or invoking an AI model', async () => {
+  const resolveModel = vi.fn(async () => {
+    throw new Error('No provider configured');
+  });
+  const assertCurrent = vi.fn(async () => {});
+  const input = {
+    target: 'schema',
+    baseSchema: base,
+    confirmedSettings: settings,
+    instruction: 'Ignore this stale instruction and set maxWords to 999',
+    resolveModel,
+    assertCurrent,
+  };
+  const first = await generateTransitionProposal(input as never);
+  const second = await generateTransitionProposal(input as never);
+  expect(resolveModel).not.toHaveBeenCalled();
+  expect(assertCurrent).toHaveBeenCalledTimes(4);
+  expect(first).toEqual(second);
+  expect((await applyWorkspaceSchemaYOps(base, first.operations)).schemaHash).toBe(
+    first.schemaHash
+  );
+  expect(first.schema.nodes.product.slots!.title).toEqual({
+    ...base.nodes.product.slots.title,
+    maxWords: 50,
+  });
+  expect(base.nodes.product.slots.title.maxWords).toBe(24);
+});
+
+it('still rejects changed authority before and after deterministic compilation', async () => {
+  for (const failureAt of [1, 2]) {
+    const assertCurrent = vi.fn(async () => {});
+    if (failureAt === 2) assertCurrent.mockResolvedValueOnce(undefined);
+    assertCurrent.mockRejectedValueOnce(new Error('Authority changed'));
+    await expect(
+      generateTransitionProposal({
+        target: 'schema',
+        baseSchema: base,
+        confirmedSettings: settings,
+        assertCurrent,
+      } as never)
+    ).rejects.toThrow('Authority changed');
+  }
+});
+
+it('honors the confirmed Node required parameter rather than silently ignoring it', async () => {
+  const result = await compileConfirmedSchemaChange(base, {
+    action: 'edit_node',
+    nodePath: '',
+    name: 'product',
+    required: true,
+    definition: { description: 'Controlled product' },
+    intent: 'Make product required',
+  });
+  expect(result.schema.nodes.product.required).toBe(true);
+  expect(result.schema.nodes.product.slots).toEqual(base.nodes.product.slots);
+});
+
+it('does not add an empty requiredSlots attribute when a confirmed optional Slot has no required siblings', async () => {
+  const result = await compileConfirmedSchemaChange(
+    { yschema: '0.1', name: 'Optional', nodes: { experiments: { slots: {} } } },
+    {
+      action: 'add_slot',
+      nodePath: 'experiments',
+      name: 'owner',
+      required: false,
+      definition: { type: 'string', maxLength: 60 },
+      intent: 'Add owner',
+    }
+  );
+  expect(result.schema.nodes.experiments.requiredSlots).toBeUndefined();
+  expect(result.schema.nodes.experiments.slots!.owner.maxLength).toBe(60);
+});
+
 it.each([
   ['edit_slot', { maxWords: 50 }],
   ['remove_slot', {}],
@@ -55,7 +125,7 @@ it.each([
 });
 
 it('edits one constraint without dropping advanced attributes or changing requiredness', async () => {
-  const result = await applySchemaSettings(base, settings as never);
+  const result = await compileConfirmedSchemaChange(base, settings as never);
   expect(result.schema.nodes.product.slots.title).toEqual({
     ...base.nodes.product.slots.title,
     maxWords: 50,
@@ -65,7 +135,7 @@ it('edits one constraint without dropping advanced attributes or changing requir
 });
 
 it('preserves untouched Slots and attributes when a Node patch changes one nested Slot', async () => {
-  const result = await applySchemaSettings(base, {
+  const result = await compileConfirmedSchemaChange(base, {
     ...settings,
     action: 'edit_node',
     nodePath: '',
@@ -81,7 +151,7 @@ it('preserves untouched Slots and attributes when a Node patch changes one neste
 });
 
 it('removes and renames required Slots without leaving invalid requiredSlots', async () => {
-  const removed = await applySchemaSettings(base, {
+  const removed = await compileConfirmedSchemaChange(base, {
     ...settings,
     action: 'remove_slot',
     name: 'obsolete',
@@ -89,7 +159,7 @@ it('removes and renames required Slots without leaving invalid requiredSlots', a
   } as never);
   expect(removed.schema.nodes.product.slots.obsolete).toBeUndefined();
   expect(removed.schema.nodes.product.requiredSlots).toEqual(['title']);
-  const renamed = await applySchemaSettings(base, {
+  const renamed = await compileConfirmedSchemaChange(base, {
     ...settings,
     action: 'rename_slot',
     newName: 'headline',
@@ -114,7 +184,7 @@ it('renames a Node and rewrites its relationship and rule endpoints while preser
       },
     ],
   };
-  const result = await applySchemaSettings(linked, {
+  const result = await compileConfirmedSchemaChange(linked, {
     ...settings,
     action: 'rename_node',
     nodePath: '',
@@ -126,7 +196,7 @@ it('renames a Node and rewrites its relationship and rule endpoints while preser
   expect(result.schema.relationTypes.links).toMatchObject({ from: 'overview', to: 'overview' });
   expect(result.schema.rules[0]).toMatchObject({ from: 'overview', to: 'overview' });
   await expect(
-    applySchemaSettings(linked, {
+    compileConfirmedSchemaChange(linked, {
       ...settings,
       action: 'remove_node',
       nodePath: '',
@@ -149,7 +219,7 @@ it.each([
     relationTypes: { links: { from: 'product', to: 'product' } },
     rules: [{ id: 'connected', description: 'Keep or update' }],
   };
-  const result = await applySchemaSettings(input, {
+  const result = await compileConfirmedSchemaChange(input, {
     ...change,
     nodePath: '',
     intent: 'Change structure',
@@ -159,7 +229,7 @@ it.each([
 });
 
 it('explicitly unsets a constraint without discarding unrelated metadata', async () => {
-  const result = await applySchemaSettings(base, {
+  const result = await compileConfirmedSchemaChange(base, {
     ...settings,
     definition: {},
     unsetAttributes: ['maxWords'],
@@ -173,7 +243,7 @@ it('explicitly unsets a constraint without discarding unrelated metadata', async
 
 it('moves a required Slot to another Node, preserving definition and requiredness', async () => {
   const input = { ...base, nodes: { ...base.nodes, target: { slots: {} } } };
-  const result = await applySchemaSettings(input, {
+  const result = await compileConfirmedSchemaChange(input, {
     ...settings,
     action: 'move_slot',
     name: 'title',
@@ -191,7 +261,7 @@ it('moves a Node under a valid parent and rejects self-nesting, collisions and r
     ...base,
     nodes: { ...base.nodes, target: { slots: {} }, list: { repeated: true, slots: {} } },
   };
-  const moved = await applySchemaSettings(input, {
+  const moved = await compileConfirmedSchemaChange(input, {
     ...settings,
     action: 'move_node',
     nodePath: '',
@@ -203,7 +273,7 @@ it('moves a Node under a valid parent and rejects self-nesting, collisions and r
   expect(moved.schema.nodes.target.children.product).toEqual(base.nodes.product);
   for (const targetNodePath of ['product', 'list'])
     await expect(
-      applySchemaSettings(input, {
+      compileConfirmedSchemaChange(input, {
         ...settings,
         action: 'move_node',
         nodePath: '',
@@ -214,109 +284,18 @@ it('moves a Node under a valid parent and rejects self-nesting, collisions and r
     ).rejects.toThrow();
 });
 
-async function generation(operations: unknown[]) {
-  const model = {
-    provider: 'test',
-    model: 'schema-test',
-    generate: vi.fn(async () => ({
-      draft: { operations },
-      usage: { inputTokens: 10, outputTokens: 10 },
-    })),
-  };
-  const call = () =>
+it.each([
+  { ...settings, nodePath: 'product.title' },
+  { ...settings, nodePath: 'content' },
+  { ...settings, name: '../strict' },
+  { ...settings, definition: { type: 'invalid-type' } },
+])('rejects invalid confirmed targets and definitions without a model: %j', async (confirmedSettings) => {
+  await expect(
     generateTransitionProposal({
       target: 'schema',
       baseSchema: base,
-      confirmedSettings: settings,
-      instruction: settings.intent,
-      resolveModel: async () => model,
-      inference: {
-        runtime: createInferenceRuntime(),
-        runId: `schema-test-${crypto.randomUUID()}`,
-        scope: { actor: { kind: 'local', id: 'test' }, ingressChannel: 'api', projectId: 'test' },
-      },
-    } as never);
-  return { call, model };
-}
-
-it('calls the AI Schema branch with the original instruction and exact confirmed parameters, then trial-applies its YOps', async () => {
-  const desired = structuredClone(base);
-  desired.nodes.product.slots.title.maxWords = 50;
-  const expected = await compileWorkspaceSchemaDefinition(base, desired);
-  const { call, model } = await generation([...expected.operations]);
-  const result = await call();
-  expect(model.generate).toHaveBeenCalledOnce();
-  expect(model.generate.mock.calls[0][0]).toMatchObject({
-    instruction: settings.intent,
-    baseSchema: base,
-    confirmedSettings: settings,
-  });
-  expect(result).toMatchObject({
-    kind: 'schema',
-    schemaHash: expected.schemaHash,
-    schema: expected.schema,
-  });
-});
-
-it.each([
-  [{ set: { path: 'strict', value: true } }],
-  [{ set: { path: 'content/title', value: 'silently fill content' } }],
-  [{ set: { path: 'nodes/product/slots/title/maxWords', value: 99 } }],
-  [{ unset: { path: 'nodes/product/slots/obsolete' } }],
-])('rejects AI operations outside the confirmed result, including content and protected roots: %j', async (...operations) => {
-  const { call, model } = await generation(operations);
-  await expect(call()).rejects.toThrow();
-  expect(model.generate).toHaveBeenCalledOnce();
+      confirmedSettings,
+    } as never)
+  ).rejects.toThrow();
   expect(base.nodes.product.slots.title.maxWords).toBe(24);
-});
-
-it('uses the managed structured model with the admitted identity and rejects unmanaged invocation', async () => {
-  const desired = structuredClone(base);
-  desired.nodes.product.slots.title.maxWords = 50;
-  const expected = await compileWorkspaceSchemaDefinition(base, desired);
-  const generate = vi.fn(async () => ({
-    output: [{ type: 'json' as const, value: { operations: expected.operations } }],
-    evidence: {
-      provider: 'managed',
-      model: 'actual-schema-model',
-      usage: { inputTokens: 12, outputTokens: 8 },
-      finishReason: 'stop' as const,
-    },
-  }));
-  const managed = createWorkspaceSchemaProposalModel({
-    specificationVersion: GENERATION_MODEL_SPECIFICATION_VERSION,
-    provider: 'managed',
-    modelId: 'schema-model',
-    capabilities: ['structured_output'],
-    generate,
-  });
-  await expect(
-    managed.generate({
-      baseSchema: base,
-      baseSchemaHash: 'exact',
-      confirmedSettings: settings as never,
-      instruction: settings.intent,
-      prompt: 'Generate Schema only',
-    })
-  ).rejects.toThrow('generation_capability_unsupported');
-  expect(generate).not.toHaveBeenCalled();
-  const result = await generateTransitionProposal({
-    target: 'schema',
-    baseSchema: base,
-    confirmedSettings: settings as never,
-    instruction: settings.intent,
-    resolveModel: async () => managed,
-    inference: {
-      runtime: createInferenceRuntime({ createGenerationId: () => 'schema-managed-admitted' }),
-      runId: 'schema-managed-run',
-      scope: { actor: { kind: 'user', id: 'u' }, projectId: 'p' },
-    },
-  });
-  expect(result.schemaHash).toBe(expected.schemaHash);
-  expect(generate).toHaveBeenCalledOnce();
-  expect(generate.mock.calls[0][0]).toMatchObject({
-    generationId: 'schema-managed-admitted',
-    feature: 'transition.schema-proposal-generation',
-    request: { output: { type: 'json', name: 'SchemaYOpsDraft' } },
-  });
 });

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
+import type { AssistantSchemaSettingsView } from '@t3x-dev/api-client';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceComposeReviewSurface } from '@/components/workspaces/WorkspaceComposeReviewSurface';
@@ -13,6 +14,16 @@ import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWor
 
 const activityMocks = vi.hoisted(() => ({
   value: undefined as ReturnType<typeof useComposeActivity> | undefined,
+}));
+const schemaCardMocks = vi.hoisted(() => ({
+  record: null as AssistantSchemaSettingsView | null,
+  error: undefined,
+  generating: false,
+  generate: vi.fn(),
+  save: vi.fn(),
+}));
+vi.mock('@/hooks/schemas/useAssistantSchemaSettings', () => ({
+  useAssistantSchemaSettings: () => schemaCardMocks,
 }));
 vi.mock('@/hooks/schemas/useWorkspaceDraftSchema', () => ({
   useWorkspaceDraftSchema: () => ({ definition: undefined, loading: false }),
@@ -73,6 +84,7 @@ vi.mock('@/hooks/workspaces/useComposeActivity', () => ({
 }));
 
 const comparisonMocks = vi.hoisted(() => ({ validate: vi.fn() }));
+const schemaDiscussion = vi.fn();
 vi.mock('@/hooks/workspaces/useWorkspaceYOps', () => ({
   validateWorkspaceCandidateYOps: comparisonMocks.validate,
 }));
@@ -163,6 +175,7 @@ vi.mock('next/navigation', () => ({
 
 describe('WorkspaceComposeReviewSurface composer', () => {
   beforeEach(() => {
+    schemaCardMocks.record = null;
     localStorage.removeItem('t3x-workspace-draft-width');
     localStorage.removeItem('t3x-workspace-draft-collapsed');
     localStorage.removeItem('t3x-workspace-discussion-width');
@@ -177,6 +190,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     bootstrapMocks.value.cancel.mockReset();
     modelSelectionMocks.handleModelChange.mockReset();
     sourceGenerationMocks.options = null;
+    schemaDiscussion.mockReset();
     navigationMocks.push.mockReset();
     navigationMocks.replace.mockReset();
     navigationMocks.searchParams = new URLSearchParams();
@@ -199,6 +213,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
             candidate,
             isBusy: false,
             materialSources: [],
+            prefillAssistant: schemaDiscussion,
           } as unknown as WorkspaceComposeReviewController
         }
         mode="compose"
@@ -206,6 +221,90 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
   }
+
+  it('places pending Schema confirmations on the timeline, never in the discussion composer', () => {
+    schemaCardMocks.record = {
+      settingsId: 'owner-card',
+      revision: 1,
+      status: 'pending',
+      conversationId: 'chat',
+      workspaceRevision: 2,
+      schemaHash: 'exact',
+      createdAt: '2026-10-22T10:00:00Z',
+      settings: {
+        action: 'add_node',
+        nodePath: 'product',
+        name: 'owner',
+        definition: {},
+        intent: 'Add owner',
+      },
+    };
+    renderCompose();
+    expect(
+      within(screen.getByRole('region', { name: 'Event: Schema structure change' })).getByRole(
+        'heading',
+        { name: 'Add Node · owner' }
+      )
+    ).toBeVisible();
+    expect(
+      within(screen.getByRole('complementary', { name: 'Discuss change' })).queryByRole('region', {
+        name: 'Schema change candidate',
+      })
+    ).not.toBeInTheDocument();
+  });
+
+  it('opens Schema changes in the shared Details panel without looking up a content node', () => {
+    schemaCardMocks.record = {
+      settingsId: 'advantage-card',
+      revision: 1,
+      status: 'applied',
+      conversationId: 'chat',
+      workspaceRevision: 2,
+      schemaHash: 'base-schema',
+      currentDefinition: { type: 'string', maxLength: 24 },
+      settings: {
+        action: 'edit_slot',
+        nodePath: 'requirements',
+        name: 'advantage',
+        definition: { type: 'string', maxLength: 80 },
+        required: false,
+        intent: 'Allow a longer advantage description',
+      },
+      snapshot: {
+        compositionId: 'snapshot',
+        compositionRevision: 2,
+        compositionHash: 'composition',
+        schemaHash: 'result-schema',
+      },
+    };
+    renderCompose();
+    const inspect = screen.getByRole('button', {
+      name: 'Inspect Schema change: requirements/advantage',
+    });
+    fireEvent.click(inspect);
+    const discussion = screen.getByRole('complementary', { name: 'Discuss change' });
+    expect(within(discussion).getByRole('heading', { name: 'Details', exact: true })).toBeVisible();
+    const details = within(discussion).getByRole('region', {
+      name: 'Selected Schema change details',
+    });
+    expect(within(details).getByRole('heading', { name: 'Advantage', exact: true })).toBeVisible();
+    expect(within(details).getByText('requirements/advantage')).toBeVisible();
+    const length = within(details).getByRole('region', { name: 'Field change: maxLength' });
+    expect(within(length).getByText('24')).toBeVisible();
+    expect(within(length).getByText('80')).toBeVisible();
+    expect(within(details).getByText('Allow a longer advantage description')).toBeVisible();
+    expect(within(details).getByText('result-schema')).toBeVisible();
+    expect(
+      within(details).queryByRole('button', { name: 'Edit', exact: true })
+    ).not.toBeInTheDocument();
+    expect(inspect).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(details).getByRole('button', { name: 'Ask AI' }));
+    expect(schemaDiscussion).toHaveBeenCalledWith('修改 Schema 结构 requirements/advantage：');
+    expect(inspect).toHaveAttribute('aria-pressed', 'false');
+    expect(
+      within(discussion).queryByRole('region', { name: 'Selected Schema change details' })
+    ).not.toBeInTheDocument();
+  });
 
   it('resizes the Draft rail with keyboard controls, resets it, and restores its saved width', () => {
     const { splitter, unmount } = renderResizableCompose();
@@ -288,6 +387,21 @@ describe('WorkspaceComposeReviewSurface composer', () => {
   });
 
   it('selects list rows directly and keeps Details or Chat permanently visible', async () => {
+    schemaCardMocks.record = {
+      settingsId: 'schema-row',
+      revision: 1,
+      status: 'applied',
+      conversationId: 'chat',
+      workspaceRevision: 2,
+      schemaHash: 'exact',
+      settings: {
+        action: 'add_slot',
+        nodePath: 'requirements',
+        name: 'advantage',
+        definition: { type: 'string' },
+        intent: 'Add advantage',
+      },
+    };
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     // Ledger presence must not silently replace the established Compose interface.
     Object.assign(candidate, { authoringLedger: { actions: [] } });
@@ -447,7 +561,22 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.getByRole('heading', { name: 'Proposed changes' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Expand Approval' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Delete Approval' })).not.toBeInTheDocument();
+    const inspectSchema = screen.getByRole('button', {
+      name: 'Inspect Schema change: requirements/advantage',
+    });
+    fireEvent.click(inspectSchema);
+    for (const row of screen.getAllByRole('button', { name: /^Inspect (?!Schema change:)/ })) {
+      expect(row).toHaveAttribute('aria-pressed', 'false');
+    }
+    expect(
+      within(discussion).getByRole('region', { name: 'Selected Schema change details' })
+    ).toBeVisible();
+    expect(activityMocks.value.inspectNode).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Inspect Approval: rollout/approval' }));
+    expect(inspectSchema).toHaveAttribute('aria-pressed', 'false');
+    expect(
+      within(discussion).queryByRole('region', { name: 'Selected Schema change details' })
+    ).not.toBeInTheDocument();
     expect(within(discussion).getByRole('heading', { name: 'Details' })).toBeVisible();
     expect(
       screen.getByRole('button', { name: 'Inspect Approval: rollout/approval' })

@@ -119,7 +119,6 @@ describe('server-side inference invocation inventory', () => {
   it.each([
     ['packages/api/src/routes/chat.openapi.ts', 3],
     ['packages/api/src/lib/proposal-generation.ts', 1],
-    ['packages/api/src/lib/schema-proposal-generation.ts', 1],
     ['packages/api/src/lib/inference-provider.ts', 3],
     ['packages/core/src/extractors/v2/compress.ts', 1],
     ['packages/core/src/extractors/v2/pipeline.ts', 3],
@@ -131,6 +130,12 @@ describe('server-side inference invocation inventory', () => {
   ])('records migrated call family %s', (file, coveredCount) => {
     const source = inventory.sources.find((candidate) => candidate.file === file);
     expect(source).toMatchObject({ status: 'migrated', coveredCount, observedCount: coveredCount });
+  });
+
+  it('keeps confirmed Schema compilation outside model inference', () => {
+    const file = 'packages/api/src/lib/schema-proposal-generation.ts';
+    expect(countInvocationLines(file)).toBe(0);
+    expect(inventory.sources.some((source) => source.file === file)).toBe(false);
   });
 
   it.each(

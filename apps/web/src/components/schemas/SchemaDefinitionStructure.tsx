@@ -187,7 +187,7 @@ export function SchemaDefinitionStructure({
 }
 
 /** Same property controls and input validation in Studio and the Assistant confirmation card. */
-export function SchemaAdditionSettingsEditor({
+export function SchemaChangeSettingsEditor({
   value,
   referenceRelations = {},
   onChange,
@@ -221,6 +221,7 @@ export function SchemaAdditionSettingsEditor({
       ...value,
       name: value.action.startsWith('add_') ? name : value.name,
       definition,
+      ...(value.action.endsWith('_node') ? { required: undefined } : {}),
       ...(removed.length ? { unsetAttributes: removed } : { unsetAttributes: undefined }),
     });
   };
@@ -273,8 +274,12 @@ export function SchemaAdditionSettingsEditor({
       ) : (
         <NodeEditor
           name={value.name}
+          attributesOnly={value.action === 'add_node'}
           path={path}
-          node={value.definition}
+          node={{
+            ...value.definition,
+            ...(value.required !== undefined ? { required: value.required } : {}),
+          }}
           lockName={!value.action.startsWith('add_')}
           names={[value.name]}
           onChange={changeDefinition}
@@ -388,6 +393,7 @@ function NodeEditor({
   node,
   names,
   lockName = false,
+  attributesOnly = false,
   onChange,
   onRemove,
 }: {
@@ -396,6 +402,7 @@ function NodeEditor({
   node: Definition;
   names: string[];
   lockName?: boolean;
+  attributesOnly?: boolean;
   onChange: (name: string, node: Definition) => void;
   onRemove: () => void;
 }) {
@@ -461,47 +468,51 @@ function NodeEditor({
             fields={[...descriptions, contentKind]}
             onChange={(next) => onChange(name, next)}
           />
-          <label className="block space-y-1 text-xs">
-            Children mode
-            <select
-              aria-label={`Children mode ${path}`}
-              className={inputClass}
-              value={node.children === 'any' ? 'any' : node.children !== undefined ? 'defined' : ''}
-              onChange={(event) =>
-                onChange(
-                  name,
-                  withField(
-                    node,
-                    'children',
-                    event.target.value === 'any'
-                      ? 'any'
-                      : event.target.value === 'defined'
-                        ? {}
-                        : undefined
+          <fieldset hidden={attributesOnly} disabled={attributesOnly} className="space-y-3">
+            <label className="block space-y-1 text-xs">
+              Children mode
+              <select
+                aria-label={`Children mode ${path}`}
+                className={inputClass}
+                value={
+                  node.children === 'any' ? 'any' : node.children !== undefined ? 'defined' : ''
+                }
+                onChange={(event) =>
+                  onChange(
+                    name,
+                    withField(
+                      node,
+                      'children',
+                      event.target.value === 'any'
+                        ? 'any'
+                        : event.target.value === 'defined'
+                          ? {}
+                          : undefined
+                    )
                   )
-                )
-              }
-            >
-              <option value="">Not specified</option>
-              <option value="defined">Defined child nodes</option>
-              <option value="any">Any children</option>
-            </select>
-          </label>
-          <p className="text-[11px] text-[var(--text-tertiary)]">
-            Changing children mode replaces its current definition. A repeated node cannot also
-            define children.
-          </p>
-          {node.children !== undefined && node.children !== 'any' ? (
-            <div className="border-l border-[var(--stroke-divider)] pl-3">
-              <NodesEditor
-                nodes={record(node.children)}
-                path={path}
-                onChange={(children) => onChange(name, { ...node, children })}
-              />
-            </div>
-          ) : null}
+                }
+              >
+                <option value="">Not specified</option>
+                <option value="defined">Defined child nodes</option>
+                <option value="any">Any children</option>
+              </select>
+            </label>
+            <p className="text-[11px] text-[var(--text-tertiary)]">
+              Changing children mode replaces its current definition. A repeated node cannot also
+              define children.
+            </p>
+            {node.children !== undefined && node.children !== 'any' ? (
+              <div className="border-l border-[var(--stroke-divider)] pl-3">
+                <NodesEditor
+                  nodes={record(node.children)}
+                  path={path}
+                  onChange={(children) => onChange(name, { ...node, children })}
+                />
+              </div>
+            ) : null}
+          </fieldset>
         </details>
-        <div className="space-y-2">
+        <div className="space-y-2" hidden={attributesOnly}>
           {Object.entries(slots).map(([slotName, value]) => (
             <SlotEditor
               key={slotName}

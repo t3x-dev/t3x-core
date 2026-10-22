@@ -133,7 +133,10 @@ import type {
 } from '@/types/workspaces';
 import type { WorkspaceYOpsValue } from '@/types/workspaceYops';
 import { cn } from '@/utils/cn';
-import { AssistantSchemaSettingsContent } from './AssistantSchemaSettingsCard';
+import {
+  AssistantSchemaSettingsDetails,
+  AssistantSchemaSettingsTimeline,
+} from './AssistantSchemaSettingsCard';
 import { ComposeActivityChangeRow } from './ComposeActivityChangeRow';
 import {
   ComposeActivityTimeline,
@@ -609,6 +612,10 @@ function ComposeSurface({
   const [sidePanel, setSidePanel] = useState<'history' | 'chat'>('chat');
   const [changeScope, setChangeScope] = useState<'latest' | 'all'>('latest');
   const [activitySelection, setActivitySelection] = useState<ComposeActivitySelection | null>(null);
+  const [schemaSelection, setSchemaSelection] = useState<{
+    workspaceId: string;
+    settingsId: string;
+  } | null>(null);
   const [structurePending, setStructurePending] = useState(false);
   const [schemaCandidateEpoch, setSchemaCandidateEpoch] = useState(0);
   const [schemaConversationId, setSchemaConversationId] = useState<string>();
@@ -690,6 +697,7 @@ function ComposeSurface({
   };
   useEffect(() => {
     setActivitySelection(null);
+    setSchemaSelection(null);
     setStaged([]);
     setStructureError(null);
     setFieldDialog(null);
@@ -700,6 +708,7 @@ function ComposeSurface({
     (selection: ComposeActivitySelection, panel: 'history' | 'chat' | 'preserve' = 'history') => {
       setActivitySelection(selection);
       if (panel !== 'preserve') {
+        setSchemaSelection(null);
         setSidePanel(panel);
       }
     },
@@ -725,13 +734,23 @@ function ComposeSurface({
     schemaConversationId ?? sourceConversationId,
     String(activity.view?.workspaceRevision ?? candidate.revision) + ':' + schemaCandidateEpoch
   );
+  const selectedSchema =
+    schemaSelection?.workspaceId === candidate.id
+      ? (
+          schemaSettings.record?.cards ?? (schemaSettings.record ? [schemaSettings.record] : [])
+        ).find(
+          (card) =>
+            card.settingsId === schemaSelection.settingsId &&
+            ['applied', 'generated'].includes(card.status)
+        )
+      : undefined;
   const sourceMaterialIds = controller.materialSources
     .filter((source) => source.included)
     .map((source) => source.materialId);
   const openChat = () => {
     setSidePanel('chat');
   };
-  const showingDetails = activity.enabled && sidePanel === 'history';
+  const showingDetails = (activity.enabled || Boolean(selectedSchema)) && sidePanel === 'history';
 
   return (
     <div
@@ -930,21 +949,36 @@ function ComposeSurface({
         <ProposedDraftPanel
           activity={activity}
           activitySelection={activitySelection}
+          schemaSelected={Boolean(showingDetails && selectedSchema)}
           onActivitySelect={selectActivity}
           candidate={candidate}
           changeFilter="all"
           changeScope={changeScope}
           staging={stagingControls}
           schemaEvent={
-            schemaSettings.record && ['generated', 'applied'].includes(schemaSettings.record.status)
+            schemaSettings.record
               ? {
-                  id: schemaSettings.record.settingsId,
-                  timestamp: schemaSettings.record.createdAt ?? candidate.updatedAt,
+                  id:
+                    schemaSettings.record.cards?.[0]?.settingsId ??
+                    schemaSettings.record.settingsId,
+                  timestamp:
+                    schemaSettings.record.cards?.[0]?.createdAt ??
+                    schemaSettings.record.createdAt ??
+                    candidate.updatedAt,
                   content: (
-                    <AssistantSchemaSettingsContent
+                    <AssistantSchemaSettingsTimeline
                       projectId={candidate.projectId}
                       workspaceId={candidate.id}
                       state={schemaSettings}
+                      selectedId={showingDetails ? selectedSchema?.settingsId : undefined}
+                      onInspect={(record) => {
+                        setActivitySelection(null);
+                        setSchemaSelection({
+                          workspaceId: candidate.id,
+                          settingsId: record.settingsId,
+                        });
+                        setSidePanel('history');
+                      }}
                       disabled={staged.length > 0}
                       onChanged={() => {
                         setSchemaCandidateEpoch((value) => value + 1);
@@ -975,7 +1009,26 @@ function ComposeSurface({
         {!activity.enabled || sidePanel === 'history' || !activity.view ? (
           <WorkspaceSourcesMenu candidate={candidate} controller={controller} />
         ) : null}
-        {!activity.enabled ? (
+        {showingDetails && selectedSchema ? (
+          <AssistantSchemaSettingsDetails
+            key={candidate.id + ':' + selectedSchema.settingsId}
+            record={selectedSchema}
+            projectId={candidate.projectId}
+            workspaceId={candidate.id}
+            onDiscuss={() => {
+              const settings = selectedSchema.settings;
+              const path = [
+                settings.targetNodePath ?? settings.nodePath,
+                settings.newName ?? settings.name,
+              ]
+                .filter(Boolean)
+                .join('/');
+              setActivitySelection(null);
+              controller.prefillAssistant(`修改 Schema 结构 ${path}：`);
+              openChat();
+            }}
+          />
+        ) : !activity.enabled ? (
           <ComposeDraftPreparation
             key={candidate.id}
             bootstrap={authoringBootstrap}
@@ -993,30 +1046,13 @@ function ComposeSurface({
           />
         ) : activity.view ? (
           <ComposeAuthoringAssistant
-            beforeComposer={
-              schemaSettings.record &&
-              ['pending', 'confirmed'].includes(schemaSettings.record.status) ? (
-                <div className="max-h-[50vh] shrink-0 overflow-y-auto border-t border-[var(--stroke-divider)] p-3">
-                  <AssistantSchemaSettingsContent
-                    projectId={candidate.projectId}
-                    workspaceId={candidate.id}
-                    state={schemaSettings}
-                    disabled={staged.length > 0}
-                    onChanged={() => {
-                      setSchemaCandidateEpoch((value) => value + 1);
-                      activity.refresh();
-                    }}
-                  />
-                </div>
-              ) : undefined
-            }
             allowProposal={staged.length === 0}
             context={{
               workspaceId: candidate.id,
               workspaceRevision: activity.view.workspaceRevision,
               sourceMaterialIds,
-              selectedActionId: activitySelection?.meta.actionId,
-              selectedNodeId: activitySelection?.operation.id,
+              selectedActionId: selectedSchema ? undefined : activitySelection?.meta.actionId,
+              selectedNodeId: selectedSchema ? undefined : activitySelection?.operation.id,
             }}
             conversationId={sourceConversationId}
             initialPendingCandidate={
@@ -1281,6 +1317,7 @@ function SourceToolbar({
 function ProposedDraftPanel({
   activity,
   activitySelection,
+  schemaSelected,
   onActivitySelect,
   candidate,
   changeFilter,
@@ -1290,6 +1327,7 @@ function ProposedDraftPanel({
 }: {
   activity: ReturnType<typeof useComposeActivity>;
   activitySelection: ComposeActivitySelection | null;
+  schemaSelected: boolean;
   onActivitySelect: (
     selection: ComposeActivitySelection,
     panel?: 'history' | 'chat' | 'preserve'
@@ -1303,7 +1341,7 @@ function ProposedDraftPanel({
   const operations = candidate.yopsDraft.operations;
   const editRequest = useRef(0);
   useEffect(() => {
-    if (!activity.view) return;
+    if (!activity.view || schemaSelected) return;
     if (changeScope === 'all') {
       if (activitySelection?.meta.comparison === 'draft') return;
       const changes = composeDraftChangeCards(
@@ -1400,6 +1438,7 @@ function ProposedDraftPanel({
     );
   }, [
     activity.view,
+    schemaSelected,
     activity.actions,
     activity.cards,
     activitySelection,
@@ -1410,7 +1449,8 @@ function ProposedDraftPanel({
   ]);
   const renderChangeRow = (operation: WorkspaceYOpsDraftOperation, meta?: ComposeActivityMeta) => {
     const selected = Boolean(
-      meta &&
+      !schemaSelected &&
+        meta &&
         activitySelection?.meta.eventId === meta.eventId &&
         activitySelection.operation.id === operation.id &&
         activitySelection.operation.path === operation.path

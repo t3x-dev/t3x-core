@@ -11,7 +11,6 @@ import {
 import {
   type AnyDB,
   addSchemaStudioCandidate,
-  findProjectById,
   findWorkspaceDraft,
   findYSchemaCompositionSnapshot,
   getTransitionRefHead,
@@ -22,32 +21,16 @@ import {
 import { diffYSchemas, normalizeYSchemaObject, sha256CompositionValue } from '@t3x-dev/yschema';
 import type { Context } from 'hono';
 import { z } from 'zod';
-import {
-  createInferenceRuntime,
-  getInferenceRuntime,
-  resolveInferenceActor,
-  resolveInferenceIngressChannel,
-  resolveInferenceProjectScope,
-  resolveInferenceRunId,
-  toGenerationModelScope,
-} from '../inference';
 import { assertProjectAccess } from '../project-access';
 import { generateTransitionProposal } from '../proposal-generation';
-import { resolveProviderAndModel } from '../provider-resolver';
-import {
-  defaultGenerationProviderRuntime,
-  getGenerationProviderRuntime,
-} from '../provider-runtime';
 import { compileConfirmedSchemaChange, schemaChangeTarget } from '../schema-change-contract';
 import { saveStudioEditCandidate } from '../schema-edit-candidate-save';
 import { assessWorkspaceSchemaImpact } from '../schema-evolution-impact';
-import { createDirectSchemaProposalModel } from '../schema-proposal-generation';
 import { compileStudioSelection, previewStudio, StudioError } from '../schema-studio-preview';
 import { workspaceAuthoringState } from '../workspace-authoring';
 import { resolveWorkspaceSchemaEditBasis } from '../workspace-schema-edit-basis';
 import { resolveWorkspaceYSchema } from '../workspace-yschema';
 import { schemaRootKeyFromBinding } from '../yschema-registry';
-import { createWorkspaceSchemaProposalModel } from './adapters/generation-model';
 
 const Stored = AssistantSchemaSettingsViewSchema.extend({
   actor: z.object({ kind: z.string(), id: z.string() }),
@@ -61,12 +44,9 @@ const Stored = AssistantSchemaSettingsViewSchema.extend({
   confirmationDigest: z.string().optional(),
   requestDigest: z.string(),
   replaceStudioCandidate: z.boolean().default(false),
-  requestedModel: z.string().optional(),
-  requestedProvider: z.string().optional(),
   originalInstruction: z.string().max(64000).optional(),
 });
 type StoredSettings = z.infer<typeof Stored>;
-const schemaInferenceRuntime = createInferenceRuntime();
 const generationFlights = new WeakMap<object, Map<string, Promise<unknown>>>();
 function schemaGenerationFlight<T>(db: AnyDB, key: string, work: () => Promise<T>): Promise<T> {
   let flights = generationFlights.get(db);
@@ -96,11 +76,49 @@ function owned(value: unknown, actor: DraftActionActor, conversationId?: string)
   return record;
 }
 export function schemaSettingsView(record: StoredSettings) {
-  return AssistantSchemaSettingsViewSchema.parse(record);
+  const view = AssistantSchemaSettingsViewSchema.parse(record);
+  if (view.cards) {
+    const { cards: _cards, ...current } = view;
+    view.cards = view.cards.map((card) => (card.settingsId === view.settingsId ? current : card));
+  }
+  return view;
 }
-/** Typed form input compiles through the same guarded native Schema adapter as Studio. */
-export async function applySchemaSettings(base: unknown, raw: AssistantSchemaSettingsInput) {
-  return compileConfirmedSchemaChange(base, raw);
+
+/** Split additions before confirmation; no child definition is authorized by its parent card. */
+function additionCards(input: AssistantSchemaSettingsInput): AssistantSchemaSettingsInput[] {
+  if (input.action !== 'add_node') return [input];
+  const { slots, requiredSlots, children, ...attributes } = input.definition;
+  const result: AssistantSchemaSettingsInput[] = [
+    {
+      ...input,
+      definition: {
+        ...attributes,
+        ...(children === 'any' ? { children } : {}),
+      },
+    },
+  ];
+  const nodePath = [input.nodePath, input.name].filter(Boolean).join('/');
+  for (const [name, definition] of Object.entries(
+    (slots ?? {}) as Record<string, Record<string, unknown>>
+  ))
+    result.push({
+      action: 'add_slot',
+      nodePath,
+      name,
+      definition,
+      required: Array.isArray(requiredSlots) && requiredSlots.includes(name),
+      intent: input.intent,
+    });
+  if (children && children !== 'any')
+    for (const [name, definition] of Object.entries(
+      children as Record<string, Record<string, unknown>>
+    ))
+      result.push(
+        ...additionCards({ action: 'add_node', nodePath, name, definition, intent: input.intent })
+      );
+  if (result.length > 100)
+    throw new StudioError('INVALID_REQUEST', 'A Schema request may contain at most 100 cards.');
+  return result;
 }
 async function currentBasis(db: AnyDB, projectId: string, workspaceId: string) {
   const draft = await findWorkspaceDraft(db, projectId, workspaceId);
@@ -149,115 +167,209 @@ export function createAssistantSchemaSettingsService(
   projectId: string,
   workspaceId: string,
   actor: DraftActionActor,
-  conversationId: string,
-  selection: { requestedModel?: string; requestedProvider?: string } = {}
+  conversationId: string
 ) {
   const read = async () => {
     const draft = await findWorkspaceDraft(db, projectId, workspaceId);
     const raw = draft?.workspace_state?.assistantSchemaSettings;
     return raw ? owned(raw, actor, conversationId) : null;
   };
-  return {
-    read,
-    show: async (
-      settings: AssistantSchemaSettingsInput,
-      operationId: string,
-      originalInstruction?: string
-    ) => {
-      const previous = await read();
-      if (previous?.settingsId === operationId) {
-        if (previous.requestDigest !== (await sha256CompositionValue(settings)))
-          throw new StudioError(
-            'CONFLICT',
-            'This settings request was already used for different inputs.'
-          );
-        return schemaSettingsView(previous);
-      }
-      if (previous && ['pending', 'confirmed'].includes(previous.status))
-        throw new StudioError('CONFLICT', 'Confirm or cancel the open Schema settings first.');
-      const live = await currentBasis(db, projectId, workspaceId);
-      const applied = await applySchemaSettings(live.schema, settings);
-      const { currentDefinition, currentRequired, proposedDefinition } = schemaChangeTarget(
-        live.schema,
-        settings
-      );
-      const confirmedInput = settings.action.startsWith('edit_')
-        ? {
-            ...settings,
-            definition: proposedDefinition,
-            definitionMode: 'replace' as const,
-            ...(settings.action === 'edit_slot'
-              ? { required: settings.required ?? currentRequired }
-              : {}),
-          }
-        : settings;
-      const basis = await resolveWorkspaceSchemaEditBasis(
-        c,
+  const stage = async (
+    settings: AssistantSchemaSettingsInput,
+    operationId: string,
+    originalInstruction?: string,
+    continuation?: StoredSettings
+  ) => {
+    const previous = await read();
+    if (previous?.settingsId === operationId) {
+      if (previous.requestDigest !== (await sha256CompositionValue(settings)))
+        throw new StudioError(
+          'CONFLICT',
+          'This settings request was already used for different inputs.'
+        );
+      return schemaSettingsView(previous);
+    }
+    if (previous && ['pending', 'confirmed'].includes(previous.status))
+      throw new StudioError('CONFLICT', 'Confirm or cancel the open Schema settings first.');
+    if (
+      !continuation &&
+      previous &&
+      schemaSettingsView(previous).cards?.some((card) => card.status === 'queued')
+    )
+      throw new StudioError('CONFLICT', 'Confirm or cancel the remaining Schema cards first.');
+    const live = await currentBasis(db, projectId, workspaceId);
+    const requestDigest = await sha256CompositionValue(settings);
+    // Validate the whole requested structure before persisting any split cards.
+    await compileConfirmedSchemaChange(live.schema, settings);
+    const changes = continuation ? [settings] : additionCards(settings);
+    if (changes.length > 1)
+      for (const change of changes)
+        change.intent = `Add only ${change.action === 'add_node' ? 'Node' : 'Slot'} ${[change.nodePath, change.name].filter(Boolean).join('/')}`;
+    settings = changes[0]!;
+    const applied = await compileConfirmedSchemaChange(live.schema, settings);
+    const { currentDefinition, currentRequired, proposedDefinition } = schemaChangeTarget(
+      live.schema,
+      settings
+    );
+    const confirmedInput = settings.action.startsWith('edit_')
+      ? {
+          ...settings,
+          definition: proposedDefinition,
+          definitionMode: 'replace' as const,
+          ...(settings.action === 'edit_slot'
+            ? { required: settings.required ?? currentRequired }
+            : {}),
+        }
+      : settings;
+    const basis = await resolveWorkspaceSchemaEditBasis(
+      c,
+      db,
+      projectId,
+      live.draft.workspace_state!,
+      live.schema
+    );
+    const candidateIds = await Promise.all(
+      basis.sources.map(
+        async (source) =>
+          `sc_${(await sha256CompositionValue({ projectId, artifactVersionId: source.artifactVersionId, hash: source.hash })).slice(7)}`
+      )
+    );
+    const storedCandidate = live.draft.workspace_state!.schemaEditCandidate;
+    const edit = storedCandidate ? parseWorkspaceSchemaEditCandidate(storedCandidate) : null;
+    const conflict =
+      edit && edit.authoringDraft?.resultSchemaHash !== live.schemaHash
+        ? { candidateId: edit.candidateId, revision: edit.revision }
+        : undefined;
+    const record = Stored.parse({
+      settingsId: operationId,
+      revision: 1,
+      status: 'pending',
+      conversationId,
+      workspaceRevision: live.draft.revision + 1,
+      settings: confirmedInput,
+      originalInstruction,
+      currentDefinition,
+      referenceRelations: live.schema.relationTypes ?? {},
+      impact: await assessWorkspaceSchemaImpact(
         db,
         projectId,
         live.draft.workspace_state!,
-        live.schema
-      );
-      const candidateIds = await Promise.all(
-        basis.sources.map(
-          async (source) =>
-            `sc_${(await sha256CompositionValue({ projectId, artifactVersionId: source.artifactVersionId, hash: source.hash })).slice(7)}`
-        )
-      );
-      const storedCandidate = live.draft.workspace_state!.schemaEditCandidate;
-      const edit = storedCandidate ? parseWorkspaceSchemaEditCandidate(storedCandidate) : null;
-      const conflict =
-        edit && edit.authoringDraft?.resultSchemaHash !== live.schemaHash
-          ? { candidateId: edit.candidateId, revision: edit.revision }
-          : undefined;
-      const record = Stored.parse({
-        settingsId: operationId,
-        revision: 1,
-        status: 'pending',
-        conversationId,
-        workspaceRevision: live.draft.revision + 1,
-        settings: confirmedInput,
-        originalInstruction,
-        requestedModel: selection.requestedModel,
-        requestedProvider: selection.requestedProvider,
-        generationMode: 'schema_yops_v1',
-        currentDefinition,
-        referenceRelations: live.schema.relationTypes ?? {},
-        impact: await assessWorkspaceSchemaImpact(
-          db,
-          projectId,
-          live.draft.workspace_state!,
-          applied.schema
-        ),
-        requestDigest: await sha256CompositionValue(settings),
-        actor,
-        schemaHash: live.schemaHash,
-        baseDefinition: live.schema,
-        bindingHash: live.bindingHash,
-        contentHash: live.contentHash,
-        refHead: live.refHead,
-        candidateIds,
-        selectionHash: basis.selectionHash,
-        baseCandidateRevision: edit?.revision ?? 0,
-        studioConflict: conflict,
-        changes: diffYSchemas(live.schema, applied.schema),
-        createdAt: new Date().toISOString(),
-      });
-      await saveWorkspaceSchemaPreparation(db, {
-        projectId,
-        workspaceId,
-        expectedRevision: live.draft.revision,
-        assistantSchemaSettings: record,
-      });
-      return schemaSettingsView(record);
-    },
+        applied.schema,
+        true,
+        confirmedInput
+      ),
+      requestDigest,
+      actor,
+      schemaHash: live.schemaHash,
+      baseDefinition: live.schema,
+      bindingHash: live.bindingHash,
+      contentHash: live.contentHash,
+      refHead: live.refHead,
+      candidateIds,
+      selectionHash: basis.selectionHash,
+      baseCandidateRevision: edit?.revision ?? 0,
+      studioConflict: conflict,
+      changes: diffYSchemas(live.schema, applied.schema),
+      createdAt: new Date().toISOString(),
+    });
+    record.cards = continuation
+      ? schemaSettingsView(continuation).cards
+      : changes.length > 1
+        ? changes.map((change, index) => ({
+            ...schemaSettingsView(record),
+            settingsId: index ? `${operationId}:change:${index}` : operationId,
+            settings: change,
+            status: index ? ('queued' as const) : ('pending' as const),
+            changes: index ? [] : record.changes,
+          }))
+        : undefined;
+    await saveWorkspaceSchemaPreparation(db, {
+      projectId,
+      workspaceId,
+      expectedRevision: live.draft.revision,
+      assistantSchemaSettings: record,
+    });
+    return schemaSettingsView(record);
+  };
+  return {
+    read,
+    show: (
+      settings: AssistantSchemaSettingsInput,
+      operationId: string,
+      originalInstruction?: string
+    ) => stage(settings, operationId, originalInstruction),
     confirm: async (
       id: string,
       revision: number,
       settings: AssistantSchemaSettingsInput | null,
       options: { discardStudioCandidate?: boolean } = {}
     ) => {
-      const record = await read();
+      let record = await read();
+      if (record && record.settingsId !== id) {
+        const cards = schemaSettingsView(record).cards;
+        const queued = cards?.find((card) => card.settingsId === id && card.status === 'queued');
+        if (
+          !queued ||
+          record.status !== 'applied' ||
+          cards?.some((card) => {
+            const path = [card.settings.nodePath, card.settings.name].filter(Boolean).join('/');
+            return (
+              card.settings.action === 'add_node' &&
+              card.status !== 'applied' &&
+              (queued.settings.nodePath === path || queued.settings.nodePath.startsWith(path + '/'))
+            );
+          })
+        )
+          throw new StudioError('CONFLICT', 'Confirm the previous Schema card first.');
+        if (!settings) {
+          if (queued.revision !== revision)
+            throw new StudioError('CONFLICT', 'Settings changed. Refresh the card.');
+          const draft = await findWorkspaceDraft(db, projectId, workspaceId);
+          if (!draft) throw new StudioError('NOT_FOUND', 'Workspace is unavailable.');
+          const next = Stored.parse({
+            ...record,
+            workspaceRevision: draft.revision + 1,
+            cards: cards!.map((card) => {
+              const path = [queued.settings.nodePath, queued.settings.name]
+                .filter(Boolean)
+                .join('/');
+              const dependent =
+                queued.settings.action === 'add_node' &&
+                (card.settings.nodePath === path || card.settings.nodePath.startsWith(path + '/'));
+              return card.settingsId === id || (card.status === 'queued' && dependent)
+                ? { ...card, status: 'cancelled' }
+                : card;
+            }),
+          });
+          await saveWorkspaceSchemaPreparation(db, {
+            projectId,
+            workspaceId,
+            expectedRevision: draft.revision,
+            assistantSchemaSettings: next,
+          });
+          return schemaSettingsView(next);
+        }
+        const live = await currentBasis(db, projectId, workspaceId);
+        const binding = (
+          live.draft.workspace_state!.schemaBindings as Record<string, unknown>[]
+        )[0];
+        const edit = parseWorkspaceSchemaEditCandidate(
+          live.draft.workspace_state!.schemaEditCandidate
+        );
+        if (
+          live.schemaHash !== record.snapshot?.schemaHash ||
+          binding.compositionHash !== record.snapshot?.compositionHash ||
+          live.contentHash !== record.contentHash ||
+          live.refHead !== record.refHead ||
+          edit.revision !== record.candidateRevision
+        )
+          throw new StudioError(
+            'CONFLICT',
+            'Schema or content changed outside this card group. Open new settings.'
+          );
+        await stage(queued.settings, id, record.originalInstruction, record);
+        record = await read();
+      }
       if (!record || record.settingsId !== id)
         throw new StudioError('NOT_FOUND', 'Settings not found.');
       const digest = settings ? await sha256CompositionValue(settings) : null;
@@ -278,6 +390,11 @@ export function createAssistantSchemaSettingsService(
         : { draft: await findWorkspaceDraft(db, projectId, workspaceId) };
       if (!live.draft) throw new StudioError('NOT_FOUND', 'Workspace is unavailable.');
       if (settings) {
+        if (settings.action === 'add_node' && additionCards(settings).length !== 1)
+          throw new StudioError(
+            'INVALID_REQUEST',
+            'Node and Slot additions require separate confirmation cards.'
+          );
         if (
           record.studioConflict &&
           !options.discardStudioCandidate &&
@@ -297,7 +414,6 @@ export function createAssistantSchemaSettingsService(
             'INVALID_REQUEST',
             'The operation and parent cannot change during confirmation.'
           );
-        await applySchemaSettings(record.baseDefinition, settings);
       }
       const next = Stored.parse({
         ...record,
@@ -309,11 +425,31 @@ export function createAssistantSchemaSettingsService(
         changes: settings
           ? diffYSchemas(
               normalizeYSchemaObject(record.baseDefinition),
-              (await applySchemaSettings(record.baseDefinition, settings)).schema
+              (await compileConfirmedSchemaChange(record.baseDefinition, settings)).schema
             )
           : record.changes,
         workspaceRevision: live.draft.revision + 1,
       });
+      if (!settings && next.cards)
+        next.cards = next.cards.map((card) =>
+          card.status === 'queued' ? { ...card, status: 'cancelled' as const } : card
+        );
+      if (settings?.action === 'add_node' && settings.name !== record.settings.name && next.cards) {
+        const from = [settings.nodePath, record.settings.name].filter(Boolean).join('/');
+        const to = [settings.nodePath, settings.name].filter(Boolean).join('/');
+        next.cards = next.cards.map((card) =>
+          card.status === 'queued' &&
+          (card.settings.nodePath === from || card.settings.nodePath.startsWith(from + '/'))
+            ? {
+                ...card,
+                settings: {
+                  ...card.settings,
+                  nodePath: to + card.settings.nodePath.slice(from.length),
+                },
+              }
+            : card
+        );
+      }
       await saveWorkspaceSchemaPreparation(db, {
         projectId,
         workspaceId,
@@ -390,62 +526,23 @@ export function createAssistantSchemaSettingsService(
             selection.selectionHash !== record.selectionHash
           )
             throw new StudioError('CONFLICT', 'The exact source selection changed.');
-          const project = await findProjectById(db, projectId);
-          if (!project) throw new StudioError('NOT_FOUND', 'Project is unavailable.');
-          const inference = {
-            runtime: getInferenceRuntime(c) ?? schemaInferenceRuntime,
-            runId: `${resolveInferenceRunId(c)}:schema:${record.settingsId}`,
-            scope: {
-              actor: resolveInferenceActor(c),
-              ingressChannel: resolveInferenceIngressChannel(c),
-              ...resolveInferenceProjectScope(project),
+          const applied = await generateTransitionProposal({
+            target: 'schema',
+            baseSchema: record.baseDefinition,
+            confirmedSettings: record.settings,
+            assertCurrent: async () => {
+              if ((await assertProjectAccess(c, db, projectId, 'project:edit')) instanceof Response)
+                throw new StudioError('FORBIDDEN', 'Workspace edit authority changed.');
+              const current = await assertFresh(db, projectId, workspaceId, record);
+              await resolveWorkspaceSchemaEditBasis(
+                c,
+                db,
+                projectId,
+                current.draft.workspace_state!,
+                current.schema
+              );
             },
-          };
-          const applied =
-            record.generationMode === 'schema_yops_v1'
-              ? await generateTransitionProposal({
-                  target: 'schema',
-                  baseSchema: record.baseDefinition,
-                  confirmedSettings: record.settings,
-                  instruction: record.originalInstruction ?? record.settings.intent,
-                  inference,
-                  resolveModel: async () => {
-                    const runtime = getGenerationProviderRuntime(c);
-                    if (runtime !== defaultGenerationProviderRuntime) {
-                      if (record.requestedProvider && record.requestedProvider !== 'managed')
-                        throw new StudioError(
-                          'INVALID_REQUEST',
-                          'Select a model from the managed catalog.'
-                        );
-                      const resolved = await runtime.resolve({
-                        requestedModel: record.requestedModel,
-                        scope: toGenerationModelScope(inference.scope, { conversationId }),
-                        requiredCapabilities: ['structured_output'],
-                      });
-                      if (!resolved.ok) throw new StudioError('INVALID_REQUEST', resolved.message);
-                      return createWorkspaceSchemaProposalModel(resolved.model);
-                    }
-                    const resolved = await resolveProviderAndModel({
-                      db,
-                      projectId,
-                      conversationId,
-                      requestedProvider: record.requestedProvider,
-                      requestedModel: record.requestedModel,
-                    });
-                    if (!resolved.ok) throw new StudioError('INVALID_REQUEST', resolved.message);
-                    if (!('generate' in resolved.provider))
-                      throw new StudioError(
-                        'INVALID_REQUEST',
-                        'Selected model cannot generate Schema operations.'
-                      );
-                    return createDirectSchemaProposalModel(
-                      resolved.provider,
-                      resolved.providerId,
-                      resolved.model
-                    );
-                  },
-                })
-              : await applySchemaSettings(record.baseDefinition, record.settings);
+          });
           await assertFresh(db, projectId, workspaceId, record);
           const snapshotHash = await sha256CompositionValue({
             profile: 'assistant-schema-snapshot/v1',
@@ -476,7 +573,7 @@ export function createAssistantSchemaSettingsService(
             render_plan_json: basis.renderPlan,
             origins_json: basis.origins,
           });
-          // Candidate identity uses the same canonical hash as Studio, not the model's ID.
+          // Candidate identity uses the same canonical hash as Studio.
           const canonicalId = `sec_${(await sha256CompositionValue({ projectId, workspaceId })).slice(7)}`;
           const next = {
             ...record,
@@ -490,7 +587,9 @@ export function createAssistantSchemaSettingsService(
             db,
             projectId,
             live.draft.workspace_state!,
-            applied.schema
+            applied.schema,
+            true,
+            record.settings
           );
           const result = await saveStudioEditCandidate(
             db,
@@ -589,11 +688,17 @@ export function createAssistantSchemaSettingsService(
               revision: candidate.revision,
             },
           };
-          const preview = await previewStudio(c, tx, projectId, {
-            workspaceId,
-            candidateIds: source.candidateIds,
-            schemaEditCandidate: source.schemaEditCandidate,
-          });
+          const preview = await previewStudio(
+            c,
+            tx,
+            projectId,
+            {
+              workspaceId,
+              candidateIds: source.candidateIds,
+              schemaEditCandidate: source.schemaEditCandidate,
+            },
+            record.settings
+          );
           if (!preview.adoption.allowed)
             throw new StudioError('FORBIDDEN', 'Schema sources are no longer authorized.');
           if (!preview.report.valid || !preview.impact?.canAdopt)

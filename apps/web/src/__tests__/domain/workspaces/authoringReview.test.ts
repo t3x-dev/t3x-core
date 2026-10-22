@@ -41,6 +41,46 @@ const cards = [
 ];
 
 describe('authoringReview', () => {
+  it('projects ordinary YAML documents without rewriting their authoring paths', () => {
+    const raw = { prd: { experiments: { owner: 'Alice', hypothesis: 'Keep this evidence' } } };
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    const projection = buildAuthoringReviewProjection(
+      candidate,
+      {
+        schema: 't3x.application/workspace-authoring-view/v1',
+        projectionVersion: 1,
+        workspaceRevision: 4,
+        compositionRevision: 2,
+        basis: { refName: 'main', refHead: null, baseDigest: 'empty' },
+        actions: [],
+        selected: null,
+        node: null,
+        nextBeforeSequence: null,
+        base: {},
+        current: raw,
+        netDiff: [{ nodeId: 'prd', path: 'prd', after: raw.prd }],
+      },
+      { content: null, deterministicValidation: null }
+    );
+    expect(projection?.review.content).toEqual({
+      trees: [
+        {
+          key: 'prd',
+          slots: {},
+          children: [{ key: 'experiments', slots: raw.prd.experiments, children: [] }],
+        },
+      ],
+      relations: [],
+    });
+    expect(projection?.candidate.yopsDraft.operations[0]?.path).toBe('prd');
+    expect(raw.prd.experiments.owner).toBe('Alice');
+    expect(
+      authoringReviewDocuments({
+        base: {},
+        current: { domain: 't3x.dev/semantic-content', content: {} },
+      })
+    ).toBeNull();
+  });
   it('projects an empty repository base onto the current authoring tree', () => {
     const documents = authoringReviewDocuments({
       base: {},

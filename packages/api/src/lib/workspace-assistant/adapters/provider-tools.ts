@@ -33,14 +33,19 @@ export async function runAssistantProvider(
     inference: AssistantInference;
     operationNamespace: string;
     assertCurrent: () => Promise<void>;
+    authorizeContinuation?: () => Promise<void>;
     emit: (event: AssistantEvent) => Promise<void>;
     signal?: AbortSignal;
     maxSteps?: number;
   }
 ) {
-  const hasTools = input.generationModel
-    ? input.generationModel.capabilities.includes('tool_use')
-    : assistantProviderCapabilities(input.provider).tools;
+  let hasTools =
+    Object.keys(input.capabilities).length > 0 &&
+    (input.generationModel
+      ? input.generationModel.capabilities.includes('tool_use')
+      : assistantProviderCapabilities(input.provider).tools);
+  let terminalReason: 'completed' | 'awaiting_confirmation' = 'completed';
+  let explainingResult = false;
   await input.emit({
     type: 'capabilities',
     tools: hasTools,
@@ -49,6 +54,7 @@ export async function runAssistantProvider(
   const prompt = structuredClone(input.prompt);
   const maxSteps = Math.min(8, Math.max(1, input.maxSteps ?? 5));
   let callIndex = 0;
+  let cardCorrections = 0;
   const seen = new Set<string>();
   const canStreamPlainResponse =
     typeof input.provider?.streamFromPrompt === 'function' && !hasTools;
@@ -57,7 +63,9 @@ export async function runAssistantProvider(
       await input.emit({ type: 'done', reason: 'cancelled' });
       return;
     }
-    await input.assertCurrent();
+    await (explainingResult && input.authorizeContinuation
+      ? input.authorizeContinuation()
+      : input.assertCurrent());
     if (promptTextLength(prompt) > 128_000)
       throw new TypeError('Assistant continuation exceeds context budget');
     if (canStreamPlainResponse) {
@@ -155,7 +163,7 @@ export async function runAssistantProvider(
       if (block.type === 'text' && typeof block.text === 'string')
         await input.emit({ type: 'text', content: block.text });
     if (response.tool_calls.length === 0) {
-      await input.emit({ type: 'done', reason: 'completed' });
+      await input.emit({ type: 'done', reason: terminalReason });
       return;
     }
     if (!hasTools || response.tool_calls.length > 8)
@@ -163,8 +171,36 @@ export async function runAssistantProvider(
     if (
       response.tool_calls.some((call) => call.name === 'showSchemaChangeCard') &&
       response.tool_calls.length !== 1
-    )
-      throw new TypeError('Show settings in a separate tool step before any other action.');
+    ) {
+      if (
+        cardCorrections >= 1 ||
+        response.tool_calls.some((call) => call.name === 'requestProposal')
+      )
+        throw new TypeError('Show settings in a separate tool step before any other action.');
+      ++cardCorrections;
+      prompt.messages.push({
+        role: 'assistant',
+        content: response.tool_calls.map((call) => ({
+          type: 'tool_use' as const,
+          id: call.id,
+          name: call.name,
+          input: call.input,
+        })),
+      });
+      prompt.messages.push({
+        role: 'user',
+        content: response.tool_calls.map((call) => ({
+          type: 'tool_result' as const,
+          tool_use_id: call.id,
+          content: JSON.stringify({
+            status: 'invalid_tool_batch',
+            error:
+              'No tools in this batch were executed. Read Schema in a separate step, then call showSchemaChangeCard once with the complete requested Node subtree. The server splits additions into individually confirmed timeline cards.',
+          }),
+        })),
+      });
+      continue;
+    }
     prompt.messages.push({
       role: 'assistant',
       content: blocks.length
@@ -191,7 +227,27 @@ export async function runAssistantProvider(
       // Allocated by the server from the business operation namespace, never from model-supplied IDs.
       const operationId = `assistant:${createHash('sha256').update(`${input.operationNamespace}:${callIndex++}`).digest('hex')}`;
       await input.emit({ type: 'operation', name: call.name, operationId, status: 'started' });
-      const result = await capability.execute(call.input, operationId);
+      let result: unknown;
+      let invalidDefinition = false;
+      try {
+        result = await capability.execute(call.input, operationId);
+      } catch (failure) {
+        if (
+          call.name !== 'showSchemaChangeCard' ||
+          !(failure instanceof Error) ||
+          !failure.message.startsWith('INVALID_SCHEMA:') ||
+          cardCorrections >= 1
+        )
+          throw failure;
+        ++cardCorrections;
+        invalidDefinition = true;
+        result = {
+          status: 'invalid_definition',
+          error: failure.message,
+          guidance:
+            'No card was saved. Correct only the definition representation using native slots and children, keeping the requested action and target unchanged; otherwise ask the user for clarification.',
+        };
+      }
       await input.emit({
         type: 'operation',
         name: call.name,
@@ -199,14 +255,11 @@ export async function runAssistantProvider(
         status: 'completed',
         result,
       });
-      if (call.name === 'showSchemaChangeCard') {
-        await input.emit({
-          type: 'text',
-          content:
-            'A Schema change confirmation card is shown above the message composer. Review the target, attributes and impact, then click Confirm to generate a candidate. Nothing is applied to the Draft, content or Commit until you explicitly save it.',
-        });
-        await input.emit({ type: 'done', reason: 'awaiting_confirmation' });
-        return;
+      if (call.name === 'showSchemaChangeCard' && !invalidDefinition) {
+        hasTools = false;
+        explainingResult = true;
+        terminalReason = 'awaiting_confirmation';
+        prompt.system = `${prompt.system ?? ''}\nGive one brief reply in the user's language after the tool has created the editable Schema cards in the Workspace timeline: summarize the requested changes and tell the user to adjust parameters, then Confirm each card to generate, validate and apply its snapshot to Draft. A child card waits only for its parent Node; sibling Slots can be confirmed in either order. Nothing has been applied yet. Mention a blocker only if the tool actually reports one. Do not enumerate internal statuses, routine checks, unrelated content gaps or claim readiness to publish. Confirm updates the cards without another chat reply. This continuation is text-only; do not request tools or claim a completed edit.`;
       }
       if (
         call.name === 'requestProposal' &&
@@ -215,13 +268,9 @@ export async function runAssistantProvider(
         'kind' in result &&
         result.kind === 'schema'
       ) {
-        await input.emit({
-          type: 'text',
-          content:
-            'Schema candidate saved. Open Schema Studio to review the difference and prepare content before adding it to the Draft.',
-        });
-        await input.emit({ type: 'done', reason: 'completed' });
-        return;
+        hasTools = false;
+        explainingResult = true;
+        prompt.system = `${prompt.system ?? ''}\nExplain the actual Schema tool result in the user's language. A candidate is not an applied change. This continuation is text-only; do not request tools or claim content or Commit changes.`;
       }
       if (call.name === 'applyUserEdit') {
         await input.emit({ type: 'done', reason: 'completed' });

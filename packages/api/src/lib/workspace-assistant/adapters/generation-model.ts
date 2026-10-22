@@ -12,7 +12,6 @@ import {
 } from '../../model-runtime-contract';
 import type { ProposalGenerationModel } from '../../proposal-generation';
 import { createProposalGenerationModel } from '../../proposal-generation-model';
-import { type SchemaProposalModel, SchemaYOpsDraftSchema } from '../../schema-proposal-generation';
 
 type ToolDefinition = Parameters<NonNullable<LLMProvider['generateWithTools']>>[1][number];
 type ToolUseResult = Awaited<ReturnType<NonNullable<LLMProvider['generateWithTools']>>>;
@@ -143,51 +142,6 @@ export async function invokeWorkspaceGenerationModel(input: {
           return [];
         }
       ),
-    },
-  };
-}
-
-/** Reuse Proposal validation and trial apply, with the same managed model and admitted attempt. */
-export function createWorkspaceSchemaProposalModel(model: GenerationModel): SchemaProposalModel {
-  return {
-    provider: model.provider,
-    model: model.modelId,
-    async generate(input, attempt) {
-      if (!attempt || !model.capabilities.includes('structured_output'))
-        throw new GenerationModelError('generation_capability_unsupported', 'not_started');
-      const result = await invokeModel({
-        model,
-        attempt,
-        request: {
-          messages: [
-            { role: 'system', content: input.prompt },
-            {
-              role: 'user',
-              content: JSON.stringify({
-                baseSchema: input.baseSchema,
-                baseSchemaHash: input.baseSchemaHash,
-                confirmedSettings: input.confirmedSettings,
-                instruction: input.instruction,
-              }),
-            },
-          ],
-          output: {
-            type: 'json',
-            name: 'SchemaYOpsDraft',
-            schema: z.toJSONSchema(SchemaYOpsDraftSchema, { unrepresentable: 'any', io: 'input' }),
-          },
-          temperature: 0,
-          maxOutputTokens: 16000,
-        },
-      });
-      const json = result.output.find((part) => part.type === 'json');
-      const draft =
-        json?.type === 'json'
-          ? json.value
-          : JSON.parse(
-              result.output.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('')
-            );
-      return { draft: SchemaYOpsDraftSchema.parse(draft), ...metering(result.evidence) };
     },
   };
 }
