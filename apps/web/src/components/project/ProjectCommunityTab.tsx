@@ -2,18 +2,14 @@
 
 import {
   ArrowRight,
-  type Box,
   ChevronDown,
   ChevronRight,
   ChevronUp,
-  GitBranch,
   GitPullRequest,
-  Grid2X2,
-  Info,
   Layers,
-  Link2,
   List,
-  type Users,
+  type LucideIcon,
+  Users,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
@@ -34,9 +30,8 @@ interface ProjectCommunityTabProps {
 interface CommunityDestination {
   description: string;
   href: string;
-  icon: typeof Box;
+  icon: LucideIcon;
   label: string;
-  tone: 'conversation' | 'info' | 'commit';
 }
 
 export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabProps) {
@@ -45,7 +40,7 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
   const [filter, setFilter] = useState<'all' | 'prs' | 'workspaces'>('all');
   const [pullRequestsExpanded, setPullRequestsExpanded] = useState(false);
   const [workspacesExpanded, setWorkspacesExpanded] = useState(false);
-  const { guestsQuery } = useProjectCollaboration(projectId);
+  const { guestsQuery, canManageGuests } = useProjectCollaboration(projectId);
   const namespaceId = guestsQuery.data?.namespace_id ?? null;
   const { membersQuery } = useNamespaceCollaboration({
     namespaceId,
@@ -82,21 +77,19 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
     : `${projectPath}?tab=workspaces`;
   const destinations: CommunityDestination[] = [
     {
-      description: 'Draft and discuss changes.',
+      description: 'Prepare and revise changes.',
       href: workspacePath,
       icon: Layers,
       label: 'Workspaces',
-      tone: 'conversation',
     },
     {
-      description: 'Review branch changes.',
+      description: 'Review and merge branch changes.',
       href: pullRequestsPath,
       icon: GitPullRequest,
       label: 'Pull requests',
-      tone: 'info',
     },
     {
-      description: 'Inspect accepted changes.',
+      description: 'Trace committed changes.',
       href: getProjectIdHistoryPath(projectId, {
         branch: branch?.trim(),
         view: 'list',
@@ -104,34 +97,36 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
       }),
       icon: List,
       label: 'Commit history',
-      tone: 'commit',
     },
   ];
 
   return (
     <section className={styles.page}>
       <header className={styles.intro}>
-        <span className={styles.brandMark} aria-hidden="true">
-          <svg aria-hidden="true" width="28" height="28" viewBox="0 0 28 28" fill="none">
-            <circle cx="14" cy="14" r="10" stroke="var(--accent-pending)" strokeWidth="2.6" />
-            <circle cx="14" cy="14" r="4.6" stroke="var(--status-error)" strokeWidth="2.6" />
-          </svg>
-        </span>
-        <div className={styles.introCopy}>
-          <h2>Project community</h2>
-          <p>People and recent project objects, linked to their original workflows.</p>
-        </div>
-        <div className={styles.primaryActions}>
-          <Link className={styles.secondaryButton} href={pullRequestsPath}>
-            <GitBranch aria-hidden="true" />
-            View pull requests
-          </Link>
-          <Link className={styles.primaryButton} href={workspacePath}>
-            <Layers aria-hidden="true" />
-            Open workspaces
-          </Link>
-        </div>
+        <h2>Community</h2>
+        <p>Collaboration overview for this repository. Continue work in the linked pages.</p>
       </header>
+
+      <nav aria-label="Community destinations" className={styles.destinationList}>
+        {destinations.map((destination) => {
+          const Icon = destination.icon;
+          return (
+            <Link
+              className={styles.destination}
+              aria-label={destination.label}
+              href={destination.href}
+              key={destination.label}
+            >
+              <Icon aria-hidden="true" className={styles.destinationIcon} />
+              <span className={styles.destinationCopy}>
+                <strong>{destination.label}</strong>
+                <small>{destination.description}</small>
+              </span>
+              <ChevronRight aria-hidden="true" className={styles.chevron} />
+            </Link>
+          );
+        })}
+      </nav>
 
       <div className={styles.layout}>
         <section
@@ -139,9 +134,11 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
           className={styles.objects}
           aria-busy={activityLoading}
         >
-          <h3 id="community-objects-title">Recent project objects</h3>
-          <p className={styles.caption}>Workspace and pull request records are shown here.</p>
-          <fieldset className={styles.filters} aria-label="Filter project objects">
+          <div className={styles.sectionHeading}>
+            <h3 id="community-objects-title">Recent work</h3>
+            <p className={styles.caption}>Pull requests and workspaces in this repository.</p>
+          </div>
+          <fieldset className={styles.filters} aria-label="Filter recent work">
             {(
               [
                 ['all', 'All', pullRequests.length + workspaces.length],
@@ -160,7 +157,7 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
             ))}
           </fieldset>
           {activityLoading ? (
-            <output className={styles.message}>Loading project objects…</output>
+            <output className={styles.message}>Loading recent work…</output>
           ) : null}
           {activityError ? (
             <p className={styles.message} role="alert">
@@ -171,7 +168,9 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
           !activityError &&
           pullRequests.length === 0 &&
           workspaces.length === 0 ? (
-            <p className={styles.message}>No recent objects available.</p>
+            <p className={styles.message}>
+              No pull requests or workspaces yet. Open Workspaces above to prepare a change.
+            </p>
           ) : null}
           {filter !== 'workspaces' && pullRequests.length > 0 ? (
             <>
@@ -181,7 +180,7 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
               <ul id="community-pull-requests" className={styles.objectList}>
                 {(pullRequestsExpanded ? pullRequests : pullRequests.slice(0, 3)).map((request) => (
                   <li className={styles.objectRow} key={request.id}>
-                    <span className={styles.objectIcon} data-tone="info">
+                    <span className={styles.objectIcon}>
                       <GitPullRequest aria-hidden="true" />
                     </span>
                     <div className={styles.objectCopy}>
@@ -227,7 +226,7 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
               <ul id="community-workspaces" className={styles.objectList}>
                 {(workspacesExpanded ? workspaces : workspaces.slice(0, 3)).map((workspace) => (
                   <li className={styles.objectRow} key={workspace.id}>
-                    <span className={styles.objectIcon} data-tone="conversation">
+                    <span className={styles.objectIcon}>
                       <Layers aria-hidden="true" />
                     </span>
                     <div className={styles.objectCopy}>
@@ -271,106 +270,60 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
               No {filter === 'prs' ? 'pull requests' : 'workspaces'} available.
             </p>
           ) : null}
-          <div className={styles.evidenceNote}>
-            <Info aria-hidden="true" />
-            <p>Handoff notes are not supported yet.</p>
-          </div>
         </section>
 
-        <aside className={styles.sidebar}>
-          <section className={styles.sidebarCard}>
-            <h3>Where to go</h3>
-            <nav aria-label="Community destinations" className={styles.destinationList}>
-              {destinations.map((destination) => {
-                const Icon = destination.icon;
-                return (
-                  <Link
-                    className={styles.destination}
-                    aria-label={destination.label}
-                    data-tone={destination.tone}
-                    href={destination.href}
-                    key={destination.label}
-                  >
-                    <span className={styles.destinationIcon}>
-                      <Icon aria-hidden="true" />
-                    </span>
-                    <span className={styles.destinationCopy}>
-                      <strong>{destination.label}</strong>
-                      <small>{destination.description}</small>
-                    </span>
-                    <ChevronRight aria-hidden="true" className={styles.chevron} />
-                  </Link>
-                );
-              })}
-            </nav>
-          </section>
-
-          <section className={styles.sidebarCard}>
-            <div className={styles.sidebarHeading}>
-              <h3>Collaborators</h3>
+        <section aria-labelledby="community-collaborators-title" className={styles.collaborators}>
+          <div className={styles.sectionHeading}>
+            <div className={styles.headingRow}>
+              <h3 id="community-collaborators-title">Collaborators</h3>
+              {canManageGuests ? (
+                <Link className={styles.openObject} href={`${projectPath}/settings#access`}>
+                  Manage access
+                  <ArrowRight aria-hidden="true" />
+                </Link>
+              ) : null}
             </div>
-            {guestsQuery.error ? (
-              <p role="alert">Project collaborators unavailable or access denied.</p>
-            ) : null}
-            {membersQuery.error ? (
-              <p role="alert">Namespace members unavailable or access denied.</p>
-            ) : null}
-            {guestsQuery.isLoading || membersQuery.isLoading ? <p>Loading collaborators…</p> : null}
-            {!guestsQuery.isLoading &&
-            !membersQuery.isLoading &&
-            collaborators.size === 0 &&
-            !guestsQuery.error &&
-            !membersQuery.error ? (
-              <div className={styles.sidebarEmpty}>
-                <span className={styles.emptyIcon}>
-                  <Grid2X2 aria-hidden="true" />
-                </span>
-                <strong>No collaborators visible.</strong>
-              </div>
-            ) : null}
-            {[...collaborators.entries()].map(([id, person]) => (
-              <p className="mt-3 text-sm" key={id}>
-                <strong>{person.name}</strong>
-                <small className="block text-[var(--text-tertiary)]">
-                  {person.scopes.join(' · ')}
-                </small>
-              </p>
-            ))}
-          </section>
-          <EmptySidebarCard
-            description="Related tools and references will appear here when linked."
-            icon={Link2}
-            title="External context"
-            value="No links connected"
-          />
-        </aside>
-      </div>
-    </section>
-  );
-}
+            <p className={styles.caption}>Visible namespace members and repository guests.</p>
+          </div>
+          {guestsQuery.error ? (
+            <p className={styles.message} role="alert">
+              Project collaborators unavailable or access denied.
+            </p>
+          ) : null}
+          {membersQuery.error ? (
+            <p className={styles.message} role="alert">
+              Namespace members unavailable or access denied.
+            </p>
+          ) : null}
+          {guestsQuery.isLoading || membersQuery.isLoading ? (
+            <output className={styles.message}>Loading collaborators…</output>
+          ) : null}
+          {!guestsQuery.isLoading &&
+          !membersQuery.isLoading &&
+          collaborators.size === 0 &&
+          !guestsQuery.error &&
+          !membersQuery.error ? (
+            <p className={styles.message}>No collaborators visible.</p>
+          ) : null}
+          {collaborators.size > 0 ? (
+            <ul className={styles.collaboratorList}>
+              {[...collaborators.entries()].map(([id, person]) => (
+                <li className={styles.collaboratorRow} key={id}>
+                  <Users aria-hidden="true" />
+                  <div className={styles.objectCopy}>
+                    <strong>{person.name}</strong>
+                    <p>{person.scopes.join(' · ')}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
 
-function EmptySidebarCard({
-  description,
-  icon: Icon,
-  title,
-  value,
-}: {
-  description: string;
-  icon: typeof Users;
-  title: string;
-  value: string;
-}) {
-  return (
-    <section className={styles.sidebarCard}>
-      <div className={styles.sidebarHeading}>
-        <h3>{title}</h3>
-      </div>
-      <div className={styles.sidebarEmpty}>
-        <span className={styles.emptyIcon}>
-          <Icon aria-hidden="true" />
-        </span>
-        <strong>{value}</strong>
-        <p>{description}</p>
+        <section aria-labelledby="community-future-title" className={styles.future}>
+          <h3 id="community-future-title">More collaboration tools</h3>
+          <p>Handoff notes and shared references are not available yet.</p>
+        </section>
       </div>
     </section>
   );

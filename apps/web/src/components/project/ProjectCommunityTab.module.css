@@ -1,417 +1,337 @@
 .page {
   width: 100%;
-  max-width: var(--project-page-max-width, 1264px);
-  margin: 0 auto;
-  padding: 0 24px 32px;
-  color: var(--text-primary);
-}
-.intro {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 32px 0 22px;
-}
-.brandMark {
-  width: 52px;
-  height: 52px;
-  flex: 0 0 52px;
-  border-radius: 15px;
-  background: #111318;
-  display: grid;
-  place-items: center;
-  box-shadow: 0 6px 14px rgba(17, 19, 24, 0.18);
-}
-.introCopy {
+  max-width: 960px;
   min-width: 0;
-  flex: 1;
+  margin-inline: auto;
+  padding: 24px 32px 48px;
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.5;
 }
+
+.intro {
+  margin-bottom: 20px;
+}
+
 .intro h2 {
-  font-size: 26px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.4;
 }
+
 .intro p {
   margin-top: 6px;
-  font-size: 13.5px;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
-.primaryActions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+
+.destinationList {
+  overflow: hidden;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
 }
-.primaryButton,
-.secondaryButton {
-  display: inline-flex;
+
+.destination {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 16px;
   align-items: center;
-  justify-content: center;
-  gap: 7px;
-  height: 36px;
-  border-radius: 9px;
-  padding: 0 14px;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--surface-card);
+}
+
+.destination + .destination {
+  border-top: 1px solid var(--stroke-divider);
+}
+
+.destination:hover,
+.destination:focus-visible {
+  background: var(--surface-hover);
+}
+
+.destinationIcon {
+  width: 18px;
+  height: 18px;
+  color: var(--text-secondary);
+}
+
+.destinationCopy {
+  display: grid;
+  grid-template-columns: 148px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 4px 16px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.destinationCopy strong {
+  color: var(--accent-commit);
+  font-weight: 600;
+}
+
+.destinationCopy small {
   font-size: 13px;
-  font-weight: 500;
-  white-space: nowrap;
+  color: var(--text-secondary);
 }
-.primaryButton {
-  color: #fff;
-  background: #2563eb;
-  box-shadow: 0 1px 2px rgba(15, 18, 30, 0.12);
+
+.chevron {
+  width: 16px;
+  height: 16px;
+  color: var(--text-secondary);
 }
-.secondaryButton {
-  background: #fff;
-  box-shadow:
-    0 1px 2px rgba(15, 18, 30, 0.06),
-    0 0 0 1px rgba(15, 18, 30, 0.1);
-}
-.primaryButton svg,
-.secondaryButton svg {
-  width: 14px;
-  height: 14px;
-}
+
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  gap: 56px;
-  padding-top: 6px;
+  gap: 28px;
+  margin-top: 28px;
 }
-.objects {
+
+.objects,
+.collaborators {
   min-width: 0;
 }
-.objects > h3 {
-  font-size: 17px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-  margin-bottom: 4px;
+
+.sectionHeading {
+  margin-bottom: 12px;
 }
+
+.sectionHeading h3 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.headingRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
 .caption {
+  margin-top: 4px;
+  color: var(--text-secondary);
   font-size: 13px;
-  color: var(--text-tertiary);
-  margin-bottom: 14px;
 }
+
 .filters {
-  display: inline-flex;
-  padding: 3px;
-  gap: 2px;
-  border-radius: 10px;
-  background: #f1f1f3;
-  margin-bottom: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
 }
+
 .filters button {
-  height: 26px;
-  padding: 0 12px;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  border-radius: 7px;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-workbench-control);
+  background: var(--surface-card);
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 500;
-  color: var(--text-secondary);
   cursor: pointer;
 }
-.filters button[aria-pressed="true"] {
-  background: #fff;
-  color: var(--text-primary);
-  box-shadow:
-    0 1px 2px rgba(15, 18, 30, 0.1),
-    0 0 0 1px rgba(15, 18, 30, 0.04);
+
+.filters button:hover {
+  background: var(--surface-hover);
 }
-.filters button span {
-  font-size: 11px;
-  font-weight: 600;
-  background: rgba(15, 18, 30, 0.06);
-  color: var(--text-tertiary);
-  height: 18px;
-  min-width: 18px;
-  padding: 0 5px;
-  border-radius: 999px;
+
+.filters button[aria-pressed="true"] {
+  border-color: var(--accent-commit);
+  background: var(--accent-commit-soft);
+  color: var(--accent-commit);
+}
+
+.filters button span,
+.groupHeading span {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-width: 20px;
+  padding-inline: 6px;
+  border-radius: var(--radius-full);
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
-.filters button[aria-pressed="true"] span {
-  background: #edf2ff;
-  color: #2563eb;
-}
+
 .groupHeading {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 34px;
-  margin-top: 8px;
-  padding: 0 14px;
-  font-size: 11.5px;
-  font-weight: 650;
-  color: var(--text-tertiary);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  margin-top: 16px;
+  padding: 8px 0;
+  font-size: 13px;
+  font-weight: 600;
 }
-.objectList + .groupHeading {
-  margin-top: 14px;
-}
-.objectList {
-  list-style: none;
-  padding: 0;
+
+.objectList,
+.collaboratorList {
   margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--stroke-divider);
 }
+
 .objectRow {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) auto;
-  gap: 14px;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
   align-items: center;
-  min-height: 60px;
-  padding: 8px 14px;
-  border-radius: 12px;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--stroke-divider);
 }
-.objectRow:hover,
-.objectRow:focus-within {
-  background: #f6f7f9;
-}
+
 .objectIcon {
-  width: 36px;
-  height: 36px;
-  border-radius: 11px;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  color: var(--text-secondary);
 }
+
 .objectIcon svg,
-.destinationIcon svg {
+.collaboratorRow > svg {
   width: 18px;
   height: 18px;
+  color: var(--text-secondary);
 }
-.objectIcon[data-tone="info"],
-.destination[data-tone="info"] .destinationIcon {
-  background: #edf2ff;
-  color: #2563eb;
-}
-.objectIcon[data-tone="conversation"],
-.destination[data-tone="conversation"] .destinationIcon {
-  background: #f1edff;
-  color: #7856ff;
-}
-.destination[data-tone="commit"] .destinationIcon {
-  background: rgba(234, 106, 12, 0.1);
-  color: #ea6a0c;
-}
+
 .objectCopy {
   min-width: 0;
+  overflow-wrap: anywhere;
 }
+
 .objectCopy strong {
   display: block;
   font-size: 14px;
   font-weight: 600;
-  letter-spacing: -0.005em;
-  overflow-wrap: anywhere;
-}
-.number {
-  color: var(--text-tertiary);
-  font-weight: 500;
-  margin-right: 6px;
-  font-size: 13px;
-}
-.objectCopy p {
-  margin-top: 3px;
-  font-size: 12.5px;
-  color: var(--text-tertiary);
-  font-variant-numeric: tabular-nums;
-}
-.openObject {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 13px;
-  font-weight: 550;
-  color: #2563eb;
-  white-space: nowrap;
-}
-.openObject svg {
-  width: 14px;
-  height: 14px;
-}
-.evidenceNote {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 18px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: rgba(37, 99, 235, 0.07);
-  font-size: 12.5px;
-  color: #274a99;
-}
-.evidenceNote svg {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-}
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-.sidebarCard {
-  border-radius: 16px;
-  background: #f7f8fa;
-  padding: 18px;
-}
-.sidebarCard h3 {
-  font-size: 14px;
-  font-weight: 650;
-  margin-bottom: 12px;
-}
-.destinationList {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.destination {
-  display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) 16px;
-  gap: 12px;
-  align-items: center;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: #fff;
-  box-shadow:
-    0 1px 2px rgba(15, 18, 30, 0.05),
-    0 0 0 1px rgba(15, 18, 30, 0.04);
-}
-.destinationIcon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  display: grid;
-  place-items: center;
-}
-.destinationCopy strong {
-  display: block;
-  font-size: 13.5px;
-  font-weight: 600;
-  line-height: 1.3;
-}
-.destinationCopy small {
-  font-size: 12px;
-  color: var(--text-tertiary);
-}
-.chevron {
-  width: 15px;
-  height: 15px;
-  color: #aeb4c0;
-}
-.sidebarEmpty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 10px 6px 4px;
-}
-.emptyIcon {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  background: #fff;
-  box-shadow: 0 0 0 1px rgba(15, 18, 30, 0.06);
-  display: grid;
-  place-items: center;
-  color: var(--text-tertiary);
-}
-.emptyIcon svg {
-  width: 20px;
-  height: 20px;
-}
-.sidebarEmpty strong {
-  margin-top: 10px;
-  font-size: 13.5px;
-  font-weight: 600;
-}
-.sidebarEmpty p {
-  margin-top: 4px;
-  font-size: 12.5px;
-  color: var(--text-tertiary);
-  line-height: 1.55;
-  max-width: 240px;
-}
-.message {
-  display: block;
-  padding: 14px;
-  font-size: 13px;
-  color: var(--text-tertiary);
-}
-.page a:focus-visible,
-.page button:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 3px;
-}
-@media (max-width: 1100px) {
-  .intro {
-    flex-wrap: wrap;
-  }
-  .introCopy {
-    flex-basis: calc(100% - 68px);
-  }
-  .primaryActions {
-    margin-left: 68px;
-  }
-  .layout {
-    gap: 28px;
-    grid-template-columns: minmax(0, 1fr) 300px;
-  }
-}
-@media (max-width: 800px) {
-  .page {
-    padding: 0 20px 24px;
-  }
-  .layout {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 24px;
-  }
-  .intro {
-    padding-top: 24px;
-  }
-  .intro h2 {
-    font-size: 24px;
-  }
-}
-@media (max-width: 480px) {
-  .page {
-    padding-right: 12px;
-    padding-left: 12px;
-  }
-  .primaryActions {
-    margin-left: 0;
-    flex-wrap: wrap;
-  }
-  .filters button {
-    padding: 0 8px;
-    font-size: 12px;
-    gap: 5px;
-  }
-  .objectRow {
-    grid-template-columns: 36px minmax(0, 1fr);
-    gap: 6px 12px;
-    padding: 10px;
-  }
-  .openObject {
-    grid-column: 2;
-  }
 }
 
+.number {
+  margin-right: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.objectCopy p {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.openObject,
 .expandButton {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin: 4px 14px 8px;
-  padding: 6px 10px;
-  border-radius: var(--radius-control);
+  min-height: 32px;
   color: var(--accent-commit);
   font-size: 13px;
-  cursor: pointer;
+  font-weight: 500;
 }
-.expandButton:hover {
-  background: var(--surface-panel);
+
+.openObject {
+  white-space: nowrap;
 }
+
+.openObject:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.openObject svg,
 .expandButton svg {
   width: 14px;
   height: 14px;
+  flex-shrink: 0;
+}
+
+.expandButton {
+  margin-top: 8px;
+  padding: 4px 8px;
+  border-radius: var(--radius-workbench-control);
+  cursor: pointer;
+}
+
+.expandButton:hover {
+  background: var(--surface-hover);
+}
+
+.message {
+  display: block;
+  padding: 14px 16px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-panel);
+  color: var(--text-secondary);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.message + .message {
+  margin-top: 8px;
+}
+
+.collaboratorRow {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--stroke-divider);
+}
+
+.future {
+  padding-top: 20px;
+  border-top: 1px solid var(--stroke-divider);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.future h3 {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.future p {
+  margin-top: 4px;
+}
+
+.page a:focus-visible,
+.page button:focus-visible {
+  outline: 2px solid var(--accent-commit);
+  outline-offset: 3px;
+}
+
+.destination:focus-visible {
+  outline-offset: -3px;
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 20px 20px 32px;
+  }
+
+  .destinationCopy {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .objectRow {
+    grid-template-columns: 20px minmax(0, 1fr);
+    gap: 4px 12px;
+  }
+
+  .openObject {
+    grid-column: 2;
+  }
 }
