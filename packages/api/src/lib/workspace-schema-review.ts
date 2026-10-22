@@ -52,6 +52,9 @@ export async function recoverCommittedSchema(
           compositionId: snapshot.compositionId,
           compositionRevision: snapshot.compositionRevision,
           compositionHash: snapshot.compositionHash,
+          ...(typeof snapshot.manifestJson.rootKey === 'string'
+            ? { rootKey: snapshot.manifestJson.rootKey }
+            : {}),
           ...(Array.isArray(snapshot.manifestJson.sources)
             ? { studioSources: snapshot.manifestJson.sources }
             : {}),

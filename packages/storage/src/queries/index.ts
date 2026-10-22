@@ -139,6 +139,7 @@ export {
 // Drafts (Workbench)
 export {
   abandonDraft,
+  advanceCleanWorkspaceAfterMerge,
   ConflictError,
   commitDraft,
   DraftAuthoringConflictError,
