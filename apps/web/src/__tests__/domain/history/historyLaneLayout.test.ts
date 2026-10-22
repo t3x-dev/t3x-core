@@ -86,4 +86,34 @@ describe('layoutHistoryLanes', () => {
 
     expect(second).toEqual(first);
   });
+
+  it('preserves both branch lanes and exact parent edges after a round-trip merge', () => {
+    const synced = commit(
+      'sha256:synced',
+      [feature.hash, merge.hash],
+      feature.branch,
+      '2026-09-14T05:00:00Z'
+    );
+    const layout = layoutHistoryLanes([synced, merge, main, feature, root]);
+    expect(
+      layout.nodes.filter((node) => node.branch === feature.branch).map((node) => node.hash)
+    ).toEqual([feature.hash, synced.hash]);
+    expect(layout.nodes.filter((node) => node.branch === 'main').map((node) => node.hash)).toEqual([
+      root.hash,
+      main.hash,
+      merge.hash,
+    ]);
+    expect(layout.edges.map((edge) => [edge.parentHash, edge.childHash])).toEqual([
+      [root.hash, feature.hash],
+      [root.hash, main.hash],
+      [main.hash, merge.hash],
+      [feature.hash, merge.hash],
+      [feature.hash, synced.hash],
+      [merge.hash, synced.hash],
+    ]);
+    expect(
+      layout.edges.some((edge) => edge.parentHash === feature.hash && edge.childHash === main.hash)
+    ).toBe(false);
+    expect(layoutHistoryLanes([root, main, synced, feature, merge])).toEqual(layout);
+  });
 });

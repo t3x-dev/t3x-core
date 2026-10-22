@@ -275,11 +275,19 @@ export function ProjectStateTab({
         if (commits.some((commit) => commit.project_id !== projectId)) {
           throw new Error('Commit response does not match the selected project.');
         }
-        if (
-          commits.some(
-            (commit) => commit.hash !== branchHeadHash && commit.branch !== requestedBranch
-          )
-        ) {
+        // Origin branch is not reachability: merged ancestors retain their own branch.
+        const byHash = new Map(commits.map((commit) => [commit.hash, commit]));
+        const reachable = new Set<string>();
+        const pending = commits
+          .filter((commit) => commit.branch === requestedBranch || commit.hash === branchHeadHash)
+          .map((commit) => commit.hash);
+        while (pending.length) {
+          const hash = pending.pop()!;
+          if (reachable.has(hash)) continue;
+          reachable.add(hash);
+          pending.push(...(byHash.get(hash)?.parents ?? []));
+        }
+        if (commits.some((commit) => !reachable.has(commit.hash))) {
           throw new Error('Commit response does not match the selected project and branch.');
         }
         let operations: StateOperationEntry[] = [];
@@ -3210,8 +3218,8 @@ function StateEmpty({
 
 function selectVisibleBranchHead(commits: ApiCommit[]): ApiCommit | null {
   if (commits.length === 0) return null;
-  const firstParentHashes = new Set(commits.map((commit) => commit.parents[0]).filter(Boolean));
-  const tips = commits.filter((commit) => !firstParentHashes.has(commit.hash));
+  const parentHashes = new Set(commits.flatMap((commit) => commit.parents));
+  const tips = commits.filter((commit) => !parentHashes.has(commit.hash));
   return [...(tips.length > 0 ? tips : commits)].sort(
     (a, b) =>
       Date.parse(b.committed_at) - Date.parse(a.committed_at) || b.hash.localeCompare(a.hash)

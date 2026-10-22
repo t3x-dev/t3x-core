@@ -1,9 +1,10 @@
 import type { AnyDB } from '@t3x-dev/storage';
-import { branches, ensureMainBranch, insertProject } from '@t3x-dev/storage';
+import { branches, ensureMainBranch, insertBranch, insertProject } from '@t3x-dev/storage';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
+  commitRepositoryYOpsMerge,
   commitRepositoryYOpsState,
   createRepositoryYOpsStateFromSemanticContent,
 } from '../lib/repository-state-transition';
@@ -178,5 +179,79 @@ describe('CommitV2 read routes', () => {
         })
       ).status
     ).toBe(404);
+  });
+
+  it('keeps origin branches and exact parents after merging dev into main and syncing main back', async () => {
+    const project = await insertProject(mockDB, testData.project({ name: 'Round-trip history' }));
+    const id = project.projectId;
+    await ensureMainBranch(mockDB, id);
+    const write = (refName: string, expectedHead: string | null, slots: Record<string, string>) =>
+      commitRepositoryYOpsState({
+        db: mockDB,
+        projectId: id,
+        refName,
+        expectedHead,
+        actor: ACTOR,
+        target: createRepositoryYOpsStateFromSemanticContent({
+          trees: [{ key: 'root', slots, children: [] }],
+          relations: [],
+        }),
+        intent: `Edit ${refName}`,
+      });
+    const root = await write('main', null, {});
+    await insertBranch(mockDB, { projectId: id, name: 'dev', parentBranch: 'main' });
+    const dev = await write('dev', root.commitDigest, { owner: 'test' });
+    const main = await write('main', root.commitDigest, { advantage: 'test' });
+    const decisions = {
+      conflictResolutions: {},
+      keepFromSource: [],
+      keepFromTarget: [],
+      keepRelationsFromSource: true,
+      keepRelationsFromTarget: true,
+    };
+    const merged = await commitRepositoryYOpsMerge({
+      db: mockDB,
+      projectId: id,
+      refName: 'main',
+      sourceDigest: dev.commitDigest,
+      targetDigest: main.commitDigest,
+      actor: ACTOR,
+      decisions,
+      message: 'Merge dev',
+    });
+    const synced = await commitRepositoryYOpsMerge({
+      db: mockDB,
+      projectId: id,
+      refName: 'dev',
+      sourceDigest: merged.commitDigest,
+      targetDigest: dev.commitDigest,
+      actor: ACTOR,
+      decisions,
+      message: 'Sync main',
+    });
+    const expected = new Map([
+      [root.commitDigest, { branch: 'main', parents: [] }],
+      [dev.commitDigest, { branch: 'dev', parents: [root.commitDigest] }],
+      [main.commitDigest, { branch: 'main', parents: [root.commitDigest] }],
+      [merged.commitDigest, { branch: 'main', parents: [main.commitDigest, dev.commitDigest] }],
+      [synced.commitDigest, { branch: 'dev', parents: [dev.commitDigest, merged.commitDigest] }],
+    ]);
+    for (const suffix of ['', '?branch=main', '?branch=dev']) {
+      const response = await app.request(`/v1/projects/${id}/commits${suffix}`);
+      expect(response.status).toBe(200);
+      const entries = (await response.json()).data.commits;
+      expect(entries.length).toBe(suffix === '?branch=main' ? 4 : 5);
+      for (const entry of entries) {
+        expect(expected.has(entry.id)).toBe(true);
+        expect(entry).toMatchObject({ id: entry.id, ...expected.get(entry.id) });
+      }
+    }
+    const detail = await app.request(
+      `/v1/commits/${encodeURIComponent(dev.commitDigest)}?project_id=${id}`
+    );
+    expect((await detail.json()).data.commit).toMatchObject({
+      branch: 'dev',
+      parents: [root.commitDigest],
+    });
   });
 });

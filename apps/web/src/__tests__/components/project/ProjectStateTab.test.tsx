@@ -1458,6 +1458,40 @@ describe('ProjectStateTab', () => {
     expect(screen.queryByText('PRD audience handoff committed')).not.toBeInTheDocument();
   });
 
+  it('accepts merged ancestors with their origin branch and selects the merge tip despite clock skew', async () => {
+    const source = {
+      ...PRD_COMMIT,
+      hash: 'sha256:source',
+      branch: 'dev',
+      parents: [],
+      committed_at: '2099-01-01T00:00:00.000Z',
+    };
+    const merged = {
+      ...PRD_COMMIT,
+      hash: 'sha256:merged',
+      message: 'Merged branch HEAD',
+      parents: [PRD_COMMIT.hash, source.hash],
+    };
+    hookMocks.loadCommits.mockResolvedValue([source, merged, PRD_COMMIT]);
+    renderStateTab(null);
+    expect(await screen.findByRole('heading', { name: 'Merged branch HEAD' })).toBeInTheDocument();
+    expect(hookMocks.loadOperations).toHaveBeenCalledWith(merged.hash, 'proj_test');
+    expect(
+      screen.queryByText('Commit response does not match the selected project and branch.')
+    ).not.toBeInTheDocument();
+  });
+
+  it('still rejects an unrelated foreign-branch commit in a branch history response', async () => {
+    hookMocks.loadCommits.mockResolvedValue([
+      PRD_COMMIT,
+      { ...PRD_COMMIT, hash: 'sha256:unrelated', branch: 'dev', parents: [] },
+    ]);
+    renderStateTab(null);
+    expect(
+      await screen.findByText('Commit response does not match the selected project and branch.')
+    ).toBeInTheDocument();
+  });
+
   it('ignores stale Canvas data from another project', async () => {
     hookMocks.loadCommits.mockResolvedValue([]);
     useCanvasStore.setState({
