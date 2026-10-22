@@ -11,6 +11,7 @@ import type { Context } from 'hono';
 import type { z } from 'zod';
 import { resolveStudioSource, schemaSourceAdoptionReason } from './schema-studio';
 import { StudioError } from './schema-studio-preview';
+import { ensureBuiltInYSchemaArtifacts } from './yschema-artifact-registry';
 
 export interface WorkspaceSchemaEditBasis {
   schema: YSchema;
@@ -85,6 +86,7 @@ export async function resolveWorkspaceSchemaEditBasis(
     }
   }
   if (!sources && !snapshot) {
+    await ensureBuiltInYSchemaArtifacts(db);
     const name = binding.canonicalName ?? binding.schemaName;
     const view =
       typeof name === 'string' && typeof binding.version === 'string'

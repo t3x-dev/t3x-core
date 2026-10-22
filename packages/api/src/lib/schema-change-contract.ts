@@ -125,6 +125,7 @@ export function schemaChangeTarget(baseInput: unknown, raw: AssistantSchemaSetti
           ? patchNode(before ?? {}, input.definition)
           : { ...before, ...input.definition };
     for (const key of input.unsetAttributes ?? []) delete next[key];
+    if (kind === 'node' && input.required !== undefined) next.required = input.required;
     if (kind === 'rule') next.id = input.name;
     owner[input.name] = next;
   }
@@ -148,7 +149,7 @@ export function schemaChangeTarget(baseInput: unknown, raw: AssistantSchemaSetti
       if (input.required) required.add(input.name);
       else required.delete(input.name);
     }
-    if (parent.requiredSlots !== undefined || input.required !== undefined)
+    if (parent.requiredSlots !== undefined || required.size > 0)
       parent.requiredSlots = [...required];
   }
   if (kind === 'rule') schema.rules = Object.values(owner);

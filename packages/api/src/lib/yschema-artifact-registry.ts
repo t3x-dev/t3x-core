@@ -14,8 +14,40 @@ import {
 import type { Context } from 'hono';
 import { schemaEcosystemStarters } from './schema-ecosystem-starters';
 import { SchemaSourceUnavailableError, schemaSourceAdoptionReason } from './schema-studio';
+import { resolveBuiltInYSchema } from './yschema-registry';
 
 export async function ensureBuiltInYSchemaArtifacts(db: AnyDB): Promise<void> {
+  // The legacy default bindings are exact versioned contracts too, not aliases
+  // to the current Core or Starter. Persist their own immutable source releases.
+  for (const canonicalName of ['t3x/prd', 't3x/skill', 't3x/prompt']) {
+    const schema = resolveBuiltInYSchema(canonicalName)!;
+    const version = String(schema.version);
+    const manifest = {
+      apiVersion: 't3x.dev/yschema-blueprint/v1',
+      canonicalName,
+      version,
+      title: schema.name,
+      source: 'official',
+      license: 'Apache-2.0',
+      schema,
+    };
+    await seedOfficialArtifactVersion(db, {
+      artifact_id: artifactId(canonicalName),
+      artifact_version_id: artifactVersionId(canonicalName, version),
+      canonical_name: canonicalName,
+      family: canonicalName.split('/')[1],
+      kind: 'schema',
+      visibility: 'official',
+      version,
+      status: 'active',
+      manifest_json: manifest,
+      artifact_hash: await sha256CompositionValue(manifest),
+      path_count: countNodePaths(schema.nodes),
+      created_by: 't3x:built-in-seed',
+      provides: [],
+      requires: [],
+    });
+  }
   const artifacts: Array<YSchemaCoreArtifact | YSchemaModuleManifest> = [
     ...builtInYSchemaCores,
     ...builtInYSchemaModules,

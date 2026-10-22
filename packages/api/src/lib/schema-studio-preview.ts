@@ -1,4 +1,5 @@
 import {
+  type AssistantSchemaSettingsInput,
   type StudioPreviewInput,
   type StudioSample,
   StudioSampleValueSchema,
@@ -34,6 +35,7 @@ import { workspaceAuthoringState } from './workspace-authoring';
 import { resolveWorkspaceSchemaEditBasis } from './workspace-schema-edit-basis';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
 import { artifactViewToOpenModule } from './yschema-artifact-registry';
+import { resolveBuiltInYSchema } from './yschema-registry';
 export class StudioError extends Error {
   constructor(
     public code: 'NOT_FOUND' | 'INVALID_REQUEST' | 'CONFLICT' | 'FORBIDDEN' | 'REVIEW_REQUIRED',
@@ -150,11 +152,19 @@ export async function compileStudioSelection(
       throw new StudioError('INVALID_REQUEST', 'Unsupported published Schema definition.');
     const schema = normalizeYSchemaObject(view.manifest.schema);
     const schemaHash = await sha256CompositionValue(schema);
-    const registry = view.manifest.registry as Record<string, unknown> | undefined;
+    const registry = (view.manifest.registry ?? {}) as Record<string, unknown>;
+    // Default bindings predate the publication registry. Their entire versioned
+    // contract is built in: verify those exact bytes, never the latest Core.
+    const builtIn = resolveBuiltInYSchema(view.canonicalName, view.version);
+    const exactBuiltIn =
+      !registry.schemaHash &&
+      view.visibility === 'official' &&
+      builtIn &&
+      (await sha256CompositionValue(builtIn)) === schemaHash;
     // Publication assigns release name/version before recording registry.schemaHash.
     // compiledSchemaHash identifies the earlier compiler output (see publish route).
     // resolveStudioSource independently verifies the entire pinned manifest hash.
-    if (registry?.schemaHash !== schemaHash)
+    if (registry.schemaHash !== schemaHash && !exactBuiltIn)
       throw new StudioError(
         'CONFLICT',
         'Published Schema integrity does not match its compiled definition.'
@@ -241,7 +251,8 @@ export async function previewStudio(
   c: Context,
   db: AnyDB,
   projectId: string,
-  input: StudioPreviewInput
+  input: StudioPreviewInput,
+  confirmedChange?: AssistantSchemaSettingsInput
 ) {
   let draft = input.workspaceId ? await findWorkspaceDraft(db, projectId, input.workspaceId) : null;
   let editCandidate: WorkspaceSchemaEditCandidate | null = null;
@@ -489,7 +500,8 @@ export async function previewStudio(
       projectId,
       draft.workspace_state,
       selected.schema,
-      selected.report.valid
+      selected.report.valid,
+      confirmedChange
     );
     if (!selected.adoption.allowed) {
       impact.status = 'blocked';

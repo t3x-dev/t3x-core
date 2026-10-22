@@ -1,4 +1,4 @@
-import type { SchemaEvolutionImpact } from '@t3x-dev/api-client';
+import type { AssistantSchemaSettingsInput, SchemaEvolutionImpact } from '@t3x-dev/api-client';
 import { currentComposition } from '@t3x-dev/application';
 import {
   createRepositorySemanticState,
@@ -15,6 +15,7 @@ import {
   type YSchema,
   type YSchemaRelation,
 } from '@t3x-dev/yschema';
+import { schemaChangeTarget } from './schema-change-contract';
 import { workspaceAuthoringState } from './workspace-authoring';
 import { workspaceProvenance } from './workspace-provenance';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
@@ -169,7 +170,8 @@ export async function assessWorkspaceSchemaImpact(
   projectId: string,
   workspace: Record<string, unknown>,
   target: YSchema,
-  definitionValid = true
+  definitionValid = true,
+  confirmedChange?: AssistantSchemaSettingsInput
 ): Promise<SchemaEvolutionImpact> {
   const items: ImpactItem[] = [];
   let changes: SchemaEvolutionImpact['changes'] = [];
@@ -257,6 +259,39 @@ export async function assessWorkspaceSchemaImpact(
       tree: content.tree as never,
       relations: content.relations,
     });
+    if (current.valid) {
+      for (const item of items) {
+        const owner = item.path.replace(/\.(type|repeated|children)$/, '');
+        const unaffectedDefinition = basePaths.has(owner) && item.affectedPaths.length === 0;
+        if (
+          ['REMOVAL_REQUIRES_MAPPING', 'SHAPE_CHANGE_REQUIRES_MAPPING'].includes(item.code) &&
+          ((paths.length === 0 && content.relations.length === 0) || unaffectedDefinition)
+        ) {
+          item.kind = 'safe_change';
+          item.code = 'NO_CONTENT_TO_MIGRATE';
+          item.message = 'No existing content or relations require migration.';
+        }
+      }
+    }
+    // Only the exact explicit deletion can dismiss the ambiguous rename warning.
+    // Validate all retained content and references first; this never authorizes
+    // unrelated edits, conversion, YAML deletion, or an invalid strict contract.
+    if (
+      current.valid &&
+      confirmedChange?.action.startsWith('remove_') &&
+      (await sha256CompositionValue(
+        normalizeYSchemaObject(schemaChangeTarget(base, confirmedChange).schema)
+      )) === (await sha256CompositionValue(target))
+    ) {
+      for (const item of items) {
+        if (item.code === 'REMOVAL_REQUIRES_MAPPING') {
+          item.kind = 'safe_change';
+          item.code = 'CONFIRMED_DEFINITION_REMOVAL';
+          item.message =
+            'Explicit definition removal; existing YAML content remains valid and is retained.';
+        }
+      }
+    }
     const previousIssues = new Set(
       [...previous.errors, ...previous.gaps].map((issue) => `${issue.code}:${issue.path}`)
     );
