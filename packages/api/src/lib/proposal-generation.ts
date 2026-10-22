@@ -35,6 +35,10 @@ import {
   type InferenceScope,
   type InferenceUsage,
 } from './inference';
+import {
+  generateSchemaTransitionProposal,
+  type SchemaProposalGenerationInput,
+} from './schema-proposal-generation';
 import { type SemanticSchemaLayout, workspaceSemanticSchemaLayout } from './semantic-schema-layout';
 import { inspectTransition, type TransitionControlPlaneView } from './transition-control-plane';
 import {
@@ -662,7 +666,8 @@ async function existingGeneration(input: {
   };
 }
 
-export async function generateTransitionProposal(input: {
+interface ContentProposalGenerationInput {
+  target?: 'content';
   db: AnyDB;
   projectId: string;
   requestId: string;
@@ -675,7 +680,23 @@ export async function generateTransitionProposal(input: {
     scope: InferenceScope;
   };
   now?: () => Date;
-}): Promise<{ view: TransitionControlPlaneView; reused: boolean }> {
+}
+export function generateTransitionProposal(
+  input: SchemaProposalGenerationInput
+): ReturnType<typeof generateSchemaTransitionProposal>;
+export function generateTransitionProposal(
+  input: ContentProposalGenerationInput
+): Promise<{ view: TransitionControlPlaneView; reused: boolean }>;
+export async function generateTransitionProposal(
+  input: SchemaProposalGenerationInput | ContentProposalGenerationInput
+) {
+  if (input.target === 'schema') return generateSchemaTransitionProposal(input);
+  return generateContentTransitionProposal(input);
+}
+
+async function generateContentTransitionProposal(
+  input: ContentProposalGenerationInput
+): Promise<{ view: TransitionControlPlaneView; reused: boolean }> {
   if (input.requestId.trim().length === 0) throw new TypeError('requestId must be non-empty');
   if (input.request.instruction.trim().length === 0) {
     throw new ProposalGenerationContextError('Generation instruction must be non-empty');

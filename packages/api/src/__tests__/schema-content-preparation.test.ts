@@ -3,6 +3,7 @@ import type { ApiKey } from '@t3x-dev/core';
 import {
   type AnyDB,
   createMaterial,
+  findBranchByName,
   findWorkspaceDraft,
   findYSchemaArtifactVersion,
   findYSchemaCompositionSnapshot,
@@ -15,10 +16,13 @@ import {
   transactWorkspaceAuthoring,
   upsertWorkspaceDraft,
   upsertYSchemaArtifactVersion,
+  yschemaCompositionSnapshots,
 } from '@t3x-dev/storage';
 import { normalizeYSchemaObject, sha256CompositionValue } from '@t3x-dev/yschema';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
+import { createBranchWorkspace } from '../lib/branch-workspace';
 import { commitTransition, decideTransition } from '../lib/transition-control-plane/lifecycle';
 import {
   initializeWorkspaceAuthoring,
@@ -108,7 +112,7 @@ const post = (path: string, body: unknown, instance = app) =>
 const studio = (action: string, body: unknown) =>
   post(`/v1/projects/${projectId}/schema-studio/${action}`, body);
 const preparationPath = (workspaceId: string) =>
-  `/v1/projects/${projectId}/schema-studio/preparation/${workspaceId}`;
+  `/v1/projects/${projectId}/schema-studio/preparation/${encodeURIComponent(workspaceId)}`;
 async function addSchema(name: string, schema: ReturnType<typeof normalizeYSchemaObject>) {
   const manifest = {
     apiVersion: 't3x.dev/yschema-blueprint/v1',
@@ -146,10 +150,15 @@ async function addSchema(name: string, schema: ReturnType<typeof normalizeYSchem
   expect(response.status).toBe(200);
   return (await response.json()).data.id as string;
 }
-async function seed(workspaceId: string, semantic = false) {
+async function seed(
+  workspaceId: string,
+  semantic = false,
+  options?: { document: Record<string, unknown>; schema?: typeof baseSchema }
+) {
   await insertBranch(db, { projectId, name: workspaceId });
-  const hash = await sha256CompositionValue(baseSchema);
-  const compositionHash = await sha256CompositionValue({ workspaceId, schema: baseSchema });
+  const definition = options?.schema ?? baseSchema;
+  const hash = await sha256CompositionValue(definition);
+  const compositionHash = await sha256CompositionValue({ workspaceId, schema: definition });
   await saveYSchemaCompositionSnapshot(db, {
     snapshot_id: `base:${workspaceId}`,
     project_id: projectId,
@@ -159,7 +168,7 @@ async function seed(workspaceId: string, semantic = false) {
     compiled_schema_hash: hash,
     compiler_version: 'test',
     manifest_json: {},
-    schema_json: { ...baseSchema },
+    schema_json: { ...definition },
     render_plan_json: [],
     origins_json: {},
   });
@@ -185,22 +194,26 @@ async function seed(workspaceId: string, semantic = false) {
       ],
     },
   });
-  const document = semantic
-    ? {
-        domain: 't3x.dev/semantic-content',
-        version: 1,
-        content: {
-          trees: [
-            {
-              key: 'candidate',
-              slots: {},
-              children: [{ key: 'requirements', slots: { title: 'Edited content' }, children: [] }],
-            },
-          ],
-          relations: [],
-        },
-      }
-    : { candidate: { requirements: { title: 'Original content' } } };
+  const document =
+    options?.document ??
+    (semantic
+      ? {
+          domain: 't3x.dev/semantic-content',
+          version: 1,
+          content: {
+            trees: [
+              {
+                key: 'candidate',
+                slots: {},
+                children: [
+                  { key: 'requirements', slots: { title: 'Edited content' }, children: [] },
+                ],
+              },
+            ],
+            relations: [],
+          },
+        }
+      : { candidate: { requirements: { title: 'Original content' } } });
   const init = await initializeWorkspaceAuthoring(db, {
     projectId,
     workspaceId,
@@ -210,7 +223,7 @@ async function seed(workspaceId: string, semantic = false) {
     actor: { kind: 'human', id: 'human:local-user' },
     legacyDocument: document as never,
   });
-  if (!semantic)
+  if (!semantic && !options)
     await publishWorkspaceAuthoringAction(db, {
       projectId,
       workspaceId,
@@ -446,6 +459,32 @@ async function fullDecision(
     },
   });
 }
+it.each([
+  ['empty', {}],
+  ['missing-required-node', { candidate: {} }],
+  ['wrong-root', { unrelated: { requirements: { title: 'Do not validate this root' } } }],
+])('blocks accepting a bound Schema Review with %s content even on an unprotected branch', async (kind, document) => {
+  const id = `bound-review-${kind}`;
+  const schema = normalizeYSchemaObject({
+    ...baseSchema,
+    nodes: {
+      requirements: {
+        required: true,
+        requiredSlots: ['title'],
+        slots: { title: { type: 'string' } },
+      },
+    },
+  });
+  await seed(id, false, { document, schema });
+  const before = (await findWorkspaceDraft(db, projectId, id))!;
+  const reviewed = await fullReview(id);
+  await expect(fullDecision(id, reviewed)).rejects.toThrow();
+  expect((await getTransitionRefHead(db, { projectId, refName: id })).head).toBeNull();
+  expect(await findWorkspaceDraft(db, projectId, id)).toEqual(before);
+  const rejected = await fullDecision(id, reviewed, 'rejected');
+  expect(rejected.commit).toBeUndefined();
+  expect((await getTransitionRefHead(db, { projectId, refName: id })).head).toBeNull();
+});
 async function editReviewedDraft(workspaceId: string) {
   const draft = (await findWorkspaceDraft(db, projectId, workspaceId))!;
   const { ledger, basis } = workspaceAuthoringState(draft.workspace_state);
@@ -468,6 +507,146 @@ async function editReviewedDraft(workspaceId: string) {
     ],
   });
 }
+it('forks one exact committed Schema/content pair without importing the source Draft or sharing its edits', async () => {
+  const source = 'fork-schema-source';
+  await seed(source);
+  const initialReview = await fullReview(source);
+  await fullDecision(source, initialReview);
+  const committedSource = (await findWorkspaceDraft(db, projectId, source))!;
+  const committedHead = committedSource.parent_commit_hash;
+  // The parent now has uncommitted Schema and content changes. A fork must ignore both.
+  expect((await post(preparationPath(source), await mapping(source))).status).toBe(200);
+  const parentPending = (await findWorkspaceDraft(db, projectId, source))!;
+  expect(
+    (await resolveWorkspaceYSchema(parentPending.workspace_state, db, projectId)).schema
+  ).toEqual(migratedSchema);
+  const branch = await createBranchWorkspace(db, {
+    projectId,
+    name: 'fork/child',
+    parentBranch: source,
+  });
+  expect(branch.headCommitHash).toBe(committedHead);
+  const childId = 'workspace_branch:fork%2Fchild';
+  const child = (await findWorkspaceDraft(db, projectId, childId))!;
+  expect(currentComposition(workspaceAuthoringState(child.workspace_state).ledger)).toEqual(
+    initialReview.schemaReview.draftContent
+  );
+  expect(child.workspace_state.schemaBindings).toEqual(initialReview.schemaReview.draft.bindings);
+  expect((await resolveWorkspaceYSchema(child.workspace_state, db, projectId)).schema).toEqual(
+    baseSchema
+  );
+  expect(child.workspace_state.workspaceSchemaBase).toEqual({
+    refHead: committedHead,
+    snapshot: initialReview.schemaReview.draft,
+  });
+  expect(workspaceAuthoringState(child.workspace_state).ledger.actions).toHaveLength(0);
+  expect(child.workspace_state).not.toHaveProperty('schemaEditCandidate');
+  expect(child.workspace_state).not.toHaveProperty('assistantSchemaSettings');
+  const cleanReview = await fullReview(childId);
+  expect(cleanReview.schemaReview.base.schemaHash).toBe(
+    initialReview.schemaReview.draft.schemaHash
+  );
+  expect(cleanReview.schemaReview.changes).toEqual([]);
+  // A child of an unmodified fork still resolves the original Commit's authority and Schema.
+  await createBranchWorkspace(db, {
+    projectId,
+    name: 'fork-grandchild',
+    parentBranch: branch.name,
+  });
+  const grandchildId = 'workspace_branch:fork-grandchild';
+  const grandchild = (await findWorkspaceDraft(db, projectId, grandchildId))!;
+  expect(grandchild.workspace_state.schemaBindings).toEqual(child.workspace_state.schemaBindings);
+  // Applying and committing Schema/content on the child never advances its parent or sibling.
+  const childSchema = normalizeYSchemaObject({
+    ...baseSchema,
+    nodes: { ...baseSchema.nodes, child_only: { slots: { note: { type: 'string' } } } },
+  });
+  const childSource = await addSchema('fork-child-only', childSchema);
+  const childPlan = await input(childId, childSource);
+  const childPreviewResponse = await post(`${preparationPath(childId)}/preview`, childPlan);
+  expect(childPreviewResponse.status).toBe(200);
+  const childPreview = (await childPreviewResponse.json()).data;
+  expect(childPreview.canPrepare).toBe(true);
+  expect(
+    (
+      await post(preparationPath(childId), {
+        ...childPlan,
+        previewHash: childPreview.previewHash,
+        requestId: 'fork-child-only-schema',
+      })
+    ).status
+  ).toBe(200);
+  const childEdited = (await findWorkspaceDraft(db, projectId, childId))!;
+  const childAuthoring = workspaceAuthoringState(childEdited.workspace_state);
+  await publishWorkspaceAuthoringAction(db, {
+    projectId,
+    workspaceId: childId,
+    actor: reviewer,
+    actionId: 'fork-child-content',
+    channel: 'manual',
+    expectedWorkspaceRevision: childEdited.revision,
+    expectedRevision: childAuthoring.ledger.compositionRevision,
+    expectedRefHead: childAuthoring.basis.refHead,
+    operations: [
+      { set: { path: 'candidate/requirements/title', value: 'Only on the child branch' } },
+    ],
+  });
+  const childReview = await fullReview(childId, 'fork-child-review');
+  await fullDecision(childId, childReview);
+  expect((await findBranchByName(db, projectId, source))!.headCommitHash).toBe(committedHead);
+  expect(await findWorkspaceDraft(db, projectId, source)).toEqual(parentPending);
+  expect(await findWorkspaceDraft(db, projectId, grandchildId)).toEqual(grandchild);
+  expect((await findBranchByName(db, projectId, branch.name))!.headCommitHash).not.toBe(
+    committedHead
+  );
+  const advanced = await createBranchWorkspace(db, {
+    projectId,
+    name: 'fork-after-child-change',
+    parentBranch: branch.name,
+  });
+  const next = (await findWorkspaceDraft(
+    db,
+    projectId,
+    'workspace_branch:fork-after-child-change'
+  ))!;
+  expect(next.parent_commit_hash).toBe(advanced.headCommitHash);
+  expect((await resolveWorkspaceYSchema(next.workspace_state, db, projectId)).schema).toEqual(
+    childSchema
+  );
+  expect(currentComposition(workspaceAuthoringState(next.workspace_state).ledger)).toEqual(
+    childReview.schemaReview.draftContent
+  );
+});
+
+it('does not leave a partial branch if its inherited Schema cannot be resolved', async () => {
+  const source = 'fork-schema-unavailable';
+  await seed(source);
+  await fullDecision(source, await fullReview(source));
+  const before = (await findWorkspaceDraft(db, projectId, source))!;
+  await db
+    .delete(yschemaCompositionSnapshots)
+    .where(
+      and(
+        eq(yschemaCompositionSnapshots.projectId, projectId),
+        eq(yschemaCompositionSnapshots.compositionId, `base:${source}`)
+      )
+    );
+  await expect(
+    createBranchWorkspace(db, { projectId, name: 'missing-schema-fork', parentBranch: source })
+  ).rejects.toThrow(/Schema failed verification/);
+  expect(await findBranchByName(db, projectId, 'missing-schema-fork')).toBeNull();
+  expect(
+    await findWorkspaceDraft(db, projectId, 'workspace_branch:missing-schema-fork')
+  ).toBeNull();
+  // A project-scoped source cannot be inherited through another project either.
+  await expect(
+    createBranchWorkspace(db, { projectId: sourceId, name: 'invalid-fork', parentBranch: source })
+  ).rejects.toThrow();
+  expect(await findBranchByName(db, sourceId, 'invalid-fork')).toBeNull();
+  expect(await findWorkspaceDraft(db, sourceId, 'workspace_branch:invalid-fork')).toBeNull();
+  expect(await findWorkspaceDraft(db, projectId, source)).toEqual(before);
+});
+
 it('SE-011 freezes complete schema/content, commits exact Schema Hash, and uses that Base next round', async () => {
   const id = 'full-review-two-rounds';
   await seed(id);
@@ -645,6 +824,51 @@ it('edits an existing strict Schema through guarded YOps, adopts, prepares evide
   expect(reviewed.schemaReview.draft.schemaHash).toBe(saved.authoringDraft.resultSchemaHash);
   const committed = await fullDecision(id, reviewed);
   expect(committed.commit).toBeDefined();
+  const originalAfterCommit = (await findWorkspaceDraft(db, projectId, id))!;
+  await createBranchWorkspace(db, { projectId, name: 'studio-exact-fork', parentBranch: id });
+  const forkId = 'workspace_branch:studio-exact-fork';
+  const forkPreviewInput = { workspaceId: forkId, candidateIds: [candidateId] };
+  const forkPreview = (await (await studio('preview', forkPreviewInput)).json()).data;
+  expect(forkPreview.schema).toEqual(definition);
+  expect(forkPreview.workspace.boundSchema).toEqual(definition);
+  const forkDefinition = normalizeYSchemaObject({
+    ...definition,
+    nodes: { ...definition.nodes, child_only: { slots: {} } },
+  });
+  const forkSaveResponse = await app.request(
+    `/v1/projects/${projectId}/schema-studio/edit-candidates/${encodeURIComponent(forkId)}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...forkPreviewInput,
+        ifRevision: 0,
+        retryKey: 'fork-edit-base',
+        intent: 'Add child-only Node without losing inherited local changes',
+        origin: 'studio',
+        localContribution: {},
+        schemaDefinition: forkDefinition,
+        baseSchemaHash: forkPreview.schemaHash,
+      }),
+    }
+  );
+  expect(forkSaveResponse.status).toBe(200);
+  const forkCandidate = (await forkSaveResponse.json()).data.candidate;
+  expect(forkCandidate.authoringDraft.base.kind).toBe('composition');
+  expect(forkCandidate.baseDefinition).toEqual(definition);
+  const forkEdited = (
+    await (
+      await studio('preview', {
+        ...forkPreviewInput,
+        schemaEditCandidate: {
+          candidateId: forkCandidate.candidateId,
+          revision: forkCandidate.revision,
+        },
+      })
+    ).json()
+  ).data;
+  expect(forkEdited.schema).toEqual(forkDefinition);
+  expect(await findWorkspaceDraft(db, projectId, id)).toEqual(originalAfterCommit);
   preview = (await (await studio('preview', previewInput)).json()).data;
   const publishInput = {
     visibility: 'community',

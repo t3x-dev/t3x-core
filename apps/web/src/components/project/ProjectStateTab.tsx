@@ -65,7 +65,6 @@ import {
 } from '@/domain/project/stateViewModel';
 import type { YSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 import { repositoryConversationSourceHref } from '@/domain/sourceEvidenceNavigation';
-import { selectWorkspaceForBranch } from '@/domain/workspaces/navigation';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitOperations } from '@/hooks/commits/useCommitOperations';
@@ -77,7 +76,6 @@ import { useBranches } from '@/hooks/shared/useBranches';
 import { useStateViewPreference } from '@/hooks/shared/useStateViewPreference';
 import { useCommitTransitionView } from '@/hooks/workspaces/useCommitTransitionView';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
-import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { ApiCommit } from '@/types/api';
 import type { WorkspaceCandidate } from '@/types/workspaces';
@@ -187,7 +185,6 @@ export function ProjectStateTab({
     refresh,
   } = useBranches(projectId, true);
   const projectWorkspaces = useProjectWorkspaces(projectId, true);
-  const { saveDraft } = useWorkspaceFlow();
   const { loadCommit } = useCommitByHash();
   const { loadCommits } = useCommitsList();
   const { loadOperations } = useCommitOperations();
@@ -278,11 +275,19 @@ export function ProjectStateTab({
         if (commits.some((commit) => commit.project_id !== projectId)) {
           throw new Error('Commit response does not match the selected project.');
         }
-        if (
-          commits.some(
-            (commit) => commit.hash !== branchHeadHash && commit.branch !== requestedBranch
-          )
-        ) {
+        // Origin branch is not reachability: merged ancestors retain their own branch.
+        const byHash = new Map(commits.map((commit) => [commit.hash, commit]));
+        const reachable = new Set<string>();
+        const pending = commits
+          .filter((commit) => commit.branch === requestedBranch || commit.hash === branchHeadHash)
+          .map((commit) => commit.hash);
+        while (pending.length) {
+          const hash = pending.pop()!;
+          if (reachable.has(hash)) continue;
+          reachable.add(hash);
+          pending.push(...(byHash.get(hash)?.parents ?? []));
+        }
+        if (commits.some((commit) => !reachable.has(commit.hash))) {
           throw new Error('Commit response does not match the selected project and branch.');
         }
         let operations: StateOperationEntry[] = [];
@@ -491,40 +496,12 @@ export function ProjectStateTab({
     latestBranchHeadHash !== dismissedHeadHash
       ? latestBranchHeadHash
       : null;
-  const mainSchemaBindings = resolveMainSchemaBindings(
-    projectWorkspaces.workspaces,
-    mainHeadCommitHash
-  );
   const handleCreateBranch = useCallback(
     async (name: string, fromBranch = branchFocus) => {
-      const createdBranch = await createBranch(name, fromBranch);
-      const workspaceId = `workspace_branch:${encodeURIComponent(name)}`;
-      await saveDraft({
-        id: workspaceId,
-        projectId,
-        title: `Branch workspace: ${name}`,
-        summary: `Workspace for collecting source evidence on ${name}.`,
-        status: 'draft',
-        updatedAt: new Date().toISOString(),
-        baseCommitHash: createdBranch.head_commit_hash ?? null,
-        targetBranch: name,
-        sourceBundle: [],
-        schemaBindings: mainSchemaBindings,
-        schemaCandidate: {
-          summary: 'Collect source evidence, then generate a candidate proposal.',
-          fields: [],
-        },
-        schemaReview: {
-          verdict: 'needs_review',
-          summary: 'This workspace needs source evidence.',
-          gaps: ['Add source evidence for this branch.'],
-        },
-        yopsDraft: { id: `draft:${workspaceId}`, operations: [] },
-        outputTargets: [],
-      });
+      await createBranch(name, fromBranch);
       pushRoute(getProjectIdWorkspacePath(projectId, { branch: name }));
     },
-    [branchFocus, createBranch, mainSchemaBindings, projectId, pushRoute, saveDraft]
+    [branchFocus, createBranch, projectId, pushRoute]
   );
   const checkCurrentBranchForUpdates = useCallback(async () => {
     setFreshnessChecking(true);
@@ -3241,8 +3218,8 @@ function StateEmpty({
 
 function selectVisibleBranchHead(commits: ApiCommit[]): ApiCommit | null {
   if (commits.length === 0) return null;
-  const firstParentHashes = new Set(commits.map((commit) => commit.parents[0]).filter(Boolean));
-  const tips = commits.filter((commit) => !firstParentHashes.has(commit.hash));
+  const parentHashes = new Set(commits.flatMap((commit) => commit.parents));
+  const tips = commits.filter((commit) => !parentHashes.has(commit.hash));
   return [...(tips.length > 0 ? tips : commits)].sort(
     (a, b) =>
       Date.parse(b.committed_at) - Date.parse(a.committed_at) || b.hash.localeCompare(a.hash)
@@ -3730,14 +3707,6 @@ export function inferSchemaName(commit: ApiCommit | null): string {
     return 't3x/skill';
   }
   return rootKeys.has('prd') ? 't3x/prd' : 't3x/state';
-}
-
-function resolveMainSchemaBindings(
-  workspaces: WorkspaceCandidate[],
-  mainHeadCommitHash: string | null
-) {
-  const mainWorkspace = selectWorkspaceForBranch(workspaces, 'main', mainHeadCommitHash);
-  return mainWorkspace?.schemaBindings.map((binding) => ({ ...binding })) ?? [];
 }
 
 function formatRelativeTime(value: string | undefined): string {

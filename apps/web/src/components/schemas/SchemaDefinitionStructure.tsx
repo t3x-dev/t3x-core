@@ -187,13 +187,15 @@ export function SchemaDefinitionStructure({
 }
 
 /** Same property controls and input validation in Studio and the Assistant confirmation card. */
-export function SchemaAdditionSettingsEditor({
+export function SchemaChangeSettingsEditor({
   value,
+  referenceRelations = {},
   onChange,
   onValidationChange,
   onCancel,
 }: {
   value: import('@t3x-dev/api-client').AssistantSchemaSettingsInput;
+  referenceRelations?: Definition;
   onChange: (value: import('@t3x-dev/api-client').AssistantSchemaSettingsInput) => void;
   onValidationChange: (error?: string) => void;
   onCancel: () => void;
@@ -208,27 +210,79 @@ export function SchemaAdditionSettingsEditor({
     onValidationChange(Object.values(errors)[0]);
   }, [errors, onValidationChange]);
   const path = [value.nodePath, value.name].filter(Boolean).join('/');
+  const changeDefinition = (name: string, definition: Definition) => {
+    const removed = [
+      ...new Set([
+        ...(value.unsetAttributes ?? []),
+        ...Object.keys(value.definition).filter((key) => !Object.hasOwn(definition, key)),
+      ]),
+    ].filter((key) => !Object.hasOwn(definition, key));
+    onChange({
+      ...value,
+      name: value.action.startsWith('add_') ? name : value.name,
+      definition,
+      ...(value.action.endsWith('_node') ? { required: undefined } : {}),
+      ...(removed.length ? { unsetAttributes: removed } : { unsetAttributes: undefined }),
+    });
+  };
+  if (value.action.endsWith('_relation') || value.action.endsWith('_rule')) {
+    const relation = value.action.endsWith('_relation');
+    return (
+      <reportErrorContext.Provider value={reportError}>
+        {relation ? (
+          <Fields
+            context={`relation ${value.name}`}
+            value={value.definition}
+            fields={[
+              { key: 'from' },
+              { key: 'to' },
+              ...descriptions,
+              { key: 'acyclic', kind: 'boolean' },
+            ]}
+            onChange={(definition) => changeDefinition(value.name, definition)}
+          />
+        ) : (
+          <RuleEditor
+            rule={{ ...value.definition, id: value.name }}
+            rules={[{ id: value.name }]}
+            lockName
+            relations={referenceRelations}
+            onChange={(definition) =>
+              changeDefinition(value.name, { ...definition, id: value.name })
+            }
+            onRemove={onCancel}
+          />
+        )}
+      </reportErrorContext.Provider>
+    );
+  }
   return (
     <reportErrorContext.Provider value={reportError}>
-      {value.action === 'add_slot' ? (
+      {value.action.endsWith('_slot') ? (
         <SlotEditor
           name={value.name}
           path={path}
           slot={value.definition}
           names={[value.name]}
-          required={value.required}
+          required={value.required ?? false}
+          lockName={!value.action.startsWith('add_')}
           initiallyExpanded
           onRequired={(required) => onChange({ ...value, required })}
-          onChange={(name, definition) => onChange({ ...value, name, definition })}
+          onChange={changeDefinition}
           onRemove={onCancel}
         />
       ) : (
         <NodeEditor
           name={value.name}
+          attributesOnly={value.action === 'add_node'}
           path={path}
-          node={value.definition}
+          node={{
+            ...value.definition,
+            ...(value.required !== undefined ? { required: value.required } : {}),
+          }}
+          lockName={!value.action.startsWith('add_')}
           names={[value.name]}
-          onChange={(name, definition) => onChange({ ...value, name, definition })}
+          onChange={changeDefinition}
           onRemove={onCancel}
         />
       )}
@@ -338,6 +392,8 @@ function NodeEditor({
   path,
   node,
   names,
+  lockName = false,
+  attributesOnly = false,
   onChange,
   onRemove,
 }: {
@@ -345,6 +401,8 @@ function NodeEditor({
   path: string;
   node: Definition;
   names: string[];
+  lockName?: boolean;
+  attributesOnly?: boolean;
   onChange: (name: string, node: Definition) => void;
   onRemove: () => void;
 }) {
@@ -378,6 +436,7 @@ function NodeEditor({
         />
         <NameField
           label={`Node name ${path}`}
+          readOnly={lockName}
           name={name}
           names={names}
           onChange={(next) => onChange(next, node)}
@@ -409,47 +468,51 @@ function NodeEditor({
             fields={[...descriptions, contentKind]}
             onChange={(next) => onChange(name, next)}
           />
-          <label className="block space-y-1 text-xs">
-            Children mode
-            <select
-              aria-label={`Children mode ${path}`}
-              className={inputClass}
-              value={node.children === 'any' ? 'any' : node.children !== undefined ? 'defined' : ''}
-              onChange={(event) =>
-                onChange(
-                  name,
-                  withField(
-                    node,
-                    'children',
-                    event.target.value === 'any'
-                      ? 'any'
-                      : event.target.value === 'defined'
-                        ? {}
-                        : undefined
+          <fieldset hidden={attributesOnly} disabled={attributesOnly} className="space-y-3">
+            <label className="block space-y-1 text-xs">
+              Children mode
+              <select
+                aria-label={`Children mode ${path}`}
+                className={inputClass}
+                value={
+                  node.children === 'any' ? 'any' : node.children !== undefined ? 'defined' : ''
+                }
+                onChange={(event) =>
+                  onChange(
+                    name,
+                    withField(
+                      node,
+                      'children',
+                      event.target.value === 'any'
+                        ? 'any'
+                        : event.target.value === 'defined'
+                          ? {}
+                          : undefined
+                    )
                   )
-                )
-              }
-            >
-              <option value="">Not specified</option>
-              <option value="defined">Defined child nodes</option>
-              <option value="any">Any children</option>
-            </select>
-          </label>
-          <p className="text-[11px] text-[var(--text-tertiary)]">
-            Changing children mode replaces its current definition. A repeated node cannot also
-            define children.
-          </p>
-          {node.children !== undefined && node.children !== 'any' ? (
-            <div className="border-l border-[var(--stroke-divider)] pl-3">
-              <NodesEditor
-                nodes={record(node.children)}
-                path={path}
-                onChange={(children) => onChange(name, { ...node, children })}
-              />
-            </div>
-          ) : null}
+                }
+              >
+                <option value="">Not specified</option>
+                <option value="defined">Defined child nodes</option>
+                <option value="any">Any children</option>
+              </select>
+            </label>
+            <p className="text-[11px] text-[var(--text-tertiary)]">
+              Changing children mode replaces its current definition. A repeated node cannot also
+              define children.
+            </p>
+            {node.children !== undefined && node.children !== 'any' ? (
+              <div className="border-l border-[var(--stroke-divider)] pl-3">
+                <NodesEditor
+                  nodes={record(node.children)}
+                  path={path}
+                  onChange={(children) => onChange(name, { ...node, children })}
+                />
+              </div>
+            ) : null}
+          </fieldset>
         </details>
-        <div className="space-y-2">
+        <div className="space-y-2" hidden={attributesOnly}>
           {Object.entries(slots).map(([slotName, value]) => (
             <SlotEditor
               key={slotName}
@@ -502,6 +565,7 @@ function SlotEditor({
   onChange,
   onRemove,
   initiallyExpanded = false,
+  lockName = false,
 }: {
   name: string;
   path: string;
@@ -512,6 +576,7 @@ function SlotEditor({
   onChange: (name: string, slot: Definition) => void;
   onRemove: () => void;
   initiallyExpanded?: boolean;
+  lockName?: boolean;
 }) {
   const [expanded, setExpanded] = useState(initiallyExpanded);
   const settingsId = useId();
@@ -529,6 +594,7 @@ function SlotEditor({
         />
         <NameField
           label={`Slot name ${name}`}
+          readOnly={lockName}
           name={name}
           names={names}
           onChange={(next) => onChange(next, slot)}
@@ -600,12 +666,14 @@ function RuleEditor({
   rule,
   rules,
   relations,
+  lockName = false,
   onChange,
   onRemove,
 }: {
   rule: Definition;
   rules: Definition[];
   relations: Definition;
+  lockName?: boolean;
   onChange: (rule: Definition) => void;
   onRemove: () => void;
 }) {
@@ -615,6 +683,7 @@ function RuleEditor({
       <div className="flex items-start gap-2">
         <NameField
           label={`Rule id ${id}`}
+          readOnly={lockName}
           name={id}
           names={rules.filter((item) => item !== rule).map((item) => String(item.id))}
           keyPattern={false}
@@ -839,12 +908,14 @@ function NameField({
   name,
   names,
   keyPattern = true,
+  readOnly = false,
   onChange,
 }: {
   label: string;
   name: string;
   names: string[];
   keyPattern?: boolean;
+  readOnly?: boolean;
   onChange: (name: string) => void;
 }) {
   const id = useId();
@@ -867,6 +938,7 @@ function NameField({
     <div className="min-w-0 flex-1">
       <Input
         aria-label={label}
+        disabled={readOnly}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? `${id}-error` : undefined}
         className="font-mono text-xs"

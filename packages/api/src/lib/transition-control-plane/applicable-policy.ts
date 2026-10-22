@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { WorkspaceFullSchemaReviewSchema } from '@t3x-dev/api-client';
 import {
   type AcceptancePolicy,
   createAcceptancePolicyResource,
@@ -262,7 +263,7 @@ export class GenerationHumanDecisionRequiredError extends Error {
 export interface ApplicableTransitionPolicy {
   policy: AcceptancePolicy;
   resource: ResourceDescriptor;
-  mode: 'ref_policy' | 'generation_overlay';
+  mode: 'ref_policy' | 'generation_overlay' | 'workspace_schema_overlay';
   refPolicyResource: ResourceDescriptor;
 }
 
@@ -352,17 +353,48 @@ export function resolveApplicableTransitionPolicy(input: {
   preparationFacts: ProtocolValue | null;
 }): ApplicableTransitionPolicy {
   const preparation = generationPreparation(input);
+  const facts = input.preparationFacts;
+  const workspaceSchemaReview =
+    input.requestKind === 'structured_yops' &&
+    preparationSchema(facts) === 't3x.application/workspace-authoring-preparation/v1' &&
+    facts !== null &&
+    typeof facts === 'object' &&
+    !Array.isArray(facts) &&
+    facts.schemaReview !== undefined
+      ? WorkspaceFullSchemaReviewSchema.parse(facts.schemaReview)
+      : null;
+  // A bound Workspace contract is load-bearing even on an unprotected ref.
+  // Provider failure is absence of evidence, never a passing Schema check.
+  // Keep every branch authorization, issuer/profile constraint and runner rule.
+  const ref = input.refPolicyBinding;
+  const effective =
+    workspaceSchemaReview?.draft.status === 'bound'
+      ? createAcceptancePolicyResource({
+          uri: `t3x://policies/workspace-schema-overlay/v1/${ref.resource.digest.slice('sha256:'.length)}`,
+          policy: {
+            ...structuredClone(ref.policy),
+            checks: {
+              ...structuredClone(ref.policy.checks),
+              validation: {
+                ...structuredClone(ref.policy.checks.validation),
+                requirement: 'required',
+              },
+            },
+            override: { ...structuredClone(ref.policy.override), allowMissingValidation: false },
+          },
+        })
+      : ref;
   if (preparation === null) {
     return {
-      mode: 'ref_policy',
-      policy: input.refPolicyBinding.policy,
-      resource: input.refPolicyBinding.resource,
-      refPolicyResource: input.refPolicyBinding.resource,
+      mode: effective === ref ? 'ref_policy' : 'workspace_schema_overlay',
+      policy: effective.policy,
+      resource: effective.resource,
+      refPolicyResource: ref.resource,
     };
   }
   const bound = createAcceptancePolicyResource({
-    policy: generationOverlayPolicy(input.refPolicyBinding.policy),
-    uri: `t3x://policies/proposal-generation-overlay/v1/${input.refPolicyBinding.resource.digest.slice(
+    policy: generationOverlayPolicy(effective.policy),
+    uri: `t3x://policies/proposal-generation-overlay/v1/${effective.resource.digest.slice(
       'sha256:'.length
     )}/${preparation.profile.id}`,
   });

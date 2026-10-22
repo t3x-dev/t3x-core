@@ -105,7 +105,15 @@ function CurrentFieldValue({ name, value }: { name: string; value: unknown }) {
   );
 }
 
-function CurrentDraftValue({ value, unknown }: { value: unknown; unknown: boolean }) {
+export function ComposeDetailValue({
+  value,
+  unknown,
+  label = 'Current Draft value',
+}: {
+  value: unknown;
+  unknown: boolean;
+  label?: string;
+}) {
   const [raw, setRaw] = useState(false);
   const type = unknown ? 'unknown' : valueType(value);
   const structured = !unknown && isPlainRecord(value);
@@ -113,7 +121,7 @@ function CurrentDraftValue({ value, unknown }: { value: unknown; unknown: boolea
   return (
     <>
       <div className={styles.currentLabel}>
-        <span>Current Draft value</span>
+        <span>{label}</span>
         <span className={styles.currentMeta}>
           {fields ? (
             <button
@@ -129,7 +137,7 @@ function CurrentDraftValue({ value, unknown }: { value: unknown; unknown: boolea
         </span>
       </div>
       {fields && !raw ? (
-        <section className={styles.currentFields} aria-label="Current Draft value" data-type={type}>
+        <section className={styles.currentFields} aria-label={label} data-type={type}>
           {fields.entries.length ? (
             <dl>
               {fields.entries.map(([name, item]) => (
@@ -163,7 +171,7 @@ function CurrentDraftValue({ value, unknown }: { value: unknown; unknown: boolea
           <ExpandableText
             text={unknown ? 'Unavailable' : valueLabel(value, Boolean(fields))}
             expandedText={unknown ? 'Unavailable' : valueLabel(value, true)}
-            label="Current Draft value"
+            label={label}
           />
         </div>
       )}
@@ -279,7 +287,7 @@ function ValueDelta({
   );
 }
 
-function ObjectDelta({
+export function ComposeObjectDelta({
   before,
   after,
   beforePath,
@@ -290,7 +298,28 @@ function ObjectDelta({
   beforePath?: string;
   afterPath?: string;
 }) {
-  const fields = composeObjectFieldChanges(before, after);
+  const fields =
+    isComposeObject(before) || isComposeObject(after)
+      ? composeObjectFieldChanges(before, after)
+      : [
+          ...new Set([
+            ...Object.keys(isPlainRecord(before) ? before : {}),
+            ...Object.keys(isPlainRecord(after) ? after : {}),
+          ]),
+        ]
+          .filter(
+            (key) =>
+              !composeValuesEqual(
+                isPlainRecord(before) ? before[key] : undefined,
+                isPlainRecord(after) ? after[key] : undefined
+              )
+          )
+          .map((key) => ({
+            scope: 'structure',
+            key,
+            before: isPlainRecord(before) ? (before[key] as TransitionProtocolValue) : undefined,
+            after: isPlainRecord(after) ? (after[key] as TransitionProtocolValue) : undefined,
+          }));
   if (beforePath && afterPath && beforePath !== afterPath)
     fields.push({ scope: 'structure', key: 'path', before: beforePath, after: afterPath });
   return (
@@ -733,7 +762,7 @@ export function ComposeNodeHistoryPanel({
           </button>
         </div>
         {copyNotice ? <output className={styles.helper}>{copyNotice}</output> : null}
-        <CurrentDraftValue key={path} value={node.current} unknown={node.state === 'unknown'} />
+        <ComposeDetailValue key={path} value={node.current} unknown={node.state === 'unknown'} />
         <div className={styles.selectedDelta}>
           <span>
             {isStaged
@@ -748,7 +777,7 @@ export function ComposeNodeHistoryPanel({
           {matchesBase ? (
             <span>Matches Base · no change</span>
           ) : isComposeObject(comparison.before) || isComposeObject(comparison.after) ? (
-            <ObjectDelta
+            <ComposeObjectDelta
               key={`${path}:${selection.meta.actionId ?? 'draft'}`}
               before={comparison.before}
               after={comparison.after}

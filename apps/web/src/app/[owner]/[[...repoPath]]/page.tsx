@@ -19,18 +19,20 @@ import { useRepositoryAddress } from '@/hooks/projects/useRepositoryAddress';
 
 function OwnerRepoProjectPageContent() {
   const params = useParams<{ owner: string; repoPath?: string[] }>();
+  const pathname = usePathname();
   const owner = params.owner;
   const segments = params.repoPath ?? [];
   const name = segments[0] ?? '';
-  const suffix =
-    segments.length > 1 ? `/${segments.slice(1).map(encodeURIComponent).join('/')}` : '';
+  // Preserve the URL's encoded suffix verbatim. Catch-all params can already
+  // contain escapes; encoding them again causes a replace loop (%3A -> %253A).
+  // Repeated decoding would also corrupt IDs containing literal escapes.
+  const suffix = segments.length > 1 ? `/${pathname.split('/').slice(3).join('/')}` : '';
   const directory = !name;
   const creating = name.toLowerCase() === 'new' && segments.length === 1;
   const organizationSettings =
     owner.toLowerCase() === 't3x-dev' && name.toLowerCase() === 'settings' && segments.length === 1;
   const special = directory || creating || organizationSettings;
   const router = useRouter();
-  const pathname = usePathname();
   const query = useSearchParams().toString();
   const { current, retry } = useRepositoryAddress(owner, name, !special);
   const address = current?.address;

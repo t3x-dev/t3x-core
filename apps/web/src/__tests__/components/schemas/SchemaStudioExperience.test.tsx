@@ -489,6 +489,58 @@ it('selects the only draft workspace once instead of duplicating Main workspace'
   expect(select).toHaveTextContent('Main workspace');
 });
 
+it('starts a new branch editor from its inherited bound definition, not the original source schema', async () => {
+  mocks.query = 'candidate=provider&workspace=workspace_branch%3Afeature';
+  mocks.workspaces = [
+    {
+      id: 'workspace_branch:feature',
+      revision: 2,
+      status: 'draft',
+      targetBranch: 'feature',
+      title: 'Feature workspace',
+    },
+  ];
+  const inherited = {
+    yschema: '0.1',
+    name: 'inherited',
+    strict: true,
+    nodes: {
+      product: {
+        slots: { owner: { type: 'string' }, existing_local: { type: 'string', maxWords: 40 } },
+      },
+    },
+  };
+  mocks.data = {
+    ...(mocks.data as object),
+    schemaHash: 'inherited-hash',
+    workspace: { id: 'workspace_branch:feature', revision: 2, changes: [], boundSchema: inherited },
+  };
+  render(<SchemaStudioExperience projectId="p" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Edit definition' }));
+  expect(screen.getByLabelText('Slot type existing_local')).toHaveValue('string');
+  fireEvent.change(screen.getByLabelText('Slot type owner'), { target: { value: 'number' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save candidate' }));
+  await waitFor(() =>
+    expect(mocks.saveSchemaEdit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 'workspace_branch:feature',
+        baseSchemaHash: 'inherited-hash',
+        schemaDefinition: {
+          ...inherited,
+          nodes: {
+            product: {
+              slots: {
+                owner: { type: 'number' },
+                existing_local: { type: 'string', maxWords: 40 },
+              },
+            },
+          },
+        },
+      })
+    )
+  );
+});
+
 it('edits existing fields against a frozen Base and retains unsaved input while preview is revalidating', async () => {
   mocks.workspaces = [
     {

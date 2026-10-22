@@ -62,9 +62,11 @@ export function ComposeAuthoringAssistant({
   proposalBlockedHint,
   contextLabel,
   onSchemaCandidateChange,
+  beforeComposer,
 }: {
   projectId: string;
   onSchemaCandidateChange?: (conversationId?: string) => void;
+  beforeComposer?: ReactNode;
   conversationId?: string;
   context: WorkspaceAssistantContext;
   onCreateConversation: () => Promise<string>;
@@ -371,6 +373,7 @@ export function ComposeAuthoringAssistant({
           onRetry={model.refresh}
         />
       ) : null}
+      {beforeComposer}
       <fieldset className={styles.discussionComposer} aria-label="Message composer">
         {contextLabel ? (
           <div className={styles.chatContext}>

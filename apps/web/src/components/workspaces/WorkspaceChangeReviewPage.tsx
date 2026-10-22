@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { workspaceSchemaCommitBlocker } from '@/domain/workspaces/changeDecision';
 import { fieldChangeCount, fieldChangeGroups } from '@/domain/workspaces/changeFields';
 import { useReviewedFieldChanges } from '@/hooks/workspaces/useReviewedFieldChanges';
 import { useWorkspaceReviewSnapshot } from '@/hooks/workspaces/useWorkspaceReviewSnapshot';
@@ -139,11 +140,7 @@ export function WorkspaceChangeReviewPage({
                 onOverrideReasonChange={setOverrideReason}
                 overrideReason={overrideReason}
                 view={view}
-                commitBlocker={
-                  state.data?.schema_review?.base.status === 'unknown'
-                    ? 'Recover the exact Base Schema before accepting or committing.'
-                    : undefined
-                }
+                commitBlocker={workspaceSchemaCommitBlocker(state.data?.schema_review, view)}
               />
             </div>
             <div className="min-w-0 lg:col-start-1">

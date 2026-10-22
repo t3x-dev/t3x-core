@@ -15,6 +15,7 @@ import {
   decodeRepositorySemanticState,
   describeCommitV2,
   describeTransitionObject,
+  executeMerge,
   flattenTrees,
   type MergeDecision,
   type MergeResult,
@@ -38,6 +39,15 @@ import {
   type VerifiedTransitionCommitGraph,
 } from '@t3x-dev/storage';
 import type { CanonicalTimestamp, EvidenceRef } from '@t3x-dev/transition';
+import {
+  advanceMergedSchemaWorkspace,
+  MERGE_SCHEMA_ACTOR,
+  persistRepositoryMergedSchema,
+  prepareRepositorySchemaMerge,
+  type RepositoryMergedSchema,
+  RepositorySchemaMergeError,
+  validateRepositoryMergedSchema,
+} from './repository-schema-merge';
 import {
   commitPreparedRepositoryTransition,
   TransitionDecisionDeniedError,
@@ -305,6 +315,7 @@ interface RepositoryMergeContext {
   mergeBaseState: State;
   mergeBaseDigest: string | null;
   prepared: MergeResult;
+  schema: RepositoryMergedSchema | null;
 }
 
 async function loadRepositoryMergeContext(input: {
@@ -371,12 +382,20 @@ async function loadRepositoryMergeContext(input: {
     decodeRepositorySemanticState(source.state),
     decodeRepositorySemanticState(target.state)
   );
+  const schema = await prepareRepositorySchemaMerge({
+    db: input.db,
+    projectId: input.projectId,
+    base: mergeBase,
+    source,
+    target,
+  });
   return {
     source,
     target,
     mergeBaseState,
     mergeBaseDigest: candidates[0]?.digest ?? null,
     prepared,
+    schema,
   };
 }
 
@@ -393,6 +412,39 @@ export async function prepareRepositoryYOpsMerge(
 ): Promise<MergeResult> {
   const context = await loadRepositoryMergeContext(input);
   return context.prepared;
+}
+
+/** Shared readiness/execution validation against the actual content conflict decisions. */
+export async function inspectRepositoryYOpsMergeSchema(
+  input: PrepareRepositoryYOpsMergeInput & { decisions?: MergeDecision }
+) {
+  const context = await loadRepositoryMergeContext(input);
+  if (!context.schema) return { schema: null, validation: null };
+  if (context.prepared.conflicts.some((item) => !input.decisions?.conflictResolutions[item.path]))
+    return { schema: context.schema, validation: null };
+  const decisions = input.decisions ?? {
+    conflictResolutions: {},
+    keepFromSource: context.prepared.onlyInSource,
+    keepFromTarget: context.prepared.onlyInTarget,
+    keepRelationsFromSource: true,
+    keepRelationsFromTarget: true,
+  };
+  const result = createRepositorySemanticState(
+    executeMerge(
+      decodeRepositorySemanticState(context.mergeBaseState),
+      decodeRepositorySemanticState(context.source.state),
+      decodeRepositorySemanticState(context.target.state),
+      context.prepared,
+      decisions
+    )
+  );
+  return {
+    schema: context.schema,
+    validation: validateRepositoryMergedSchema(result, context.schema, {
+      id: 'repository-merge-readiness',
+      recordedAt: new Date().toISOString() as CanonicalTimestamp,
+    }),
+  };
 }
 
 type FlatNode = ReturnType<typeof flattenTrees>[number];
@@ -415,6 +467,7 @@ export interface RepositoryMergeReviewNode {
 }
 
 export interface RepositoryMergeReview {
+  schemaMerge?: { schemaHash: string; rootKey: string; changes: RepositoryMergedSchema['changes'] };
   prepared: MergeResult;
   mergeBaseDigest: string | null;
   nodes: RepositoryMergeReviewNode[];
@@ -510,7 +563,20 @@ export async function reviewRepositoryYOpsMerge(
         },
       ];
     });
-  return { prepared, mergeBaseDigest: context.mergeBaseDigest, nodes };
+  return {
+    prepared,
+    mergeBaseDigest: context.mergeBaseDigest,
+    nodes,
+    ...(context.schema
+      ? {
+          schemaMerge: {
+            schemaHash: context.schema.schemaHash,
+            rootKey: context.schema.rootKey,
+            changes: context.schema.changes,
+          },
+        }
+      : {}),
+  };
 }
 
 export interface CommitRepositoryYOpsMergeInput extends PrepareRepositoryYOpsMergeInput {
@@ -537,6 +603,14 @@ export interface CommitRepositoryYOpsMergeResult {
 export async function commitRepositoryYOpsMerge(
   input: CommitRepositoryYOpsMergeInput
 ): Promise<CommitRepositoryYOpsMergeResult> {
+  return input.db.transaction(async (rawTx) =>
+    commitRepositoryYOpsMergeInTransaction({ ...input, db: rawTx as AnyDB })
+  );
+}
+
+async function commitRepositoryYOpsMergeInTransaction(
+  input: CommitRepositoryYOpsMergeInput
+): Promise<CommitRepositoryYOpsMergeResult> {
   const actor = structuredClone(input.actor);
   const policyBindingSource = input.policyBindingSource ?? 'explicit';
   const policyBinding =
@@ -560,6 +634,32 @@ export async function commitRepositoryYOpsMerge(
     throw new TransitionHeadConflictError(input.targetDigest, head.head);
   }
   const recordedAt = new Date().toISOString() as CanonicalTimestamp;
+  const validation = context.schema
+    ? validateRepositoryMergedSchema(
+        createRepositorySemanticState(
+          executeMerge(
+            decodeRepositorySemanticState(context.mergeBaseState),
+            decodeRepositorySemanticState(context.source.state),
+            decodeRepositorySemanticState(context.target.state),
+            context.prepared,
+            input.decisions
+          )
+        ),
+        context.schema,
+        { id: `repository-merge:${input.targetDigest}:${input.sourceDigest}`, recordedAt }
+      )
+    : null;
+  if (validation && validation.predicate.outcome !== 'passed') {
+    const details =
+      validation.predicate.outcome === 'failed'
+        ? [...validation.predicate.errors, ...validation.predicate.gaps]
+            .map((issue) => `${issue.path}: ${issue.message}`)
+            .join('; ')
+        : validation.predicate.outcome;
+    throw new RepositorySchemaMergeError(
+      `Merged content does not pass the merged Schema: ${details}`
+    );
+  }
   const prepared = prepareRepositoryYOpsMergeWrite({
     projectId: input.projectId,
     refName: input.refName,
@@ -576,7 +676,12 @@ export async function commitRepositoryYOpsMerge(
     policyBinding: policyBinding ?? REPOSITORY_MERGE_POLICY,
     ...(serverPolicyBindingExpectation === undefined ? {} : { serverPolicyBindingExpectation }),
     recordedAt,
+    ...(validation
+      ? { observations: [{ statement: validation, issuerContext: { actor: MERGE_SCHEMA_ACTOR } }] }
+      : {}),
   });
+  if (context.schema)
+    await persistRepositoryMergedSchema(input.db, input.projectId, context.schema);
   let created: Awaited<ReturnType<typeof commitPreparedRepositoryTransition>>;
   try {
     created = await commitPreparedRepositoryTransition({
@@ -603,6 +708,16 @@ export async function commitRepositoryYOpsMerge(
     throw error;
   }
 
+  if (context.schema)
+    await advanceMergedSchemaWorkspace({
+      db: input.db,
+      projectId: input.projectId,
+      refName: input.refName,
+      expectedHead: input.targetDigest,
+      commitDigest: created.commitDigest,
+      result: prepared.result,
+      contract: context.schema,
+    });
   return {
     commit: created.commit,
     commitDigest: created.commitDigest,

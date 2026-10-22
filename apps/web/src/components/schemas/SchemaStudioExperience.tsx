@@ -691,12 +691,18 @@ export function SchemaStudioExperience({
                 if (!basePreview.data || !data) return;
                 setEditorBase({
                   schema: structuredClone(
-                    schemaEdit.candidate?.baseDefinition ?? basePreview.data.schema
+                    schemaEdit.candidate?.baseDefinition ??
+                      basePreview.data.workspace?.boundSchema ??
+                      basePreview.data.schema
                   ),
                   hash: schemaEdit.candidate?.baseDefinition
                     ? String(schemaEdit.candidate.authoringDraft?.base.schemaHash)
                     : basePreview.data.schemaHash,
-                  initial: structuredClone(data.schema),
+                  initial: structuredClone(
+                    !hasSchemaEdit && basePreview.data.workspace?.boundSchema
+                      ? basePreview.data.workspace.boundSchema
+                      : data.schema
+                  ),
                 });
                 setDefinitionOpen(true);
               }

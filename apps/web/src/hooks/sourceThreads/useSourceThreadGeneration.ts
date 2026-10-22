@@ -634,7 +634,7 @@ export function useSourceThreadGeneration({
                   );
                 }
                 if (event.status === 'completed') {
-                  if (event.name === 'showSchemaSettings' || event.result?.kind === 'schema')
+                  if (event.name === 'showSchemaChangeCard' || event.result?.kind === 'schema')
                     assistantRef.current?.onSchemaSettings?.(
                       event.result?.settings?.conversationId
                     );

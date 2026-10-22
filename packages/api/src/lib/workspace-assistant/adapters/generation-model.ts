@@ -146,7 +146,6 @@ export async function invokeWorkspaceGenerationModel(input: {
   };
 }
 
-/** Reuse Proposal validation and trial apply, with the same managed model and admitted attempt. */
 export function createWorkspaceProposalModel(model: GenerationModel): ProposalGenerationModel {
   return {
     provider: model.provider,

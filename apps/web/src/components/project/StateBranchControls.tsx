@@ -331,7 +331,8 @@ export function StateBranchControls({
             <DialogHeader>
               <DialogTitle>Create a new branch</DialogTitle>
               <DialogDescription>
-                Start a new line of structured state from {branch}.
+                Start with the same committed content and Schema as {branch}. Future changes stay
+                independent. Uncommitted Draft changes are not copied.
               </DialogDescription>
             </DialogHeader>
 

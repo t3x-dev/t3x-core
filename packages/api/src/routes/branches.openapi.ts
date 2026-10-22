@@ -13,18 +13,20 @@ import type { ApiKey } from '@t3x-dev/core';
 import {
   type AnyDB,
   bindTransitionPolicy,
+  DraftAuthoringConflictError,
   ensureMainBranch,
   findBranchByName,
   findBranchesByProject,
   findCurrentBranch,
   getTransitionPolicyBinding,
-  insertBranch,
   listTransitionPolicyBindings,
+  NotFoundError,
   switchBranch,
   type TransitionPolicyBinding,
   unbindTransitionPolicy,
 } from '@t3x-dev/storage';
 import type { Context } from 'hono';
+import { createBranchWorkspace } from '../lib/branch-workspace';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
@@ -375,7 +377,7 @@ branchRoutes.openapi(createBranchRoute, async (c) => {
     }
 
     try {
-      const branch = await insertBranch(db, {
+      const branch = await createBranchWorkspace(db, {
         projectId: body.project_id,
         name: body.name,
         parentBranch: body.parent_branch,
@@ -399,6 +401,8 @@ branchRoutes.openapi(createBranchRoute, async (c) => {
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
+    if (err instanceof NotFoundError) return errorResponse(c, 'NOT_FOUND', message);
+    if (err instanceof DraftAuthoringConflictError) return errorResponse(c, 'CONFLICT', message);
     return errorResponse(c, 'CREATE_FAILED', message);
   }
 });
@@ -457,7 +461,7 @@ branchRoutes.openapi(switchBranchRoute, async (c) => {
 
     if (!branch) {
       if (body.create_if_missing) {
-        branch = await insertBranch(db, {
+        branch = await createBranchWorkspace(db, {
           projectId: body.project_id,
           name: body.branch_name,
           parentBranch: body.parent_branch,
@@ -475,6 +479,8 @@ branchRoutes.openapi(switchBranchRoute, async (c) => {
     return c.json({ success: true as const, data: await withRules(db, switched) }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
+    if (err instanceof NotFoundError) return errorResponse(c, 'NOT_FOUND', message);
+    if (err instanceof DraftAuthoringConflictError) return errorResponse(c, 'CONFLICT', message);
     return errorResponse(c, 'UPDATE_FAILED', message);
   }
 });

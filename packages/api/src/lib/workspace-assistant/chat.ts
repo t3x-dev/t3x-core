@@ -77,6 +77,7 @@ export async function chatWithWorkspace(
     ...input,
     prompt,
     capabilities,
+    authorizeContinuation: () => input.authorize('read'),
     assertCurrent: () =>
       assertAssistantContextCurrent(input.db, prepared, () => input.authorize('read')),
   });

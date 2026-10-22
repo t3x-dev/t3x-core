@@ -242,6 +242,8 @@ export interface PrepareRepositoryYOpsMergeWriteInput {
   policyBinding: RepositoryWriterPolicyBinding;
   serverPolicyBindingExpectation?: RepositoryWriterServerPolicyBindingExpectation;
   recordedAt: CanonicalTimestamp;
+  /** Server-native validation observations for this exact merged Result, never client review flags. */
+  observations?: readonly StatementObservation[];
 }
 
 export interface PreparedRepositoryYOpsMergeWrite extends PreparedRepositoryTransitionWrite {
@@ -534,6 +536,7 @@ export function prepareRepositoryYOpsMergeWrite(
   });
   const observations: StatementObservation[] = [
     { statement: replay, issuerContext: { actor: REPOSITORY_MERGE_REPLAY_ACTOR } },
+    ...(input.observations ?? []),
   ];
   const keptFromSource = new Set(input.decisions.keepFromSource).size;
   const keptFromTarget = new Set(input.decisions.keepFromTarget).size;

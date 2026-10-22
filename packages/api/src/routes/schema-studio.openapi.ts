@@ -41,10 +41,12 @@ import { saveStudioEditCandidate } from '../lib/schema-edit-candidate-save';
 import { projectStudioCandidate, resolveStudioSource } from '../lib/schema-studio';
 import { compileStudioSelection, previewStudio, StudioError } from '../lib/schema-studio-preview';
 import { workspaceAuthoringState } from '../lib/workspace-authoring';
+import { resolveWorkspaceSchemaEditBasis } from '../lib/workspace-schema-edit-basis';
 import {
   readPendingWorkspaceSchema,
   savePendingWorkspaceSchema,
 } from '../lib/workspace-schema-pending';
+import { resolveWorkspaceYSchema } from '../lib/workspace-yschema';
 import { ensureBuiltInYSchemaArtifacts } from '../lib/yschema-artifact-registry';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import { schemaPreparationRoutes } from './schema-preparation.openapi';
@@ -343,7 +345,33 @@ schemaStudioRoutes.openapi(saveSchemaEditCandidateRoute, async (c) => {
           },
         }
       : { channel: input.origin, actor: { kind: 'local', id: 'auth-disabled-local' } };
-    const result = await saveStudioEditCandidate(db, projectId, input, selection, origin);
+    let guard: Parameters<typeof saveStudioEditCandidate>[5];
+    if (input.schemaDefinition && input.baseSchemaHash !== selection.schemaHash) {
+      const draft = await findWorkspaceDraft(db, projectId, workspaceId);
+      if (!draft?.workspace_state)
+        return errorResponse(c, 'NOT_FOUND', 'Target Workspace is unavailable.');
+      const resolved = await resolveWorkspaceYSchema(draft.workspace_state, db, projectId);
+      if (
+        resolved.schema &&
+        (await sha256CompositionValue(resolved.schema)) === input.baseSchemaHash
+      ) {
+        const basis = await resolveWorkspaceSchemaEditBasis(
+          c,
+          db,
+          projectId,
+          draft.workspace_state,
+          resolved.schema
+        );
+        if (basis.selectionHash !== selection.selectionHash)
+          throw new StudioError('CONFLICT', 'The selected sources do not match the bound Schema.');
+        guard = {
+          workspaceRevision: draft.revision,
+          assistantSchemaSettings: draft.workspace_state.assistantSchemaSettings,
+          basis,
+        };
+      }
+    }
+    const result = await saveStudioEditCandidate(db, projectId, input, selection, origin, guard);
     return c.json({ success: true as const, data: result }, 200);
   } catch (error) {
     if (error instanceof WorkspaceSchemaYOpsError)

@@ -201,6 +201,8 @@ export const StudioPreviewSchema = z.object({
       id: z.string(),
       revision: z.number(),
       binding: z.record(z.string(), z.unknown()).nullable(),
+      /** Exact bound definition when the selected source versions match its provenance. */
+      boundSchema: z.record(z.string(), z.unknown()).optional(),
       canBind: z.boolean().optional(),
       changes: z.array(change),
     })

@@ -30,6 +30,19 @@ export function useWorkspaceFlow() {
       parentCommitHash,
       targetBranch,
     }: StartWorkspaceIterationOptions): Promise<StartWorkspaceIterationResult> => {
+      if (createBranchFrom) {
+        await createBranch(candidate.projectId, targetBranch, createBranchFrom);
+        const workspaceId = `workspace_branch:${encodeURIComponent(targetBranch)}`;
+        const workspaces = await fetchProjectWorkspaces(candidate.projectId);
+        const workspace = workspaces.find(
+          (item) => item.id === workspaceId && item.targetBranch === targetBranch
+        );
+        if (!workspace)
+          throw new Error(
+            'The branch was created, but its inherited Workspace could not be loaded. Refresh before continuing.'
+          );
+        return { workspace };
+      }
       const workspaceId =
         targetBranch === candidate.targetBranch ? candidate.id : `workspace_${crypto.randomUUID()}`;
       const nextWorkspace = buildNextWorkspaceIteration(
@@ -38,10 +51,6 @@ export function useWorkspaceFlow() {
         parentCommitHash,
         targetBranch
       );
-
-      if (createBranchFrom) {
-        await createBranch(candidate.projectId, targetBranch, createBranchFrom);
-      }
 
       const saved = await saveWorkspaceDraft(candidate.projectId, workspaceId, nextWorkspace);
       return { workspace: saved.workspace };

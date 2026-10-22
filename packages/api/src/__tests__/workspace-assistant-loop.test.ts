@@ -1,4 +1,5 @@
 import type { LLMProvider } from '@t3x-dev/core';
+import { normalizeYSchemaObject } from '@t3x-dev/yschema';
 import { describe, expect, it, vi } from 'vitest';
 import { createInferenceRuntime } from '../lib/inference';
 import {
@@ -12,6 +13,15 @@ import {
 } from '../lib/workspace-assistant/adapters/provider-tools';
 
 const usage = { inputTokens: 4, outputTokens: 2 };
+function invalidSchemaDefinition(): Error {
+  try {
+    normalizeYSchemaObject({ yschema: '0.1', name: 'Test', nodes: { scratchpad: { nodes: {} } } });
+  } catch (failure) {
+    if (failure instanceof Error) return failure;
+    throw failure;
+  }
+  throw new Error('Expected native definition validation to reject nested nodes');
+}
 function fixture() {
   const runtime = createInferenceRuntime();
   const metered = vi.spyOn(runtime, 'execute');
@@ -40,24 +50,127 @@ function fixture() {
   };
 }
 describe('metered Assistant loop', () => {
-  it('ends the model loop after showing settings, without executing another model step', async () => {
+  it('returns a mixed read/card batch to AI for one bounded correction without executing either call', async () => {
+    const { input, events } = fixture();
+    const read = vi.fn();
+    const card = vi.fn().mockResolvedValue({ status: 'awaiting_confirmation' });
+    const generateWithTools = vi
+      .fn()
+      .mockResolvedValueOnce({
+        tool_calls: [
+          { id: 'read', name: 'readSchema', input: {} },
+          { id: 'card', name: 'showSchemaChangeCard', input: {} },
+        ],
+        usage,
+      })
+      .mockResolvedValueOnce({
+        tool_calls: [{ id: 'single-card', name: 'showSchemaChangeCard', input: {} }],
+        usage,
+      });
+    await runAssistantProvider({
+      ...input,
+      provider: {
+        id: 'test',
+        generateWithTools,
+        generateFromPrompt: vi.fn().mockResolvedValue({ text: '请在时间轴逐张确认。', usage }),
+      } as unknown as LLMProvider,
+      capabilities: {
+        readSchema: {
+          definition: { name: 'readSchema', description: '', input_schema: {} },
+          execute: read,
+        },
+        showSchemaChangeCard: {
+          definition: { name: 'showSchemaChangeCard', description: '', input_schema: {} },
+          execute: card,
+        },
+      },
+    });
+    expect(read).not.toHaveBeenCalled();
+    expect(card).toHaveBeenCalledOnce();
+    expect(JSON.stringify(generateWithTools.mock.calls[1]![0])).toContain('invalid_tool_batch');
+    expect(events.at(-1)).toEqual({ type: 'done', reason: 'awaiting_confirmation' });
+  });
+  it.each([
+    ['invalid definition', 2],
+    ['permission failure', 1],
+  ] as const)('bounds Schema card correction for %s', async (kind, attempts) => {
+    const { input } = fixture();
+    let step = 0;
+    const failure =
+      kind === 'invalid definition' ? invalidSchemaDefinition() : new Error('Permission failure');
+    const execute = vi.fn().mockRejectedValue(failure);
+    const generateWithTools = vi.fn(async () => ({
+      tool_calls: [{ id: `card-${++step}`, name: 'showSchemaChangeCard', input: {} }],
+      usage,
+    }));
+    await expect(
+      runAssistantProvider({
+        ...input,
+        provider: { id: 'test', generateWithTools } as unknown as LLMProvider,
+        capabilities: {
+          showSchemaChangeCard: {
+            definition: { name: 'showSchemaChangeCard', description: 'settings', input_schema: {} },
+            execute,
+          },
+        },
+      })
+    ).rejects.toBe(failure);
+    expect(execute).toHaveBeenCalledTimes(attempts);
+    expect(generateWithTools).toHaveBeenCalledTimes(attempts);
+  });
+  it('returns one invalid Schema card definition to AI for correction instead of stopping the conversation', async () => {
+    const { input, events } = fixture();
+    const execute = vi
+      .fn()
+      .mockRejectedValueOnce(invalidSchemaDefinition())
+      .mockResolvedValueOnce({
+        status: 'awaiting_confirmation',
+        settings: { settingsId: 'corrected' },
+      });
+    const generateWithTools = vi
+      .fn()
+      .mockResolvedValueOnce({
+        tool_calls: [{ id: 'bad', name: 'showSchemaChangeCard', input: {} }],
+        usage,
+      })
+      .mockResolvedValueOnce({
+        tool_calls: [{ id: 'corrected', name: 'showSchemaChangeCard', input: {} }],
+        usage,
+      });
+    const generateFromPrompt = vi.fn(async () => ({ text: '请确认修正后的结构。', usage }));
+    await runAssistantProvider({
+      ...input,
+      provider: { id: 'test', generateWithTools, generateFromPrompt } as unknown as LLMProvider,
+      capabilities: {
+        showSchemaChangeCard: {
+          definition: { name: 'showSchemaChangeCard', description: 'settings', input_schema: {} },
+          execute,
+        },
+      },
+    });
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(generateWithTools.mock.calls[1][0])).toContain('invalid_definition');
+    expect(events.at(-1)).toEqual({ type: 'done', reason: 'awaiting_confirmation' });
+  });
+  it('returns the settings tool result to a text-only AI continuation before awaiting confirmation', async () => {
     const { input, events } = fixture();
     const execute = vi.fn(async () => ({
       status: 'awaiting_confirmation',
       settings: { settingsId: 's' },
     }));
     const generateWithTools = vi.fn(async () => ({
-      tool_calls: [{ id: 'settings', name: 'showSchemaSettings', input: {} }],
+      tool_calls: [{ id: 'settings', name: 'showSchemaChangeCard', input: {} }],
       stop_reason: 'tool_use',
       usage,
     }));
+    const generateFromPrompt = vi.fn(async () => ({ text: '请确认上方的字段设置。', usage }));
     await runAssistantProvider({
       ...input,
-      provider: { id: 'test', generateWithTools } as unknown as LLMProvider,
+      provider: { id: 'test', generateWithTools, generateFromPrompt } as unknown as LLMProvider,
       capabilities: {
-        showSchemaSettings: {
+        showSchemaChangeCard: {
           definition: {
-            name: 'showSchemaSettings',
+            name: 'showSchemaChangeCard',
             description: 'settings',
             input_schema: { type: 'object' },
           },
@@ -67,6 +180,12 @@ describe('metered Assistant loop', () => {
     });
     expect(generateWithTools).toHaveBeenCalledTimes(1);
     expect(execute).toHaveBeenCalledTimes(1);
+    expect(generateFromPrompt).toHaveBeenCalledOnce();
+    expect(JSON.stringify(generateFromPrompt.mock.calls[0][0])).toContain('tool_result');
+    expect(JSON.stringify(generateFromPrompt.mock.calls[0][0])).toContain('awaiting_confirmation');
+    expect(generateFromPrompt.mock.calls[0][0].system).toContain('one brief reply');
+    expect(generateFromPrompt.mock.calls[0][0].system).toContain('parent Node');
+    expect(events).toContainEqual({ type: 'text', content: '请确认上方的字段设置。' });
     expect(events.at(-1)).toEqual({ type: 'done', reason: 'awaiting_confirmation' });
   });
   it('rejects a batch combining settings with a write before executing either tool', async () => {
@@ -75,7 +194,7 @@ describe('metered Assistant loop', () => {
     const generateWithTools = vi.fn(async () => ({
       tool_calls: [
         { id: 'write', name: 'requestProposal', input: {} },
-        { id: 'settings', name: 'showSchemaSettings', input: {} },
+        { id: 'settings', name: 'showSchemaChangeCard', input: {} },
       ],
       stop_reason: 'tool_use',
       usage,
@@ -85,8 +204,8 @@ describe('metered Assistant loop', () => {
         ...input,
         provider: { id: 'test', generateWithTools } as unknown as LLMProvider,
         capabilities: {
-          showSchemaSettings: {
-            definition: { name: 'showSchemaSettings', description: 'settings', input_schema: {} },
+          showSchemaChangeCard: {
+            definition: { name: 'showSchemaChangeCard', description: 'settings', input_schema: {} },
             execute,
           },
           requestProposal: {
@@ -328,12 +447,18 @@ describe('metered Assistant loop', () => {
         usage,
       })),
     } as unknown as LLMProvider;
-    await expect(runAssistantProvider({ ...input, provider, capabilities: {} })).rejects.toThrow(
+    const capabilities = {
+      readStructure: {
+        definition: { name: 'readStructure', description: 'read', input_schema: {} },
+        execute: vi.fn(),
+      },
+    };
+    await expect(runAssistantProvider({ ...input, provider, capabilities })).rejects.toThrow(
       'not available'
     );
     input.assertCurrent.mockRejectedValueOnce(new Error('Revision changed'));
     const called = vi.mocked(provider.generateWithTools!).mock.calls.length;
-    await expect(runAssistantProvider({ ...input, provider, capabilities: {} })).rejects.toThrow(
+    await expect(runAssistantProvider({ ...input, provider, capabilities })).rejects.toThrow(
       'Revision changed'
     );
     expect(vi.mocked(provider.generateWithTools!).mock.calls).toHaveLength(called);
