@@ -1,9 +1,10 @@
 'use client';
 
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { notFound, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useEffect, useState } from 'react';
 import { getProjectIdRepoPath } from '@/domain/project/repoPath';
 import {
+  isRetiredRepositoryLocation,
   isSupportedRepositorySuffix,
   repositoryLocation,
 } from '@/domain/project/repositoryLocation';
@@ -72,6 +73,9 @@ export function ProjectRouteShell({
       { scroll: false }
     );
   }, [resolvedProject?.canonical_path, pathname, query, projectId, router]);
+
+  const suffix = `/${pathname.split('/').slice(3).join('/')}`;
+  if (isRetiredRepositoryLocation(suffix, searchParams)) notFound();
 
   // The project index already owns ProjectShell because it also controls the
   // tab content. Nested project routes use this route-level shell so the

@@ -140,7 +140,6 @@ export function NodeContextMenu({ x, y, groups, onClose }: NodeContextMenuProps)
 
 export {
   buildBackgroundMenu,
-  buildLeafNodeMenu,
   buildUnitNodeMenu,
   type ContextMenuGroup,
   type ContextMenuItem,

@@ -9,7 +9,6 @@ import { ProjectRouteShell } from './ProjectRouteShell';
 const Settings = dynamic(() => import('@/app/project/[projectId]/settings/page'));
 const Diff = dynamic(() => import('@/app/project/[projectId]/diff/page'));
 const Merge = dynamic(() => import('@/app/project/[projectId]/merge/[mergeId]/page'));
-const Leaf = dynamic(() => import('@/app/project/[projectId]/leaf/[leafId]/page'));
 const History = dynamic(() =>
   import('@/components/history/CommitHistoryPage').then((m) => m.CommitHistoryPage)
 );
@@ -34,7 +33,6 @@ export function RepositoryNestedPage({
   const params = {
     projectId,
     mergeId: first,
-    leafId: first,
     workspaceId: first,
     snapshotId: second,
   };
@@ -51,9 +49,6 @@ export function RepositoryNestedPage({
       break;
     case 'changes':
       content = <Changes />;
-      break;
-    case 'leaf':
-      content = <Leaf />;
       break;
     case 'history':
       content = <History projectId={projectId} />;

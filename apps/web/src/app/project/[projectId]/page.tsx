@@ -6,7 +6,6 @@ import { CanvasWorkspace } from '@/components/canvas';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { ProjectDemoTourOverlay } from '@/components/onboarding/ProjectDemoTourOverlay';
 import { ProjectCommunityTab } from '@/components/project/ProjectCommunityTab';
-import { ProjectOutputsTab } from '@/components/project/ProjectOutputsTab';
 import { ProjectReviewsTab } from '@/components/project/ProjectReviewsTab';
 import { ProjectSchemasTab } from '@/components/project/ProjectSchemasTab';
 import { ProjectShell } from '@/components/project/ProjectShell';
@@ -492,8 +491,6 @@ export function ProjectDetailPageContent({
             projectId={projectId}
           />
         );
-      case 'outputs':
-        return <ProjectOutputsTab key={projectId} projectId={projectId} />;
       case 'community':
         return <ProjectCommunityTab branch={searchParams.get('branch')} projectId={projectId} />;
       default:

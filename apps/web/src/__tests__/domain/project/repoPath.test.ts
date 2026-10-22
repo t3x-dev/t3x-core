@@ -3,9 +3,7 @@ import {
   getProjectIdCanvasCommitPath,
   getProjectIdCanvasPath,
   getProjectIdDiffPath,
-  getProjectIdOutputsPath,
   getProjectIdRepoPath,
-  getProjectOutputsPath,
   getProjectRepoPath,
   toRepoSlug,
 } from '@/domain/project/repoPath';
@@ -24,15 +22,6 @@ describe('repoPath', () => {
     expect(toRepoSlug('Release-2026101500000')).toBe('Release-2026101500000');
   });
 
-  it('builds output links without guessing a namespace', () => {
-    expect(
-      getProjectOutputsPath({ id: 'p', name: 'Repo', canonical_path: '/alice/Repo' }, 'leaf/id')
-    ).toBe('/alice/Repo/outputs?leaf=leaf%2Fid');
-    expect(getProjectOutputsPath({ id: 'p', name: 'Repo' }, 'leaf/id')).toBe(
-      '/project/p?tab=outputs&leaf=leaf%2Fid'
-    );
-  });
-
   it('builds project-id entry points that canonicalize in the route layer', () => {
     expect(getProjectIdRepoPath('proj/test')).toBe('/project/proj%2Ftest');
     expect(getProjectIdCanvasPath('proj/test')).toBe('/project/proj%2Ftest?view=canvas');
@@ -41,9 +30,6 @@ describe('repoPath', () => {
     );
     expect(getProjectIdDiffPath('proj/test', 'sha256:base', 'sha256:target')).toBe(
       '/project/proj%2Ftest/diff?base=sha256%3Abase&target=sha256%3Atarget'
-    );
-    expect(getProjectIdOutputsPath('proj/test', 'leaf/audience brief')).toBe(
-      '/project/proj%2Ftest?tab=outputs&leaf=leaf%2Faudience+brief'
     );
   });
 });

@@ -13,6 +13,9 @@ const mocks = vi.hoisted(() => ({
   query: 'workspace=w&conversation=c&branch=main&pr=9',
 }));
 vi.mock('next/navigation', () => ({
+  notFound: () => {
+    throw new Error('NEXT_HTTP_ERROR_FALLBACK;404');
+  },
   useParams: () => mocks.params,
   usePathname: () => mocks.pathname ?? `/${mocks.params.owner}/${mocks.params.repoPath.join('/')}`,
   useSearchParams: () => new URLSearchParams(mocks.query),
@@ -303,5 +306,17 @@ it('leaves namespace directory and new-repository routes out of repository resol
   mocks.params.repoPath = ['new'];
   render(<OwnerRepoProjectPage />);
   expect(screen.getByText('New repository')).toBeInTheDocument();
+  expect(mocks.resolve).not.toHaveBeenCalled();
+});
+
+it.each([
+  { segments: ['outputs'], query: '' },
+  { segments: ['leaf', 'old'], query: '' },
+  { segments: [], query: 'tab=outputs&leaf=old' },
+])('returns not found for retired repository view $segments $query', ({ segments, query }) => {
+  mocks.params.repoPath = ['Repo', ...segments];
+  mocks.query = query;
+  expect(() => render(<OwnerRepoProjectPage />)).toThrow('NEXT_HTTP_ERROR_FALLBACK;404');
+  expect(mocks.replace).not.toHaveBeenCalled();
   expect(mocks.resolve).not.toHaveBeenCalled();
 });

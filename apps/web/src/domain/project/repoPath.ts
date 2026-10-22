@@ -75,16 +75,3 @@ export function getProjectIdDiffPath(
   const params = new URLSearchParams({ base: baseHash, target: targetHash });
   return `${getProjectIdRepoPath(projectId)}/diff?${params.toString()}`;
 }
-
-export function getProjectIdOutputsPath(projectId: string, leafId?: string): string {
-  const params = new URLSearchParams({ tab: 'outputs' });
-  if (leafId) params.set('leaf', leafId);
-  return `${getProjectIdRepoPath(projectId)}?${params.toString()}`;
-}
-
-export function getProjectOutputsPath(project: RepositoryPathProject, leafId?: string): string {
-  if (!project.canonical_path)
-    return getProjectIdOutputsPath(project.id ?? project.project_id ?? '', leafId);
-  const path = `${project.canonical_path}/outputs`;
-  return leafId ? `${path}?leaf=${encodeURIComponent(leafId)}` : path;
-}

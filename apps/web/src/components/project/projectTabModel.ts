@@ -8,7 +8,6 @@ export type ProjectTabId =
   | 'workspaces'
   | 'reviews'
   | 'history'
-  | 'outputs'
   | 'community'
   | 'settings';
 
@@ -29,11 +28,10 @@ export const PROJECT_TABS: ProjectTabDefinition[] = [
   { id: 'settings', label: 'Settings' },
 ];
 
-// Browse is reached within Discover; legacy outputs remain routable for historical artifacts.
+// Browse is reached within Discover.
 const ROUTABLE_PROJECT_TABS: ProjectTabDefinition[] = [
   ...PROJECT_TABS,
   { id: 'browse', label: 'Browse' },
-  { id: 'outputs', label: 'Legacy outputs' },
 ];
 const PROJECT_TAB_BY_ID = new Map(ROUTABLE_PROJECT_TABS.map((tab) => [tab.id, tab]));
 const PROJECT_TAB_SEGMENTS = new Set(ROUTABLE_PROJECT_TABS.map((tab) => tab.segment ?? tab.id));

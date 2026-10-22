@@ -9,7 +9,6 @@ import {
   Command,
   Compass,
   Database,
-  FileText,
   FolderGit2,
   GitPullRequest,
   History,
@@ -40,7 +39,6 @@ const tabIcons: Record<ProjectTabId, LucideIcon> = {
   history: History,
   community: LayoutGrid,
   settings: Settings,
-  outputs: FileText,
 };
 
 export function DiscoverHeader({

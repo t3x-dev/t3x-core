@@ -14,6 +14,9 @@ const navigation = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({
+  notFound: () => {
+    throw new Error('NEXT_HTTP_ERROR_FALLBACK;404');
+  },
   useRouter: () => ({ replace: navigation.replace }),
   usePathname: () => navigation.pathname,
   useSearchParams: () => new URLSearchParams(navigation.search),
@@ -143,7 +146,7 @@ describe('ProjectRouteShell', () => {
     '/project/proj_test/history',
     '/team/Test-Project/history',
     '/team/Test-Project/diff',
-  ])('owns %s in History and preserves the exact Settings return destination', async (pathname) => {
+  ])('owns %s in State and preserves the exact Settings return destination', async (pathname) => {
     navigation.pathname = pathname;
     navigation.search = 'branch=feature%2Frelease&view=list&commit=sha256%3Aabc&q=fix';
     render(
@@ -151,8 +154,8 @@ describe('ProjectRouteShell', () => {
         <div>History content</div>
       </ProjectRouteShell>
     );
-    expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: 'State' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('link', { name: 'History' })).toBeNull();
     await waitFor(() => {
       const settings = new URL(
         screen.getByRole('link', { name: 'Settings' }).getAttribute('href')!,
@@ -179,7 +182,7 @@ describe('ProjectRouteShell', () => {
       'href',
       `${navigation.pathname}?${navigation.search}`
     );
-    expect(screen.getByRole('link', { name: 'History' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: 'State' })).not.toHaveAttribute('aria-current');
   });
 
   it('canonicalizes History query links with their full detail context', async () => {
@@ -198,4 +201,24 @@ describe('ProjectRouteShell', () => {
       )
     );
   });
+});
+
+it.each([
+  { suffix: '/outputs', query: '' },
+  { suffix: '/leaf/old', query: '' },
+  { suffix: '', query: 'tab=outputs&leaf=old' },
+])('does not canonicalize retired ID routes $suffix $query', ({ suffix, query }) => {
+  navigation.pathname = `/project/proj_test${suffix}`;
+  navigation.search = query;
+  navigation.replace.mockClear();
+  navigation.load.mockClear();
+  expect(() =>
+    render(
+      <ProjectRouteShell projectId="proj_test">
+        <div>Archive</div>
+      </ProjectRouteShell>
+    )
+  ).toThrow('NEXT_HTTP_ERROR_FALLBACK;404');
+  expect(navigation.replace).not.toHaveBeenCalled();
+  expect(navigation.load).not.toHaveBeenCalled();
 });

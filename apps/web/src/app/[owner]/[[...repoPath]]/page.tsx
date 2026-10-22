@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { notFound, useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect } from 'react';
 import { ProjectDetailPageContent } from '@/app/project/[projectId]/page';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
@@ -13,6 +13,7 @@ import { parseProjectTab, resolveProjectRouteTab } from '@/components/project/pr
 import { RepositoryNestedPage } from '@/components/project/RepositoryNestedPage';
 import { getProjectIdRepoPath } from '@/domain/project/repoPath';
 import {
+  isRetiredRepositoryLocation,
   isSupportedRepositorySuffix,
   repositoryLocation,
 } from '@/domain/project/repositoryLocation';
@@ -58,6 +59,7 @@ function OwnerRepoProjectPageContent() {
     if (target !== here) router.replace(target, { scroll: false });
   }, [address, supported, suffix, pathname, query, router]);
 
+  if (!special && isRetiredRepositoryLocation(suffix, new URLSearchParams(query))) notFound();
   if (directory) return <ProjectDirectoryPage ownerSlug={owner} />;
   if (creating) return <NewRepositoryPage />;
   if (organizationSettings) return <OrganizationSettingsPage ownerSlug={owner} />;
@@ -92,16 +94,7 @@ function OwnerRepoProjectPageContent() {
   if (!address.canonical_path)
     return <LoadingSpinner message="Opening repository by ID; its name needs migration." />;
   if (
-    [
-      'settings',
-      'diff',
-      'merge',
-      'changes',
-      'leaf',
-      'history',
-      'knowledge-graph',
-      'sources',
-    ].includes(view)
+    ['settings', 'diff', 'merge', 'changes', 'history', 'knowledge-graph', 'sources'].includes(view)
   )
     return (
       <RepositoryNestedPage

@@ -7,8 +7,19 @@ export function getSchemaProjectTab(schemaView: string | null): 'schemas' | 'dis
 
 /** Only routes with an explicit owner/name adapter may migrate from ID links. */
 export function isSupportedRepositorySuffix(suffix: string): boolean {
-  return /^(?:\/?|\/(?:state|workspaces|pull-requests|outputs|community|schemas|discover|browse|settings|diff|history|knowledge-graph)\/?|\/(?:merge|leaf)\/[^/]+\/?|\/changes\/[^/]+\/[^/]+\/?|\/sources\/conversations\/[^/]+\/?)$/.test(
+  return /^(?:\/?|\/(?:state|workspaces|pull-requests|community|schemas|discover|browse|settings|diff|history|knowledge-graph)\/?|\/merge\/[^/]+\/?|\/changes\/[^/]+\/[^/]+\/?|\/sources\/conversations\/[^/]+\/?)$/.test(
     suffix
+  );
+}
+
+/** Retired output pages must not fall back to State or canonicalize to an active view. */
+export function isRetiredRepositoryLocation(
+  suffix: string,
+  searchParams: { get: (key: string) => string | null }
+): boolean {
+  return (
+    /^\/(?:outputs|leaf)(?:\/|$)/.test(suffix) ||
+    (/^(?:\/?|\/state\/?)$/.test(suffix) && searchParams.get('tab') === 'outputs')
   );
 }
 
@@ -24,7 +35,6 @@ export function repositoryLocation(base: string, suffix: string, query: string, 
         'workspaces',
         'pull-requests',
         'history',
-        'outputs',
         'community',
         'schemas',
         'discover',

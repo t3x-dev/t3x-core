@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import { getProjectTabSegment, PROJECT_TABS } from '@/components/project/projectTabModel';
 import {
+  isRetiredRepositoryLocation,
   isSupportedRepositorySuffix,
   repositoryLocation,
 } from '@/domain/project/repositoryLocation';
@@ -74,12 +75,14 @@ it('only migrates explicitly supported nested routes', () => {
     '/history',
     '/diff',
     '/merge/m',
-    '/leaf/l',
     '/changes/w/s',
     '/sources/conversations/c',
   ])
     expect(isSupportedRepositorySuffix(suffix)).toBe(true);
   for (const suffix of [
+    '/outputs',
+    '/outputs/',
+    '/leaf/l',
     '/settings/unknown',
     '/commit/legacy',
     '/draft/d',
@@ -91,4 +94,33 @@ it('only migrates explicitly supported nested routes', () => {
     '/unknown',
   ])
     expect(isSupportedRepositorySuffix(suffix)).toBe(false);
+});
+
+it.each([
+  '/outputs',
+  '/outputs/',
+  '/outputs/extra',
+  '/leaf',
+  '/leaf/id',
+  '/leaf/id/extra',
+])('recognizes the retired repository route %s', (suffix) => {
+  expect(isRetiredRepositoryLocation(suffix, new URLSearchParams())).toBe(true);
+  expect(isSupportedRepositorySuffix(suffix)).toBe(false);
+});
+
+it.each(['', '/', '/state', '/state/'])('rejects the old Outputs query on %s', (suffix) => {
+  expect(isRetiredRepositoryLocation(suffix, new URLSearchParams('tab=outputs&leaf=old'))).toBe(
+    true
+  );
+});
+
+it.each([
+  '/knowledge-graph',
+  '/history',
+  '/schemas',
+  '/browse',
+  '/workspaces',
+])('keeps the active route %s available', (suffix) => {
+  expect(isRetiredRepositoryLocation(suffix, new URLSearchParams())).toBe(false);
+  expect(isSupportedRepositorySuffix(suffix)).toBe(true);
 });
