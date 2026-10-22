@@ -150,10 +150,15 @@ async function addSchema(name: string, schema: ReturnType<typeof normalizeYSchem
   expect(response.status).toBe(200);
   return (await response.json()).data.id as string;
 }
-async function seed(workspaceId: string, semantic = false) {
+async function seed(
+  workspaceId: string,
+  semantic = false,
+  options?: { document: Record<string, unknown>; schema?: typeof baseSchema }
+) {
   await insertBranch(db, { projectId, name: workspaceId });
-  const hash = await sha256CompositionValue(baseSchema);
-  const compositionHash = await sha256CompositionValue({ workspaceId, schema: baseSchema });
+  const definition = options?.schema ?? baseSchema;
+  const hash = await sha256CompositionValue(definition);
+  const compositionHash = await sha256CompositionValue({ workspaceId, schema: definition });
   await saveYSchemaCompositionSnapshot(db, {
     snapshot_id: `base:${workspaceId}`,
     project_id: projectId,
@@ -163,7 +168,7 @@ async function seed(workspaceId: string, semantic = false) {
     compiled_schema_hash: hash,
     compiler_version: 'test',
     manifest_json: {},
-    schema_json: { ...baseSchema },
+    schema_json: { ...definition },
     render_plan_json: [],
     origins_json: {},
   });
@@ -189,22 +194,26 @@ async function seed(workspaceId: string, semantic = false) {
       ],
     },
   });
-  const document = semantic
-    ? {
-        domain: 't3x.dev/semantic-content',
-        version: 1,
-        content: {
-          trees: [
-            {
-              key: 'candidate',
-              slots: {},
-              children: [{ key: 'requirements', slots: { title: 'Edited content' }, children: [] }],
-            },
-          ],
-          relations: [],
-        },
-      }
-    : { candidate: { requirements: { title: 'Original content' } } };
+  const document =
+    options?.document ??
+    (semantic
+      ? {
+          domain: 't3x.dev/semantic-content',
+          version: 1,
+          content: {
+            trees: [
+              {
+                key: 'candidate',
+                slots: {},
+                children: [
+                  { key: 'requirements', slots: { title: 'Edited content' }, children: [] },
+                ],
+              },
+            ],
+            relations: [],
+          },
+        }
+      : { candidate: { requirements: { title: 'Original content' } } });
   const init = await initializeWorkspaceAuthoring(db, {
     projectId,
     workspaceId,
@@ -214,7 +223,7 @@ async function seed(workspaceId: string, semantic = false) {
     actor: { kind: 'human', id: 'human:local-user' },
     legacyDocument: document as never,
   });
-  if (!semantic)
+  if (!semantic && !options)
     await publishWorkspaceAuthoringAction(db, {
       projectId,
       workspaceId,
@@ -450,6 +459,32 @@ async function fullDecision(
     },
   });
 }
+it.each([
+  ['empty', {}],
+  ['missing-required-node', { candidate: {} }],
+  ['wrong-root', { unrelated: { requirements: { title: 'Do not validate this root' } } }],
+])('blocks accepting a bound Schema Review with %s content even on an unprotected branch', async (kind, document) => {
+  const id = `bound-review-${kind}`;
+  const schema = normalizeYSchemaObject({
+    ...baseSchema,
+    nodes: {
+      requirements: {
+        required: true,
+        requiredSlots: ['title'],
+        slots: { title: { type: 'string' } },
+      },
+    },
+  });
+  await seed(id, false, { document, schema });
+  const before = (await findWorkspaceDraft(db, projectId, id))!;
+  const reviewed = await fullReview(id);
+  await expect(fullDecision(id, reviewed)).rejects.toThrow();
+  expect((await getTransitionRefHead(db, { projectId, refName: id })).head).toBeNull();
+  expect(await findWorkspaceDraft(db, projectId, id)).toEqual(before);
+  const rejected = await fullDecision(id, reviewed, 'rejected');
+  expect(rejected.commit).toBeUndefined();
+  expect((await getTransitionRefHead(db, { projectId, refName: id })).head).toBeNull();
+});
 async function editReviewedDraft(workspaceId: string) {
   const draft = (await findWorkspaceDraft(db, projectId, workspaceId))!;
   const { ledger, basis } = workspaceAuthoringState(draft.workspace_state);

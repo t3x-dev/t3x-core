@@ -1,8 +1,61 @@
+import type { WorkspaceFullSchemaReview } from '@t3x-dev/api-client';
 import type { TransitionGraphViewV1 } from '@t3x-dev/core';
 import { describe, expect, it } from 'vitest';
-import { changeCheckRows, changeDecisionBlockers } from '@/domain/workspaces/changeDecision';
+import {
+  changeCheckRows,
+  changeDecisionBlockers,
+  workspaceSchemaCommitBlocker,
+} from '@/domain/workspaces/changeDecision';
 
 const POSTURE_TOOL = '@t3x-dev/core/proposal-generation-posture';
+const boundReview = {
+  schema: 't3x.application/workspace-schema-review/v1',
+  base: { status: 'unbound', schemaHash: null, definition: null, bindings: [] },
+  draft: {
+    status: 'bound',
+    schemaHash: `sha256:${'a'.repeat(64)}`,
+    definition: { nodes: {} },
+    bindings: [],
+  },
+  changes: [],
+  actionCount: 0,
+  baseContent: {},
+  draftContent: {},
+} as WorkspaceFullSchemaReview;
+
+it.each([
+  'missing',
+  'wrong-schema',
+])('blocks a legacy ready snapshot whose bound Schema validation is %s', (kind) => {
+  const ready = view({ accept: { disposition: 'allowed', reasons: [] } });
+  ready.checks.validation.runs =
+    kind === 'missing'
+      ? []
+      : ([
+          {
+            predicate: {
+              outcome: 'passed',
+              schemaResource: { digest: `sha256:${'b'.repeat(64)}` },
+            },
+          },
+        ] as never);
+  expect(workspaceSchemaCommitBlocker(boundReview, ready)).toContain(
+    'no conclusive validation result'
+  );
+});
+it('allows the exact bound validation and retains the existing unknown-Base blocker', () => {
+  const ready = view();
+  ready.checks.validation.runs = [
+    { predicate: { outcome: 'passed', schemaResource: { digest: boundReview.draft.schemaHash } } },
+  ] as never;
+  expect(workspaceSchemaCommitBlocker(boundReview, ready)).toBeUndefined();
+  expect(
+    workspaceSchemaCommitBlocker(
+      { ...boundReview, base: { ...boundReview.base, status: 'unknown' } },
+      ready
+    )
+  ).toContain('Recover the exact Base Schema');
+});
 const SOURCE_SUPPORT = {
   code: 'SOURCE_SUPPORT_REQUIRED',
   message: 'Evidence integrity alone does not prove semantic support.',

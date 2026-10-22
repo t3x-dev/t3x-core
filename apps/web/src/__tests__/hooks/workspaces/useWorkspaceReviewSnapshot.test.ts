@@ -159,6 +159,39 @@ describe('useWorkspaceReviewSnapshot', () => {
       expect.objectContaining({ outcome: 'rejected' })
     );
   });
+  it('blocks accepting or overriding an old ready snapshot with no validation for its bound Schema', async () => {
+    vi.mocked(decideWorkspaceTransition).mockClear();
+    const loaded = snapshotEnvelope('reviewing') as WorkspaceTransitionReviewSnapshotEnvelope;
+    const data = {
+      ...loaded,
+      schema_review: {
+        schema: 't3x.application/workspace-schema-review/v1',
+        base: { status: 'unbound', schemaHash: null, definition: null, bindings: [] },
+        draft: {
+          status: 'bound',
+          schemaHash: `sha256:${'b'.repeat(64)}`,
+          definition: { nodes: {} },
+          bindings: [],
+        },
+        changes: [],
+        actionCount: 0,
+        baseContent: {},
+        draftContent: {},
+      },
+    } as WorkspaceTransitionReviewSnapshotEnvelope & { schema_review: WorkspaceFullSchemaReview };
+    vi.mocked(fetchWorkspaceTransitionReviewSnapshot).mockResolvedValue(data);
+    const { result } = renderHook(() =>
+      useWorkspaceReviewSnapshot('proj_1', 'workspace_prd_handoff', loaded.snapshot_id)
+    );
+    await waitFor(() => expect(result.current.state.loading).toBe(false));
+    for (const outcome of ['accepted', 'overridden'] as const) {
+      await act(async () => {
+        await result.current.decide(outcome, 'Must not bypass missing validation');
+      });
+      expect(result.current.state.error).toContain('no conclusive validation result');
+    }
+    expect(decideWorkspaceTransition).not.toHaveBeenCalled();
+  });
 });
 
 function snapshotEnvelope(status: 'reviewing' | 'committed') {
@@ -294,6 +327,11 @@ function reviewSnapshot(status: 'reviewing' | 'committed') {
     },
     transition: {
       mode: 'transition',
+      checks: {
+        validation: {
+          runs: [{ predicate: { schemaResource: { digest: `sha256:${'a'.repeat(64)}` } } }],
+        },
+      },
       decision:
         status === 'reviewing'
           ? { observation: 'not_supplied' }
