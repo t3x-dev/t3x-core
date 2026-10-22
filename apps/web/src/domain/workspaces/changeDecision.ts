@@ -1,4 +1,24 @@
+import type { WorkspaceFullSchemaReview } from '@t3x-dev/api-client';
 import type { ProjectionCapabilityReason, TransitionGraphViewV1 } from '@t3x-dev/core';
+
+/** Old immutable snapshots retain their original policy projection, not permission
+ * to skip the bound Workspace contract when making a new Decision. */
+export function workspaceSchemaCommitBlocker(
+  review: WorkspaceFullSchemaReview | null | undefined,
+  view: TransitionGraphViewV1 | null
+): string | undefined {
+  if (review?.base.status === 'unknown')
+    return 'Recover the exact Base Schema before accepting or committing.';
+  if (
+    review?.draft.status === 'bound' &&
+    view &&
+    !view.checks.validation.runs.some(
+      (run) => run.predicate.schemaResource?.digest === review.draft.schemaHash
+    )
+  )
+    return 'The bound Schema has no conclusive validation result. Prepare a new complete Review before accepting or committing.';
+  return undefined;
+}
 
 export type ChangeCheckStatus = 'passed' | 'failed' | 'missing';
 

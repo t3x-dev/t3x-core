@@ -18,6 +18,7 @@ import {
   findBranchesByProject,
   findConversationById,
   getCommitHistoryEntry,
+  getRepositoryDecisionAuditByDigest,
   getTransitionRefHead,
   getTransitionViewForCommit,
   getVerifiedTransitionCommitGraph,
@@ -231,6 +232,8 @@ const CommitHistoryProjectionSchema = z.object({
   schema: z.literal('t3x/commit/v2'),
   parents: z.array(z.string()),
   recordedAt: z.string(),
+  /** Origin ref recorded when this Commit was created, not the ref used to walk history. */
+  branch: z.string().optional(),
   result: z.object({
     mode: z.literal('state_descriptor'),
     descriptor: DescriptorBaseSchema.extend({
@@ -543,7 +546,7 @@ commitRoutes.openapi(getCommitRoute, async (c) => {
             content,
             project_id: projectId,
             message: semanticCommit?.intent ?? proposalMessage(graph),
-            branch: 'main',
+            branch: await commitOriginBranch(db, projectId, graph.commit.decision.digest),
             sources: null,
             provenance: { method: 'transition_v2' },
           },
@@ -557,10 +560,15 @@ commitRoutes.openapi(getCommitRoute, async (c) => {
   }
 });
 
+async function commitOriginBranch(db: RepositoryDB, projectId: string, decisionDigest: string) {
+  const audit = await getRepositoryDecisionAuditByDigest(db, projectId, decisionDigest);
+  // Never attribute an imported/unattributed Commit to the currently viewed branch.
+  return audit?.refName ?? 'unknown';
+}
+
 async function withSemanticCommitFields(
   db: RepositoryDB,
   projectId: string,
-  branch: string,
   entry: CommitHistoryEntry
 ) {
   const semanticCommit = await getRepositorySemanticCommitIfSupported(db, entry.id, projectId);
@@ -569,7 +577,7 @@ async function withSemanticCommitFields(
     : await getVerifiedTransitionCommitGraph(db, projectId, entry.id);
   return {
     ...entry,
-    branch,
+    branch: await commitOriginBranch(db, projectId, entry.assurance.decision.digest),
     content:
       semanticCommit?.semanticContent ??
       (graph ? semanticContentFromTransitionState(graph.state) : undefined),
@@ -595,7 +603,7 @@ async function listCommitHistoryForRef(
     seen.add(digest);
     const entry = await getCommitHistoryEntry(db, projectId, digest);
     if (!entry) continue;
-    commits.push(await withSemanticCommitFields(db, projectId, refName, entry));
+    commits.push(await withSemanticCommitFields(db, projectId, entry));
     stack.push(...entry.parents);
   }
   return commits.slice(options.offset, options.offset + options.limit);

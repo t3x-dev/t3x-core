@@ -188,7 +188,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-export const POSTGRES_SCHEMA_VERSION = 77;
+export const POSTGRES_SCHEMA_VERSION = 78;
 
 function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
   if (!tableExists) return 'missing';
@@ -296,8 +296,9 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
     return;
   }
 
-  // First run or version bump — execute full schema init. The v77 upgrade also
-  // repairs early v76 tables missing resolvable through ensureRepositoryPaths.
+  // First run or version bump — execute full schema init. v78 combines both v77
+  // branches: public publisher ownership and permanent-deletion path cleanup.
+  // It also repairs early v76 tables missing resolvable through ensureRepositoryPaths.
   await sql.unsafe(`
     -- Projects table
     CREATE TABLE IF NOT EXISTS projects (
@@ -2607,6 +2608,13 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS schema_studio_candidates_project
       ON schema_studio_candidates(project_id, created_at, id);
+  `);
+
+  // Public releases retain namespace ownership independently of their source repository.
+  // Existing project-owned/private releases are deliberately not made public.
+  await sql.unsafe(`
+    ALTER TABLE yschema_artifacts ADD COLUMN IF NOT EXISTS publisher_namespace_id TEXT
+      REFERENCES namespaces(namespace_id) ON DELETE RESTRICT;
   `);
 
   // v76 reserves addresses; v77 releases linked claims on permanent deletion.

@@ -17,6 +17,11 @@ export interface ApiPullRequestMergeReviewNode {
 }
 
 export interface ApiPullRequestMergeReview {
+  schema_merge?: {
+    schema_hash: string;
+    root_key: string;
+    changes: Array<{ kind: 'ADD' | 'CHANGE' | 'REMOVE'; path: string; summary: string }>;
+  };
   draft_id: string;
   decision_revision: number;
   decisions: MergeDecision | null;

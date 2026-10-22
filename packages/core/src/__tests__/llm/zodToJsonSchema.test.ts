@@ -105,6 +105,37 @@ describe('zodToJsonSchema', () => {
     expect(json.type).toBe('string');
   });
 
+  it('represents recursive values with references instead of repeatedly expanding their branches', () => {
+    let expansions = 0;
+    const value: z.ZodType = z.lazy(() => {
+      // Keep the old converter's failure bounded; a test timeout cannot stop synchronous recursion.
+      if (++expansions > 8) throw new Error('Unbounded recursive schema expansion');
+      return z.union([z.string(), z.array(value), z.record(z.string(), value)]);
+    });
+    const json = zodToJsonSchema(value);
+    expect(expansions).toBe(1);
+    expect(json.$ref).toMatch(/^#\/\$defs\//);
+    const definition = json.$defs[json.$ref.split('/').at(-1)];
+    expect(definition.anyOf).toEqual([
+      { type: 'string' },
+      { type: 'array', items: { $ref: json.$ref } },
+      { type: 'object', additionalProperties: { $ref: json.$ref } },
+    ]);
+    expect(JSON.stringify(json).length).toBeLessThan(1000);
+  });
+
+  it('does not treat reuse of an acyclic lazy schema as recursion or retain references across calls', () => {
+    const value = z.lazy(() => z.string().min(1));
+    const schema = z.object({ first: value, second: value });
+    const json = zodToJsonSchema(schema);
+    expect(json.properties).toEqual({
+      first: { type: 'string', minLength: 1 },
+      second: { type: 'string', minLength: 1 },
+    });
+    expect(json.$defs).toBeUndefined();
+    expect(zodToJsonSchema(schema)).toEqual(json);
+  });
+
   it('converts discriminatedUnion to anyOf', () => {
     const schema = z.discriminatedUnion('type', [
       z.object({ type: z.literal('a'), value: z.string() }),

@@ -1,4 +1,5 @@
 import {
+  type AssistantSchemaSettingsInput,
   type StudioPreviewInput,
   type StudioSample,
   StudioSampleValueSchema,
@@ -12,7 +13,12 @@ import {
   compileWorkspaceSchemaDefinition,
   WorkspaceSchemaYOpsError,
 } from '@t3x-dev/core';
-import { type AnyDB, findSchemaStudioCandidate, findWorkspaceDraft } from '@t3x-dev/storage';
+import {
+  type AnyDB,
+  findSchemaStudioCandidate,
+  findWorkspaceDraft,
+  findYSchemaCompositionSnapshot,
+} from '@t3x-dev/storage';
 import {
   compileYSchemaCompositionV2,
   diffYSchemas,
@@ -26,12 +32,15 @@ import type { Context } from 'hono';
 import { assessWorkspaceSchemaImpact, workspaceContent } from './schema-evolution-impact';
 import { resolveStudioSource, schemaSourceAdoptionReason } from './schema-studio';
 import { workspaceAuthoringState } from './workspace-authoring';
+import { resolveWorkspaceSchemaEditBasis } from './workspace-schema-edit-basis';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
 import { artifactViewToOpenModule } from './yschema-artifact-registry';
+import { resolveBuiltInYSchema } from './yschema-registry';
 export class StudioError extends Error {
   constructor(
     public code: 'NOT_FOUND' | 'INVALID_REQUEST' | 'CONFLICT' | 'FORBIDDEN' | 'REVIEW_REQUIRED',
-    message: string
+    message: string,
+    public details?: Record<string, unknown>
   ) {
     super(message);
   }
@@ -143,11 +152,19 @@ export async function compileStudioSelection(
       throw new StudioError('INVALID_REQUEST', 'Unsupported published Schema definition.');
     const schema = normalizeYSchemaObject(view.manifest.schema);
     const schemaHash = await sha256CompositionValue(schema);
-    const registry = view.manifest.registry as Record<string, unknown> | undefined;
+    const registry = (view.manifest.registry ?? {}) as Record<string, unknown>;
+    // Default bindings predate the publication registry. Their entire versioned
+    // contract is built in: verify those exact bytes, never the latest Core.
+    const builtIn = resolveBuiltInYSchema(view.canonicalName, view.version);
+    const exactBuiltIn =
+      !registry.schemaHash &&
+      view.visibility === 'official' &&
+      builtIn &&
+      (await sha256CompositionValue(builtIn)) === schemaHash;
     // Publication assigns release name/version before recording registry.schemaHash.
     // compiledSchemaHash identifies the earlier compiler output (see publish route).
     // resolveStudioSource independently verifies the entire pinned manifest hash.
-    if (registry?.schemaHash !== schemaHash)
+    if (registry.schemaHash !== schemaHash && !exactBuiltIn)
       throw new StudioError(
         'CONFLICT',
         'Published Schema integrity does not match its compiled definition.'
@@ -234,7 +251,8 @@ export async function previewStudio(
   c: Context,
   db: AnyDB,
   projectId: string,
-  input: StudioPreviewInput
+  input: StudioPreviewInput,
+  confirmedChange?: AssistantSchemaSettingsInput
 ) {
   let draft = input.workspaceId ? await findWorkspaceDraft(db, projectId, input.workspaceId) : null;
   let editCandidate: WorkspaceSchemaEditCandidate | null = null;
@@ -279,6 +297,35 @@ export async function previewStudio(
       'CONFLICT',
       'The selected base sources changed after this Schema edit candidate was saved.'
     );
+  let boundSchema: Record<string, unknown> | undefined;
+  if (!editCandidate && !input.localContribution && draft?.workspace_state) {
+    const resolved = await resolveWorkspaceYSchema(draft.workspace_state, db, projectId);
+    if (resolved.schema) {
+      try {
+        const basis = await resolveWorkspaceSchemaEditBasis(
+          c,
+          db,
+          projectId,
+          draft.workspace_state,
+          resolved.schema
+        );
+        if (basis.selectionHash === selected.selectionHash) {
+          boundSchema = { ...basis.schema };
+          if (!input.schemaDefinition || input.baseSchemaHash === basis.schemaHash)
+            selected = {
+              ...selected,
+              schema: basis.schema,
+              schemaHash: basis.schemaHash,
+              renderPlan: basis.renderPlan,
+              origins: basis.origins,
+            } as typeof selected;
+        }
+      } catch (error) {
+        if (!(error instanceof StudioError) || input.schemaDefinition) throw error;
+        // An unrelated selection may still be reviewed; never substitute its bytes for the bound Base.
+      }
+    }
+  }
   if (editCandidate?.authoringDraft || input.schemaDefinition) {
     if (!selected.report.valid)
       throw new StudioError(
@@ -287,6 +334,29 @@ export async function previewStudio(
       );
     try {
       const authoring = editCandidate?.authoringDraft;
+      if (authoring?.base.kind === 'composition') {
+        const base = authoring.base;
+        const snapshot = await findYSchemaCompositionSnapshot(db, {
+          project_id: projectId,
+          composition_id: base.compositionId,
+          composition_revision: base.compositionRevision,
+          compiled_schema_hash: base.schemaHash,
+        });
+        if (
+          !snapshot ||
+          snapshot.compositionHash !== base.compositionHash ||
+          (await sha256CompositionValue(normalizeYSchemaObject(snapshot.schemaJson))) !==
+            base.schemaHash
+        )
+          throw new StudioError('CONFLICT', 'The exact Schema edit Base snapshot is unavailable.');
+        selected = {
+          ...selected,
+          schema: normalizeYSchemaObject(snapshot.schemaJson),
+          schemaHash: base.schemaHash,
+          renderPlan: snapshot.renderPlanJson as typeof selected.renderPlan,
+          origins: snapshot.originsJson as typeof selected.origins,
+        } as typeof selected;
+      }
       const expected = authoring?.base.schemaHash ?? input.baseSchemaHash;
       if (!expected || expected !== selected.schemaHash)
         throw new StudioError(
@@ -366,6 +436,7 @@ export async function previewStudio(
     binding: Record<string, unknown> | null;
     canBind: boolean;
     changes: ReturnType<typeof diffYSchemas>;
+    boundSchema?: Record<string, unknown>;
   } | null = null;
   let impact: Awaited<ReturnType<typeof assessWorkspaceSchemaImpact>> | null = null;
   let baseSchemaHash: string | null = null;
@@ -391,6 +462,7 @@ export async function previewStudio(
     baseSchemaHash = await sha256CompositionValue(base);
     workspace = {
       id: input.workspaceId,
+      ...(boundSchema ? { boundSchema } : {}),
       revision: draft.revision,
       canBind: (() => {
         const state = draft.workspace_state!;
@@ -428,7 +500,8 @@ export async function previewStudio(
       projectId,
       draft.workspace_state,
       selected.schema,
-      selected.report.valid
+      selected.report.valid,
+      confirmedChange
     );
     if (!selected.adoption.allowed) {
       impact.status = 'blocked';

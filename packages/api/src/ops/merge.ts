@@ -16,6 +16,7 @@ import type {
   SemanticContent,
 } from '@t3x-dev/core';
 import type { TransitionPolicyBinding } from '@t3x-dev/storage';
+import { RepositorySchemaMergeError } from '../lib/repository-schema-merge';
 import {
   commitRepositoryYOpsMerge,
   prepareRepositoryYOpsMerge,
@@ -39,7 +40,7 @@ function mapMergeServiceError(error: unknown): never {
   if (error instanceof RepositoryMergeCommitNotFoundError) {
     throw new MergeError('NOT_FOUND', error.message);
   }
-  if (error instanceof RepositoryMergeInvalidError) {
+  if (error instanceof RepositoryMergeInvalidError || error instanceof RepositorySchemaMergeError) {
     throw new MergeError('INVALID_REQUEST', error.message);
   }
   throw error;

@@ -1631,6 +1631,7 @@ describe('T3xClient', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({
+            visibility: 'community',
             composition_revision: 2,
             composition_hash: 'sha256:composition',
             canonical_name: 'projects/project-a/prd',

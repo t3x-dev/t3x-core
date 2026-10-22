@@ -3,6 +3,7 @@ import type { ApiKey } from '@t3x-dev/core';
 import {
   type AnyDB,
   createMaterial,
+  findBranchByName,
   findWorkspaceDraft,
   findYSchemaArtifactVersion,
   findYSchemaCompositionSnapshot,
@@ -15,14 +16,18 @@ import {
   transactWorkspaceAuthoring,
   upsertWorkspaceDraft,
   upsertYSchemaArtifactVersion,
+  yschemaCompositionSnapshots,
 } from '@t3x-dev/storage';
 import { normalizeYSchemaObject, sha256CompositionValue } from '@t3x-dev/yschema';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
+import { createBranchWorkspace } from '../lib/branch-workspace';
 import { commitTransition, decideTransition } from '../lib/transition-control-plane/lifecycle';
 import {
   initializeWorkspaceAuthoring,
   publishWorkspaceAuthoringAction,
+  readWorkspaceAuthoring,
   workspaceAuthoringState,
 } from '../lib/workspace-authoring';
 import { prepareWorkspaceAuthoringReview } from '../lib/workspace-authoring-review';
@@ -72,10 +77,12 @@ vi.mock('@t3x-dev/storage', async (original) => {
 });
 
 import { schemaStudioRoutes } from '../routes/schema-studio.openapi';
+import { workspaceAuthoringRoutes } from '../routes/workspace-authoring.openapi';
 import { yschemaCompositionRoutes } from '../routes/yschema-composition.openapi';
 
 const app = new Hono().route('/', schemaStudioRoutes);
 app.route('/', yschemaCompositionRoutes);
+app.route('/', workspaceAuthoringRoutes);
 const baseSchema = normalizeYSchemaObject({
   yschema: '0.1',
   name: 'base',
@@ -105,7 +112,7 @@ const post = (path: string, body: unknown, instance = app) =>
 const studio = (action: string, body: unknown) =>
   post(`/v1/projects/${projectId}/schema-studio/${action}`, body);
 const preparationPath = (workspaceId: string) =>
-  `/v1/projects/${projectId}/schema-studio/preparation/${workspaceId}`;
+  `/v1/projects/${projectId}/schema-studio/preparation/${encodeURIComponent(workspaceId)}`;
 async function addSchema(name: string, schema: ReturnType<typeof normalizeYSchemaObject>) {
   const manifest = {
     apiVersion: 't3x.dev/yschema-blueprint/v1',
@@ -143,10 +150,15 @@ async function addSchema(name: string, schema: ReturnType<typeof normalizeYSchem
   expect(response.status).toBe(200);
   return (await response.json()).data.id as string;
 }
-async function seed(workspaceId: string, semantic = false) {
+async function seed(
+  workspaceId: string,
+  semantic = false,
+  options?: { document: Record<string, unknown>; schema?: typeof baseSchema }
+) {
   await insertBranch(db, { projectId, name: workspaceId });
-  const hash = await sha256CompositionValue(baseSchema);
-  const compositionHash = await sha256CompositionValue({ workspaceId, schema: baseSchema });
+  const definition = options?.schema ?? baseSchema;
+  const hash = await sha256CompositionValue(definition);
+  const compositionHash = await sha256CompositionValue({ workspaceId, schema: definition });
   await saveYSchemaCompositionSnapshot(db, {
     snapshot_id: `base:${workspaceId}`,
     project_id: projectId,
@@ -156,7 +168,7 @@ async function seed(workspaceId: string, semantic = false) {
     compiled_schema_hash: hash,
     compiler_version: 'test',
     manifest_json: {},
-    schema_json: { ...baseSchema },
+    schema_json: { ...definition },
     render_plan_json: [],
     origins_json: {},
   });
@@ -182,22 +194,26 @@ async function seed(workspaceId: string, semantic = false) {
       ],
     },
   });
-  const document = semantic
-    ? {
-        domain: 't3x.dev/semantic-content',
-        version: 1,
-        content: {
-          trees: [
-            {
-              key: 'candidate',
-              slots: {},
-              children: [{ key: 'requirements', slots: { title: 'Edited content' }, children: [] }],
-            },
-          ],
-          relations: [],
-        },
-      }
-    : { candidate: { requirements: { title: 'Original content' } } };
+  const document =
+    options?.document ??
+    (semantic
+      ? {
+          domain: 't3x.dev/semantic-content',
+          version: 1,
+          content: {
+            trees: [
+              {
+                key: 'candidate',
+                slots: {},
+                children: [
+                  { key: 'requirements', slots: { title: 'Edited content' }, children: [] },
+                ],
+              },
+            ],
+            relations: [],
+          },
+        }
+      : { candidate: { requirements: { title: 'Original content' } } });
   const init = await initializeWorkspaceAuthoring(db, {
     projectId,
     workspaceId,
@@ -207,7 +223,7 @@ async function seed(workspaceId: string, semantic = false) {
     actor: { kind: 'human', id: 'human:local-user' },
     legacyDocument: document as never,
   });
-  if (!semantic)
+  if (!semantic && !options)
     await publishWorkspaceAuthoringAction(db, {
       projectId,
       workspaceId,
@@ -263,7 +279,9 @@ beforeAll(async () => {
   const setup = await setupTestDB();
   db = setup.db;
   cleanup = setup.cleanup;
-  projectId = (await insertProject(db, { name: 'Schema preparation' })).projectId;
+  projectId = (
+    await insertProject(db, { name: 'Schema preparation', ownerId: 'schema-preparation-owner' })
+  ).projectId;
   sourceId = (await insertProject(db, { name: 'Preparation sources' })).projectId;
   renameId = await addSchema('renamed', migratedSchema);
   inputId = await addSchema(
@@ -289,6 +307,126 @@ beforeEach(() => {
 });
 
 const reviewer = { kind: 'human' as const, id: 'human:local-user' };
+it('prepares an equivalent explicit repeated:false with empty migration commands and unchanged content', async () => {
+  const id = 'equivalent-repeated-default';
+  await seed(id, true);
+  const next = normalizeYSchemaObject({
+    ...baseSchema,
+    nodes: {
+      requirements: {
+        ...baseSchema.nodes.requirements,
+        repeated: false,
+        slots: { ...baseSchema.nodes.requirements!.slots, advantage: { type: 'string' } },
+      },
+    },
+  });
+  const candidateId = await addSchema('equivalent-repeated-default', next);
+  const before = (await findWorkspaceDraft(db, projectId, id))!;
+  const contentBefore = currentComposition(workspaceAuthoringState(before.workspace_state).ledger);
+  const body = await input(id, candidateId);
+  const response = await post(`${preparationPath(id)}/preview`, body);
+  expect(response.status).toBe(200);
+  const preview = (await response.json()).data;
+  expect(preview).toMatchObject({ canPrepare: true, issues: [] });
+  expect(preview.after).toEqual(preview.before);
+  expect(preview.impact.items.some((item: { kind: string }) => item.kind === 'needs_mapping')).toBe(
+    false
+  );
+  const prepared = await post(preparationPath(id), {
+    ...body,
+    previewHash: preview.previewHash,
+    requestId: 'prepare-equivalent-default',
+  });
+  expect(prepared.status).toBe(200);
+  const after = (await findWorkspaceDraft(db, projectId, id))!;
+  expect(after.revision).toBe(before.revision + 1);
+  expect(currentComposition(workspaceAuthoringState(after.workspace_state).ledger)).toEqual(
+    contentBefore
+  );
+  expect(after.workspace_state.schemaBindings[0].schemaHash).toBe(preview.schemaHash);
+  expect(
+    (await resolveWorkspaceYSchema(after.workspace_state, db, projectId)).schema?.nodes.requirements
+      ?.repeated
+  ).toBe(false);
+  // Reading the adopted contract must work even without studioSources, and
+  // must not rebind, initialize, migrate content, or change the Draft revision.
+  expect(after.workspace_state.schemaBindings[0].compositionId).toMatch(/^prepared:/);
+  expect(after.workspace_state.schemaBindings[0].studioSources).toBeUndefined();
+  const read = await app.request(`/v1/projects/${projectId}/workspaces/${id}/authoring`);
+  expect(read.status).toBe(200);
+  expect((await read.json()).data).toMatchObject({
+    workspaceRevision: after.revision,
+    current: contentBefore,
+    currentSchema: {
+      status: 'bound',
+      schemaHash: preview.schemaHash,
+      definition: next,
+      bindings: after.workspace_state.schemaBindings,
+    },
+  });
+  expect(await findWorkspaceDraft(db, projectId, id)).toEqual(after);
+});
+
+it('reads only the bound composition revision and fails closed on missing or mismatched snapshots without hiding content', async () => {
+  const id = 'exact-authoring-schema';
+  await seed(id);
+  const saved = (await findWorkspaceDraft(db, projectId, id))!;
+  const bindings = saved.workspace_state.schemaBindings;
+  const newer = normalizeYSchemaObject({ ...baseSchema, name: 'newer-unbound-definition' });
+  await saveYSchemaCompositionSnapshot(db, {
+    snapshot_id: `newer:${id}`,
+    project_id: projectId,
+    composition_id: bindings[0].compositionId,
+    composition_revision: 2,
+    composition_hash: await sha256CompositionValue({ newer }),
+    compiled_schema_hash: await sha256CompositionValue(newer),
+    compiler_version: 'test',
+    manifest_json: {},
+    schema_json: { ...newer },
+    render_plan_json: [],
+    origins_json: {},
+  });
+  const view = await readWorkspaceAuthoring(db, { projectId, workspaceId: id });
+  expect(view.currentSchema).toEqual({
+    status: 'bound',
+    schemaHash: bindings[0].schemaHash,
+    definition: baseSchema,
+    bindings,
+  });
+  const inspected = await readWorkspaceAuthoring(db, {
+    projectId,
+    workspaceId: id,
+    actionId: `import:${id}`,
+  });
+  expect(inspected.currentSchema).toEqual(view.currentSchema);
+  expect(inspected.selected?.after).not.toEqual(inspected.current);
+  expect(await findWorkspaceDraft(db, projectId, id)).toEqual(saved);
+  for (const drift of [
+    { compositionRevision: 99 },
+    { compositionHash: `sha256:${'a'.repeat(64)}` },
+    { schemaHash: `sha256:${'b'.repeat(64)}` },
+  ]) {
+    const { draft: changed } = await transactWorkspaceAuthoring(
+      db,
+      { projectId, workspaceId: id, refName: id },
+      async (_tx, current) => ({
+        workspace: { ...current.workspace_state, schemaBindings: [{ ...bindings[0], ...drift }] },
+        value: null,
+      })
+    );
+    const unresolved = await readWorkspaceAuthoring(db, { projectId, workspaceId: id });
+    expect(unresolved.currentSchema).toEqual({
+      status: 'unknown',
+      schemaHash: null,
+      definition: null,
+      bindings: [],
+    });
+    expect(unresolved.current).toEqual(view.current);
+    expect(unresolved.actions).toEqual(view.actions);
+    expect(await findWorkspaceDraft(db, projectId, id)).toEqual(changed);
+  }
+});
+
 async function fullReview(workspaceId: string, requestId = `full-review:${workspaceId}`) {
   const draft = (await findWorkspaceDraft(db, projectId, workspaceId))!;
   const { ledger, basis } = workspaceAuthoringState(draft.workspace_state);
@@ -321,6 +459,32 @@ async function fullDecision(
     },
   });
 }
+it.each([
+  ['empty', {}],
+  ['missing-required-node', { candidate: {} }],
+  ['wrong-root', { unrelated: { requirements: { title: 'Do not validate this root' } } }],
+])('blocks accepting a bound Schema Review with %s content even on an unprotected branch', async (kind, document) => {
+  const id = `bound-review-${kind}`;
+  const schema = normalizeYSchemaObject({
+    ...baseSchema,
+    nodes: {
+      requirements: {
+        required: true,
+        requiredSlots: ['title'],
+        slots: { title: { type: 'string' } },
+      },
+    },
+  });
+  await seed(id, false, { document, schema });
+  const before = (await findWorkspaceDraft(db, projectId, id))!;
+  const reviewed = await fullReview(id);
+  await expect(fullDecision(id, reviewed)).rejects.toThrow();
+  expect((await getTransitionRefHead(db, { projectId, refName: id })).head).toBeNull();
+  expect(await findWorkspaceDraft(db, projectId, id)).toEqual(before);
+  const rejected = await fullDecision(id, reviewed, 'rejected');
+  expect(rejected.commit).toBeUndefined();
+  expect((await getTransitionRefHead(db, { projectId, refName: id })).head).toBeNull();
+});
 async function editReviewedDraft(workspaceId: string) {
   const draft = (await findWorkspaceDraft(db, projectId, workspaceId))!;
   const { ledger, basis } = workspaceAuthoringState(draft.workspace_state);
@@ -343,6 +507,146 @@ async function editReviewedDraft(workspaceId: string) {
     ],
   });
 }
+it('forks one exact committed Schema/content pair without importing the source Draft or sharing its edits', async () => {
+  const source = 'fork-schema-source';
+  await seed(source);
+  const initialReview = await fullReview(source);
+  await fullDecision(source, initialReview);
+  const committedSource = (await findWorkspaceDraft(db, projectId, source))!;
+  const committedHead = committedSource.parent_commit_hash;
+  // The parent now has uncommitted Schema and content changes. A fork must ignore both.
+  expect((await post(preparationPath(source), await mapping(source))).status).toBe(200);
+  const parentPending = (await findWorkspaceDraft(db, projectId, source))!;
+  expect(
+    (await resolveWorkspaceYSchema(parentPending.workspace_state, db, projectId)).schema
+  ).toEqual(migratedSchema);
+  const branch = await createBranchWorkspace(db, {
+    projectId,
+    name: 'fork/child',
+    parentBranch: source,
+  });
+  expect(branch.headCommitHash).toBe(committedHead);
+  const childId = 'workspace_branch:fork%2Fchild';
+  const child = (await findWorkspaceDraft(db, projectId, childId))!;
+  expect(currentComposition(workspaceAuthoringState(child.workspace_state).ledger)).toEqual(
+    initialReview.schemaReview.draftContent
+  );
+  expect(child.workspace_state.schemaBindings).toEqual(initialReview.schemaReview.draft.bindings);
+  expect((await resolveWorkspaceYSchema(child.workspace_state, db, projectId)).schema).toEqual(
+    baseSchema
+  );
+  expect(child.workspace_state.workspaceSchemaBase).toEqual({
+    refHead: committedHead,
+    snapshot: initialReview.schemaReview.draft,
+  });
+  expect(workspaceAuthoringState(child.workspace_state).ledger.actions).toHaveLength(0);
+  expect(child.workspace_state).not.toHaveProperty('schemaEditCandidate');
+  expect(child.workspace_state).not.toHaveProperty('assistantSchemaSettings');
+  const cleanReview = await fullReview(childId);
+  expect(cleanReview.schemaReview.base.schemaHash).toBe(
+    initialReview.schemaReview.draft.schemaHash
+  );
+  expect(cleanReview.schemaReview.changes).toEqual([]);
+  // A child of an unmodified fork still resolves the original Commit's authority and Schema.
+  await createBranchWorkspace(db, {
+    projectId,
+    name: 'fork-grandchild',
+    parentBranch: branch.name,
+  });
+  const grandchildId = 'workspace_branch:fork-grandchild';
+  const grandchild = (await findWorkspaceDraft(db, projectId, grandchildId))!;
+  expect(grandchild.workspace_state.schemaBindings).toEqual(child.workspace_state.schemaBindings);
+  // Applying and committing Schema/content on the child never advances its parent or sibling.
+  const childSchema = normalizeYSchemaObject({
+    ...baseSchema,
+    nodes: { ...baseSchema.nodes, child_only: { slots: { note: { type: 'string' } } } },
+  });
+  const childSource = await addSchema('fork-child-only', childSchema);
+  const childPlan = await input(childId, childSource);
+  const childPreviewResponse = await post(`${preparationPath(childId)}/preview`, childPlan);
+  expect(childPreviewResponse.status).toBe(200);
+  const childPreview = (await childPreviewResponse.json()).data;
+  expect(childPreview.canPrepare).toBe(true);
+  expect(
+    (
+      await post(preparationPath(childId), {
+        ...childPlan,
+        previewHash: childPreview.previewHash,
+        requestId: 'fork-child-only-schema',
+      })
+    ).status
+  ).toBe(200);
+  const childEdited = (await findWorkspaceDraft(db, projectId, childId))!;
+  const childAuthoring = workspaceAuthoringState(childEdited.workspace_state);
+  await publishWorkspaceAuthoringAction(db, {
+    projectId,
+    workspaceId: childId,
+    actor: reviewer,
+    actionId: 'fork-child-content',
+    channel: 'manual',
+    expectedWorkspaceRevision: childEdited.revision,
+    expectedRevision: childAuthoring.ledger.compositionRevision,
+    expectedRefHead: childAuthoring.basis.refHead,
+    operations: [
+      { set: { path: 'candidate/requirements/title', value: 'Only on the child branch' } },
+    ],
+  });
+  const childReview = await fullReview(childId, 'fork-child-review');
+  await fullDecision(childId, childReview);
+  expect((await findBranchByName(db, projectId, source))!.headCommitHash).toBe(committedHead);
+  expect(await findWorkspaceDraft(db, projectId, source)).toEqual(parentPending);
+  expect(await findWorkspaceDraft(db, projectId, grandchildId)).toEqual(grandchild);
+  expect((await findBranchByName(db, projectId, branch.name))!.headCommitHash).not.toBe(
+    committedHead
+  );
+  const advanced = await createBranchWorkspace(db, {
+    projectId,
+    name: 'fork-after-child-change',
+    parentBranch: branch.name,
+  });
+  const next = (await findWorkspaceDraft(
+    db,
+    projectId,
+    'workspace_branch:fork-after-child-change'
+  ))!;
+  expect(next.parent_commit_hash).toBe(advanced.headCommitHash);
+  expect((await resolveWorkspaceYSchema(next.workspace_state, db, projectId)).schema).toEqual(
+    childSchema
+  );
+  expect(currentComposition(workspaceAuthoringState(next.workspace_state).ledger)).toEqual(
+    childReview.schemaReview.draftContent
+  );
+});
+
+it('does not leave a partial branch if its inherited Schema cannot be resolved', async () => {
+  const source = 'fork-schema-unavailable';
+  await seed(source);
+  await fullDecision(source, await fullReview(source));
+  const before = (await findWorkspaceDraft(db, projectId, source))!;
+  await db
+    .delete(yschemaCompositionSnapshots)
+    .where(
+      and(
+        eq(yschemaCompositionSnapshots.projectId, projectId),
+        eq(yschemaCompositionSnapshots.compositionId, `base:${source}`)
+      )
+    );
+  await expect(
+    createBranchWorkspace(db, { projectId, name: 'missing-schema-fork', parentBranch: source })
+  ).rejects.toThrow(/Schema failed verification/);
+  expect(await findBranchByName(db, projectId, 'missing-schema-fork')).toBeNull();
+  expect(
+    await findWorkspaceDraft(db, projectId, 'workspace_branch:missing-schema-fork')
+  ).toBeNull();
+  // A project-scoped source cannot be inherited through another project either.
+  await expect(
+    createBranchWorkspace(db, { projectId: sourceId, name: 'invalid-fork', parentBranch: source })
+  ).rejects.toThrow();
+  expect(await findBranchByName(db, sourceId, 'invalid-fork')).toBeNull();
+  expect(await findWorkspaceDraft(db, sourceId, 'workspace_branch:invalid-fork')).toBeNull();
+  expect(await findWorkspaceDraft(db, projectId, source)).toEqual(before);
+});
+
 it('SE-011 freezes complete schema/content, commits exact Schema Hash, and uses that Base next round', async () => {
   const id = 'full-review-two-rounds';
   await seed(id);
@@ -520,8 +824,54 @@ it('edits an existing strict Schema through guarded YOps, adopts, prepares evide
   expect(reviewed.schemaReview.draft.schemaHash).toBe(saved.authoringDraft.resultSchemaHash);
   const committed = await fullDecision(id, reviewed);
   expect(committed.commit).toBeDefined();
+  const originalAfterCommit = (await findWorkspaceDraft(db, projectId, id))!;
+  await createBranchWorkspace(db, { projectId, name: 'studio-exact-fork', parentBranch: id });
+  const forkId = 'workspace_branch:studio-exact-fork';
+  const forkPreviewInput = { workspaceId: forkId, candidateIds: [candidateId] };
+  const forkPreview = (await (await studio('preview', forkPreviewInput)).json()).data;
+  expect(forkPreview.schema).toEqual(definition);
+  expect(forkPreview.workspace.boundSchema).toEqual(definition);
+  const forkDefinition = normalizeYSchemaObject({
+    ...definition,
+    nodes: { ...definition.nodes, child_only: { slots: {} } },
+  });
+  const forkSaveResponse = await app.request(
+    `/v1/projects/${projectId}/schema-studio/edit-candidates/${encodeURIComponent(forkId)}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...forkPreviewInput,
+        ifRevision: 0,
+        retryKey: 'fork-edit-base',
+        intent: 'Add child-only Node without losing inherited local changes',
+        origin: 'studio',
+        localContribution: {},
+        schemaDefinition: forkDefinition,
+        baseSchemaHash: forkPreview.schemaHash,
+      }),
+    }
+  );
+  expect(forkSaveResponse.status).toBe(200);
+  const forkCandidate = (await forkSaveResponse.json()).data.candidate;
+  expect(forkCandidate.authoringDraft.base.kind).toBe('composition');
+  expect(forkCandidate.baseDefinition).toEqual(definition);
+  const forkEdited = (
+    await (
+      await studio('preview', {
+        ...forkPreviewInput,
+        schemaEditCandidate: {
+          candidateId: forkCandidate.candidateId,
+          revision: forkCandidate.revision,
+        },
+      })
+    ).json()
+  ).data;
+  expect(forkEdited.schema).toEqual(forkDefinition);
+  expect(await findWorkspaceDraft(db, projectId, id)).toEqual(originalAfterCommit);
   preview = (await (await studio('preview', previewInput)).json()).data;
   const publishInput = {
+    visibility: 'community',
     candidateIds: [candidateId],
     schemaEditCandidate: candidateRef,
     ifRevision: preview.workspace.revision,
@@ -542,14 +892,14 @@ it('edits an existing strict Schema through guarded YOps, adopts, prepares evide
     project_id: projectId,
   });
   expect(stored!.manifest.schema).toMatchObject({ strict: true, nodes: definition.nodes });
-  expect(stored!.manifest.blueprint).toMatchObject({ authoringDraft: saved.authoringDraft });
+  expect(stored!.manifest.blueprint).not.toHaveProperty('authoringDraft');
   const catalog = await app.request(
     `/v1/projects/${projectId}/yschema/catalog?${new URLSearchParams({ canonical_name: publishInput.canonicalName })}`
   );
   expect(catalog.status).toBe(200);
   expect((await catalog.json()).data.items[0].release.hash).toBe(release.source.hash);
   const reading = await app.request(
-    `/v1/projects/${projectId}/schema-studio/source?${new URLSearchParams({ sourceProjectId: projectId, canonicalName: publishInput.canonicalName, version: '1.0.0', expectedHash: release.source.hash })}`
+    `/v1/projects/${projectId}/schema-studio/source?${new URLSearchParams({ canonicalName: publishInput.canonicalName, version: '1.0.0', expectedHash: release.source.hash })}`
   );
   expect(reading.status).toBe(200);
   expect((await reading.json()).data.manifest).toEqual(stored!.manifest);

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
+import type { AssistantSchemaSettingsView } from '@t3x-dev/api-client';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceComposeReviewSurface } from '@/components/workspaces/WorkspaceComposeReviewSurface';
@@ -14,6 +15,22 @@ import { type ProjectSummary, useProjectStore } from '@/store/projectStore';
 
 const activityMocks = vi.hoisted(() => ({
   value: undefined as ReturnType<typeof useComposeActivity> | undefined,
+}));
+const schemaCardMocks = vi.hoisted(() => ({
+  record: null as AssistantSchemaSettingsView | null,
+  error: undefined,
+  generating: false,
+  generate: vi.fn(),
+  save: vi.fn(),
+}));
+vi.mock('@/hooks/schemas/useAssistantSchemaSettings', () => ({
+  useAssistantSchemaSettings: () => schemaCardMocks,
+}));
+vi.mock('@/hooks/schemas/useWorkspaceDraftSchema', () => ({
+  useWorkspaceDraftSchema: () => ({ definition: undefined, loading: false }),
+}));
+vi.mock('@/hooks/schemas/useWorkspaceSchemaPending', () => ({
+  useWorkspaceSchemaPending: () => ({ data: { status: 'none', pending: null }, loading: false }),
 }));
 const bootstrapMocks = vi.hoisted(() => ({
   value: {
@@ -68,6 +85,7 @@ vi.mock('@/hooks/workspaces/useComposeActivity', () => ({
 }));
 
 const comparisonMocks = vi.hoisted(() => ({ validate: vi.fn() }));
+const schemaDiscussion = vi.fn();
 vi.mock('@/hooks/workspaces/useWorkspaceYOps', () => ({
   validateWorkspaceCandidateYOps: comparisonMocks.validate,
 }));
@@ -159,6 +177,10 @@ vi.mock('next/navigation', () => ({
 describe('WorkspaceComposeReviewSurface composer', () => {
   beforeEach(() => {
     useProjectStore.setState({ projects: [], details: {} });
+    schemaCardMocks.record = null;
+    localStorage.removeItem('t3x-workspace-draft-width');
+    localStorage.removeItem('t3x-workspace-draft-collapsed');
+    localStorage.removeItem('t3x-workspace-discussion-width');
     snapshotMocks.list.mockReset().mockResolvedValue({ snapshots: [] });
     snapshotMocks.detail.mockReset();
     activityMocks.value = undefined;
@@ -170,12 +192,218 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     bootstrapMocks.value.cancel.mockReset();
     modelSelectionMocks.handleModelChange.mockReset();
     sourceGenerationMocks.options = null;
+    schemaDiscussion.mockReset();
     navigationMocks.push.mockReset();
     navigationMocks.replace.mockReset();
     navigationMocks.searchParams = new URLSearchParams();
   });
 
+  function renderResizableCompose() {
+    return {
+      ...renderCompose(),
+      splitter: screen.getByRole('separator', { name: 'Resize current Draft panel' }),
+    };
+  }
+
+  function renderCompose() {
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    return render(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={
+          {
+            candidate,
+            isBusy: false,
+            materialSources: [],
+            prefillAssistant: schemaDiscussion,
+          } as unknown as WorkspaceComposeReviewController
+        }
+        mode="compose"
+        onModeChange={vi.fn()}
+      />
+    );
+  }
+
+  it('places pending Schema confirmations on the timeline, never in the discussion composer', () => {
+    schemaCardMocks.record = {
+      settingsId: 'owner-card',
+      revision: 1,
+      status: 'pending',
+      conversationId: 'chat',
+      workspaceRevision: 2,
+      schemaHash: 'exact',
+      createdAt: '2026-10-22T10:00:00Z',
+      settings: {
+        action: 'add_node',
+        nodePath: 'product',
+        name: 'owner',
+        definition: {},
+        intent: 'Add owner',
+      },
+    };
+    renderCompose();
+    expect(
+      within(screen.getByRole('region', { name: 'Event: Schema structure change' })).getByRole(
+        'heading',
+        { name: 'Add Node · owner' }
+      )
+    ).toBeVisible();
+    expect(
+      within(screen.getByRole('complementary', { name: 'Discuss change' })).queryByRole('region', {
+        name: 'Schema change candidate',
+      })
+    ).not.toBeInTheDocument();
+  });
+
+  it('opens Schema changes in the shared Details panel without looking up a content node', () => {
+    schemaCardMocks.record = {
+      settingsId: 'advantage-card',
+      revision: 1,
+      status: 'applied',
+      conversationId: 'chat',
+      workspaceRevision: 2,
+      schemaHash: 'base-schema',
+      currentDefinition: { type: 'string', maxLength: 24 },
+      settings: {
+        action: 'edit_slot',
+        nodePath: 'requirements',
+        name: 'advantage',
+        definition: { type: 'string', maxLength: 80 },
+        required: false,
+        intent: 'Allow a longer advantage description',
+      },
+      snapshot: {
+        compositionId: 'snapshot',
+        compositionRevision: 2,
+        compositionHash: 'composition',
+        schemaHash: 'result-schema',
+      },
+    };
+    renderCompose();
+    const inspect = screen.getByRole('button', {
+      name: 'Inspect Schema change: requirements/advantage',
+    });
+    fireEvent.click(inspect);
+    const discussion = screen.getByRole('complementary', { name: 'Discuss change' });
+    expect(within(discussion).getByRole('heading', { name: 'Details', exact: true })).toBeVisible();
+    const details = within(discussion).getByRole('region', {
+      name: 'Selected Schema change details',
+    });
+    expect(within(details).getByRole('heading', { name: 'Advantage', exact: true })).toBeVisible();
+    expect(within(details).getByText('requirements/advantage')).toBeVisible();
+    const length = within(details).getByRole('region', { name: 'Field change: maxLength' });
+    expect(within(length).getByText('24')).toBeVisible();
+    expect(within(length).getByText('80')).toBeVisible();
+    expect(within(details).getByText('Allow a longer advantage description')).toBeVisible();
+    expect(within(details).getByText('result-schema')).toBeVisible();
+    expect(
+      within(details).queryByRole('button', { name: 'Edit', exact: true })
+    ).not.toBeInTheDocument();
+    expect(inspect).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(details).getByRole('button', { name: 'Ask AI' }));
+    expect(schemaDiscussion).toHaveBeenCalledWith('修改 Schema 结构 requirements/advantage：');
+    expect(inspect).toHaveAttribute('aria-pressed', 'false');
+    expect(
+      within(discussion).queryByRole('region', { name: 'Selected Schema change details' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('resizes the Draft rail with keyboard controls, resets it, and restores its saved width', () => {
+    const { splitter, unmount } = renderResizableCompose();
+    expect(splitter).toHaveAttribute('aria-valuenow', '260');
+    fireEvent.keyDown(splitter, { key: 'ArrowRight' });
+    expect(splitter).toHaveAttribute('aria-valuenow', '280');
+    expect(localStorage.getItem('t3x-workspace-draft-width')).toBe('280');
+    expect(splitter.parentElement?.style.getPropertyValue('--draft-width')).toBe('280px');
+    fireEvent.keyDown(splitter, { key: 'End' });
+    expect(splitter).toHaveAttribute('aria-valuenow', '560');
+    fireEvent.keyDown(splitter, { key: 'Home' });
+    expect(splitter).toHaveAttribute('aria-valuenow', '180');
+    fireEvent.doubleClick(splitter);
+    expect(splitter).toHaveAttribute('aria-valuenow', '260');
+    fireEvent.keyDown(splitter, { key: 'ArrowLeft' });
+    unmount();
+    expect(renderResizableCompose().splitter).toHaveAttribute('aria-valuenow', '240');
+  });
+
+  it('collapses the Draft rail to a narrow strip and remembers the choice', () => {
+    const { splitter, unmount } = renderResizableCompose();
+    const board = splitter.parentElement!;
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse current Draft panel' }));
+    expect(board).toHaveAttribute('data-draft-collapsed', 'true');
+    expect(screen.queryByRole('region', { name: 'Current Draft' })).toBeNull();
+    expect(screen.queryByRole('separator', { name: 'Resize current Draft panel' })).toBeNull();
+    expect(localStorage.getItem('t3x-workspace-draft-collapsed')).toBe('true');
+    unmount();
+    renderCompose();
+    expect(screen.queryByRole('region', { name: 'Current Draft' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Expand current Draft panel' }));
+    expect(screen.getByRole('region', { name: 'Current Draft' })).toBeVisible();
+    expect(screen.getByRole('separator', { name: 'Resize current Draft panel' })).toBeVisible();
+    expect(localStorage.getItem('t3x-workspace-draft-collapsed')).toBe('false');
+  });
+
+  it('drags the Draft divider and stops resizing on release or cancellation', () => {
+    const originalPointerEvent = window.PointerEvent;
+    window.PointerEvent = MouseEvent as typeof PointerEvent;
+    try {
+      const { splitter } = renderResizableCompose();
+      Object.assign(splitter, {
+        setPointerCapture: vi.fn(),
+        hasPointerCapture: () => true,
+        releasePointerCapture: vi.fn(),
+      });
+      fireEvent.pointerDown(splitter, { button: 0, clientX: 300 });
+      expect(splitter.parentElement).toHaveAttribute('data-resizing', 'true');
+      fireEvent.pointerMove(splitter, { clientX: 380 });
+      expect(splitter).toHaveAttribute('aria-valuenow', '340');
+      fireEvent.pointerUp(splitter, { clientX: 380 });
+      expect(splitter.parentElement).not.toHaveAttribute('data-resizing');
+      fireEvent.pointerMove(splitter, { clientX: 450 });
+      expect(splitter).toHaveAttribute('aria-valuenow', '340');
+      fireEvent.pointerDown(splitter, { button: 0, clientX: 380 });
+      fireEvent.pointerCancel(splitter);
+      fireEvent.pointerMove(splitter, { clientX: 450 });
+      expect(splitter).toHaveAttribute('aria-valuenow', '340');
+      expect(splitter.parentElement).not.toHaveAttribute('data-resizing');
+    } finally {
+      window.PointerEvent = originalPointerEvent;
+    }
+  });
+
+  it('limits Draft width so changes and Chat retain room, and ignores invalid saved preferences', () => {
+    localStorage.setItem('t3x-workspace-draft-width', 'not-a-width');
+    const { splitter } = renderResizableCompose();
+    expect(splitter).toHaveAttribute('aria-valuenow', '260');
+    Object.defineProperty(splitter.parentElement, 'clientWidth', {
+      value: 1000,
+      configurable: true,
+    });
+    fireEvent.keyDown(splitter, { key: 'End' });
+    expect(splitter).toHaveAttribute('aria-valuenow', '240');
+    expect(screen.getByRole('separator', { name: 'Resize discussion panel' })).toHaveAttribute(
+      'aria-valuenow',
+      '440'
+    );
+    expect(screen.getByRole('complementary', { name: 'Discuss change' })).toBeVisible();
+  });
+
   it('selects list rows directly and keeps Details or Chat permanently visible', async () => {
+    schemaCardMocks.record = {
+      settingsId: 'schema-row',
+      revision: 1,
+      status: 'applied',
+      conversationId: 'chat',
+      workspaceRevision: 2,
+      schemaHash: 'exact',
+      settings: {
+        action: 'add_slot',
+        nodePath: 'requirements',
+        name: 'advantage',
+        definition: { type: 'string' },
+        intent: 'Add advantage',
+      },
+    };
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     // Ledger presence must not silently replace the established Compose interface.
     Object.assign(candidate, { authoringLedger: { actions: [] } });
@@ -282,6 +510,18 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.getByRole('tab', { name: 'Compose' })).toBeInTheDocument();
     expect(screen.queryByRole('tablist', { name: 'Change context' })).not.toBeInTheDocument();
     const discussion = screen.getByRole('complementary', { name: 'Discuss change' });
+    const draftNavigation = screen.getByRole('complementary', { name: 'Current Draft navigation' });
+    expect(draftNavigation).toContainElement(screen.getByRole('region', { name: 'Current Draft' }));
+    expect(
+      within(discussion).queryByRole('region', { name: 'Current Draft' })
+    ).not.toBeInTheDocument();
+    const changes = screen.getByRole('main');
+    expect(
+      draftNavigation.compareDocumentPosition(changes) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(
+      changes.compareDocumentPosition(discussion) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
     expect(within(discussion).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
     expect(within(discussion).getByTitle(candidate.title)).toBeVisible();
     expect(screen.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute(
@@ -323,7 +563,22 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.getByRole('heading', { name: 'Proposed changes' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Expand Approval' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Delete Approval' })).not.toBeInTheDocument();
+    const inspectSchema = screen.getByRole('button', {
+      name: 'Inspect Schema change: requirements/advantage',
+    });
+    fireEvent.click(inspectSchema);
+    for (const row of screen.getAllByRole('button', { name: /^Inspect (?!Schema change:)/ })) {
+      expect(row).toHaveAttribute('aria-pressed', 'false');
+    }
+    expect(
+      within(discussion).getByRole('region', { name: 'Selected Schema change details' })
+    ).toBeVisible();
+    expect(activityMocks.value.inspectNode).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Inspect Approval: rollout/approval' }));
+    expect(inspectSchema).toHaveAttribute('aria-pressed', 'false');
+    expect(
+      within(discussion).queryByRole('region', { name: 'Selected Schema change details' })
+    ).not.toBeInTheDocument();
     expect(within(discussion).getByRole('heading', { name: 'Details' })).toBeVisible();
     expect(
       screen.getByRole('button', { name: 'Inspect Approval: rollout/approval' })
@@ -476,6 +731,9 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save change' }));
     expect(publish).not.toHaveBeenCalled();
     expect(screen.getByText('Ungrouped manual changes')).toBeInTheDocument();
+    const draftSidebar = screen.getByRole('region', { name: 'Current Draft' });
+    expect(within(draftSidebar).getByText('30')).toBeVisible();
+    expect(within(draftSidebar).getByText(/ungrouped local changes/)).toBeVisible();
     expect(
       screen.getByRole('checkbox', { name: 'Include Allocation in the next P' })
     ).toBeChecked();

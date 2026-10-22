@@ -76,6 +76,32 @@ beforeEach(() => {
   mocks.prepare.mockResolvedValue(prepared);
   mocks.latest.mockResolvedValue({ snapshot: { snapshotId: 'rvs_review' } });
 });
+it('prepares the complete ordinary YAML Draft through managed Review, never a legacy fallback', async () => {
+  mocks.read.mockResolvedValueOnce({
+    base: {},
+    current: { prd: { experiments: { owner: 'Alice' } } },
+    selected: null,
+    workspaceRevision: 2,
+    compositionRevision: 2,
+    basis: { refHead: null },
+    netDiff: [{ nodeId: 'prd', path: 'prd' }],
+  });
+  const fallback = vi.fn();
+  const workspace = candidate();
+  const { result } = renderHook(() =>
+    useWorkspaceComposeReviewController({ candidate: workspace, onPrepareDraft: fallback })
+  );
+  await act(async () => {
+    expect(await result.current.prepareReview()).toBe(true);
+  });
+  expect(mocks.prepare).toHaveBeenCalledWith(
+    'proj_1',
+    expect.any(String),
+    expect.objectContaining({ expected_workspace_revision: 2, expected_revision: 2 })
+  );
+  expect(result.current.review.content?.trees[0]?.key).toBe('prd');
+  expect(fallback).not.toHaveBeenCalled();
+});
 it('freezes the complete application Review and invalidates it on a same-Workspace revision change', async () => {
   const { result, rerender } = renderHook(
     ({ workspace }) => useWorkspaceComposeReviewController({ candidate: workspace }),

@@ -1,6 +1,7 @@
 import type { ReviewSnapshotV1 } from '@t3x-dev/api-client';
 import type { TransitionViewV1 } from '@t3x-dev/core';
 import { useCallback, useEffect, useState } from 'react';
+import { workspaceSchemaCommitBlocker } from '@/domain/workspaces/changeDecision';
 import { dispatchCommitCreated } from '@/hooks/commits/commitEvents';
 import type {
   WorkspaceTransitionDecisionResponse,
@@ -92,10 +93,14 @@ export function useWorkspaceReviewSnapshot(
         return null;
       }
       if (state.deciding) return null;
-      if (outcome !== 'rejected' && state.data?.schema_review?.base.status === 'unknown') {
+      const commitBlocker = workspaceSchemaCommitBlocker(
+        state.data?.schema_review,
+        snapshot.transition
+      );
+      if (outcome !== 'rejected' && commitBlocker) {
         setState((current) => ({
           ...current,
-          error: 'Recover the exact Base Schema before accepting or committing.',
+          error: commitBlocker,
         }));
         return null;
       }

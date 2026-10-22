@@ -239,7 +239,7 @@ export function PullRequestMergeReviewPanel({
       </div>
     );
   if (!review || !outcome) return <div className={styles.emptyState}>Loading merge review…</div>;
-  if (review.nodes.length === 0) {
+  if (review.nodes.length === 0 && !review.schema_merge) {
     return <div className={styles.emptyState}>These commits merge without any field changes.</div>;
   }
 
@@ -319,6 +319,27 @@ export function PullRequestMergeReviewPanel({
           // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users must be able to focus and scroll this comparison region.
           tabIndex={0}
         >
+          {review.schema_merge ? (
+            <section className={styles.schemaChanges} aria-label="Schema changes">
+              <header>
+                <strong>Schema changes · {review.schema_merge.changes.length}</strong>
+                <code title={review.schema_merge.schema_hash}>
+                  {shortHash(review.schema_merge.schema_hash)}
+                </code>
+              </header>
+              <p>Combined Schema · not yet merged</p>
+              <ul>
+                {review.schema_merge.changes.map((change) => (
+                  <li key={change.path} title={change.summary}>
+                    <span>
+                      {change.kind === 'ADD' ? '+' : change.kind === 'REMOVE' ? '−' : '~'}
+                    </span>
+                    <code>{change.path}</code>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
           <table className={detailStyles.tree}>
             <colgroup>
               <col className={detailStyles.pathColumn} />

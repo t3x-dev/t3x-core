@@ -1,12 +1,15 @@
 import type { StudioPreview, StudioPublishInput } from '@t3x-dev/api-client';
 import {
   type AnyDB,
+  deleteProject,
+  findProjectById,
   findWorkspaceDraft,
   findYSchemaArtifactVersion,
   insertBranch,
   insertProject,
   listProjectYSchemaVersionHistory,
   listYSchemaArtifactVersions,
+  permanentDeleteProject,
   updateYSchemaArtifactIdentity,
   upsertWorkspaceDraft,
   upsertYSchemaArtifactVersion,
@@ -47,8 +50,8 @@ import { yschemaCompositionRoutes } from '../routes/yschema-composition.openapi'
 const app = new Hono();
 app.route('/', schemaStudioRoutes);
 app.route('/', yschemaCompositionRoutes);
-function request(action: string, body: unknown, method = 'POST') {
-  return app.request(`/v1/projects/${target}/schema-studio/${action}`, {
+function request(action: string, body: unknown, method = 'POST', projectId = target) {
+  return app.request(`/v1/projects/${projectId}/schema-studio/${action}`, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -58,11 +61,12 @@ const contribution = { nodes: { advantage: { slots: { title: { type: 'string' } 
 async function prepare(
   workspaceId: string,
   localContribution: unknown = contribution,
-  candidateId = baseId
+  candidateId = baseId,
+  projectId = target
 ) {
-  await insertBranch(db, { projectId: target, name: workspaceId });
+  await insertBranch(db, { projectId, name: workspaceId });
   await upsertWorkspaceDraft(db, {
-    project_id: target,
+    project_id: projectId,
     workspace_id: workspaceId,
     target_branch: workspaceId,
     title: workspaceId,
@@ -85,21 +89,28 @@ async function prepare(
       origin: 'studio',
       localContribution,
     },
-    'PUT'
+    'PUT',
+    projectId
   );
   expect(savedResponse.status).toBe(200);
   const saved = (await savedResponse.json()).data;
-  const previewResponse = await request('preview', {
-    workspaceId,
-    candidateIds: [candidateId],
-    schemaEditCandidate: {
-      candidateId: saved.candidate.candidateId,
-      revision: saved.candidate.revision,
+  const previewResponse = await request(
+    'preview',
+    {
+      workspaceId,
+      candidateIds: [candidateId],
+      schemaEditCandidate: {
+        candidateId: saved.candidate.candidateId,
+        revision: saved.candidate.revision,
+      },
     },
-  });
+    'POST',
+    projectId
+  );
   expect(previewResponse.status).toBe(200);
   const preview: StudioPreview = (await previewResponse.json()).data;
   const input: StudioPublishInput = {
+    visibility: 'community',
     candidateIds: [candidateId],
     schemaEditCandidate: {
       candidateId: saved.candidate.candidateId,
@@ -107,7 +118,7 @@ async function prepare(
     },
     ifRevision: preview.workspace!.revision,
     reviewHash: preview.reviewHash,
-    canonicalName: `projects/${target}/${workspaceId}`,
+    canonicalName: `projects/${projectId}/${workspaceId}`,
     version: '1.0.0',
     title: 'Derived Schema',
     description: 'Local advantage',
@@ -120,7 +131,12 @@ beforeAll(async () => {
   const setup = await setupTestDB();
   db = setup.db;
   cleanup = setup.cleanup;
-  target = (await insertProject(db, testData.project({ name: 'Publish target' }))).projectId;
+  target = (
+    await insertProject(db, {
+      ...testData.project({ name: 'Publish target' }),
+      ownerId: 'schema-publisher',
+    })
+  ).projectId;
   source = (await insertProject(db, testData.project({ name: 'Publish source' }))).projectId;
   foreign = (await insertProject(db, testData.project({ name: 'Foreign project' }))).projectId;
   const schema = normalizeYSchemaObject({
@@ -170,7 +186,7 @@ beforeAll(async () => {
 });
 afterAll(async () => cleanup?.());
 
-it('freezes a whole Schema plus local nodes privately, without mutating Workspace, sources or publishing a Module', async () => {
+it('publishes a public namespace-owned Schema without mutating Workspace or upstream', async () => {
   const { input, preview } = await prepare('private-release');
   expect(preview.impact?.canPublish).toBe(true);
   const before = await findWorkspaceDraft(db, target, 'private-release');
@@ -184,8 +200,9 @@ it('freezes a whole Schema plus local nodes privately, without mutating Workspac
   });
   expect(stored).toMatchObject({
     kind: 'schema',
-    visibility: 'private',
-    ownerProjectId: target,
+    visibility: 'community',
+    ownerProjectId: null,
+    publisherNamespaceId: (await findProjectById(db, target))!.namespaceId,
     status: 'published',
     artifactHash: release.source.hash,
   });
@@ -199,12 +216,15 @@ it('freezes a whole Schema plus local nodes privately, without mutating Workspac
     blueprint: {
       modules: [],
       baseSources: [{ hash: baseHash, projectId: source }],
-      localContribution: { contribution },
       authoring: { workspaceId: 'private-release', revision: 1 },
     },
     registry: { schemaHash: release.schemaHash, compiledSchemaHash: preview.schemaHash },
   });
   expect(await sha256CompositionValue(stored!.manifest)).toBe(release.source.hash);
+  expect(stored!.manifest.blueprint).not.toHaveProperty('authoringDraft');
+  expect(stored!.manifest.blueprint).not.toHaveProperty('localContribution');
+  expect(stored!.manifest.blueprint).not.toHaveProperty('authoring.intent');
+  expect(stored!.manifest.blueprint).not.toHaveProperty('authoring.origin');
   expect(await sha256CompositionValue(stored!.manifest.schema)).toBe(release.schemaHash);
   expect(await findWorkspaceDraft(db, target, 'private-release')).toEqual(before);
   expect(
@@ -222,6 +242,7 @@ it('freezes a whole Schema plus local nodes privately, without mutating Workspac
       ...(project_id ? { project_id } : {}),
       limit: 100,
     });
+    // Legacy module picker lists active versions only; published Schemas use the catalog below.
     expect(page.items.some((item) => item.canonicalName === input.canonicalName)).toBe(false);
   }
   const retries = await Promise.all([
@@ -272,12 +293,11 @@ it('freezes a whole Schema plus local nodes privately, without mutating Workspac
   for (const prefix of ['/v1', `/v1/projects/${foreign}`]) {
     const response = await app.request(`${prefix}/yschema/catalog?${filter}`);
     expect(response.status).toBe(200);
-    expect((await response.json()).data.items).toEqual([]);
+    expect((await response.json()).data.items).toHaveLength(2);
   }
-  // The release is self-contained; losing access to the upstream does not corrupt this private snapshot.
+  // Public releases are self-contained and independent of upstream access.
   denied.add(`${source}:project:read`);
   const query = new URLSearchParams({
-    sourceProjectId: target,
     canonicalName: input.canonicalName,
     version: input.version,
     expectedHash: release.source.hash,
@@ -291,7 +311,6 @@ it('freezes a whole Schema plus local nodes privately, without mutating Workspac
   );
   denied.delete(`${source}:project:read`);
   const addRelease = await request('candidates', {
-    sourceProjectId: target,
     canonicalName: input.canonicalName,
     version: input.version,
     expectedHash: release.source.hash,
@@ -302,8 +321,99 @@ it('freezes a whole Schema plus local nodes privately, without mutating Workspac
   expect((await roundtrip.json()).data.schemaHash).toBe(release.schemaHash);
 });
 
+it('keeps a public release discoverable and reusable after deleting its origin and revoking source access', async () => {
+  const origin = await insertProject(db, {
+    name: 'Disposable-schema-origin',
+    ownerId: 'schema-publisher',
+  });
+  const added = await request(
+    'candidates',
+    {
+      sourceProjectId: source,
+      canonicalName: 'team/publish-base',
+      version: '1.0.0',
+      expectedHash: baseHash,
+    },
+    'POST',
+    origin.projectId
+  );
+  expect(added.status).toBe(200);
+  const candidateId = (await added.json()).data.id;
+  const { input } = await prepare('retained-release', contribution, candidateId, origin.projectId);
+  const published = await request('publish/retained-release', input, 'POST', origin.projectId);
+  expect(published.status).toBe(200);
+  const release = (await published.json()).data;
+  expect(release).toMatchObject({ source: { projectId: null }, visibility: 'community' });
+  await deleteProject(db, origin.projectId);
+  const filter = new URLSearchParams({ canonical_name: input.canonicalName });
+  expect(
+    (await (await app.request(`/v1/yschema/catalog?${filter}`)).json()).data.items
+  ).toHaveLength(1);
+  await permanentDeleteProject(db, origin.projectId);
+  denied.add(`${origin.projectId}:project:read`);
+  denied.add(`${source}:project:read`);
+  try {
+    expect(await findWorkspaceDraft(db, origin.projectId, 'retained-release')).toBeNull();
+    const read = await app.request(
+      `/v1/projects/${foreign}/schema-studio/source?${new URLSearchParams({
+        canonicalName: input.canonicalName,
+        version: input.version,
+        expectedHash: release.source.hash,
+      })}`
+    );
+    expect(read.status).toBe(200);
+    expect((await read.json()).data.manifest).toMatchObject({
+      source: 'community',
+      license: 'Apache-2.0',
+      schema: { nodes: { advantage: contribution.nodes.advantage } },
+    });
+    const imported = await request(
+      'candidates',
+      {
+        canonicalName: input.canonicalName,
+        version: input.version,
+        expectedHash: release.source.hash,
+      },
+      'POST',
+      foreign
+    );
+    expect(imported.status).toBe(200);
+    const candidate = (await imported.json()).data;
+    expect(candidate.source.projectId).toBeNull();
+    const preview = await request('preview', { candidateIds: [candidate.id] }, 'POST', foreign);
+    expect(preview.status).toBe(200);
+    expect((await preview.json()).data).toMatchObject({
+      schemaHash: release.schemaHash,
+      adoption: { allowed: true },
+    });
+  } finally {
+    denied.delete(`${origin.projectId}:project:read`);
+    denied.delete(`${source}:project:read`);
+  }
+});
+
 it('rechecks authority, candidate/review/workspace freshness and refuses client supplied publication bytes', async () => {
   const { input } = await prepare('guarded-release');
+  const { visibility: _visibility, ...legacyPrivateRequest } = input;
+  expect((await request('publish/guarded-release', legacyPrivateRequest)).status).toBe(400);
+  expect(
+    (await request('publish/guarded-release', { ...input, visibility: 'private' })).status
+  ).toBe(400);
+  const outsider = new Hono();
+  outsider.use('*', async (c, next) => {
+    c.set('apiKey' as never, { user_id: 'unrelated-publisher', principal_kind: 'human' } as never);
+    await next();
+  });
+  outsider.route('/', schemaStudioRoutes);
+  expect(
+    (
+      await outsider.request(`/v1/projects/${target}/schema-studio/publish/guarded-release`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      })
+    ).status
+  ).toBe(403);
   for (const patch of [
     { ifRevision: input.ifRevision + 1 },
     { reviewHash: `sha256:${'0'.repeat(64)}` },
@@ -414,7 +524,6 @@ it('publishes Module composition and local contribution through the same path, b
       modules: [
         { canonicalName: module.manifest.canonicalName, version: '1.0.0', hash: module.hash },
       ],
-      localContribution: { contribution },
     },
     schema: { nodes: { product: {}, advantage: {} } },
   });

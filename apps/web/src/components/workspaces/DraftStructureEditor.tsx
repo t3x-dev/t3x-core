@@ -314,7 +314,7 @@ function StructureRow({
           ) : null}
           <button
             aria-label={`Edit ${node.key}`}
-            disabled={pending}
+            disabled={pending || !node.path}
             onClick={(event) => {
               event.stopPropagation();
               onEdit();

@@ -4,6 +4,7 @@
  * TypeScript client for the T3X API.
  */
 
+export * from './assistant-schema-settings';
 export type { T3xClientConfig, T3xRequestOptions } from './client.js';
 export { createClient, T3xApiError, T3xClient } from './client.js';
 export * from './collaboration.js';

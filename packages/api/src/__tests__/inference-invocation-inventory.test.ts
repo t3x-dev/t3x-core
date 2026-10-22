@@ -132,6 +132,12 @@ describe('server-side inference invocation inventory', () => {
     expect(source).toMatchObject({ status: 'migrated', coveredCount, observedCount: coveredCount });
   });
 
+  it('keeps confirmed Schema compilation outside model inference', () => {
+    const file = 'packages/api/src/lib/schema-proposal-generation.ts';
+    expect(countInvocationLines(file)).toBe(0);
+    expect(inventory.sources.some((source) => source.file === file)).toBe(false);
+  });
+
   it.each(
     dormantCoreCalls
   )('keeps dormant Core call family %s unmounted until it receives an application binding', (file, symbol) => {

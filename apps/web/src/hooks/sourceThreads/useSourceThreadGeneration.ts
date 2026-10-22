@@ -43,6 +43,7 @@ export type SourceThreadMessage = ChatMessage;
 const TURN_SAVE_RETRY_DELAY_MS = 250;
 
 interface SendMessageOptions {
+  confirmedSettingsId?: string;
   historyOverride?: Array<{ role: string; content: string }>;
   skipMemoryFetch?: boolean;
   images?: AttachedImage[];
@@ -553,9 +554,10 @@ export function useSourceThreadGeneration({
         }
 
         if (!isTemporaryMode && workspaceAssistant && savedUserTurnHash) {
-          // Creating the bound conversation saves the source bundle and advances the Draft revision.
+          // Source turns and settings confirmations can advance the Workspace independently
+          // of its last rendered authoring view. Pin each new chat run to the live revision.
           let assistantContext = workspaceAssistant;
-          if (!hasExistingConversation && createConversation) {
+          {
             const { workspace } = await getSharedApiClient().workspaces.get(
               projectId,
               workspaceAssistant.workspaceId
@@ -588,6 +590,7 @@ export function useSourceThreadGeneration({
                 reasoningEffort,
                 contextMode,
                 fast: fastEnabled,
+                confirmedSettingsId: options?.confirmedSettingsId,
               }
             )) {
               if (event.type === 'context') {
@@ -631,6 +634,10 @@ export function useSourceThreadGeneration({
                   );
                 }
                 if (event.status === 'completed') {
+                  if (event.name === 'showSchemaChangeCard' || event.result?.kind === 'schema')
+                    assistantRef.current?.onSchemaSettings?.(
+                      event.result?.settings?.conversationId
+                    );
                   unfinished.delete(event.operationId);
                   if (event.result?.transitionId)
                     completedCandidates.add(event.result.transitionId);

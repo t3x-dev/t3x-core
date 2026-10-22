@@ -41,6 +41,160 @@ beforeEach(() => {
 });
 
 describe('Schema evolution impact', () => {
+  it.each([
+    'node rename',
+    'slot rename',
+    'absent slot type',
+  ])('does not invent a migration for %s when only unrelated content exists', async (edit) => {
+    const before = target((schema) => {
+      schema.nodes.scratchpad = { slots: { note: { type: 'string' } } };
+      schema.nodes.product!.slots!.unused = { type: 'integer' };
+    });
+    vi.mocked(resolveWorkspaceYSchema).mockResolvedValueOnce({
+      canonicalName: 'team/product',
+      schema: before,
+    });
+    const next = structuredClone(before);
+    if (edit === 'node rename') {
+      next.nodes.lab = next.nodes.scratchpad;
+      delete next.nodes.scratchpad;
+    }
+    if (edit === 'slot rename') {
+      next.nodes.product!.slots!.memo = next.nodes.product!.slots!.unused;
+      delete next.nodes.product!.slots!.unused;
+    }
+    if (edit === 'absent slot type') next.nodes.product!.slots!.unused.type = 'number';
+    const impact = await assessWorkspaceSchemaImpact(
+      db,
+      'project',
+      workspace(),
+      normalizeYSchemaObject(next)
+    );
+    expect(impact).toMatchObject({ canAdopt: true, status: 'safe', content: { valid: true } });
+  });
+  it('does not ask to migrate absent values when replacing the default Schema on an empty Draft', async () => {
+    const current = { ...workspace(), schemaCandidate: { fields: [] } };
+    const next = target((schema) => {
+      delete schema.nodes.product;
+      schema.nodes.requirements!.slots!.title = { type: 'number' };
+    });
+    const impact = await assessWorkspaceSchemaImpact(db, 'project', current, next);
+    expect(impact.canAdopt).toBe(true);
+    expect(impact.items.some((item) => item.kind === 'needs_mapping')).toBe(false);
+  });
+  it.each([
+    'remove_node',
+    'remove_slot',
+  ] as const)('allows an exact explicitly confirmed %s while retaining valid non-strict content', async (action) => {
+    const settings = {
+      action,
+      nodePath: action === 'remove_slot' ? 'product' : '',
+      name: action === 'remove_slot' ? 'title' : 'product',
+      definition: {},
+      intent: 'Remove this definition only',
+    };
+    const next = target((schema) => {
+      if (action === 'remove_node') delete schema.nodes.product;
+      else {
+        delete schema.nodes.product!.slots!.title;
+        schema.nodes.product!.requiredSlots = [];
+      }
+    });
+    const current = workspace();
+    const before = structuredClone(current);
+    const impact = await assessWorkspaceSchemaImpact(db, 'project', current, next, true, settings);
+    expect(impact).toMatchObject({ status: 'safe', canAdopt: true, content: { valid: true } });
+    expect(current).toEqual(before);
+  });
+
+  it('never lets a confirmed removal authorize an unrelated rename or type change', async () => {
+    const next = target((schema) => {
+      schema.nodes.overview = schema.nodes.product!;
+      delete schema.nodes.product;
+    });
+    const impact = await assessWorkspaceSchemaImpact(db, 'project', workspace(), next, true, {
+      action: 'remove_node',
+      nodePath: '',
+      name: 'product',
+      definition: {},
+      intent: 'Remove this definition only',
+    });
+    expect(impact.canAdopt).toBe(false);
+  });
+
+  it('still blocks an explicitly confirmed removal when strict content would become invalid', async () => {
+    const strict = normalizeYSchemaObject({ ...base, strict: true });
+    vi.mocked(resolveWorkspaceYSchema).mockResolvedValueOnce({
+      canonicalName: 'team/product',
+      schema: strict,
+    });
+    const next = normalizeYSchemaObject({
+      ...strict,
+      nodes: { requirements: strict.nodes.requirements! },
+    });
+    const impact = await assessWorkspaceSchemaImpact(db, 'project', workspace(), next, true, {
+      action: 'remove_node',
+      nodePath: '',
+      name: 'product',
+      definition: {},
+      intent: 'Remove this definition only',
+    });
+    expect(impact.canAdopt).toBe(false);
+    expect(impact.content.valid).toBe(false);
+  });
+  it('does not require content migration for explicit repeated:false alongside safe additions', async () => {
+    const current = workspace();
+    const before = structuredClone(current);
+    const next = target((schema) => {
+      schema.nodes.product!.repeated = false;
+      schema.nodes.product!.contentKind = 'structured';
+      schema.nodes.requirements!.slots!.advantage = { type: 'string' };
+    });
+    const impact = await assessWorkspaceSchemaImpact(db, 'project', current, next);
+    expect(impact).toMatchObject({
+      status: 'safe',
+      canAdopt: true,
+      canPublish: true,
+      content: { valid: true, ready: true, issues: [] },
+    });
+    expect(impact.changes.map((change) => change.path)).toEqual([
+      'nodes.product.contentKind',
+      'nodes.requirements.slots.advantage',
+    ]);
+    expect(impact.items.some((item) => item.kind === 'needs_mapping')).toBe(false);
+    expect(impact.content.hash).toBe(
+      (await assessWorkspaceSchemaImpact(db, 'project', current, base)).content.hash
+    );
+    expect(current).toEqual(before);
+  });
+
+  it('does not require migration when removing an explicit repeated:false', async () => {
+    const explicit = target((schema) => {
+      schema.nodes.product!.repeated = false;
+    });
+    vi.mocked(resolveWorkspaceYSchema).mockResolvedValueOnce({
+      canonicalName: 'team/product',
+      schema: explicit,
+    });
+    const impact = await assessWorkspaceSchemaImpact(db, 'project', workspace(), base);
+    expect(impact).toMatchObject({ status: 'safe', changes: [], canAdopt: true, canPublish: true });
+  });
+
+  it('still requires conversion when a single product really becomes repeated', async () => {
+    const next = target((schema) => {
+      schema.nodes.product!.repeated = true;
+    });
+    const impact = await assessWorkspaceSchemaImpact(db, 'project', workspace(), next);
+    expect(impact).toMatchObject({ status: 'needs_mapping', canAdopt: false });
+    expect(impact.items).toContainEqual(
+      expect.objectContaining({
+        code: 'SHAPE_CHANGE_REQUIRES_MAPPING',
+        path: 'nodes.product.repeated',
+        affectedPaths: expect.arrayContaining(['product', 'product/title']),
+      })
+    );
+  });
+
   it('allows optional additions and deterministically reports the same content hash', async () => {
     const next = target((schema) => {
       schema.nodes.advantage = { slots: { title: { type: 'string' } } };

@@ -40,7 +40,12 @@ import { computeMergeChecks } from '../lib/merge-checks';
 import { readMergeDraftDecision } from '../lib/merge-draft-decisions';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
 import {
+  hasRepositorySchemaChanges,
+  RepositorySchemaMergeError,
+} from '../lib/repository-schema-merge';
+import {
   getRepositorySemanticCommit,
+  inspectRepositoryYOpsMergeSchema,
   RepositoryMergeCommitNotFoundError,
   RepositoryStateDecisionDeniedError,
   reviewRepositoryYOpsMerge,
@@ -373,7 +378,18 @@ async function summarizeBranchChanges(
     mergeBase === null || mergeBase === targetCommit.hash
       ? targetCommit
       : await loadRepositoryCommit(db, projectId, mergeBase);
-  return summarizeCommitChanges(sourceCommit, baseCommit ?? targetCommit);
+  const summary = summarizeCommitChanges(sourceCommit, baseCommit ?? targetCommit);
+  return {
+    ...summary,
+    hasChanges:
+      summary.hasChanges ||
+      (await hasRepositorySchemaChanges(
+        db,
+        projectId,
+        sourceCommit.hash,
+        (baseCommit ?? targetCommit).hash
+      )),
+  };
 }
 
 async function buildCompareCandidates(
@@ -1034,8 +1050,17 @@ async function runPullRequestReadiness(
       );
       const serverChecks = await computeMergeChecks(tx, draft);
       const serverChecksPassed = serverChecks.every((check) => check.passed);
+      const schemaInspection = await inspectRepositoryYOpsMergeSchema({
+        db: tx as AnyDB,
+        projectId,
+        sourceDigest: pullRequest.sourceCommitHash,
+        targetDigest: pullRequest.targetBaseCommitHash,
+        ...(storedDecisions ? { decisions: storedDecisions } : {}),
+      });
+      const schemaValid =
+        !schemaInspection.validation || schemaInspection.validation.predicate.outcome === 'passed';
       const nextStatus: PullRequestStatus =
-        unresolvedConflicts.length === 0 && serverChecksPassed ? 'ready' : 'blocked';
+        unresolvedConflicts.length === 0 && serverChecksPassed && schemaValid ? 'ready' : 'blocked';
       const diffSummary = {
         changed_nodes:
           prepared.autoKept.length +
@@ -1098,6 +1123,40 @@ async function runPullRequestReadiness(
           startedAt: now,
           completedAt: now,
         })),
+        ...(schemaInspection.schema
+          ? [
+              {
+                kind: 'schema_compatibility' as const,
+                status: 'passed' as const,
+                title: 'Schema three-way merge',
+                message: `Combined Schema ${schemaInspection.schema.schemaHash}; independent branch definitions are preserved.`,
+                startedAt: now,
+                completedAt: now,
+              },
+              {
+                kind: 'review_requirement' as const,
+                status: schemaInspection.validation
+                  ? schemaValid
+                    ? ('passed' as const)
+                    : ('blocked' as const)
+                  : ('warning' as const),
+                title: 'Merged content against merged Schema',
+                message:
+                  schemaInspection.validation?.predicate.outcome === 'failed'
+                    ? [
+                        ...schemaInspection.validation.predicate.errors,
+                        ...schemaInspection.validation.predicate.gaps,
+                      ]
+                        .map((issue) => `${issue.path}: ${issue.message}`)
+                        .join('; ')
+                    : schemaInspection.validation
+                      ? 'The exact merged content passes the combined Schema.'
+                      : 'Awaiting content conflict decisions; execution will validate the decided result.',
+                startedAt: now,
+                completedAt: now,
+              },
+            ]
+          : []),
       ]);
       await addPullRequestActivity(tx, preparedPullRequest.pullRequestId, {
         actorId,
@@ -1122,7 +1181,7 @@ async function runPullRequestReadiness(
       if (!failed) throw new MergeError('PULL_REQUEST_NOT_FOUND', 'Pull request not found.');
       const now = failed.updatedAt;
       const failureMessage =
-        error instanceof MergeError
+        error instanceof MergeError || error instanceof RepositorySchemaMergeError
           ? error.message
           : 'Deterministic merge preparation failed unexpectedly.';
       await replacePullRequestChecks(tx, failed.pullRequestId, [
@@ -1150,6 +1209,18 @@ async function runPullRequestReadiness(
           startedAt: now,
           completedAt: now,
         },
+        ...(/Schema/i.test(failureMessage)
+          ? [
+              {
+                kind: 'schema_compatibility' as const,
+                status: 'blocked' as const,
+                title: 'Schema three-way merge',
+                message: failureMessage,
+                startedAt: now,
+                completedAt: now,
+              },
+            ]
+          : []),
       ]);
       await addPullRequestActivity(tx, failed.pullRequestId, {
         actorId,
@@ -1180,6 +1251,19 @@ const MergeReviewSlotSchema = z.object({
 });
 
 const MergeReviewSchema = z.object({
+  schema_merge: z
+    .object({
+      schema_hash: z.string(),
+      root_key: z.string(),
+      changes: z.array(
+        z.object({
+          kind: z.enum(['ADD', 'CHANGE', 'REMOVE']),
+          path: z.string(),
+          summary: z.string(),
+        })
+      ),
+    })
+    .optional(),
   draft_id: z.string(),
   decision_revision: z.number().int(),
   decisions: z.unknown().nullable(),
@@ -1257,6 +1341,15 @@ pullRequestRoutes.openapi(mergeReviewRoute, async (c) => {
           target_commit_id: pullRequest.targetBaseCommitHash,
           merge_base_commit_id: review.mergeBaseDigest,
           nodes: review.nodes,
+          ...(review.schemaMerge
+            ? {
+                schema_merge: {
+                  schema_hash: review.schemaMerge.schemaHash,
+                  root_key: review.schemaMerge.rootKey,
+                  changes: review.schemaMerge.changes,
+                },
+              }
+            : {}),
         },
       },
       200

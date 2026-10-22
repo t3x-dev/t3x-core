@@ -1,5 +1,5 @@
 import type { WorkspaceAuthoringCard, WorkspaceAuthoringView } from '@t3x-dev/api-client';
-import type { SemanticContent } from '@t3x-dev/core';
+import { type SemanticContent, yamlToTree } from '@t3x-dev/core';
 import { expandAuthoringCards } from '@/domain/composeActivity';
 import type { WorkspaceCandidate, WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 import type { WorkspaceYOpsValidationResult, WorkspaceYOpsValue } from '@/types/workspaceYops';
@@ -45,12 +45,22 @@ export function authoringReviewDocuments(
   current: SemanticContent;
 } | null {
   if (!view) return null;
-  const current = authoringSemanticContent(view.selected?.after ?? view.current);
+  // This is a display projection only. Review still freezes and replays the
+  // original document on the server; ordinary YAML never gains envelope paths.
+  const project = (value: unknown): SemanticContent | null => {
+    const semantic = authoringSemanticContent(value);
+    if (semantic) return semantic;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    if ((value as Record<string, unknown>).domain === 't3x.dev/semantic-content') return null;
+    return {
+      trees: Object.entries(value).map(([key, item]) => yamlToTree(key, item)),
+      relations: [],
+    };
+  };
+  const current = project(view.selected?.after ?? view.current);
   if (!current) return null;
   return {
-    baseline:
-      authoringSemanticContent(view.selected?.before ?? view.base) ??
-      EMPTY_AUTHORING_SEMANTIC_CONTENT,
+    baseline: project(view.selected?.before ?? view.base) ?? EMPTY_AUTHORING_SEMANTIC_CONTENT,
     current,
   };
 }
@@ -60,12 +70,15 @@ export function authoringVisibleCards(cards: readonly WorkspaceAuthoringCard[]) 
 }
 
 export function authoringReviewOperations(
-  cards: readonly WorkspaceAuthoringCard[]
+  cards: readonly WorkspaceAuthoringCard[],
+  ordinaryYaml = false
 ): WorkspaceYOpsDraftOperation[] {
   return cards.flatMap((card, index): WorkspaceYOpsDraftOperation[] => {
-    const path =
-      authoringSemanticPath(card.path) ?? (isAuthoringEnvelopePath(card.path) ? card.path : null);
-    if (!path || path === 'content') return [];
+    const path = ordinaryYaml
+      ? card.path
+      : (authoringSemanticPath(card.path) ??
+        (isAuthoringEnvelopePath(card.path) ? card.path : null));
+    if (!path || (!ordinaryYaml && path === 'content')) return [];
     return [
       {
         id: card.nodeId || `authoring-change-${String(index + 1)}`,
@@ -107,7 +120,8 @@ export function buildAuthoringReviewProjection<
   const documents = authoringReviewDocuments(view);
   if (!view || !documents) return null;
   const operations = authoringReviewOperations(
-    expandAuthoringCards(view.selected?.cards ?? view.netDiff)
+    expandAuthoringCards(view.selected?.cards ?? view.netDiff),
+    !authoringSemanticContent(view.selected?.after ?? view.current)
   );
   return {
     candidate: {

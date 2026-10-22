@@ -113,12 +113,32 @@ function quotesSupportClaim(quotes: readonly string[], value: string): boolean {
   );
 }
 
-function deterministicSupport(operations: readonly ProtocolValue[], quotes: readonly string[]) {
+function deterministicSupport(
+  operations: readonly ProtocolValue[],
+  quotes: readonly string[],
+  base: ProtocolValue
+) {
   const names = operations.map(operationName);
   if (names.every((name) => name !== null && DETERMINISTIC_STRUCTURAL_OPERATIONS.has(name))) {
     return true;
   }
+  // The fixed semantic envelope is transport structure, not a source claim. Only
+  // recognize the complete canonical bootstrap against an actually empty Base;
+  // arbitrary metadata, existing documents and every business value still need support.
+  const bootstrap = [
+    { set: { path: 'domain', value: 't3x.dev/semantic-content' } },
+    { set: { path: 'version', value: 1 } },
+    { set: { path: 'content', value: { trees: [], relations: [] } } },
+  ].map((operation) => canonicalizeProtocolValue(operation));
+  const isEmptyDocument = isRecord(base) && Object.keys(base).length === 0;
+  const hasCanonicalBootstrap =
+    isEmptyDocument &&
+    bootstrap.every((expected) =>
+      operations.some((operation) => canonicalizeProtocolValue(operation) === expected)
+    );
   const values = operations.flatMap((operation) => {
+    if (hasCanonicalBootstrap && bootstrap.includes(canonicalizeProtocolValue(operation)))
+      return [];
     let supportOperation = operation;
     if (operationName(operation) === 'append' && isRecord(operation)) {
       const payload = operation.append;
@@ -194,7 +214,7 @@ async function assessGeneration(
     if (binding.origin !== 'source_backed') continue;
     const operations = binding.operationIndexes.map((index) => context.operations[index]!);
     const quotes = evidenceQuotes(binding);
-    if (deterministicSupport(operations, quotes)) {
+    if (deterministicSupport(operations, quotes, context.base.value)) {
       support.push({
         groupId: binding.groupId,
         outcome: 'supported',

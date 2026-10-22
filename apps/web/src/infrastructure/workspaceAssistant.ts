@@ -1,3 +1,8 @@
+import {
+  type AssistantSchemaSettingsInput,
+  type AssistantSchemaSettingsView,
+  AssistantSchemaSettingsViewSchema,
+} from '@t3x-dev/api-client';
 import { frameData, splitSseFrames } from './chat';
 import { API_V1, handleResponse, injectAuthHeaders } from './core';
 export interface WorkspaceAssistantContext {
@@ -9,6 +14,7 @@ export interface WorkspaceAssistantContext {
   allowProposal?: boolean;
   posture?: 'source_only' | 'guided' | 'recommend';
   onCandidate?: (transitionId: string, turnId?: string) => void;
+  onSchemaSettings?: (conversationId?: string) => void;
 }
 export type WorkspaceAssistantEvent = {
   type: 'context' | 'capabilities' | 'text' | 'operation' | 'done' | 'error';
@@ -18,7 +24,13 @@ export type WorkspaceAssistantEvent = {
   operationId?: string;
   name?: string;
   status?: string;
-  result?: { status?: string; transitionId?: string };
+  result?: {
+    status?: string;
+    transitionId?: string;
+    kind?: 'content' | 'schema';
+    settings?: AssistantSchemaSettingsView;
+    candidateId?: string;
+  };
   disclosure?: { partial: boolean; omitted?: string[] };
   reason?: string;
 };
@@ -33,6 +45,7 @@ export async function* streamWorkspaceAssistant(
     reasoningEffort?: 'low' | 'medium' | 'high';
     contextMode?: 'auto' | 'compact' | 'expanded';
     fast?: boolean;
+    confirmedSettingsId?: string;
   }
 ): AsyncGenerator<WorkspaceAssistantEvent> {
   const headers = await injectAuthHeaders(new Headers({ 'Content-Type': 'application/json' }));
@@ -57,6 +70,7 @@ export async function* streamWorkspaceAssistant(
         reasoning_effort: options.reasoningEffort,
         context_mode: options.contextMode,
         fast: options.fast,
+        confirmed_settings_id: options.confirmedSettingsId,
       }),
     }
   );
@@ -84,6 +98,45 @@ export async function* streamWorkspaceAssistant(
     await reader.cancel();
     reader.releaseLock();
   }
+}
+const schemaSettingsUrl = (projectId: string, workspaceId: string) =>
+  `${API_V1}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/source-chat/assistant/schema-settings`;
+export async function readAssistantSchemaSettings(
+  projectId: string,
+  workspaceId: string,
+  conversationId: string
+) {
+  const response = await fetch(
+    `${schemaSettingsUrl(projectId, workspaceId)}?conversation_id=${encodeURIComponent(conversationId)}`,
+    { headers: await injectAuthHeaders(new Headers()) }
+  );
+  return AssistantSchemaSettingsViewSchema.nullable().parse(
+    await handleResponse<unknown>(response)
+  );
+}
+export async function confirmAssistantSchemaSettings(
+  projectId: string,
+  workspaceId: string,
+  record: AssistantSchemaSettingsView,
+  settings: AssistantSchemaSettingsInput | null,
+  options: {
+    generateSnapshot?: boolean;
+    discardStudioCandidate?: boolean;
+    applyToDraft?: boolean;
+  } = {}
+) {
+  const response = await fetch(schemaSettingsUrl(projectId, workspaceId), {
+    method: 'POST',
+    headers: await injectAuthHeaders(new Headers({ 'Content-Type': 'application/json' })),
+    body: JSON.stringify({
+      conversationId: record.conversationId,
+      settingsId: record.settingsId,
+      ifRevision: record.revision,
+      settings,
+      ...options,
+    }),
+  });
+  return AssistantSchemaSettingsViewSchema.parse(await handleResponse<unknown>(response));
 }
 export async function recoverWorkspaceAssistantOperation(
   projectId: string,

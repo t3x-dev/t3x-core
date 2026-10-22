@@ -39,6 +39,39 @@
 .toolbar {
   flex-wrap: wrap;
 }
+.schemaChanges {
+  margin: 8px 0;
+  border: 1px solid var(--stroke-default, #dbe5f1);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 11px;
+}
+.schemaChanges header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.schemaChanges header code,
+.schemaChanges p {
+  color: var(--text-tertiary, #64748b);
+}
+.schemaChanges p {
+  margin: 4px 0;
+}
+.schemaChanges ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.schemaChanges li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  overflow-wrap: anywhere;
+}
+
 .bulkActions {
   display: flex;
   flex-wrap: wrap;

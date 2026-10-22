@@ -14,7 +14,10 @@ import {
 } from '@t3x-dev/storage';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { verifyTransition } from '../lib/transition-control-plane';
-import { UNPROTECTED_REF_POLICY } from '../lib/transition-control-plane/applicable-policy';
+import {
+  resolveApplicableTransitionPolicy,
+  UNPROTECTED_REF_POLICY,
+} from '../lib/transition-control-plane/applicable-policy';
 import {
   commitTransition,
   decideTransition,
@@ -80,6 +83,14 @@ describe('durable Draft authoring commands', () => {
   it('repairs missing Schema with revision protection and leaves immutable history intact', async () => {
     const init = await initialize('unbound', true);
     const input = { projectId, workspaceId: 'unbound', expectedRevision: init.draft.revision };
+    const unbound = await readWorkspaceAuthoring(setup.db, input);
+    expect(unbound.currentSchema).toEqual({
+      status: 'unbound',
+      schemaHash: null,
+      definition: null,
+      bindings: [],
+    });
+    expect(await findWorkspaceDraft(setup.db, projectId, 'unbound')).toEqual(init.draft);
     await expect(
       ensureWorkspaceAuthoringSchema(setup.db, { ...input, expectedRevision: 0 })
     ).rejects.toThrow();
@@ -553,7 +564,18 @@ describe('durable Draft authoring commands', () => {
       expectedRefHead: null,
     });
     const precondition = reviewed.view.precondition;
-    expect(precondition.policyDigest).toBe(UNPROTECTED_REF_POLICY.resource.digest);
+    const policy = resolveApplicableTransitionPolicy({
+      refPolicyBinding: UNPROTECTED_REF_POLICY,
+      requestKind: 'structured_yops',
+      preparationFacts: {
+        ...buildAuthoringPreparation(saved.draft.workspace_state!),
+        schemaReview: reviewed.schemaReview,
+      } as never,
+    });
+    expect(precondition.policyDigest).toBe(policy.resource.digest);
+    expect(policy.policy.authorization).toEqual(UNPROTECTED_REF_POLICY.policy.authorization);
+    expect(policy.policy.checks.validation.requirement).toBe('required');
+    expect(policy.policy.override.allowMissingValidation).toBe(false);
     await expect(
       decideTransition({
         db: setup.db,

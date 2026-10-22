@@ -28,6 +28,8 @@ const operationLabels: Record<string, string> = {
   readNodeHistory: 'Read node history',
   searchSources: 'Search selected sources',
   requestProposal: 'Generate proposed changes',
+  showSchemaChangeCard: 'Prepare Schema confirmation',
+  confirmSchemaChange: 'Confirm Schema change',
   applyUserEdit: 'Apply exact edit',
 };
 

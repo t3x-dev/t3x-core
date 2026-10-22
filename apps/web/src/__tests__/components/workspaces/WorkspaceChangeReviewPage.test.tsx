@@ -47,10 +47,17 @@ vi.mock('@/components/workspaces/ChangeReviewChanges', () => ({
 vi.mock('@/components/workspaces/ChangeDecisionPanel', () => ({
   ChangeDecisionPanel: ({
     onDecide,
+    commitBlocker,
   }: {
     onDecide: (outcome: 'accepted' | 'overridden' | 'rejected', reason?: string) => void;
+    commitBlocker?: string;
   }) => (
-    <button onClick={() => onDecide('accepted')} type="button">
+    <button
+      disabled={Boolean(commitBlocker)}
+      title={commitBlocker}
+      onClick={() => onDecide('accepted')}
+      type="button"
+    >
       Approve and commit
     </button>
   ),
@@ -78,6 +85,7 @@ function snapshotResponse() {
       review: { precondition: { refName: 'feature/release', workspaceRevision: 3 } },
       transition: {
         mode: 'transition',
+        checks: { validation: { runs: [] } },
         change: { operations: [{ op: 'set' }, { op: 'set' }] },
         claims: {
           intent: { mode: 'authored', value: 'Cut log noise' },
@@ -235,6 +243,11 @@ it('keeps the complete frozen Schema and content visible without loading a newer
       workspaceId="workspace_prd_handoff"
       snapshotId={data.snapshot_id}
     />
+  );
+  expect(screen.getByRole('button', { name: 'Approve and commit' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Approve and commit' })).toHaveAttribute(
+    'title',
+    expect.stringContaining('no conclusive validation result')
   );
   expect(screen.getByText('ADD nodes.advantage')).toBeInTheDocument();
   expect(

@@ -1295,6 +1295,7 @@ export interface PublishWorkspaceYSchemaCompositionInput {
   title: string;
   description?: string;
   releaseNotes?: string;
+  license?: 'Apache-2.0' | 'MIT' | 'BSD-2-Clause' | 'BSD-3-Clause' | 'ISC' | 'CC0-1.0';
   tags?: string[];
 }
 

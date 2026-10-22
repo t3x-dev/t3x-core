@@ -34,6 +34,20 @@ vi.mock('@/components/workspaces/WorkspaceComposeChat', () => ({
 }));
 
 describe('ComposeAuthoringAssistant first message', () => {
+  it('places the Schema confirmation immediately above the message composer', () => {
+    render(
+      <ComposeAuthoringAssistant
+        projectId="schema-card-location"
+        context={{ workspaceId: 'schema-ws', workspaceRevision: 1, sourceMaterialIds: [] }}
+        onCreateConversation={vi.fn()}
+        onPublishCandidate={vi.fn()}
+        beforeComposer={<section aria-label="Schema confirmation">Review and Confirm</section>}
+      />
+    );
+    const card = screen.getByRole('region', { name: 'Schema confirmation' });
+    const composer = screen.getByRole('group', { name: 'Message composer' });
+    expect(card.nextElementSibling).toBe(composer);
+  });
   it('allows sending without a prior conversation and uses the Workspace conversation factory', () => {
     const create = vi.fn(async () => 'conversation-1');
     render(

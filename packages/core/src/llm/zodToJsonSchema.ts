@@ -13,6 +13,12 @@ import type { ZodTypeAny } from 'zod';
 // biome-ignore lint/suspicious/noExplicitAny: JSON Schema output is inherently dynamic
 type JsonSchema = Record<string, any>;
 
+interface ConversionContext {
+  active: Map<ZodTypeAny, { id: string; referenced: boolean }>;
+  definitions: JsonSchema;
+  nextId: number;
+}
+
 function getDef(schema: ZodTypeAny): Record<string, unknown> {
   // Zod v4 stores the def on _zod.def
   const z = (schema as unknown as { _zod?: { def?: Record<string, unknown> } })._zod;
@@ -27,6 +33,32 @@ function getDef(schema: ZodTypeAny): Record<string, unknown> {
  * Convert a Zod schema to a JSON Schema object.
  */
 export function zodToJsonSchema(schema: ZodTypeAny): JsonSchema {
+  const context: ConversionContext = { active: new Map(), definitions: {}, nextId: 0 };
+  const result = convertSchema(schema, context);
+  return Object.keys(context.definitions).length
+    ? { ...result, $defs: context.definitions }
+    : result;
+}
+
+function convertSchema(schema: ZodTypeAny, context: ConversionContext): JsonSchema {
+  const ancestor = context.active.get(schema);
+  if (ancestor) {
+    ancestor.referenced = true;
+    return { $ref: `#/$defs/${ancestor.id}` };
+  }
+  const entry = { id: `schema${context.nextId++}`, referenced: false };
+  context.active.set(schema, entry);
+  try {
+    const result = convertSchemaNode(schema, context);
+    if (!entry.referenced) return result;
+    context.definitions[entry.id] = result;
+    return { $ref: `#/$defs/${entry.id}` };
+  } finally {
+    context.active.delete(schema);
+  }
+}
+
+function convertSchemaNode(schema: ZodTypeAny, context: ConversionContext): JsonSchema {
   const def = getDef(schema);
   const type = def.type as string | undefined;
 
@@ -63,7 +95,7 @@ export function zodToJsonSchema(schema: ZodTypeAny): JsonSchema {
       const element = def.element as ZodTypeAny | undefined;
       return {
         type: 'array',
-        items: element ? zodToJsonSchema(element) : {},
+        items: element ? convertSchema(element, context) : {},
       };
     }
 
@@ -84,9 +116,9 @@ export function zodToJsonSchema(schema: ZodTypeAny): JsonSchema {
         if (isOptional) {
           // Unwrap optional/default to get the inner type for properties
           const inner = (fieldDef.innerType as ZodTypeAny | undefined) ?? fieldSchema;
-          properties[key] = zodToJsonSchema(inner);
+          properties[key] = convertSchema(inner, context);
         } else {
-          properties[key] = zodToJsonSchema(fieldSchema);
+          properties[key] = convertSchema(fieldSchema, context);
           required.push(key);
         }
       }
@@ -100,7 +132,7 @@ export function zodToJsonSchema(schema: ZodTypeAny): JsonSchema {
       const valueType = def.valueType as ZodTypeAny | undefined;
       return {
         type: 'object',
-        additionalProperties: valueType ? zodToJsonSchema(valueType) : {},
+        additionalProperties: valueType ? convertSchema(valueType, context) : {},
       };
     }
 
@@ -110,32 +142,32 @@ export function zodToJsonSchema(schema: ZodTypeAny): JsonSchema {
       // are covered by this case via the options array.
       const options = def.options as ZodTypeAny[] | undefined;
       return {
-        anyOf: (options ?? []).map(zodToJsonSchema),
+        anyOf: (options ?? []).map((option) => convertSchema(option, context)),
       };
     }
 
     case 'optional': {
       const inner = def.innerType as ZodTypeAny | undefined;
-      return inner ? zodToJsonSchema(inner) : {};
+      return inner ? convertSchema(inner, context) : {};
     }
 
     case 'nullable': {
       const inner = def.innerType as ZodTypeAny | undefined;
       return {
-        anyOf: [inner ? zodToJsonSchema(inner) : {}, { type: 'null' }],
+        anyOf: [inner ? convertSchema(inner, context) : {}, { type: 'null' }],
       };
     }
 
     case 'default': {
       const inner = def.innerType as ZodTypeAny | undefined;
-      return inner ? zodToJsonSchema(inner) : {};
+      return inner ? convertSchema(inner, context) : {};
     }
 
     case 'lazy': {
       const getter = def.getter as (() => ZodTypeAny) | undefined;
       if (getter) {
         try {
-          return zodToJsonSchema(getter());
+          return convertSchema(getter(), context);
         } catch {
           return {};
         }
@@ -151,14 +183,17 @@ export function zodToJsonSchema(schema: ZodTypeAny): JsonSchema {
         (def.schema as ZodTypeAny | undefined) ??
         (def.in as ZodTypeAny | undefined) ??
         (def.innerType as ZodTypeAny | undefined);
-      return inner ? zodToJsonSchema(inner) : {};
+      return inner ? convertSchema(inner, context) : {};
     }
 
     case 'intersection': {
       const left = def.left as ZodTypeAny | undefined;
       const right = def.right as ZodTypeAny | undefined;
       return {
-        allOf: [left ? zodToJsonSchema(left) : {}, right ? zodToJsonSchema(right) : {}],
+        allOf: [
+          left ? convertSchema(left, context) : {},
+          right ? convertSchema(right, context) : {},
+        ],
       };
     }
 

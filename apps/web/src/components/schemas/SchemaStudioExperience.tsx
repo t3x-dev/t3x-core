@@ -368,10 +368,29 @@ export function SchemaStudioExperience({
     requested,
   ]);
   useEffect(() => {
-    if (schemaEdit.loading) return;
+    if (schemaEdit.loading || candidates.loading) return;
     const identity = `${projectId}:${workspaceId}:${recoveredCandidateKey}`;
     if (recoveredEditIdentity.current === identity) return;
+    if (schemaEdit.candidate?.baseSources?.length) {
+      const ids = schemaEdit.candidate.baseSources.map(
+        (base) =>
+          candidates.items.find(
+            (candidate) =>
+              candidate.source?.artifactVersionId === base.artifactVersionId &&
+              candidate.source.hash === base.hash &&
+              candidate.source.projectId === base.projectId &&
+              candidate.source.canonicalName === base.canonicalName &&
+              candidate.source.version === base.version
+          )?.id
+      );
+      if (ids.some((id) => !id)) return;
+      setSelection(ids as string[]);
+    }
     recoveredEditIdentity.current = identity;
+    setReview(undefined);
+    setPublishReview(undefined);
+    setDefinitionOpen(false);
+    setEditorBase(undefined);
     setLocalContribution(structuredClone(schemaEdit.candidate?.localContribution ?? {}));
     setSchemaDefinition(undefined);
     setSavedCandidateRef(
@@ -382,7 +401,15 @@ export function SchemaStudioExperience({
           }
         : undefined
     );
-  }, [projectId, recoveredCandidateKey, schemaEdit.loading, workspaceId]);
+  }, [
+    candidates.items,
+    candidates.loading,
+    projectId,
+    recoveredCandidateKey,
+    schemaEdit.candidate,
+    schemaEdit.loading,
+    workspaceId,
+  ]);
 
   useEffect(() => {
     setDefinitionOpen(false);
@@ -668,9 +695,19 @@ export function SchemaStudioExperience({
             ? () => {
                 if (!basePreview.data || !data) return;
                 setEditorBase({
-                  schema: structuredClone(basePreview.data.schema),
-                  hash: basePreview.data.schemaHash,
-                  initial: structuredClone(data.schema),
+                  schema: structuredClone(
+                    schemaEdit.candidate?.baseDefinition ??
+                      basePreview.data.workspace?.boundSchema ??
+                      basePreview.data.schema
+                  ),
+                  hash: schemaEdit.candidate?.baseDefinition
+                    ? String(schemaEdit.candidate.authoringDraft?.base.schemaHash)
+                    : basePreview.data.schemaHash,
+                  initial: structuredClone(
+                    !hasSchemaEdit && basePreview.data.workspace?.boundSchema
+                      ? basePreview.data.workspace.boundSchema
+                      : data.schema
+                  ),
                 });
                 setDefinitionOpen(true);
               }
@@ -839,7 +876,7 @@ export function SchemaStudioExperience({
                     setReview(undefined);
                   }}
                 >
-                  Publish private Schema
+                  Publish public Schema
                 </Button>
                 <Button
                   hidden={review.workspace?.canBind}

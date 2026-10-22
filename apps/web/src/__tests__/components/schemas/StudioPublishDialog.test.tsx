@@ -30,7 +30,7 @@ const props = {
 };
 const receipt = {
   source: {
-    projectId: 'p',
+    projectId: null,
     canonicalName: 'projects/p/custom',
     version: '1.0.0',
     artifactVersionId: 'release-v1',
@@ -38,7 +38,7 @@ const receipt = {
   },
   schemaHash: hash,
   kind: 'schema',
-  visibility: 'private',
+  visibility: 'community',
 };
 beforeEach(() => {
   vi.clearAllMocks();
@@ -51,7 +51,7 @@ it('publishes only on explicit submit, pins the checked revision and opens the e
   fireEvent.change(screen.getByLabelText('Canonical name'), {
     target: { value: receipt.source.canonicalName },
   });
-  const button = screen.getByRole('button', { name: 'Publish private version' });
+  const button = screen.getByRole('button', { name: 'Publish public version' });
   fireEvent.submit(button.closest('form')!);
   fireEvent.submit(button.closest('form')!);
   await waitFor(() =>
@@ -59,6 +59,7 @@ it('publishes only on explicit submit, pins the checked revision and opens the e
   );
   expect(mocks.publish).toHaveBeenCalledTimes(1);
   expect(mocks.publish).toHaveBeenCalledWith({
+    visibility: 'community',
     candidateIds: ['base'],
     schemaEditCandidate: { candidateId: 'edit', revision: 2 },
     ifRevision: 3,
@@ -68,6 +69,7 @@ it('publishes only on explicit submit, pins the checked revision and opens the e
     title: 'My Schema',
     description: '',
     releaseNotes: '',
+    license: 'Apache-2.0',
     tags: [],
   });
   const url = new URL(screen.getByRole('link').getAttribute('href')!, 'http://localhost');
@@ -81,7 +83,7 @@ it('publishes only on explicit submit, pins the checked revision and opens the e
 });
 it('disables stale or blocked previews without attempting a write', () => {
   const { rerender } = render(<StudioPublishDialog {...props} currentReviewHash={undefined} />);
-  expect(screen.getByRole('button', { name: 'Publish private version' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Publish public version' })).toBeDisabled();
   expect(screen.getByRole('alert')).toHaveTextContent('stale');
   rerender(
     <StudioPublishDialog
@@ -89,15 +91,27 @@ it('disables stale or blocked previews without attempting a write', () => {
       preview={{ ...preview, impact: { ...preview.impact!, canPublish: false } }}
     />
   );
-  fireEvent.submit(
-    screen.getByRole('button', { name: 'Publish private version' }).closest('form')!
-  );
+  fireEvent.submit(screen.getByRole('button', { name: 'Publish public version' }).closest('form')!);
   expect(mocks.publish).not.toHaveBeenCalled();
+});
+it('discloses public retention and submits the selected reuse license explicitly', async () => {
+  render(<StudioPublishDialog {...props} />);
+  expect(screen.getByText(/immutable release survives repository deletion/)).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Reuse license'), { target: { value: 'MIT' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Publish public version' }));
+  await waitFor(() =>
+    expect(mocks.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        visibility: 'community',
+        license: 'MIT',
+      })
+    )
+  );
 });
 it('keeps metadata after conflicts and retries only when the user asks', async () => {
   mocks.publish.mockRejectedValueOnce(new Error('Immutable version conflict'));
   render(<StudioPublishDialog {...props} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Publish private version' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Publish public version' }));
   await waitFor(() =>
     expect(screen.getByRole('alert')).toHaveTextContent('Immutable version conflict')
   );
@@ -105,7 +119,7 @@ it('keeps metadata after conflicts and retries only when the user asks', async (
   expect(mocks.publish).toHaveBeenCalledTimes(1);
   fireEvent.change(screen.getByLabelText('Version'), { target: { value: '1.1.0' } });
   mocks.publish.mockResolvedValue({ ...receipt, source: { ...receipt.source, version: '1.1.0' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Publish private version' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Publish public version' }));
   await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('@1.1.0'));
 });
 it('validates metadata and ignores a response after the dialog is unmounted', async () => {
@@ -118,11 +132,11 @@ it('validates metadata and ignores a response after the dialog is unmounted', as
   );
   const { unmount } = render(<StudioPublishDialog {...props} />);
   fireEvent.change(screen.getByLabelText('Version'), { target: { value: 'not-semver' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Publish private version' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Publish public version' }));
   expect(screen.getByRole('alert')).toBeInTheDocument();
   expect(mocks.publish).not.toHaveBeenCalled();
   fireEvent.change(screen.getByLabelText('Version'), { target: { value: '1.0.0' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Publish private version' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Publish public version' }));
   expect(screen.getByRole('button', { name: 'Publishing…' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
   unmount();

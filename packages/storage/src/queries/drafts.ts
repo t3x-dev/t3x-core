@@ -460,6 +460,7 @@ export async function saveWorkspaceSchemaPreparation(
     schemaEditCandidate?: unknown;
     schemaPending?: unknown;
     schemaComposition?: unknown;
+    assistantSchemaSettings?: unknown;
   }
 ): Promise<Draft> {
   const current = await findWorkspaceDraft(db, input.projectId, input.workspaceId);
@@ -468,6 +469,9 @@ export async function saveWorkspaceSchemaPreparation(
     throw new ConflictError(current.id, input.expectedRevision);
   const state = {
     ...current.workspace_state,
+    ...(input.assistantSchemaSettings !== undefined
+      ? { assistantSchemaSettings: input.assistantSchemaSettings }
+      : {}),
     ...(input.schemaEditCandidate !== undefined
       ? { schemaEditCandidate: input.schemaEditCandidate }
       : {}),
@@ -887,6 +891,72 @@ export async function renewWorkspaceAuthoring(
       and(
         eq(drafts.id, input.draft.id),
         eq(drafts.projectId, input.draft.project_id),
+        eq(drafts.revision, input.draft.revision),
+        eq(drafts.status, 'editing')
+      )
+    )
+    .returning();
+  if (!saved) throw new ConflictError(input.draft.id, input.draft.revision);
+  return rowToDraft(saved);
+}
+
+/** Internal post-merge projection only. Never rebase unpublished actions or fabricate a retired manifest. */
+export async function advanceCleanWorkspaceAfterMerge(
+  db: AnyDB,
+  input: {
+    draft: Draft;
+    expectedHead: string;
+    commitDigest: string;
+    result: unknown;
+    workspace: Record<string, unknown>;
+  }
+): Promise<Draft> {
+  const previous = input.draft.workspace_state ?? {};
+  const before = previous.authoringLedger as AuthoringLedgerStorage | undefined;
+  const after = input.workspace.authoringLedger as AuthoringLedgerStorage | undefined;
+  const basis = previous.authoringBasis as { refHead?: unknown; refName?: unknown } | undefined;
+  const nextBasis = input.workspace.authoringBasis as
+    | { refHead?: unknown; refName?: unknown }
+    | undefined;
+  if (
+    !before ||
+    before.actions.length ||
+    before.compositionRevision !== 0 ||
+    !after ||
+    after.actions.length ||
+    after.compositionRevision !== 0 ||
+    basis?.refHead !== input.expectedHead ||
+    nextBasis?.refHead !== input.commitDigest ||
+    basis.refName !== nextBasis.refName ||
+    !isDeepStrictEqual(after.base, input.result) ||
+    !isDeepStrictEqual(previous.authoringHistory, input.workspace.authoringHistory)
+  )
+    throw new DraftAuthoringConflictError(
+      'Only a clean Workspace can follow an external merge Commit'
+    );
+  const [branch] = await db
+    .select()
+    .from(branches)
+    .where(
+      and(
+        eq(branches.projectId, input.draft.project_id),
+        eq(branches.name, input.draft.target_branch!)
+      )
+    )
+    .for('update');
+  if (branch?.headCommitHash !== input.commitDigest)
+    throw new DraftAuthoringConflictError('Merge head changed before Workspace refresh');
+  const [saved] = await db
+    .update(drafts)
+    .set({
+      workspaceStateJson: input.workspace,
+      parentCommitHash: input.commitDigest,
+      revision: input.draft.revision + 1,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(drafts.id, input.draft.id),
         eq(drafts.revision, input.draft.revision),
         eq(drafts.status, 'editing')
       )

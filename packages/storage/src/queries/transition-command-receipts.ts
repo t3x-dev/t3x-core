@@ -146,6 +146,27 @@ export async function findTransitionCommandReceipt(
   return row === undefined ? null : receipt(row);
 }
 
+/** Locate the application preparation for an exact committed object, not the latest ref. */
+export async function findTransitionCommitReceipt(
+  db: AnyDB,
+  projectId: string,
+  commitDigest: string
+): Promise<TransitionCommandReceipt | null> {
+  const [row] = await db
+    .select()
+    .from(transitionCommandReceipts)
+    .where(
+      and(
+        eq(transitionCommandReceipts.projectId, projectId),
+        eq(transitionCommandReceipts.action, 'commit'),
+        eq(transitionCommandReceipts.resultKind, 'commit'),
+        eq(transitionCommandReceipts.resultDigest, commitDigest)
+      )
+    )
+    .limit(1);
+  return row === undefined ? null : receipt(row);
+}
+
 async function assertResultObject(
   db: AnyDB,
   input: RecordTransitionCommandReceiptInput

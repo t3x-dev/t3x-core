@@ -22,6 +22,7 @@ import { useProjectStore } from '@/store/projectStore';
 
 function OwnerRepoProjectPageContent() {
   const params = useParams<{ owner: string; repoPath?: string[] }>();
+  const pathname = usePathname();
   const owner = params.owner;
   const segments = params.repoPath ?? [];
   const name = segments[0] ?? '';
@@ -31,7 +32,6 @@ function OwnerRepoProjectPageContent() {
     owner.toLowerCase() === 't3x-dev' && name.toLowerCase() === 'settings' && segments.length === 1;
   const special = directory || creating || organizationSettings;
   const router = useRouter();
-  const pathname = usePathname();
   // Preserve the URL's encoded suffix: encoding route params again can turn
   // %3A into %253A on every canonical redirect and prevent the route from settling.
   const suffixSegments = pathname.split('/').slice(3);
