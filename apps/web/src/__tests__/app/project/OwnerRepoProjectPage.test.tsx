@@ -112,9 +112,11 @@ it('uses the namespace returned by the backend after a transfer', async () => {
   });
   render(<OwnerRepoProjectPage />);
   expect(await screen.findByTestId('detail')).toHaveTextContent('moved bob');
-  expect(mocks.replace).toHaveBeenCalledWith(
-    '/bob/Repo?workspace=w&conversation=c&branch=main&pr=9',
-    { scroll: false }
+  await waitFor(() =>
+    expect(mocks.replace).toHaveBeenCalledWith(
+      '/bob/Repo?workspace=w&conversation=c&branch=main&pr=9',
+      { scroll: false }
+    )
   );
 });
 it('opens canonical settings and nested changes without bouncing to an ID URL', async () => {
