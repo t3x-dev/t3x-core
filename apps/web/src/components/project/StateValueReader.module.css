@@ -1,0 +1,68 @@
+.groups {
+  min-width: 0;
+}
+.group + .group {
+  border-top: 1px solid var(--stroke-divider);
+}
+.heading {
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  background: var(--surface-panel);
+}
+.children {
+  border-top: 1px solid var(--stroke-divider);
+  padding-left: 16px;
+}
+.children .heading {
+  background: transparent;
+}
+.field {
+  display: grid;
+  grid-template-columns: minmax(100px, 180px) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 12px;
+}
+.field > :first-child {
+  font-size: 13px;
+}
+.table {
+  max-width: 100%;
+  overflow: auto;
+}
+.table table {
+  min-width: 400px;
+}
+.table th,
+.table td {
+  overflow-wrap: anywhere;
+  max-width: 420px;
+}
+.table th {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.table th[scope="row"] {
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.disclosure {
+  padding: 10px 12px;
+}
+.type {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+@media (max-width: 600px) {
+  .field {
+    grid-template-columns: minmax(80px, 0.4fr) minmax(0, 1fr);
+  }
+  .children {
+    padding-left: 8px;
+  }
+}

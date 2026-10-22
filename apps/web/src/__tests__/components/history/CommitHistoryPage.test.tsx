@@ -239,7 +239,7 @@ describe('History node navigation', () => {
   });
 
   it('returns to the graph with the selected commit focused', async () => {
-    mocks.search = 'branch=main';
+    mocks.search = 'branch=main&view=canvas';
     render(<CommitHistoryPage projectId="proj_test" />);
     fireEvent.click(await screen.findByRole('button', { name: 'Inspect Initial state' }));
     fireEvent.click(screen.getByRole('button', { name: 'View Diff Changes' }));
@@ -249,12 +249,13 @@ describe('History node navigation', () => {
     expect(screen.getByRole('heading', { name: 'History Canvas' })).toBeInTheDocument();
   });
 
-  it('allows the standalone list to switch branches and has no fabricated State return', async () => {
+  it('falls back to State for an unsafe return link and keeps branch filtering', async () => {
     mocks.search = 'view=list&returnTo=https%3A%2F%2Fexample.com';
     render(<CommitHistoryPage projectId="proj_test" />);
     await screen.findByRole('button', { name: /Update title/ });
     expect(mocks.loadCommits).toHaveBeenCalledWith('proj_test', undefined, 100);
-    expect(screen.queryByRole('button', { name: 'Back to previous page' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to State' }));
+    expect(mocks.routerPush).toHaveBeenLastCalledWith('/project/proj_test?view=overview');
     fireEvent.change(screen.getByRole('combobox', { name: 'History branch filter' }), {
       target: { value: 'main' },
     });

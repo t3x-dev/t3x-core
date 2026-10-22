@@ -78,7 +78,7 @@ export function ProjectShell({
   return (
     <div className="flex h-dvh min-h-[680px] flex-col overflow-hidden bg-[var(--surface-app)] text-[var(--text-primary)] [--text-base:14px] [--text-lg:16px] [--text-sm:13px] [--text-xs:12px]">
       <DiscoverHeader
-        activeTab={activeTab}
+        activeTab={activeTab === 'history' ? 'state' : activeTab}
         owner={actualOwner || undefined}
         projectName={project.name}
         newProjectHref={newRepositoryHref}

@@ -116,8 +116,9 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
   const queryRef = useRef(query);
   queryRef.current = query;
   const branchFromUrl = searchParams.get('branch')?.trim() || 'all';
-  const historyView = searchParams.get('view') === 'list' ? 'list' : 'canvas';
-  const returnHref = safeInternalReturnTo(searchParams.get('returnTo'), '');
+  const historyView = searchParams.get('view') === 'canvas' ? 'canvas' : 'list';
+  const stateHref = `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ view: 'overview', ...(branchFromUrl !== 'all' ? { branch: branchFromUrl } : {}) }).toString()}`;
+  const returnHref = safeInternalReturnTo(searchParams.get('returnTo'), stateHref);
   const selectedCommitHash = searchParams.get('commit')?.trim() || null;
   const authorFilter = searchParams.get('author') || 'all';
   const searchQuery = searchParams.get('q') || '';
@@ -471,7 +472,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
                 type="button"
               >
                 <ArrowLeft size={15} strokeWidth={2} />
-                <span>Back to previous page</span>
+                <span>{returnHref === stateHref ? 'Back to State' : 'Back to previous page'}</span>
               </button>
             ) : null}
           </header>

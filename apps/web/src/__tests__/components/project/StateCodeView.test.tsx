@@ -76,6 +76,7 @@ it('derives source metadata from the selected format and navigates between match
   expect(within(info).getByText('2')).toBeInTheDocument();
   expect(within(info).getByText('28 B')).toBeInTheDocument();
   expect(within(info).getByText('test/schema')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Find in code' }));
   fireEvent.change(screen.getByRole('textbox', { name: 'Find in code' }), {
     target: { value: '中文' },
   });
@@ -85,8 +86,5 @@ it('derives source metadata from the selected format and navigates between match
   fireEvent.click(screen.getByRole('button', { name: 'JSON', exact: true }));
   expect(within(info).getByText('JSON')).toBeInTheDocument();
   expect(within(info).getByText('4')).toBeInTheDocument();
-  expect(within(info).getByRole('link', { name: 'Propose change' })).toHaveAttribute(
-    'href',
-    '/workspace'
-  );
+  expect(screen.queryByRole('link', { name: 'Propose change' })).toBeNull();
 });

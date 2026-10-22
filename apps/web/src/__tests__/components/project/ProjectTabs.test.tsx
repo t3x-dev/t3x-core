@@ -102,14 +102,13 @@ describe('ProjectTabs', () => {
     );
   });
 
-  it('places Discover before Schemas and retains the nested Browse route', () => {
+  it('keeps the current primary navigation and legacy catalog routes', () => {
     expect(PROJECT_TABS.map((tab) => tab.id)).toEqual([
       'state',
       'discover',
       'schemas',
       'workspaces',
       'reviews',
-      'history',
       'community',
       'settings',
     ]);
@@ -126,7 +125,7 @@ describe('ProjectTabs', () => {
     expect(parseProjectTab('browse')).toBe('browse');
   });
 
-  it('places History beside PRs with branch context and without Workspace selection', () => {
+  it('owns legacy History routes under State and preserves branch context', () => {
     render(
       <ProjectTabs
         activeTab="history"
@@ -136,13 +135,10 @@ describe('ProjectTabs', () => {
         repoPath="/project/proj_123"
       />
     );
-    const history = screen.getByRole('link', { name: 'History' });
-    expect(history).toHaveAttribute('aria-current', 'page');
-    expect(history).toHaveAttribute(
-      'href',
-      '/project/proj_123?tab=history&branch=feature%2Frelease'
-    );
-    expect(history.previousElementSibling).toHaveAttribute('aria-label', 'Pull requests');
+    expect(screen.queryByRole('link', { name: 'History' })).toBeNull();
+    const state = screen.getByRole('link', { name: 'State' });
+    expect(state).toHaveAttribute('aria-current', 'page');
+    expect(state).toHaveAttribute('href', '/project/proj_123?branch=feature%2Frelease');
     expect(parseProjectTab('history')).toBe('history');
   });
 });
