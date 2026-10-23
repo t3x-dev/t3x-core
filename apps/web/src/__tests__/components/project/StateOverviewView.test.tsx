@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { StateOverviewView } from '@/components/project/StateOverviewView';
 import type { ApiCommit } from '@/types/api';
@@ -171,6 +171,11 @@ it('renders an empty repository with its own metadata and no committed state', (
   expect(screen.queryByText('Release with evidence')).toBeNull();
   expect(screen.getByText('No README added yet.')).toBeVisible();
   expect(screen.getByText('No commits yet')).toBeVisible();
+  expect(
+    within(screen.getByRole('region', { name: 'Committed State' })).getByRole('link', {
+      name: 'Propose change',
+    })
+  ).toHaveAttribute('href', '/project/empty?tab=workspaces');
   expect(screen.queryByText('Committed')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Expand rendered State' })).toBeNull();
   expect(screen.getAllByRole('link', { name: 'Propose change' })[0]).toHaveAttribute(

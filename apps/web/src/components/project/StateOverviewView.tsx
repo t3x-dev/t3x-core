@@ -1,7 +1,15 @@
 'use client';
 
 import type { RepositoryProfile, RepositoryProfilePatch } from '@t3x-dev/api-client';
-import { BookOpen, ChevronRight, Globe2, List, LockKeyhole } from 'lucide-react';
+import {
+  ArrowRight,
+  BookOpen,
+  ChevronRight,
+  GitCommitHorizontal,
+  Globe2,
+  List,
+  LockKeyhole,
+} from 'lucide-react';
 import Link from 'next/link';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { StateAuthorReadme } from '@/components/project/StateAuthorReadme';
@@ -94,6 +102,10 @@ export function StateOverviewView({
   // Historical introductions belong to this revision; never borrow current repository metadata.
   const author = version && !loading && !error ? data?.author?.document : undefined;
   const shownDescription = version ? author?.description?.trim() : projectDescription?.trim();
+  const readme = version ? author?.readme : repositoryProfile.readme;
+  const descriptionInReadme = readme
+    ?.split(/\n\s*\n/)
+    .some((paragraph) => paragraph.trim() === shownDescription);
   const shownTags = version ? (author?.tags ?? []) : repositoryProfile.tags;
   const canEdit = !version && canEditRepository && onSaveRepositoryProfile;
   const value = data?.render.model.value;
@@ -168,12 +180,25 @@ export function StateOverviewView({
               ) : null}
             </div>
           ) : empty ? (
-            <div className={styles.feedback}>
-              <h3>No commits yet</h3>
-              <p>
-                This branch has no committed state yet. Use Propose change to create the first
-                change in a Workspace.
-              </p>
+            <div className={styles.emptyState}>
+              <span className={styles.emptyIcon} aria-hidden="true">
+                <GitCommitHorizontal />
+              </span>
+              <div className={styles.emptyContent}>
+                <h3>No commits yet</h3>
+                <p>
+                  Committed content will appear here. Prepare your first change in a Workspace, then
+                  review and commit it.
+                </p>
+                {workspaceHref ? (
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={workspaceHref}>
+                      Propose change
+                      <ArrowRight aria-hidden="true" />
+                    </Link>
+                  </Button>
+                ) : null}
+              </div>
             </div>
           ) : (
             <>
@@ -225,33 +250,36 @@ export function StateOverviewView({
         <details className={styles.readmeDisclosure}>
           <summary>
             <BookOpen aria-hidden="true" />
-            {version ? 'Version introduction' : 'README & repository information'}
+            {version ? 'Version introduction' : 'README'}
           </summary>
           <section
             aria-label={version ? 'Version introduction' : 'Repository information'}
             className={styles.readmeContent}
           >
-            {shownDescription ? <p className={styles.description}>{shownDescription}</p> : null}
-            <fieldset
-              className={styles.tags}
-              aria-label={version ? 'Version tags' : 'Repository tags'}
-            >
-              {shownTags.map((tag) => (
-                <Badge key={tag} variant="outline" className={styles.tag}>
-                  {version || tag.startsWith('#') ? tag : `#${tag}`}
-                </Badge>
-              ))}
-              {canEdit ? (
-                <RepositoryProfileEditor
-                  field="tags"
-                  profile={repositoryProfile}
-                  projectName={projectName}
-                  onSave={canEdit}
-                />
-              ) : null}
-            </fieldset>
             <div className={styles.readmeHeader}>
-              <h2>{version ? 'Version README' : 'README'}</h2>
+              <div className={styles.repositoryInfo}>
+                {shownDescription && !descriptionInReadme ? (
+                  <p className={styles.description}>{shownDescription}</p>
+                ) : null}
+                <fieldset
+                  className={styles.tags}
+                  aria-label={version ? 'Version tags' : 'Repository tags'}
+                >
+                  {shownTags.map((tag) => (
+                    <Badge key={tag} variant="outline" className={styles.tag}>
+                      {version || tag.startsWith('#') ? tag : `#${tag}`}
+                    </Badge>
+                  ))}
+                  {canEdit ? (
+                    <RepositoryProfileEditor
+                      field="tags"
+                      profile={repositoryProfile}
+                      projectName={projectName}
+                      onSave={canEdit}
+                    />
+                  ) : null}
+                </fieldset>
+              </div>
               <div className={styles.readmeActions}>
                 <Button
                   type="button"
@@ -317,7 +345,7 @@ export function StateOverviewView({
                   ) : null}
                 </>
               ) : version ? (
-                <StateAuthorReadme author={author} compact embedded />
+                <StateAuthorReadme author={author} embedded />
               ) : (
                 <StateAuthorReadme
                   author={{ readme: repositoryProfile.readme, resources: [] }}

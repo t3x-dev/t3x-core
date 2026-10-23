@@ -158,18 +158,30 @@
 }
 .readmeDisclosure {
   max-width: 960px;
-  border-top: 1px solid var(--stroke-divider);
+  margin-top: 8px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  overflow: hidden;
 }
 .readmeDisclosure > summary {
   display: flex;
   align-items: center;
   gap: 8px;
   min-height: 44px;
-  padding: 8px 0;
-  font-size: 13px;
-  font-weight: 500;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  color: var(--text-secondary);
+  color: var(--text-primary);
+  background: var(--surface-panel);
+  list-style: none;
+}
+.readmeDisclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.readmeDisclosure[open] > summary {
+  border-bottom: 1px solid var(--stroke-divider);
 }
 .readmeDisclosure > summary::after {
   content: "+";
@@ -184,8 +196,7 @@
   height: 16px;
 }
 .readmeContent {
-  max-width: 840px;
-  padding: 8px 0 24px;
+  min-width: 0;
 }
 .description {
   font-size: 14px;
@@ -195,28 +206,50 @@
 .readmeHeader {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
-  margin: 16px 0;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--stroke-divider);
 }
-.readmeHeader h2 {
-  font-size: 14px;
-  font-weight: 600;
+.repositoryInfo {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 8px;
 }
 .readmeActions {
   display: flex;
   gap: 4px;
   align-items: center;
+  flex-wrap: wrap;
+  margin-left: auto;
 }
 .readmeBody {
   min-width: 0;
+  padding: 24px;
+  overflow-wrap: anywhere;
+}
+.readmeBody > section {
+  max-width: 80ch;
+}
+.readmeBody h1 {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--stroke-divider);
+  font-size: 24px;
+  line-height: 1.3;
+}
+.readmeBody h2 {
+  font-size: 20px;
+  line-height: 1.4;
 }
 .contents {
   display: grid;
   gap: 4px;
   padding: 12px;
-  margin-bottom: 16px;
+  margin: 0;
+  border-bottom: 1px solid var(--stroke-divider);
   background: var(--surface-panel);
 }
 .contents button {
@@ -243,6 +276,47 @@
 .feedback p {
   margin: 8px 0;
 }
+.emptyState {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+  padding: 28px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-panel);
+}
+.emptyIcon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+}
+.emptyIcon svg {
+  width: 20px;
+  height: 20px;
+}
+.emptyContent {
+  min-width: 0;
+}
+.emptyContent h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+}
+.emptyContent p {
+  max-width: 60ch;
+  margin: 8px 0 16px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
 .root button:focus-visible,
 .root summary:focus-visible,
 .actions a:focus-visible {
@@ -253,6 +327,16 @@
   .page {
     padding: 0 16px 24px;
   }
+  .readmeBody {
+    padding: 16px;
+  }
+}
+@media (max-width: 480px) {
+  .emptyState {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 20px;
+  }
 }
 .tags {
   display: flex;
@@ -260,7 +344,7 @@
   min-width: 0;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 12px;
+  margin: 0;
 }
 .tag {
   max-width: 100%;
