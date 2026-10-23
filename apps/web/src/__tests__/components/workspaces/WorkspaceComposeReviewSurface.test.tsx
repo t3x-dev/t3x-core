@@ -183,6 +183,7 @@ vi.mock('next/navigation', () => ({
 
 describe('WorkspaceComposeReviewSurface composer', () => {
   beforeEach(() => {
+    localStorage.clear();
     useProjectStore.setState({ projects: [], details: {} });
     schemaCardMocks.record = null;
     localStorage.removeItem('t3x-workspace-draft-width');
@@ -230,6 +231,40 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
   }
+
+  it('restores the change scope and stage on return, with explicit URL stages taking priority', () => {
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    const first = renderCompose();
+    fireEvent.click(screen.getByRole('tab', { name: 'All changes' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Review', exact: true }));
+    first.unmount();
+    const onModeChange = vi.fn();
+    const ui = (
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={
+          {
+            candidate,
+            isBusy: false,
+            materialSources: [],
+          } as unknown as WorkspaceComposeReviewController
+        }
+        mode="compose"
+        onModeChange={onModeChange}
+      />
+    );
+    const returned = render(ui);
+    expect(onModeChange).toHaveBeenLastCalledWith('review');
+    expect(screen.getByRole('tab', { name: 'All changes' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    returned.unmount();
+    navigationMocks.searchParams = new URLSearchParams('workspaceMode=compose');
+    onModeChange.mockClear();
+    render(ui);
+    expect(onModeChange).not.toHaveBeenCalledWith('review');
+  });
 
   it('places pending Schema confirmations on the timeline, never in the discussion composer', () => {
     schemaCardMocks.record = {

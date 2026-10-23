@@ -1,5 +1,5 @@
 import { CheckCircle2, Pencil } from 'lucide-react';
-import navigationStyles from '@/components/project/StateNavigationControls.module.css';
+import styles from './WorkspaceStageHeader.module.css';
 
 export function WorkspaceStageNavigation({
   mode,
@@ -9,7 +9,7 @@ export function WorkspaceStageNavigation({
   onModeChange: (mode: 'compose' | 'review') => void;
 }) {
   return (
-    <div aria-label="Workspace stage" className={navigationStyles.segments} role="tablist">
+    <div aria-label="Workspace stage" className={styles.navigation} role="tablist">
       <button
         aria-selected={mode === 'compose'}
         onClick={() => onModeChange('compose')}

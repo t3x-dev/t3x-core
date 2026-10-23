@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { SchemaCatalogExperience } from '@/components/schemas/SchemaCatalogExperience';
 
@@ -20,8 +20,20 @@ vi.mock('@/components/schemas/ActiveSchemaBindings', () => ({
   ActiveSchemaBindings: () => <div>Workspace bindings</div>,
 }));
 beforeEach(() => {
+  localStorage.clear();
   mocks.query = '';
   mocks.replace.mockReset();
+});
+it('remembers Bindings on return and honors an explicit Studio link', () => {
+  const first = render(<SchemaCatalogExperience projectId="p">{null}</SchemaCatalogExperience>);
+  fireEvent.click(screen.getByRole('link', { name: 'Bindings' }));
+  first.unmount();
+  const restored = render(<SchemaCatalogExperience projectId="p">{null}</SchemaCatalogExperience>);
+  expect(screen.getByText('Workspace bindings')).toBeInTheDocument();
+  restored.unmount();
+  mocks.query = 'schemaView=studio';
+  render(<SchemaCatalogExperience projectId="p">{null}</SchemaCatalogExperience>);
+  expect(screen.getByText('Project Studio')).toBeInTheDocument();
 });
 it.each([
   'discover',

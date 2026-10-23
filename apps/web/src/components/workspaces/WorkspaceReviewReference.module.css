@@ -4,21 +4,22 @@
 .views {
   width: 100%;
   max-width: var(--project-page-max-width, 1264px);
-  margin: 0 auto 8px;
+  margin: 0 auto;
   min-height: 44px;
-  border: 0;
-  padding: 0 24px;
+  border-bottom: 1px solid var(--stroke-divider);
+  padding: 6px 16px;
   gap: 18px;
 }
 .views > div:first-child {
-  border-radius: 10px;
-  padding: 3px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  padding: 2px;
   gap: 2px;
   background: var(--surface-app);
 }
 .views > div:first-child button {
   height: 28px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   padding: 0 14px;
   font-size: 13px;
   font-weight: 500;
@@ -26,7 +27,7 @@
 .views > div:first-child button[aria-current="page"] {
   background: var(--surface-card);
   color: var(--text-primary);
-  box-shadow: var(--fx-shadow-sm);
+  font-weight: 600;
 }
 .readiness {
   box-sizing: border-box;

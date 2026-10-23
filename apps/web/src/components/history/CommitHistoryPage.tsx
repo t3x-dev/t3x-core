@@ -40,6 +40,7 @@ import { useIntroDemoQueryFlag } from '@/hooks/onboarding/useIntroDemoQueryFlag'
 import { useBranchesList } from '@/hooks/shared/useBranchesList';
 import { useDiffRaw } from '@/hooks/shared/useDiffRaw';
 import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
+import { useViewPreference } from '@/hooks/shared/useViewPreference';
 import type { ApiCommit, Branch } from '@/types/api';
 import { buildReturnTo, safeInternalReturnTo, withReturnTo } from '@/utils/navigationReturn';
 import { CommitHistoryDiffView } from './CommitHistoryDiffView';
@@ -108,6 +109,8 @@ const HISTORY_TOUR_STEPS: FeatureTourStep[] = [
 // Component
 // ============================================================================
 
+const HISTORY_VIEWS = ['list', 'canvas'] as const;
+
 export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -116,7 +119,14 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
   const queryRef = useRef(query);
   queryRef.current = query;
   const branchFromUrl = searchParams.get('branch')?.trim() || 'all';
-  const historyView = searchParams.get('view') === 'canvas' ? 'canvas' : 'list';
+  const [preferredView, rememberView] = useViewPreference(
+    `t3x.history-view:${projectId}`,
+    HISTORY_VIEWS,
+    'list'
+  );
+  const requestedView = searchParams.get('view');
+  const historyView =
+    requestedView === 'canvas' || requestedView === 'list' ? requestedView : preferredView;
   const stateHref = `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ view: 'overview', ...(branchFromUrl !== 'all' ? { branch: branchFromUrl } : {}) }).toString()}`;
   const returnHref = safeInternalReturnTo(searchParams.get('returnTo'), stateHref);
   const selectedCommitHash = searchParams.get('commit')?.trim() || null;
@@ -188,9 +198,10 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
 
   const handleViewChange = useCallback(
     (view: 'canvas' | 'list') => {
+      rememberView(view);
       updateQuery({ view, commit: null });
     },
-    [updateQuery]
+    [rememberView, updateQuery]
   );
 
   // Fetch branches

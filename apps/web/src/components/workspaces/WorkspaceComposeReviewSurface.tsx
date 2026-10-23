@@ -42,6 +42,7 @@ import { WorkspaceChecksRedirect } from '@/components/checks/WorkspaceChecksRedi
 import { DOCUMENT_SOURCE_ACCEPTED_TYPES } from '@/components/import/documentAcceptTypes';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -57,6 +58,7 @@ import { OutputTargetsTab } from '@/components/workspaces/OutputTargetsTab';
 import { SourceArtifactRoleEditor } from '@/components/workspaces/SourceArtifactRoleEditor';
 import { SourceTransitionTab } from '@/components/workspaces/SourceTransitionTab';
 import { WorkspaceContentEditor } from '@/components/workspaces/WorkspaceContentEditor';
+import { WorkspaceNotice } from '@/components/workspaces/WorkspaceNotice';
 import { WorkspaceSchemaReviewPanel } from '@/components/workspaces/WorkspaceSchemaReviewPanel';
 import type { WorkspaceYOpsFlowView } from '@/components/workspaces/YOpsDraftTab';
 import { getSchemaRegistryPreview } from '@/data/schemaReleases';
@@ -119,6 +121,7 @@ import {
 } from '@/domain/workspaces/schemaBindings';
 import { useAssistantSchemaSettings } from '@/hooks/schemas/useAssistantSchemaSettings';
 import { useProjectYSchemaVersions } from '@/hooks/schemas/useProjectYSchemaVersions';
+import { useViewPreference } from '@/hooks/shared/useViewPreference';
 import { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import { useWorkspaceAuthoringBootstrap } from '@/hooks/workspaces/useWorkspaceAuthoringBootstrap';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
@@ -157,6 +160,9 @@ type ReviewPane = 'rendered' | 'changes' | 'yaml' | 'checks';
 type WorkspaceTool = 'source' | 'edit' | 'delivery';
 type ReviewCheckStatus = 'failed' | 'passed' | 'pending';
 type ComposeChangeFilter = 'all' | 'modified' | 'added' | 'attention';
+const WORKSPACE_MODES = ['compose', 'review'] as const;
+const REVIEW_VIEWS = ['changes', 'rendered', 'yaml'] as const;
+const CHANGE_SCOPES = ['latest', 'all'] as const;
 
 function parseReviewPane(value: string | null): ReviewPane {
   return value === 'rendered' || value === 'yaml' || value === 'checks' ? value : 'changes';
@@ -207,6 +213,17 @@ export function WorkspaceComposeReviewSurface({
   const searchParams = useSearchParams();
   const routeQuery = searchParams.toString();
   const routeParams = new URLSearchParams(routeQuery);
+  const preferenceKey = `t3x.workspace-view:${candidate.projectId}:${candidate.id}`;
+  const [preferredMode, rememberMode, modeReady] = useViewPreference(
+    `${preferenceKey}:mode`,
+    WORKSPACE_MODES,
+    'compose'
+  );
+  const [preferredReviewPane, rememberReviewPane, paneReady] = useViewPreference(
+    `${preferenceKey}:review`,
+    REVIEW_VIEWS,
+    'changes'
+  );
   const workspaceTool =
     parseWorkspaceTool(routeParams.get('workspaceTool')) ??
     parseWorkspaceTool(routeParams.get('reviewPane'));
@@ -239,7 +256,7 @@ export function WorkspaceComposeReviewSurface({
           params.delete('reviewPane');
         }
       } else {
-        params.delete('workspaceMode');
+        params.set('workspaceMode', 'compose');
         params.delete('reviewPane');
       }
 
@@ -251,10 +268,11 @@ export function WorkspaceComposeReviewSurface({
 
   const setSurfaceMode = useCallback(
     (nextMode: WorkspaceSurfaceMode) => {
+      rememberMode(nextMode);
       writeWorkspaceSurfaceUrl(nextMode, reviewPane);
       onModeChange(nextMode);
     },
-    [onModeChange, reviewPane, writeWorkspaceSurfaceUrl]
+    [onModeChange, rememberMode, reviewPane, writeWorkspaceSurfaceUrl]
   );
 
   const setReviewPane = useCallback(
@@ -275,6 +293,7 @@ export function WorkspaceComposeReviewSurface({
         );
         return;
       }
+      rememberReviewPane(nextPane);
       setReviewPaneState(nextPane);
       writeWorkspaceSurfaceUrl('review', nextPane);
     },
@@ -287,12 +306,15 @@ export function WorkspaceComposeReviewSurface({
       candidate.id,
       pathname,
       reviewPane,
+      rememberReviewPane,
     ]
   );
 
   useEffect(() => {
-    if (lastSyncedRouteQueryRef.current === routeQuery) return;
-    lastSyncedRouteQueryRef.current = routeQuery;
+    if (!modeReady || !paneReady) return;
+    const routeKey = `${preferenceKey}:${routeQuery}`;
+    if (lastSyncedRouteQueryRef.current === routeKey) return;
+    lastSyncedRouteQueryRef.current = routeKey;
     const params = new URLSearchParams(routeQuery);
     const rawPane = params.get('reviewPane');
     const legacyTool = parseWorkspaceTool(rawPane);
@@ -304,13 +326,30 @@ export function WorkspaceComposeReviewSurface({
       if (legacyTool !== 'delivery' && mode !== 'compose') onModeChange('compose');
       return;
     }
-    setReviewPaneState(parseReviewPane(rawPane));
-    const routeMode = parseWorkspaceSurfaceMode(params.get('workspaceMode'), rawPane) ?? 'compose';
+    setReviewPaneState(
+      rawPane || params.get('workspaceMode') === 'review'
+        ? parseReviewPane(rawPane)
+        : preferredReviewPane
+    );
+    const routeMode =
+      parseWorkspaceSurfaceMode(params.get('workspaceMode'), rawPane) ?? preferredMode;
     if (routeMode !== mode) onModeChange(routeMode);
     if (rawPane === 'validation') {
       writeWorkspaceSurfaceUrl('review', 'changes');
     }
-  }, [mode, onModeChange, pathname, routeQuery, router, writeWorkspaceSurfaceUrl]);
+  }, [
+    mode,
+    onModeChange,
+    pathname,
+    routeQuery,
+    router,
+    writeWorkspaceSurfaceUrl,
+    modeReady,
+    paneReady,
+    preferenceKey,
+    preferredMode,
+    preferredReviewPane,
+  ]);
 
   return (
     <div
@@ -320,28 +359,23 @@ export function WorkspaceComposeReviewSurface({
       )}
     >
       {syncRequired ? (
-        <div
-          aria-live="polite"
-          className="border-b border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] px-4 py-3 text-sm text-[var(--text-primary)]"
+        <WorkspaceNotice
+          label="Workspace synchronization"
+          title="The branch has new commits"
+          actions={
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={activity.reconciling}
+              onClick={() => void activity.reconcile()}
+            >
+              {activity.reconciling ? 'Syncing…' : 'Sync latest branch'}
+            </Button>
+          }
         >
-          <p>
-            The branch has new commits. Sync this Workspace to continue editing. Saved edits and
-            history will be preserved.
-          </p>
-          <button
-            type="button"
-            className="mt-2 rounded border px-3 py-1 font-medium"
-            disabled={activity.reconciling}
-            onClick={() => void activity.reconcile()}
-          >
-            {activity.reconciling ? 'Syncing…' : 'Sync latest branch'}
-          </button>
-          {activity.reconciliationError ? (
-            <p role="alert" className="mt-2">
-              {activity.reconciliationError}
-            </p>
-          ) : null}
-        </div>
+          <p>Sync this Workspace to continue editing. Saved edits and history will be preserved.</p>
+          {activity.reconciliationError ? <p role="alert">{activity.reconciliationError}</p> : null}
+        </WorkspaceNotice>
       ) : null}
       <div className={composeStyles.workspaceBody}>
         <div
@@ -713,8 +747,13 @@ function ComposeSurface({
     }
   };
 
+  const preferenceKey = `t3x.workspace-view:${candidate.projectId}:${candidate.id}`;
   const [sidePanel, setSidePanel] = useState<'history' | 'chat'>('chat');
-  const [changeScope, setChangeScope] = useState<'latest' | 'all'>('latest');
+  const [changeScope, setChangeScope] = useViewPreference(
+    `${preferenceKey}:scope`,
+    CHANGE_SCOPES,
+    'latest'
+  );
   const [activitySelection, setActivitySelection] = useState<ComposeActivitySelection | null>(null);
   const [schemaSelection, setSchemaSelection] = useState<{
     workspaceId: string;
@@ -827,7 +866,7 @@ function ComposeSurface({
         selectActivity(selection, 'history');
       });
     },
-    [activity.selectActionNode, selectActivity]
+    [activity.selectActionNode, selectActivity, setChangeScope]
   );
   const sourceConversationId = candidate.sourceBundle.find(
     (source) =>
@@ -1350,8 +1389,8 @@ function SourceToolbar({
   return (
     <section className={composeStyles.sourcesSection}>
       <div className={composeStyles.sourcesHeading}>
-        <h2 className="sr-only">Proposed changes</h2>
-        <span className="sr-only">{proposedChangeCount} changes</span>
+        <h2>Proposed changes</h2>
+        <span className={composeStyles.changeCount}>{proposedChangeCount}</span>
         <div className={composeStyles.composeToolbarActions}>
           <div className={composeStyles.changeScope} role="tablist" aria-label="Change scope">
             <button

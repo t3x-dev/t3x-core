@@ -81,6 +81,7 @@ const emptyBaseCompareCandidate = {
 };
 
 beforeEach(() => {
+  localStorage.clear();
   vi.clearAllMocks();
   changePreview.mockReturnValue({ changes: undefined, error: null, loading: false });
   pullRequestApi.fetchPullRequests.mockResolvedValue({

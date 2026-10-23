@@ -5,12 +5,14 @@
   grid-row: 1;
   flex: none;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   width: 100%;
   max-width: var(--project-page-max-width, 1264px);
-  min-height: 64px;
+  min-height: 52px;
   margin-inline: auto;
-  padding: 16px 24px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--stroke-divider);
   background: var(--surface-panel);
 }
 .identity {
@@ -22,13 +24,10 @@
   font-weight: 600;
 }
 .identity > svg {
-  width: 24px;
-  height: 24px;
+  width: 18px;
+  height: 18px;
   flex: none;
-  padding: 4px;
-  border-radius: 7px;
-  background: #f97316;
-  color: white;
+  color: var(--text-secondary);
 }
 .identity > span {
   max-width: 220px;
@@ -41,10 +40,49 @@
 }
 .meta {
   display: flex;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   margin-left: auto;
+}
+.meta select {
+  min-width: 0;
+  max-width: min(220px, 100%);
+}
+.navigation {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-app);
+}
+.navigation button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.navigation button[aria-selected="true"] {
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.navigation button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.navigation svg {
+  width: 14px;
+  height: 14px;
 }
 .chatToggle {
   display: inline-flex;

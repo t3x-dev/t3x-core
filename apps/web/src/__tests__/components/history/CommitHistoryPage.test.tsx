@@ -81,6 +81,7 @@ const selected: ApiCommit = {
 
 describe('History node navigation', () => {
   beforeEach(() => {
+    localStorage.clear();
     vi.resetAllMocks();
     mocks.search = 'branch=main&view=list';
     mocks.routerReplace.mockImplementation(navigate);

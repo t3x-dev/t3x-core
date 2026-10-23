@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useEffect, useState } from 'react';
 import { legacyExploreLocation, safeExploreReturn } from '@/domain/project/exploreLocation';
+import { useViewPreference } from '@/hooks/shared/useViewPreference';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { ActiveSchemaBindings } from './ActiveSchemaBindings';
 import headerStyles from './SchemaCatalogHeader.module.css';
@@ -39,11 +40,19 @@ function LegacyCatalogRedirect({
     </p>
   );
 }
+const SCHEMA_VIEWS = ['studio', 'active'] as const;
+
 function ProjectSchemas({ projectId, children }: { projectId: string; children: ReactNode }) {
   const search = useSearchParams();
   const pathname = usePathname();
   const params = new URLSearchParams(search.toString());
-  const active = params.get('schemaView') === 'active';
+  const [preferredView, rememberView] = useViewPreference(
+    `t3x.schemas-view:${projectId}`,
+    SCHEMA_VIEWS,
+    'studio'
+  );
+  const requestedView = params.get('schemaView');
+  const active = (requestedView ?? preferredView) === 'active';
   const [toolbarTarget, setToolbarTarget] = useState<HTMLDivElement | null>(null);
   const workspaces = useProjectWorkspaces(projectId);
   function tabHref(view: string) {
@@ -69,6 +78,7 @@ function ProjectSchemas({ projectId, children }: { projectId: string; children: 
           <nav aria-label="Project schemas" className="flex shrink-0 items-center gap-4 text-xs">
             <Link
               href={tabHref('studio')}
+              onClick={() => rememberView('studio')}
               aria-current={!active ? 'page' : undefined}
               className={!active ? 'font-semibold' : 'text-[var(--text-secondary)]'}
             >
@@ -76,6 +86,7 @@ function ProjectSchemas({ projectId, children }: { projectId: string; children: 
             </Link>
             <Link
               href={tabHref('active')}
+              onClick={() => rememberView('active')}
               aria-current={active ? 'page' : undefined}
               className={active ? 'font-semibold' : 'text-[var(--text-secondary)]'}
             >

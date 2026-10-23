@@ -53,6 +53,7 @@ import type {
 } from '@/hooks/projects/useProjectPullRequestsApi';
 import { useProjectPullRequestsApi } from '@/hooks/projects/useProjectPullRequestsApi';
 import { usePullRequestChangePreview } from '@/hooks/projects/usePullRequestChangePreview';
+import { useViewPreference } from '@/hooks/shared/useViewPreference';
 import { cn } from '@/utils/cn';
 import createStyles from './ProjectReviewsCreate.module.css';
 import detailStyles from './ProjectReviewsDetail.module.css';
@@ -72,6 +73,8 @@ type PullRequestView = 'list' | 'create' | 'detail';
 type PullRequestDetailTab = 'overview' | 'structured-diff' | 'checks' | 'activity' | 'merge';
 type PullRequestCompareStatus = 'ready' | 'already_open' | 'no_changes' | 'base_empty';
 type PullRequestConflictSide = 'main' | 'feature';
+const PR_LIST_MODES = ['open', 'merged', 'closed'] as const;
+const PR_DETAIL_TABS = ['overview', 'structured-diff', 'checks', 'activity', 'merge'] as const;
 
 const LIST_STATUS_LABELS: Record<PullRequestStatus, string> = {
   draft: 'Draft',
@@ -535,7 +538,11 @@ export function ProjectReviewsTab({
   const [compareCandidates, setCompareCandidates] = useState(() =>
     projectId ? [] : INITIAL_COMPARE_CANDIDATES
   );
-  const [mode, setMode] = useState<PullRequestListMode>('open');
+  const [mode, setMode] = useViewPreference(
+    `t3x.pr-list:${projectId ?? 'preview'}`,
+    PR_LIST_MODES,
+    'open'
+  );
   const [statusFilter, setStatusFilter] = useState<'all' | PullRequestStatus>('all');
   const [view, setView] = useState<PullRequestView>('list');
   const [selectedId, setSelectedId] = useState(
@@ -547,10 +554,16 @@ export function ProjectReviewsTab({
   )
     ? (initialDetailTab as PullRequestDetailTab)
     : undefined;
+  const [preferredDetailTab, rememberDetailTab, , hasPreferredDetailTab] = useViewPreference(
+    `t3x.pr-detail:${projectId ?? 'preview'}`,
+    PR_DETAIL_TABS,
+    'structured-diff'
+  );
   const [detailTab, setDetailTab] = useState<PullRequestDetailTab>(requestedTab ?? 'overview');
   useEffect(() => {
     if (requestedTab) setDetailTab(requestedTab);
-  }, [requestedTab]);
+    else if (hasPreferredDetailTab) setDetailTab(preferredDetailTab);
+  }, [requestedTab, preferredDetailTab, hasPreferredDetailTab]);
   const [query, setQuery] = useState('');
   const [closeConfirmId, setCloseConfirmId] = useState<string | null>(null);
   const [closeError, setCloseError] = useState<string | null>(null);
@@ -856,7 +869,7 @@ export function ProjectReviewsTab({
     setConflictDecision(null);
     setConflictProgress(null);
     setResolutionError(null);
-    setDetailTab('structured-diff');
+    setDetailTab(preferredDetailTab);
     setView('detail');
 
     if (projectId && onPullRequestNumberChange) {
@@ -911,7 +924,7 @@ export function ProjectReviewsTab({
     setResolutionError(null);
     setDetailError(null);
     setDetailLoadingId(`pr-${number}`);
-    setDetailTab('structured-diff');
+    setDetailTab(preferredDetailTab);
     setView('detail');
     fetchProjectPullRequest(projectId, number)
       .then((detail) => {
@@ -1264,6 +1277,7 @@ export function ProjectReviewsTab({
         onCancelClose={() => setCloseConfirmId(null)}
         onClose={() => closePullRequest(selectedPullRequest)}
         onChangeTab={(tab) => {
+          rememberDetailTab(tab);
           setDetailTab(tab);
           onDetailTabChange?.(tab);
         }}
