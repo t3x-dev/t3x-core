@@ -118,6 +118,7 @@ function SettingsNavLink({
   return (
     <Link
       href={withSettingsContext(item.href, context)}
+      draggable={item.href === '/settings/providers' ? false : undefined}
       aria-current={active ? 'page' : undefined}
       className={active ? styles.navLinkActive : styles.navLink}
     >
