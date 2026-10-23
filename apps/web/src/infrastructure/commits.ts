@@ -2,8 +2,25 @@
  * Commits API (tree-based)
  */
 
+import type { WorkspaceCommitChanges } from '@t3x-dev/api-client';
 import type { SemanticContent, TransitionViewV1 } from '@t3x-dev/core';
 import { API_V1, buildQueryString, fetchWithTimeout, handleResponse } from './core';
+
+export async function getCommitChanges(
+  projectId: string,
+  hash: string,
+  beforeSequence?: number,
+  signal?: AbortSignal
+): Promise<WorkspaceCommitChanges> {
+  const query = buildQueryString({ before_sequence: beforeSequence });
+  const response = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/commits/${encodeURIComponent(hash)}/changes${query ? `?${query}` : ''}`,
+    undefined,
+    undefined,
+    signal
+  );
+  return handleResponse<WorkspaceCommitChanges>(response);
+}
 
 // ============================================================================
 // ContentNode type (used by DiffDisplayView and other components)

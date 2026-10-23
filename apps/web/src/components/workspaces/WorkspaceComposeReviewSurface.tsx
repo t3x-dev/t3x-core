@@ -125,6 +125,7 @@ import { useWorkspaceAuthoringBootstrap } from '@/hooks/workspaces/useWorkspaceA
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import { useWorkspaceReviewHistory } from '@/hooks/workspaces/useWorkspaceReviewHistory';
 import { validateWorkspaceCandidateYOps } from '@/hooks/workspaces/useWorkspaceYOps';
+import type { ApiCommit } from '@/types/api';
 import type {
   SourceBundleItem,
   WorkspaceCandidate,
@@ -145,6 +146,12 @@ import {
 import { ComposeAuthoringAssistant } from './ComposeAuthoringAssistant';
 import { ComposeFieldDialog } from './ComposeFieldDialog';
 import { ComposeNodeHistoryPanel } from './ComposeNodeHistoryPanel';
+import {
+  type CommitChangeInspection,
+  WorkspaceCommitChangeDetails,
+} from './WorkspaceCommitChangeDetails';
+import { WorkspaceCommitGraph } from './WorkspaceCommitGraph';
+import { WorkspaceCommitHistoryPanel } from './WorkspaceCommitHistoryPanel';
 import composeStyles from './WorkspaceComposeSurface.module.css';
 import { WorkspaceCurrentDraft } from './WorkspaceCurrentDraft';
 import checksStyles from './WorkspaceReviewChecks.module.css';
@@ -611,6 +618,24 @@ function ComposeSurface({
 
   const [sidePanel, setSidePanel] = useState<'history' | 'chat'>('chat');
   const [changeScope, setChangeScope] = useState<'latest' | 'all'>('latest');
+  const [commitSelection, setCommitSelection] = useState<{
+    scope: string;
+    commit: ApiCommit;
+  } | null>(null);
+  const commitScope = JSON.stringify([candidate.projectId, candidate.id, candidate.targetBranch]);
+  const historicalCommit = commitSelection?.scope === commitScope ? commitSelection.commit : null;
+  const [commitInspection, setCommitInspection] = useState<{
+    scope: string;
+    value: CommitChangeInspection;
+  } | null>(null);
+  const historicalInspection =
+    commitInspection?.scope === commitScope &&
+    commitInspection.value.commitDigest === historicalCommit?.hash
+      ? commitInspection.value
+      : null;
+  useEffect(() => {
+    setCommitSelection(null);
+  }, [commitScope]);
   const [activitySelection, setActivitySelection] = useState<ComposeActivitySelection | null>(null);
   const [schemaSelection, setSchemaSelection] = useState<{
     workspaceId: string;
@@ -768,36 +793,46 @@ function ComposeSurface({
       <WorkspaceStageHeader
         branchOptions={branchOptions}
         candidate={candidate}
-        controller={controller}
+        controller={historicalCommit ? undefined : controller}
         mode="compose"
         onBranchChange={onBranchChange}
-        onModeChange={onModeChange}
+        onModeChange={(mode) => {
+          setCommitSelection(null);
+          onModeChange(mode);
+        }}
         onOpenChat={openChat}
         chatOpen={!showingDetails}
       />
-      <SourceToolbar
-        proposedChangeCount={
-          activity.view
-            ? (changeScope === 'all'
-                ? composeDraftChangeCards(
-                    activity.view.netDiff,
-                    activity.view.base,
-                    activity.view.current
-                  ).length
-                : groupComposeActivity(activity.actions).reduce(
-                    (count, event) => count + composeEventCards(event, activity.cards).length,
-                    0
-                  )) + stagedObjectGroups(staged, publishedCurrent).length
-            : candidate.yopsDraft.operations.length
-        }
-        changeScope={changeScope}
-        controller={controller}
-        onChangeScope={setChangeScope}
-        publishError={structureError}
-        onDiscuss={openChat}
-        onEditStructure={(view) => void openStructure(view)}
-        canEdit={Boolean(activity.view?.current !== undefined)}
-      />
+      <div style={{ display: historicalCommit ? 'none' : 'contents' }}>
+        <SourceToolbar
+          proposedChangeCount={
+            activity.view
+              ? (changeScope === 'all'
+                  ? composeDraftChangeCards(
+                      activity.view.netDiff,
+                      activity.view.base,
+                      activity.view.current
+                    ).length
+                  : groupComposeActivity(activity.actions).reduce(
+                      (count, event) => count + composeEventCards(event, activity.cards).length,
+                      0
+                    )) + stagedObjectGroups(staged, publishedCurrent).length
+              : candidate.yopsDraft.operations.length
+          }
+          changeScope={changeScope}
+          controller={controller}
+          onChangeScope={setChangeScope}
+          publishError={structureError}
+          onDiscuss={openChat}
+          onEditStructure={(view) => void openStructure(view)}
+          canEdit={Boolean(activity.view?.current !== undefined)}
+        />
+      </div>
+      {historicalCommit ? (
+        <section className={composeStyles.sourcesSection}>
+          <span>Commit history · Read-only</span>
+        </section>
+      ) : null}
 
       {/* biome-ignore lint/a11y/useSemanticElements: This is an interactive window splitter, not a thematic break. */}
       <div
@@ -916,171 +951,218 @@ function ComposeSurface({
             <span>Current Draft</span>
           </button>
         ) : (
-          <WorkspaceCurrentDraft
-            key={candidate.id}
-            candidate={candidate}
-            current={workingCurrent}
-            revision={activity.compositionRevision}
-            loading={activity.loading}
-            error={activity.error}
-            enabled={activity.enabled}
-            stagedCount={staged.length}
-            authoring={activity.view}
-            onCollapse={() => toggleDraft(true)}
-          />
+          <>
+            <WorkspaceCurrentDraft
+              key={candidate.id}
+              candidate={candidate}
+              current={workingCurrent}
+              revision={activity.compositionRevision}
+              loading={activity.loading}
+              error={activity.error}
+              enabled={activity.enabled}
+              stagedCount={staged.length}
+              authoring={activity.view}
+              onCollapse={() => toggleDraft(true)}
+            />
+            <WorkspaceCommitGraph
+              key={`graph:${candidate.id}`}
+              projectId={candidate.projectId}
+              branch={candidate.targetBranch}
+              refreshKey={candidate.baseCommitHash ?? undefined}
+              selectedCommitHash={historicalCommit?.hash}
+              onSelectCommit={(commit) => {
+                if (commit.project_id === candidate.projectId) {
+                  setCommitInspection(null);
+                  setCommitSelection({ scope: commitScope, commit });
+                }
+              }}
+            />
+          </>
         )}
       </aside>
       <main className={composeStyles.composeMain}>
-        {schemaSettings.error && !schemaSettings.record ? (
-          <p role="alert">{schemaSettings.error}</p>
+        {historicalCommit ? (
+          <WorkspaceCommitHistoryPanel
+            key={`${commitScope}:${historicalCommit.hash}`}
+            projectId={candidate.projectId}
+            commit={historicalCommit}
+            onReturn={() => setCommitSelection(null)}
+            selectedId={historicalInspection?.id}
+            onInspect={(value) => setCommitInspection({ scope: commitScope, value })}
+          />
         ) : null}
-        {activity.newActivity ? (
-          <output className={composeStyles.newActivity}>
-            <span>
-              New activity · Draft r{activity.newActivity.compositionRevision}. Your inspected node
-              remains open.
-            </span>
-            <button onClick={() => void activity.loadLatest()} type="button">
-              Load latest
-            </button>
-          </output>
-        ) : null}
+        <div hidden={Boolean(historicalCommit)}>
+          {schemaSettings.error && !schemaSettings.record ? (
+            <p role="alert">{schemaSettings.error}</p>
+          ) : null}
+          {activity.newActivity ? (
+            <output className={composeStyles.newActivity}>
+              <span>
+                New activity · Draft r{activity.newActivity.compositionRevision}. Your inspected
+                node remains open.
+              </span>
+              <button onClick={() => void activity.loadLatest()} type="button">
+                Load latest
+              </button>
+            </output>
+          ) : null}
 
-        <ProposedDraftPanel
-          activity={activity}
-          activitySelection={activitySelection}
-          schemaSelected={Boolean(showingDetails && selectedSchema)}
-          onActivitySelect={selectActivity}
-          candidate={candidate}
-          changeFilter="all"
-          changeScope={changeScope}
-          staging={stagingControls}
-          schemaEvent={
-            schemaSettings.record
-              ? {
-                  id:
-                    schemaSettings.record.cards?.[0]?.settingsId ??
-                    schemaSettings.record.settingsId,
-                  timestamp:
-                    schemaSettings.record.cards?.[0]?.createdAt ??
-                    schemaSettings.record.createdAt ??
-                    candidate.updatedAt,
-                  content: (
-                    <AssistantSchemaSettingsTimeline
-                      projectId={candidate.projectId}
-                      workspaceId={candidate.id}
-                      state={schemaSettings}
-                      selectedId={showingDetails ? selectedSchema?.settingsId : undefined}
-                      onInspect={(record) => {
-                        setActivitySelection(null);
-                        setSchemaSelection({
-                          workspaceId: candidate.id,
-                          settingsId: record.settingsId,
-                        });
-                        setSidePanel('history');
-                      }}
-                      disabled={staged.length > 0}
-                      onChanged={() => {
-                        setSchemaCandidateEpoch((value) => value + 1);
-                        activity.refresh();
-                      }}
-                    />
-                  ),
-                }
-              : undefined
-          }
-        />
+          <ProposedDraftPanel
+            activity={activity}
+            activitySelection={activitySelection}
+            schemaSelected={Boolean(showingDetails && selectedSchema)}
+            onActivitySelect={selectActivity}
+            candidate={candidate}
+            changeFilter="all"
+            changeScope={changeScope}
+            staging={stagingControls}
+            schemaEvent={
+              schemaSettings.record
+                ? {
+                    id:
+                      schemaSettings.record.cards?.[0]?.settingsId ??
+                      schemaSettings.record.settingsId,
+                    timestamp:
+                      schemaSettings.record.cards?.[0]?.createdAt ??
+                      schemaSettings.record.createdAt ??
+                      candidate.updatedAt,
+                    content: (
+                      <AssistantSchemaSettingsTimeline
+                        projectId={candidate.projectId}
+                        workspaceId={candidate.id}
+                        state={schemaSettings}
+                        selectedId={showingDetails ? selectedSchema?.settingsId : undefined}
+                        onInspect={(record) => {
+                          setActivitySelection(null);
+                          setSchemaSelection({
+                            workspaceId: candidate.id,
+                            settingsId: record.settingsId,
+                          });
+                          setSidePanel('history');
+                        }}
+                        disabled={staged.length > 0}
+                        onChanged={() => {
+                          setSchemaCandidateEpoch((value) => value + 1);
+                          activity.refresh();
+                        }}
+                      />
+                    ),
+                  }
+                : undefined
+            }
+          />
+        </div>
       </main>
 
       <aside
         aria-label="Discuss change"
         className={composeStyles.discussionSidebar}
-        data-panel={showingDetails ? 'details' : 'chat'}
+        data-panel={historicalCommit || showingDetails ? 'details' : 'chat'}
       >
-        <header className={composeStyles.discussionHeader}>
-          {showingDetails ? <Layers aria-hidden="true" /> : <MessageSquare aria-hidden="true" />}
-          <h2>{showingDetails ? 'Details' : 'Chat'}</h2>
-          {!showingDetails ? (
-            <span className={composeStyles.discussionWorkspace} title={candidate.title}>
-              {candidate.title}
-            </span>
-          ) : null}
-        </header>
-        {!activity.enabled || sidePanel === 'history' || !activity.view ? (
-          <WorkspaceSourcesMenu candidate={candidate} controller={controller} />
+        {historicalCommit ? (
+          <>
+            <header className={composeStyles.discussionHeader}>
+              <Layers aria-hidden="true" />
+              <h2>Details</h2>
+              <span className={composeStyles.discussionWorkspace}>Commit · Read-only</span>
+            </header>
+            <WorkspaceCommitChangeDetails
+              key={`${commitScope}:${historicalCommit.hash}:${historicalInspection?.id ?? 'empty'}`}
+              inspection={historicalInspection}
+            />
+          </>
         ) : null}
-        {showingDetails && selectedSchema ? (
-          <AssistantSchemaSettingsDetails
-            key={candidate.id + ':' + selectedSchema.settingsId}
-            record={selectedSchema}
-            projectId={candidate.projectId}
-            workspaceId={candidate.id}
-            onDiscuss={() => {
-              const settings = selectedSchema.settings;
-              const path = [
-                settings.targetNodePath ?? settings.nodePath,
-                settings.newName ?? settings.name,
-              ]
-                .filter(Boolean)
-                .join('/');
-              setActivitySelection(null);
-              controller.prefillAssistant(`修改 Schema 结构 ${path}：`);
-              openChat();
-            }}
-          />
-        ) : !activity.enabled ? (
-          <ComposeDraftPreparation
-            key={candidate.id}
-            bootstrap={authoringBootstrap}
-            onPrepare={enableActivity}
-          />
-        ) : sidePanel === 'history' ? (
-          <ComposeNodeHistoryPanel
-            activity={activity}
-            selection={activitySelection}
-            onOpenAction={openHistoryAction}
-            onDiscuss={openChat}
-            onOpenStructure={setFieldDialog}
-            onSubmit={stageManualOps}
-            workingCurrent={workingCurrent}
-          />
-        ) : activity.view ? (
-          <ComposeAuthoringAssistant
-            allowProposal={staged.length === 0}
-            context={{
-              workspaceId: candidate.id,
-              workspaceRevision: activity.view.workspaceRevision,
-              sourceMaterialIds,
-              selectedActionId: selectedSchema ? undefined : activitySelection?.meta.actionId,
-              selectedNodeId: selectedSchema ? undefined : activitySelection?.operation.id,
-            }}
-            conversationId={sourceConversationId}
-            initialPendingCandidate={
-              activity.view?.pendingCandidates?.find((item) => item.status === 'candidate')
-                ?.transitionId
-            }
-            onCreateConversation={activity.createAssistantConversation}
-            onPublishCandidate={activity.publishCandidate}
-            activityActions={activity.actions}
-            activityCards={activity.cards}
-            projectId={candidate.projectId}
-            onSchemaCandidateChange={(id) => {
-              if (id) setSchemaConversationId(id);
-              setSchemaCandidateEpoch((value) => value + 1);
-            }}
-            prefill={controller.assistantPrefill}
-            onPrefillApplied={controller.clearAssistantPrefill}
-            proposalBlockedHint={staged.length ? UNGROUPED_MANUAL_HINT : undefined}
-            sourcesControl={<WorkspaceSourcesMenu candidate={candidate} controller={controller} />}
-            contextLabel={`${candidate.title} · Draft r${activity.compositionRevision ?? 0}`}
-          />
-        ) : (
-          <p className={composeStyles.activityStatus} role={activity.error ? 'alert' : 'status'}>
-            {activity.error ?? 'Loading Draft activity…'}
-          </p>
-        )}
+        <div
+          hidden={Boolean(historicalCommit)}
+          style={historicalCommit ? undefined : { display: 'contents' }}
+        >
+          <header className={composeStyles.discussionHeader}>
+            {showingDetails ? <Layers aria-hidden="true" /> : <MessageSquare aria-hidden="true" />}
+            <h2>{showingDetails ? 'Details' : 'Chat'}</h2>
+            {!showingDetails ? (
+              <span className={composeStyles.discussionWorkspace} title={candidate.title}>
+                {candidate.title}
+              </span>
+            ) : null}
+          </header>
+          {!activity.enabled || sidePanel === 'history' || !activity.view ? (
+            <WorkspaceSourcesMenu candidate={candidate} controller={controller} />
+          ) : null}
+          {showingDetails && selectedSchema ? (
+            <AssistantSchemaSettingsDetails
+              key={candidate.id + ':' + selectedSchema.settingsId}
+              record={selectedSchema}
+              projectId={candidate.projectId}
+              workspaceId={candidate.id}
+              onDiscuss={() => {
+                const settings = selectedSchema.settings;
+                const path = [
+                  settings.targetNodePath ?? settings.nodePath,
+                  settings.newName ?? settings.name,
+                ]
+                  .filter(Boolean)
+                  .join('/');
+                setActivitySelection(null);
+                controller.prefillAssistant(`修改 Schema 结构 ${path}：`);
+                openChat();
+              }}
+            />
+          ) : !activity.enabled ? (
+            <ComposeDraftPreparation
+              key={candidate.id}
+              bootstrap={authoringBootstrap}
+              onPrepare={enableActivity}
+            />
+          ) : sidePanel === 'history' ? (
+            <ComposeNodeHistoryPanel
+              activity={activity}
+              selection={activitySelection}
+              onOpenAction={openHistoryAction}
+              onDiscuss={openChat}
+              onOpenStructure={setFieldDialog}
+              onSubmit={stageManualOps}
+              workingCurrent={workingCurrent}
+            />
+          ) : activity.view ? (
+            <ComposeAuthoringAssistant
+              allowProposal={staged.length === 0}
+              context={{
+                workspaceId: candidate.id,
+                workspaceRevision: activity.view.workspaceRevision,
+                sourceMaterialIds,
+                selectedActionId: selectedSchema ? undefined : activitySelection?.meta.actionId,
+                selectedNodeId: selectedSchema ? undefined : activitySelection?.operation.id,
+              }}
+              conversationId={sourceConversationId}
+              initialPendingCandidate={
+                activity.view?.pendingCandidates?.find((item) => item.status === 'candidate')
+                  ?.transitionId
+              }
+              onCreateConversation={activity.createAssistantConversation}
+              onPublishCandidate={activity.publishCandidate}
+              activityActions={activity.actions}
+              activityCards={activity.cards}
+              projectId={candidate.projectId}
+              onSchemaCandidateChange={(id) => {
+                if (id) setSchemaConversationId(id);
+                setSchemaCandidateEpoch((value) => value + 1);
+              }}
+              prefill={controller.assistantPrefill}
+              onPrefillApplied={controller.clearAssistantPrefill}
+              proposalBlockedHint={staged.length ? UNGROUPED_MANUAL_HINT : undefined}
+              sourcesControl={
+                <WorkspaceSourcesMenu candidate={candidate} controller={controller} />
+              }
+              contextLabel={`${candidate.title} · Draft r${activity.compositionRevision ?? 0}`}
+            />
+          ) : (
+            <p className={composeStyles.activityStatus} role={activity.error ? 'alert' : 'status'}>
+              {activity.error ?? 'Loading Draft activity…'}
+            </p>
+          )}
+        </div>
       </aside>
-      {fieldDialog ? (
+      {fieldDialog && !historicalCommit ? (
         <ComposeFieldDialog
           key={`${candidate.id}:${fieldDialog}`}
           activity={activity}

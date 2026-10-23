@@ -312,6 +312,13 @@
     {
       "source": "commits.openapi.ts",
       "method": "GET",
+      "path": "/v1/projects/{projectId}/commits/{hash}/changes",
+      "policy": "project",
+      "rationale": "Project-scoped read of verified immutable Commit evidence."
+    },
+    {
+      "source": "commits.openapi.ts",
+      "method": "GET",
       "path": "/v1/commits/{hash}/operations",
       "policy": "project",
       "rationale": "Project ownership or project-scoped resource boundary."

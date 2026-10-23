@@ -2655,9 +2655,14 @@
   display: flex;
   min-width: 0;
   min-height: 0;
+  flex-direction: column;
   overflow: hidden;
   border-right: 1px solid var(--stroke-divider);
   padding: 8px 0 16px 12px;
+}
+.currentDraftSidebar > .currentDraft {
+  max-height: 55%;
+  flex: 0 1 auto;
 }
 .currentDraft {
   display: flex;
@@ -2843,6 +2848,10 @@ button.currentDraftRow:hover {
     border-right: 0;
     border-bottom: 1px solid var(--stroke-divider);
     padding-left: 12px;
+  }
+  .currentDraftSidebar > .currentDraft {
+    max-height: none;
+    flex: none;
   }
   .composeBoard[data-draft-collapsed] {
     grid-template-rows: auto auto auto minmax(440px, 1fr) minmax(340px, 1fr);
