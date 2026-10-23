@@ -13,6 +13,7 @@ import {
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { readCommitChanges } from '../lib/commit-changes';
 import { verifyTransition } from '../lib/transition-control-plane';
 import {
   resolveApplicableTransitionPolicy,
@@ -523,6 +524,11 @@ describe('durable Draft authoring commands', () => {
       operations: [{ set: { path: 'z', value: 3 } }],
     });
     expect(next.value.kind).toBe('published');
+    const historical = await readCommitChanges(setup.db, projectId, committed.commitDigest);
+    expect(historical).toMatchObject({ source: 'authoring', current: { x: 1, y: 2 } });
+    expect(historical?.actions.map((item) => item.action.actionId)).toEqual(['full']);
+    expect(historical?.actions[0]?.after).toEqual({ x: 1, y: 2 });
+    expect(historical?.current).not.toHaveProperty('z');
     expect(
       buildAuthoringPreparation(next.draft.workspace_state!).ledger.actions.map((a) => a.actionId)
     ).toEqual(['after-commit']);

@@ -1,4 +1,4 @@
-import { AssistantSchemaSettingsInputSchema } from '@t3x-dev/api-client';
+import { AssistantSchemaSettingsProposalInputSchema } from '@t3x-dev/api-client';
 import {
   type DraftActionActor,
   type DraftYOp,
@@ -216,7 +216,7 @@ export function createAssistantCapabilities(input: {
       capabilities.showSchemaChangeCard = capability(
         'showSchemaChangeCard',
         'Show Schema confirmation cards in the Workspace timeline for an addition, edit, removal, rename or move. Call alone, after a separate readSchema step. Supply an entire requested Node subtree in one call; the server splits additions into independently confirmed Node and Slot cards. nodePath is the semantic parent path; name identifies the target. For a Node, definition uses {required, repeated, slots: {field: {type}}, requiredSlots: [field], children: {child: {slots: {field: {type}}}}}. Nested Nodes use children, never nodes; requiredSlots belongs to the Node, not a Slot. For a Slot use definition: {type, description, ...constraints} and top-level required. For edit supply only changed attributes in definition; omitted attributes remain unchanged. Set unsetAttributes to explicitly remove optional constraints. Rename uses newName; moving a Node/Slot uses targetNodePath and optionally newName. Removals use an empty definition. Also supports adding/editing/removing relation types and rules. Only stage cards and stop; no generation, Schema binding, content edit or Commit before human confirmation.',
-        AssistantSchemaSettingsInputSchema,
+        AssistantSchemaSettingsProposalInputSchema,
         async (settings, operationId) => {
           await input.authorize('propose');
           await guard();

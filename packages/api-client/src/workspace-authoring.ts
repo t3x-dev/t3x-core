@@ -18,6 +18,7 @@ export interface WorkspaceAuthoringAction {
   affectedNodeCount?: number;
   affectedNodeIds?: string[];
   generation?: { transitionId: string; preparationDigest: string; preparation: unknown };
+  deletionConfirmation?: { status: 'required' | 'confirmed'; paths: string[] };
 }
 export interface WorkspaceAuthoringCard {
   nodeId: string;
@@ -109,6 +110,16 @@ export interface WorkspaceAuthoringOutcome {
   receipt?: { actionId: string; outcome: 'no_change'; message: string };
 }
 export interface WorkspaceAuthoringCapability {
+  confirmDeletion(
+    projectId: string,
+    workspaceId: string,
+    actionId: string,
+    input: {
+      expected_workspace_revision: number;
+      expected_revision: number;
+      expected_ref_head: string | null;
+    }
+  ): Promise<{ workspaceRevision: number }>;
   prepareReview(
     projectId: string,
     workspaceId: string,

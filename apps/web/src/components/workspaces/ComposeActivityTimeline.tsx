@@ -1,7 +1,7 @@
 import type { WorkspaceAuthoringCard } from '@t3x-dev/api-client';
 import { parsePath } from '@t3x-dev/yops';
 import { Braces, GitCompareArrows, History, Minus, Pencil, Plus } from 'lucide-react';
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, type ReactNode, useState } from 'react';
 import {
   activityChangeKind,
   activityChannelLabel,
@@ -63,6 +63,58 @@ const dayLabel = (value: string) => {
 };
 
 type ComposeChangeFilter = 'all' | 'modified' | 'added' | 'attention';
+
+function ConfirmDeletion({
+  action,
+  onConfirm,
+}: {
+  action: import('@t3x-dev/api-client').WorkspaceAuthoringAction;
+  onConfirm: (id: string) => Promise<void>;
+}) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string>();
+  const confirmation = action.deletionConfirmation;
+  if (!confirmation) return null;
+  return (
+    <div className={styles.stagingActions}>
+      <details>
+        <summary>删除范围 · {confirmation.paths.length} 项</summary>
+        <ul>
+          {confirmation.paths.map((path) => (
+            <li key={path}>
+              <code>{path}</code>
+            </li>
+          ))}
+        </ul>
+      </details>
+      {confirmation.status === 'confirmed' ? (
+        <span>已人工确认删除</span>
+      ) : (
+        <>
+          <span>此删除尚未获得人工确认；Confirm 只授权这张卡片的删除。</span>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={async () => {
+              setPending(true);
+              setError(undefined);
+              try {
+                await onConfirm(action.actionId);
+              } catch (cause) {
+                setError(cause instanceof Error ? cause.message : 'Could not confirm deletion');
+              } finally {
+                setPending(false);
+              }
+            }}
+          >
+            {pending ? 'Confirming…' : 'Confirm deletion'}
+          </button>
+        </>
+      )}
+      {error ? <p role="alert">{error}</p> : null}
+    </div>
+  );
+}
 
 export interface ComposeSchemaTimelineEvent {
   id: string;
@@ -227,6 +279,15 @@ export function ComposeActivityTimeline({
               renderRow(activityOperation(card), { eventId: 'all', comparison: 'draft' })
             )}
           </ul>
+          {activity.actions
+            .filter((action) => action.deletionConfirmation?.status === 'required')
+            .map((action) => (
+              <ConfirmDeletion
+                key={action.actionId}
+                action={action}
+                onConfirm={activity.confirmDeletion}
+              />
+            ))}
           {!changes.length ? (
             <p className={draftStyles.empty}>
               Current draft matches Base. Event history is retained.
@@ -454,6 +515,13 @@ export function ComposeActivityTimeline({
                     });
                   })}
                 </div>
+                {event.actions.map((action) => (
+                  <ConfirmDeletion
+                    key={action.actionId}
+                    action={action}
+                    onConfirm={activity.confirmDeletion}
+                  />
+                ))}
               </div>
             </section>
           </Fragment>

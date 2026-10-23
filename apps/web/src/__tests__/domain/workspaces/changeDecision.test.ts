@@ -133,6 +133,43 @@ describe('changeCheckRows', () => {
 });
 
 describe('changeDecisionBlockers', () => {
+  it('explains deletion authorization instead of claiming its source evidence is missing', () => {
+    const current = view({
+      accept: {
+        disposition: 'denied',
+        reasons: [{ code: 'RUNNER_FAILED', message: 'runner failed' }],
+      },
+    });
+    const changed = {
+      ...current,
+      checks: {
+        ...current.checks,
+        runner: {
+          ...current.checks.runner,
+          runs: current.checks.runner.runs.map((run) => ({
+            ...run,
+            predicate: {
+              ...run.predicate,
+              findings: [
+                {
+                  code: 'SOURCE_REPLACEMENT_NOT_ALLOWED',
+                  severity: 'error' as const,
+                  message: 'guided cannot replace trusted values',
+                  path: 'candidate/phone',
+                },
+              ],
+            },
+          })),
+        },
+      },
+    };
+    expect(changeDecisionBlockers(changed)[0].title).toBe(
+      'Existing content changes need authorization'
+    );
+    expect(changeCheckRows(changed).find((row) => row.id === 'runner')?.label).toBe(
+      'AI checks & deletion authorization'
+    );
+  });
   it('merges accept and override reasons into one plain-language list', () => {
     const blockers = changeDecisionBlockers(
       view({

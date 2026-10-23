@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import type { WorkspaceAuthoringAction, WorkspaceAuthoringView } from '@t3x-dev/api-client';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ComposeActivityChangeRow } from '@/components/workspaces/ComposeActivityChangeRow';
 import { ComposeActivityTimeline } from '@/components/workspaces/ComposeActivityTimeline';
@@ -78,6 +78,7 @@ function fixture(): ReturnType<typeof useComposeActivity> {
     loadOlderNode: vi.fn(),
     publish: vi.fn(),
     publishCandidate: vi.fn(),
+    confirmDeletion: vi.fn(),
     createAssistantConversation: vi.fn(),
   };
 }
@@ -91,6 +92,43 @@ describe('ComposeActivityTimeline', () => {
       {meta.comparison}: {String(operation.beforeValue)} → {String(operation.afterValue)}
     </div>
   );
+  it('confirms only the selected generated deletion and retains its confirmed state', async () => {
+    const activity = fixture();
+    activity.actions[3] = {
+      ...activity.actions[3],
+      channel: 'assistant',
+      deletionConfirmation: { status: 'required', paths: ['candidate/phone'] },
+    };
+    activity.confirmDeletion = vi.fn().mockResolvedValue(undefined);
+    const { rerender } = render(
+      <ComposeActivityTimeline
+        activity={activity}
+        scope="latest"
+        updatedAt="2026-09-21T11:53:00Z"
+        fallback={null}
+        renderRow={renderRow}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm deletion', exact: true }));
+    await waitFor(() => expect(activity.confirmDeletion).toHaveBeenCalledWith('a3'));
+    activity.actions[3] = {
+      ...activity.actions[3],
+      deletionConfirmation: { status: 'confirmed', paths: ['candidate/phone'] },
+    };
+    rerender(
+      <ComposeActivityTimeline
+        activity={activity}
+        scope="latest"
+        updatedAt="2026-09-21T11:53:00Z"
+        fallback={null}
+        renderRow={renderRow}
+      />
+    );
+    expect(screen.getByText('已人工确认删除')).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Confirm deletion', exact: true })
+    ).not.toBeInTheDocument();
+  });
   it('orders Schema cards alongside content events with the same date groups and rail', () => {
     render(
       <ComposeActivityTimeline

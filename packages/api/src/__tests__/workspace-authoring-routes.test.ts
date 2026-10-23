@@ -110,4 +110,22 @@ describe('Workspace authoring HTTP boundary', () => {
       (await post(`${url}/actions`, { ...request, actor: { id: 'forged', kind: 'human' } })).status
     ).toBe(400);
   });
+  it('does not let an agent or client-supplied actor manufacture human deletion authority', async () => {
+    const body = { expected_workspace_revision: 3, expected_revision: 1, expected_ref_head: null };
+    const target = `${url}/actions/edit/deletion-confirmation`;
+    const agent = await authenticated(credential(['transition:propose']));
+    expect(
+      (
+        await agent.request(target, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+      ).status
+    ).toBe(403);
+    expect((await post(target, { ...body, actor: { kind: 'human', id: 'forged' } })).status).toBe(
+      400
+    );
+    expect((await post(target, body)).status).toBe(409);
+  });
 });

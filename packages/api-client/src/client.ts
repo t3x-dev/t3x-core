@@ -236,6 +236,12 @@ export class T3xClient {
             `${authoringPath(projectId, workspaceId)}/candidates/${encodeURIComponent(transitionId)}/publication`,
             input
           ),
+        confirmDeletion: (projectId, workspaceId, actionId, input) =>
+          this.request(
+            'POST',
+            `${authoringPath(projectId, workspaceId)}/actions/${encodeURIComponent(actionId)}/deletion-confirmation`,
+            input
+          ),
       } satisfies import('./workspace-authoring').WorkspaceAuthoringCapability),
       list: (projectId) => this.listRepositoryWorkspaces(projectId),
       get: (projectId, workspaceId) => this.getRepositoryWorkspace(projectId, workspaceId),

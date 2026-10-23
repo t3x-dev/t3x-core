@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import {
+  SchemaContentMigrationCommandSchema,
   SchemaEvolutionImpactSchema,
   StudioSchemaEditLocalContributionSchema,
 } from './schema-studio';
 
-export const AssistantSchemaSettingsInputSchema = z
+export const AssistantSchemaSettingsProposalInputSchema = z
   .object({
     action: z.enum([
       'add_node',
@@ -46,6 +47,28 @@ export const AssistantSchemaSettingsInputSchema = z
     intent: z.string().trim().min(1).max(2000),
   })
   .strict();
+export const AssistantSchemaSettingsInputSchema =
+  AssistantSchemaSettingsProposalInputSchema.safeExtend({
+    /** Human-confirmed choice: keep existing values or explicitly clear them. */
+    renameContentMode: z.enum(['preserve', 'clear']).optional(),
+    contentMigration: z.array(SchemaContentMigrationCommandSchema).max(200).optional(),
+  }).superRefine((input, ctx) => {
+    if (input.renameContentMode !== undefined && !input.action.startsWith('rename_'))
+      ctx.addIssue({
+        code: 'custom',
+        path: ['renameContentMode'],
+        message: 'Content mode is only supported for rename cards.',
+      });
+    if (
+      input.contentMigration !== undefined &&
+      !['rename_node', 'rename_slot', 'remove_node', 'remove_slot'].includes(input.action)
+    )
+      ctx.addIssue({
+        code: 'custom',
+        path: ['contentMigration'],
+        message: 'Content mapping is only supported for rename or deletion cards.',
+      });
+  });
 const AssistantSchemaSettingsCardViewSchema = z.object({
   settingsId: z.string(),
   revision: z.number().int().positive(),
@@ -54,6 +77,12 @@ const AssistantSchemaSettingsCardViewSchema = z.object({
   workspaceRevision: z.number().int().positive(),
   schemaHash: z.string(),
   settings: AssistantSchemaSettingsInputSchema,
+  renameMappings: z
+    .object({
+      preserve: z.array(SchemaContentMigrationCommandSchema).max(200),
+      clear: z.array(SchemaContentMigrationCommandSchema).max(200),
+    })
+    .optional(),
   currentDefinition: z.record(z.string(), z.unknown()).optional(),
   referenceRelations: z.record(z.string(), z.unknown()).optional(),
   impact: SchemaEvolutionImpactSchema.optional(),

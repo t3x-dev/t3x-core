@@ -29,8 +29,13 @@ import { assessWorkspaceSchemaImpact } from '../schema-evolution-impact';
 import { compileStudioSelection, previewStudio, StudioError } from '../schema-studio-preview';
 import { workspaceAuthoringState } from '../workspace-authoring';
 import { resolveWorkspaceSchemaEditBasis } from '../workspace-schema-edit-basis';
+import {
+  previewWorkspaceSchemaPreparation,
+  publishSchemaPreparationContent,
+} from '../workspace-schema-preparation';
 import { resolveWorkspaceYSchema } from '../workspace-yschema';
 import { schemaRootKeyFromBinding } from '../yschema-registry';
+import { removalContentMappings, renameContentMappings } from './schema-rename-migration';
 
 const Stored = AssistantSchemaSettingsViewSchema.extend({
   actor: z.object({ kind: z.string(), id: z.string() }),
@@ -172,7 +177,37 @@ export function createAssistantSchemaSettingsService(
   const read = async () => {
     const draft = await findWorkspaceDraft(db, projectId, workspaceId);
     const raw = draft?.workspace_state?.assistantSchemaSettings;
-    return raw ? owned(raw, actor, conversationId) : null;
+    if (raw && draft?.workspace_state?.authoringBasis) {
+      const record = Stored.parse(raw);
+      if (record.refHead !== workspaceAuthoringState(draft.workspace_state).basis.refHead)
+        return null;
+    }
+    if (!raw) return null;
+    const record = owned(raw, actor, conversationId);
+    if (
+      ['pending', 'generated'].includes(record.status) &&
+      record.settings.action.startsWith('rename_')
+    ) {
+      record.renameMappings ??= renameContentMappings(
+        draft!.workspace_state!,
+        normalizeYSchemaObject(record.baseDefinition),
+        record.settings
+      );
+      record.settings = {
+        ...record.settings,
+        renameContentMode: record.settings.renameContentMode ?? 'preserve',
+        contentMigration: record.settings.contentMigration ?? record.renameMappings?.preserve ?? [],
+      };
+    }
+    if (record.status === 'pending' && record.settings.contentMigration === undefined) {
+      const commands = removalContentMappings(
+        draft!.workspace_state!,
+        normalizeYSchemaObject(record.baseDefinition),
+        record.settings
+      );
+      if (commands) record.settings = { ...record.settings, contentMigration: commands };
+    }
+    return record;
   };
   const stage = async (
     settings: AssistantSchemaSettingsInput,
@@ -211,6 +246,16 @@ export function createAssistantSchemaSettingsService(
       live.schema,
       settings
     );
+    const renameMappings = renameContentMappings(
+      live.draft.workspace_state!,
+      live.schema,
+      settings
+    );
+    const removalMappings = removalContentMappings(
+      live.draft.workspace_state!,
+      live.schema,
+      settings
+    );
     const confirmedInput = settings.action.startsWith('edit_')
       ? {
           ...settings,
@@ -220,7 +265,16 @@ export function createAssistantSchemaSettingsService(
             ? { required: settings.required ?? currentRequired }
             : {}),
         }
-      : settings;
+      : renameMappings
+        ? {
+            ...settings,
+            renameContentMode: settings.renameContentMode ?? ('preserve' as const),
+            contentMigration:
+              settings.contentMigration ?? renameMappings[settings.renameContentMode ?? 'preserve'],
+          }
+        : removalMappings
+          ? { ...settings, contentMigration: removalMappings }
+          : settings;
     const basis = await resolveWorkspaceSchemaEditBasis(
       c,
       db,
@@ -247,6 +301,7 @@ export function createAssistantSchemaSettingsService(
       conversationId,
       workspaceRevision: live.draft.revision + 1,
       settings: confirmedInput,
+      renameMappings,
       originalInstruction,
       currentDefinition,
       referenceRelations: live.schema.relationTypes ?? {},
@@ -372,6 +427,17 @@ export function createAssistantSchemaSettingsService(
       }
       if (!record || record.settingsId !== id)
         throw new StudioError('NOT_FOUND', 'Settings not found.');
+      if (
+        settings &&
+        ['remove_slot', 'remove_node'].includes(settings.action) &&
+        (settings.contentMigration === undefined ||
+          (await sha256CompositionValue(settings.contentMigration)) !==
+            (await sha256CompositionValue(record.settings.contentMigration ?? null)))
+      )
+        throw new StudioError(
+          'REVIEW_REQUIRED',
+          'Review and confirm the exact content deletion plan. Refresh the deletion card.'
+        );
       const digest = settings ? await sha256CompositionValue(settings) : null;
       if (
         ['confirmed', 'generated', 'applied'].includes(record.status) &&
@@ -380,8 +446,56 @@ export function createAssistantSchemaSettingsService(
         if (record.status === 'confirmed') await assertFresh(db, projectId, workspaceId, record);
         return schemaSettingsView(record);
       }
+      // A failed generated rename may revise only its content plan without regenerating Schema.
       if (
-        (record.status !== 'pending' && !(record.status === 'confirmed' && !settings)) ||
+        record.status === 'generated' &&
+        settings &&
+        record.settings.action.startsWith('rename_')
+      ) {
+        const withoutMapping = (value: AssistantSchemaSettingsInput) => {
+          const { contentMigration: _commands, renameContentMode: _mode, ...definition } = value;
+          return definition;
+        };
+        if (
+          record.revision !== revision ||
+          (await sha256CompositionValue(withoutMapping(settings))) !==
+            (await sha256CompositionValue(withoutMapping(record.settings)))
+        )
+          throw new StudioError(
+            'CONFLICT',
+            'The generated Schema cannot change. Open a new card for different definition parameters.'
+          );
+        const live = await currentBasis(db, projectId, workspaceId);
+        const candidate = parseWorkspaceSchemaEditCandidate(
+          live.draft.workspace_state!.schemaEditCandidate
+        );
+        if (
+          live.schemaHash !== record.schemaHash ||
+          live.contentHash !== record.contentHash ||
+          live.bindingHash !== record.bindingHash ||
+          live.refHead !== record.refHead ||
+          candidate.candidateId !== record.candidateId ||
+          candidate.revision !== record.candidateRevision
+        )
+          throw new StudioError('CONFLICT', 'Schema or content changed. Open new settings.');
+        const next = Stored.parse({
+          ...record,
+          settings,
+          confirmationDigest: digest,
+          revision: revision + 1,
+          workspaceRevision: live.draft.revision + 1,
+        });
+        await saveWorkspaceSchemaPreparation(db, {
+          projectId,
+          workspaceId,
+          expectedRevision: live.draft.revision,
+          assistantSchemaSettings: next,
+        });
+        return schemaSettingsView(next);
+      }
+      if (
+        (record.status !== 'pending' &&
+          !(['confirmed', 'generated'].includes(record.status) && !settings)) ||
         record.revision !== revision
       )
         throw new StudioError('CONFLICT', 'Settings changed. Refresh the card.');
@@ -627,7 +741,7 @@ export function createAssistantSchemaSettingsService(
           };
         }
       ),
-    /** Human-only confirmation applies structure, never content or a Commit. */
+    /** Human-only confirmation atomically applies Schema and any explicit rename mapping. No Commit. */
     applyToDraft: async (id: string) => {
       if (actor.kind !== 'human')
         throw new StudioError('FORBIDDEN', 'Saving Schema to Draft requires a human principal.');
@@ -701,11 +815,60 @@ export function createAssistantSchemaSettingsService(
           );
           if (!preview.adoption.allowed)
             throw new StudioError('FORBIDDEN', 'Schema sources are no longer authorized.');
-          if (!preview.report.valid || !preview.impact?.canAdopt)
+          const commands = record.settings.contentMigration;
+          const removing = ['remove_slot', 'remove_node'].includes(record.settings.action);
+          if (
+            removing &&
+            (commands === undefined ||
+              (await sha256CompositionValue(commands)) !==
+                (await sha256CompositionValue(
+                  removalContentMappings(
+                    workspace,
+                    normalizeYSchemaObject(record.baseDefinition),
+                    record.settings
+                  )
+                )))
+          )
             throw new StudioError(
               'REVIEW_REQUIRED',
-              'Resolve incompatible content or migration requirements before saving to Draft.',
-              { impact: preview.impact }
+              'The content deletion plan changed or was not confirmed. Open a new deletion card.'
+            );
+          const rename =
+            record.settings.action === 'rename_slot' || record.settings.action === 'rename_node';
+          const prepared =
+            (rename || removing) && commands !== undefined
+              ? await previewWorkspaceSchemaPreparation(
+                  c,
+                  tx,
+                  projectId,
+                  workspaceId,
+                  {
+                    target: { ...source, reviewHash: preview.reviewHash },
+                    ifRevision: draft.revision,
+                    commands,
+                    confirmedChanges:
+                      preview.impact?.items
+                        .filter(
+                          (item) =>
+                            item.kind === 'needs_mapping' ||
+                            (removing && item.code === 'CONFIRMED_DEFINITION_REMOVAL')
+                        )
+                        .map((item) => item.path) ?? [],
+                  },
+                  { allowInputGaps: true }
+                )
+              : null;
+          if (
+            prepared
+              ? !prepared.view.canPrepare
+              : !preview.report.valid || !preview.impact?.canAdopt
+          )
+            throw new StudioError(
+              'REVIEW_REQUIRED',
+              prepared
+                ? `Content mapping could not be applied: ${prepared.view.issues.map((issue) => issue.message).join('; ')}`
+                : 'Resolve incompatible content or migration requirements before saving to Draft.',
+              { impact: preview.impact, ...(prepared ? { issues: prepared.view.issues } : {}) }
             );
           const snapshot = await findYSchemaCompositionSnapshot(tx, {
             project_id: projectId,
@@ -730,14 +893,30 @@ export function createAssistantSchemaSettingsService(
             workspaceRevision: draft.revision + 1,
             application: {
               workspaceRevision: draft.revision + 1,
-              ready: preview.impact.content.ready === true,
-              issues: preview.impact.content.issues,
+              ready: prepared ? prepared.view.ready : preview.impact!.content.ready === true,
+              issues: prepared ? prepared.view.issues : preview.impact!.content.issues,
             },
           });
           const { schemaPending: _pending, ...unchanged } = workspace;
+          const actionId =
+            prepared && commands!.length
+              ? `assistant-schema-migration:${record.settingsId}`
+              : undefined;
+          const ledger =
+            actionId && prepared
+              ? publishSchemaPreparationContent(
+                  workspace,
+                  draft.revision,
+                  prepared.migration,
+                  actor,
+                  actionId,
+                  `${removing ? 'Remove' : 'Rename'} ${[record.settings.nodePath, record.settings.name].filter(Boolean).join('/')}: ${removing ? 'delete' : (record.settings.renameContentMode ?? 'preserve')} content`
+                )
+              : null;
           return {
             workspace: {
               ...unchanged,
+              ...(ledger ? { authoringLedger: ledger } : {}),
               updatedAt: new Date().toISOString(),
               assistantSchemaSettings: next,
               schemaBindings: [
@@ -767,10 +946,13 @@ export function createAssistantSchemaSettingsService(
                   schemaHash: record.snapshot.schemaHash,
                   workspaceRevision: draft.revision + 1,
                   compositionRevision:
+                    ledger?.compositionRevision ??
                     workspaceAuthoringState(workspace).ledger.compositionRevision,
                   actor,
-                  kind: 'schema_only',
+                  kind: ledger ? 'schema_and_content' : 'schema_only',
+                  ...(actionId ? { actionId, commands } : {}),
                   ready: next.application!.ready,
+                  schemaCard: { ...schemaSettingsView(next), cards: undefined },
                 },
               ],
             },

@@ -26,6 +26,7 @@ import {
   authoringGenerationChecks,
   authoringPreparationResource,
 } from './workspace-authoring-generation';
+import { pureDeletionPaths } from './workspace-deletion-authorization';
 
 export { PROPOSAL_GENERATION_POSTURE_PROVIDER_SOURCE } from './transition-control-plane/applicable-policy';
 
@@ -202,7 +203,10 @@ function proposalClaim(
 }
 
 type PostureContext = Parameters<TransitionNativeStatementProvider['verify']>[0];
-type GenerationAssessmentContext = Omit<PostureContext, 'effect'> & { operations: ProtocolValue[] };
+type GenerationAssessmentContext = Omit<PostureContext, 'effect'> & {
+  operations: ProtocolValue[];
+  authorizedDeletionPaths?: string[];
+};
 async function assessGeneration(
   context: GenerationAssessmentContext,
   options?: { supportVerifier?: ProposalGenerationSupportVerifier }
@@ -210,10 +214,24 @@ async function assessGeneration(
   const preparation = parseProposalGenerationPreparation(context.preparationFacts);
   const verifier = independentVerifier(options?.supportVerifier, preparation);
   const support: SourceSupportAssessment[] = [];
+  const authorizedGroup = (indexes: number[]) => {
+    const paths = pureDeletionPaths(indexes.map((index) => context.operations[index]));
+    return (
+      paths.length > 0 && paths.every((path) => context.authorizedDeletionPaths?.includes(path))
+    );
+  };
   for (const binding of preparation.bindings) {
     if (binding.origin !== 'source_backed') continue;
     const operations = binding.operationIndexes.map((index) => context.operations[index]!);
     const quotes = evidenceQuotes(binding);
+    if (authorizedGroup(binding.operationIndexes)) {
+      support.push({
+        groupId: binding.groupId,
+        outcome: 'supported',
+        method: 'human_confirmation',
+      });
+      continue;
+    }
     if (deterministicSupport(operations, quotes, context.base.value)) {
       support.push({
         groupId: binding.groupId,
@@ -324,7 +342,14 @@ async function assessGeneration(
     preparation,
     sourceSupport: support,
     conflicts: baseChanges
-      .filter((conflict) => !conflict.structural)
+      .filter(
+        (conflict) =>
+          !conflict.structural &&
+          !preparation.bindings.some(
+            (binding) =>
+              binding.groupId === conflict.groupId && authorizedGroup(binding.operationIndexes)
+          )
+      )
       .map((conflict) => ({
         groupId: conflict.groupId,
         path: conflict.path,
@@ -389,6 +414,17 @@ async function assessGeneration(
         ];
   });
   const findings = [
+    ...(context.authorizedDeletionPaths?.length
+      ? [
+          {
+            severity: 'warning' as const,
+            code: 'HUMAN_CONFIRMED_DELETION',
+            message:
+              'A human confirmed this exact deletion and version; this does not authorize new values or other changes.',
+            path: context.authorizedDeletionPaths[0],
+          },
+        ]
+      : []),
     ...report.issues.map((issue) => ({
       severity: issue.severity,
       code: issue.code,

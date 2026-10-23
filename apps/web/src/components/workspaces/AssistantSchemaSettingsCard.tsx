@@ -17,8 +17,15 @@ import {
   Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { SchemaChangeSettingsEditor } from '@/components/schemas/SchemaDefinitionStructure';
+import {
+  editablePreparationCommand,
+  newPreparationChange,
+  type PreparationChange,
+  PreparationChangeForm,
+  preparationCommands,
+} from '@/components/schemas/SchemaPreparationFields';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -29,6 +36,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { humanizeComposeIdentifier } from '@/domain/composePresentation';
+import { shortHash } from '@/domain/format/formatters';
 import { getProjectIdRepoPath } from '@/domain/project/repoPath';
 import { useAssistantSchemaSettings } from '@/hooks/schemas/useAssistantSchemaSettings';
 import styles from './AssistantSchemaSettingsCard.module.css';
@@ -252,6 +260,24 @@ export function AssistantSchemaSettingsContent({
     '?' +
     new URLSearchParams({ tab: 'schemas', schemaView: 'studio', workspace: workspaceId });
   const summary = schemaSummary(record);
+  if (record.status === 'generated' && record.settings.action.startsWith('rename_'))
+    return (
+      <SettingsForm
+        key={`${record.settingsId}:${record.revision}`}
+        record={record}
+        disabled={disabled}
+        generating={generating}
+        externalError={error}
+        onSave={async (settings, discard) => {
+          const saved = settings ? await generate(settings, discard) : await save(null);
+          if (saved) onChanged?.();
+        }}
+        onResume={async () => {
+          const saved = await generate(record.settings);
+          if (saved) onChanged?.();
+        }}
+      />
+    );
   if (record.status === 'generated' || record.status === 'applied')
     return (
       <section
@@ -329,7 +355,11 @@ export function AssistantSchemaSettingsContent({
                   ? ` in ${record.settings.nodePath.split('/').map(humanizeComposeIdentifier).join(' / ')}`
                   : ''}
               </p>
-              <p className={styles.resultScope}>YAML content is unchanged · No Commit created</p>
+              <p className={styles.resultScope}>
+                {record.settings.contentMigration?.length
+                  ? 'Schema and confirmed content mapping saved together · No Commit created'
+                  : 'YAML content is unchanged · No Commit created'}
+              </p>
               {record.status === 'applied' ? (
                 <p className={styles.resultDescription}>
                   Schema saved to the current Draft and synced to Studio.
@@ -434,11 +464,13 @@ export function AssistantSchemaSettingsDetails({
   projectId,
   workspaceId,
   onDiscuss,
+  committedHash,
 }: {
   record: AssistantSchemaSettingsView;
-  projectId: string;
-  workspaceId: string;
-  onDiscuss: () => void;
+  projectId?: string;
+  workspaceId?: string;
+  onDiscuss?: () => void;
+  committedHash?: string;
 }) {
   const { settings } = record;
   const beforePath = [settings.nodePath, settings.name].filter(Boolean).join('/');
@@ -462,7 +494,11 @@ export function AssistantSchemaSettingsDetails({
     >
       <div className={detailsStyles.context}>
         <div className={detailsStyles.revision}>
-          {applied ? 'Saved to Draft' : 'Candidate · Not applied'}
+          {committedHash
+            ? `Commit ${shortHash(committedHash)} · Read-only`
+            : applied
+              ? 'Saved to Draft'
+              : 'Candidate · Not applied'}
         </div>
         <h2>{humanizeComposeIdentifier(settings.newName ?? settings.name)}</h2>
         <div className={detailsStyles.path}>
@@ -489,41 +525,50 @@ export function AssistantSchemaSettingsDetails({
             />
           )}
         </div>
-        <fieldset className={styles.detailActions} aria-label="Schema change actions">
-          <Button
-            type="button"
-            variant="canvas-outline"
-            size="sm"
-            className="h-7 gap-1.5 px-2.5 text-xs"
-            onClick={onDiscuss}
-          >
-            <Sparkles aria-hidden="true" /> Ask AI
-          </Button>
-          <Button asChild variant="canvas-outline" size="sm" className="h-7 gap-1.5 px-2.5 text-xs">
-            <Link
-              href={
-                getProjectIdRepoPath(projectId) +
-                '?' +
-                new URLSearchParams({
-                  tab: 'schemas',
-                  schemaView: 'studio',
-                  workspace: workspaceId,
-                })
-              }
+        {!committedHash && projectId && workspaceId && onDiscuss ? (
+          <fieldset className={styles.detailActions} aria-label="Schema change actions">
+            <Button
+              type="button"
+              variant="canvas-outline"
+              size="sm"
+              className="h-7 gap-1.5 px-2.5 text-xs"
+              onClick={onDiscuss}
             >
-              Open Schema Studio <ArrowUpRight size={14} aria-hidden="true" />
-            </Link>
-          </Button>
-        </fieldset>
+              <Sparkles aria-hidden="true" /> Ask AI
+            </Button>
+            <Button
+              asChild
+              variant="canvas-outline"
+              size="sm"
+              className="h-7 gap-1.5 px-2.5 text-xs"
+            >
+              <Link
+                href={
+                  getProjectIdRepoPath(projectId) +
+                  '?' +
+                  new URLSearchParams({
+                    tab: 'schemas',
+                    schemaView: 'studio',
+                    workspace: workspaceId,
+                  })
+                }
+              >
+                Open Schema Studio <ArrowUpRight size={14} aria-hidden="true" />
+              </Link>
+            </Button>
+          </fieldset>
+        ) : null}
       </div>
       <div className={detailsStyles.body}>
         <section className={detailsStyles.reason}>
           <h3>Reason for this action</h3>
           <p>{settings.intent}</p>
           <span>
-            {applied
-              ? 'Schema saved to Draft and synced to Studio.'
-              : 'This candidate has not been applied to the Draft.'}
+            {committedHash
+              ? 'Historical Schema change · Read-only.'
+              : applied
+                ? 'Schema saved to Draft and synced to Studio.'
+                : 'This candidate has not been applied to the Draft.'}
           </span>
         </section>
         {record.application && !record.application.ready ? (
@@ -547,7 +592,13 @@ export function AssistantSchemaSettingsDetails({
           {record.candidateRevision !== undefined ? (
             <p>Studio revision: r{record.candidateRevision}</p>
           ) : null}
-          <p>YAML content is unchanged · No Commit created by this change</p>
+          <p>
+            {committedHash
+              ? 'Schema change included in this Commit.'
+              : record.settings.contentMigration?.length
+                ? 'Schema and confirmed content mapping saved together · No Commit created'
+                : 'YAML content is unchanged · No Commit created by this change'}
+          </p>
         </section>
       </div>
     </section>
@@ -643,6 +694,34 @@ function SaveGeneratedCandidate({
   );
 }
 
+function retargetRename(
+  change: PreparationChange,
+  oldName: string | undefined,
+  newName: string
+): PreparationChange {
+  const suffix = JSON.stringify(oldName);
+  return {
+    ...change,
+    destination:
+      change.kind === 'rename_node' && change.destination === oldName
+        ? newName
+        : change.kind === 'move' && suffix && change.destination.endsWith(suffix)
+          ? change.destination.slice(0, -suffix.length) + JSON.stringify(newName)
+          : change.destination,
+    value:
+      change.kind === 'set' && change.value.type === 'object'
+        ? {
+            ...change.value,
+            children: change.value.children.map((child) =>
+              child.name === 'key' && child.value.text === oldName
+                ? { ...child, value: { ...child.value, text: newName } }
+                : child
+            ),
+          }
+        : change.value,
+  };
+}
+
 export function SettingsForm({
   record,
   disabled,
@@ -662,6 +741,11 @@ export function SettingsForm({
   onResume: () => void | Promise<void>;
 }) {
   const [value, setValue] = useState(record.settings);
+  const pathsId = useId();
+  const [mapping, setMapping] = useState(() =>
+    (record.settings.contentMigration ?? []).map(editablePreparationCommand)
+  );
+  const [mappingError, setMappingError] = useState<string>();
   const [validation, setValidation] = useState<string>();
   const [error, setError] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
@@ -669,7 +753,9 @@ export function SettingsForm({
   const [editing, setEditing] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const removing = value.action.startsWith('remove_');
+  const deletingContent = value.action === 'remove_slot' || value.action === 'remove_node';
   const renaming = value.action.startsWith('rename_');
+  const clearContent = value.renameContentMode === 'clear';
   const moving = value.action.startsWith('move_');
   const edited = JSON.stringify(value) !== JSON.stringify(record.settings);
   const confirmationParameters = {
@@ -683,6 +769,8 @@ export function SettingsForm({
     setSubmitting(true);
     setError(undefined);
     try {
+      if (settings && renaming)
+        settings = { ...settings, contentMigration: preparationCommands(mapping) };
       if (discard) await onSave(settings, true);
       else await onSave(settings);
       setConfirmDiscard(false);
@@ -691,6 +779,23 @@ export function SettingsForm({
     } finally {
       setSubmitting(false);
     }
+  }
+  function updateMapping(changes: PreparationChange[]) {
+    setMapping(changes);
+    try {
+      setValue((current) => ({ ...current, contentMigration: preparationCommands(changes) }));
+      setMappingError(undefined);
+    } catch (cause) {
+      setMappingError(cause instanceof Error ? cause.message : 'Invalid content mapping.');
+    }
+  }
+  function chooseContentMode(mode: 'preserve' | 'clear') {
+    const commands = record.renameMappings?.[mode] ?? [];
+    const changes = commands
+      .map(editablePreparationCommand)
+      .map((change) => retargetRename(change, record.settings.newName, value.newName ?? ''));
+    setValue((current) => ({ ...current, renameContentMode: mode }));
+    updateMapping(changes);
   }
   async function resume() {
     setSubmitting(true);
@@ -770,8 +875,27 @@ export function SettingsForm({
       ) : null}
       {removing ? (
         <p className={styles.warning}>
-          Removes the definition only; existing YAML values are kept. Migration may be required.
+          {deletingContent
+            ? value.action === 'remove_node'
+              ? 'Confirm 将同时删除节点定义及对应节点的全部内容（包含子节点）。只保存到 Draft，不创建 Commit。'
+              : 'Confirm 将同时删除字段定义和所有对应实例中的字段值。只保存到 Draft，不创建 Commit。'
+            : 'Removes the definition only; existing YAML values are kept. Migration may be required.'}
         </p>
+      ) : null}
+      {deletingContent ? (
+        <details className={styles.technicalDetails}>
+          <summary>查看内容删除范围 · {value.contentMigration?.length ?? 0} 项</summary>
+          <ul aria-label="Confirmed content deletions">
+            {value.contentMigration?.map((command) =>
+              command.kind === 'remove' ? (
+                <li key={command.path}>
+                  <code>{command.path}</code>
+                </li>
+              ) : null
+            )}
+          </ul>
+          {value.contentMigration?.length === 0 ? <p>没有现有内容需要删除。</p> : null}
+        </details>
       ) : null}
       {renaming ? (
         <label>
@@ -780,9 +904,75 @@ export function SettingsForm({
             aria-label="New name"
             value={value.newName ?? ''}
             disabled={disabled || saving || record.status !== 'pending'}
-            onChange={(event) => setValue({ ...value, newName: event.target.value })}
+            onChange={(event) => {
+              const newName = event.target.value;
+              const changes = mapping.map((change) =>
+                retargetRename(change, value.newName, newName)
+              );
+              setValue((current) => ({ ...current, newName }));
+              updateMapping(changes);
+            }}
           />
         </label>
+      ) : null}
+      {renaming ? (
+        <fieldset
+          disabled={disabled || saving || record.status === 'confirmed'}
+          className={styles.fields}
+          aria-label="Rename content mapping"
+        >
+          <legend>重命名后的内容</legend>
+          <div className="flex gap-4 text-xs">
+            <label>
+              <input
+                type="radio"
+                name={`${pathsId}-mode`}
+                checked={!clearContent}
+                onChange={() => chooseContentMode('preserve')}
+              />{' '}
+              保留原内容
+            </label>
+            <label>
+              <input
+                type="radio"
+                name={`${pathsId}-mode`}
+                checked={clearContent}
+                onChange={() => chooseContentMode('clear')}
+              />{' '}
+              清空内容
+            </label>
+          </div>
+          <p className={clearContent ? styles.warning : styles.scope}>
+            {clearContent
+              ? 'Confirm 将清除旧字段的内容，新字段留空。必填内容未补齐时可以保存 Draft，但不能通过提交校验。'
+              : 'Confirm 将保留原值并迁移到新名称，同时校验和保存 Schema 与内容。'}
+          </p>
+          <details>
+            <summary>编辑迁移映射 · {mapping.length} 项</summary>
+            {mapping.map((change, index) => (
+              <PreparationChangeForm
+                key={change.id}
+                change={change}
+                index={index}
+                pathsId={pathsId}
+                onChange={(next) =>
+                  updateMapping(mapping.map((item) => (item.id === change.id ? next : item)))
+                }
+                onRemove={() => updateMapping(mapping.filter((item) => item.id !== change.id))}
+              />
+            ))}
+            {!mapping.length ? <p className={styles.scope}>没有现有内容需要迁移。</p> : null}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => updateMapping([...mapping, newPreparationChange()])}
+            >
+              添加内容变更
+            </Button>
+          </details>
+          {mappingError ? <p role="alert">{mappingError}</p> : null}
+        </fieldset>
       ) : null}
       {moving ? (
         <label>
@@ -819,10 +1009,20 @@ export function SettingsForm({
           <summary>
             <ChevronRight size={12} aria-hidden="true" /> Change details
           </summary>
-          <p className={styles.scope}>YAML content stays unchanged · No Commit</p>
+          <p className={styles.scope}>
+            {renaming || deletingContent
+              ? 'Schema 与确认的内容映射一起保存到 Draft · No Commit'
+              : 'YAML content stays unchanged · No Commit'}
+          </p>
           <p>
-            Confirm generates, validates and applies the Schema change to Draft using the exact
-            bound snapshot. No content values are modified and no Commit is created.
+            {renaming || deletingContent ? (
+              'Confirm 按当前参数确定性生成操作，校验后将 Schema 和内容原子保存到 Draft，不调用模型。'
+            ) : (
+              <>
+                Confirm generates, validates and applies the Schema change to Draft using the exact
+                bound snapshot. No content values are modified and no Commit is created.
+              </>
+            )}
           </p>
           {!edited && record.changes?.length ? (
             <ul aria-label="Proposed Schema changes" className={styles.validationDetails}>
@@ -864,7 +1064,7 @@ export function SettingsForm({
           </Button>
           <Button
             size="sm"
-            disabled={disabled || saving || !!validation}
+            disabled={disabled || saving || !!validation || !!mappingError}
             onClick={() => {
               if (record.studioConflict) setConfirmDiscard(true);
               else if (record.status === 'confirmed') void resume();
@@ -888,8 +1088,10 @@ export function SettingsForm({
               <DialogTitle>Replace the Studio candidate?</DialogTitle>
               <DialogDescription>
                 Replace the unadopted Studio candidate r{record.studioConflict?.revision} with this
-                confirmed Schema change and apply it to Draft after validation. YAML content stays
-                unchanged and no Commit is created.
+                confirmed Schema change and apply it to Draft after validation.{' '}
+                {renaming
+                  ? 'The selected content mapping will also be applied. No Commit is created.'
+                  : 'YAML content stays unchanged and no Commit is created.'}
               </DialogDescription>
             </DialogHeader>
             {error ? <p role="alert">{error}</p> : null}
