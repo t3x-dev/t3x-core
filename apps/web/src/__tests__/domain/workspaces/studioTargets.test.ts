@@ -95,3 +95,11 @@ describe('studio workspace targets', () => {
     ).toBe(true);
   });
 });
+
+it('resolves a branch-only entry and never substitutes an invalid explicit Workspace', () => {
+  const main = workspace('main-draft', 'Main', 'draft');
+  const feature = { ...workspace('feature-draft', 'Feature', 'draft'), targetBranch: 'feature' };
+  expect(resolveStudioWorkspaceId([main, feature], '', 'feature')).toBe('feature-draft');
+  expect(resolveStudioWorkspaceId([main, feature], '', 'missing')).toBe('');
+  expect(resolveStudioWorkspaceId([main, feature], 'missing', 'main')).toBe('missing');
+});

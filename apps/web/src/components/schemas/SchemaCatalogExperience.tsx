@@ -3,7 +3,8 @@ import { ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useEffect, useState } from 'react';
-import { legacyExploreLocation, safeExploreReturn } from '@/domain/project/exploreLocation';
+import { legacyExploreLocation } from '@/domain/project/exploreLocation';
+import { schemaBrowseHref } from '@/domain/schemas/schemaNavigation';
 import { useViewPreference } from '@/hooks/shared/useViewPreference';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { ActiveSchemaBindings } from './ActiveSchemaBindings';
@@ -60,27 +61,23 @@ function ProjectSchemas({ projectId, children }: { projectId: string; children: 
     next.set('schemaView', view);
     return `${pathname}?${next}`;
   }
-  const exploreParams = new URLSearchParams({
-    view: 'browse',
-    type: 'schemas',
-    studioTarget: projectId,
-  });
-  for (const key of ['workspace', 'branch'])
-    if (params.get(key)) exploreParams.set(key, params.get(key)!);
-  const exploreHref = safeExploreReturn(params.get('returnTo')) ?? `/explore?${exploreParams}`;
+  const exploreHref = schemaBrowseHref(
+    projectId,
+    params.get('workspace') ?? undefined,
+    params.get('branch') ?? undefined
+  );
   return (
     <SchemaToolbarContext.Provider value={toolbarTarget}>
       <section
         className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--surface-card)] text-[var(--text-primary)]"
         aria-label="Schema experience"
       >
-        <header className={headerStyles.header}>
-          <nav aria-label="Project schemas" className="flex shrink-0 items-center gap-4 text-xs">
+        <header className={headerStyles.header} data-view={active ? 'bindings' : 'studio'}>
+          <nav aria-label="Project schemas" className={headerStyles.navigation}>
             <Link
               href={tabHref('studio')}
               onClick={() => rememberView('studio')}
               aria-current={!active ? 'page' : undefined}
-              className={!active ? 'font-semibold' : 'text-[var(--text-secondary)]'}
             >
               Studio
             </Link>
@@ -88,17 +85,18 @@ function ProjectSchemas({ projectId, children }: { projectId: string; children: 
               href={tabHref('active')}
               onClick={() => rememberView('active')}
               aria-current={active ? 'page' : undefined}
-              className={active ? 'font-semibold' : 'text-[var(--text-secondary)]'}
             >
               Bindings
             </Link>
-            <Link
-              href={exploreHref}
-              className="flex items-center gap-1 text-[var(--accent-commit)]"
-            >
-              Explore <ArrowUpRight size={13} />
-            </Link>
           </nav>
+          {active ? (
+            <>
+              <span className={headerStyles.scopeLabel}>All workspaces</span>
+              <Link href={exploreHref} className={headerStyles.browse}>
+                Browse schemas <ArrowUpRight size={14} />
+              </Link>
+            </>
+          ) : null}
           <div className={headerStyles.slot} hidden={active} ref={setToolbarTarget} />
         </header>
         {active ? (

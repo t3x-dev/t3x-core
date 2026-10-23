@@ -22,7 +22,7 @@ export function ActiveSchemaBindings({
   return (
     <section aria-label="Active schema bindings" className="p-4 sm:p-6">
       <header className="mb-5 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Your active definitions</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Workspace bindings</h1>
         <Button variant="ghost" size="sm" onClick={() => void refresh()}>
           <RefreshCw className="mr-2 size-3.5" />
           Refresh
@@ -45,7 +45,7 @@ export function ActiveSchemaBindings({
                   href={`${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ tab: 'schemas', schemaView: 'studio', branch: workspace.targetBranch, workspace: workspace.id }).toString()}`}
                   className="text-sm text-[var(--status-info)]"
                 >
-                  Review a replacement <ArrowRight className="ml-1 inline size-3.5" />
+                  Edit in Studio <ArrowRight className="ml-1 inline size-3.5" />
                 </Link>
               </div>
               {workspace.schemaBindings.map((binding, index) => (

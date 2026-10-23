@@ -1,88 +1,72 @@
-.header.header {
+.header {
   width: 100%;
   max-width: var(--project-page-max-width, 1264px);
   margin: 0 auto;
-  padding: 0 24px;
-  min-height: 64px;
-  height: 64px;
+  padding: 10px var(--project-page-gutter, 24px);
+  min-height: 56px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
+  border-bottom: 1px solid var(--stroke-divider);
 }
-.header > nav {
+.navigation {
+  display: inline-flex;
   flex-shrink: 0;
-}
-.header.header[data-view="studio"] {
-  height: auto;
-}
-.search {
-  display: flex;
   align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: 120px;
-  background: #f1f1f3;
-  height: 36px;
-  padding: 0 12px;
-  border-radius: 10px;
-  color: #8b909a;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+  background: var(--surface-canvas);
 }
-.search input {
-  min-width: 0;
-  width: 100%;
-  outline: none;
+.navigation a {
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
+  color: var(--text-secondary);
 }
-.scope {
-  display: flex;
+.navigation a[aria-current="page"] {
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+}
+.navigation a:focus-visible,
+.browse:focus-visible {
+  outline: 2px solid var(--accent-commit);
+  outline-offset: 2px;
+}
+.scopeLabel {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.browse {
+  display: inline-flex;
   align-items: center;
   gap: 4px;
-  flex-shrink: 0;
-}
-.scope button {
-  padding: 7px 12px;
+  margin-left: auto;
   font-size: 13px;
-  border-radius: 999px;
-}
-.scope button[aria-selected="true"] {
-  background: #16181d;
-  color: #fff;
 }
 .slot {
   flex: 1;
   min-width: 0;
 }
-.slot > [role="toolbar"] {
-  min-height: 64px;
-  height: auto;
-  min-width: 0;
-  gap: 10px;
-}
-.slot > [role="toolbar"] > :first-child {
-  display: none;
-}
 .header [hidden] {
   display: none;
 }
-@media (max-width: 800px) {
-  .header.header {
-    overflow-x: auto;
+@media (max-width: 1000px) {
+  .header {
+    align-items: flex-start;
+    gap: 12px;
   }
-  .search {
-    min-width: 160px;
+}
+@media (max-width: 600px) {
+  .header {
+    padding-inline: 16px;
+    flex-wrap: wrap;
   }
   .slot {
-    min-width: 700px;
-  }
-  .header.header[data-view="studio"] {
-    flex-wrap: wrap;
-    gap: 0;
-    overflow-x: visible;
-    padding-block: 8px;
-  }
-  .header[data-view="studio"] > .slot {
     flex-basis: 100%;
-    min-width: 0;
   }
 }

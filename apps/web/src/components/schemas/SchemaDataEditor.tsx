@@ -2,7 +2,7 @@
 
 import type { StudioCandidate } from '@t3x-dev/api-client';
 import { Box, FileText, Plus, Trash2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type RefObject, useEffect, useMemo, useRef, useState } from 'react';
 import { StructureTreeRow, visibleTreeRows } from '@/components/structure/StructureTree';
 import tree from '@/components/structure/StructureTree.module.css';
 import { Button } from '@/components/ui/button';
@@ -23,8 +23,10 @@ import {
   SchemaFieldValidation,
 } from './SchemaDefinitionStructure';
 import { SchemaVisualEditor } from './SchemaVisualEditor';
+import { type SchemaEditorNavigation, useSchemaNavigationGuard } from './useSchemaNavigationGuard';
 
 export function SchemaDataEditor({
+  navigationRef,
   view = 'data',
   layoutKey = 'schema',
   sources,
@@ -40,6 +42,7 @@ export function SchemaDataEditor({
   onDiscard,
   disabledReason,
 }: {
+  navigationRef?: RefObject<SchemaEditorNavigation | null>;
   onValidationChange?: (invalid: boolean) => void;
   view?: 'data' | 'visual';
   layoutKey?: string;
@@ -179,19 +182,47 @@ export function SchemaDataEditor({
     }
   }
   async function save() {
-    if (!definition || busy || validationError || stale) return;
+    if (!definition || busy || validationError || stale || disabledReason) return false;
     setSaving(true);
     setError(undefined);
     try {
       await onSave(definition, intent.trim() || 'Edit Schema fields.');
       setDirty(false);
       setNotice('Schema candidate saved.');
+      return true;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save the Schema candidate.');
+      return false;
     } finally {
       setSaving(false);
     }
   }
+
+  function discard() {
+    if (!initialDefinition) return;
+    setDirty(false);
+    setFieldError(undefined);
+    setRulesError(undefined);
+    setError(undefined);
+    setSelected(undefined);
+    loaded.current = undefined;
+    setDefinition(undefined);
+    setResetKey((value) => value + 1);
+    onDiscard();
+  }
+  const navigation = useSchemaNavigationGuard({
+    dirty: dirty || Boolean(validationError),
+    canSave: !busy && dirty && !validationError && !stale && !disabledReason,
+    save,
+    discard,
+  });
+  useEffect(() => {
+    if (!navigationRef) return;
+    navigationRef.current = { requestNavigation: navigation.requestNavigation };
+    return () => {
+      navigationRef.current = null;
+    };
+  }, [navigationRef, navigation.requestNavigation]);
 
   if (!definition)
     return (
@@ -200,16 +231,6 @@ export function SchemaDataEditor({
   return (
     <section aria-label="Schema data editor" className={styles.editor} data-schema-editor>
       <header className={styles.toolbar}>
-        {onComposeSources ? (
-          <Button
-            variant="canvas-outline"
-            size="sm"
-            disabled={busy || !!validationError || stale}
-            onClick={() => onComposeSources()}
-          >
-            Combine sources
-          </Button>
-        ) : null}
         {view === 'data' ? (
           <input
             aria-label="Find a Schema field"
@@ -519,22 +540,7 @@ export function SchemaDataEditor({
           onChange={(event) => setIntent(event.target.value)}
         />
         <output>{notice}</output>
-        <Button
-          variant="ghost"
-          disabled={busy || (!dirty && !validationError)}
-          onClick={() => {
-            if (!initialDefinition) return;
-            setDirty(false);
-            setFieldError(undefined);
-            setRulesError(undefined);
-            setError(undefined);
-            setSelected(undefined);
-            loaded.current = undefined;
-            setDefinition(undefined);
-            setResetKey((value) => value + 1);
-            onDiscard();
-          }}
-        >
+        <Button variant="ghost" disabled={busy || (!dirty && !validationError)} onClick={discard}>
           Discard changes
         </Button>
         <Button
@@ -545,6 +551,7 @@ export function SchemaDataEditor({
           {busy ? 'Saving…' : 'Save candidate'}
         </Button>
       </footer>
+      {navigation.dialog}
     </section>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 import type { StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
 import { dump } from 'js-yaml';
+import { ArrowUpRight, GitBranch, X } from 'lucide-react';
 import Link from 'next/link';
 import { type ReactNode, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,10 @@ export function SchemaStudioSurface({
   editorInvalid = false,
   contextLocked = false,
   browseHref,
+  sourceHref,
+  workspaceHref,
+  branch,
+  draftStatus,
   workspaceTitle = 'No draft workspace',
   workspaceId = '',
   workspaces = [],
@@ -52,6 +57,10 @@ export function SchemaStudioSurface({
   dataEditor?: (view: 'data' | 'visual') => ReactNode;
   contextLocked?: boolean;
   browseHref: string;
+  sourceHref?: string;
+  workspaceHref?: string;
+  branch?: string;
+  draftStatus?: string;
   workspaceTitle?: string;
   workspaceId?: string;
   workspaces?: Array<{ id: string; title: string }>;
@@ -79,7 +88,8 @@ export function SchemaStudioSurface({
     dataEditor ? 'data' : 'structure'
   );
   const editing = mode === 'data' || mode === 'visual';
-  const [panel, setPanel] = useState<'Inspector' | 'Checks' | 'Changes'>('Inspector');
+  const [panel, setPanel] = useState<'Inspector' | 'Checks' | 'Changes' | null>('Inspector');
+  const detailsOpen = panel !== null && (!editing || panel !== 'Inspector');
   const [zoom, setZoom] = useState(1);
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
@@ -105,7 +115,6 @@ export function SchemaStudioSurface({
       <SchemaToolbarSlot>
         <div className={s.tool} role="toolbar" aria-label="Studio controls">
           {navigation}
-          <span className={s.separator} />
           <label className={s.ws}>
             <Icon name="layers" size={15} />
             <span>{workspaceTitle}</span>
@@ -114,8 +123,11 @@ export function SchemaStudioSurface({
               aria-label="Target Workspace"
               value={workspaceId}
               onChange={(event) => onWorkspace?.(event.target.value)}
-              disabled={!onWorkspace || contextLocked}
+              disabled={!onWorkspace}
             >
+              {!workspaces.some((item) => item.id === workspaceId) && workspaces.length > 0 ? (
+                <option value={workspaceId}>Workspace unavailable</option>
+              ) : null}
               {workspaces.length ? (
                 workspaces.map((item) => (
                   <option key={item.id} value={item.id}>
@@ -127,48 +139,118 @@ export function SchemaStudioSurface({
               )}
             </select>
           </label>
-          <span className={`${shared.pill} ${shared.orange}`}>Draft</span>
-          <div className={shared.grow} />
-          <div className={s.meta}>
-            <span>{composition.length} modules</span>
-            <span className={s.d} />
-            <span>{sourceCount} source projects</span>
-            {data ? (
-              <>
-                <span className={s.d} />
-                <span className={data.report.valid ? shared.ok : shared.warn}>
-                  {data.report.valid ? 'Schema valid' : 'Check issues'}
-                </span>
-              </>
+          {branch ? (
+            <span className={s.branch} title={branch}>
+              <GitBranch size={14} />
+              {branch}
+            </span>
+          ) : null}
+          <div className={s.toolbarActions}>
+            {sourceHref ? (
+              <Link href={sourceHref} className={s.navLink}>
+                Back to source
+              </Link>
             ) : null}
+            <Link href={browseHref} className={s.navLink}>
+              Browse schemas <ArrowUpRight size={13} />
+            </Link>
+            {workspaceHref ? (
+              <Link href={workspaceHref} className={s.navLink}>
+                Open Workspace <ArrowUpRight size={13} />
+              </Link>
+            ) : null}
+            <button
+              type="button"
+              className={`${shared.btn} ${s.b2}`}
+              aria-label="Manage sources"
+              onClick={onAdd}
+              disabled={!onAdd || contextLocked}
+            >
+              <Icon name="plus" />
+              Manage sources
+            </button>
+            <Button
+              variant="commit"
+              size="sm"
+              aria-label="Review Schema changes"
+              disabled={!canReview}
+              onClick={onReview}
+            >
+              Review Schema changes
+            </Button>
           </div>
-          <button
-            className={`${shared.btn} ${s.b2}`}
-            aria-label="Add modules"
-            onClick={onAdd}
-            disabled={!onAdd || contextLocked}
-          >
-            <Icon name="plus" />
-            Add modules
-          </button>
-          <Button
-            variant="commit"
-            size="sm"
-            aria-label="Review changes"
-            disabled={!canReview}
-            onClick={onReview}
-          >
-            Review changes
-          </Button>
         </div>
       </SchemaToolbarSlot>
-      <div className={s.body} data-mode={editing ? 'data' : mode}>
+      <div className={s.viewToolbar} role="toolbar" aria-label="Schema views and inspection">
+        <div className={s.seg} role="tablist" aria-label="Studio view">
+          {(dataEditor
+            ? (['data', 'visual', 'structure', 'yaml'] as const)
+            : (['structure', 'yaml'] as const)
+          ).map((view) => (
+            <button
+              type="button"
+              disabled={editorInvalid}
+              role="tab"
+              aria-selected={mode === view}
+              className={mode === view ? s.on : ''}
+              onClick={() => setMode(view)}
+              key={view}
+            >
+              <Icon name={view === 'structure' ? 'layers' : 'braces'} size={13} />
+              {view === 'data'
+                ? 'Fields'
+                : view === 'visual'
+                  ? 'Visual'
+                  : view === 'structure'
+                    ? 'Composition'
+                    : 'YAML'}
+            </button>
+          ))}
+        </div>
+        {draftStatus ? <span className={s.draftStatus}>{draftStatus}</span> : null}
+        <fieldset className={s.panelControls} aria-label="Schema inspection">
+          {!editing ? (
+            <button
+              type="button"
+              aria-pressed={detailsOpen && panel === 'Inspector'}
+              onClick={() => setPanel(panel === 'Inspector' ? null : 'Inspector')}
+            >
+              Module details
+            </button>
+          ) : null}
+          <button
+            type="button"
+            disabled={editorInvalid}
+            aria-pressed={detailsOpen && panel === 'Checks'}
+            onClick={() => {
+              setPanel(panel === 'Checks' ? null : 'Checks');
+              if (panel !== 'Checks') onCheck?.();
+            }}
+          >
+            Schema checks
+          </button>
+          <button
+            type="button"
+            disabled={editorInvalid}
+            aria-pressed={detailsOpen && panel === 'Changes'}
+            onClick={() => setPanel(panel === 'Changes' ? null : 'Changes')}
+          >
+            Definition changes
+          </button>
+        </fieldset>
+      </div>
+      <div
+        className={s.body}
+        data-mode={editing ? 'data' : mode}
+        data-panel={detailsOpen ? 'open' : 'closed'}
+      >
         <aside aria-label="Studio sources" className={s.col} hidden={editing}>
           <div className={s.ch}>
             <b>Sources</b>
             <span className={s.n}>{modules.length}</span>
             <div className={shared.grow} />
             <button
+              type="button"
               className={s.ib2}
               aria-label="Search sources"
               onClick={() => setSearching(!searching)}
@@ -179,6 +261,9 @@ export function SchemaStudioSurface({
               <Icon name="plus" />
             </Link>
           </div>
+          <p className={s.compositionSummary}>
+            {composition.length} selected · {sourceCount} source projects
+          </p>
           {searching ? (
             <input
               className={s.sourceSearch}
@@ -219,7 +304,14 @@ export function SchemaStudioSurface({
                   className={`${s.sg} ${activeModule?.id === module.id ? s.hov : ''}`}
                 >
                   {moduleIcon(module)}
-                  <button className={s.sourceIdentity} onClick={() => onSelect?.(module.id)}>
+                  <button
+                    type="button"
+                    className={s.sourceIdentity}
+                    onClick={() => {
+                      onSelect?.(module.id);
+                      setPanel('Inspector');
+                    }}
+                  >
                     <span className={s.nm}>{module.title}</span>
                     <span className={s.by}>
                       {module.source} · {module.candidate?.source?.version ?? 'Preview'}
@@ -246,6 +338,7 @@ export function SchemaStudioSurface({
                   </label>
                   {module.candidate ? (
                     <button
+                      type="button"
                       className={s.remove}
                       aria-label={`Remove ${module.title}`}
                       disabled={pending || locked.has(module.id)}
@@ -257,7 +350,7 @@ export function SchemaStudioSurface({
                 </div>
               ))}
             {composition.length && onClear ? (
-              <button className={s.clear} onClick={onClear}>
+              <button type="button" className={s.clear} onClick={onClear}>
                 Clear selection
               </button>
             ) : null}
@@ -267,60 +360,6 @@ export function SchemaStudioSurface({
           aria-label={editing ? 'Schema definition' : 'Composed structure'}
           className={s.canvas}
         >
-          <div className={s.ctop}>
-            <div className={s.seg} role="tablist" aria-label="Studio view">
-              {(dataEditor
-                ? (['data', 'visual', 'structure', 'yaml'] as const)
-                : (['structure', 'yaml'] as const)
-              ).map((view) => (
-                <button
-                  type="button"
-                  disabled={editorInvalid}
-                  role="tab"
-                  aria-selected={mode === view}
-                  className={mode === view ? s.on : ''}
-                  onClick={() => setMode(view)}
-                  key={view}
-                >
-                  <Icon name={view === 'structure' ? 'layers' : 'braces'} size={13} />
-                  {view === 'data'
-                    ? 'Data'
-                    : view === 'visual'
-                      ? 'Visual'
-                      : view === 'structure'
-                        ? 'Composition'
-                        : 'YAML'}
-                </button>
-              ))}
-            </div>
-            {editing ? (
-              <div className={s.dataActions}>
-                <button
-                  type="button"
-                  disabled={editorInvalid}
-                  onClick={() => {
-                    if (editorInvalid) return;
-                    setMode('structure');
-                    setPanel('Checks');
-                    onCheck?.();
-                  }}
-                >
-                  Checks
-                </button>
-                <button
-                  type="button"
-                  disabled={editorInvalid}
-                  onClick={() => {
-                    if (editorInvalid) return;
-                    setMode('structure');
-                    setPanel('Changes');
-                  }}
-                >
-                  Changes
-                </button>
-              </div>
-            ) : null}
-          </div>
           {dataEditor ? (
             <div className={s.dataEditor} hidden={!editing}>
               {dataEditor(mode === 'visual' ? 'visual' : 'data')}
@@ -339,9 +378,12 @@ export function SchemaStudioSurface({
               >
                 {composition.map((module, index) => (
                   <button
-                    key={module.id}
                     type="button"
-                    onClick={() => onSelect?.(module.id)}
+                    key={module.id}
+                    onClick={() => {
+                      onSelect?.(module.id);
+                      setPanel('Inspector');
+                    }}
                     className={`${s.node} ${activeModule?.id === module.id ? s.sel : ''}`}
                     style={{
                       left: index % 2 ? 'calc(100% - 264px)' : '28px',
@@ -374,6 +416,7 @@ export function SchemaStudioSurface({
           )}
           <div className={s.float} hidden={editing}>
             <button
+              type="button"
               aria-label="Zoom out"
               onClick={() => setZoom((value) => Math.max(0.5, value - 0.1))}
               disabled={mode === 'yaml'}
@@ -382,6 +425,7 @@ export function SchemaStudioSurface({
             </button>
             <span>{Math.round(zoom * 100)}%</span>
             <button
+              type="button"
               aria-label="Zoom in"
               onClick={() => setZoom((value) => Math.min(1.5, value + 0.1))}
               disabled={mode === 'yaml'}
@@ -389,11 +433,12 @@ export function SchemaStudioSurface({
               +
             </button>
             <span className={s.sp} />
-            <button aria-label="Fit view" onClick={() => setZoom(1)}>
+            <button type="button" aria-label="Fit view" onClick={() => setZoom(1)}>
               ⤢
             </button>
             <span className={s.sp} />
             <button
+              type="button"
               aria-label="Download definition"
               onClick={onDownload}
               disabled={!data?.schema || !onDownload}
@@ -402,19 +447,32 @@ export function SchemaStudioSurface({
             </button>
           </div>
         </section>
-        <aside aria-label="Module details" className={s.insp} hidden={editing}>
-          <div className={s.seg} role="tablist" aria-label="Module panel">
-            {(['Inspector', 'Checks', 'Changes'] as const).map((tab) => (
-              <button
-                role="tab"
-                aria-selected={panel === tab}
-                className={panel === tab ? s.on : ''}
-                onClick={() => setPanel(tab)}
-                key={tab}
-              >
-                {tab}
-              </button>
-            ))}
+        <aside
+          aria-label={
+            panel === 'Checks'
+              ? 'Schema checks'
+              : panel === 'Changes'
+                ? 'Definition changes'
+                : 'Module details'
+          }
+          className={s.insp}
+          hidden={!detailsOpen}
+        >
+          <div className={s.panelHeading}>
+            <h2>
+              {panel === 'Checks'
+                ? 'Schema checks'
+                : panel === 'Changes'
+                  ? 'Definition changes'
+                  : 'Module details'}
+            </h2>
+            <button
+              type="button"
+              aria-label="Close inspection panel"
+              onClick={() => setPanel(null)}
+            >
+              <X size={16} />
+            </button>
           </div>
           <div className={s.inspectorScroll}>
             {panel === 'Inspector' ? (
@@ -458,7 +516,7 @@ export function SchemaStudioSurface({
                   </p>
                   <div className={s.moduleActions}>
                     {activeModule && onEditDefinition ? (
-                      <button className={shared.btn} onClick={onEditDefinition} type="button">
+                      <button type="button" className={shared.btn} onClick={onEditDefinition}>
                         Edit definition
                       </button>
                     ) : null}
@@ -543,7 +601,7 @@ export function SchemaStudioSurface({
               </>
             ) : (
               <div className={s.sec}>
-                <div className={s['sec-h']}>WORKSPACE CHANGES</div>
+                <div className={s['sec-h']}>DEFINITION CHANGES</div>
                 <StudioChanges changes={data?.workspace?.changes ?? []} />
                 <div className={s['sec-h']}>CONTENT IMPACT</div>
                 <StudioImpactPreview impact={data?.impact ?? null} />
@@ -566,7 +624,7 @@ export function StudioEmptyCanvas({
     <div className={s.hint}>
       <div className={s.in}>
         <div className={s.dia} aria-hidden="true">
-          <svg viewBox="0 0 260 112">
+          <svg aria-hidden="true" viewBox="0 0 260 112">
             <path
               d="M96 36 C 130 36, 130 76, 164 76"
               fill="none"
@@ -598,9 +656,9 @@ export function StudioEmptyCanvas({
             Browse schemas
           </Link>
           {onAdd ? (
-            <button className={`${shared.btn} ${s.b2}`} onClick={onAdd}>
+            <button type="button" className={`${shared.btn} ${s.b2}`} onClick={onAdd}>
               <Icon name="file" />
-              Start from template
+              Manage sources
             </button>
           ) : (
             <Link className={`${shared.btn} ${s.b2}`} href="/">

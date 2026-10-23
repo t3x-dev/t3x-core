@@ -56,11 +56,11 @@ it.each([
   expect(destination.searchParams.get('q')).toBe('care');
 });
 it('keeps Studio and Bindings inside the project with a global Explore handoff', () => {
-  mocks.query = 'workspace=w&branch=release';
+  mocks.query = 'schemaView=active&workspace=w&branch=release';
   render(<SchemaCatalogExperience projectId="p">{null}</SchemaCatalogExperience>);
-  expect(screen.getByText('Project Studio')).toBeInTheDocument();
+  expect(screen.getByText('Workspace bindings')).toBeInTheDocument();
   const target = new URL(
-    screen.getByRole('link', { name: 'Explore' }).getAttribute('href')!,
+    screen.getByRole('link', { name: 'Browse schemas' }).getAttribute('href')!,
     'http://local'
   );
   expect(target.pathname).toBe('/explore');

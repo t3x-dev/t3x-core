@@ -1,9 +1,9 @@
 'use client';
 
 import type { SchemaPreparationTarget, StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
-import { ArrowRight, Layers } from 'lucide-react';
+import { Layers } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,8 +14,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
-import { safeExploreReturn } from '@/domain/project/exploreLocation';
 import { getProjectIdWorkspacePath } from '@/domain/project/repoPath';
+import {
+  schemaBrowseHref,
+  schemaSourceHref,
+  schemaWorkspaceHref,
+} from '@/domain/schemas/schemaNavigation';
 import {
   listStudioDraftWorkspaces,
   listStudioWorkspacesForBranches,
@@ -36,6 +40,7 @@ import { SchemaSourceCompositionDialog } from './SchemaSourceCompositionDialog';
 import { SchemaStudioSurface } from './SchemaStudioSurface';
 import { StudioChanges, StudioImpactPreview } from './StudioDefinitionPreview';
 import { StudioPublishDialog } from './StudioPublishDialog';
+import type { SchemaEditorNavigation } from './useSchemaNavigationGuard';
 
 type ModuleTone = 'blue' | 'purple' | 'orange' | 'green' | 'rose' | 'slate' | 'amber';
 
@@ -181,6 +186,7 @@ export function SchemaStudioExperience({
 }) {
   const params = useSearchParams();
   const router = useRouter();
+  const pathname = usePathname();
   const candidates = useStudioCandidates(projectId);
   const workspaces = useProjectWorkspaces(projectId);
   const projectBranches = useBranches(projectId, true);
@@ -188,8 +194,10 @@ export function SchemaStudioExperience({
   const ensuringBranches = useRef(new Map<string, Promise<void>>());
   const applySelection = useApplyStudioSelection(projectId);
   const [selection, setSelection] = useState<string[]>([]);
-  const [workspaceId, setWorkspaceId] = useState(params?.get('workspace') ?? '');
+  const navigationRef = useRef<SchemaEditorNavigation | null>(null);
   const requestedWorkspaceId = params?.get('workspace') ?? '';
+  const requestedBranch = params?.get('branch');
+  const query = params?.toString() ?? '';
   const [activeModuleId, setActiveModuleId] = useState('requirements');
   const [advanced, setAdvanced] = useState(params?.get('mode') === 'compose');
   const [definitionOpen, setDefinitionOpen] = useState(false);
@@ -236,10 +244,6 @@ export function SchemaStudioExperience({
       mounted.current = false;
     };
   }, []);
-
-  useEffect(() => {
-    setWorkspaceId(requestedWorkspaceId);
-  }, [requestedWorkspaceId]);
 
   const requested = params?.get('candidate');
   useEffect(() => {
@@ -305,12 +309,35 @@ export function SchemaStudioExperience({
     workspaces.refresh,
     workspaces.workspaces,
   ]);
-  useEffect(() => {
-    if (workspaceId) return;
-    const resolved = resolveStudioWorkspaceId(draftWorkspaces, workspaceId);
-    if (resolved) setWorkspaceId(resolved);
-  }, [draftWorkspaces, workspaceId]);
+  const workspaceId = resolveStudioWorkspaceId(
+    draftWorkspaces,
+    requestedWorkspaceId,
+    requestedBranch
+  );
   const target = draftWorkspaces.find((item) => item.id === workspaceId);
+  useEffect(() => {
+    if (!target || workspaces.loading || projectBranches.loading) return;
+    if (requestedWorkspaceId === target.id && requestedBranch === target.targetBranch) return;
+    router.replace(schemaWorkspaceHref(pathname, query, target), { scroll: false });
+  }, [
+    pathname,
+    query,
+    requestedBranch,
+    requestedWorkspaceId,
+    router,
+    target,
+    workspaces.loading,
+    projectBranches.loading,
+  ]);
+
+  function changeWorkspace(id: string) {
+    const next = draftWorkspaces.find((item) => item.id === id);
+    if (!next || next.id === workspaceId) return;
+    const navigate = () =>
+      router.push(schemaWorkspaceHref(pathname, query, next, true), { scroll: false });
+    if (navigationRef.current) navigationRef.current.requestNavigation(navigate);
+    else navigate();
+  }
   const persistedTarget = listStudioDraftWorkspaces(workspaces.workspaces).find(
     (item) => item.id === workspaceId
   );
@@ -528,7 +555,7 @@ export function SchemaStudioExperience({
     composition[0];
   const selectedWorkspaceTitle =
     target?.title ??
-    (workspaceId ? 'Workspace unavailable' : (draftWorkspaces[0]?.title ?? 'No draft workspace'));
+    (workspaceId || requestedBranch ? 'Workspace unavailable' : 'No draft workspace');
 
   function composeSources(sourceId?: string) {
     setCompositionRequest({
@@ -667,16 +694,17 @@ export function SchemaStudioExperience({
   }
 
   const canReview = !!target && data?.workspace?.id === target.id && !applying && !dataDirty;
-  const browseParams = new URLSearchParams({
-    view: 'browse',
-    type: 'schemas',
-    studioTarget: projectId,
-  });
-  const routeBranch = params?.get('branch');
-  if (routeBranch) browseParams.set('branch', routeBranch);
-  if (workspaceId) browseParams.set('workspace', workspaceId);
-  const browseHref =
-    safeExploreReturn(params?.get('returnTo')) ?? `/explore?${browseParams.toString()}`;
+  const browseHref = schemaBrowseHref(
+    projectId,
+    workspaceId,
+    target?.targetBranch ?? requestedBranch ?? undefined
+  );
+  const sourceHref = schemaSourceHref(
+    params?.get('returnTo') ?? null,
+    projectId,
+    workspaceId,
+    target?.targetBranch ?? requestedBranch ?? undefined
+  );
   const workspaceLink = target
     ? `${getProjectIdWorkspacePath(projectId, { branch: target.targetBranch })}&workspace=${encodeURIComponent(target.id)}`
     : getProjectIdWorkspacePath(projectId);
@@ -692,6 +720,12 @@ export function SchemaStudioExperience({
           applying.
         </p>
       ) : null}
+      {!workspaces.loading && !workspaces.error && !workspaceId && requestedBranch && !target ? (
+        <p className="px-6 py-2 text-sm text-[var(--status-error)]" role="alert">
+          No Workspace is available for branch {requestedBranch}. Select a valid Workspace before
+          editing.
+        </p>
+      ) : null}
       {error ? (
         <p className="px-6 py-2 text-sm text-[var(--status-error)]" role="alert">
           {error} Review the refreshed selection before trying again.
@@ -703,6 +737,7 @@ export function SchemaStudioExperience({
         editorInvalid={editorInvalid}
         dataEditor={(view) => (
           <SchemaDataEditor
+            navigationRef={navigationRef}
             view={view}
             onValidationChange={setEditorInvalid}
             sources={candidates.items.filter((candidate) => !selection.includes(candidate.id))}
@@ -763,10 +798,16 @@ export function SchemaStudioExperience({
           />
         )}
         browseHref={browseHref}
+        sourceHref={sourceHref}
+        workspaceHref={target ? workspaceLink : undefined}
+        branch={target?.targetBranch}
+        draftStatus={
+          dataDirty ? 'Unsaved changes' : savedCandidateRef ? 'Candidate saved' : undefined
+        }
         workspaceTitle={selectedWorkspaceTitle}
         workspaceId={workspaceId}
         workspaces={draftWorkspaces}
-        onWorkspace={setWorkspaceId}
+        onWorkspace={changeWorkspace}
         modules={visibleSources.flatMap((source) => source.modules)}
         composition={composition}
         activeModule={activeModule}
@@ -1079,11 +1120,6 @@ export function SchemaStudioExperience({
           ) : null}
         </DialogContent>
       </Dialog>
-      {target ? (
-        <Link className="sr-only" href={workspaceLink}>
-          Review in Workspace <ArrowRight />
-        </Link>
-      ) : null}
       {preparation ? (
         <SchemaContentPreparationDialog
           projectId={projectId}
