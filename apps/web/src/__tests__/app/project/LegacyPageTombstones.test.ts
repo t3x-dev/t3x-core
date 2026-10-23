@@ -7,12 +7,14 @@ vi.mock('next/navigation', () => ({
 }));
 
 import RetiredChatLeafRoute from '@/app/chat/project/[projectId]/leaf/[[...retired]]/page';
+import RetiredInsightsPage from '@/app/insights/page';
 import RetiredLeafRoute from '@/app/project/[projectId]/leaf/[[...retired]]/page';
 import RetiredOutputsRoute from '@/app/project/[projectId]/outputs/[[...retired]]/page';
 import RetiredPromptArchiveRoute from '@/app/templates/archive/[[...retired]]/page';
 
 describe('retired Legacy pages', () => {
   it.each([
+    ['Insights', RetiredInsightsPage],
     ['Leaf', RetiredLeafRoute],
     ['Outputs', RetiredOutputsRoute],
     ['Chat Leaf alias', RetiredChatLeafRoute],

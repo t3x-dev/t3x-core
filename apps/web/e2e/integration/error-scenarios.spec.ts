@@ -84,7 +84,7 @@ test.describe('Error Scenarios', () => {
     });
 
     // Visit multiple key routes
-    const routes = ['/', '/insights', '/deploy'];
+    const routes = ['/', '/deploy'];
 
     for (const route of routes) {
       errors.length = 0;

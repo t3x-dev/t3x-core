@@ -4,7 +4,7 @@ import { useTerminology } from '@/hooks/shared/useTerminology';
 
 /**
  * GraphIllustration — conversation → commit → leaf node graph
- * Used for: Canvas empty state, insights empty state
+ * Used for: Canvas empty state
  */
 export function GraphIllustration({ className }: { className?: string }) {
   const { t } = useTerminology();

@@ -95,8 +95,7 @@ const TERMINOLOGY: Record<string, TermEntry> = {
   run_failed: { default: 'Run Failed', developer: 'Run Failed' },
   draft_from_canvas: { default: 'Draft from Canvas', developer: 'Draft from Canvas' },
 
-  // Batch 4: Command palette, tooltips, empty states
-  search_command: { default: 'Search commands...', developer: 'Search commands...' },
+  // Batch 4: Tooltips and empty states
   no_results: { default: 'No results found', developer: 'No results found' },
   empty_project: {
     default: 'Empty project. Create a conversation to start',

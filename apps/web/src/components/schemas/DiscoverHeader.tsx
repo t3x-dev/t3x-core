@@ -7,7 +7,6 @@ import {
   Building2,
   CheckCircle2,
   CircleUserRound,
-  Command,
   Compass,
   Database,
   FolderGit2,
@@ -185,24 +184,6 @@ export function DiscoverHeader({
             <Link href="/">Your repositories</Link>
           </nav>
           <div className={styles.actions}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className={styles.search}
-              aria-label="Commands"
-              aria-keyshortcuts="Meta+K Control+K"
-              title="Search commands (⌘K / Ctrl+K)"
-              onClick={() =>
-                document.dispatchEvent(
-                  new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true })
-                )
-              }
-            >
-              <Command aria-hidden="true" />
-              <span className={styles.searchLabel}>Commands</span>
-              <kbd className={styles.shortcut}>⌘K</kbd>
-            </Button>
             <Button asChild variant="ghost" size="icon-sm" className={styles.account}>
               <Link href="/settings/profile" aria-label="Account settings" title="Account settings">
                 <CircleUserRound aria-hidden="true" />

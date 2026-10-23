@@ -109,7 +109,11 @@ describe('DiscoverHeader navigation', () => {
       'aria-current'
     );
     expect(globalNavigation.queryByRole('link', { name: 'Explore' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Commands' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Commands' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Account settings' })).toHaveAttribute(
+      'href',
+      '/settings/profile'
+    );
     expect(screen.queryByRole('navigation', { name: 'Project views' })).not.toBeInTheDocument();
     expect(screen.queryByText('Private')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Notifications preview')).not.toBeInTheDocument();

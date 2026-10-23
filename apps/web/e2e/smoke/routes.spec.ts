@@ -13,7 +13,7 @@ import { API_BASE } from '../fixtures/api-helpers';
  * never exposed as a WebUI route (see audit A-4).
  */
 
-const STATIC_ROUTES = ['/', '/insights', '/deploy'];
+const STATIC_ROUTES = ['/', '/deploy'];
 
 /**
  * Console-error allowlist. KEEP TIGHT — only patterns verified safe.
