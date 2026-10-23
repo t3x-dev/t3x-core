@@ -3,6 +3,7 @@ import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { StateOverviewView } from '@/components/project/StateOverviewView';
+import type { ApiCommit } from '@/types/api';
 
 const overview = vi.hoisted(() => vi.fn());
 vi.mock('@/hooks/commits/useStateOverview', () => ({ useStateOverview: overview }));
@@ -20,6 +21,14 @@ const props = {
   projectName: 'Evaluation schema',
   introductionSource: 'version' as const,
 };
+const commit = {
+  hash: props.commitDigest,
+  project_id: props.projectId,
+  content: {
+    trees: [{ key: 'document', slots: { title: 'Already loaded State' }, children: [] }],
+    relations: [],
+  },
+} as ApiCommit;
 beforeEach(() => {
   HTMLElement.prototype.scrollIntoView = vi.fn();
   overview.mockReturnValue({
@@ -71,6 +80,41 @@ it('shows a retryable failure without showing old author content', () => {
   expect(screen.queryByText('Author description')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Retry State' }));
   expect(retry).toHaveBeenCalledOnce();
+});
+
+it('reads current committed content without requesting the overview again', () => {
+  overview.mockReturnValue({ data: undefined, loading: false });
+  render(<StateOverviewView {...props} introductionSource="repository" commit={commit} />);
+  expect(overview).toHaveBeenCalledWith(props.projectId, null);
+  expect(screen.getByText('Already loaded State')).toBeVisible();
+  expect(screen.queryByText('Loading committed State…')).not.toBeInTheDocument();
+});
+
+it('keeps historical State readable while its introduction loads or fails', () => {
+  const retry = vi.fn();
+  overview.mockReturnValue({ data: undefined, loading: true, retry });
+  const view = renderIntroduction(<StateOverviewView {...props} commit={commit} />);
+  expect(overview).toHaveBeenCalledWith(props.projectId, props.commitDigest);
+  expect(screen.getByText('Already loaded State')).toBeVisible();
+  expect(screen.getByText('Loading version introduction…')).toBeVisible();
+  expect(screen.queryByText('Loading committed State…')).not.toBeInTheDocument();
+
+  overview.mockReturnValue({ error: 'Introduction unavailable', loading: false, retry });
+  view.rerender(<StateOverviewView {...props} commit={commit} />);
+  expect(screen.getByText('Already loaded State')).toBeVisible();
+  expect(screen.queryByText('State unavailable')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry introduction' }));
+  expect(retry).toHaveBeenCalledOnce();
+});
+
+it.each([
+  { ...commit, hash: 'different-version' },
+  { ...commit, project_id: 'other-project' },
+])('never uses committed content from another version or repository', (staleCommit) => {
+  overview.mockReturnValue({ data: undefined, loading: true });
+  render(<StateOverviewView {...props} commit={staleCommit} />);
+  expect(screen.queryByText('Already loaded State')).not.toBeInTheDocument();
+  expect(screen.getByText('Loading committed State…')).toBeVisible();
 });
 
 it('shows repository identity once and keeps committed values primary', () => {

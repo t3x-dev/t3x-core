@@ -24,6 +24,7 @@ function displayName(key: string) {
 export function StateOverviewView({
   projectId,
   commitDigest,
+  commit,
   projectName,
   projectDescription,
   projectOwner = 't3x-dev',
@@ -56,6 +57,7 @@ export function StateOverviewView({
   historyReturnTo?: string;
   workspaceHref?: string;
   commits?: ApiCommit[];
+  commit?: ApiCommit | null;
   projectId: string;
   /** `null` renders the repository before its first commit. */
   commitDigest: string | null;
@@ -71,9 +73,12 @@ export function StateOverviewView({
   onAuthorRevision?: (digest: string) => void;
   reader?: (expanded: boolean, expand: () => void) => ReactNode;
 }) {
+  const committedContent =
+    commit?.hash === commitDigest && commit.project_id === projectId ? commit.content : null;
+  const hasCommittedContent = Boolean(committedContent || reader);
   const { data, error, loading, retry } = useStateOverview(
     projectId,
-    headerOnly && introductionSource === 'repository' ? null : commitDigest
+    introductionSource === 'repository' && (headerOnly || hasCommittedContent) ? null : commitDigest
   );
   const [selected, setSelected] = useState<string | null>(null);
   const [contentsOpen, setContentsOpen] = useState(false);
@@ -92,7 +97,8 @@ export function StateOverviewView({
   const shownTags = version ? (author?.tags ?? []) : repositoryProfile.tags;
   const canEdit = !version && canEditRepository && onSaveRepositoryProfile;
   const value = data?.render.model.value;
-  const semantic = data?.reading?.kind === 'semantic-content' ? data.reading.value : null;
+  const semantic =
+    committedContent ?? (data?.reading?.kind === 'semantic-content' ? data.reading.value : null);
   const items = semantic
     ? semantic.trees.map((tree, index) => ({
         key: String(index),
@@ -117,7 +123,7 @@ export function StateOverviewView({
   );
   if (headerOnly) return <div className={styles.page}>{projectHeader}</div>;
 
-  const failed = stateError || error || (!empty && !loading && !data);
+  const failed = stateError || (!hasCommittedContent && (error || (!empty && !loading && !data)));
   return (
     <div className={styles.root} data-testid="state-overview">
       <div className={styles.page}>
@@ -149,7 +155,7 @@ export function StateOverviewView({
               )
             ) : null}
           </header>
-          {stateLoading || loading ? (
+          {stateLoading || (!hasCommittedContent && loading) ? (
             <output className={styles.feedback}>Loading committed State…</output>
           ) : failed ? (
             <div role="alert" className={styles.feedback}>
@@ -298,9 +304,18 @@ export function StateOverviewView({
             ) : null}
             <div ref={readmeRef} className={styles.readmeBody}>
               {version && (loading || error) ? (
-                <p>
-                  {loading ? 'Loading version introduction…' : 'Version introduction unavailable.'}
-                </p>
+                <>
+                  <p>
+                    {loading
+                      ? 'Loading version introduction…'
+                      : 'Version introduction unavailable.'}
+                  </p>
+                  {error && hasCommittedContent ? (
+                    <Button size="sm" variant="outline" onClick={retry}>
+                      Retry introduction
+                    </Button>
+                  ) : null}
+                </>
               ) : version ? (
                 <StateAuthorReadme author={author} compact embedded />
               ) : (

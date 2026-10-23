@@ -108,13 +108,27 @@ interface ProjectStateTabProps {
 }
 
 interface StateSnapshot {
-  auxiliaryError: string | null;
   commits: ApiCommit[];
   headCommit: ApiCommit | null;
   loading: boolean;
+  primaryError: string | null;
+  scope: string;
+}
+
+const EMPTY_SNAPSHOT: StateSnapshot = {
+  commits: [],
+  headCommit: null,
+  loading: true,
+  primaryError: null,
+  scope: '',
+};
+
+interface StateSnapshotContext {
+  commit: ApiCommit;
+  error: string | null;
+  loading: boolean;
   operations: StateOperationEntry[];
   parentCommit: ApiCommit | null;
-  primaryError: string | null;
 }
 
 const SNAPSHOT_VIEWS: Array<{
@@ -189,15 +203,17 @@ export function ProjectStateTab({
   const { loadCommit } = useCommitByHash();
   const { loadCommits } = useCommitsList();
   const { loadOperations } = useCommitOperations();
-  const [snapshot, setSnapshot] = useState<StateSnapshot>({
-    auxiliaryError: null,
-    commits: [],
-    headCommit: null,
-    loading: true,
-    operations: [],
-    parentCommit: null,
-    primaryError: null,
-  });
+  const selectionScope = JSON.stringify([
+    projectId,
+    branchFocus,
+    focusedCommitHash,
+    snapshotRefreshVersion,
+  ]);
+  const branchScope = JSON.stringify([projectId, branchFocus]);
+  const [loadedSnapshot, setSnapshot] = useState<StateSnapshot>(EMPTY_SNAPSHOT);
+  // Never render the previous branch/project while its replacement effect is starting.
+  const snapshot = loadedSnapshot.scope === selectionScope ? loadedSnapshot : EMPTY_SNAPSHOT;
+  const [loadedContext, setLoadedContext] = useState<StateSnapshotContext | null>(null);
 
   useEffect(() => {
     setActiveView(routeView);
@@ -242,36 +258,38 @@ export function ProjectStateTab({
 
   const snapshotTargetHead = focusedCommitHash ?? branchHeads[branchFocus];
   const loadedSnapshotScope = useRef('');
+  const waitingForBranch =
+    snapshotTargetHead === undefined &&
+    !inspectedHeadByBranchRef.current[branchScope] &&
+    branchesLoading;
 
   useEffect(() => {
     if (!snapshotEnabled) return;
 
     const selectedHead =
-      focusedCommitHash ?? inspectedHeadByBranchRef.current[branchFocus] ?? snapshotTargetHead;
-    const scopePrefix = `${projectId}:${branchFocus}:${snapshotRefreshVersion}:`;
-    if (selectedHead && loadedSnapshotScope.current === `${scopePrefix}${selectedHead}`) return;
+      focusedCommitHash ?? inspectedHeadByBranchRef.current[branchScope] ?? snapshotTargetHead;
+    const scopePrefix = `${selectionScope}:`;
+    if (loadedSnapshotScope.current === `${scopePrefix}${selectedHead ?? ''}`) return;
+    // The registered pointer is authoritative. Wait for it before falling back to history.
+    if (waitingForBranch) return;
     let cancelled = false;
     const load = async () => {
-      setSnapshot({
-        auxiliaryError: null,
-        commits: [],
-        headCommit: null,
-        loading: true,
-        operations: [],
-        parentCommit: null,
-        primaryError: null,
-      });
+      setSnapshot({ ...EMPTY_SNAPSHOT, scope: selectionScope });
       try {
         const requestedBranch = branchFocus || 'main';
         const branchHeadHash = selectedHead;
-        let commits = await loadCommits(projectId, requestedBranch, 100);
-        let headCommit = selectVisibleBranchHead(commits);
+        let commits: ApiCommit[] = [];
+        let headCommit: ApiCommit | null = null;
         if (branchHeadHash) {
           headCommit = await loadCommit(branchHeadHash, projectId);
           if (headCommit.hash !== branchHeadHash) {
             throw new Error('Branch HEAD response does not match the registered branch pointer.');
           }
-          commits = [headCommit, ...commits.filter((commit) => commit.hash !== headCommit?.hash)];
+          commits = [headCommit];
+        } else if (branchHeadHash !== null) {
+          // Compatibility fallback when branch metadata is unavailable, not an empty branch.
+          commits = await loadCommits(projectId, requestedBranch, 100);
+          headCommit = selectVisibleBranchHead(commits);
         }
         if (commits.some((commit) => commit.project_id !== projectId)) {
           throw new Error('Commit response does not match the selected project.');
@@ -291,60 +309,26 @@ export function ProjectStateTab({
         if (commits.some((commit) => !reachable.has(commit.hash))) {
           throw new Error('Commit response does not match the selected project and branch.');
         }
-        let operations: StateOperationEntry[] = [];
-        let parentCommit: ApiCommit | null = null;
-        const auxiliaryErrors: string[] = [];
-
-        if (headCommit) {
-          try {
-            operations = (await loadOperations(headCommit.hash, projectId)).operations;
-          } catch {
-            auxiliaryErrors.push('YOps log unavailable.');
-          }
-
-          const parentHash = headCommit.parents[0];
-          if (parentHash) {
-            try {
-              parentCommit = commits.find((commit) => commit.hash === parentHash) ?? null;
-              if (!parentCommit) parentCommit = await loadCommit(parentHash, projectId);
-              if (parentCommit.project_id !== projectId || parentCommit.hash !== parentHash) {
-                throw new Error('Parent commit response does not match the selected project.');
-              }
-            } catch {
-              auxiliaryErrors.push('Parent commit unavailable.');
-            }
-          }
-        }
-
         if (!cancelled) {
-          if (
-            headCommit &&
-            !focusedCommitHash &&
-            !inspectedHeadByBranchRef.current[requestedBranch]
-          ) {
-            inspectedHeadByBranchRef.current[requestedBranch] = headCommit.hash;
+          if (headCommit && !focusedCommitHash && !inspectedHeadByBranchRef.current[branchScope]) {
+            inspectedHeadByBranchRef.current[branchScope] = headCommit.hash;
           }
           loadedSnapshotScope.current = `${scopePrefix}${headCommit?.hash ?? ''}`;
           setSnapshot({
-            auxiliaryError: auxiliaryErrors.join(' ') || null,
             commits,
             headCommit,
             loading: false,
-            operations,
-            parentCommit,
             primaryError: null,
+            scope: selectionScope,
           });
         }
       } catch (error) {
         if (!cancelled) {
           setSnapshot({
-            auxiliaryError: null,
-            commits: [],
-            headCommit: null,
+            ...EMPTY_SNAPSHOT,
             loading: false,
-            operations: [],
-            parentCommit: null,
             primaryError: formatError(error, 'Committed state is unavailable.'),
+            scope: selectionScope,
           });
         }
       }
@@ -356,17 +340,62 @@ export function ProjectStateTab({
     };
   }, [
     branchFocus,
+    branchScope,
+    waitingForBranch,
+    selectionScope,
     snapshotTargetHead,
     focusedCommitHash,
     loadCommit,
     loadCommits,
-    loadOperations,
     projectId,
     snapshotEnabled,
     snapshotRefreshVersion,
   ]);
 
   const headCommit = snapshot.headCommit;
+  const context = loadedContext?.commit === headCommit ? loadedContext : null;
+  const contextLoading = Boolean(headCommit) && (!context || context.loading);
+  useEffect(() => {
+    if (!headCommit) return;
+    let cancelled = false;
+    setLoadedContext({
+      commit: headCommit,
+      error: null,
+      loading: true,
+      operations: [],
+      parentCommit: null,
+    });
+    const loadParent = async () => {
+      const parentHash = headCommit.parents[0];
+      if (!parentHash) return null;
+      const parent =
+        snapshot.commits.find((commit) => commit.hash === parentHash) ??
+        (await loadCommit(parentHash, projectId));
+      if (parent.project_id !== projectId || parent.hash !== parentHash) {
+        throw new Error('Parent commit response does not match the selected project.');
+      }
+      return parent;
+    };
+    // Change evidence is useful, but neither request is required to read committed content.
+    void Promise.allSettled([loadOperations(headCommit.hash, projectId), loadParent()]).then(
+      ([operations, parent]) => {
+        if (cancelled) return;
+        setLoadedContext({
+          commit: headCommit,
+          error: joinWarnings(
+            operations.status === 'rejected' ? 'YOps log unavailable.' : null,
+            parent.status === 'rejected' ? 'Parent commit unavailable.' : null
+          ),
+          loading: false,
+          operations: operations.status === 'fulfilled' ? operations.value.operations : [],
+          parentCommit: parent.status === 'fulfilled' ? parent.value : null,
+        });
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [headCommit, snapshot.commits, loadCommit, loadOperations, projectId]);
   const committedWorkspace = useMemo(
     () => findCommittedWorkspaceForCommit(projectWorkspaces.workspaces, headCommit),
     [headCommit, projectWorkspaces.workspaces]
@@ -384,8 +413,7 @@ export function ProjectStateTab({
     () => workspaceDraftOperationsToStateOperations(committedWorkspace?.yopsDraft.operations ?? []),
     [committedWorkspace]
   );
-  const effectiveOperations =
-    snapshot.operations.length > 0 ? snapshot.operations : workspaceOperations;
+  const effectiveOperations = context?.operations.length ? context.operations : workspaceOperations;
   const workspaceGaps = useMemo(
     () => workspaceValidationGaps(committedWorkspace),
     [committedWorkspace]
@@ -466,20 +494,16 @@ export function ProjectStateTab({
     : validationGaps.length;
   const committedDiffChanges = useMemo(
     () =>
-      headCommit && snapshot.parentCommit
+      headCommit && context?.parentCommit
         ? buildStructuredStateDiff({
-            baseline: snapshot.parentCommit.content,
+            baseline: context.parentCommit.content,
             head: headCommit.content,
             workspace: committedWorkspace,
           })
         : [],
-    [committedWorkspace, headCommit, snapshot.parentCommit]
+    [committedWorkspace, headCommit, context?.parentCommit]
   );
-  const stateWarning = joinWarnings(
-    snapshot.auxiliaryError,
-    projectWorkspaces.error,
-    validationError
-  );
+  const stateWarning = joinWarnings(projectWorkspaces.error, validationError);
   const currentStateReturnTo = buildReturnTo(pathname, routeQuery);
   const historyHref = getProjectIdHistoryPath(projectId, {
     branch: branchFocus,
@@ -538,8 +562,8 @@ export function ProjectStateTab({
   const handleViewLatest = useCallback(() => {
     const latestHash = availableHeadHash ?? latestBranchHeadHash;
     if (!latestHash && !focusedCommitHash) return;
-    if (latestHash) inspectedHeadByBranchRef.current[branchFocus] = latestHash;
-    else delete inspectedHeadByBranchRef.current[branchFocus];
+    if (latestHash) inspectedHeadByBranchRef.current[branchScope] = latestHash;
+    else delete inspectedHeadByBranchRef.current[branchScope];
     setDismissedHeadHash(null);
     if (focusedCommitHash) {
       const params = new URLSearchParams(routeQueryRef.current);
@@ -551,7 +575,7 @@ export function ProjectStateTab({
   }, [
     availableHeadHash,
     latestBranchHeadHash,
-    branchFocus,
+    branchScope,
     focusedCommitHash,
     pathname,
     replaceRoute,
@@ -673,10 +697,7 @@ export function ProjectStateTab({
                 />
               ) : null}
               {!snapshot.primaryError && snapshot.loading && activeView !== 'overview' ? (
-                <StateEmpty
-                  message="Loading commit, YOps, and validation context."
-                  title="Loading state"
-                />
+                <StateEmpty message="Reading this version’s content." title="Loading state" />
               ) : null}
               {activeView === 'overview' ? (
                 <StateOverviewView
@@ -686,6 +707,7 @@ export function ProjectStateTab({
                   historyReturnTo={currentStateReturnTo}
                   workspaceHref={workspaceHref}
                   commits={snapshot.commits}
+                  commit={headCommit}
                   projectId={projectId}
                   commitDigest={
                     snapshot.loading || snapshot.primaryError ? null : (headCommit?.hash ?? null)
@@ -773,6 +795,8 @@ export function ProjectStateTab({
                   branch={branchFocus || 'main'}
                   changeReason={headCommit.message?.trim() ?? ''}
                   diffChanges={committedDiffChanges}
+                  contextLoading={contextLoading}
+                  contextError={context?.error}
                   headCommit={headCommit}
                   modifiedLabel={formatRelativeTime(headCommit.committed_at)}
                   pathQuery={pathQuery}
@@ -1074,7 +1098,11 @@ export function StateStructureView({
   dataMode = 'structure',
   onDataModeChange,
   yamlText,
+  contextLoading = false,
+  contextError,
 }: {
+  contextLoading?: boolean;
+  contextError?: string | null;
   dataMode?: 'structure' | 'code';
   onDataModeChange?: (mode: 'structure' | 'code') => void;
   yamlText?: string;
@@ -1291,6 +1319,8 @@ export function StateStructureView({
           <div className={inspectionStyles.stats}>
             <span>{structureRows.length} fields</span>
             <span>{structureRows.filter((row) => row.type === 'object').length} objects</span>
+            {contextLoading ? <output>Loading change details…</output> : null}
+            {contextError ? <output>{contextError}</output> : null}
           </div>
           <label className={inspectionStyles.detailsControl}>
             <input

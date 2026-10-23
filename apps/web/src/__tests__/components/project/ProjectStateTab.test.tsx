@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectStateTab } from '@/components/project/ProjectStateTab';
 import { PRD_CORE_ARTIFACT, PRD_MODULE_ARTIFACTS } from '@/data/schemaModules';
@@ -13,6 +13,7 @@ import type { WorkspaceCandidate } from '@/types/workspaces';
 
 const hookMocks = vi.hoisted(() => ({
   branchHeads: {} as Record<string, string | null>,
+  branchesLoading: false,
   nativeView: null as unknown,
   createBranch: vi.fn(),
   loadCanvas: vi.fn(),
@@ -91,7 +92,7 @@ vi.mock('@/hooks/shared/useBranches', () => ({
     branchHeads: hookMocks.branchHeads,
     branches: ['main', 'feature/prd-audience'],
     create: hookMocks.createBranch,
-    loading: false,
+    loading: hookMocks.branchesLoading,
     refresh: hookMocks.refreshBranches,
   }),
 }));
@@ -467,6 +468,7 @@ const PROMPT_VALIDATION: YSchemaValidationSummary = {
 
 function setupHookMocks() {
   hookMocks.branchHeads = {};
+  hookMocks.branchesLoading = false;
   hookMocks.loadCommit.mockResolvedValue(PRD_COMMIT);
   hookMocks.createBranch.mockResolvedValue({
     branch_id: 'branch_feature_checkout_retry',
@@ -519,7 +521,124 @@ function renderStateTab(validation: YSchemaValidationSummary | null = VALIDATION
   );
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 describe('ProjectStateTab', () => {
+  it('shows the pointed State before slow change evidence and starts evidence requests in parallel', async () => {
+    const operations = deferred<{ commit_hash: string; operations: [] }>();
+    const parent = deferred<ApiCommit>();
+    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
+    hookMocks.loadCommit.mockImplementation((hash: string) =>
+      hash === PRD_COMMIT.hash ? Promise.resolve(PRD_COMMIT) : parent.promise
+    );
+    hookMocks.loadOperations.mockReturnValue(operations.promise);
+    renderStateTab();
+
+    const body = await screen.findByRole('region', { name: 'State data' });
+    expect(within(body).getByText('problem')).toBeVisible();
+    expect(screen.queryByText('Loading state')).not.toBeInTheDocument();
+    expect(screen.getByText('Loading change details…')).toBeVisible();
+    expect(hookMocks.loadCommits).not.toHaveBeenCalled();
+    expect(hookMocks.loadCommit).toHaveBeenCalledWith(PARENT_COMMIT.hash, 'proj_test');
+    expect(hookMocks.loadOperations).toHaveBeenCalledOnce();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Code', exact: true }));
+    expect(screen.queryByText('Loading state')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Structure', exact: true }));
+    const restoredBody = screen.getByRole('region', { name: 'State data' });
+    expect(restoredBody).toBeVisible();
+    expect(hookMocks.loadCommit).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      operations.resolve({ commit_hash: PRD_COMMIT.hash, operations: [] });
+      parent.resolve(PARENT_COMMIT);
+    });
+    expect(screen.queryByText('Loading change details…')).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'State data' })).toBe(restoredBody);
+  });
+
+  it('waits for the initial branch pointer instead of starting a redundant history request', async () => {
+    hookMocks.branchesLoading = true;
+    const view = renderStateTab();
+    expect(hookMocks.loadCommits).not.toHaveBeenCalled();
+    expect(hookMocks.loadCommit).not.toHaveBeenCalled();
+    hookMocks.branchesLoading = false;
+    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
+    hookMocks.loadCommit.mockImplementation(async (hash: string) =>
+      hash === PRD_COMMIT.hash ? PRD_COMMIT : PARENT_COMMIT
+    );
+    view.rerender(
+      <ProjectStateTab initialView="structure" projectId="proj_test" projectName="Test Project" />
+    );
+    expect(await screen.findByRole('region', { name: 'State data' })).toBeVisible();
+    expect(hookMocks.loadCommits).not.toHaveBeenCalled();
+  });
+
+  it('keeps evidence loading across a branch pointer refresh and ignores late evidence from the old version', async () => {
+    const operations = deferred<{ commit_hash: string; operations: [] }>();
+    const newerHead = { ...PRD_COMMIT, hash: 'sha256:newer', message: 'New version' };
+    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
+    hookMocks.loadCommit.mockImplementation(async (hash: string) =>
+      hash === PRD_COMMIT.hash ? PRD_COMMIT : hash === newerHead.hash ? newerHead : PARENT_COMMIT
+    );
+    hookMocks.loadOperations.mockReturnValueOnce(operations.promise);
+    const view = renderStateTab();
+    await screen.findByRole('region', { name: 'State data' });
+    hookMocks.branchHeads = { main: newerHead.hash };
+    view.rerender(
+      <ProjectStateTab initialView="structure" projectId="proj_test" projectName="Test Project" />
+    );
+    expect(screen.getByText(PRD_COMMIT.message!)).toBeVisible();
+    expect(screen.getByText('Loading change details…')).toBeVisible();
+    expect(hookMocks.loadOperations).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'View latest' }));
+    await screen.findByRole('link', { name: 'New version' });
+    await act(async () => operations.reject(new Error('Old request failed')));
+    expect(screen.getByRole('link', { name: 'New version' })).toBeVisible();
+    expect(screen.queryByText('YOps log unavailable.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Loading change details…')).not.toBeInTheDocument();
+  });
+
+  it('does not reuse a pinned main revision when switching projects', async () => {
+    const view = renderStateTab();
+    await screen.findByRole('region', { name: 'State data' });
+    hookMocks.loadCommits.mockResolvedValue([]);
+    hookMocks.loadCommit.mockClear();
+    view.rerender(
+      <ProjectStateTab initialView="structure" projectId="proj_other" projectName="Other" />
+    );
+    expect(await screen.findByText('No commit on this branch')).toBeVisible();
+    expect(hookMocks.loadCommits).toHaveBeenLastCalledWith('proj_other', 'main', 100);
+    expect(hookMocks.loadCommit).not.toHaveBeenCalled();
+    expect(screen.queryByText(PRD_COMMIT.message!)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [
+      { ...PRD_COMMIT, hash: 'sha256:wrong' },
+      'Branch HEAD response does not match the registered branch pointer.',
+    ],
+    [
+      { ...PRD_COMMIT, project_id: 'proj_other' },
+      'Commit response does not match the selected project.',
+    ],
+  ])('rejects a mismatched direct State response before showing content', async (commit, message) => {
+    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
+    hookMocks.loadCommit.mockResolvedValue(commit);
+    renderStateTab();
+    expect(await screen.findByText(message)).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'State data' })).not.toBeInTheDocument();
+    expect(hookMocks.loadOperations).not.toHaveBeenCalled();
+  });
+
   it('creates a branch through the server without overwriting its inherited Schema with a client Draft', async () => {
     renderStateTab();
     await screen.findByRole('link', { name: 'PRD audience handoff committed' });
@@ -1472,7 +1591,7 @@ describe('ProjectStateTab', () => {
     expect(
       await screen.findByRole('link', { name: 'PRD audience handoff committed' })
     ).toBeInTheDocument();
-    expect(screen.getByText('YOps log unavailable.')).toBeInTheDocument();
+    expect(await screen.findByText('YOps log unavailable.')).toBeVisible();
     expect(screen.getAllByText('problem').length).toBeGreaterThan(0);
   });
 
