@@ -76,6 +76,17 @@ beforeEach(() => {
   mocks.prepare.mockResolvedValue(prepared);
   mocks.latest.mockResolvedValue({ snapshot: { snapshotId: 'rvs_review' } });
 });
+it('does not prepare an unchanged Draft even when invoked outside the disabled button', async () => {
+  mocks.read.mockResolvedValueOnce({ hasChanges: false, base: document, current: document });
+  const workspace = candidate();
+  const { result } = renderHook(() =>
+    useWorkspaceComposeReviewController({ candidate: workspace })
+  );
+  await act(async () => expect(await result.current.prepareReview()).toBe(false));
+  expect(result.current.error).toContain('No changes to commit');
+  expect(mocks.prepare).not.toHaveBeenCalled();
+  expect(mocks.legacy).not.toHaveBeenCalled();
+});
 it('prepares the complete ordinary YAML Draft through managed Review, never a legacy fallback', async () => {
   mocks.read.mockResolvedValueOnce({
     base: {},
@@ -142,9 +153,10 @@ it('discards a delayed snapshot after a concurrent edit of the same Workspace', 
     ({ workspace }) => useWorkspaceComposeReviewController({ candidate: workspace }),
     { initialProps: { workspace: candidate() } }
   );
+  const onPrepared = vi.fn();
   let pending!: Promise<boolean>;
   act(() => {
-    pending = result.current.prepareReview();
+    pending = result.current.prepareReview(onPrepared);
   });
   await waitFor(() => expect(mocks.latest).toHaveBeenCalled());
   rerender({ workspace: candidate(3) });
@@ -152,6 +164,7 @@ it('discards a delayed snapshot after a concurrent edit of the same Workspace', 
     resolve({ snapshot: { snapshotId: 'obsolete' } });
     await pending;
   });
+  expect(onPrepared).not.toHaveBeenCalled();
   expect(result.current.review.transitionId).toBeNull();
 });
 it('does not silently fall back to legacy Studio-style Review when the managed Draft read fails', async () => {
@@ -167,4 +180,31 @@ it('does not silently fall back to legacy Studio-style Review when the managed D
   expect(fallback).not.toHaveBeenCalled();
   expect(mocks.legacy).not.toHaveBeenCalled();
   expect(result.current.error).toContain('Authoring unavailable');
+});
+
+it('opens exactly the prepared snapshot without making a decision', async () => {
+  const workspace = candidate();
+  const onPrepared = vi.fn();
+  const { result } = renderHook(() =>
+    useWorkspaceComposeReviewController({ candidate: workspace })
+  );
+  await act(async () => {
+    expect(await result.current.prepareReview(onPrepared)).toBe(true);
+  });
+  expect(onPrepared).toHaveBeenCalledExactlyOnceWith({ snapshotId: 'rvs_review' });
+  expect(mocks.decide).not.toHaveBeenCalled();
+});
+it('stays in the draft when the saved review cannot be retrieved', async () => {
+  mocks.latest.mockRejectedValueOnce(new Error('Snapshot unavailable'));
+  const workspace = candidate();
+  const onPrepared = vi.fn();
+  const { result } = renderHook(() =>
+    useWorkspaceComposeReviewController({ candidate: workspace })
+  );
+  await act(async () => {
+    expect(await result.current.prepareReview(onPrepared)).toBe(false);
+  });
+  expect(onPrepared).not.toHaveBeenCalled();
+  expect(result.current.review.reviewSnapshot).toBeNull();
+  expect(result.current.error).toContain('Snapshot unavailable');
 });

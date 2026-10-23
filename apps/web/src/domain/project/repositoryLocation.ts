@@ -6,7 +6,7 @@ export function getSchemaProjectTab(schemaView: string | null): 'schemas' | 'dis
 
 /** Only routes with an explicit owner/name adapter may migrate from ID links. */
 export function isSupportedRepositorySuffix(suffix: string): boolean {
-  return /^(?:\/?|\/(?:state|workspaces|pull-requests|community|schemas|discover|browse|settings|diff|history|knowledge-graph)\/?|\/merge\/[^/]+\/?|\/changes\/[^/]+\/[^/]+\/?|\/sources\/conversations\/[^/]+\/?)$/.test(
+  return /^(?:\/?|\/(?:state|workspaces|pull-requests|checks|community|schemas|discover|browse|settings|diff|history|knowledge-graph)\/?|\/checks\/[^/]+\/?|\/merge\/[^/]+\/?|\/changes\/[^/]+\/[^/]+\/?|\/sources\/conversations\/[^/]+\/?)$/.test(
     suffix
   );
 }
@@ -33,6 +33,7 @@ export function repositoryLocation(base: string, suffix: string, query: string, 
         'state',
         'workspaces',
         'pull-requests',
+        'checks',
         'history',
         'community',
         'schemas',

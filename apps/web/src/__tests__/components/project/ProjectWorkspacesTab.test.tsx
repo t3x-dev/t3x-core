@@ -22,6 +22,19 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mocks.push, replace: mocks.replace }),
   useSearchParams: () => new URLSearchParams(mocks.query),
 }));
+vi.mock('@/components/workspaces/WorkspaceSnapshotReview', () => ({
+  WorkspaceSnapshotReview: ({
+    snapshotId,
+    workspaceId,
+  }: {
+    snapshotId: string;
+    workspaceId: string;
+  }) => (
+    <section aria-label="Fixed review">
+      {workspaceId} · {snapshotId}
+    </section>
+  ),
+}));
 vi.mock('@/hooks/materials/useProjectMaterials', () => ({
   useProjectMaterials: () => ({ materials: [], refresh: mocks.refresh }),
 }));
@@ -132,4 +145,30 @@ describe('ProjectWorkspacesTab navigation and persisted drafts', () => {
     expect(url.searchParams.get('commit')).toBe('sha256:saved');
     expect(url.searchParams.get('branch')).toBe('feature/test');
   });
+});
+
+it('loads an exact historical snapshot without mounting the live authoring workbench', () => {
+  mocks.query = 'tab=workspaces&workspace=ws%3Amain&workspaceMode=review&reviewSnapshot=rvs_old';
+  render(<ProjectWorkspacesTab projectId="proj_test" />);
+  expect(screen.getByRole('region', { name: 'Fixed review' })).toHaveTextContent(
+    'ws:main · rvs_old'
+  );
+  expect(screen.queryByRole('button', { name: 'View State' })).not.toBeInTheDocument();
+});
+it('does not silently fall back to a mutable draft for a malformed snapshot link', () => {
+  mocks.query = 'tab=workspaces&reviewSnapshot=rvs_old';
+  render(<ProjectWorkspacesTab projectId="proj_test" />);
+  expect(screen.getByRole('alert')).toHaveTextContent('Workspace ID is required');
+  expect(screen.queryByRole('button', { name: 'View State' })).not.toBeInTheDocument();
+});
+
+it('redirects a legacy Checks pane for a fixed snapshot to its exact check details', () => {
+  mocks.query =
+    'tab=workspaces&workspace=ws%3Amain&workspaceMode=review&reviewSnapshot=rvs_saved&reviewPane=checks';
+  render(<ProjectWorkspacesTab projectId="proj_test" />);
+  const href = new URL(mocks.replace.mock.calls.at(-1)![0], 'http://localhost');
+  expect(href.pathname).toBe('/project/proj_test/checks/review%3Arvs_saved');
+  const back = new URL(href.searchParams.get('returnTo')!, 'http://localhost');
+  expect(back.searchParams.get('reviewSnapshot')).toBe('rvs_saved');
+  expect(back.searchParams.has('reviewPane')).toBe(false);
 });

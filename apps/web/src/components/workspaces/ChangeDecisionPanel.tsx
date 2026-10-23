@@ -10,6 +10,7 @@ import {
   Sparkles,
   XCircle,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -32,6 +33,7 @@ export function ChangeDecisionPanel({
   overrideReason,
   view,
   commitBlocker,
+  checksHref,
 }: {
   branch: string | null;
   busy: boolean;
@@ -40,6 +42,7 @@ export function ChangeDecisionPanel({
   overrideReason: string;
   view: TransitionViewV1;
   commitBlocker?: string;
+  checksHref?: string;
 }) {
   const reasonRef = useRef<HTMLTextAreaElement>(null);
   const [reasonError, setReasonError] = useState(false);
@@ -93,9 +96,17 @@ export function ChangeDecisionPanel({
         </h3>
         <ul className="mt-2 grid gap-1">
           {checks.map((check) => (
-            <CheckRow check={check} key={check.id} />
+            <CheckRow check={check} key={check.id} summaryOnly={Boolean(checksHref)} />
           ))}
         </ul>
+        {checksHref ? (
+          <Link
+            className="mt-2 inline-block text-xs underline text-[var(--text-secondary)]"
+            href={checksHref}
+          >
+            Check details and evidence
+          </Link>
+        ) : null}
       </section>
 
       {!decided && blockers.length > 0 ? (
@@ -205,7 +216,7 @@ export function ChangeDecisionPanel({
   );
 }
 
-function CheckRow({ check }: { check: ChangeCheckRow }) {
+function CheckRow({ check, summaryOnly }: { check: ChangeCheckRow; summaryOnly?: boolean }) {
   const Icon =
     check.status === 'passed' ? CheckCircle2 : check.status === 'failed' ? XCircle : CircleDashed;
   const tone =
@@ -225,7 +236,7 @@ function CheckRow({ check }: { check: ChangeCheckRow }) {
       </span>
     </>
   );
-  if (check.findings.length === 0) {
+  if (summaryOnly || check.findings.length === 0) {
     return (
       <li aria-label={`${check.label}: ${check.status}`} className="flex gap-2 rounded px-1 py-1">
         {label}
@@ -309,7 +320,8 @@ function panelStatus(view: TransitionViewV1, acceptAllowed: boolean, overrideAll
       tone: 'ready' as const,
       icon: CheckCircle2,
       title: 'Ready to commit',
-      detail: 'All required checks passed for this branch.',
+      detail:
+        'Checks passed for this snapshot. The Draft and branch are checked again when you commit.',
     };
   if (overrideAllowed)
     return {

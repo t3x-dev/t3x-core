@@ -328,6 +328,7 @@ export {
   type ListPinsOptions,
   updatePinAssertions,
 } from './pins';
+export * from './project-check-records';
 export {
   type ChangeProjectVisibilityInput,
   type ChangeProjectVisibilityResult,

@@ -459,6 +459,120 @@ async function fullDecision(
     },
   });
 }
+it('blocks empty and edit-then-revert Reviews and empty snapshot decisions without advancing history', async () => {
+  const id = 'empty-review';
+  await seed(id, true);
+  await fullDecision(id, await fullReview(id));
+  const head = await getTransitionRefHead(db, { projectId, refName: id });
+  expect((await readWorkspaceAuthoring(db, { projectId, workspaceId: id })).hasChanges).toBe(false);
+  await expect(fullReview(id, 'empty-new-review')).rejects.toThrow('No changes to commit');
+  for (const [index, title] of ['Temporary edit', 'Edited content'].entries()) {
+    const draft = (await findWorkspaceDraft(db, projectId, id))!;
+    const { ledger, basis } = workspaceAuthoringState(draft.workspace_state);
+    await publishWorkspaceAuthoringAction(db, {
+      projectId,
+      workspaceId: id,
+      actionId: `net-zero:${index}`,
+      actor: reviewer,
+      channel: 'manual',
+      expectedWorkspaceRevision: draft.revision,
+      expectedRevision: ledger.compositionRevision,
+      expectedRefHead: basis.refHead,
+      operations: [
+        {
+          set: {
+            path: 'content/trees/[key=candidate]/children/[key=requirements]/slots/title',
+            value: title,
+          },
+        },
+      ],
+    });
+  }
+  const authoring = await readWorkspaceAuthoring(db, { projectId, workspaceId: id });
+  expect(authoring.actions).toHaveLength(2);
+  expect(authoring.netDiff).toHaveLength(0);
+  expect(authoring.hasChanges).toBe(false);
+  const response = await post(`/v1/projects/${projectId}/workspaces/${id}/authoring/reviews`, {
+    request_id: 'net-zero-review',
+    expected_workspace_revision: authoring.workspaceRevision,
+    expected_revision: authoring.compositionRevision,
+    expected_ref_head: authoring.basis.refHead,
+  });
+  expect(response.status).toBe(409);
+  expect(await response.text()).toContain('No changes to commit');
+  // The compatibility route can still expose a historical empty snapshot. Both
+  // the Workspace adapter and generic Decision service must refuse publication.
+  const content = (authoring.current as { content: unknown }).content;
+  const old = await reviewWorkspaceTransition(db, {
+    projectId,
+    workspaceId: id,
+    actor: reviewer,
+    expectedRevision: authoring.workspaceRevision,
+    content: content as never,
+  });
+  for (const outcome of ['accepted', 'overridden'] as const) {
+    await expect(
+      decideWorkspaceTransition(db, {
+        projectId,
+        workspaceId: id,
+        actor: reviewer,
+        transitionId: old.transitionId,
+        outcome,
+        decisionReason: 'No change must not advance history',
+        precondition: old.precondition,
+      })
+    ).rejects.toThrow('No changes to commit');
+    await expect(
+      decideTransition({
+        db,
+        projectId,
+        transitionId: old.transitionId,
+        actor: reviewer,
+        requestId: `empty-direct:${outcome}`,
+        outcome,
+        precondition: { ...old.precondition, refName: id },
+        rationale: 'No change must not advance history',
+      })
+    ).rejects.toThrow('No changes to commit');
+  }
+  await decideWorkspaceTransition(db, {
+    projectId,
+    workspaceId: id,
+    actor: reviewer,
+    transitionId: old.transitionId,
+    outcome: 'rejected',
+    precondition: old.precondition,
+  });
+  expect((await getTransitionRefHead(db, { projectId, refName: id })).head).toBe(head.head);
+});
+
+it('allows a Schema-only change even when the complete content matches Base', async () => {
+  const id = 'schema-only-review';
+  await seed(id);
+  await fullDecision(id, await fullReview(id));
+  const schema = normalizeYSchemaObject({
+    ...baseSchema,
+    nodes: { ...baseSchema.nodes, optional_note: { slots: { title: { type: 'string' } } } },
+  });
+  const candidateId = await addSchema('schema-only-review', schema);
+  const body = await input(id, candidateId);
+  const preview = await post(`${preparationPath(id)}/preview`, body);
+  expect(preview.status).toBe(200);
+  const plan = (await preview.json()).data;
+  expect(plan.canPrepare).toBe(true);
+  const prepared = await post(preparationPath(id), {
+    ...body,
+    previewHash: plan.previewHash,
+    requestId: 'schema-only-prepare',
+  });
+  expect(prepared.status).toBe(200);
+  const authoring = await readWorkspaceAuthoring(db, { projectId, workspaceId: id });
+  expect(authoring.base).toEqual(authoring.current);
+  expect(authoring.hasChanges).toBe(true);
+  const review = await fullReview(id, 'schema-only-change');
+  expect((await fullDecision(id, review)).commit).toBeDefined();
+  expect((await readWorkspaceAuthoring(db, { projectId, workspaceId: id })).hasChanges).toBe(false);
+});
 it.each([
   ['empty', {}],
   ['missing-required-node', { candidate: {} }],
@@ -542,11 +656,10 @@ it('forks one exact committed Schema/content pair without importing the source D
   expect(workspaceAuthoringState(child.workspace_state).ledger.actions).toHaveLength(0);
   expect(child.workspace_state).not.toHaveProperty('schemaEditCandidate');
   expect(child.workspace_state).not.toHaveProperty('assistantSchemaSettings');
-  const cleanReview = await fullReview(childId);
-  expect(cleanReview.schemaReview.base.schemaHash).toBe(
-    initialReview.schemaReview.draft.schemaHash
+  expect((await readWorkspaceAuthoring(db, { projectId, workspaceId: childId })).hasChanges).toBe(
+    false
   );
-  expect(cleanReview.schemaReview.changes).toEqual([]);
+  await expect(fullReview(childId)).rejects.toThrow('No changes to commit');
   // A child of an unmodified fork still resolves the original Commit's authority and Schema.
   await createBranchWorkspace(db, {
     projectId,

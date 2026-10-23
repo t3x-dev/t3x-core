@@ -94,7 +94,16 @@ function OwnerRepoProjectPageContent() {
   if (!address.canonical_path)
     return <LoadingSpinner message="Opening repository by ID; its name needs migration." />;
   if (
-    ['settings', 'diff', 'merge', 'changes', 'history', 'knowledge-graph', 'sources'].includes(view)
+    [
+      'settings',
+      'diff',
+      'merge',
+      'changes',
+      'checks',
+      'history',
+      'knowledge-graph',
+      'sources',
+    ].includes(view)
   )
     return (
       <RepositoryNestedPage

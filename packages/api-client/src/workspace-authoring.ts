@@ -60,6 +60,8 @@ export interface WorkspaceAuthoringView {
   current?: TransitionProtocolValue;
   /** Exact effective binding at workspaceRevision, not the latest Studio candidate. */
   currentSchema?: WorkspaceSchemaDefinitionSnapshot;
+  /** Net content or effective Schema change. Omitted when the Base contract is unknown. */
+  hasChanges?: boolean;
   netDiff: WorkspaceAuthoringCard[];
   node: {
     nodeId: string;

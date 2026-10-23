@@ -7,6 +7,7 @@ import type {
 } from '@t3x-dev/core';
 import { AlertTriangle, CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { workspaceReviewHref } from '@/domain/workspaces/reviewNavigation';
 
 export function TransitionReviewPanel({
   changeProjection,
@@ -247,11 +248,10 @@ function ReviewSnapshotSummary({
     changeProjection?.review.policyDigest ??
     null;
   const changeHref = reviewSnapshot
-    ? reviewSnapshotHref(
-        reviewSnapshot.projectId,
-        reviewSnapshot.workspaceId,
-        reviewSnapshot.snapshotId
-      )
+    ? workspaceReviewHref(reviewSnapshot.projectId, reviewSnapshot.workspaceId, {
+        snapshotId: reviewSnapshot.snapshotId,
+        branch: reviewSnapshot.review.precondition.refName,
+      })
     : null;
 
   return (
@@ -275,7 +275,7 @@ function ReviewSnapshotSummary({
               className="text-xs font-semibold text-[var(--accent-commit)] hover:underline"
               href={changeHref}
             >
-              Open Changes
+              Open Review
             </a>
           ) : null}
           {changeProjection ? (
@@ -434,24 +434,6 @@ function shortToken(value: string): string {
   const normalized = value.startsWith('sha256:') ? value.slice('sha256:'.length) : value;
   if (normalized.length <= 18) return normalized;
   return `${normalized.slice(0, 12)}…${normalized.slice(-6)}`;
-}
-
-function reviewSnapshotHref(projectId: string, workspaceId: string, snapshotId: string): string {
-  return `/project/${encodePathSegment(projectId)}/changes/${encodePathSegment(
-    workspaceId
-  )}/${encodePathSegment(snapshotId)}`;
-}
-
-function encodePathSegment(value: string): string {
-  return encodeURIComponent(safeDecodeURIComponent(value));
-}
-
-function safeDecodeURIComponent(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
 }
 
 export function operationLabel(operation: unknown, index: number): string {

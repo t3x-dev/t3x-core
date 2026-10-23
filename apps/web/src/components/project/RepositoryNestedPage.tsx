@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 import Changes from '@/app/project/[projectId]/changes/[workspaceId]/[snapshotId]/page';
+import { ProjectChecksPage } from '@/components/checks/ProjectChecksPage';
 import { RepositoryRouteContext } from '@/hooks/projects/repositoryRouteContext';
 import { ProjectRouteShell } from './ProjectRouteShell';
 
@@ -38,6 +39,9 @@ export function RepositoryNestedPage({
   };
   let content;
   switch (view) {
+    case 'checks':
+      content = <ProjectChecksPage projectId={projectId} recordId={first || undefined} />;
+      break;
     case 'settings':
       content = <Settings />;
       break;

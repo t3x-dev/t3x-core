@@ -19,12 +19,50 @@ vi.mock('@/queries/workspaces', () => ({
   fetchWorkspaceTransitionReviewSnapshot: vi.fn(),
 }));
 
-describe('useWorkspaceReviewSnapshot', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-    cleanupRoots();
-  });
+afterEach(() => {
+  vi.restoreAllMocks();
+  cleanupRoots();
+});
 
+describe('useWorkspaceReviewSnapshot', () => {
+  it('blocks accepting and overriding an empty snapshot but keeps rejection auditable', async () => {
+    const loaded = snapshotEnvelope('reviewing');
+    const schema = { status: 'unbound' as const, schemaHash: null, definition: null, bindings: [] };
+    vi.mocked(fetchWorkspaceTransitionReviewSnapshot).mockResolvedValue({
+      ...loaded,
+      schema_review: {
+        schema: 't3x.application/workspace-schema-review/v1',
+        base: schema,
+        draft: schema,
+        baseContent: {},
+        draftContent: {},
+        actionCount: 2,
+        changes: [],
+      },
+    });
+    vi.mocked(decideWorkspaceTransition).mockClear();
+    vi.mocked(decideWorkspaceTransition).mockRejectedValue(new Error('rejection reached server'));
+    const { result } = renderHook(() =>
+      useWorkspaceReviewSnapshot('proj_1', 'workspace_prd_handoff', loaded.snapshot_id)
+    );
+    await waitFor(() => expect(result.current.state.loading).toBe(false));
+    await act(async () => {
+      await result.current.decide('accepted');
+    });
+    await act(async () => {
+      await result.current.decide('overridden', 'still empty');
+    });
+    expect(result.current.state.error).toContain('No changes to commit');
+    expect(decideWorkspaceTransition).not.toHaveBeenCalled();
+    await act(async () => {
+      await result.current.decide('rejected');
+    });
+    expect(decideWorkspaceTransition).toHaveBeenCalledWith(
+      'proj_1',
+      'workspace_prd_handoff',
+      expect.objectContaining({ outcome: 'rejected' })
+    );
+  });
   it('loads one immutable Workspace ReviewSnapshot with abortable transport', async () => {
     vi.mocked(fetchWorkspaceTransitionReviewSnapshot).mockResolvedValue({
       snapshot_id: 'rvs_88888888888888888888888888888888',
@@ -192,6 +230,91 @@ describe('useWorkspaceReviewSnapshot', () => {
     }
     expect(decideWorkspaceTransition).not.toHaveBeenCalled();
   });
+});
+
+it('retains the original snapshot and preconditions when a concurrent edit prevents approval', async () => {
+  const loaded = snapshotEnvelope('reviewing') as WorkspaceTransitionReviewSnapshotEnvelope;
+  vi.mocked(fetchWorkspaceTransitionReviewSnapshot).mockResolvedValue(loaded);
+  vi.mocked(decideWorkspaceTransition).mockRejectedValueOnce(
+    new Error('Workspace revision changed. Prepare a new review.')
+  );
+  const { result } = renderHook(() =>
+    useWorkspaceReviewSnapshot('proj_1', 'workspace_prd_handoff', loaded.snapshot_id)
+  );
+  await waitFor(() => expect(result.current.state.loading).toBe(false));
+  await act(async () => {
+    expect(await result.current.decide('accepted')).toBeNull();
+  });
+  expect(result.current.state.data?.snapshot.snapshotId).toBe(loaded.snapshot_id);
+  expect(result.current.state.error).toContain('Workspace revision changed');
+  expect(result.current.state.deciding).toBe(false);
+});
+it('serializes rapid decisions and keeps refresh from replacing an in-flight decision', async () => {
+  vi.mocked(decideWorkspaceTransition).mockClear();
+  const loaded = snapshotEnvelope('reviewing') as WorkspaceTransitionReviewSnapshotEnvelope;
+  vi.mocked(fetchWorkspaceTransitionReviewSnapshot).mockResolvedValue(loaded);
+  let finish!: (value: never) => void;
+  vi.mocked(decideWorkspaceTransition).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+  );
+  const { result } = renderHook(() =>
+    useWorkspaceReviewSnapshot('proj_1', 'workspace_prd_handoff', loaded.snapshot_id)
+  );
+  await waitFor(() => expect(result.current.state.loading).toBe(false));
+  const reads = vi.mocked(fetchWorkspaceTransitionReviewSnapshot).mock.calls.length;
+  await act(async () => {
+    const first = result.current.decide('accepted');
+    expect(await result.current.decide('rejected')).toBeNull();
+    await result.current.load();
+    expect(fetchWorkspaceTransitionReviewSnapshot).toHaveBeenCalledTimes(reads);
+    finish({
+      ...decisionEnvelope('committed'),
+      workspace: { id: 'workspace_prd_handoff' },
+    } as never);
+    await first;
+  });
+  expect(decideWorkspaceTransition).toHaveBeenCalledTimes(1);
+  expect(result.current.state.data?.snapshot.snapshotId).toBe(
+    'rvs_99999999999999999999999999999999'
+  );
+});
+it('requires an override reason and preserves the recorded rejection without a commit event', async () => {
+  vi.mocked(decideWorkspaceTransition).mockClear();
+  const loaded = snapshotEnvelope('reviewing') as WorkspaceTransitionReviewSnapshotEnvelope;
+  vi.mocked(fetchWorkspaceTransitionReviewSnapshot).mockResolvedValue(loaded);
+  const { result } = renderHook(() =>
+    useWorkspaceReviewSnapshot('proj_1', 'workspace_prd_handoff', loaded.snapshot_id)
+  );
+  await waitFor(() => expect(result.current.state.loading).toBe(false));
+  await act(async () => {
+    await result.current.decide('overridden', '  ');
+  });
+  expect(decideWorkspaceTransition).not.toHaveBeenCalled();
+  const response = decisionEnvelope('committed');
+  Object.assign(response.review_snapshot, {
+    snapshotId: 'rvs_rejected',
+    objects: loaded.snapshot.objects,
+  });
+  Object.assign(response.transition, {
+    decision: { observation: 'supplied', outcome: 'rejected' },
+    history: { observation: 'not_committed' },
+  });
+  vi.mocked(decideWorkspaceTransition).mockResolvedValueOnce(response as never);
+  const commitCreated = vi.fn();
+  window.addEventListener('t3x:commit-created', commitCreated);
+  try {
+    await act(async () => {
+      expect(await result.current.decide('rejected')).toBeNull();
+    });
+    expect(result.current.state.data?.snapshot.snapshotId).toBe('rvs_rejected');
+    expect(result.current.state.data?.snapshot.objects.commit).toBeUndefined();
+    expect(commitCreated).not.toHaveBeenCalled();
+  } finally {
+    window.removeEventListener('t3x:commit-created', commitCreated);
+  }
 });
 
 function snapshotEnvelope(status: 'reviewing' | 'committed') {

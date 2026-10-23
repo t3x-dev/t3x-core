@@ -7,6 +7,7 @@ export type ProjectTabId =
   | 'browse'
   | 'workspaces'
   | 'reviews'
+  | 'checks'
   | 'history'
   | 'community'
   | 'settings';
@@ -21,6 +22,7 @@ export const PROJECT_TABS: ProjectTabDefinition[] = [
   { id: 'state', label: 'State' },
   { id: 'schemas', label: 'Schemas' },
   { id: 'workspaces', label: 'Workspaces' },
+  { id: 'checks', label: 'Checks' },
   { id: 'reviews', label: 'Pull requests', segment: 'pull-requests' },
   { id: 'community', label: 'Community' },
   { id: 'settings', label: 'Settings' },

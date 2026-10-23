@@ -3,6 +3,7 @@
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasWorkspace } from '@/components/canvas';
+import { ProjectChecksPage } from '@/components/checks/ProjectChecksPage';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { ProjectDemoTourOverlay } from '@/components/onboarding/ProjectDemoTourOverlay';
 import { ProjectCommunityTab } from '@/components/project/ProjectCommunityTab';
@@ -464,6 +465,8 @@ export function ProjectDetailPageContent({
 
   const activeContent = (() => {
     switch (activeTab) {
+      case 'checks':
+        return <ProjectChecksPage projectId={projectId} />;
       case 'schemas':
       case 'discover':
       case 'browse':
@@ -480,6 +483,12 @@ export function ProjectDetailPageContent({
         return (
           <ProjectReviewsTab
             initialPullRequestNumber={Number(searchParams.get('pr')) || undefined}
+            initialDetailTab={searchParams.get('prTab') ?? undefined}
+            onDetailTabChange={(tab) => {
+              const next = new URLSearchParams(searchParams.toString());
+              next.set('prTab', tab);
+              router.replace(`${pathname}?${next}`, { scroll: false });
+            }}
             key={projectId}
             onPullRequestNumberChange={(number) => {
               const next = new URLSearchParams(searchParams.toString());

@@ -37,6 +37,7 @@ export { mergeRoutes } from './merge.openapi';
 export { namespaceRoutes } from './namespaces.openapi';
 export { notificationsRoutes } from './notifications.openapi';
 export { pinsRoutes } from './pins.openapi';
+export { projectChecksRoutes } from './project-checks.openapi';
 export {
   createProjectVisibilityRoutes,
   projectVisibilityRoutes,

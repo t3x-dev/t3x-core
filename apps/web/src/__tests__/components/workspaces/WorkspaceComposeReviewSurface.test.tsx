@@ -11,7 +11,14 @@ import {
 } from '@/data/workspaceCandidates';
 import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
-import { type ProjectSummary, useProjectStore } from '@/store/projectStore';
+import { useProjectStore } from '@/store/projectStore';
+
+vi.mock('@/components/workspaces/WorkspaceContentEditor', () => ({
+  WorkspaceContentEditor: () => <div>Edit structured content</div>,
+}));
+vi.mock('@/components/workspaces/OutputTargetsTab', () => ({
+  OutputTargetsTab: () => <div>Committed State delivery</div>,
+}));
 
 const activityMocks = vi.hoisted(() => ({
   value: undefined as ReturnType<typeof useComposeActivity> | undefined,
@@ -1038,7 +1045,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       sourceBusy: false,
       viewCommit: vi.fn(),
     } as unknown as WorkspaceComposeReviewController;
-    const { rerender } = render(
+    const { rerender, unmount } = render(
       <WorkspaceComposeReviewSurface
         candidate={candidate}
         controller={controller}
@@ -1057,6 +1064,10 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
     expect(prepareReview).not.toHaveBeenCalled();
     expect(onModeChange).toHaveBeenCalledWith('review');
+    expect(navigationMocks.replace).toHaveBeenLastCalledWith(
+      '/t3x-dev/test-project/workspaces?workspaceMode=review',
+      { scroll: false }
+    );
 
     rerender(
       <WorkspaceComposeReviewSurface
@@ -1067,6 +1078,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
 
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     expect(screen.getByLabelText('Rendered result')).toBeInTheDocument();
     expect(screen.getByText('No rollout plan recorded.')).toBeInTheDocument();
     expect(
@@ -1080,7 +1092,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.getByRole('tab', { name: 'Review' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('button', { name: 'Validation' })).not.toBeInTheDocument();
     expect(document.querySelector('.workspace-rendered-review-theme')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Commit changes' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Continue to decision' })).not.toBeInTheDocument();
     controller.review.reviewSnapshot = {
       projectId: 'proj_1',
       workspaceId: candidate.id,
@@ -1094,32 +1106,15 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         onModeChange={onModeChange}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Commit changes' }));
-    expect(navigationMocks.push).toHaveBeenCalledWith(
-      `/project/proj_1/changes/${encodeURIComponent(candidate.id)}/rvs_ready`
-    );
-    act(() => {
-      useProjectStore.getState().cacheProject({
-        id: 'proj_1',
-        name: 'Test Project',
-        namespace: 't3x-dev',
-        canonical_path: '/t3x-dev/test-project',
-      } as ProjectSummary);
-    });
-    navigationMocks.push.mockClear();
-    fireEvent.click(screen.getByRole('button', { name: 'Commit changes' }));
-    expect(navigationMocks.push).toHaveBeenCalledExactlyOnceWith(
-      `/t3x-dev/test-project/changes/${encodeURIComponent(candidate.id)}/rvs_ready`
-    );
     fireEvent.click(screen.getByRole('button', { name: 'Open checks' }));
-    expect(screen.getByRole('region', { name: 'Workspace review checks' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Project checks' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Run history' })).toBeInTheDocument();
-    await waitFor(() => expect(snapshotMocks.list).toHaveBeenCalledWith('proj_1', candidate.id));
-    expect(screen.queryByText(/check-\d+/)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Back to Review' }));
+    const checksTarget = new URL(navigationMocks.push.mock.calls.at(-1)?.[0], 'http://localhost');
+    expect(checksTarget.pathname).toBe('/project/proj_1/checks/review%3Arvs_ready');
+    expect(checksTarget.searchParams.get('returnTo')).toContain('workspaceMode=review');
+    expect(checksTarget.searchParams.get('returnTo')).toContain('reviewPane=rendered');
+    expect(snapshotMocks.list).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     expect(screen.getByLabelText('Rendered result')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Structure diff' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
     expect(document.querySelector('.workspace-rendered-review-theme')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Workspace review structure')).not.toBeInTheDocument();
     expect(screen.getByText('Loading the exact before and after values…')).toBeInTheDocument();
@@ -1187,7 +1182,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(within(screen.getByRole('table')).queryByTitle('prd/summary/outcome')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Expand prd', exact: true }));
     expect(within(screen.getByRole('table')).getByTitle('prd/summary/outcome')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Rendered YAML' }));
+    fireEvent.click(screen.getByRole('button', { name: 'YAML' }));
     const code = screen.getByLabelText('YAML code view');
     fireEvent.click(
       within(code)
@@ -1201,6 +1196,54 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         'prd/requirements/canary/title'
       )
     ).toHaveTextContent('prd.requirements.canary.title');
+    expect(screen.getAllByRole('region', { name: 'Review readiness' })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Continue to decision' })).not.toBeInTheDocument();
+    activityMocks.value = {
+      view: null,
+      newActivity: { workspaceRevision: 13 },
+    } as ReturnType<typeof useComposeActivity>;
+    controller.review.reviewSnapshot = {
+      ...controller.review.reviewSnapshot,
+      review: { precondition: { workspaceRevision: 12 } },
+    } as never;
+    rerender(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="review"
+        onModeChange={onModeChange}
+      />
+    );
+    expect(screen.queryByRole('button', { name: 'Continue to decision' })).not.toBeInTheDocument();
+    expect(
+      screen.getByText('The branch or Draft changed. Prepare review again.')
+    ).toBeInTheDocument();
+    expect(prepareReview).not.toHaveBeenCalled();
+    expect(decide).not.toHaveBeenCalled();
+    prepareReview.mockImplementationOnce(async (onPrepared) => {
+      onPrepared({
+        projectId: candidate.projectId,
+        workspaceId: candidate.id,
+        snapshotId: 'rvs_new',
+        review: { precondition: { refName: 'feature/review', workspaceRevision: 13 } },
+      });
+      return true;
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare review' }));
+    expect(navigationMocks.replace).toHaveBeenCalledWith(
+      `/project/proj_1?tab=workspaces&workspace=${encodeURIComponent(candidate.id)}&workspaceMode=review&branch=feature%2Freview&reviewSnapshot=rvs_new&reviewPane=yaml`,
+      { scroll: false }
+    );
+    expect(decide).not.toHaveBeenCalled();
+    unmount();
+    navigationMocks.replace.mockClear();
+    prepareReview.mock.calls.at(-1)![0]({
+      projectId: candidate.projectId,
+      workspaceId: candidate.id,
+      snapshotId: 'rvs_delayed',
+      review: { precondition: { refName: 'feature/review' } },
+    });
+    expect(navigationMocks.replace).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -1320,7 +1363,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(prepareReview).not.toHaveBeenCalled();
   });
 
-  it('shows the schema statement gaps on the current candidate', async () => {
+  it('redirects legacy Checks to the repository history without preparing a new review', async () => {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     navigationMocks.searchParams = new URLSearchParams('workspaceMode=review&reviewPane=checks');
     const controller = {
@@ -1400,19 +1443,15 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
 
-    expect(
-      await screen.findByRole('region', { name: 'Workspace review checks' })
-    ).toBeInTheDocument();
-    expect(screen.getAllByText('REQUIRED_EVIDENCE_MISSING').length).toBeGreaterThan(0);
-    expect(screen.getByRole('heading', { name: 'Gap (1)' })).toBeInTheDocument();
-    expect(screen.getAllByText('summary/audience').length).toBeGreaterThan(0);
-    expect(screen.queryByText('REQUIRED_SLOT_MISSING')).not.toBeInTheDocument();
-    expect(
-      screen.queryByText('Generate a candidate proposal from source evidence.')
-    ).not.toBeInTheDocument();
+    await waitFor(() => expect(navigationMocks.replace).toHaveBeenCalled());
+    const target = new URL(navigationMocks.replace.mock.calls.at(-1)?.[0], 'http://localhost');
+    expect(target.pathname).toBe('/project/proj_1/checks');
+    expect(target.searchParams.get('workspace')).toBe(candidate.id);
+    expect(controller.prepareReview).not.toHaveBeenCalled();
+    expect(snapshotMocks.list).not.toHaveBeenCalled();
   });
 
-  it('treats a stale validation review pane as Render', () => {
+  it('normalizes a stale validation review pane to Changes', () => {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     navigationMocks.searchParams = new URLSearchParams(
       'workspaceMode=review&reviewPane=validation'
@@ -1471,8 +1510,13 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
 
     expect(screen.queryByRole('button', { name: 'Validation' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Render' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByLabelText('Rendered result')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Changes' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('region', { name: 'Review readiness' })).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('navigation', { name: 'Review views' }))
+        .getAllByRole('button')
+        .map((button) => button.textContent?.trim())
+    ).toEqual(['Changes', 'Preview', 'YAML', 'Edit in Compose']);
     expect(navigationMocks.replace).toHaveBeenCalledWith(
       '/t3x-dev/test-project/workspaces?workspaceMode=review',
       { scroll: false }
@@ -1488,6 +1532,86 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
     expect(onModeChange).toHaveBeenCalledWith('compose');
+  });
+
+  it.each([
+    'edit',
+    'source',
+    'delivery',
+  ] as const)('moves the legacy %s link out of Review and preserves its Workspace and branch', (tool) => {
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    const controller = { candidate, isBusy: false } as WorkspaceComposeReviewController;
+    const onModeChange = vi.fn();
+    navigationMocks.searchParams = new URLSearchParams(
+      `workspace=ws%3Amain&branch=feature&workspaceMode=review&reviewPane=${tool}`
+    );
+    render(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="review"
+        onModeChange={onModeChange}
+      />
+    );
+    const target = new URL(navigationMocks.replace.mock.calls.at(-1)?.[0], 'http://localhost');
+    expect(target.searchParams.get('workspaceTool')).toBe(tool);
+    expect(target.searchParams.get('reviewPane')).toBeNull();
+    expect(target.searchParams.get('workspace')).toBe('ws:main');
+    expect(target.searchParams.get('branch')).toBe('feature');
+    expect(target.searchParams.get('workspaceMode')).toBe(
+      tool === 'delivery' ? 'review' : 'compose'
+    );
+    expect(screen.queryByRole('navigation', { name: 'Review views' })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Review' })).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByRole('tab', { name: 'Compose' })).toHaveAttribute(
+      'aria-selected',
+      tool === 'delivery' ? 'false' : 'true'
+    );
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: tool === 'delivery' ? 'Back to Review' : 'Back to Compose',
+      })
+    );
+    const back = new URL(navigationMocks.replace.mock.calls.at(-1)?.[0], 'http://localhost');
+    expect(back.searchParams.get('workspaceTool')).toBeNull();
+    expect(back.searchParams.get('reviewPane')).toBeNull();
+    expect(back.searchParams.get('workspace')).toBe('ws:main');
+    expect(onModeChange).toHaveBeenCalledWith(tool === 'delivery' ? 'review' : 'compose');
+  });
+
+  it('returns from Delivery to the exact review snapshot, rejecting external return targets', () => {
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    const controller = { candidate, isBusy: false } as WorkspaceComposeReviewController;
+    const back =
+      '/project/proj_1?tab=workspaces&workspace=ws%3Amain&workspaceMode=review&reviewSnapshot=rvs_saved';
+    navigationMocks.searchParams = new URLSearchParams({
+      workspaceTool: 'delivery',
+      workspaceMode: 'review',
+      returnTo: back,
+    });
+    const view = render(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="review"
+        onModeChange={vi.fn()}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Review snapshot' }));
+    expect(navigationMocks.push).toHaveBeenCalledWith(back);
+    navigationMocks.searchParams.set('returnTo', 'https://outside.example/review');
+    view.rerender(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="review"
+        onModeChange={vi.fn()}
+      />
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Back to Review snapshot' })
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back to Review' })).toBeInTheDocument();
   });
 
   it('lets Compose keep the default Schema or pin another published Schema', () => {
@@ -1686,6 +1810,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
 
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     expect(screen.getByLabelText('Rendered result')).toBeInTheDocument();
     expect(screen.getAllByText('天气为晴天').length).toBeGreaterThan(0);
     expect(screen.getByText('Proposed changes')).toBeInTheDocument();
@@ -1695,7 +1820,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.queryByText(candidate.summary)).not.toBeInTheDocument();
     expect(screen.queryByText('No rollout plan recorded.')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Structure diff' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
     expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
     expect(screen.queryByText('No structured changes are prepared yet')).not.toBeInTheDocument();
     expect(
@@ -1767,6 +1892,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         nextBeforeSequence: null,
         base: inherited,
         current: inherited,
+        hasChanges: false,
       },
     } as unknown as ReturnType<typeof useComposeActivity>;
     const controller = {
@@ -1821,15 +1947,27 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Structure diff' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
     expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
     expect(screen.queryByText('No structured changes are prepared yet')).not.toBeInTheDocument();
     expect(screen.getByText('0 added')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Prepare review' })).toBeDisabled();
+    expect(screen.getByText(/No changes to commit/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare review' }));
+    expect(controller.prepareReview).not.toHaveBeenCalled();
+    const history = new URL(
+      screen.getByRole('link', { name: 'View History' }).getAttribute('href')!,
+      'http://localhost'
+    );
+    expect(history.searchParams.get('branch')).toBe('dev4');
+    const back = new URL(history.searchParams.get('returnTo')!, 'http://localhost');
+    expect(back.searchParams.get('workspace')).toBe(candidate.id);
+    expect(back.searchParams.get('workspaceMode')).toBe('review');
     expect(
       within(screen.getByRole('table')).getByTitle('prd/requirements/weather')
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Rendered YAML' }));
+    fireEvent.click(screen.getByRole('button', { name: 'YAML' }));
     expect(screen.queryByText('No structured changes are prepared yet')).not.toBeInTheDocument();
     expect(screen.getAllByText(/天气为晴天/).length).toBeGreaterThan(0);
   });

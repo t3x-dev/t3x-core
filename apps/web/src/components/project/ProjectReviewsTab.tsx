@@ -32,6 +32,7 @@ import {
   ShieldCheck,
   XCircle,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -42,6 +43,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { shortHash } from '@/domain/format/formatters';
+import { checksHref } from '@/domain/project/checks';
 import { summarizeMergeReview } from '@/domain/project/pullRequestMergeReview';
 import type {
   ApiProjectPullRequest,
@@ -502,10 +504,14 @@ function toCompareCandidate(
 export function ProjectReviewsTab({
   projectId,
   initialPullRequestNumber,
+  initialDetailTab,
+  onDetailTabChange,
   onPullRequestNumberChange,
 }: {
   projectId?: string;
   initialPullRequestNumber?: number;
+  initialDetailTab?: string;
+  onDetailTabChange?: (tab: PullRequestDetailTab) => void;
   onPullRequestNumberChange?: (number?: number) => void;
 } = {}) {
   const {
@@ -536,7 +542,15 @@ export function ProjectReviewsTab({
     projectId ? '' : (INITIAL_PULL_REQUESTS[0]?.id ?? '')
   );
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
-  const [detailTab, setDetailTab] = useState<PullRequestDetailTab>('overview');
+  const requestedTab = ['overview', 'structured-diff', 'checks', 'activity', 'merge'].includes(
+    initialDetailTab ?? ''
+  )
+    ? (initialDetailTab as PullRequestDetailTab)
+    : undefined;
+  const [detailTab, setDetailTab] = useState<PullRequestDetailTab>(requestedTab ?? 'overview');
+  useEffect(() => {
+    if (requestedTab) setDetailTab(requestedTab);
+  }, [requestedTab]);
   const [query, setQuery] = useState('');
   const [closeConfirmId, setCloseConfirmId] = useState<string | null>(null);
   const [closeError, setCloseError] = useState<string | null>(null);
@@ -597,7 +611,7 @@ export function ProjectReviewsTab({
           ...items.filter((item) => item.number !== mapped.number),
         ]);
         setSelectedId(mapped.id);
-        if (mapped.status === 'blocked') setDetailTab('structured-diff');
+        if (mapped.status === 'blocked' && !requestedTab) setDetailTab('structured-diff');
       })
       .catch((err) => {
         if (!cancelled)
@@ -1249,7 +1263,10 @@ export function ProjectReviewsTab({
         }}
         onCancelClose={() => setCloseConfirmId(null)}
         onClose={() => closePullRequest(selectedPullRequest)}
-        onChangeTab={setDetailTab}
+        onChangeTab={(tab) => {
+          setDetailTab(tab);
+          onDetailTabChange?.(tab);
+        }}
         onMerge={() => mergePullRequest(selectedPullRequest)}
         onRerun={() => rerunReadiness(selectedPullRequest)}
         projectId={projectId}
@@ -2335,7 +2352,22 @@ function PullRequestDetailView({
               ) : null
             ) : tab.id === 'checks' ? (
               detailTab === tab.id ? (
-                <ChecksPanel checks={checks} />
+                <>
+                  {projectId ? (
+                    <p className="mb-4 text-sm">
+                      <Link
+                        className="inline-flex items-center gap-2 underline"
+                        href={checksHref(projectId, {
+                          recordId: `pull-request:${pullRequest.id}`,
+                          returnTo: `/project/${encodeURIComponent(projectId)}?tab=pull-requests&pr=${pullRequest.number}&prTab=checks`,
+                        })}
+                      >
+                        Open check details <ArrowRight size={14} />
+                      </Link>
+                    </p>
+                  ) : null}
+                  <ChecksPanel checks={checks} />
+                </>
               ) : null
             ) : projectId ? (
               <PullRequestMergeReviewPanel

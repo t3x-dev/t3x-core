@@ -93,6 +93,7 @@ import {
   namespaceRoutes,
   notificationsRoutes,
   pinsRoutes,
+  projectChecksRoutes,
   projectRoutes,
   promptCompileRoutes,
   providersRoutes,
@@ -304,6 +305,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   }
   api.route('/', autopilotRoutes);
   api.route('/', checkRoutes);
+  api.route('/', projectChecksRoutes);
   api.route('/', contextRoutes);
   api.route('/', relationsRoutes);
   api.route('/', extractionFeedbackRoutes);

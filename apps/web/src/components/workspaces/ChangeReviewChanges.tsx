@@ -177,11 +177,7 @@ function OperationList({ operations }: { operations: readonly unknown[] }) {
 
 function ChangeList({ children, label }: { children: ReactNode; label: string }) {
   return (
-    <StateScrollArea
-      className="h-[clamp(18rem,calc(100dvh-28rem),40rem)]"
-      label={label}
-      type="always"
-    >
+    <StateScrollArea label={label} type="always" viewportClassName="h-auto max-h-[40rem]">
       {children}
     </StateScrollArea>
   );

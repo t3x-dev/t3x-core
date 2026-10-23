@@ -1,5 +1,25 @@
 import type { WorkspaceFullSchemaReview } from '@t3x-dev/api-client';
 import type { ProjectionCapabilityReason, TransitionGraphViewV1 } from '@t3x-dev/core';
+import { composeValuesEqual } from './composeObjectChanges';
+
+export const EMPTY_WORKSPACE_REVIEW =
+  'No changes to commit. Content and Schema match the Base. Edit the Draft before preparing Review.';
+
+export function workspaceCommitBlocker(
+  review: WorkspaceFullSchemaReview | null | undefined,
+  view: TransitionGraphViewV1 | null
+): string | undefined {
+  const schemaBlocker = workspaceSchemaCommitBlocker(review, view);
+  if (schemaBlocker) return schemaBlocker;
+  const unchanged = review
+    ? review.base.status !== 'unknown' &&
+      review.draft.status !== 'unknown' &&
+      review.base.status === review.draft.status &&
+      review.base.schemaHash === review.draft.schemaHash &&
+      composeValuesEqual(review.baseContent, review.draftContent)
+    : view?.change?.base?.digest && view.change.base.digest === view.change.result?.digest;
+  return unchanged ? EMPTY_WORKSPACE_REVIEW : undefined;
+}
 
 /** Old immutable snapshots retain their original policy projection, not permission
  * to skip the bound Workspace contract when making a new Decision. */

@@ -102,7 +102,10 @@ export function ProjectShell({
           activeTab === 'workspaces' ||
           activeTab === 'history'
             ? 'relative min-h-0 flex-1 overflow-hidden'
-            : activeTab === 'reviews' || activeTab === 'community' || activeTab === 'settings'
+            : activeTab === 'reviews' ||
+                activeTab === 'checks' ||
+                activeTab === 'community' ||
+                activeTab === 'settings'
               ? 'relative min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable_both-edges] bg-[var(--surface-card)]'
               : 'relative min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable_both-edges]'
         }

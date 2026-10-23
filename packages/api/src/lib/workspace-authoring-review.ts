@@ -30,7 +30,10 @@ import {
   persistWorkspaceReviewArtifacts,
   reviewSnapshotCreatedAt,
 } from './workspace-review-artifacts';
-import { buildWorkspaceSchemaReview } from './workspace-schema-review';
+import {
+  assertWorkspaceReviewHasChanges,
+  buildWorkspaceSchemaReview,
+} from './workspace-schema-review';
 import { resolveWorkspaceTransitionContext, workspaceProvenance } from './workspace-transition';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
 import { schemaRootKeyFromBinding } from './yschema-registry';
@@ -83,6 +86,7 @@ export async function prepareWorkspaceAuthoringReview(input: {
     input.projectId,
     context.workspace
   );
+  assertWorkspaceReviewHasChanges(context.base, built.result, schemaReview);
   const frozen = { ...buildAuthoringPreparation(context.workspace), schemaReview };
   const membership = await materializeTransitionProposal({
     db: input.db,

@@ -4,10 +4,31 @@ import { describe, expect, it } from 'vitest';
 import {
   changeCheckRows,
   changeDecisionBlockers,
+  workspaceCommitBlocker,
   workspaceSchemaCommitBlocker,
 } from '@/domain/workspaces/changeDecision';
 
 const POSTURE_TOOL = '@t3x-dev/core/proposal-generation-posture';
+
+it('blocks a net-zero Review but allows a Schema-only change', () => {
+  const ready = view();
+  ready.checks.validation.runs = [
+    { predicate: { schemaResource: { digest: boundReview.draft.schemaHash } } },
+  ] as never;
+  expect(workspaceCommitBlocker(boundReview, ready)).toBeUndefined();
+  expect(
+    workspaceCommitBlocker({ ...boundReview, base: boundReview.draft, actionCount: 2 }, ready)
+  ).toContain('No changes to commit');
+  expect(
+    workspaceCommitBlocker(
+      { ...boundReview, base: boundReview.draft, draftContent: { title: 'new' } },
+      ready
+    )
+  ).toBeUndefined();
+  ready.change.base = { digest: 'sha256:same' } as never;
+  ready.change.result = ready.change.base;
+  expect(workspaceCommitBlocker(undefined, ready)).toContain('No changes to commit');
+});
 const boundReview = {
   schema: 't3x.application/workspace-schema-review/v1',
   base: { status: 'unbound', schemaHash: null, definition: null, bindings: [] },

@@ -1010,6 +1010,20 @@
       "rationale": "Project-scoped visibility mutation guarded by explicit visibility-management authority."
     },
     {
+      "source": "project-checks.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/checks",
+      "policy": "project",
+      "rationale": "Read-only check evidence requires canonical project access and project-scoped record lookup."
+    },
+    {
+      "source": "project-checks.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/checks/{recordId}",
+      "policy": "project",
+      "rationale": "Read-only check evidence requires canonical project access and project-scoped record lookup."
+    },
+    {
       "source": "projects.openapi.ts",
       "method": "GET",
       "path": "/v1/projects",

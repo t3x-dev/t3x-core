@@ -31,7 +31,11 @@ import {
   transactWorkspaceAuthoring,
 } from '@t3x-dev/storage';
 import { canonicalizeProtocolValue } from '@t3x-dev/transition';
-import { captureWorkspaceSchema } from './workspace-schema-review';
+import {
+  buildWorkspaceSchemaReview,
+  captureWorkspaceSchema,
+  workspaceSchemaReviewHasChanges,
+} from './workspace-schema-review';
 
 export interface WorkspaceAuthoringBasis {
   schema: 't3x.application/workspace-authoring-basis/v1';
@@ -293,14 +297,22 @@ export async function readWorkspaceAuthoring(
   const history = input.nodeId ? nodeHistory(ledger, input.nodeId, input.actionId) : null;
   // Resolve from the same Workspace revision as current content, including
   // immutable prepared snapshots. A missing contract must not hide Draft activity.
-  const currentSchema = await captureWorkspaceSchema(
+  const schemaReview = await buildWorkspaceSchemaReview(
     db,
     input.projectId,
     draft.workspace_state!
   ).catch((error: unknown) => {
     if (!(error instanceof DraftAuthoringConflictError)) throw error;
-    return { status: 'unknown' as const, schemaHash: null, definition: null, bindings: [] };
+    return null;
   });
+  const currentSchema =
+    schemaReview?.draft ??
+    (await captureWorkspaceSchema(db, input.projectId, draft.workspace_state!).catch(
+      (error: unknown) => {
+        if (!(error instanceof DraftAuthoringConflictError)) throw error;
+        return { status: 'unknown' as const, schemaHash: null, definition: null, bindings: [] };
+      }
+    ));
   return {
     schema: 't3x.application/workspace-authoring-view/v1' as const,
     projectionVersion: 1,
@@ -339,6 +351,7 @@ export async function readWorkspaceAuthoring(
     base: ledger.base,
     current: currentComposition(ledger),
     currentSchema,
+    hasChanges: schemaReview ? workspaceSchemaReviewHasChanges(schemaReview) : undefined,
     netDiff: netDiffCards(ledger),
     node: history
       ? {
