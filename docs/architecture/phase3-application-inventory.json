@@ -32,7 +32,7 @@
     "routeFiles": 80,
     "filesUsingGetDB": 71,
     "filesUsingAssertProjectAccess": 56,
-    "filesUsingRequireTransitionAuthority": 5,
+    "filesUsingRequireTransitionAuthority": 6,
     "getDBWithoutProjectAccess": [
       "packages/api/src/routes/auth-local.openapi.ts",
       "packages/api/src/routes/auth-me.openapi.ts",

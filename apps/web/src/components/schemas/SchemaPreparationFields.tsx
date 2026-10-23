@@ -41,6 +41,53 @@ export const newPreparationChange = (): PreparationChange => ({
   value: emptyValue(),
 });
 
+export function editablePreparationValue(value: unknown): PreparationValue {
+  if (Array.isArray(value))
+    return {
+      type: 'array',
+      text: '',
+      children: value.map((item, i) => ({
+        id: crypto.randomUUID(),
+        name: String(i),
+        value: editablePreparationValue(item),
+      })),
+    };
+  if (value !== null && typeof value === 'object')
+    return {
+      type: 'object',
+      text: '',
+      children: Object.entries(value).map(([name, item]) => ({
+        id: crypto.randomUUID(),
+        name,
+        value: editablePreparationValue(item),
+      })),
+    };
+  return {
+    type:
+      value === null
+        ? 'null'
+        : typeof value === 'number'
+          ? 'number'
+          : typeof value === 'boolean'
+            ? 'boolean'
+            : 'text',
+    text: String(value ?? ''),
+    children: [],
+  };
+}
+export function editablePreparationCommand(
+  command: SchemaContentMigrationCommand
+): PreparationChange {
+  return {
+    ...newPreparationChange(),
+    kind: command.kind,
+    path: command.kind === 'move' ? command.from : command.path,
+    destination:
+      command.kind === 'move' ? command.to : command.kind === 'rename_node' ? command.toKey : '',
+    value: editablePreparationValue('value' in command ? command.value : ''),
+  };
+}
+
 export function preparationCommands(changes: PreparationChange[]): SchemaContentMigrationCommand[] {
   return changes.map((change, index) => {
     if (!change.path.trim()) throw new Error(`Change ${index + 1}: choose a content path.`);

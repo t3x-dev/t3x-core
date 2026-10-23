@@ -43,6 +43,95 @@ const record: AssistantSchemaSettingsView = {
   },
 };
 
+it.each([
+  'preserve',
+  'clear',
+] as const)('confirms the editable rename mapping with the user-selected %s content choice', async (mode) => {
+  const preserve = [
+    { kind: 'move' as const, from: 'candidate/product/phone', to: 'candidate/product/mail' },
+  ];
+  const clear = [{ kind: 'remove' as const, path: 'candidate/product/phone' }];
+  const settings = {
+    ...record.settings,
+    action: 'rename_slot' as const,
+    nodePath: 'product',
+    name: 'phone',
+    newName: 'mail',
+    definition: {},
+    renameContentMode: 'preserve' as const,
+    contentMigration: preserve,
+  };
+  const onSave = vi.fn().mockResolvedValue(undefined);
+  render(
+    <SettingsForm
+      record={{ ...record, settings, renameMappings: { preserve, clear } }}
+      disabled={false}
+      onSave={onSave}
+      onResume={vi.fn()}
+    />
+  );
+  fireEvent.click(
+    screen.getByRole('radio', { name: mode === 'preserve' ? '保留原内容' : '清空内容' })
+  );
+  if (mode === 'clear') expect(screen.getByText(/Confirm 将清除旧字段的内容/)).toBeVisible();
+  fireEvent.click(screen.getByText(/编辑迁移映射/));
+  if (mode === 'preserve') {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Destination for change 1' }), {
+      target: { value: 'candidate/product/mail' },
+    });
+  }
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm', exact: true }));
+  await waitFor(() =>
+    expect(onSave).toHaveBeenCalledWith({
+      ...settings,
+      renameContentMode: mode,
+      contentMigration: mode === 'preserve' ? preserve : clear,
+    })
+  );
+});
+
+it('retargets a cleared Node mapping when the editable new name changes', async () => {
+  const clear = [
+    {
+      kind: 'set' as const,
+      path: 'content/trees/[0]',
+      value: { key: 'renamed', slots: {}, children: [] },
+    },
+  ];
+  const settings = {
+    ...record.settings,
+    action: 'rename_node' as const,
+    nodePath: '',
+    name: 'original',
+    newName: 'renamed',
+    definition: {},
+    renameContentMode: 'clear' as const,
+    contentMigration: clear,
+  };
+  const onSave = vi.fn().mockResolvedValue(undefined);
+  render(
+    <SettingsForm
+      record={{ ...record, settings, renameMappings: { preserve: [], clear } }}
+      disabled={false}
+      onSave={onSave}
+      onResume={vi.fn()}
+    />
+  );
+  fireEvent.change(screen.getByRole('textbox', { name: 'New name' }), {
+    target: { value: 'final_name' },
+  });
+  fireEvent.click(screen.getByRole('radio', { name: '保留原内容' }));
+  fireEvent.click(screen.getByRole('radio', { name: '清空内容' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm', exact: true }));
+  await waitFor(() =>
+    expect(onSave).toHaveBeenCalledWith({
+      ...settings,
+      newName: 'final_name',
+      contentMigration: [{ ...clear[0], value: { ...clear[0].value, key: 'final_name' } }],
+    })
+  );
+});
+
 it('shows three independent timeline cards and unlocks sibling Slots after their parent Confirm', () => {
   const node = {
     ...record,
@@ -473,20 +562,42 @@ describe('Assistant settings reuse the Studio property controls', () => {
     expect(screen.queryByRole('button', { name: 'Add node' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Add rule' })).not.toBeInTheDocument();
   });
-  it('shows a deletion confirmation card and submits the exact change for confirmed application', async () => {
+  it.each([
+    'remove_slot',
+    'remove_node',
+  ] as const)('shows the content deletion scope for %s and submits it with the definition', async (action) => {
     const onSave = vi.fn(async () => {});
     const deletion = {
       ...record,
-      settings: { ...record.settings, action: 'remove_slot', name: 'owner', definition: {} },
+      settings: {
+        ...record.settings,
+        action,
+        name: 'owner',
+        definition: {},
+        contentMigration: [{ kind: 'remove', path: '"candidate"/"requirements"/"owner"' }],
+      },
       currentDefinition: { type: 'string' },
     } as unknown as AssistantSchemaSettingsView;
     render(<SettingsForm record={deletion} disabled={false} onSave={onSave} onResume={vi.fn()} />);
-    expect(screen.getByRole('heading', { name: /Remove Slot.*owner/ })).toBeVisible();
     expect(
-      screen.getByText(/Removes the definition only; existing YAML values are kept/)
+      screen.getByRole('heading', {
+        name: new RegExp(`Remove ${action === 'remove_slot' ? 'Slot' : 'Node'}.*owner`),
+      })
     ).toBeVisible();
+    expect(
+      screen.getByText(
+        action === 'remove_slot'
+          ? /Confirm 将同时删除字段定义和所有对应实例中的字段值/
+          : /Confirm 将同时删除节点定义及对应节点的全部内容/
+      )
+    ).toBeVisible();
+    fireEvent.click(screen.getByText('查看内容删除范围 · 1 项'));
+    expect(screen.getByRole('list', { name: 'Confirmed content deletions' })).toHaveTextContent(
+      '"candidate"/"requirements"/"owner"'
+    );
     fireEvent.click(screen.getByText('Change details'));
-    expect(screen.getByText(/YAML content.*unchanged/i)).toBeVisible();
+    expect(screen.queryByText(/YAML content.*unchanged/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Schema 和内容原子保存到 Draft，不调用模型/)).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Edit attributes' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
     await waitFor(() => expect(onSave).toHaveBeenCalledWith(deletion.settings));

@@ -1048,8 +1048,9 @@ export function ProjectReviewsTab({
   };
 
   const canMergePullRequest = (pullRequest: ProjectPullRequest) =>
-    pullRequest.status === 'ready' ||
-    (pullRequest.status === 'blocked' && conflictDecision !== null);
+    (conflictProgress?.unresolved ?? 0) === 0 &&
+    (pullRequest.status === 'ready' ||
+      (pullRequest.status === 'blocked' && conflictDecision !== null));
 
   /** Local fixture PRs have no merge draft; one side settles their single sample conflict. */
   const applyResolution = (side: PullRequestConflictSide | null) => {
@@ -2225,7 +2226,9 @@ function PullRequestDetailView({
   const saveState = savedDecision?.key === reviewKey ? savedDecision.state : 'idle';
   const terminal = ['merged', 'closed'].includes(pullRequest.status);
   const busy = closing || merging || rerunning || detailLoading || saveState === 'saving';
-  const ready = pullRequest.status === 'ready' || conflictResolved;
+  const ready =
+    (conflictProgress?.unresolved ?? 0) === 0 &&
+    (pullRequest.status === 'ready' || conflictResolved);
   const checks = pullRequest.checks ?? [];
   const passedChecks = checks.filter((check) => check.status === 'passed').length;
   const progress = projectId && !reviewState.review ? null : conflictProgress;
@@ -2432,6 +2435,9 @@ function PullRequestDetailView({
               ) : null}
             </small>
           ) : null}
+          {conflictProgress?.requiresRecheck
+            ? ' Save and recheck your Schema/content edits in Changes.'
+            : null}
         </div>
         {!terminal ? (
           <div className={detailStyles.footerActions}>
@@ -2447,7 +2453,7 @@ function PullRequestDetailView({
               <button
                 aria-label="Rerun readiness"
                 className={detailStyles.secondaryAction}
-                disabled={busy}
+                disabled={busy || conflictProgress?.requiresRecheck}
                 onClick={onRerun}
                 type="button"
               >

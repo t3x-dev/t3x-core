@@ -1,3 +1,4 @@
+import { AssistantSchemaSettingsViewSchema } from '@t3x-dev/api-client';
 import {
   compileDraftComposition,
   createDraftActionLedger,
@@ -31,6 +32,12 @@ import {
   transactWorkspaceAuthoring,
 } from '@t3x-dev/storage';
 import { canonicalizeProtocolValue } from '@t3x-dev/transition';
+import {
+  DELETION_AUTHORIZATIONS,
+  deletionAuthorizations,
+  deletionSubject,
+  matchingDeletionAuthorization,
+} from './workspace-deletion-authorization';
 import {
   buildWorkspaceSchemaReview,
   captureWorkspaceSchema,
@@ -267,6 +274,71 @@ export function buildAuthoringEffect(ledger: DraftActionLedger) {
   return { ...built, bindings: compiled.bindings };
 }
 
+/** Explicit human button, never an assistant tool. Authorization changes no content or history. */
+export async function confirmWorkspaceDeletion(
+  db: AnyDB,
+  input: {
+    projectId: string;
+    workspaceId: string;
+    actionId: string;
+    actor: DraftActionActor;
+    expectedWorkspaceRevision: number;
+    expectedRevision: number;
+    expectedRefHead: string | null;
+  }
+) {
+  if (input.actor.kind !== 'human')
+    throw new DraftAuthoringConflictError('Deletion confirmation requires a human principal');
+  const initial = await requireWorkspace(db, input.projectId, input.workspaceId);
+  const { basis } = workspaceAuthoringState(initial.workspace_state!);
+  return transactWorkspaceAuthoring(db, { ...input, refName: basis.refName }, async (tx, draft) => {
+    const workspace = draft.workspace_state!;
+    const current = workspaceAuthoringState(workspace);
+    const action = current.ledger.actions.find((entry) => entry.actionId === input.actionId);
+    if (!action) throw new NotFoundError(input.actionId);
+    const subject = deletionSubject(
+      input.projectId,
+      input.workspaceId,
+      current.basis,
+      current.ledger,
+      action
+    );
+    if (!subject)
+      throw new DraftAuthoringConflictError(
+        'Only an exact generated deletion can be confirmed here'
+      );
+    const receipts = deletionAuthorizations(workspace);
+    const previous = matchingDeletionAuthorization(receipts, subject);
+    if (previous) return { workspace: null, value: previous };
+    const head = await getTransitionRefHead(tx, {
+      projectId: input.projectId,
+      refName: current.basis.refName,
+    });
+    if (
+      draft.revision !== input.expectedWorkspaceRevision ||
+      current.ledger.compositionRevision !== input.expectedRevision ||
+      current.basis.refHead !== input.expectedRefHead ||
+      head.head !== input.expectedRefHead ||
+      draft.target_branch !== current.basis.refName
+    )
+      throw new DraftAuthoringConflictError(
+        'Draft or branch changed; refresh before confirming deletion'
+      );
+    const receipt = {
+      schema: 't3x.application/deletion-authorization/v1' as const,
+      subjectDigest: subject.digest,
+      actionId: action.actionId,
+      paths: subject.paths,
+      actor: input.actor,
+      confirmedAt: new Date().toISOString(),
+    };
+    return {
+      workspace: { ...workspace, [DELETION_AUTHORIZATIONS]: [...receipts, receipt] },
+      value: receipt,
+    };
+  });
+}
+
 export async function readWorkspaceAuthoring(
   db: AnyDB,
   input: {
@@ -334,8 +406,22 @@ export async function readWorkspaceAuthoring(
     candidateWindowTruncated,
     actions: actions.map((action) => {
       const cards = selectedActionView(ledger, action.actionId)!.cards;
+      const subject = deletionSubject(input.projectId, input.workspaceId, basis, ledger, action);
       return {
         ...action,
+        ...(subject
+          ? {
+              deletionConfirmation: {
+                status: matchingDeletionAuthorization(
+                  deletionAuthorizations(draft.workspace_state!),
+                  subject
+                )
+                  ? ('confirmed' as const)
+                  : ('required' as const),
+                paths: subject.paths,
+              },
+            }
+          : {}),
         affectedNodeCount: cards.length,
         affectedNodeIds: cards.map((card) => card.nodeId),
       };
@@ -405,6 +491,17 @@ export async function readWorkspaceAuthoringCandidates(
 /** Application audit linkage; no authoring fields are added to protocol envelopes. */
 export function buildAuthoringPreparation(workspace: Record<string, unknown>) {
   const { ledger, basis } = workspaceAuthoringState(workspace);
+  const schemaCards = (
+    Array.isArray(workspace.schemaPreparations) ? workspace.schemaPreparations : []
+  ).flatMap((entry) => {
+    const parsed = AssistantSchemaSettingsViewSchema.safeParse(entry.schemaCard);
+    return parsed.success &&
+      parsed.data.status === 'applied' &&
+      entry.requestId === `assistant-schema:${parsed.data.settingsId}` &&
+      parsed.data.snapshot?.schemaHash === entry.schemaHash
+      ? [parsed.data]
+      : [];
+  });
   return {
     schema: 't3x.application/workspace-authoring-preparation/v1' as const,
     version: 1 as const,
@@ -415,7 +512,9 @@ export function buildAuthoringPreparation(workspace: Record<string, unknown>) {
       ? { reconciliations: workspace.authoringReconciliations }
       : {}),
     schemaBindings: workspace.schemaBindings ?? [],
+    deletionAuthorizations: deletionAuthorizations(workspace),
     workspaceSchemaBase: workspace.workspaceSchemaBase ?? null,
+    ...(schemaCards.length ? { schemaCards } : {}),
   };
 }
 
@@ -492,8 +591,14 @@ export function renewWorkspaceAuthoringState(
       facts: canonicalizeProtocolValue({ renewedFrom: input.commitDigest }),
     },
   };
+  const {
+    assistantSchemaSettings: _settings,
+    schemaPreparations: _preparations,
+    schemaPending: _pending,
+    ...nextWorkspace
+  } = workspace;
   return {
-    ...workspace,
+    ...nextWorkspace,
     authoringHistory: [...history, entry],
     authoringLedger: createDraftActionLedger(input.result.value as DraftDocument),
     authoringBasis: nextBasis,

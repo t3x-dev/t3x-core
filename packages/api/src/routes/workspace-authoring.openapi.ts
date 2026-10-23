@@ -13,6 +13,7 @@ import {
 } from '../lib/transition-authority';
 import { wireTransitionView } from '../lib/transition-control-plane/wire';
 import {
+  confirmWorkspaceDeletion,
   initializeWorkspaceAuthoring,
   publishWorkspaceAuthoringAction,
   readWorkspaceAuthoring,
@@ -279,6 +280,63 @@ workspaceAuthoringRoutes.openapi(reconcile, async (c) => {
   });
   return c.json(
     { success: true as const, data: { ...result.value, workspaceRevision: result.draft.revision } },
+    200
+  );
+});
+
+const confirmDeletion = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/actions/{actionId}/deletion-confirmation',
+  tags: ['Workspaces'],
+  request: {
+    params: Params.extend({ actionId: Identity }),
+    body: {
+      content: {
+        'application/json': {
+          schema: z
+            .object({
+              expected_workspace_revision: z.number().int().positive(),
+              expected_revision: z.number().int().nonnegative(),
+              expected_ref_head: RefHead,
+            })
+            .strict(),
+        },
+      },
+    },
+  },
+  responses,
+});
+workspaceAuthoringRoutes.openapi(confirmDeletion, async (c) => {
+  const params = c.req.valid('param');
+  const body = c.req.valid('json');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, params.projectId, 'project:edit');
+  if (access instanceof Response) return access;
+  const principal = requireTransitionAuthority({
+    apiKey: transitionApiKey(c),
+    projectId: params.projectId,
+    scope: 'transition:propose',
+  });
+  if (principal.actor.kind !== 'human')
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Only a human can confirm deletion' },
+      },
+      403
+    );
+  const saved = await confirmWorkspaceDeletion(db, {
+    ...params,
+    actor: principal.actor,
+    expectedWorkspaceRevision: body.expected_workspace_revision,
+    expectedRevision: body.expected_revision,
+    expectedRefHead: body.expected_ref_head,
+  });
+  return c.json(
+    {
+      success: true as const,
+      data: { authorization: saved.value, workspaceRevision: saved.draft.revision },
+    },
     200
   );
 });

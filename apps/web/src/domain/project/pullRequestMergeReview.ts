@@ -1,3 +1,4 @@
+import type { MergeWorkspaceDecision } from '@t3x-dev/api-client';
 import type { MergeDecision, MergeResolution } from '@t3x-dev/core';
 
 export interface ApiPullRequestMergeReviewSlot {
@@ -21,10 +22,16 @@ export interface ApiPullRequestMergeReview {
     schema_hash: string;
     root_key: string;
     changes: Array<{ kind: 'ADD' | 'CHANGE' | 'REMOVE'; path: string; summary: string }>;
+    conflicts?: Array<{ path: string; base?: unknown; source?: unknown; target?: unknown }>;
+    unresolved?: string[];
+    definition_error?: string | null;
+    before?: unknown;
+    after?: unknown;
+    issues?: Array<{ path: string; message: string }>;
   };
   draft_id: string;
   decision_revision: number;
-  decisions: MergeDecision | null;
+  decisions: MergeWorkspaceDecision | null;
   source_commit_id: string;
   target_commit_id: string;
   merge_base_commit_id: string | null;

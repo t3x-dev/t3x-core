@@ -1058,7 +1058,10 @@ async function runPullRequestReadiness(
         ...(storedDecisions ? { decisions: storedDecisions } : {}),
       });
       const schemaValid =
-        !schemaInspection.validation || schemaInspection.validation.predicate.outcome === 'passed';
+        !schemaInspection.error &&
+        !schemaInspection.schema?.unresolved.length &&
+        (!schemaInspection.validation ||
+          schemaInspection.validation.predicate.outcome === 'passed');
       const nextStatus: PullRequestStatus =
         unresolvedConflicts.length === 0 && serverChecksPassed && schemaValid ? 'ready' : 'blocked';
       const diffSummary = {
@@ -1127,9 +1130,16 @@ async function runPullRequestReadiness(
           ? [
               {
                 kind: 'schema_compatibility' as const,
-                status: 'passed' as const,
+                status:
+                  schemaInspection.schema.unresolved.length || schemaInspection.error
+                    ? ('blocked' as const)
+                    : ('passed' as const),
                 title: 'Schema three-way merge',
-                message: `Combined Schema ${schemaInspection.schema.schemaHash}; independent branch definitions are preserved.`,
+                message:
+                  schemaInspection.error ??
+                  (schemaInspection.schema.unresolved.length
+                    ? `${schemaInspection.schema.unresolved.length} Schema conflicts require a decision in this merge workspace.`
+                    : `Combined Schema ${schemaInspection.schema.schemaHash}; independent branch definitions are preserved.`),
                 startedAt: now,
                 completedAt: now,
               },
@@ -1255,6 +1265,19 @@ const MergeReviewSchema = z.object({
     .object({
       schema_hash: z.string(),
       root_key: z.string(),
+      conflicts: z.array(
+        z.object({
+          path: z.string(),
+          base: z.unknown().optional(),
+          source: z.unknown().optional(),
+          target: z.unknown().optional(),
+        })
+      ),
+      unresolved: z.array(z.string()),
+      definition_error: z.string().nullable(),
+      before: z.unknown().nullable(),
+      after: z.unknown().nullable(),
+      issues: z.array(z.object({ path: z.string(), message: z.string() })),
       changes: z.array(
         z.object({
           kind: z.enum(['ADD', 'CHANGE', 'REMOVE']),
@@ -1329,6 +1352,14 @@ pullRequestRoutes.openapi(mergeReviewRoute, async (c) => {
       projectId,
       sourceDigest: pullRequest.sourceCommitHash,
       targetDigest: pullRequest.targetBaseCommitHash,
+      decisions: readMergeDraftDecision(draft) ?? undefined,
+    });
+    const inspection = await inspectRepositoryYOpsMergeSchema({
+      db,
+      projectId,
+      sourceDigest: pullRequest.sourceCommitHash,
+      targetDigest: pullRequest.targetBaseCommitHash,
+      decisions: readMergeDraftDecision(draft) ?? undefined,
     });
     return c.json(
       {
@@ -1347,6 +1378,18 @@ pullRequestRoutes.openapi(mergeReviewRoute, async (c) => {
                   schema_hash: review.schemaMerge.schemaHash,
                   root_key: review.schemaMerge.rootKey,
                   changes: review.schemaMerge.changes,
+                  conflicts: review.schemaMerge.conflicts,
+                  unresolved: review.schemaMerge.unresolved,
+                  definition_error: inspection.error,
+                  before: inspection.before,
+                  after: inspection.after,
+                  issues:
+                    inspection.validation?.predicate.outcome === 'failed'
+                      ? [
+                          ...inspection.validation.predicate.errors,
+                          ...inspection.validation.predicate.gaps,
+                        ].map(({ path, message }) => ({ path, message }))
+                      : [],
                 },
               }
             : {}),

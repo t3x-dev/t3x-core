@@ -146,7 +146,8 @@ export async function previewWorkspaceSchemaPreparation(
   db: AnyDB,
   projectId: string,
   workspaceId: string,
-  input: SchemaPreparationInput
+  input: SchemaPreparationInput,
+  options: { allowInputGaps?: boolean } = {}
 ) {
   const draft = await findWorkspaceDraft(db, projectId, workspaceId);
   if (!draft?.workspace_state) throw new StudioError('NOT_FOUND', 'Workspace is unavailable.');
@@ -285,10 +286,48 @@ export async function previewWorkspaceSchemaPreparation(
     impact: target.impact,
     valid: report.valid,
     ready: report.ready,
-    canPrepare: report.valid && report.ready && issues.length === 0,
+    canPrepare:
+      report.valid &&
+      (report.ready || options.allowInputGaps === true) &&
+      issues.every(
+        (issue) =>
+          options.allowInputGaps === true &&
+          report.gaps.some((gap) => gap.code === issue.code && gap.path === issue.path)
+      ),
     issues,
   });
   return { view, target, source, draft, migration };
+}
+
+/** Shared deterministic Draft action for Studio preparation and assistant rename confirmation. */
+export function publishSchemaPreparationContent(
+  workspace: Record<string, unknown>,
+  workspaceRevision: number,
+  migration: ReturnType<typeof compileSchemaContentMigration>,
+  actor: DraftActionActor,
+  actionId: string,
+  reason: string
+) {
+  const current = workspaceAuthoringState(workspace);
+  const published = publishDraftAction(current.ledger, {
+    actionId,
+    actor,
+    channel: actor.kind === 'human' ? 'manual' : 'mcp',
+    operations: migration.operations,
+    expectedRevision: current.ledger.compositionRevision,
+    publishedAt: new Date().toISOString(),
+    precondition: { workspaceRevision, refHead: current.basis.refHead },
+    reason,
+  });
+  if (published.kind === 'conflict' || published.kind === 'rejected')
+    throw new StudioError('CONFLICT', published.message);
+  const built = buildAuthoringEffect(published.ledger);
+  if (
+    describeTransitionObject(built.result).digest !==
+    describeTransitionObject(createYOpsState(migration.document)).digest
+  )
+    throw new TypeError('Schema migration replay mismatch.');
+  return published.ledger;
 }
 
 /** Append content action and bind its exact Schema in ONE existing authoring transaction. No Commit. */
@@ -356,26 +395,15 @@ export async function prepareWorkspaceSchema(
         'REVIEW_REQUIRED',
         'Resolve content gaps and confirm all mappings before preparing.'
       );
-    const current = workspaceAuthoringState(workspace);
     const actionId = `schema-preparation:${input.requestId}`;
-    const published = publishDraftAction(current.ledger, {
-      actionId,
+    const ledger = publishSchemaPreparationContent(
+      workspace,
+      draft.revision,
+      prepared.migration,
       actor,
-      channel: actor.kind === 'human' ? 'manual' : 'mcp',
-      operations: prepared.migration.operations,
-      expectedRevision: prepared.view.compositionRevision,
-      publishedAt: new Date().toISOString(),
-      precondition: { workspaceRevision: draft.revision, refHead: current.basis.refHead },
-      reason: 'User-confirmed Schema content preparation',
-    });
-    if (published.kind === 'conflict' || published.kind === 'rejected')
-      throw new StudioError('CONFLICT', published.message);
-    const built = buildAuthoringEffect(published.ledger);
-    if (
-      describeTransitionObject(built.result).digest !==
-      describeTransitionObject(createYOpsState(currentComposition(published.ledger))).digest
-    )
-      throw new TypeError('Schema migration replay mismatch.');
+      actionId,
+      'User-confirmed Schema content preparation'
+    );
     const snapshotHash = await sha256CompositionValue({
       profile: 'schema-content-preparation/v1',
       selectionHash: prepared.target.selectionHash,
@@ -405,7 +433,7 @@ export async function prepareWorkspaceSchema(
     const result = {
       outcome: 'prepared' as const,
       workspaceRevision: draft.revision + 1,
-      compositionRevision: published.ledger.compositionRevision,
+      compositionRevision: ledger.compositionRevision,
       schemaHash: prepared.target.schemaHash,
     };
     const { schemaPending: _pending, ...unchanged } = workspace;
@@ -413,7 +441,7 @@ export async function prepareWorkspaceSchema(
       workspace: {
         ...unchanged,
         updatedAt: new Date().toISOString(),
-        authoringLedger: published.ledger,
+        authoringLedger: ledger,
         schemaBindings: [
           {
             canonicalName: prepared.target.publishedReference?.canonicalName ?? compositionId,

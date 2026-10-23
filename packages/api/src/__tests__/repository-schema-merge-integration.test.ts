@@ -29,6 +29,7 @@ import {
 import { prepareWorkspaceAuthoringReview } from '../lib/workspace-authoring-review';
 import { decideWorkspaceTransition } from '../lib/workspace-transition';
 import { resolveWorkspaceYSchema } from '../lib/workspace-yschema';
+import { mergeRoutes } from '../routes/merge.openapi';
 import { pullRequestRoutes } from '../routes/pull-requests.openapi';
 import { setupTestDB } from './setup';
 
@@ -300,9 +301,8 @@ describe('Schema/content merge across verified Commits', () => {
       schema({ owner: { type: 'string' }, title: { type: 'string', maxLength: 30 } }),
       schema({ advantage: { type: 'string' }, title: { type: 'string', maxLength: 40 } })
     );
-    await expect(prepareRepositoryYOpsMerge({ db, ...input })).rejects.toThrow(
-      /Schema.*nodes\/requirements\/slots\/title\/maxLength/i
-    );
+    // Preparation now retains an editable draft; unresolved publication must still fail closed.
+    await expect(prepareRepositoryYOpsMerge({ db, ...input })).resolves.toBeDefined();
     await expect(
       commitRepositoryYOpsMerge({
         db,
@@ -316,6 +316,146 @@ describe('Schema/content merge across verified Commits', () => {
     expect(
       (await getTransitionRefHead(db, { projectId: input.projectId, refName: 'main' })).head
     ).toBe(input.targetDigest);
+  });
+
+  it('resolves a Schema conflict in the PR workspace, migrates content, rechecks and commits one validated result', async () => {
+    const input = await branches(
+      schema({ owner: { type: 'string' }, title: { type: 'string', maxLength: 30 } }),
+      schema({ advantage: { type: 'string' }, title: { type: 'string', maxLength: 40 } })
+    );
+    const app = new Hono().route('/', pullRequestRoutes).route('/', mergeRoutes);
+    const prefix = `/v1/projects/${input.projectId}/pull-requests`;
+    const post = (url: string, body: unknown, method = 'POST') =>
+      app.request(url, {
+        method,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    const opened = await (
+      await post(prefix, {
+        title: 'Resolve Schema together',
+        source_branch: 'dev',
+        target_branch: 'main',
+        expected_source_commit_id: input.sourceDigest,
+        expected_target_commit_id: input.targetDigest,
+      })
+    ).json();
+    expect(opened.data.status).toBe('blocked');
+    expect(opened.data.merge_draft_id).toBeTruthy();
+    const url = `${prefix}/${opened.data.number}`;
+    const review = await (await app.request(`${url}/merge-review`)).json();
+    const path = 'nodes/requirements/slots/title/maxLength';
+    expect(review.data.schema_merge).toMatchObject({
+      unresolved: [path],
+      conflicts: [{ path, source: 30, target: 40 }],
+    });
+    const merge = () =>
+      post(`${url}/merge`, {
+        expected_source_commit_id: input.sourceDigest,
+        expected_target_commit_id: input.targetDigest,
+      });
+    expect((await merge()).status).toBe(409);
+    const decision = {
+      ...decisions,
+      schemaResolution: { choices: { [path]: { value: 3 } }, commands: [] },
+    };
+    const saved = await post(
+      `/v1/merge/drafts/${review.data.draft_id}`,
+      {
+        decisions: decision,
+        expected_decision_revision: review.data.decision_revision,
+      },
+      'PATCH'
+    );
+    expect(saved.status).toBe(200);
+    const revision = (await saved.json()).data.decisionRevision;
+    // Schema choices persist across reload, but invalid combined content still blocks merging.
+    const invalid = await (await app.request(`${url}/merge-review`)).json();
+    expect(invalid.data.decisions.schemaResolution).toEqual(decision.schemaResolution);
+    expect(invalid.data.schema_merge.unresolved).toEqual([]);
+    expect(invalid.data.schema_merge.issues.length).toBeGreaterThan(0);
+    expect((await (await post(`${url}/checks/rerun`, {})).json()).data.status).toBe('blocked');
+    expect((await merge()).status).toBe(409);
+    decision.schemaResolution.commands = [
+      {
+        kind: 'set',
+        path: 'content/trees/[key=candidate]/children/[key=requirements]/slots/title',
+        value: 'New',
+      },
+    ] as never;
+    const updated = await post(
+      `/v1/merge/drafts/${review.data.draft_id}`,
+      { decisions: decision, expected_decision_revision: revision },
+      'PATCH'
+    );
+    expect(updated.status).toBe(200);
+    const stale = await post(
+      `/v1/merge/drafts/${review.data.draft_id}`,
+      { decisions: decision, expected_decision_revision: revision },
+      'PATCH'
+    );
+    expect(stale.status).toBe(409);
+    const readyResponse = await post(`${url}/checks/rerun`, {});
+    expect(readyResponse.status).toBe(200);
+    const ready = await readyResponse.json();
+    expect(ready.data.status).toBe('ready');
+    const preview = await (await app.request(`${url}/merge-review`)).json();
+    expect(preview.data.schema_merge.issues).toEqual([]);
+    const merged = await merge();
+    expect(merged.status, await merged.clone().text()).toBe(200);
+    const head = await getTransitionRefHead(db, { projectId: input.projectId, refName: 'main' });
+    expect(head.state!.value).toMatchObject({
+      content: {
+        trees: [{ children: [{ slots: { title: 'New', owner: 'Ada', advantage: 'Useful' } }] }],
+      },
+    });
+    const draft = (await findWorkspaceDraft(db, input.projectId, 'fixture:main'))!;
+    expect(
+      (await resolveWorkspaceYSchema(draft.workspace_state!, db, input.projectId)).schema?.nodes
+        .requirements?.slots.title
+    ).toMatchObject({ maxLength: 3 });
+    expect(
+      (await getTransitionRefHead(db, { projectId: input.projectId, refName: 'dev' })).head
+    ).toBe(input.sourceDigest);
+  });
+
+  it('rejects destructive mappings, invalid Schema edits and paths outside content without advancing either branch', async () => {
+    const input = await branches(
+      schema({ title: { type: 'string', maxLength: 30 } }),
+      schema({ title: { type: 'string', maxLength: 40 } }),
+      {},
+      {}
+    );
+    const path = 'nodes/requirements/slots/title/maxLength';
+    for (const schemaResolution of [
+      { choices: { [path]: { value: 'invalid constraint' } }, commands: [] },
+      {
+        choices: { [path]: 'source' },
+        commands: [{ kind: 'set', path: 'domain', value: 'forged' }],
+      },
+      {
+        choices: { [path]: 'source' },
+        commands: [{ kind: 'move', from: 'content/missing', to: 'content/other' }],
+      },
+      { choices: { 'nodes/not_a_conflict': 'source' }, commands: [] },
+    ]) {
+      await expect(
+        commitRepositoryYOpsMerge({
+          db,
+          ...input,
+          refName: 'main',
+          actor,
+          message: 'Invalid mapping',
+          decisions: { ...decisions, schemaResolution } as never,
+        })
+      ).rejects.toThrow();
+      expect(
+        (await getTransitionRefHead(db, { projectId: input.projectId, refName: 'main' })).head
+      ).toBe(input.targetDigest);
+      expect(
+        (await getTransitionRefHead(db, { projectId: input.projectId, refName: 'dev' })).head
+      ).toBe(input.sourceDigest);
+    }
   });
 
   it('records a Schema check on the actual PR rather than treating content-only readiness as enough', async () => {
@@ -356,7 +496,18 @@ describe('Schema/content merge across verified Commits', () => {
   });
 
   it('allows a Schema-only PR and commits its verified contract without requiring content changes', async () => {
-    const input = await branches(schema({ owner: { type: 'string' } }), base, {}, {});
+    const projectId = (await insertProject(db, { name: 'Schema-only merge' })).projectId;
+    await ensureMainBranch(db, projectId);
+    const targetDigest = await commit(projectId, 'main', base, content({}));
+    await insertBranch(db, { projectId, name: 'dev', parentBranch: 'main' });
+    const sourceDigest = await commit(
+      projectId,
+      'dev',
+      schema({ owner: { type: 'string' } }),
+      content({})
+    );
+    // Keep the target at its existing Commit instead of preparing an empty Review.
+    const input = { projectId, sourceDigest, targetDigest };
     const app = new Hono().route('/', pullRequestRoutes);
     const response = await app.request(`/v1/projects/${input.projectId}/pull-requests`, {
       method: 'POST',

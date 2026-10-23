@@ -1,0 +1,201 @@
+.panel {
+  display: flex;
+  min-width: 0;
+  min-height: 160px;
+  flex: 1;
+  flex-direction: column;
+  margin-top: 16px;
+  border-top: 1px solid var(--stroke-divider);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.panel[data-collapsed] {
+  min-height: 0;
+  flex: none;
+}
+.header {
+  display: flex;
+  height: 32px;
+  min-width: 0;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px 0 4px;
+}
+.header svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: auto;
+  color: var(--text-secondary);
+}
+.toggle h2 {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.branchIcon {
+  color: var(--text-tertiary);
+}
+.header select {
+  width: auto;
+  max-width: 105px;
+  min-width: 0;
+  height: 22px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 3px;
+  padding: 0 2px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 10px;
+  text-overflow: ellipsis;
+}
+.refresh {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  place-items: center;
+  border-radius: 3px;
+}
+.refresh:hover,
+.header select:hover {
+  background: var(--hover-bg);
+}
+.scroll {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.scroll > p,
+.scroll > output {
+  display: block;
+  margin: 8px 12px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.scroll > p[role="alert"] {
+  color: var(--status-error);
+}
+.graph {
+  position: relative;
+}
+.lines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.row {
+  display: flex;
+  width: 100%;
+  text-align: left;
+  height: 23px;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  border-radius: 3px;
+  padding: 0 7px 0 3px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 23px;
+  text-decoration: none;
+}
+.row:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+.row[data-head] {
+  background: var(--accent-commit-soft);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.row[data-selected] {
+  outline: 1px solid var(--accent-commit);
+  outline-offset: -1px;
+  background: var(--accent-commit-soft);
+}
+.message {
+  min-width: 32px;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.labels {
+  display: inline-flex;
+  max-width: 55%;
+  min-width: 0;
+  gap: 3px;
+  overflow: hidden;
+}
+.badge {
+  display: inline-flex;
+  height: 16px;
+  min-width: 0;
+  align-items: center;
+  gap: 3px;
+  overflow: hidden;
+  border: 1px solid;
+  border-radius: 8px;
+  padding: 0 5px;
+  font-size: 9px;
+  line-height: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.badge[data-current] {
+  background: var(--accent-commit-soft);
+  font-weight: 650;
+}
+.badge svg {
+  width: 9px;
+  height: 9px;
+  flex: none;
+}
+.branchName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.footer {
+  display: flex;
+  min-height: 26px;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid var(--stroke-divider);
+  padding: 4px 9px;
+  color: var(--text-tertiary);
+  font-size: 9px;
+}
+.footer a {
+  color: var(--accent-commit);
+  white-space: nowrap;
+}
+@media (max-width: 760px) {
+  .panel {
+    min-height: 160px;
+    max-height: 280px;
+  }
+  .panel[data-collapsed] {
+    min-height: 0;
+  }
+}

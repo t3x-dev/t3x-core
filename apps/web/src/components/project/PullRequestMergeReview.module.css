@@ -86,6 +86,72 @@
 .bulkActions > span {
   margin-right: auto;
 }
+
+.schemaEditor {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0;
+}
+.schemaEditor h3 {
+  font-weight: 600;
+  font-size: 12px;
+}
+.schemaEditor fieldset {
+  min-width: 0;
+  border: 1px solid var(--stroke-divider);
+  border-radius: 6px;
+  padding: 10px;
+}
+.schemaEditor legend {
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+}
+.schemaEditor label {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+.schemaEditor textarea {
+  width: 100%;
+  border: 1px solid var(--stroke-default);
+  border-radius: 4px;
+  padding: 6px;
+  font-family: var(--font-mono);
+}
+.schemaEditor pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 280px;
+  overflow-y: auto;
+  font-size: 11px;
+}
+.schemaEditor summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+.schemaSides {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.schemaSides > div {
+  min-width: 0;
+  background: var(--surface-panel);
+  border-radius: 4px;
+  padding: 6px;
+}
+.schemaEditor button[aria-pressed="true"] {
+  border-color: var(--accent-commit);
+  background: var(--status-info-muted);
+}
+.schemaEditor [role="alert"] {
+  color: var(--status-error);
+}
+.primaryButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .bulkActions button {
   min-height: 30px;
   border: 1px solid var(--stroke-default);

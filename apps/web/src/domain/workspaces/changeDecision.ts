@@ -110,6 +110,11 @@ export function changeCheckRows(view: TransitionGraphViewV1): ChangeCheckRow[] {
   ];
   if (checks.runner.observation === 'observed') {
     const generated = isGeneratedChange(view);
+    const deletionAuthorization = checks.runner.runs.some((run) =>
+      run.predicate.findings.some((finding) =>
+        ['SOURCE_REPLACEMENT_NOT_ALLOWED', 'HUMAN_CONFIRMED_DELETION'].includes(finding.code)
+      )
+    );
     const status = outcomeStatus(checks.runner.observation, checks.runner.outcomes, ['passed']);
     const errors = checks.runner.runs.flatMap((run) =>
       run.predicate.findings
@@ -118,11 +123,15 @@ export function changeCheckRows(view: TransitionGraphViewV1): ChangeCheckRow[] {
     );
     rows.push({
       id: 'runner',
-      label: generated ? 'AI source support' : 'Runner check',
+      label: generated
+        ? deletionAuthorization
+          ? 'AI checks & deletion authorization'
+          : 'AI source support'
+        : 'Runner check',
       status,
       summary:
         status === 'failed' && errors.length > 0
-          ? `${errors.length} ${generated ? 'source-support ' : ''}${errors.length === 1 ? 'issue' : 'issues'} found.`
+          ? `${errors.length} ${generated && !deletionAuthorization ? 'source-support ' : ''}${errors.length === 1 ? 'issue' : 'issues'} found.`
           : checks.runner.runs.map((run) => run.predicate.summary).join(' ') ||
             'Runner check observed.',
       findings: groupFindings(errors),
@@ -169,6 +178,20 @@ function explainReason(
         detail: 'This branch requires review by someone other than the proposer.',
       };
     case 'RUNNER_FAILED':
+      if (
+        view.checks.runner.runs.some((run) =>
+          run.predicate.findings.some(
+            (finding) =>
+              finding.severity === 'error' && finding.code === 'SOURCE_REPLACEMENT_NOT_ALLOWED'
+          )
+        )
+      )
+        return {
+          code: reason.code,
+          title: 'Existing content changes need authorization',
+          detail:
+            'Return to Compose and Confirm the exact deletion on its content card, then prepare a new Review. New values and other changes still require their own checks.',
+        };
       return {
         code: reason.code,
         title: generated ? 'AI output is not backed by sources' : 'A required check failed',
