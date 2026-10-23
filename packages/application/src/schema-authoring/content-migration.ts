@@ -68,7 +68,14 @@ export function compileSchemaContentMigration(
           throw new TypeError('Select an existing semantic node to rename.');
         edits = [{ set: { path: `${command.path}/key`, value: command.toKey } }];
       } else if (command.kind === 'remove') {
-        edits = [{ unset: { path: command.path } }];
+        // Semantic Nodes live in arrays. Native unset only removes mapping keys;
+        // drop splices the addressed array element without leaving a hole.
+        const last = parseNativeYOpsPath(command.path).at(-1)!;
+        edits = [
+          last.type === 'key'
+            ? { unset: { path: command.path } }
+            : { drop: { path: command.path } },
+        ];
       } else {
         edits = [
           {

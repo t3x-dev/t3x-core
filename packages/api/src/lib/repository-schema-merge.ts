@@ -1,4 +1,4 @@
-import type { WorkspaceSchemaDefinitionSnapshot } from '@t3x-dev/api-client';
+import type { MergeSchemaResolution, WorkspaceSchemaDefinitionSnapshot } from '@t3x-dev/api-client';
 import { createDraftActionLedger } from '@t3x-dev/application';
 import {
   createYSchemaContextDescriptor,
@@ -58,9 +58,12 @@ const equal = (left: unknown, right: unknown) =>
 export function mergeSchemaDefinitions(
   base: YSchema | null,
   source: YSchema | null,
-  target: YSchema | null
+  target: YSchema | null,
+  choices: MergeSchemaResolution['choices'] = {}
 ) {
   const conflicts: SchemaMergeConflict[] = [];
+  const unresolved: string[] = [];
+  const used = new Set<string>();
   function merge(before: unknown, incoming: unknown, current: unknown, path: string): unknown {
     if (equal(incoming, current)) return structuredClone(incoming);
     if (equal(incoming, before)) return structuredClone(current);
@@ -86,12 +89,39 @@ export function mergeSchemaDefinitions(
       );
     }
     conflicts.push({ path: path || '/', base: before, source: incoming, target: current });
-    return undefined;
+    const key = path || '/';
+    const choice = Object.hasOwn(choices, key) ? choices[key] : undefined;
+    if (choice === undefined) {
+      unresolved.push(key);
+      return structuredClone(current); // Preview only. Publication rejects every unresolved path.
+    }
+    used.add(key);
+    return structuredClone(
+      choice === 'source'
+        ? incoming
+        : choice === 'target'
+          ? current
+          : 'remove' in choice
+            ? undefined
+            : choice.value
+    );
   }
   const value = merge(base ?? undefined, source ?? undefined, target ?? undefined, '');
+  for (const key of Object.keys(choices))
+    if (!used.has(key))
+      throw new RepositorySchemaMergeError(`Unknown or stale Schema conflict: ${key}`);
+  let definition: YSchema | null = null;
+  let definitionError: string | null = null;
+  try {
+    definition = value === undefined ? null : normalizeYSchemaObject(value);
+  } catch (error) {
+    definitionError = error instanceof Error ? error.message : 'Invalid merged definition.';
+  }
   return {
     conflicts,
-    definition: conflicts.length || value === undefined ? null : normalizeYSchemaObject(value),
+    unresolved,
+    definition: unresolved.length ? null : definition,
+    definitionError,
   };
 }
 
@@ -207,6 +237,8 @@ export async function prepareRepositorySchemaMerge(input: {
   base: VerifiedTransitionCommitGraph | null;
   source: VerifiedTransitionCommitGraph;
   target: VerifiedTransitionCommitGraph;
+  resolution?: MergeSchemaResolution;
+  allowUnresolved?: boolean;
 }) {
   const [base, source, target] = await Promise.all([
     committedSchema(input.db, input.projectId, input.base),
@@ -226,14 +258,17 @@ export async function prepareRepositorySchemaMerge(input: {
   const merged = mergeSchemaDefinitions(
     base?.schema ?? null,
     source?.schema ?? null,
-    target?.schema ?? null
+    target?.schema ?? null,
+    input.resolution?.choices
   );
-  if (merged.conflicts.length)
+  if (merged.unresolved.length && !input.allowUnresolved)
     throw new RepositorySchemaMergeError(
-      `Schema conflicts require a branch revision: ${merged.conflicts.map((item) => item.path).join(', ')}`
+      `Schema conflicts require resolution: ${merged.unresolved.join(', ')}`
     );
-  if (!merged.definition) throw new RepositorySchemaMergeError('Merged Schema is unavailable.');
-  const schemaHash = await sha256CompositionValue(merged.definition);
+  if (!merged.definition && !input.allowUnresolved)
+    throw new RepositorySchemaMergeError(merged.definitionError ?? 'Merged Schema is unavailable.');
+  const definition = merged.definition ?? target?.schema ?? source!.schema;
+  const schemaHash = await sha256CompositionValue(definition);
   const sources = [
     ...new Map(
       [...(source?.sources ?? []), ...(target?.sources ?? [])].map((item) => [
@@ -253,10 +288,13 @@ export async function prepareRepositorySchemaMerge(input: {
   });
   const compositionId = `studio:merge:${compositionHash}`;
   return {
-    definition: merged.definition,
+    conflicts: merged.conflicts,
+    unresolved: merged.unresolved,
+    definitionError: merged.definitionError,
+    definition,
     changes: diffYSchemas(
       target?.schema ?? normalizeYSchemaObject({ yschema: '0.1', name: 'Unbound', nodes: {} }),
-      merged.definition
+      definition
     ),
     schemaHash,
     rootKey,
@@ -265,7 +303,7 @@ export async function prepareRepositorySchemaMerge(input: {
     compositionHash,
     resource: createYSchemaResourceDescriptor(
       `t3x://schemas/${encodeURIComponent(compositionId)}/r1`,
-      merged.definition
+      definition
     ),
   };
 }

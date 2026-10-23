@@ -4,6 +4,7 @@
  * Schemas for frame-level merge operations (FrameMergeResult / FrameMergeDecision)
  */
 import { z } from '@hono/zod-openapi';
+import { MergeSchemaResolutionSchema } from '@t3x-dev/api-client';
 
 // ============================================================================
 // Base Schemas (Frame-level)
@@ -110,6 +111,7 @@ const MergeResolutionSchema = z.union([
  * FrameMergeDecision schema (user decisions for executeFrameMerge)
  */
 export const FrameMergeDecisionSchema = z.object({
+  schemaResolution: MergeSchemaResolutionSchema.optional(),
   conflictResolutions: z.record(z.string(), MergeResolutionSchema).openapi({
     description: 'How to resolve each conflicted frame (frameId -> resolution)',
   }),

@@ -86,4 +86,38 @@ describe('deterministic Schema three-way merge', () => {
       conflicts: [expect.objectContaining({ path: 'nodes/requirements/slots/title/enum' })],
     });
   });
+
+  it('resolves only exact conflicting paths, including custom scalars, deletion and invalid definitions', () => {
+    const source = withSlots({ title: { type: 'string', maxLength: 30 } });
+    const target = withSlots({ title: { type: 'string', maxLength: 40 } });
+    const path = 'nodes/requirements/slots/title/maxLength';
+    for (const [choice, expected] of [
+      ['source', 30],
+      ['target', 40],
+      [{ value: 20 }, 20],
+    ] as const) {
+      const result = mergeSchemaDefinitions(base, source, target, { [path]: choice });
+      expect(result.unresolved).toEqual([]);
+      expect(result.definition?.nodes.requirements?.slots.title?.maxLength).toBe(expected);
+    }
+    expect(
+      mergeSchemaDefinitions(base, source, target, { [path]: { remove: true } }).definition?.nodes
+        .requirements?.slots.title?.maxLength
+    ).toBeUndefined();
+    expect(
+      mergeSchemaDefinitions(base, source, target, { [path]: { value: 'wrong' } })
+    ).toMatchObject({ definition: null, definitionError: expect.any(String) });
+    expect(() =>
+      mergeSchemaDefinitions(base, source, target, { 'nodes/unknown': 'source' })
+    ).toThrow(/stale Schema conflict/);
+    const deleted = normalizeYSchemaObject({ ...base, nodes: {} });
+    expect(
+      mergeSchemaDefinitions(base, deleted, source, { 'nodes/requirements': 'source' }).definition
+        ?.nodes
+    ).toEqual({});
+    expect(
+      mergeSchemaDefinitions(base, deleted, source, { 'nodes/requirements': 'target' }).definition
+        ?.nodes.requirements?.slots.title?.maxLength
+    ).toBe(30);
+  });
 });

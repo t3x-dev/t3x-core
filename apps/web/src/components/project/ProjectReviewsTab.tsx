@@ -939,8 +939,9 @@ export function ProjectReviewsTab({
   };
 
   const canMergePullRequest = (pullRequest: ProjectPullRequest) =>
-    pullRequest.status === 'ready' ||
-    (pullRequest.status === 'blocked' && conflictDecision !== null);
+    (conflictProgress?.unresolved ?? 0) === 0 &&
+    (pullRequest.status === 'ready' ||
+      (pullRequest.status === 'blocked' && conflictDecision !== null));
 
   /** Local fixture PRs have no merge draft; one side settles their single sample conflict. */
   const applyResolution = (side: PullRequestConflictSide | null) => {
@@ -1861,7 +1862,9 @@ function PullRequestDetailView({
   const passedChecks = (pullRequest.checks ?? []).filter(
     (check) => check.status === 'passed'
   ).length;
-  const ready = pullRequest.status === 'ready' || conflictResolved;
+  const ready =
+    (conflictProgress?.unresolved ?? 0) === 0 &&
+    (pullRequest.status === 'ready' || conflictResolved);
 
   return (
     <section className={detailStyles.page}>
@@ -1970,6 +1973,9 @@ function PullRequestDetailView({
                 ? `${conflictCount} of ${conflictProgress.total} conflicts still need a decision.`
                 : `Choose ${conflictCount} conflict to continue.`
               : `${passedChecks} checks passed.`}
+          {conflictProgress?.requiresRecheck
+            ? ' Save and recheck your Schema/content edits in Changes.'
+            : null}
         </div>
         <div className={detailStyles.footerActions}>
           {closeable ? (
@@ -1986,7 +1992,7 @@ function PullRequestDetailView({
             <button
               aria-label="Rerun readiness"
               className={detailStyles.secondaryAction}
-              disabled={rerunning}
+              disabled={rerunning || conflictProgress?.requiresRecheck}
               onClick={onRerun}
               type="button"
             >

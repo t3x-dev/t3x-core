@@ -28,6 +28,8 @@ import type {
   ResourceDescriptor,
   StringClaim,
 } from '@t3x-dev/transition';
+import type { SchemaContentMigrationCommand } from '../schema-authoring/content-migration';
+import { createReviewedSemanticMergeEffect } from './reviewed-merge';
 
 export type RepositoryWriterActorRef = ProposalStatement['actor'];
 
@@ -227,6 +229,7 @@ export interface PrepareRepositoryYOpsStateWriteInput {
 export interface PreparedRepositoryYOpsStateWrite extends PreparedRepositoryTransitionWrite {}
 
 export interface PrepareRepositoryYOpsMergeWriteInput {
+  contentMigration?: { rootKey: string; commands: readonly SchemaContentMigrationCommand[] };
   projectId: string;
   refName: string;
   sourceDigest: string;
@@ -485,13 +488,20 @@ export function prepareRepositoryYOpsMergeWrite(
   input: PrepareRepositoryYOpsMergeWriteInput
 ): PreparedRepositoryYOpsMergeWrite {
   const actor = immutableSnapshot(input.actor);
-  const merged = createSemanticMergeEffect({
+  const mergeInput = {
     target: input.targetState,
     mergeBase: input.mergeBaseState,
     source: input.sourceState,
     decisions: input.decisions,
     expectedTarget: input.targetCommit.result,
-  });
+  };
+  const migration = input.contentMigration;
+  const merged = migration?.commands.length
+    ? createReviewedSemanticMergeEffect({
+        ...mergeInput,
+        ...migration,
+      })
+    : createSemanticMergeEffect(mergeInput);
   const sourceEvidence = {
     resource: {
       uri: `t3x://projects/${input.projectId}/commits/${input.sourceDigest}`,
