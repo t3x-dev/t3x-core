@@ -188,7 +188,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
 
   const handleViewChange = useCallback(
     (view: 'canvas' | 'list') => {
-      updateQuery({ view: view === 'canvas' ? null : 'list', commit: null });
+      updateQuery({ view, commit: null });
     },
     [updateQuery]
   );

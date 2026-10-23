@@ -144,8 +144,17 @@ describe('History node navigation', () => {
     expect(window.history.replaceState).toHaveBeenLastCalledWith(
       null,
       '',
-      '/project/proj_test/history?branch=main&author=Maya+Chen'
+      '/project/proj_test/history?branch=main&view=canvas&author=Maya+Chen'
     );
+    expect(await screen.findByRole('heading', { name: 'History Canvas' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Commit graph canvas' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'List View' }));
+    expect(await screen.findByRole('searchbox', { name: 'Search commits' })).toBeInTheDocument();
+    expect(new URLSearchParams(mocks.search).get('view')).toBe('list');
+    expect(screen.getByRole('combobox', { name: 'Author filter' })).toHaveValue('Maya Chen');
+    expect(screen.queryByRole('button', { name: /Initial state/ })).not.toBeInTheDocument();
+    expect(mocks.loadCommits).toHaveBeenCalledTimes(1);
   });
 
   it('keeps rapid search input immediate and updates its URL without a server navigation', async () => {
