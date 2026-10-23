@@ -343,6 +343,22 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
 
   return {
     enabled,
+    confirmDeletion: async (actionId: string) => {
+      const current = viewRef.current;
+      if (!current) throw new Error('Refresh the Draft before confirming deletion.');
+      await getSharedApiClient().workspaces.authoring.confirmDeletion(
+        candidate.projectId,
+        candidate.id,
+        actionId,
+        {
+          expected_workspace_revision: current.workspaceRevision,
+          expected_revision: current.compositionRevision,
+          expected_ref_head: current.basis.refHead,
+        }
+      );
+      await load();
+      setNotice('Deletion confirmed by you. Prepare a new Review to include this authorization.');
+    },
     view,
     actions,
     cards,

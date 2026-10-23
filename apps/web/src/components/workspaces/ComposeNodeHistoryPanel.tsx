@@ -12,6 +12,7 @@ import {
   RotateCcw,
   Sparkles,
 } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -346,6 +347,111 @@ export function ComposeObjectDelta({
   );
 }
 
+/** Shared selected-change presentation. Callers supply a live Draft or an immutable Commit. */
+export function ComposeChangeContext({
+  title,
+  path,
+  revisionLabel,
+  current,
+  unknown,
+  currentLabel = 'Current Draft value',
+  comparison,
+  comparisonLabel,
+  matchesBase = false,
+  children,
+}: {
+  title: string;
+  path?: string | null;
+  revisionLabel: string;
+  current: TransitionProtocolValue | undefined;
+  unknown: boolean;
+  currentLabel?: string;
+  comparison: {
+    before?: TransitionProtocolValue;
+    after?: TransitionProtocolValue;
+    beforePath?: string;
+    afterPath?: string;
+  };
+  comparisonLabel: string;
+  matchesBase?: boolean;
+  children?: ReactNode;
+}) {
+  const [copyNotice, setCopyNotice] = useState<string | null>(null);
+  const copyPath = async () => {
+    if (!path) return;
+    try {
+      await navigator.clipboard.writeText(path);
+      setCopyNotice('Field path copied.');
+    } catch {
+      setCopyNotice('Could not copy. Select the path to copy it.');
+    }
+  };
+  return (
+    <div className={styles.context}>
+      <div className={styles.revision}>{revisionLabel}</div>
+      <h2>{title}</h2>
+      <div className={styles.path}>
+        <code title={path ?? undefined}>{path ?? 'Path unavailable'}</code>
+        <button
+          type="button"
+          aria-label="Copy field path"
+          disabled={!path}
+          onClick={() => void copyPath()}
+        >
+          <Copy aria-hidden="true" />
+        </button>
+      </div>
+      {copyNotice ? <output className={styles.helper}>{copyNotice}</output> : null}
+      <ComposeDetailValue key={path} value={current} unknown={unknown} label={currentLabel} />
+      <div className={styles.selectedDelta}>
+        <span>{comparisonLabel}</span>
+        {matchesBase ? (
+          <span>Matches Base · no change</span>
+        ) : isComposeObject(comparison.before) || isComposeObject(comparison.after) ? (
+          <ComposeObjectDelta
+            before={comparison.before}
+            after={comparison.after}
+            beforePath={comparison.beforePath}
+            afterPath={comparison.afterPath}
+          />
+        ) : (
+          <ValueDelta before={comparison.before} after={comparison.after} expandable />
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+export function ComposeChangeReason({
+  reason,
+  actor,
+  channel,
+  channelLabel,
+  timestamp,
+}: {
+  reason: string;
+  actor?: string;
+  channel?: ComposeActivitySelection['meta']['channel'];
+  channelLabel?: string;
+  timestamp?: string;
+}) {
+  return (
+    <section className={styles.reason}>
+      <h3>Reason for this action</h3>
+      <ExpandableText text={reason} label="Reason for this action" className={styles.reasonText} />
+      <span>
+        {actor ? actorLabel(actor) + ' / ' : ''}
+        {channelLabel ?? activityChannelLabel(channel)}
+        {timestamp
+          ? ' · ' +
+            new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : ''}
+      </span>
+    </section>
+  );
+}
+
 function DraftStructure({
   document,
   revision,
@@ -458,7 +564,6 @@ export function ComposeNodeHistoryPanel({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [copyNotice, setCopyNotice] = useState<string | null>(null);
   const nodeId = selection?.operation.id;
   const selectedPath = selection?.operation.path;
   const isStaged = selection?.meta.eventId === MANUAL_STAGING_EVENT_ID;
@@ -468,7 +573,6 @@ export function ComposeNodeHistoryPanel({
   useEffect(() => {
     setEditing(Boolean(selection?.meta.editRequest));
     setSaveError(null);
-    setCopyNotice(null);
   }, [nodeId, selectedPath, selection?.meta.actionId, selection?.meta.editRequest]);
   useEffect(() => {
     if (nodeId && !isStaged && !isObject)
@@ -683,15 +787,6 @@ export function ComposeNodeHistoryPanel({
                 : !editableObject && !isSimpleDraftValue(node.current)
                   ? 'Objects and arrays cannot be edited here. Select a text, number, or boolean field, or use Ask AI.'
                   : undefined;
-  const copyPath = async () => {
-    if (!path) return;
-    try {
-      await navigator.clipboard.writeText(path);
-      setCopyNotice('Field path copied.');
-    } catch {
-      setCopyNotice('Could not copy. Select the path to copy it.');
-    }
-  };
   const latestCard =
     latest &&
     cardsForSelection(expandComposeActivityCards(activity.cards[latest.actionId] ?? []))[0];
@@ -747,52 +842,26 @@ export function ComposeNodeHistoryPanel({
       className={styles.panel}
       aria-label={isObject ? 'Selected object details' : 'Selected field details'}
     >
-      <div className={styles.context}>
-        <div className={styles.revision}>Draft r{activity.compositionRevision ?? '—'}</div>
-        <h2>{title}</h2>
-        <div className={styles.path}>
-          <code title={path}>{path ?? 'Path unavailable'}</code>
-          <button
-            type="button"
-            aria-label="Copy field path"
-            disabled={!path}
-            onClick={() => void copyPath()}
-          >
-            <Copy aria-hidden="true" />
-          </button>
-        </div>
-        {copyNotice ? <output className={styles.helper}>{copyNotice}</output> : null}
-        <ComposeDetailValue key={path} value={node.current} unknown={node.state === 'unknown'} />
-        <div className={styles.selectedDelta}>
-          <span>
-            {isStaged
-              ? 'Unsaved change · not yet applied to Draft'
-              : selection.meta.comparison === 'draft'
-                ? 'Whole draft · Base → r' + (activity.compositionRevision ?? '—')
-                : 'Selected action' +
-                  (selectedAction || selectedEntry
-                    ? ' · A' + (selectedAction?.sequence ?? selectedEntry?.sequence)
-                    : '')}
-          </span>
-          {matchesBase ? (
-            <span>Matches Base · no change</span>
-          ) : isComposeObject(comparison.before) || isComposeObject(comparison.after) ? (
-            <ComposeObjectDelta
-              key={`${path}:${selection.meta.actionId ?? 'draft'}`}
-              before={comparison.before}
-              after={comparison.after}
-              beforePath={'beforePath' in comparison ? comparison.beforePath : undefined}
-              afterPath={'afterPath' in comparison ? comparison.afterPath : undefined}
-            />
-          ) : (
-            <ValueDelta
-              key={`${path}:${selection.meta.actionId ?? 'draft'}`}
-              before={comparison.before}
-              after={comparison.after}
-              expandable
-            />
-          )}
-        </div>
+      <ComposeChangeContext
+        key={`${path}:${selection.meta.actionId ?? 'draft'}`}
+        title={title}
+        path={path}
+        revisionLabel={`Draft r${activity.compositionRevision ?? '—'}`}
+        current={node.current}
+        unknown={node.state === 'unknown'}
+        comparison={comparison}
+        matchesBase={matchesBase}
+        comparisonLabel={
+          isStaged
+            ? 'Unsaved change · not yet applied to Draft'
+            : selection.meta.comparison === 'draft'
+              ? 'Whole draft · Base → r' + (activity.compositionRevision ?? '—')
+              : 'Selected action' +
+                (selectedAction || selectedEntry
+                  ? ' · A' + (selectedAction?.sequence ?? selectedEntry?.sequence)
+                  : '')
+        }
+      >
         {!editOpen ? (
           <div className={styles.actions}>
             <Tooltip>
@@ -825,7 +894,7 @@ export function ComposeNodeHistoryPanel({
             </button>
           </div>
         ) : null}
-      </div>
+      </ComposeChangeContext>
       <div className={styles.body}>
         {editOpen && path ? (
           editableObject ? (
@@ -865,25 +934,12 @@ export function ComposeNodeHistoryPanel({
         ) : null}
         {activity.notice ? <output className={styles.helper}>{activity.notice}</output> : null}
         {!editing && selectedReason ? (
-          <section className={styles.reason}>
-            <h3>Reason for this action</h3>
-            <ExpandableText
-              text={selectedReason}
-              label="Reason for this action"
-              className={styles.reasonText}
-            />
-            <span>
-              {selectedActor ? actorLabel(selectedActor) + ' / ' : ''}
-              {activityChannelLabel(selectedChannel)}
-              {selectedTime
-                ? ' · ' +
-                  new Date(selectedTime).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })
-                : ''}
-            </span>
-          </section>
+          <ComposeChangeReason
+            reason={selectedReason}
+            actor={selectedActor}
+            channel={selectedChannel}
+            timestamp={selectedTime}
+          />
         ) : null}
         <details className={styles.disclosure}>
           <summary>

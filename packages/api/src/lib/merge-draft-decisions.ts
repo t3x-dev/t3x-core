@@ -1,4 +1,5 @@
-import type { MergeDecision, MergeResult } from '@t3x-dev/core';
+import type { MergeWorkspaceDecision } from '@t3x-dev/api-client';
+import type { MergeResult } from '@t3x-dev/core';
 import { FrameMergeDecisionSchema } from '../schemas/merge';
 
 interface StoredMergeDraftDecision {
@@ -17,7 +18,9 @@ export class MergeDraftDecisionIntegrityError extends Error {
  * Read the canonical decision column, with a read-only compatibility path for
  * drafts written before decisions were separated from merge preparation.
  */
-export function readMergeDraftDecision(draft: StoredMergeDraftDecision): MergeDecision | null {
+export function readMergeDraftDecision(
+  draft: StoredMergeDraftDecision
+): MergeWorkspaceDecision | null {
   let raw: unknown;
   try {
     if (draft.decisionJson !== null) {
@@ -39,5 +42,5 @@ export function readMergeDraftDecision(draft: StoredMergeDraftDecision): MergeDe
   if (!parsed.success) {
     throw new MergeDraftDecisionIntegrityError('Stored merge decision does not match the contract');
   }
-  return parsed.data as MergeDecision;
+  return parsed.data as MergeWorkspaceDecision;
 }

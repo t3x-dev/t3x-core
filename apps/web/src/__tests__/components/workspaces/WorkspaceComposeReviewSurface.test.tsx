@@ -4,6 +4,7 @@ import '@testing-library/jest-dom';
 import type { AssistantSchemaSettingsView } from '@t3x-dev/api-client';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { CommitChangeInspection } from '@/components/workspaces/WorkspaceCommitChangeDetails';
 import { WorkspaceComposeReviewSurface } from '@/components/workspaces/WorkspaceComposeReviewSurface';
 import {
   getProjectWorkspaceStarterCandidate,
@@ -11,6 +12,69 @@ import {
 } from '@/data/workspaceCandidates';
 import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
+import type { ApiCommit } from '@/types/api';
+
+vi.mock('@/components/workspaces/WorkspaceCommitGraph', () => ({
+  WorkspaceCommitGraph: ({
+    projectId,
+    branch,
+    onSelectCommit,
+  }: {
+    projectId: string;
+    branch: string;
+    onSelectCommit?: (commit: ApiCommit) => void;
+  }) => (
+    <section aria-label="Commit graph">
+      Graph for {projectId} · {branch}
+      <button
+        type="button"
+        onClick={() =>
+          onSelectCommit?.({
+            project_id: projectId,
+            hash: 'sha256:historical',
+            message: 'Earlier submission',
+          } as ApiCommit)
+        }
+      >
+        Open earlier Commit
+      </button>
+    </section>
+  ),
+}));
+vi.mock('@/components/workspaces/WorkspaceCommitHistoryPanel', () => ({
+  WorkspaceCommitHistoryPanel: ({
+    onReturn,
+    onInspect,
+    commit,
+  }: {
+    onReturn: () => void;
+    onInspect: (inspection: CommitChangeInspection) => void;
+    commit: ApiCommit;
+  }) => (
+    <section aria-label="Committed changes">
+      <h2>Earlier submission · Read-only</h2>
+      <button
+        type="button"
+        onClick={() =>
+          onInspect({
+            id: 'earlier-owner',
+            commitDigest: commit.hash,
+            kind: 'content',
+            card: { nodeId: 'owner', path: 'owner', before: 'before', after: 'archived' },
+            current: 'Archived owner',
+            reason: 'Historical owner change',
+            timestamp: '',
+          })
+        }
+      >
+        Inspect committed owner
+      </button>
+      <button type="button" onClick={onReturn}>
+        Return to current Draft
+      </button>
+    </section>
+  ),
+}));
 
 const activityMocks = vi.hoisted(() => ({
   value: undefined as ReturnType<typeof useComposeActivity> | undefined,
@@ -203,6 +267,17 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     };
   }
 
+  it('puts the read-only commit graph below the current Draft and scopes it to the workspace', () => {
+    renderCompose();
+    const sidebar = screen.getByRole('complementary', { name: 'Current Draft navigation' });
+    const draft = within(sidebar).getByRole('region', { name: 'Current Draft' });
+    const graph = within(sidebar).getByRole('region', { name: 'Commit graph' });
+    expect(graph).toHaveTextContent('Graph for proj_1 · main');
+    expect(draft.nextElementSibling).toBe(graph);
+    fireEvent.click(within(sidebar).getByRole('button', { name: 'Collapse current Draft panel' }));
+    expect(screen.queryByRole('region', { name: 'Commit graph' })).not.toBeInTheDocument();
+  });
+
   function renderCompose() {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     return render(
@@ -221,6 +296,52 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
   }
+
+  it('replaces only the center with historical cards and restores the same live Draft on Return', () => {
+    schemaCardMocks.record = {
+      settingsId: 'pending-owner',
+      revision: 1,
+      status: 'pending',
+      conversationId: 'chat',
+      workspaceRevision: 2,
+      schemaHash: 'exact',
+      createdAt: '2026-10-22T10:00:00Z',
+      settings: {
+        action: 'add_node',
+        nodePath: 'product',
+        name: 'owner',
+        definition: {},
+        intent: 'Add owner',
+      },
+    };
+    renderCompose();
+    const confirmation = screen.getByRole('button', { name: 'Confirm' });
+    const toolbar = screen.getByRole('button', { name: 'New change' });
+    fireEvent.click(screen.getByRole('button', { name: 'Open earlier Commit' }));
+    expect(screen.getByRole('region', { name: 'Committed changes' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect committed owner' }));
+    const details = within(screen.getByRole('complementary', { name: 'Discuss change' }));
+    expect(details.getByRole('heading', { name: 'Details' })).toBeVisible();
+    expect(details.getByText('Value at this Commit')).toBeVisible();
+    expect(details.getByText('Archived owner')).toBeVisible();
+    expect(details.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+    expect(confirmation).not.toBeVisible();
+    expect(toolbar).not.toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'New change' })).not.toBeInTheDocument();
+    fireEvent.click(
+      within(screen.getByRole('region', { name: 'Committed changes' })).getByRole('button', {
+        name: 'Return to current Draft',
+      })
+    );
+    expect(screen.queryByRole('region', { name: 'Committed changes' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirm' })).toBe(confirmation);
+    expect(confirmation).toBeVisible();
+    expect(schemaCardMocks.generate).not.toHaveBeenCalled();
+    expect(navigationMocks.push).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Open earlier Commit' }));
+    expect(screen.queryByText('Archived owner')).not.toBeInTheDocument();
+  });
 
   it('places pending Schema confirmations on the timeline, never in the discussion composer', () => {
     schemaCardMocks.record = {

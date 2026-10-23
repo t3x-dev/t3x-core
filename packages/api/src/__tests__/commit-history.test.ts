@@ -65,6 +65,28 @@ describe('CommitV2 read routes', () => {
 
   afterAll(async () => cleanup());
 
+  it('reads immutable changes for old Commit formats without inventing authoring actions', async () => {
+    const response = await app.request(
+      `/v1/projects/${projectId}/commits/${encodeURIComponent(childDigest)}/changes`
+    );
+    expect(response.status).toBe(200);
+    const { data } = await response.json();
+    expect(data).toMatchObject({
+      projectId,
+      commitDigest: childDigest,
+      source: 'commit_diff',
+      actions: [],
+    });
+    expect(data.base).not.toEqual(data.current);
+    expect(data.netDiff[0].before).toEqual(data.base);
+    expect(data.netDiff[0].after).toEqual(data.current);
+    const other = await insertProject(mockDB, testData.project({ name: 'Other commit scope' }));
+    const foreign = await app.request(
+      `/v1/projects/${other.projectId}/commits/${encodeURIComponent(childDigest)}/changes`
+    );
+    expect(foreign.status).toBe(404);
+  });
+
   it('returns only CommitV2 history projections', async () => {
     const response = await app.request(`/v1/projects/${projectId}/commit-history`);
     expect(response.status).toBe(200);

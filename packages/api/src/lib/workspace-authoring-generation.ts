@@ -23,6 +23,12 @@ import {
   type WorkspaceAuthoringBasis,
   workspaceAuthoringState,
 } from './workspace-authoring';
+import {
+  type DeletionAuthorization,
+  deletionAuthorizations,
+  deletionSubject,
+  matchingDeletionAuthorization,
+} from './workspace-deletion-authorization';
 
 export const WORKSPACE_GENERATION_PREPARATION_SCHEMA =
   't3x.application/workspace-generation-preparation/v1' as const;
@@ -246,13 +252,37 @@ export async function authoringGenerationChecks(context: VerificationContext) {
     describeTransitionObject(context.effect).digest
   )
     throw new TypeError('Authoring manifest does not describe the full Effect');
+  // A snapshot cannot self-assert authorization. Require the same server-written receipt.
+  const frozenReceipts = Array.isArray(value.deletionAuthorizations)
+    ? value.deletionAuthorizations
+    : [];
+  const stored = frozenReceipts.length
+    ? await findWorkspaceDraft(context.db, context.projectId, context.workspaceId)
+    : null;
+  const persisted = deletionAuthorizations(stored?.workspace_state ?? {});
+  const receipts = frozenReceipts.filter((receipt) =>
+    persisted.some(
+      (item) =>
+        canonicalizeProtocolValue(JSON.parse(JSON.stringify(item))) ===
+        canonicalizeProtocolValue(receipt)
+    )
+  ) as unknown as DeletionAuthorization[];
   return ledger.actions.flatMap((action) => {
     if (!action.generation) return [];
     const preparation = parseProposalGenerationPreparation(action.generation.preparation);
     if (preparation.operationCount !== action.operations.length)
       throw new TypeError('Generation operation provenance is incomplete');
+    const subject = deletionSubject(
+      context.projectId,
+      context.workspaceId,
+      value.basis,
+      ledger,
+      action
+    );
+    const confirmation = matchingDeletionAuthorization(receipts, subject);
     return [
       {
+        authorizedDeletionPaths: confirmation ? subject!.paths : [],
         preparationFacts: JSON.parse(JSON.stringify(preparation)) as ProtocolValue,
         operations: JSON.parse(JSON.stringify(action.operations)) as ProtocolValue[],
         base: createYOpsState(

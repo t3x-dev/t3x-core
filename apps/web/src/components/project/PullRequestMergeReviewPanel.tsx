@@ -1,6 +1,7 @@
 'use client';
 
 import { CheckCircle as PhCheckCircle, Tilde as PhTilde } from '@phosphor-icons/react';
+import type { MergeSchemaResolution, MergeWorkspaceDecision } from '@t3x-dev/api-client';
 import type { MergeDecision } from '@t3x-dev/core';
 import { ChevronLeft, ChevronRight, Copy, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -22,12 +23,14 @@ import {
   type MergeSlotChoice,
 } from '@/domain/project/pullRequestMergeReview';
 import { cn } from '@/utils/cn';
+import { MergeSchemaEditor } from './MergeSchemaEditor';
 import detailStyles from './ProjectReviewsDetail.module.css';
 import styles from './PullRequestMergeReview.module.css';
 
 export interface MergeResolutionProgress {
   total: number;
   unresolved: number;
+  requiresRecheck?: boolean;
 }
 
 export interface PullRequestMergeReviewPanelProps {
@@ -80,6 +83,14 @@ export function PullRequestMergeReviewPanel({
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [conflictsOnly, setConflictsOnly] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [schemaResolution, setSchemaResolution] = useState<MergeSchemaResolution>({
+    choices: {},
+    commands: [],
+  });
+  const [schemaInputValid, setSchemaInputValid] = useState(true);
+  const [localChanges, setLocalChanges] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const saveTimer = useRef<number | undefined>(undefined);
   const revision = useRef(0);
   const dirty = useRef(false);
   const saving = useRef<Promise<unknown>>(Promise.resolve());
@@ -95,6 +106,7 @@ export function PullRequestMergeReviewPanel({
         revision.current = loaded.decision_revision;
         dirty.current = false;
         setReview(loaded);
+        setSchemaResolution(loaded.decisions?.schemaResolution ?? { choices: {}, commands: [] });
         setChoices(restored);
         setSelectedPath(
           loaded.nodes.find(
@@ -117,21 +129,40 @@ export function PullRequestMergeReviewPanel({
     () => review?.nodes.filter((node) => node.status === 'conflict') ?? [],
     [review]
   );
-  const outcome = useMemo(
-    () => (review ? buildMergeReviewDecision(review, choices) : null),
-    [choices, review]
-  );
+  const outcome = useMemo(() => {
+    if (!review) return null;
+    const content = buildMergeReviewDecision(review, choices);
+    const decision: MergeWorkspaceDecision = {
+      ...content.decision,
+      ...(review.schema_merge ? { schemaResolution } : {}),
+    };
+    return { ...content, decision };
+  }, [choices, review, schemaResolution]);
+  const schemaOpen =
+    (review?.schema_merge?.unresolved?.length ?? 0) +
+    (review?.schema_merge?.definition_error || review?.schema_merge?.issues?.length ? 1 : 0);
+  const needsRecheck = Boolean(review?.schema_merge && (localChanges || !schemaInputValid));
 
   useEffect(() => {
     if (!outcome) return;
     onResolutionChange(
-      conflicts.length > 0 && outcome.unresolved.length === 0 ? outcome.decision : null,
-      { total: conflicts.length, unresolved: outcome.unresolved.length }
+      conflicts.length > 0 && outcome.unresolved.length === 0 && !schemaOpen && !needsRecheck
+        ? outcome.decision
+        : null,
+      {
+        total: Math.max(
+          conflicts.length + (review?.schema_merge?.conflicts?.length ?? 0),
+          outcome.unresolved.length + schemaOpen,
+          needsRecheck ? 1 : 0
+        ),
+        unresolved: Math.max(outcome.unresolved.length + schemaOpen, needsRecheck ? 1 : 0),
+        ...(needsRecheck ? { requiresRecheck: true } : {}),
+      }
     );
-  }, [conflicts.length, onResolutionChange, outcome]);
+  }, [conflicts.length, onResolutionChange, outcome, schemaOpen, needsRecheck, review]);
 
   useEffect(() => {
-    if (!outcome || !draftId || !dirty.current) return;
+    if (!outcome || !draftId || !dirty.current || !schemaInputValid || checking) return;
     const timer = window.setTimeout(() => {
       saving.current = saving.current
         .then(() => saveMergeDecision(draftId, outcome.decision, revision.current))
@@ -145,13 +176,31 @@ export function PullRequestMergeReviewPanel({
           );
         });
     }, 400);
+    saveTimer.current = timer;
     return () => window.clearTimeout(timer);
-  }, [draftId, outcome, saveMergeDecision]);
+  }, [draftId, outcome, saveMergeDecision, schemaInputValid, checking]);
 
   const updateChoices = (next: MergeChoices) => {
     dirty.current = true;
+    setLocalChanges(true);
     setChoices(next);
   };
+  async function saveAndRecheck() {
+    if (!outcome || !draftId || !schemaInputValid || checking) return;
+    window.clearTimeout(saveTimer.current);
+    setChecking(true);
+    try {
+      await saving.current;
+      revision.current = await saveMergeDecision(draftId, outcome.decision, revision.current);
+      dirty.current = false;
+      setSaveError(null);
+      onRerun();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Could not save merge edits.');
+    } finally {
+      setChecking(false);
+    }
+  }
   const updateNode = (path: string, update: (current: MergeNodeChoice) => MergeNodeChoice) =>
     updateChoices({ ...choices, [path]: update(choices[path] ?? { slots: {} }) });
 
@@ -246,6 +295,11 @@ export function PullRequestMergeReviewPanel({
           </div>
         </div>
         <div className={detailStyles.treeWrap}>
+          {saveError ? (
+            <p className={styles.saveError} role="alert">
+              {saveError}
+            </p>
+          ) : null}
           {review.schema_merge ? (
             <section className={styles.schemaChanges} aria-label="Schema changes">
               <header>
@@ -265,6 +319,29 @@ export function PullRequestMergeReviewPanel({
                   </li>
                 ))}
               </ul>
+              <MergeSchemaEditor
+                stale={localChanges}
+                review={review.schema_merge}
+                resolution={schemaResolution}
+                sourceBranch={pullRequest.sourceBranch}
+                targetBranch={pullRequest.targetBranch}
+                onChange={(next, valid) => {
+                  dirty.current = true;
+                  setLocalChanges(true);
+                  setSchemaInputValid(valid);
+                  setSchemaResolution(next);
+                }}
+              />
+              <button
+                type="button"
+                className={styles.primaryButton}
+                disabled={
+                  checking || rerunning || !schemaInputValid || outcome.unresolved.length > 0
+                }
+                onClick={() => void saveAndRecheck()}
+              >
+                {checking || rerunning ? 'Checking…' : 'Save & recheck Schema and content'}
+              </button>
             </section>
           ) : null}
           <table className={detailStyles.tree}>
@@ -372,11 +449,6 @@ export function PullRequestMergeReviewPanel({
                     <ChevronRight aria-hidden="true" />
                   </button>
                 </div>
-              ) : null}
-              {saveError ? (
-                <p className={styles.saveError} role="alert">
-                  {saveError}
-                </p>
               ) : null}
             </div>
           </section>

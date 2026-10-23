@@ -1,6 +1,6 @@
 import type { AssistantSchemaSettingsInput } from '@t3x-dev/api-client';
 import { currentComposition } from '@t3x-dev/application';
-import { applyWorkspaceSchemaYOps } from '@t3x-dev/core';
+import { applyWorkspaceSchemaYOps, createYOpsState } from '@t3x-dev/core';
 import {
   type AnyDB,
   findTurnsByConversation,
@@ -22,8 +22,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { compileConfirmedSchemaChange } from '../lib/schema-change-contract';
 import { createAssistantSchemaSettingsService } from '../lib/workspace-assistant/schema-settings';
 import {
+  buildAuthoringPreparation,
   initializeWorkspaceAuthoring,
   publishWorkspaceAuthoringAction,
+  renewWorkspaceAuthoringState,
   workspaceAuthoringState,
 } from '../lib/workspace-authoring';
 import { setupTestDB } from './setup';
@@ -203,6 +205,29 @@ it('stages a Node and its two Slots as three durable cards, each requiring its o
     expect(draft.workspace_state!.authoringLedger).toEqual(before.workspace_state!.authoringLedger);
   }
   expect(state.cards?.map((card) => card.status)).toEqual(['applied', 'applied', 'applied']);
+  const appliedWorkspace = (await findWorkspaceDraft(db, projectId, ws))!.workspace_state!;
+  const frozen = buildAuthoringPreparation(appliedWorkspace);
+  expect(frozen.schemaCards?.map((card) => card.settingsId)).toEqual([
+    state.cards![0].settingsId,
+    state.cards![2].settingsId,
+    state.cards![1].settingsId,
+  ]);
+  expect(
+    frozen.schemaCards?.every((card) => card.status === 'applied' && card.cards === undefined)
+  ).toBe(true);
+  const fresh = renewWorkspaceAuthoringState(appliedWorkspace, {
+    commitDigest: `sha256:${'1'.repeat(64)}`,
+    committedAt: '2026-10-22T00:00:00Z',
+    transitionId: 'committed',
+    preparationDigest: null,
+    result: createYOpsState(currentComposition(workspaceAuthoringState(appliedWorkspace).ledger)),
+  });
+  expect(fresh.assistantSchemaSettings).toBeUndefined();
+  expect(fresh.schemaPreparations).toBeUndefined();
+  expect(fresh.schemaPending).toBeUndefined();
+  expect(fresh.schemaBindings).toEqual(appliedWorkspace.schemaBindings);
+  expect(buildAuthoringPreparation(fresh).schemaCards).toBeUndefined();
+  expect(frozen.schemaCards).toHaveLength(3);
   await expect(run(ws, (service) => service.show(slot, 'next-plan'))).resolves.toMatchObject({
     status: 'pending',
     settings: slot,
@@ -298,7 +323,7 @@ it('rejects queued confirmation after outside content changes instead of silentl
 it.each([
   'remove_node',
   'remove_slot',
-] as const)('one human Confirm applies an explicitly confirmed %s without changing YAML', async (action) => {
+] as const)('one human Confirm atomically removes the %s definition and its concrete content', async (action) => {
   const ws = await fixture();
   const seeded = (await findWorkspaceDraft(db, projectId, ws))!;
   await publishWorkspaceAuthoringAction(db, {
@@ -306,8 +331,18 @@ it.each([
     workspaceId: ws,
     actor,
     channel: 'manual',
-    actionId: 'retain-deleted-field-content',
-    operations: [{ set: { path: 'candidate', value: { product: { title: 'Keep this value' } } } }],
+    actionId: 'seed-deleted-field-content',
+    operations: [
+      {
+        set: {
+          path: 'candidate',
+          value: {
+            product: { title: 'Delete this value', unrelated: 'Keep' },
+            other: 'Keep sibling',
+          },
+        },
+      },
+    ],
     expectedRevision: workspaceAuthoringState(seeded.workspace_state!).ledger.compositionRevision,
     expectedWorkspaceRevision: seeded.revision,
     expectedRefHead: null,
@@ -317,28 +352,68 @@ it.each([
     nodePath: action === 'remove_slot' ? 'product' : '',
     name: action === 'remove_slot' ? 'title' : 'product',
     definition: {},
-    intent: 'Remove this definition only',
+    intent: 'Remove definition and content',
   };
   const shown = await run(ws, (service) => service.show(settings, `delete-${ws}`));
   const before = (await findWorkspaceDraft(db, projectId, ws))!;
-  const response = await app.request(
-    `/v1/projects/${projectId}/workspaces/${ws}/source-chat/assistant/schema-settings`,
+  expect(shown.settings.contentMigration).toEqual([
     {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        conversationId: 'conversation',
-        settingsId: shown.settingsId,
-        ifRevision: shown.revision,
-        settings,
-        applyToDraft: true,
-      }),
-    }
-  );
+      kind: 'remove',
+      path: action === 'remove_slot' ? '"candidate"/"product"/"title"' : '"candidate"/"product"',
+    },
+  ]);
+  const calls = model.structured.mock.calls.length;
+  // Schema-only legacy confirmations and plans that omit real content are not destructive authority.
+  await expect(
+    run(ws, (service) => service.confirm(shown.settingsId, shown.revision, settings))
+  ).rejects.toThrow('exact content deletion plan');
+  await expect(
+    run(ws, (service) =>
+      service.confirm(shown.settingsId, shown.revision, { ...shown.settings, contentMigration: [] })
+    )
+  ).rejects.toThrow('exact content deletion plan');
+  expect(await findWorkspaceDraft(db, projectId, ws)).toEqual(before);
+  const request = () =>
+    app.request(
+      `/v1/projects/${projectId}/workspaces/${ws}/source-chat/assistant/schema-settings`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId: 'conversation',
+          settingsId: shown.settingsId,
+          ifRevision: shown.revision,
+          settings: shown.settings,
+          applyToDraft: true,
+        }),
+      }
+    );
+  const response = await request();
   expect(response.status, await response.clone().text()).toBe(200);
   expect((await response.json()).data.status).toBe('applied');
   const after = (await findWorkspaceDraft(db, projectId, ws))!;
-  expect(after.workspace_state!.authoringLedger).toEqual(before.workspace_state!.authoringLedger);
+  expect(currentComposition(workspaceAuthoringState(after.workspace_state!).ledger)).toMatchObject({
+    candidate: {
+      other: 'Keep sibling',
+      ...(action === 'remove_slot' ? { product: { unrelated: 'Keep' } } : {}),
+    },
+  });
+  const document = currentComposition(workspaceAuthoringState(after.workspace_state!).ledger) as {
+    candidate: Record<string, unknown>;
+  };
+  if (action === 'remove_node') expect(document.candidate).not.toHaveProperty('product');
+  else expect(document.candidate.product).not.toHaveProperty('title');
+  const schema = (await resolveWorkspaceYSchema(after.workspace_state!, db, projectId)).schema!;
+  if (action === 'remove_node') expect(schema.nodes.product).toBeUndefined();
+  else expect(schema.nodes.product.slots!.title).toBeUndefined();
+  expect(after.workspace_state!.schemaBindings).not.toEqual(before.workspace_state!.schemaBindings);
+  expect(workspaceAuthoringState(after.workspace_state!).ledger.compositionRevision).toBe(
+    workspaceAuthoringState(before.workspace_state!).ledger.compositionRevision + 1
+  );
+  expect((await request()).status).toBe(200);
+  expect(await findWorkspaceDraft(db, projectId, ws)).toEqual(after);
+  expect(model.structured).toHaveBeenCalledTimes(calls);
+  expect(workspaceAuthoringState(after.workspace_state!).basis.refHead).toBeNull();
 });
 
 async function fixture() {
@@ -547,6 +622,142 @@ beforeAll(async () => {
   expect(add.status).toBe(200);
 });
 afterAll(async () => cleanup?.());
+
+async function renameFixture() {
+  const ws = await fixture();
+  const draft = (await findWorkspaceDraft(db, projectId, ws))!;
+  await publishWorkspaceAuthoringAction(db, {
+    projectId,
+    workspaceId: ws,
+    actor,
+    channel: 'manual',
+    actionId: 'seed-rename',
+    operations: [
+      {
+        set: {
+          path: 'candidate',
+          value: { product: { title: 'Keep this title', retained: 'Unrelated' } },
+        },
+      },
+    ],
+    expectedRevision: workspaceAuthoringState(draft.workspace_state!).ledger.compositionRevision,
+    expectedWorkspaceRevision: draft.revision,
+    expectedRefHead: null,
+  });
+  return ws;
+}
+
+it.each([
+  'preserve',
+  'clear',
+] as const)('atomically confirms a rename and its editable %s content plan without a model or Commit', async (mode) => {
+  const ws = await renameFixture();
+  const shown = await run(ws, (s) =>
+    s.show(
+      {
+        action: 'rename_slot',
+        nodePath: 'product',
+        name: 'title',
+        newName: 'headline',
+        definition: {},
+        intent: 'Rename title',
+      },
+      `rename-${ws}`
+    )
+  );
+  expect(shown.settings.contentMigration).toEqual(shown.renameMappings!.preserve);
+  expect(shown.renameMappings!.preserve).toEqual([
+    { kind: 'move', from: '"candidate"/"product"/"title"', to: '"candidate"/"product"/"headline"' },
+  ]);
+  const settings = {
+    ...shown.settings,
+    renameContentMode: mode,
+    contentMigration: shown.renameMappings![mode],
+  };
+  const request = () =>
+    app.request(
+      `/v1/projects/${projectId}/workspaces/${ws}/source-chat/assistant/schema-settings`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId: 'conversation',
+          settingsId: shown.settingsId,
+          ifRevision: shown.revision,
+          settings,
+          applyToDraft: true,
+        }),
+      }
+    );
+  const calls = model.structured.mock.calls.length;
+  const response = await request();
+  expect(response.status, await response.clone().text()).toBe(200);
+  expect((await response.json()).data).toMatchObject({ status: 'applied' });
+  const after = (await findWorkspaceDraft(db, projectId, ws))!;
+  const document = currentComposition(
+    workspaceAuthoringState(after.workspace_state!).ledger
+  ) as any;
+  expect(document.candidate.product).toEqual({
+    retained: 'Unrelated',
+    ...(mode === 'preserve' ? { headline: 'Keep this title' } : {}),
+  });
+  const schema = (await resolveWorkspaceYSchema(after.workspace_state!, db, projectId)).schema!;
+  expect(schema.nodes.product.slots!.title).toBeUndefined();
+  expect(schema.nodes.product.slots!.headline).toEqual(base.nodes.product.slots!.title);
+  expect(schema.nodes.product.requiredSlots).toContain('headline');
+  if (mode === 'clear')
+    expect((await run(ws, (s) => s.read()))!.application).toMatchObject({
+      ready: false,
+      issues: expect.arrayContaining([expect.objectContaining({ code: 'REQUIRED_SLOT_MISSING' })]),
+    });
+  expect((await request()).status).toBe(200);
+  expect(await findWorkspaceDraft(db, projectId, ws)).toEqual(after);
+  expect(model.structured).toHaveBeenCalledTimes(calls);
+  expect(workspaceAuthoringState(after.workspace_state!).basis.refHead).toBeNull();
+});
+
+it('retains both Schema and content on invalid mapping and lets the generated card correct its plan', async () => {
+  const ws = await renameFixture();
+  const shown = await run(ws, (s) =>
+    s.show(
+      {
+        action: 'rename_slot',
+        nodePath: 'product',
+        name: 'title',
+        newName: 'headline',
+        definition: {},
+        intent: 'Rename title',
+      },
+      `correct-${ws}`
+    )
+  );
+  const before = (await findWorkspaceDraft(db, projectId, ws))!;
+  const broken = {
+    ...shown.settings,
+    contentMigration: [
+      {
+        kind: 'move' as const,
+        from: 'candidate/product/missing',
+        to: 'candidate/product/headline',
+      },
+    ],
+  };
+  await run(ws, (s) => s.confirm(shown.settingsId, shown.revision, broken));
+  await run(ws, (s) => s.propose(shown.settingsId));
+  await expect(run(ws, (s) => s.applyToDraft(shown.settingsId))).rejects.toThrow();
+  const failed = (await findWorkspaceDraft(db, projectId, ws))!;
+  expect(failed.workspace_state!.schemaBindings).toEqual(before.workspace_state!.schemaBindings);
+  expect(failed.workspace_state!.authoringLedger).toEqual(before.workspace_state!.authoringLedger);
+  const generated = (await run(ws, (s) => s.read()))!;
+  await run(ws, (s) =>
+    s.confirm(generated.settingsId, generated.revision, {
+      ...generated.settings,
+      contentMigration: shown.renameMappings!.preserve,
+    })
+  );
+  await run(ws, (s) => s.applyToDraft(shown.settingsId));
+  expect((await run(ws, (s) => s.read()))!.status).toBe('applied');
+});
 
 it.each([
   { action: 'add_slot', name: 'owner', definition: { type: 'string' }, required: true },

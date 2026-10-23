@@ -1,4 +1,6 @@
+import { MergeSchemaResolutionSchema, type MergeWorkspaceDecision } from '@t3x-dev/api-client';
 import {
+  compileSchemaContentMigration,
   prepareRepositoryYOpsMergeWrite,
   prepareRepositoryYOpsStateWrite,
   REPOSITORY_MERGE_POLICY,
@@ -323,6 +325,7 @@ async function loadRepositoryMergeContext(input: {
   projectId: string;
   sourceDigest: string;
   targetDigest: string;
+  decisions?: MergeDecision;
 }): Promise<RepositoryMergeContext> {
   if (input.sourceDigest === input.targetDigest) {
     throw new RepositoryMergeInvalidError('Source and target CommitV2 must be different');
@@ -388,6 +391,13 @@ async function loadRepositoryMergeContext(input: {
     base: mergeBase,
     source,
     target,
+    resolution:
+      (input.decisions as MergeWorkspaceDecision | undefined)?.schemaResolution === undefined
+        ? undefined
+        : MergeSchemaResolutionSchema.parse(
+            (input.decisions as MergeWorkspaceDecision).schemaResolution
+          ),
+    allowUnresolved: true,
   });
   return {
     source,
@@ -404,6 +414,7 @@ export interface PrepareRepositoryYOpsMergeInput {
   projectId: string;
   sourceDigest: string;
   targetDigest: string;
+  decisions?: MergeDecision;
 }
 
 /** Recompute the merge plan only from verified CommitV2 graphs. */
@@ -419,9 +430,18 @@ export async function inspectRepositoryYOpsMergeSchema(
   input: PrepareRepositoryYOpsMergeInput & { decisions?: MergeDecision }
 ) {
   const context = await loadRepositoryMergeContext(input);
-  if (!context.schema) return { schema: null, validation: null };
+  if (!context.schema)
+    return { schema: null, validation: null, before: null, after: null, error: null };
+  if (context.schema.unresolved.length || context.schema.definitionError)
+    return {
+      schema: context.schema,
+      validation: null,
+      before: null,
+      after: null,
+      error: context.schema.definitionError,
+    };
   if (context.prepared.conflicts.some((item) => !input.decisions?.conflictResolutions[item.path]))
-    return { schema: context.schema, validation: null };
+    return { schema: context.schema, validation: null, before: null, after: null, error: null };
   const decisions = input.decisions ?? {
     conflictResolutions: {},
     keepFromSource: context.prepared.onlyInSource,
@@ -429,7 +449,7 @@ export async function inspectRepositoryYOpsMergeSchema(
     keepRelationsFromSource: true,
     keepRelationsFromTarget: true,
   };
-  const result = createRepositorySemanticState(
+  const before = createRepositorySemanticState(
     executeMerge(
       decodeRepositorySemanticState(context.mergeBaseState),
       decodeRepositorySemanticState(context.source.state),
@@ -438,13 +458,42 @@ export async function inspectRepositoryYOpsMergeSchema(
       decisions
     )
   );
+  let result = before;
+  try {
+    result = migrateRepositoryMergeContent(before, context.schema.rootKey, input.decisions);
+  } catch (error) {
+    return {
+      schema: context.schema,
+      validation: null,
+      before: before.value,
+      after: null,
+      error: error instanceof Error ? error.message : 'Invalid content migration.',
+    };
+  }
   return {
     schema: context.schema,
+    before: before.value,
+    after: result.value,
+    error: null,
     validation: validateRepositoryMergedSchema(result, context.schema, {
       id: 'repository-merge-readiness',
       recordedAt: new Date().toISOString() as CanonicalTimestamp,
     }),
   };
+}
+
+function migrateRepositoryMergeContent(state: State, rootKey: string, decisions?: MergeDecision) {
+  const resolution = (decisions as MergeWorkspaceDecision | undefined)?.schemaResolution;
+  if (!resolution?.commands.length) return state;
+  try {
+    return createYOpsState(
+      compileSchemaContentMigration(state.value as never, rootKey, resolution.commands).document
+    );
+  } catch (error) {
+    throw new RepositorySchemaMergeError(
+      error instanceof Error ? error.message : 'Invalid content migration.'
+    );
+  }
 }
 
 type FlatNode = ReturnType<typeof flattenTrees>[number];
@@ -467,7 +516,14 @@ export interface RepositoryMergeReviewNode {
 }
 
 export interface RepositoryMergeReview {
-  schemaMerge?: { schemaHash: string; rootKey: string; changes: RepositoryMergedSchema['changes'] };
+  schemaMerge?: {
+    schemaHash: string;
+    rootKey: string;
+    changes: RepositoryMergedSchema['changes'];
+    conflicts: RepositoryMergedSchema['conflicts'];
+    unresolved: string[];
+    definitionError: string | null;
+  };
   prepared: MergeResult;
   mergeBaseDigest: string | null;
   nodes: RepositoryMergeReviewNode[];
@@ -573,6 +629,9 @@ export async function reviewRepositoryYOpsMerge(
             schemaHash: context.schema.schemaHash,
             rootKey: context.schema.rootKey,
             changes: context.schema.changes,
+            conflicts: context.schema.conflicts,
+            unresolved: context.schema.unresolved,
+            definitionError: context.schema.definitionError,
           },
         }
       : {}),
@@ -634,16 +693,27 @@ async function commitRepositoryYOpsMergeInTransaction(
     throw new TransitionHeadConflictError(input.targetDigest, head.head);
   }
   const recordedAt = new Date().toISOString() as CanonicalTimestamp;
+  if (context.schema?.unresolved.length || context.schema?.definitionError)
+    throw new RepositorySchemaMergeError(
+      context.schema.definitionError ??
+        `Schema conflicts require resolution: ${context.schema.unresolved.join(', ')}`
+    );
+  if (!context.schema && (input.decisions as MergeWorkspaceDecision).schemaResolution)
+    throw new RepositorySchemaMergeError('Schema resolution requires a bound branch contract.');
   const validation = context.schema
     ? validateRepositoryMergedSchema(
-        createRepositorySemanticState(
-          executeMerge(
-            decodeRepositorySemanticState(context.mergeBaseState),
-            decodeRepositorySemanticState(context.source.state),
-            decodeRepositorySemanticState(context.target.state),
-            context.prepared,
-            input.decisions
-          )
+        migrateRepositoryMergeContent(
+          createRepositorySemanticState(
+            executeMerge(
+              decodeRepositorySemanticState(context.mergeBaseState),
+              decodeRepositorySemanticState(context.source.state),
+              decodeRepositorySemanticState(context.target.state),
+              context.prepared,
+              input.decisions
+            )
+          ),
+          context.schema.rootKey,
+          input.decisions
         ),
         context.schema,
         { id: `repository-merge:${input.targetDigest}:${input.sourceDigest}`, recordedAt }
@@ -671,6 +741,14 @@ async function commitRepositoryYOpsMergeInTransaction(
     sourceCommit: context.source.commit,
     targetCommit: context.target.commit,
     decisions: input.decisions,
+    ...(context.schema
+      ? {
+          contentMigration: {
+            rootKey: context.schema.rootKey,
+            commands: (input.decisions as MergeWorkspaceDecision).schemaResolution?.commands ?? [],
+          },
+        }
+      : {}),
     actor,
     message: input.message,
     policyBinding: policyBinding ?? REPOSITORY_MERGE_POLICY,

@@ -1055,6 +1055,7 @@ export async function listTransitionCommitProjectIds(db: AnyDB, digest: string):
 export interface VerifiedTransitionCommitGraph extends VerifiedCommitIntegrity {
   recordedAt: string;
   state: State;
+  base: State;
 }
 
 /**
@@ -1072,10 +1073,11 @@ export async function getVerifiedTransitionCommitGraph(
   const resolver = new DatabaseTransitionObjectResolver(db, projectId);
   const verified = await verifyRepositoryCommitClosure(stored.commit, resolver);
   const result = await resolveStoredObject(resolver, verified.effect.result);
-  if (result.schema !== 't3x/state/v1') {
+  const base = await resolveStoredObject(resolver, verified.effect.base);
+  if (result.schema !== 't3x/state/v1' || base.schema !== 't3x/state/v1') {
     throw new TransitionCommitGraphIntegrityError(digest);
   }
-  return { ...verified, state: result, recordedAt: stored.recordedAt };
+  return { ...verified, base, state: result, recordedAt: stored.recordedAt };
 }
 
 export async function listTransitionCommits(

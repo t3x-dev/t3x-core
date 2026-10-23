@@ -1,5 +1,23 @@
 import type { WorkspaceSchemaDefinitionSnapshot } from './schema-studio';
 import type { TransitionControlPlaneView, TransitionProtocolValue } from './types';
+export interface WorkspaceCommitChanges {
+  projectId: string;
+  commitDigest: string;
+  committedAt: string;
+  source: 'authoring' | 'commit_diff';
+  base: TransitionProtocolValue;
+  current: TransitionProtocolValue;
+  actions: Array<{
+    action: WorkspaceAuthoringAction;
+    cards: WorkspaceAuthoringCard[];
+    before: TransitionProtocolValue;
+    after: TransitionProtocolValue;
+  }>;
+  nextBeforeSequence: number | null;
+  netDiff: WorkspaceAuthoringCard[];
+  schemaCards: import('./assistant-schema-settings').AssistantSchemaSettingsView[];
+  schemaReview: import('./schema-studio').WorkspaceFullSchemaReview | null;
+}
 export interface WorkspaceAuthoringActor {
   kind: 'human' | 'agent' | 'service';
   id: string;
@@ -18,6 +36,7 @@ export interface WorkspaceAuthoringAction {
   affectedNodeCount?: number;
   affectedNodeIds?: string[];
   generation?: { transitionId: string; preparationDigest: string; preparation: unknown };
+  deletionConfirmation?: { status: 'required' | 'confirmed'; paths: string[] };
 }
 export interface WorkspaceAuthoringCard {
   nodeId: string;
@@ -109,6 +128,16 @@ export interface WorkspaceAuthoringOutcome {
   receipt?: { actionId: string; outcome: 'no_change'; message: string };
 }
 export interface WorkspaceAuthoringCapability {
+  confirmDeletion(
+    projectId: string,
+    workspaceId: string,
+    actionId: string,
+    input: {
+      expected_workspace_revision: number;
+      expected_revision: number;
+      expected_ref_head: string | null;
+    }
+  ): Promise<{ workspaceRevision: number }>;
   prepareReview(
     projectId: string,
     workspaceId: string,

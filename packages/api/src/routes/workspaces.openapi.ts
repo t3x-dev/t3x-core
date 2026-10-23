@@ -792,6 +792,7 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
     assistantSchemaSettings: storedAssistantSchemaSettings,
     schemaPending: storedSchemaPending,
     schemaPreparations: storedSchemaPreparations,
+    authoringDeletionAuthorizations: storedDeletionAuthorizations,
     workspaceSchemaBase: storedWorkspaceSchemaBase,
     status: storedStatus,
     ...storedEditableWorkspace
@@ -803,6 +804,7 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
     assistantSchemaSettings: _ignoredAssistantSchemaSettings,
     schemaPending: _ignoredSchemaPending,
     schemaPreparations: _ignoredSchemaPreparations,
+    authoringDeletionAuthorizations: _ignoredDeletionAuthorizations,
     workspaceSchemaBase: _ignoredWorkspaceSchemaBase,
     status,
     ...clientWorkspace
@@ -827,6 +829,9 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
     ...(storedSchemaPending !== undefined ? { schemaPending: storedSchemaPending } : {}),
     ...(storedSchemaPreparations !== undefined
       ? { schemaPreparations: storedSchemaPreparations }
+      : {}),
+    ...(storedDeletionAuthorizations !== undefined
+      ? { authoringDeletionAuthorizations: storedDeletionAuthorizations }
       : {}),
     ...(storedWorkspaceSchemaBase !== undefined
       ? { workspaceSchemaBase: storedWorkspaceSchemaBase }

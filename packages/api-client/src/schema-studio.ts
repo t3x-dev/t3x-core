@@ -20,6 +20,7 @@ const schemaJsonValue = z
     }
     return parsed.data;
   });
+export { schemaJsonValue as SchemaJsonValueSchema };
 export const StudioSourceSchema = z.object({
   projectId: z.string().min(1).nullable(),
   canonicalName: z.string().min(1).max(240),

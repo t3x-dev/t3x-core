@@ -842,6 +842,9 @@ describe('Workspace routes', () => {
     };
     const serverPending = { pendingId: 'server-pending', workspaceRevision: 1 };
     const serverPreparations = [{ requestId: 'server-request', previewHash: 'server-hash' }];
+    const serverDeletionAuthorizations = [
+      { actionId: 'server-deletion', subjectDigest: 'server-bound-subject' },
+    ];
     const serverSchemaBase = { refHead: 'server-commit', snapshot: { status: 'bound' } };
     const serverSettings = {
       settingsId: 'server-only',
@@ -858,6 +861,7 @@ describe('Workspace routes', () => {
       assistantSchemaSettings: serverSettings,
       schemaPending: serverPending,
       schemaPreparations: serverPreparations,
+      authoringDeletionAuthorizations: serverDeletionAuthorizations,
       workspaceSchemaBase: serverSchemaBase,
     });
     const response = await app.request(
@@ -874,6 +878,9 @@ describe('Workspace routes', () => {
             assistantSchemaSettings: { settingsId: 'forged', status: 'confirmed' },
             schemaPending: { pendingId: 'forged' },
             schemaPreparations: [{ requestId: 'forged' }],
+            authoringDeletionAuthorizations: [
+              { actionId: 'forged', actor: { kind: 'human', id: 'fake' } },
+            ],
             workspaceSchemaBase: { refHead: 'forged-commit', snapshot: { status: 'unbound' } },
           },
         }),
@@ -890,6 +897,10 @@ describe('Workspace routes', () => {
     ).toEqual(serverSettings);
     expect(body.data.workspace.schemaPending).toEqual(serverPending);
     expect(body.data.workspace.schemaPreparations).toEqual(serverPreparations);
+    expect(
+      storageMock.upsertWorkspaceDraft.mock.calls.at(-1)?.[1].workspace_state
+        .authoringDeletionAuthorizations
+    ).toEqual(serverDeletionAuthorizations);
     expect(body.data.workspace.workspaceSchemaBase).toEqual(serverSchemaBase);
     expect(
       storageMock.upsertWorkspaceDraft.mock.calls.at(-1)?.[1].workspace_state.schemaEditCandidate

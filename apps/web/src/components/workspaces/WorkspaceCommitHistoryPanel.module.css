@@ -1,0 +1,90 @@
+.panel {
+  padding: 12px 16px 24px;
+  font-size: 12px;
+  min-width: 0;
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--stroke-divider);
+}
+.header button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-link);
+  font-size: 12px;
+}
+.header > span,
+.hint,
+.group time {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.panel h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  margin: 16px 0 4px;
+}
+.hint {
+  margin: 8px 0 12px;
+}
+.group,
+.schema {
+  border: 1px solid var(--stroke-divider);
+  border-radius: 8px;
+  padding: 10px;
+  margin: 12px 0;
+}
+.group {
+  background: var(--accent-commit-soft);
+}
+.panel h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.schema {
+  border-left: 2px solid #6555ff;
+  background: #6555ff08;
+}
+.schema h3 > span {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--status-success);
+}
+.schema p {
+  margin: 4px 0;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.inspect {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.inspect:hover,
+.inspect[aria-pressed="true"] {
+  background: var(--accent-commit-soft);
+}
+.inspect[aria-pressed="true"],
+.inspect:focus-visible {
+  outline: 1px solid var(--accent-commit);
+  outline-offset: 3px;
+}
+.snapshot {
+  padding: 10px;
+  border-top: 1px solid var(--stroke-divider);
+}

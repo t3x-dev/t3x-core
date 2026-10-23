@@ -3,6 +3,56 @@ import { describe, expect, it } from 'vitest';
 import { compileSchemaContentMigration } from '../schema-authoring/content-migration';
 
 describe('guarded Schema content migration', () => {
+  it('removes complete semantic array nodes and blocks dangling relation endpoints without mutating input', () => {
+    const base = {
+      domain: 't3x.dev/semantic-content',
+      content: {
+        trees: [
+          {
+            key: 'candidate',
+            slots: {},
+            children: [
+              {
+                key: 'remove_me',
+                slots: { title: 'Delete' },
+                children: [{ key: 'child', slots: {}, children: [] }],
+              },
+              { key: 'keep', slots: { title: 'Keep' }, children: [] },
+            ],
+          },
+        ],
+        relations: [],
+      },
+    };
+    const command = { kind: 'remove' as const, path: 'content/trees/[0]/children/[0]' };
+    const result = compileSchemaContentMigration(base, 'candidate', [command]);
+    expect(result.document).toEqual({
+      ...base,
+      content: {
+        ...base.content,
+        trees: [{ ...base.content.trees[0], children: [base.content.trees[0].children[1]] }],
+      },
+    });
+    expect(result.operations).toContainEqual({ drop: { path: command.path } });
+    expect(base.content.trees[0].children).toHaveLength(2);
+    const related = {
+      ...base,
+      content: {
+        ...base.content,
+        relations: [{ from: 'candidate/remove_me/child', to: 'candidate/keep', type: 'links' }],
+      },
+    };
+    expect(() => compileSchemaContentMigration(related, 'candidate', [command])).toThrow(
+      'relation endpoint'
+    );
+    expect(related.content.trees[0].children).toHaveLength(2);
+    expect(
+      applyNativeYOps(
+        { ...base, content: { ...base.content, concurrent: true } },
+        result.operations
+      ).ok
+    ).toBe(false);
+  });
   it('moves content, fills inputs and guards the complete existing root deterministically', () => {
     const base = {
       candidate: { requirements: { title: 'Preserved edit' }, tags: ['old'] },
