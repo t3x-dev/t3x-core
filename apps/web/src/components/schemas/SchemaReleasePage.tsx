@@ -19,6 +19,7 @@ export function SchemaReleasePage({
   workspaceId,
   branch,
   onBack,
+  backLabel,
 }: {
   item?: SchemaCatalogItem;
   loading: boolean;
@@ -29,6 +30,7 @@ export function SchemaReleasePage({
   branch?: string;
   returnTo: string;
   onBack: () => void;
+  backLabel?: string;
 }) {
   const name = item?.identity.displayName || item?.identity.canonicalName || 'Schema';
   return (
@@ -36,7 +38,7 @@ export function SchemaReleasePage({
       <header className={styles.topbar}>
         <button className={styles.back} onClick={onBack} type="button">
           <ArrowLeft aria-hidden="true" className="size-4" />
-          {projectId ? 'Browse schemas' : 'Back to Explore'}
+          {backLabel ?? (projectId ? 'Browse schemas' : 'Back to Explore')}
         </button>
       </header>
       <div className={styles.scroll}>

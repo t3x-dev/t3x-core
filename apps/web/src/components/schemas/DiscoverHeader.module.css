@@ -22,6 +22,17 @@
   padding: 12px 28px;
 }
 
+.exploreHeader {
+  overflow: hidden;
+  scrollbar-gutter: stable;
+}
+
+.exploreHeader .topRow {
+  max-width: var(--explore-page-width, 1440px);
+  margin-inline: auto;
+  padding-inline: var(--explore-page-gutter, 28px);
+}
+
 .identity {
   display: flex;
   flex: 1 1 300px;
@@ -122,6 +133,7 @@
 }
 
 .globalNav a {
+  position: relative;
   display: inline-flex;
   align-items: center;
   min-height: 36px;
@@ -129,6 +141,16 @@
   color: var(--text-secondary);
   font-size: 13px;
   white-space: nowrap;
+}
+
+.globalNav a[aria-current="page"]::after {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent-commit);
+  content: "";
 }
 
 .actions {
@@ -240,6 +262,14 @@
   .identity {
     flex-basis: 100%;
     gap: 10px;
+  }
+
+  .exploreHeader .topRow {
+    padding-inline: var(--explore-page-gutter, 16px);
+  }
+
+  .exploreHeader .utilities {
+    justify-content: space-between;
   }
 
   .context {

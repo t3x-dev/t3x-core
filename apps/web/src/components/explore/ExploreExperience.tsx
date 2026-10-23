@@ -6,7 +6,6 @@ import {
   BookOpen,
   Braces,
   Check,
-  Compass,
   FolderGit2,
   Grid2X2,
   Layers,
@@ -110,6 +109,12 @@ export function ExploreExperience() {
   function back() {
     navigate(Object.fromEntries([...releaseKeys, 'project'].map((key) => [key, undefined])));
   }
+  function viewHref(nextView: 'discover' | 'browse') {
+    const next = new URLSearchParams(query);
+    for (const key of [...releaseKeys, 'project']) next.delete(key);
+    next.set('view', nextView);
+    return `/explore?${next}`;
+  }
   function submit(event: FormEvent) {
     event.preventDefault();
     navigate({ view: 'browse', q: searchText.trim() || undefined });
@@ -120,35 +125,25 @@ export function ExploreExperience() {
     );
   }
   const returnTo = `/explore?${query}`;
+  const viewLabel = view === 'browse' ? 'Browse' : 'Discover';
+  const backLabel = `Back to ${viewLabel}`;
   return (
     <div className={`${palette.scope} ${styles.shell}`}>
-      <DiscoverHeader />
+      <DiscoverHeader
+        exploreNavigation={{
+          view,
+          discoverHref: viewHref('discover'),
+          browseHref: viewHref('browse'),
+        }}
+      />
       {release ? (
-        <ExactRelease params={params} returnTo={returnTo} onBack={back} />
+        <ExactRelease params={params} returnTo={returnTo} onBack={back} backLabel={backLabel} />
       ) : project ? (
-        <PublicProjectReading projectId={project} onBack={back} />
+        <PublicProjectReading projectId={project} onBack={back} backLabel={backLabel} />
       ) : (
-        <main className={styles.scroll} aria-label="Explore">
+        <main className={styles.scroll} aria-label={viewLabel}>
           <div className={styles.page}>
             <header className={styles.toolbar}>
-              <nav className={styles.segmented} aria-label="Explore views">
-                <button
-                  type="button"
-                  aria-current={view === 'discover' ? 'page' : undefined}
-                  onClick={() => navigate({ view: 'discover' })}
-                >
-                  <Compass size={16} />
-                  Discover
-                </button>
-                <button
-                  type="button"
-                  aria-current={view === 'browse' ? 'page' : undefined}
-                  onClick={() => navigate({ view: 'browse' })}
-                >
-                  <Grid2X2 size={16} />
-                  Browse
-                </button>
-              </nav>
               <form className={styles.search} onSubmit={submit}>
                 <Search size={17} aria-hidden="true" />
                 <input
@@ -351,7 +346,7 @@ export function ExploreExperience() {
                 </aside>
                 <div className={styles.results}>
                   <div className={styles.resultHeading}>
-                    <h1>Browse {type === 'all' ? 'Explore' : type}</h1>
+                    <h1>Browse {type === 'all' ? 'projects and schemas' : type}</h1>
                     <fieldset className={styles.viewSwitch} aria-label="Display">
                       <button
                         type="button"
@@ -672,10 +667,12 @@ function ExactRelease({
   params,
   returnTo,
   onBack,
+  backLabel,
 }: {
   params: URLSearchParams;
   returnTo: string;
   onBack: () => void;
+  backLabel: string;
 }) {
   const query = new URLSearchParams({
     canonicalName: params.get('catalogName') ?? '',
@@ -703,11 +700,20 @@ function ExactRelease({
         branch={params.get('branch') ?? undefined}
         returnTo={returnTo}
         onBack={onBack}
+        backLabel={backLabel}
       />
     </div>
   );
 }
-function PublicProjectReading({ projectId, onBack }: { projectId: string; onBack: () => void }) {
+function PublicProjectReading({
+  projectId,
+  onBack,
+  backLabel,
+}: {
+  projectId: string;
+  onBack: () => void;
+  backLabel: string;
+}) {
   const result = usePublicProject(projectId);
   const project = result.data;
   return (
@@ -715,7 +721,7 @@ function PublicProjectReading({ projectId, onBack }: { projectId: string; onBack
       <div className={styles.projectDetail}>
         <button className={styles.textLink} type="button" onClick={onBack}>
           <ArrowLeft size={15} />
-          Back to Explore
+          {backLabel}
         </button>
         {result.loading && <output className={styles.feedback}>Loading project…</output>}
         {result.error && (

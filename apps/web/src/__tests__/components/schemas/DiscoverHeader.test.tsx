@@ -25,6 +25,7 @@ describe('DiscoverHeader navigation', () => {
       'State',
       'Schemas',
       'Workspaces',
+      'Checks',
       'Pull requests',
       'Community',
       'Settings',
@@ -46,6 +47,18 @@ describe('DiscoverHeader navigation', () => {
     expect(pullRequests.searchParams.has('workspace')).toBe(false);
     expect(tabs.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', settingsHref);
     expect(tabs.getByRole('link', { name: 'Workspaces' })).toHaveAttribute('aria-current', 'page');
+    const globalNavigation = within(screen.getByRole('navigation', { name: 'Global' }));
+    expect(globalNavigation.getByRole('link', { name: 'Discover' })).toHaveAttribute(
+      'href',
+      '/explore?view=discover'
+    );
+    expect(globalNavigation.getByRole('link', { name: 'Browse' })).toHaveAttribute(
+      'href',
+      '/explore?view=browse'
+    );
+    expect(
+      globalNavigation.getAllByRole('link').every((link) => !link.hasAttribute('aria-current'))
+    ).toBe(true);
   });
 
   it('keeps namespace settings and repository creation under the supplied owner', () => {
@@ -76,18 +89,26 @@ describe('DiscoverHeader navigation', () => {
     );
   });
 
-  it('gives Explore global navigation without invented repository state', () => {
+  it('gives Discover and Browse global navigation without invented repository state', () => {
     render(<DiscoverHeader />);
 
     const globalNavigation = within(screen.getByRole('navigation', { name: 'Global' }));
-    expect(globalNavigation.getByRole('link', { name: 'Explore' })).toHaveAttribute(
+    expect(globalNavigation.getByRole('link', { name: 'Discover' })).toHaveAttribute(
       'href',
-      '/explore'
+      '/explore?view=discover'
     );
-    expect(globalNavigation.getByRole('link', { name: 'Explore' })).toHaveAttribute(
+    expect(globalNavigation.getByRole('link', { name: 'Discover' })).toHaveAttribute(
       'aria-current',
       'page'
     );
+    expect(globalNavigation.getByRole('link', { name: 'Browse' })).toHaveAttribute(
+      'href',
+      '/explore?view=browse'
+    );
+    expect(globalNavigation.getByRole('link', { name: 'Browse' })).not.toHaveAttribute(
+      'aria-current'
+    );
+    expect(globalNavigation.queryByRole('link', { name: 'Explore' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Commands' })).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Project views' })).not.toBeInTheDocument();
     expect(screen.queryByText('Private')).not.toBeInTheDocument();

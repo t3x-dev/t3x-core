@@ -56,7 +56,13 @@ export function DiscoverHeader({
   projectName,
   newProjectHref,
   namespaceTab,
+  exploreNavigation,
 }: {
+  exploreNavigation?: {
+    view: 'discover' | 'browse';
+    discoverHref: string;
+    browseHref: string;
+  };
   namespaceTab?: 'repositories' | 'settings';
   repoPath?: string;
   settingsHref?: string;
@@ -71,6 +77,11 @@ export function DiscoverHeader({
   newProjectHref?: string;
 }) {
   const isExplore = !namespaceTab && !repoPath;
+  const exploreView = exploreNavigation?.view ?? 'discover';
+  const discoverHref = exploreNavigation?.discoverHref ?? '/explore?view=discover';
+  const browseHref = exploreNavigation?.browseHref ?? '/explore?view=browse';
+  const exploreLabel = exploreView === 'browse' ? 'Browse' : 'Discover';
+  const ExploreIcon = exploreView === 'browse' ? BookOpen : Compass;
   const ownerHref = owner ? `/${encodeURIComponent(owner)}` : '/';
   const createLabel = newProjectHref === '/' ? 'Browse repositories' : 'New repository';
   const OwnerIcon =
@@ -95,7 +106,9 @@ export function DiscoverHeader({
   }
 
   return (
-    <header className={`${palette.scope} ${styles.header}`}>
+    <header
+      className={`${palette.scope} ${styles.header}${isExplore ? ` ${styles.exploreHeader}` : ''}`}
+    >
       <div className={styles.topRow}>
         <div className={styles.identity}>
           <Link className={styles.brand} href="/" aria-label="T3X home">
@@ -117,16 +130,16 @@ export function DiscoverHeader({
           <div className={styles.context}>
             <Link
               className={`${styles.owner}${!projectName ? ` ${styles.currentContext}` : ''}`}
-              href={isExplore ? '/explore' : ownerHref}
+              href={isExplore ? (exploreView === 'browse' ? browseHref : discoverHref) : ownerHref}
             >
               {isExplore ? (
-                <Compass aria-hidden="true" />
+                <ExploreIcon aria-hidden="true" />
               ) : owner ? (
                 <OwnerIcon aria-hidden="true" />
               ) : (
                 <FolderGit2 aria-hidden="true" />
               )}
-              <span>{isExplore ? 'Explore' : owner || 'Repositories'}</span>
+              <span>{isExplore ? exploreLabel : owner || 'Repositories'}</span>
             </Link>
             {projectName ? (
               <>
@@ -157,8 +170,17 @@ export function DiscoverHeader({
             </Button>
           ) : null}
           <nav aria-label="Global" className={styles.globalNav}>
-            <Link href="/explore" aria-current={isExplore ? 'page' : undefined}>
-              Explore
+            <Link
+              href={discoverHref}
+              aria-current={isExplore && exploreView === 'discover' ? 'page' : undefined}
+            >
+              Discover
+            </Link>
+            <Link
+              href={browseHref}
+              aria-current={isExplore && exploreView === 'browse' ? 'page' : undefined}
+            >
+              Browse
             </Link>
             <Link href="/">Your repositories</Link>
           </nav>

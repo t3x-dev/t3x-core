@@ -1,4 +1,6 @@
 .shell {
+  --explore-page-width: 1440px;
+  --explore-page-gutter: 28px;
   height: 100dvh;
   display: flex;
   flex-direction: column;
@@ -10,26 +12,21 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 .page {
-  max-width: 1440px;
+  width: 100%;
+  max-width: var(--explore-page-width);
   margin: 0 auto;
-  padding: 24px 40px 64px;
+  padding: 24px var(--explore-page-gutter) 64px;
 }
 .toolbar {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
   gap: 16px;
-  padding-bottom: 20px;
+  padding-bottom: 24px;
 }
-.segmented {
-  display: flex;
-  padding: 3px;
-  background: var(--management-control-bg);
-  border-radius: 9px;
-  flex-shrink: 0;
-}
-.segmented button,
 .types button,
 .viewSwitch button {
   display: flex;
@@ -42,7 +39,7 @@
   font-size: 13px;
   cursor: pointer;
 }
-.segmented button[aria-current],
+.types button[aria-current],
 .viewSwitch button[aria-pressed="true"] {
   background: var(--surface-card);
   color: var(--text-primary);
@@ -50,14 +47,14 @@
 }
 .search {
   display: flex;
-  flex: 1;
-  min-width: 160px;
+  min-width: 0;
   align-items: center;
   gap: 9px;
-  min-height: 38px;
+  min-height: 40px;
   padding: 0 12px;
+  border: 1px solid var(--stroke-default);
   background: var(--management-control-bg);
-  border-radius: 9px;
+  border-radius: 8px;
   color: var(--text-tertiary);
 }
 .search input {
@@ -66,8 +63,9 @@
   flex: 1;
   min-width: 0;
   outline: none;
-  padding: 9px 0;
+  padding: 8px 0;
   font-size: 13px;
+  line-height: 20px;
   color: var(--text-primary);
 }
 .search:focus-within {
@@ -75,25 +73,35 @@
   outline-offset: 2px;
 }
 .search button {
+  display: grid;
+  min-width: 28px;
+  min-height: 32px;
+  place-items: center;
   cursor: pointer;
 }
-.types {
+.types,
+.viewSwitch {
   display: flex;
-  gap: 3px;
+  flex: none;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--stroke-default);
+  border-radius: 8px;
+  background: var(--management-control-bg);
 }
-.types button {
-  border-radius: 18px;
-}
-.types button[aria-current] {
-  background: var(--text-primary);
-  color: var(--surface-panel);
+.types button,
+.viewSwitch button {
+  min-height: 32px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  line-height: 20px;
 }
 .heading {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
   gap: 24px;
-  margin: 0 0 23px;
+  margin: 0 0 24px;
 }
 .eyebrow {
   display: block;
@@ -102,12 +110,15 @@
   font-weight: 650;
   letter-spacing: 0.1em;
 }
+.heading h1,
+.resultHeading h1 {
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 32px;
+  letter-spacing: normal;
+}
 .heading h1 {
-  font-size: 25px;
-  font-weight: 640;
-  line-height: 1.3;
-  letter-spacing: -0.7px;
-  margin: 5px 0 6px;
+  margin: 4px 0 8px;
 }
 .heading p {
   font-size: 13px;
@@ -547,7 +558,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 6px 0 28px;
+  min-height: 40px;
+  margin: 0 0 20px;
 }
 .filterHeading h2 {
   display: flex;
@@ -630,22 +642,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  margin-bottom: 14px;
+  gap: 16px;
+  min-height: 40px;
+  margin-bottom: 20px;
 }
 .resultHeading h1 {
-  font-size: 20px;
-  font-weight: 650;
-  letter-spacing: -0.4px;
-}
-.viewSwitch {
-  display: flex;
-  padding: 3px;
-  background: var(--management-control-bg);
-  border-radius: 7px;
+  margin: 0;
 }
 .viewSwitch button {
-  padding: 5px 7px;
+  min-width: 32px;
+  padding: 4px;
 }
 .results {
   min-width: 0;
@@ -783,7 +789,7 @@
 }
 @media (max-width: 1150px) {
   .page {
-    padding: 22px 26px 50px;
+    padding-bottom: 48px;
   }
   .discoveryBody {
     grid-template-columns: minmax(0, 1fr) 225px;
@@ -807,16 +813,6 @@
   }
 }
 @media (max-width: 850px) {
-  .toolbar {
-    flex-wrap: wrap;
-  }
-  .search {
-    order: 3;
-    flex-basis: 100%;
-  }
-  .types {
-    margin-left: auto;
-  }
   .featureGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -837,20 +833,21 @@
     grid-template-columns: 1fr;
   }
 }
+@media (max-width: 760px) {
+  .shell {
+    --explore-page-gutter: 16px;
+  }
+}
 @media (max-width: 560px) {
   .page {
-    padding: 18px 16px 40px;
+    padding-block: 20px 40px;
   }
   .toolbar {
-    gap: 10px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
   }
-  .segmented button,
-  .types button {
-    padding: 7px 9px;
-    font-size: 12px;
-  }
-  .heading h1 {
-    font-size: 24px;
+  .types {
+    justify-self: start;
   }
   .featureGrid,
   .projectGrid {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { ExploreExperience } from '@/components/explore/ExploreExperience';
 
@@ -104,6 +104,21 @@ it('sends filters to the schema server while keeping public project paging indep
   expect(projectQuery.has('publisher')).toBe(false);
   expect(screen.getByRole('heading', { name: 'Schemas', exact: true })).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: 'Public projects', exact: true })).toBeInTheDocument();
+  const navigation = within(screen.getByRole('navigation', { name: 'Global' }));
+  expect(navigation.getByRole('link', { name: 'Browse' })).toHaveAttribute('aria-current', 'page');
+  expect(navigation.getByRole('link', { name: 'Discover' })).not.toHaveAttribute('aria-current');
+  const discover = new URL(
+    navigation.getByRole('link', { name: 'Discover' }).getAttribute('href')!,
+    'http://local'
+  );
+  expect(Object.fromEntries(discover.searchParams)).toEqual({
+    view: 'discover',
+    type: 'all',
+    q: 'garden',
+    publisher: 'alice',
+    projectTag: 'plants',
+  });
+  expect(screen.queryByRole('navigation', { name: 'Explore views' })).not.toBeInTheDocument();
 });
 it('resolves a release directly even when it is not on a loaded catalog page', async () => {
   mocks.query = 'catalogName=t3x%2Fcare-checklist&catalogVersion=1.0.0&catalogHash=sha256%3Aexact';
@@ -114,12 +129,23 @@ it('resolves a release directly even when it is not on a loaded catalog page', a
   );
   expect(mocks.catalog.mock.calls.every((call) => call[2] === false)).toBe(true);
   expect(screen.getByRole('button', { name: 'Use Schema' })).toBeEnabled();
+  const navigation = within(screen.getByRole('navigation', { name: 'Global' }));
+  expect(navigation.getByRole('link', { name: 'Browse' })).toHaveAttribute(
+    'href',
+    '/explore?view=browse'
+  );
+  expect(screen.getByRole('button', { name: 'Back to Discover' })).toBeInTheDocument();
 });
 it('shows a public introduction without inventing permission to open project contents', async () => {
   mocks.query = 'view=browse&type=projects&project=public';
   render(<ExploreExperience />);
   expect(await screen.findByText('# A public introduction')).toBeInTheDocument();
   expect(screen.queryByRole('link', { name: 'Open project' })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Back to Explore' }));
+  const navigation = within(screen.getByRole('navigation', { name: 'Global' }));
+  expect(navigation.getByRole('link', { name: 'Browse' })).toHaveAttribute(
+    'href',
+    '/explore?view=browse&type=projects'
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Back to Browse' }));
   expect(mocks.push).toHaveBeenCalledWith('/explore?view=browse&type=projects', { scroll: false });
 });
