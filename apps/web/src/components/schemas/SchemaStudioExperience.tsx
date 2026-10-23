@@ -32,6 +32,7 @@ import moduleStyles from './AddModulesDialog.module.css';
 import { SchemaContentPreparationDialog } from './SchemaContentPreparationDialog';
 import { SchemaDataEditor } from './SchemaDataEditor';
 import { SchemaDefinitionWorkbench } from './SchemaDefinitionWorkbench';
+import { SchemaSourceCompositionDialog } from './SchemaSourceCompositionDialog';
 import { SchemaStudioSurface } from './SchemaStudioSurface';
 import { StudioChanges, StudioImpactPreview } from './StudioDefinitionPreview';
 import { StudioPublishDialog } from './StudioPublishDialog';
@@ -192,6 +193,15 @@ export function SchemaStudioExperience({
   const [activeModuleId, setActiveModuleId] = useState('requirements');
   const [advanced, setAdvanced] = useState(params?.get('mode') === 'compose');
   const [definitionOpen, setDefinitionOpen] = useState(false);
+  const [compositionRequest, setCompositionRequest] = useState<{
+    ids: string[];
+    revision: number;
+    base?: Record<string, unknown>;
+    current?: Record<string, unknown>;
+    choices?: Record<string, string>;
+  }>();
+  const [editorReset, setEditorReset] = useState(0);
+  const [editorInvalid, setEditorInvalid] = useState(false);
   const [dataDirty, setDataDirty] = useState(false);
   const dataDirtyRef = useRef(false);
   const updateDataDirty = useCallback((dirty: boolean) => {
@@ -426,6 +436,7 @@ export function SchemaStudioExperience({
   }, [workspaceId]);
 
   const previewInput = {
+    ...(schemaEdit.candidate?.composition ? { composition: schemaEdit.candidate.composition } : {}),
     candidateIds: selection,
     ...(persistedTarget ? { workspaceId: persistedTarget.id } : {}),
   };
@@ -518,6 +529,21 @@ export function SchemaStudioExperience({
   const selectedWorkspaceTitle =
     target?.title ??
     (workspaceId ? 'Workspace unavailable' : (draftWorkspaces[0]?.title ?? 'No draft workspace'));
+
+  function composeSources(sourceId?: string) {
+    setCompositionRequest({
+      ids: sourceId ? [...new Set([...selection, sourceId])] : [...selection],
+      revision: schemaEdit.candidate?.revision ?? 0,
+      base: structuredClone(
+        editorBase?.schema ??
+          schemaEdit.candidate?.baseDefinition ??
+          basePreview.data?.workspace?.boundSchema ??
+          basePreview.data?.schema
+      ),
+      current: structuredClone(schemaDefinition ?? data?.schema),
+      choices: sourceId && !selection.includes(sourceId) ? {} : schemaEdit.candidate?.composition,
+    });
+  }
 
   function choose(module: StudioModule) {
     if (dataDirtyRef.current) return;
@@ -674,9 +700,15 @@ export function SchemaStudioExperience({
       <SchemaStudioSurface
         navigation={navigation}
         contextLocked={dataDirty || definitionOpen}
-        dataEditor={
+        editorInvalid={editorInvalid}
+        dataEditor={(view) => (
           <SchemaDataEditor
-            key={`${projectId}:${workspaceId}:${candidateSelectionKey}`}
+            view={view}
+            onValidationChange={setEditorInvalid}
+            sources={candidates.items.filter((candidate) => !selection.includes(candidate.id))}
+            onComposeSources={persistedTarget ? composeSources : undefined}
+            layoutKey={`${projectId}:${workspaceId}`}
+            key={`${projectId}:${workspaceId}:${candidateSelectionKey}:${editorReset}`}
             initialDefinition={
               editorBase?.initial ??
               (selection.length && recoveredDefinitionReady && data
@@ -729,7 +761,7 @@ export function SchemaStudioExperience({
               updateDataDirty(false);
             }}
           />
-        }
+        )}
         browseHref={browseHref}
         workspaceTitle={selectedWorkspaceTitle}
         workspaceId={workspaceId}
@@ -763,7 +795,7 @@ export function SchemaStudioExperience({
           pendingSchema.refresh();
           void workspaces.refresh();
         }}
-        onAdd={() => setAdvanced(true)}
+        onAdd={() => composeSources()}
         onEditDefinition={
           !dataDirty && activeModule && persistedTarget && selection.length
             ? () => {
@@ -799,6 +831,46 @@ export function SchemaStudioExperience({
               }
         }
       />
+      {compositionRequest ? (
+        <SchemaSourceCompositionDialog
+          projectId={projectId}
+          workspaceId={persistedTarget?.id ?? ''}
+          candidates={candidates.items}
+          selection={compositionRequest.ids}
+          initialComposition={compositionRequest.choices}
+          baseDefinition={compositionRequest.base}
+          currentDefinition={compositionRequest.current}
+          onClose={() => setCompositionRequest(undefined)}
+          onSave={async (ids, composition, combined, definition) => {
+            if (!persistedTarget) throw new Error('Select a saved Workspace.');
+            const saved = await schemaEdit.save({
+              workspaceId: persistedTarget.id,
+              candidateIds: ids,
+              ifRevision: compositionRequest.revision,
+              retryKey: `studio-rebase:${crypto.randomUUID()}`,
+              origin: 'studio',
+              intent: 'Combine pinned Schema sources and preserve local edits.',
+              localContribution: {},
+              schemaDefinition: definition,
+              baseSchemaHash: combined.schemaHash,
+              composition,
+              rebase: true,
+            });
+            setEditorReset((value) => value + 1);
+            setSelection(ids);
+            setEditorBase(undefined);
+            setSchemaDefinition(undefined);
+            setLocalContribution({});
+            setSavedCandidateRef({
+              candidateId: saved.candidate.candidateId,
+              revision: saved.candidate.revision,
+            });
+            setReview(undefined);
+            updateDataDirty(false);
+            await workspaces.refresh();
+          }}
+        />
+      ) : null}
       <SchemaDefinitionWorkbench
         baseSchema={definitionOpen ? editorBase?.schema : basePreview.data?.schema}
         initialContribution={localContribution}

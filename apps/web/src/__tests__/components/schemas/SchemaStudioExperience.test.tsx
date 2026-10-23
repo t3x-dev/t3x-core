@@ -1,4 +1,3 @@
-import moduleStyles from '@/components/schemas/AddModulesDialog.module.css';
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import type { StudioSchemaEditCandidate } from '@t3x-dev/api-client';
@@ -432,18 +431,17 @@ it('does not offer the selected candidate as its own comparison', () => {
   expect(screen.getByText('Create a Workspace to review and adopt this definition.')).toBeVisible();
 });
 
-it('opens the module workbench in a wide viewport-bounded dialog with a scrollable body', () => {
+it('opens source composition without applying or discarding the current candidate', () => {
   render(
     <SchemaStudioExperience projectId="p">
       <div>Module workbench content</div>
     </SchemaStudioExperience>
   );
   fireEvent.click(screen.getByRole('button', { name: 'Add modules' }));
-  const dialog = screen.getByRole('dialog', { name: 'Add modules' });
-  expect(dialog).toHaveClass(moduleStyles.dialog);
+  const dialog = screen.getByRole('dialog', { name: 'Combine Schema sources' });
   expect(
-    within(dialog).getByText(/No separate Composition draft is created/).parentElement
-  ).toHaveClass(moduleStyles.body);
+    within(dialog).getByRole('checkbox', { name: 'Combine Shared foundation @ 1.0' })
+  ).toBeChecked();
   expect(within(dialog).queryByText('Module workbench content')).not.toBeInTheDocument();
   fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

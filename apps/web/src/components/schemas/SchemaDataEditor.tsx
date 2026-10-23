@@ -1,5 +1,6 @@
 'use client';
 
+import type { StudioCandidate } from '@t3x-dev/api-client';
 import { Box, FileText, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { StructureTreeRow, visibleTreeRows } from '@/components/structure/StructureTree';
@@ -7,7 +8,9 @@ import tree from '@/components/structure/StructureTree.module.css';
 import { Button } from '@/components/ui/button';
 import {
   addSchemaField,
+  addSchemaRelation,
   changeSchemaField,
+  moveSchemaField,
   type SchemaDefinition,
   type SchemaFieldRow,
   schemaFieldRows,
@@ -19,8 +22,14 @@ import {
   SchemaFieldProperties,
   SchemaFieldValidation,
 } from './SchemaDefinitionStructure';
+import { SchemaVisualEditor } from './SchemaVisualEditor';
 
 export function SchemaDataEditor({
+  view = 'data',
+  layoutKey = 'schema',
+  sources,
+  onComposeSources,
+  onValidationChange,
   initialDefinition,
   revisionKey,
   pending = false,
@@ -31,6 +40,11 @@ export function SchemaDataEditor({
   onDiscard,
   disabledReason,
 }: {
+  onValidationChange?: (invalid: boolean) => void;
+  view?: 'data' | 'visual';
+  layoutKey?: string;
+  sources?: StudioCandidate[];
+  onComposeSources?: (sourceId?: string) => void;
   initialDefinition?: SchemaDefinition;
   revisionKey: string;
   pending?: boolean;
@@ -65,6 +79,9 @@ export function SchemaDataEditor({
     setDefinition(structuredClone(initialDefinition));
   }, [initialDefinition, revisionKey, dirty]);
   useEffect(() => {
+    onValidationChange?.(!!validationError);
+  }, [validationError, onValidationChange]);
+  useEffect(() => {
     onDirtyChange(dirty || Boolean(validationError));
   }, [dirty, validationError, onDirtyChange]);
   useEffect(() => {
@@ -94,6 +111,28 @@ export function SchemaDataEditor({
     return rows.filter((row) => matches.has(row.path));
   }, [rows, collapsed, query]);
   const active = rows.find((row) => row.path === selected);
+
+  function move(path: string, target: SchemaFieldRow) {
+    const row = rows.find((item) => item.path === path);
+    if (!definition || !row) return;
+    try {
+      change(moveSchemaField(definition, row, target));
+      setSelected(JSON.stringify([...target.location, 'slots', row.name]));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not move this field.');
+    }
+  }
+  function relate(from: string, to: string) {
+    const source = rows.find((item) => item.path === from),
+      target = rows.find((item) => item.path === to);
+    if (!definition || !source || !target) return;
+    try {
+      change(addSchemaRelation(definition, source, target));
+      setPanel('rules');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not add this relation.');
+    }
+  }
 
   function select(row: SchemaFieldRow) {
     if (validationError) return;
@@ -161,13 +200,25 @@ export function SchemaDataEditor({
   return (
     <section aria-label="Schema data editor" className={styles.editor} data-schema-editor>
       <header className={styles.toolbar}>
-        <input
-          aria-label="Find a Schema field"
-          placeholder="Find a field…"
-          value={query}
-          disabled={Boolean(validationError)}
-          onChange={(event) => setQuery(event.target.value)}
-        />
+        {onComposeSources ? (
+          <Button
+            variant="canvas-outline"
+            size="sm"
+            disabled={busy || !!validationError || stale}
+            onClick={() => onComposeSources()}
+          >
+            Combine sources
+          </Button>
+        ) : null}
+        {view === 'data' ? (
+          <input
+            aria-label="Find a Schema field"
+            placeholder="Find a field…"
+            value={query}
+            disabled={Boolean(validationError)}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        ) : null}
         <span>{rows.length} fields</span>
         <output>{dirty ? 'Unsaved changes' : 'Saved definition'}</output>
         <Button
@@ -189,7 +240,7 @@ export function SchemaDataEditor({
       ) : null}
       <fieldset className={styles.content} disabled={busy || !!disabledReason}>
         <SchemaFieldValidation key={resetKey} onValidationChange={setFieldError}>
-          <div className={styles.list}>
+          <div className={styles.list} hidden={view !== 'data'}>
             <div className={styles.columns}>
               <span>Field</span>
               <span>Type · Required</span>
@@ -340,6 +391,24 @@ export function SchemaDataEditor({
               </p>
             ) : null}
           </div>
+          {view === 'visual' ? (
+            <SchemaVisualEditor
+              definition={definition}
+              rows={rows}
+              selected={selected}
+              layoutKey={layoutKey}
+              disabled={busy || !!disabledReason || !!validationError || stale}
+              onSelect={select}
+              onAdd={(row) => add(row, 'slot')}
+              onMove={move}
+              onRelation={relate}
+              onRules={() => {
+                if (!validationError) setPanel('rules');
+              }}
+              sources={sources}
+              onSource={onComposeSources}
+            />
+          ) : null}
           <aside className={styles.properties} aria-label="Schema properties">
             <div className={styles.tabs}>
               <button
@@ -363,6 +432,61 @@ export function SchemaDataEditor({
               {active ? (
                 <div key={active.path} className={styles.settings}>
                   <h3>{active.semanticPath}</h3>
+                  {view === 'visual' ? (
+                    <div className="mb-4 space-y-2">
+                      <SchemaFieldName
+                        label={`Visual name ${active.semanticPath}`}
+                        name={active.name}
+                        names={rows
+                          .filter(
+                            (row) =>
+                              JSON.stringify(row.location.slice(0, -1)) ===
+                              JSON.stringify(active.location.slice(0, -1))
+                          )
+                          .map((row) => row.name)}
+                        onChange={(name) => update(active, name, active.definition)}
+                      />
+                      {active.kind === 'slot' ? (
+                        <label className="flex items-center gap-2 text-sm">
+                          Type
+                          <select
+                            aria-label={`Visual type ${active.semanticPath}`}
+                            value={String(active.definition.type ?? '')}
+                            onChange={(event) => {
+                              const next = { ...active.definition };
+                              if (event.target.value) next.type = event.target.value;
+                              else delete next.type;
+                              update(active, active.name, next);
+                            }}
+                          >
+                            <option value="">Any type</option>
+                            {[
+                              'string',
+                              'number',
+                              'integer',
+                              'boolean',
+                              'array',
+                              'object',
+                              'null',
+                            ].map((type) => (
+                              <option key={type}>{type}</option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : null}
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          aria-label={`Visual required ${active.semanticPath}`}
+                          checked={active.required}
+                          onChange={(event) =>
+                            update(active, active.name, active.definition, event.target.checked)
+                          }
+                        />
+                        Required
+                      </label>
+                    </div>
+                  ) : null}
                   <SchemaFieldProperties
                     kind={active.kind}
                     path={active.semanticPath}

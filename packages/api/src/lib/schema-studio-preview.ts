@@ -31,6 +31,7 @@ import {
 import type { Context } from 'hono';
 import { assessWorkspaceSchemaImpact, workspaceContent } from './schema-evolution-impact';
 import { resolveStudioSource, schemaSourceAdoptionReason } from './schema-studio';
+import { resolveStudioComposition, type StudioComposition } from './schema-studio-composition';
 import { workspaceAuthoringState } from './workspace-authoring';
 import { resolveWorkspaceSchemaEditBasis } from './workspace-schema-edit-basis';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
@@ -99,7 +100,8 @@ export async function compileStudioSelection(
   projectId: string,
   candidateIds: string[],
   rawLocalContribution?: Record<string, unknown>,
-  localIdentity?: { id: string; revision: number }
+  localIdentity?: { id: string; revision: number },
+  composition?: StudioComposition
 ) {
   const entries = await Promise.all(
     candidateIds.map(async (id) => {
@@ -130,6 +132,7 @@ export async function compileStudioSelection(
     apiVersion: 't3x.dev/studio-selection/v1',
     projectId,
     sources,
+    ...(composition && Object.keys(composition).length ? { composition } : {}),
   });
   const localContribution = studioLocalContribution(
     rawLocalContribution,
@@ -141,13 +144,7 @@ export async function compileStudioSelection(
     adoptionReason = (await schemaSourceAdoptionReason(c, db, projectId, view)) ?? adoptionReason;
   }
   const whole = entries.filter(({ view }) => view.kind === 'schema');
-  if (whole.length && entries.length !== 1)
-    throw new StudioError(
-      'INVALID_REQUEST',
-      'A published Schema is adopted whole. Select it alone or compose declared Modules separately.'
-    );
-  if (whole.length) {
-    const view = whole[0]!.view;
+  for (const { view } of whole) {
     if (view.manifest.apiVersion !== 't3x.dev/yschema-blueprint/v1')
       throw new StudioError('INVALID_REQUEST', 'Unsupported published Schema definition.');
     const schema = normalizeYSchemaObject(view.manifest.schema);
@@ -169,8 +166,15 @@ export async function compileStudioSelection(
         'CONFLICT',
         'Published Schema integrity does not match its compiled definition.'
       );
-    if (!localContribution)
+    if (!localContribution && entries.length === 1 && Object.keys(composition ?? {}).length)
+      throw new StudioError(
+        'INVALID_REQUEST',
+        'Composition decisions no longer apply to this single source.'
+      );
+    if (!localContribution && entries.length === 1)
       return {
+        compositionConflicts: [],
+        composition,
         schema,
         samples: samplesFor(schema, true),
         schemaHash,
@@ -183,7 +187,31 @@ export async function compileStudioSelection(
         adoption: { allowed: !adoptionReason, reason: adoptionReason },
       };
   }
-  const modules = entries.map(({ view }) => artifactViewToOpenModule(view));
+  let resolved: ReturnType<typeof resolveStudioComposition>;
+  try {
+    resolved = resolveStudioComposition(
+      entries.map(({ row, view }) => ({
+        id: row.id,
+        whole: view.kind === 'schema',
+        module: artifactViewToOpenModule(view),
+        metadata:
+          view.kind === 'schema'
+            ? Object.fromEntries(
+                Object.entries(view.manifest.schema as Record<string, unknown>).filter(
+                  ([key]) => !['nodes', 'relationTypes', 'rules'].includes(key)
+                )
+              )
+            : undefined,
+      })),
+      composition
+    );
+  } catch (error) {
+    throw new StudioError(
+      'INVALID_REQUEST',
+      error instanceof Error ? error.message : 'Invalid composition decisions.'
+    );
+  }
+  const { modules, conflicts: compositionConflicts } = resolved;
   const compiled = await compileYSchemaCompositionV2({
     composition: {
       apiVersion: 't3x.dev/yschema-composition/v2',
@@ -201,7 +229,7 @@ export async function compileStudioSelection(
   });
   // Whole-Schema bases retain root semantics; Modules alone do not carry strict/name metadata.
   if (whole.length) {
-    const base = normalizeYSchemaObject(whole[0]!.view.manifest.schema);
+    const base = normalizeYSchemaObject(entries[resolved.metadataIndex!]!.view.manifest.schema);
     const derived = {
       ...base,
       nodes: compiled.schema.nodes,
@@ -211,7 +239,21 @@ export async function compileStudioSelection(
     compiled.schema = compiled.report.valid ? normalizeYSchemaObject(derived) : derived;
     compiled.compiledSchemaHash = await sha256CompositionValue(compiled.schema);
   }
+  const unresolved = compositionConflicts.filter((conflict) => !conflict.selected);
+  if (unresolved.length) {
+    compiled.report.valid = false;
+    compiled.report.issues.push(
+      ...unresolved.map((conflict) => ({
+        code: 'PATH_OWNERSHIP_CONFLICT' as const,
+        path: conflict.path,
+        blocking: true,
+        message: `Choose the source definition for ${conflict.path}.`,
+      }))
+    );
+  }
   return {
+    composition,
+    compositionConflicts,
     samples: samplesFor(compiled.schema, compiled.report.valid),
     schema: compiled.schema,
     schemaHash: compiled.compiledSchemaHash,
@@ -282,6 +324,10 @@ export async function previewStudio(
         'The Schema edit candidate changed. Refresh it before checking again.'
       );
   }
+  const recoveredComposition =
+    editCandidate?.authoringDraft?.base.kind === 'composition'
+      ? await readStudioComposition(db, projectId, editCandidate.authoringDraft.base)
+      : undefined;
   let selected = await compileStudioSelection(
     c,
     db,
@@ -290,7 +336,8 @@ export async function previewStudio(
     (editCandidate?.localContribution ?? input.localContribution) as
       | Record<string, unknown>
       | undefined,
-    editCandidate ? { id: editCandidate.candidateId, revision: editCandidate.revision } : undefined
+    editCandidate ? { id: editCandidate.candidateId, revision: editCandidate.revision } : undefined,
+    recoveredComposition ?? input.composition
   );
   if (editCandidate && !sameStudioSources(editCandidate.baseSources, selected.sources))
     throw new StudioError(
@@ -309,6 +356,21 @@ export async function previewStudio(
           draft.workspace_state,
           resolved.schema
         );
+        if (
+          !input.composition &&
+          basis.composition &&
+          sameStudioSources(basis.sources, selected.sources)
+        ) {
+          selected = await compileStudioSelection(
+            c,
+            db,
+            projectId,
+            input.candidateIds,
+            undefined,
+            undefined,
+            basis.composition
+          );
+        }
         if (basis.selectionHash === selected.selectionHash) {
           boundSchema = { ...basis.schema };
           if (!input.schemaDefinition || input.baseSchemaHash === basis.schemaHash)
@@ -562,6 +624,8 @@ export async function previewStudio(
       input.sample === undefined
         ? null
         : samplePreview(input.sample, selected.schema, selected.report.valid, 'local', null),
+    composition: selected.composition,
+    compositionConflicts: selected.compositionConflicts,
     schema: selected.schema as unknown as Record<string, unknown>,
     renderPlan: selected.renderPlan as unknown as Record<string, unknown>[],
     origins: selected.origins as unknown as Record<string, unknown>,
@@ -720,4 +784,48 @@ function sameStudioSources(
       );
     })
   );
+}
+
+/** Resolve only the exact frozen snapshot belonging to this candidate. */
+export async function readStudioComposition(
+  db: AnyDB,
+  projectId: string,
+  base: {
+    compositionId: string;
+    compositionRevision: number;
+    compositionHash: string;
+    schemaHash: string;
+  }
+) {
+  const snapshot = await findYSchemaCompositionSnapshot(db, {
+    project_id: projectId,
+    composition_id: base.compositionId,
+    composition_revision: base.compositionRevision,
+    compiled_schema_hash: base.schemaHash,
+  });
+  if (
+    !snapshot ||
+    snapshot.compositionHash !== base.compositionHash ||
+    (await sha256CompositionValue(normalizeYSchemaObject(snapshot.schemaJson))) !== base.schemaHash
+  )
+    throw new StudioError('CONFLICT', 'The exact Schema editing Base is unavailable.');
+  const manifest = snapshot.manifestJson as {
+    studioComposition?: StudioComposition;
+    sources?: unknown;
+    selectionHash?: string;
+  };
+  if (manifest.studioComposition && Object.keys(manifest.studioComposition).length) {
+    const hash = await sha256CompositionValue({
+      apiVersion: 't3x.dev/studio-selection/v1',
+      projectId,
+      sources: manifest.sources,
+      composition: manifest.studioComposition,
+    });
+    if (hash !== (manifest.selectionHash ?? base.compositionHash))
+      throw new StudioError(
+        'CONFLICT',
+        'The saved composition decisions failed integrity verification.'
+      );
+  }
+  return manifest.studioComposition;
 }

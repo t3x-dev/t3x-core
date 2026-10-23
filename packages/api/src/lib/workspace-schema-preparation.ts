@@ -394,6 +394,9 @@ export async function prepareWorkspaceSchema(
         source: prepared.source,
         selectionHash: prepared.target.selectionHash,
         ...('sources' in prepared.target ? { sources: prepared.target.sources } : {}),
+        ...('composition' in prepared.target
+          ? { studioComposition: prepared.target.composition }
+          : {}),
       },
       schema_json: { ...prepared.target.schema },
       render_plan_json: prepared.target.renderPlan,

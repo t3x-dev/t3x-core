@@ -108,11 +108,22 @@ export const StudioSchemaEditCandidateRefSchema = z.object({
   candidateId: z.string().min(1),
   revision: z.number().int().positive(),
 });
+export const StudioCompositionSchema = z.record(
+  z.string().min(1).max(300),
+  z.string().min(1).max(300)
+);
+export const StudioCompositionConflictSchema = z.object({
+  definitions: z.record(z.string(), z.unknown()).default({}),
+  path: z.string(),
+  candidates: z.array(z.string()),
+  selected: z.string().nullable(),
+});
 export const StudioPreviewInputSchema = z
   .object({
     candidateIds: ids,
     workspaceId: z.string().min(1).optional(),
     compareToCandidateIds: ids.optional(),
+    composition: StudioCompositionSchema.optional(),
     sample: StudioSampleValueSchema.optional(),
     localContribution: StudioSchemaEditLocalContributionSchema.optional(),
     schemaDefinition: StudioSchemaEditLocalContributionSchema.optional(),
@@ -177,6 +188,8 @@ export const StudioCheckLayerSchema = z.object({
   summary: z.string().optional(),
 });
 export const StudioPreviewSchema = z.object({
+  composition: StudioCompositionSchema.optional(),
+  compositionConflicts: z.array(StudioCompositionConflictSchema).default([]),
   impact: SchemaEvolutionImpactSchema.nullable().default(null),
   samples: z.array(StudioSampleSchema).default([]),
   localSample: StudioSampleSchema.nullable().default(null),
@@ -420,6 +433,8 @@ export const StudioSchemaEditOriginChannelSchema = z.enum(['studio', 'assistant'
 
 export const SaveStudioSchemaEditCandidateInputSchema = z
   .object({
+    composition: StudioCompositionSchema.optional(),
+    rebase: z.boolean().optional(),
     workspaceId: z.string().min(1),
     candidateIds: ids,
     ifRevision: z.number().int().nonnegative(),
@@ -433,6 +448,7 @@ export const SaveStudioSchemaEditCandidateInputSchema = z
   .strict();
 
 export const StudioSchemaEditCandidateSchema = z.object({
+  composition: StudioCompositionSchema.optional(),
   schema: z.literal('t3x.application/workspace-schema-edit-candidate/v1'),
   candidateId: z.string().min(1),
   workspaceId: z.string().min(1),

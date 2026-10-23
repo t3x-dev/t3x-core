@@ -14,6 +14,7 @@ import { StudioError } from './schema-studio-preview';
 import { ensureBuiltInYSchemaArtifacts } from './yschema-artifact-registry';
 
 export interface WorkspaceSchemaEditBasis {
+  composition?: Record<string, string>;
   schema: YSchema;
   schemaHash: string;
   reference: WorkspaceSchemaCompositionBase;
@@ -133,6 +134,9 @@ export async function resolveWorkspaceSchemaEditBasis(
     apiVersion: 't3x.dev/studio-selection/v1',
     projectId,
     sources: parsed.data,
+    ...(Object.keys(record(manifest.studioComposition)).length
+      ? { composition: manifest.studioComposition }
+      : {}),
   });
   if (manifest.selectionHash && manifest.selectionHash !== selectionHash)
     throw new StudioError(
@@ -147,6 +151,7 @@ export async function resolveWorkspaceSchemaEditBasis(
       schemaHash,
     }));
   return {
+    composition: manifest.studioComposition as Record<string, string> | undefined,
     schema,
     schemaHash,
     sources: parsed.data,

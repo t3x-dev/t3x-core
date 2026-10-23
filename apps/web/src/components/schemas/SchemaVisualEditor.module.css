@@ -1,0 +1,113 @@
+.editor {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+}
+.canvas {
+  flex: 1 0 360px;
+  min-height: 360px;
+  background: var(--surface-app);
+}
+.tools,
+.sources {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid var(--stroke-divider);
+  font-size: 12px;
+}
+.tools button,
+.tools select,
+.sources button {
+  padding: 6px 10px;
+  min-height: 32px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+}
+.sources {
+  max-height: 100px;
+  overflow: auto;
+}
+.sources:empty {
+  display: none;
+}
+.sources small,
+.tools span {
+  color: var(--text-secondary);
+}
+.card {
+  width: 270px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-size: 13px;
+  box-shadow: var(--shadow-xs);
+}
+.card header {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: grab;
+  border-bottom: 1px solid var(--stroke-divider);
+}
+.card[data-drop-target] {
+  outline: 2px solid var(--accent-commit);
+}
+.dragPreview {
+  padding: 10px 12px;
+  border: 1px solid var(--accent-commit);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-size: 13px;
+  box-shadow: var(--shadow-xs);
+}
+.card header button {
+  text-align: left;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.card header span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.field {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  text-align: left;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--stroke-divider);
+  cursor: grab;
+}
+.field span:first-child {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.field span:last-child {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.field[aria-pressed="true"],
+.card header button[aria-pressed="true"] {
+  color: var(--accent-commit);
+  background: var(--accent-commit-soft);
+}
+.add {
+  padding: 10px 12px;
+  color: var(--accent-commit);
+}
+.editor button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

@@ -21,6 +21,7 @@ export type StudioVisualModule = {
 export function SchemaStudioSurface({
   navigation,
   dataEditor,
+  editorInvalid = false,
   contextLocked = false,
   browseHref,
   workspaceTitle = 'No draft workspace',
@@ -47,7 +48,8 @@ export function SchemaStudioSurface({
   onClear,
 }: {
   navigation?: ReactNode;
-  dataEditor?: ReactNode;
+  editorInvalid?: boolean;
+  dataEditor?: (view: 'data' | 'visual') => ReactNode;
   contextLocked?: boolean;
   browseHref: string;
   workspaceTitle?: string;
@@ -73,9 +75,10 @@ export function SchemaStudioSurface({
   onDownload?: () => void;
   onClear?: () => void;
 }) {
-  const [mode, setMode] = useState<'data' | 'structure' | 'yaml'>(
+  const [mode, setMode] = useState<'data' | 'visual' | 'structure' | 'yaml'>(
     dataEditor ? 'data' : 'structure'
   );
+  const editing = mode === 'data' || mode === 'visual';
   const [panel, setPanel] = useState<'Inspector' | 'Checks' | 'Changes'>('Inspector');
   const [zoom, setZoom] = useState(1);
   const [query, setQuery] = useState('');
@@ -159,8 +162,8 @@ export function SchemaStudioSurface({
           </Button>
         </div>
       </SchemaToolbarSlot>
-      <div className={s.body} data-mode={mode}>
-        <aside aria-label="Studio sources" className={s.col} hidden={mode === 'data'}>
+      <div className={s.body} data-mode={editing ? 'data' : mode}>
+        <aside aria-label="Studio sources" className={s.col} hidden={editing}>
           <div className={s.ch}>
             <b>Sources</b>
             <span className={s.n}>{modules.length}</span>
@@ -261,17 +264,18 @@ export function SchemaStudioSurface({
           </div>
         </aside>
         <section
-          aria-label={mode === 'data' ? 'Schema definition' : 'Composed structure'}
+          aria-label={editing ? 'Schema definition' : 'Composed structure'}
           className={s.canvas}
         >
           <div className={s.ctop}>
             <div className={s.seg} role="tablist" aria-label="Studio view">
               {(dataEditor
-                ? (['data', 'structure', 'yaml'] as const)
+                ? (['data', 'visual', 'structure', 'yaml'] as const)
                 : (['structure', 'yaml'] as const)
               ).map((view) => (
                 <button
                   type="button"
+                  disabled={editorInvalid}
                   role="tab"
                   aria-selected={mode === view}
                   className={mode === view ? s.on : ''}
@@ -279,15 +283,23 @@ export function SchemaStudioSurface({
                   key={view}
                 >
                   <Icon name={view === 'structure' ? 'layers' : 'braces'} size={13} />
-                  {view === 'data' ? 'Data' : view === 'structure' ? 'Composition' : 'YAML'}
+                  {view === 'data'
+                    ? 'Data'
+                    : view === 'visual'
+                      ? 'Visual'
+                      : view === 'structure'
+                        ? 'Composition'
+                        : 'YAML'}
                 </button>
               ))}
             </div>
-            {mode === 'data' ? (
+            {editing ? (
               <div className={s.dataActions}>
                 <button
                   type="button"
+                  disabled={editorInvalid}
                   onClick={() => {
+                    if (editorInvalid) return;
                     setMode('structure');
                     setPanel('Checks');
                     onCheck?.();
@@ -297,7 +309,9 @@ export function SchemaStudioSurface({
                 </button>
                 <button
                   type="button"
+                  disabled={editorInvalid}
                   onClick={() => {
+                    if (editorInvalid) return;
                     setMode('structure');
                     setPanel('Changes');
                   }}
@@ -308,11 +322,11 @@ export function SchemaStudioSurface({
             ) : null}
           </div>
           {dataEditor ? (
-            <div className={s.dataEditor} hidden={mode !== 'data'}>
-              {dataEditor}
+            <div className={s.dataEditor} hidden={!editing}>
+              {dataEditor(mode === 'visual' ? 'visual' : 'data')}
             </div>
           ) : null}
-          {mode === 'data' ? null : mode === 'yaml' ? (
+          {editing ? null : mode === 'yaml' ? (
             <pre className={s.yaml}>{yaml}</pre>
           ) : composition.length ? (
             <div className={s.canvasScroll}>
@@ -358,7 +372,7 @@ export function SchemaStudioSurface({
           ) : (
             <StudioEmptyCanvas browseHref={browseHref} onAdd={onAdd} />
           )}
-          <div className={s.float} hidden={mode === 'data'}>
+          <div className={s.float} hidden={editing}>
             <button
               aria-label="Zoom out"
               onClick={() => setZoom((value) => Math.max(0.5, value - 0.1))}
@@ -388,7 +402,7 @@ export function SchemaStudioSurface({
             </button>
           </div>
         </section>
-        <aside aria-label="Module details" className={s.insp} hidden={mode === 'data'}>
+        <aside aria-label="Module details" className={s.insp} hidden={editing}>
           <div className={s.seg} role="tablist" aria-label="Module panel">
             {(['Inspector', 'Checks', 'Changes'] as const).map((tab) => (
               <button

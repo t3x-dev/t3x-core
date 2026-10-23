@@ -157,7 +157,7 @@ it('compiles deterministically, compares definitions, and keeps preview read-onl
   expect(a.workspace.changes.length).toBeGreaterThan(0);
   expect(a.comparison.changes).toEqual([]);
   expect((await findWorkspaceDraft(db, target, 'work'))?.revision).toBe(before?.revision);
-  expect((await request('preview', { candidateIds: [schemaId, coreId] })).status).toBe(400);
+  expect((await request('preview', { candidateIds: [schemaId, coreId] })).status).toBe(200);
   expect((await request('preview', { candidateIds: ['foreign-candidate'] })).status).toBe(404);
   const invalid = (
     await (await request('preview', { candidateIds: [moduleId], workspaceId: 'work' })).json()

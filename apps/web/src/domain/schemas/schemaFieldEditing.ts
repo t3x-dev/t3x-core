@@ -166,3 +166,41 @@ export function addSchemaField(
   container[name] = kind === 'slot' ? { type: 'string' } : { slots: {} };
   return { definition: next, path: JSON.stringify([...location, name]) };
 }
+
+export function moveSchemaField(
+  schema: SchemaDefinition,
+  row: SchemaFieldRow,
+  target: SchemaFieldRow
+) {
+  if (row.kind !== 'slot' || target.kind !== 'node') throw new Error('Move a field into a node.');
+  if (JSON.stringify(row.owner) === JSON.stringify(target.location)) return schema;
+  guardReferences(schema, row);
+  const next = changeSchemaField(schema, row, row.name, undefined);
+  const node = at(next, target.location);
+  const slots = schemaRecord(node.slots);
+  if (Object.hasOwn(slots, row.name))
+    throw new Error('The destination already has a field with this name.');
+  node.slots = { ...slots, [row.name]: structuredClone(row.definition) };
+  if (row.required)
+    node.requiredSlots = [
+      ...new Set([...(Array.isArray(node.requiredSlots) ? node.requiredSlots : []), row.name]),
+    ];
+  return next;
+}
+
+export function addSchemaRelation(
+  schema: SchemaDefinition,
+  from: SchemaFieldRow,
+  to: SchemaFieldRow
+) {
+  if (from.kind !== 'node' || to.kind !== 'node') throw new Error('Relations connect nodes.');
+  const next = structuredClone(schema);
+  const relations = schemaRecord(next.relationTypes);
+  let name = 'relates_to';
+  for (let n = 2; Object.hasOwn(relations, name); n++) name = `relates_to_${n}`;
+  // Repeated nodes describe a collection; endpoints target each concrete item.
+  const endpoint = (row: SchemaFieldRow) =>
+    `${row.semanticPath}${row.definition.repeated ? '/*' : ''}`;
+  next.relationTypes = { ...relations, [name]: { from: endpoint(from), to: endpoint(to) } };
+  return next;
+}
