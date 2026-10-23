@@ -164,7 +164,7 @@ beforeEach(() => {
 it('keeps the selected branch when Studio links to Browse', () => {
   mocks.query = 'candidate=provider&branch=feature%2Frelease';
   render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+  openSources();
   expect(screen.getByRole('link', { name: 'Browse source releases' })).toHaveAttribute(
     'href',
     '/explore?view=browse&type=schemas&studioTarget=p&branch=feature%2Frelease'
@@ -176,7 +176,7 @@ it('synchronizes exact sources and revision when an assistant snapshot replaces 
     { id: 'saved', revision: 2, status: 'draft', targetBranch: 'main', title: 'Saved' },
   ];
   const { rerender } = render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+  openSources();
   mocks.schemaEditCandidate = {
     candidateId: 'assistant-schema',
     revision: 3,
@@ -205,7 +205,7 @@ it('synchronizes exact sources and revision when an assistant snapshot replaces 
 it('does not review another Workspace when the deep-linked target is missing', () => {
   mocks.query = 'candidate=provider&workspace=missing';
   render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+  openSources();
   expect(screen.getByRole('alert')).toHaveTextContent(
     'Workspace missing was not found in this project'
   );
@@ -217,29 +217,22 @@ it('does not review another Workspace when the deep-linked target is missing', (
 });
 it('keeps a required provider checked and locked while blocking a failed definition review', () => {
   render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+  openSources();
   const controls = screen.getByRole('toolbar', { name: 'Studio controls' });
-  const composition = screen.getByRole('main', { name: 'Studio composition' });
-  const sources = screen.getByRole('complementary', { name: 'Studio sources' });
+  const composition = screen.getByRole('main', { name: 'Schema editor' });
+  const sources = screen.getByRole('region', { name: 'Schema details' });
   expect(composition).toContainElement(controls);
   expect(composition).toContainElement(sources);
-  expect(composition).toContainElement(screen.getByRole('region', { name: 'Composed structure' }));
-  expect(composition).toContainElement(
-    screen.getByRole('complementary', { name: 'Module details' })
-  );
-  expect(within(controls).getByRole('button', { name: 'Manage sources' })).toBeVisible();
+  expect(composition).toContainElement(screen.getByRole('region', { name: 'Schema definition' }));
+  expect(within(sources).getByRole('button', { name: 'Manage sources' })).toBeVisible();
   expect(within(controls).getByRole('button', { name: 'Review Schema changes' })).toBeDisabled();
   expect(screen.getByLabelText('Target Workspace')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Zoom out' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Zoom out' })).not.toBeInTheDocument();
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).toBeChecked();
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Remove Shared foundation' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Review Schema changes' })).toBeDisabled();
-  const checkSchema = screen.getByRole('button', { name: 'Check schema' });
-  expect(controls).not.toContainElement(checkSchema);
-  expect(screen.getByRole('complementary', { name: 'Module details' })).toContainElement(
-    checkSchema
-  );
+  const checkSchema = screen.getByRole('button', { name: 'Schema checks', exact: true });
   fireEvent.click(checkSchema);
   expect(screen.getByRole('button', { name: 'Schema checks', exact: true })).toHaveAttribute(
     'aria-pressed',
@@ -257,15 +250,15 @@ it('keeps a required provider checked and locked while blocking a failed definit
 it.each([
   '',
   'workspace=workspace_branch%3Amain&branch=main',
-])('restores bound sources and the canvas without applying again (query: %s)', async (query) => {
+])('restores bound sources without applying again (query: %s)', async (query) => {
   mocks.query = query;
   mocks.workspaces = [boundWorkspace()];
   const { unmount } = render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+  openSources();
   await expectBoundSelection();
   unmount();
   render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+  openSources();
   await expectBoundSelection();
   expect(mocks.apply).not.toHaveBeenCalled();
   expect(mocks.saveDraft).not.toHaveBeenCalled();
@@ -276,7 +269,7 @@ it('waits for sources before restoring and does not undo an explicit clear', asy
   mocks.workspaces = [boundWorkspace()];
   mocks.candidatesLoading = true;
   const { rerender } = render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+  openSources();
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).not.toBeChecked();
   mocks.candidatesLoading = false;
   rerender(<SchemaStudioExperience projectId="p" />);
@@ -299,12 +292,12 @@ it.each([
   workspace.schemaBindings[0]!.studioSources![0]![field] = 'different';
   mocks.workspaces = [workspace];
   render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+  openSources();
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).not.toBeChecked();
   expect(mocks.apply).not.toHaveBeenCalled();
 });
 
-it('clears the restored canvas when switching to an unbound Workspace', async () => {
+it('clears restored sources when switching to an unbound Workspace', async () => {
   mocks.query = '';
   mocks.workspaces = [
     boundWorkspace(),
@@ -318,7 +311,7 @@ it('clears the restored canvas when switching to an unbound Workspace', async ()
     },
   ];
   const { rerender } = render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+  openSources();
   await expectBoundSelection();
   fireEvent.change(screen.getByLabelText('Target Workspace'), {
     target: { value: 'workspace_branch:feature' },
@@ -328,7 +321,7 @@ it('clears the restored canvas when switching to an unbound Workspace', async ()
   await waitFor(() =>
     expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).not.toBeChecked()
   );
-  expect(screen.getByRole('heading', { name: 'Compose your structure' })).toBeVisible();
+  expect(screen.getByText('Choose a Schema or Module in Sources to start editing.')).toBeVisible();
   expect(mocks.apply).not.toHaveBeenCalled();
 });
 
@@ -342,7 +335,7 @@ it('keeps pending Studio selection ahead of the bound sources', async () => {
     pending: { source: { kind: 'studio', candidateIds: ['provider'] } },
   };
   render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+  openSources();
   await expectBoundSelection();
 });
 
@@ -356,7 +349,7 @@ it('keeps the saved edit selection ahead of the bound sources', () => {
     origin: { channel: 'studio' },
   };
   render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+  openSources();
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).not.toBeChecked();
 });
 
@@ -390,11 +383,7 @@ async function expectBoundSelection() {
   await waitFor(() =>
     expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).toBeChecked()
   );
-  expect(
-    within(screen.getByRole('region', { name: 'Composed structure' })).getByRole('button', {
-      name: /Shared foundation/,
-    })
-  ).toBeVisible();
+  expect(screen.getByText('team/base · 1.0')).toBeVisible();
   expect(mocks.previewInputs).toContainEqual({
     candidateIds: ['provider'],
     workspaceId: 'workspace_branch:main',
@@ -418,7 +407,7 @@ it('previews a recovered Schema edit by server-managed candidate revision', asyn
     origin: { channel: 'studio' },
   };
   render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+  openSources();
   await waitFor(() =>
     expect(mocks.previewInputs).toContainEqual({
       candidateIds: ['provider'],
@@ -431,7 +420,7 @@ it('previews a recovered Schema edit by server-managed candidate revision', asyn
 
 it('does not offer the selected candidate as its own comparison', () => {
   render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+  openSources();
   expect(screen.queryByRole('option', { name: 'Shared foundation · 1.0' })).not.toBeInTheDocument();
   expect(screen.getByText('Create a Workspace to review and adopt this definition.')).toBeVisible();
 });
@@ -442,6 +431,7 @@ it('opens source composition without applying or discarding the current candidat
       <div>Module workbench content</div>
     </SchemaStudioExperience>
   );
+  openSources();
   fireEvent.click(screen.getByRole('button', { name: 'Manage sources' }));
   const dialog = screen.getByRole('dialog', { name: 'Combine Schema sources' });
   expect(
@@ -464,11 +454,13 @@ it('opens the embedded definition workbench and saves one shared Structure/YAML 
     },
   ];
   render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+  openSources();
+  openYaml();
   const editDefinition = screen.getByRole('button', { name: 'Edit definition' });
-  expect(editDefinition.nextElementSibling).toBe(
-    screen.getByRole('button', { name: 'Check schema' })
+  expect(editDefinition.closest('details')).toContainElement(
+    screen.getByRole('button', { name: 'Download YAML' })
   );
+  openYaml();
   fireEvent.click(screen.getByRole('button', { name: 'Edit definition' }));
   const dialog = screen.getByRole('dialog', { name: 'Edit Schema definition' });
   expect(within(dialog).getByText('Base (immutable)')).toBeVisible();
@@ -503,7 +495,7 @@ it('selects the only draft workspace once instead of duplicating Main workspace'
     },
   ];
   render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+  openSources();
   const select = screen.getByLabelText('Target Workspace');
   expect(select.querySelectorAll('option')).toHaveLength(1);
   expect(select).toHaveValue('workspace_branch:main');
@@ -537,7 +529,8 @@ it('starts a new branch editor from its inherited bound definition, not the orig
     workspace: { id: 'workspace_branch:feature', revision: 2, changes: [], boundSchema: inherited },
   };
   render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+  openSources();
+  openYaml();
   fireEvent.click(screen.getByRole('button', { name: 'Edit definition' }));
   expect(screen.getByLabelText('Slot type existing_local')).toHaveValue('string');
   fireEvent.change(screen.getByLabelText('Slot type owner'), { target: { value: 'number' } });
@@ -583,7 +576,8 @@ it('edits existing fields against a frozen Base and retains unsaved input while 
     },
   };
   const { rerender } = render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+  openSources();
+  openYaml();
   fireEvent.click(screen.getByRole('button', { name: 'Edit definition' }));
   fireEvent.change(screen.getByLabelText('Slot type title'), { target: { value: 'number' } });
   expect(screen.getByLabelText('Slot type title')).toHaveValue('number');
@@ -653,7 +647,7 @@ it.each([
     workspace: { id: 'workspace_branch:main', revision: 3, changes: [] },
   };
   render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+  openSources();
   expect(screen.getByLabelText('Target Workspace')).toHaveValue('workspace_branch:main');
   await waitFor(() =>
     expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).toBeChecked()
@@ -729,7 +723,7 @@ it('shows unsafe content impact while preventing confirmation, then discards a s
   };
   mocks.data = preview;
   const { rerender } = render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+  openSources();
   fireEvent.click(screen.getByRole('button', { name: 'Review Schema changes' }));
   const dialog = screen.getByRole('dialog', { name: 'Review Schema changes' });
   expect(within(dialog).getByText('Map existing content before removing product.')).toBeVisible();
@@ -776,7 +770,7 @@ it('reuses Confirm & apply for an empty first binding without opening content mi
   };
   mocks.apply.mockResolvedValue({ outcome: 'bound', workspaceRevision: 4, binding: {} });
   render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+  openSources();
   expect(screen.queryByRole('button', { name: 'Bind Schema' })).not.toBeInTheDocument();
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Review Schema changes' })).toBeEnabled()
@@ -841,7 +835,7 @@ it('opens private publication from the checked saved candidate without applying 
     freshness: { candidateId: 'saved-local', candidateRevision: 3 },
   };
   render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+  openSources();
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Review Schema changes' })).toBeEnabled()
   );
@@ -860,7 +854,7 @@ it('saves a main branch workspace when none is persisted', async () => {
   mocks.branches = ['main'];
   mocks.refresh.mockResolvedValue(undefined);
   render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+  openSources();
   expect(screen.getByLabelText('Target Workspace')).toHaveValue('workspace_branch:main');
   await waitFor(() => expect(mocks.saveDraft).toHaveBeenCalled());
   expect(mocks.saveDraft).toHaveBeenCalledWith(
@@ -895,8 +889,12 @@ it('edits Schema fields in the default Data view and saves through the existing 
   fireEvent.click(screen.getByLabelText('Required checklist/title'));
   expect(screen.getByLabelText('Target Workspace')).toBeEnabled();
   expect(screen.getByRole('button', { name: 'Review Schema changes' })).toBeDisabled();
-  fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+  openSources();
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).toBeDisabled();
+  openYaml();
+  expect(screen.getByLabelText('Required checklist/title')).toBeChecked();
+  fireEvent.click(screen.getByText(/^Sources/, { selector: 'summary' }));
+  fireEvent.click(screen.getByText(/^YAML/, { selector: 'summary' }));
   fireEvent.click(screen.getByRole('tab', { name: 'Fields' }));
   expect(screen.getByLabelText('Required checklist/title')).toBeChecked();
   fireEvent.click(screen.getByRole('button', { name: 'Save candidate' }));
@@ -1051,4 +1049,69 @@ it('discards only the unsaved editor before completing a requested Workspace swi
     )
   );
   expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
+});
+
+function openSources() {
+  const summary = screen.getByText(/^Sources/, { selector: 'summary' });
+  if (!summary.closest('details')!.open) fireEvent.click(summary);
+}
+function openYaml() {
+  const summary = screen.getByText(/^YAML/, { selector: 'summary' });
+  if (!summary.closest('details')!.open) fireEvent.click(summary);
+}
+
+it('keeps only Fields and Visual while sources and candidate YAML start collapsed', () => {
+  mocks.workspaces = [boundWorkspace()];
+  render(<SchemaStudioExperience projectId="p" />);
+  const views = screen.getByRole('tablist', { name: 'Studio view' });
+  expect(
+    within(views)
+      .getAllByRole('tab')
+      .map((tab) => tab.textContent)
+  ).toEqual(['Fields', 'Visual']);
+  expect(
+    screen.getByText(/^Sources/, { selector: 'summary' }).closest('details')
+  ).not.toHaveAttribute('open');
+  expect(screen.getByText(/^YAML/, { selector: 'summary' }).closest('details')).not.toHaveAttribute(
+    'open'
+  );
+  expect(screen.getByText('In use: team/base · 1.0')).toBeVisible();
+  openYaml();
+  expect(screen.getByText(/yschema: '0.1'/, { selector: 'code' })).toBeVisible();
+  expect(screen.getByRole('tab', { name: 'Fields' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.queryByRole('region', { name: 'Composed structure' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('complementary', { name: 'Module details' })).not.toBeInTheDocument();
+  expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
+  expect(mocks.apply).not.toHaveBeenCalled();
+});
+
+it('downloads the candidate as YAML without applying it', () => {
+  const createObjectURL = vi.fn((_blob: Blob) => 'blob:schema');
+  const revokeObjectURL = vi.fn();
+  let downloadedName = '';
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+    this: HTMLAnchorElement
+  ) {
+    downloadedName = this.download;
+  });
+  vi.stubGlobal(
+    'URL',
+    class extends URL {
+      static createObjectURL = createObjectURL;
+      static revokeObjectURL = revokeObjectURL;
+    }
+  );
+  try {
+    render(<SchemaStudioExperience projectId="p" />);
+    openYaml();
+    fireEvent.click(screen.getByRole('button', { name: 'Download YAML' }));
+    expect(createObjectURL.mock.calls[0][0]).toBeInstanceOf(Blob);
+    expect(createObjectURL.mock.calls[0][0].type).toBe('application/yaml');
+    expect(downloadedName).toBe('schema-studio-definition.yaml');
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:schema');
+    expect(mocks.apply).not.toHaveBeenCalled();
+  } finally {
+    click.mockRestore();
+    vi.unstubAllGlobals();
+  }
 });

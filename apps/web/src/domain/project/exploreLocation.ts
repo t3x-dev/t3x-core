@@ -11,6 +11,7 @@ export function legacyExploreLocation(
   const params = new URLSearchParams(query);
   if (params.get('schemaView') === 'active') {
     params.set('tab', 'schemas');
+    params.set('schemaView', 'studio');
     return `/project/${encodeURIComponent(projectId)}?${params}`;
   }
   params.delete('tab');

@@ -1,8 +1,7 @@
 'use client';
 
 import type { SchemaPreparationTarget, StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
-import { Layers } from 'lucide-react';
-import Link from 'next/link';
+import { dump } from 'js-yaml';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -32,7 +31,6 @@ import { useWorkspaceSchemaPending } from '@/hooks/schemas/useWorkspaceSchemaPen
 import { useBranches } from '@/hooks/shared/useBranches';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
-import moduleStyles from './AddModulesDialog.module.css';
 import { SchemaContentPreparationDialog } from './SchemaContentPreparationDialog';
 import { SchemaDataEditor } from './SchemaDataEditor';
 import { SchemaDefinitionWorkbench } from './SchemaDefinitionWorkbench';
@@ -198,8 +196,7 @@ export function SchemaStudioExperience({
   const requestedWorkspaceId = params?.get('workspace') ?? '';
   const requestedBranch = params?.get('branch');
   const query = params?.toString() ?? '';
-  const [activeModuleId, setActiveModuleId] = useState('requirements');
-  const [advanced, setAdvanced] = useState(params?.get('mode') === 'compose');
+  const legacyView = params?.get('schemaView') === 'active';
   const [definitionOpen, setDefinitionOpen] = useState(false);
   const [compositionRequest, setCompositionRequest] = useState<{
     ids: string[];
@@ -317,9 +314,15 @@ export function SchemaStudioExperience({
   const target = draftWorkspaces.find((item) => item.id === workspaceId);
   useEffect(() => {
     if (!target || workspaces.loading || projectBranches.loading) return;
-    if (requestedWorkspaceId === target.id && requestedBranch === target.targetBranch) return;
+    if (
+      !legacyView &&
+      requestedWorkspaceId === target.id &&
+      requestedBranch === target.targetBranch
+    )
+      return;
     router.replace(schemaWorkspaceHref(pathname, query, target), { scroll: false });
   }, [
+    legacyView,
     pathname,
     query,
     requestedBranch,
@@ -549,10 +552,6 @@ export function SchemaStudioExperience({
     : showExplicitDemo
       ? demoComposition
       : [];
-  const activeModule =
-    visibleSources.flatMap((source) => source.modules).find((item) => item.id === activeModuleId) ??
-    composition[1] ??
-    composition[0];
   const selectedWorkspaceTitle =
     target?.title ??
     (workspaceId || requestedBranch ? 'Workspace unavailable' : 'No draft workspace');
@@ -575,7 +574,6 @@ export function SchemaStudioExperience({
   function choose(module: StudioModule) {
     if (dataDirtyRef.current) return;
     recoveredSelection.current = recoveryKey;
-    setActiveModuleId(module.id);
     if (!module.candidate) return;
     const candidate = module.candidate;
     setSavedCandidateRef(undefined);
@@ -637,13 +635,13 @@ export function SchemaStudioExperience({
 
   function downloadDefinition() {
     if (!data?.schema) return;
-    const blob = new Blob([JSON.stringify(data.schema, null, 2)], {
-      type: 'application/json',
+    const blob = new Blob([dump(data.schema, { noRefs: true, lineWidth: 100 })], {
+      type: 'application/yaml',
     });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = 'schema-studio-definition.json';
+    anchor.download = 'schema-studio-definition.yaml';
     anchor.click();
     URL.revokeObjectURL(url);
   }
@@ -693,6 +691,7 @@ export function SchemaStudioExperience({
     setDefinitionOpen(open);
   }
 
+  const currentBinding = persistedTarget?.schemaBindings?.[0];
   const canReview = !!target && data?.workspace?.id === target.id && !applying && !dataDirty;
   const browseHref = schemaBrowseHref(
     projectId,
@@ -757,7 +756,7 @@ export function SchemaStudioExperience({
               !persistedTarget
                 ? 'Select a saved Workspace to edit its Schema.'
                 : !selection.length
-                  ? 'Choose a Schema or Module in Composition to start editing.'
+                  ? 'Choose a Schema or Module in Sources to start editing.'
                   : undefined
             }
             pending={schemaEdit.pending}
@@ -804,14 +803,19 @@ export function SchemaStudioExperience({
         draftStatus={
           dataDirty ? 'Unsaved changes' : savedCandidateRef ? 'Candidate saved' : undefined
         }
+        bindingStatus={
+          persistedTarget
+            ? currentBinding
+              ? `In use: ${currentBinding.schemaName ?? currentBinding.canonicalName} · ${currentBinding.version}`
+              : 'No Schema applied to this Workspace.'
+            : undefined
+        }
         workspaceTitle={selectedWorkspaceTitle}
         workspaceId={workspaceId}
         workspaces={draftWorkspaces}
         onWorkspace={changeWorkspace}
         modules={visibleSources.flatMap((source) => source.modules)}
         composition={composition}
-        activeModule={activeModule}
-        onSelect={setActiveModuleId}
         onChoose={(module) => {
           const candidate = visibleSources
             .flatMap((source) => source.modules)
@@ -838,7 +842,7 @@ export function SchemaStudioExperience({
         }}
         onAdd={() => composeSources()}
         onEditDefinition={
-          !dataDirty && activeModule && persistedTarget && selection.length
+          !dataDirty && persistedTarget && selection.length
             ? () => {
                 if (!basePreview.data || !data) return;
                 setEditorBase({
@@ -935,64 +939,6 @@ export function SchemaStudioExperience({
         }
         resultSchema={data?.schema}
       />
-      <Dialog open={advanced} onOpenChange={setAdvanced}>
-        <DialogContent className={moduleStyles.dialog}>
-          <DialogHeader className={moduleStyles.header}>
-            <span className={moduleStyles.icon}>
-              <Layers aria-hidden="true" />
-            </span>
-            <div>
-              <DialogTitle>Add modules</DialogTitle>
-              <DialogDescription>
-                Pick Schema modules from the library to compose into this project.
-              </DialogDescription>
-            </div>
-          </DialogHeader>
-          <div className={`${moduleStyles.body} space-y-3 p-5`}>
-            <p className="text-sm">
-              Choose sources for this Studio candidate. No separate Composition draft is created.
-            </p>
-            {candidates.items.map((candidate) => (
-              <label key={candidate.id} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={selection.includes(candidate.id)}
-                  disabled={!candidate.available || !!schemaEdit.candidate?.authoringDraft}
-                  onChange={() => choose({ id: candidate.id, candidate } as StudioModule)}
-                />
-                {candidate.title ?? 'Unavailable source'} · {candidate.source?.version}
-              </label>
-            ))}
-            {schemaEdit.candidate?.authoringDraft ? (
-              <p className="text-sm">
-                This edited candidate pins its exact Base. Edit its definition without replacing the
-                source selection.
-              </p>
-            ) : null}
-            <Link href={browseHref}>Browse more source releases</Link>
-            <Button
-              disabled={
-                !persistedTarget ||
-                !selection.length ||
-                schemaEdit.pending ||
-                !!schemaEdit.candidate?.authoringDraft
-              }
-              onClick={() =>
-                void saveDefinition(localContribution, 'Select Schema sources')
-                  .then(() => setAdvanced(false))
-                  .catch((cause) =>
-                    setError(
-                      cause instanceof Error ? cause.message : 'Candidate could not be saved.'
-                    )
-                  )
-              }
-            >
-              Save selected modules
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       <Dialog
         open={!!review}
         onOpenChange={(open) => {

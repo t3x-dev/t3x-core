@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { SchemaCatalogExperience } from '@/components/schemas/SchemaCatalogExperience';
 
@@ -10,30 +10,19 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/team/project/schemas',
   useRouter: () => ({ replace: mocks.replace }),
 }));
-vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
-  useProjectWorkspaces: () => ({ workspaces: [], refresh: vi.fn(), error: null }),
-}));
 vi.mock('@/components/schemas/SchemaStudioExperience', () => ({
   SchemaStudioExperience: () => <div>Project Studio</div>,
-}));
-vi.mock('@/components/schemas/ActiveSchemaBindings', () => ({
-  ActiveSchemaBindings: () => <div>Workspace bindings</div>,
 }));
 beforeEach(() => {
   localStorage.clear();
   mocks.query = '';
   mocks.replace.mockReset();
 });
-it('remembers Bindings on return and honors an explicit Studio link', () => {
-  const first = render(<SchemaCatalogExperience projectId="p">{null}</SchemaCatalogExperience>);
-  fireEvent.click(screen.getByRole('link', { name: 'Bindings' }));
-  first.unmount();
-  const restored = render(<SchemaCatalogExperience projectId="p">{null}</SchemaCatalogExperience>);
-  expect(screen.getByText('Workspace bindings')).toBeInTheDocument();
-  restored.unmount();
-  mocks.query = 'schemaView=studio';
+it('opens the editor even when the retired Bindings preference is stored', () => {
+  localStorage.setItem('t3x.schemas-view:p', 'active');
   render(<SchemaCatalogExperience projectId="p">{null}</SchemaCatalogExperience>);
   expect(screen.getByText('Project Studio')).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Bindings' })).not.toBeInTheDocument();
 });
 it.each([
   'discover',
@@ -55,22 +44,10 @@ it.each([
   expect(destination.searchParams.get('catalogProjectId')).toBe('p');
   expect(destination.searchParams.get('q')).toBe('care');
 });
-it('keeps Studio and Bindings inside the project with a global Explore handoff', () => {
+it('opens the editor from a historical Bindings URL', () => {
   mocks.query = 'schemaView=active&workspace=w&branch=release';
   render(<SchemaCatalogExperience projectId="p">{null}</SchemaCatalogExperience>);
-  expect(screen.getByText('Workspace bindings')).toBeInTheDocument();
-  const target = new URL(
-    screen.getByRole('link', { name: 'Browse schemas' }).getAttribute('href')!,
-    'http://local'
-  );
-  expect(target.pathname).toBe('/explore');
-  expect(target.searchParams.get('studioTarget')).toBe('p');
-  expect(target.searchParams.get('workspace')).toBe('w');
-});
-it('renders active schema bindings as Bindings, not public Projects', () => {
-  mocks.query = 'schemaView=active';
-  render(<SchemaCatalogExperience projectId="p">{null}</SchemaCatalogExperience>);
-  expect(screen.getByText('Workspace bindings')).toBeInTheDocument();
-  expect(screen.queryByText('Project Studio')).not.toBeInTheDocument();
-  expect(screen.queryByText('Projects')).not.toBeInTheDocument();
+  expect(screen.getByText('Project Studio')).toBeInTheDocument();
+  expect(screen.queryByText('Workspace bindings')).not.toBeInTheDocument();
+  expect(screen.queryByRole('navigation', { name: 'Project schemas' })).not.toBeInTheDocument();
 });
