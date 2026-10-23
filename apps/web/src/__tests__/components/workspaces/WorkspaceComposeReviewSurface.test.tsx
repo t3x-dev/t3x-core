@@ -1141,7 +1141,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         onModeChange={onModeChange}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Open checks' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Run' }));
     const checksTarget = new URL(navigationMocks.push.mock.calls.at(-1)?.[0], 'http://localhost');
     expect(checksTarget.pathname).toBe('/project/proj_1/checks/review%3Arvs_ready');
     expect(checksTarget.searchParams.get('returnTo')).toContain('workspaceMode=review');

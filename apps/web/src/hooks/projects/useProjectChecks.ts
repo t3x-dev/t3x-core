@@ -37,7 +37,7 @@ export function useProjectChecks(projectId: string, recordId: string | undefined
             key,
             records: [],
             next: null,
-            error: error instanceof Error ? error.message : 'Could not load checks.',
+            error: error instanceof Error ? error.message : 'Could not load runs.',
           });
       }
     );

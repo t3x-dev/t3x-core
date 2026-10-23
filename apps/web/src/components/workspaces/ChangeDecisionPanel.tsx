@@ -104,7 +104,7 @@ export function ChangeDecisionPanel({
             className="mt-2 inline-block text-xs underline text-[var(--text-secondary)]"
             href={checksHref}
           >
-            Check details and evidence
+            Run details and evidence
           </Link>
         ) : null}
       </section>

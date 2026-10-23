@@ -112,7 +112,7 @@ export function WorkspaceSnapshotReview({
                 ? 'This revision is saved. Open State to inspect or export it.'
                 : view?.decision?.observation === 'supplied' && view.decision.outcome === 'rejected'
                   ? 'This revision was rejected. The decision is recorded and the branch was not changed.'
-                  : 'Review this fixed revision, then approve and commit or reject it here. Checks contains the detailed evidence.'}
+                  : 'Review this fixed revision, then approve and commit or reject it here. Run contains the detailed evidence.'}
             </p>
           </div>
           {stateHref ? (
@@ -130,7 +130,7 @@ export function WorkspaceSnapshotReview({
                 returnTo: reviewHref,
               })}
             >
-              View checks
+              View run
             </Link>
           </Button>
           <Button
@@ -189,7 +189,7 @@ export function WorkspaceSnapshotReview({
               <Link className="underline" href={workspaceHref}>
                 open the current draft and prepare a new review
               </Link>
-              . This snapshot stays available in Checks.
+              . This snapshot stays available in Run.
             </p>
           </section>
         ) : null}

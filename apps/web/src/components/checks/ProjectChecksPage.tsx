@@ -60,10 +60,10 @@ export function ProjectChecksPage({
         <div>
           {sourceHref ? (
             <Link className={styles.back} href={sourceHref}>
-              <ArrowLeft size={15} /> {returnTo ? 'Back to source' : 'Checks'}
+              <ArrowLeft size={15} /> {returnTo ? 'Back to source' : 'Run'}
             </Link>
           ) : null}
-          <h1>{recordId ? 'Check details' : 'Checks'}</h1>
+          <h1>{recordId ? 'Run details' : 'Run'}</h1>
           <p>
             {recordId
               ? 'Results and evidence for the selected record.'
@@ -87,7 +87,7 @@ export function ProjectChecksPage({
               key={params.get('q') ?? ''}
               name="q"
               type="search"
-              aria-label="Search check records"
+              aria-label="Search run records"
               placeholder="Search names, Workspace, PR or record IDs…"
               defaultValue={params.get('q') ?? ''}
               maxLength={200}
@@ -128,10 +128,10 @@ export function ProjectChecksPage({
         </div>
       ) : null}
       {!current ? (
-        <output className={styles.empty}>Loading checks…</output>
+        <output className={styles.empty}>Loading runs…</output>
       ) : current.error ? (
         <div role="alert" className={styles.empty}>
-          <h2>Checks unavailable</h2>
+          <h2>Runs unavailable</h2>
           <p>{current.error}</p>
           <Button variant="outline" onClick={() => refresh()}>
             Try again
@@ -150,7 +150,7 @@ export function ProjectChecksPage({
         />
       ) : current.records.length ? (
         <>
-          <section className={styles.list} aria-label="Check records">
+          <section className={styles.list} aria-label="Run records">
             {current.records.map((record) => {
               const view = checkRecordView(record);
               return (
@@ -176,7 +176,7 @@ export function ProjectChecksPage({
               );
             })}
           </section>
-          <nav className={styles.pagination} aria-label="Checks pagination">
+          <nav className={styles.pagination} aria-label="Run pagination">
             {params.has('cursor') ? (
               <Button variant="outline" size="sm" onClick={() => filter('cursor', '')}>
                 Newest records
@@ -197,7 +197,7 @@ export function ProjectChecksPage({
         </>
       ) : (
         <div className={styles.empty}>
-          <h2>{scoped ? 'No checks match this scope' : 'No check records yet'}</h2>
+          <h2>{scoped ? 'No runs match this scope' : 'No run records yet'}</h2>
           <p>
             Prepare a review in a Workspace or run checks from a pull request to record evidence.
           </p>
@@ -295,12 +295,12 @@ function CheckDetails({
           ) : null}
           {view.commit ? (
             <Link href={checksHref(projectId, { commit: view.commit })}>
-              Commit checks <ArrowRight size={14} />
+              Commit runs <ArrowRight size={14} />
             </Link>
           ) : null}
           {view.workspace ? (
             <Link href={checksHref(projectId, { workspace: view.workspace })}>
-              Workspace check history <ArrowRight size={14} />
+              Workspace run history <ArrowRight size={14} />
             </Link>
           ) : null}
           {view.commit ? (

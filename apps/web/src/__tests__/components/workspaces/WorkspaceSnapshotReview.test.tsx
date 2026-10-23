@@ -136,7 +136,7 @@ describe('WorkspaceSnapshotReview', () => {
     expect(await screen.findByRole('heading', { name: 'Review' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Review' })).toHaveAttribute('aria-selected', 'true');
     const checks = new URL(
-      screen.getByRole('link', { name: 'View checks' }).getAttribute('href')!,
+      screen.getByRole('link', { name: 'View run' }).getAttribute('href')!,
       'http://localhost'
     );
     const back = new URL(checks.searchParams.get('returnTo')!, 'http://localhost');

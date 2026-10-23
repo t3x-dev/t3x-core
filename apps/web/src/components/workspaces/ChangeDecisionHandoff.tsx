@@ -26,7 +26,7 @@ export function ChangeDecisionHandoff({
         <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
           {compact
             ? 'Review the checks and decide whether to commit this revision.'
-            : 'A fixed snapshot is ready. Open Workspace Review to approve and commit or reject this revision. Detailed evidence is available in Checks.'}
+            : 'A fixed snapshot is ready. Open Workspace Review to approve and commit or reject this revision. Detailed evidence is available in Run.'}
         </p>
       </div>
       {href ? (

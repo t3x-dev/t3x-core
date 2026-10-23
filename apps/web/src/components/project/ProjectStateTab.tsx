@@ -858,7 +858,7 @@ function StateInspectionToolbar({
             {(
               [
                 { id: 'overview', label: 'Overview', icon: Eye },
-                { id: 'structure', label: 'Data', icon: TableProperties },
+                { id: 'structure', label: 'Structure', icon: TableProperties },
               ] as const
             ).map((view) => {
               const Icon = view.icon;
@@ -1299,12 +1299,12 @@ export function StateStructureView({
   if (!historyPresentation) {
     const renderWorkspace = (content: ReactNode, details: ReactNode) => (
       <section
-        aria-label="State data"
+        aria-label="State structure"
         className={`${inspectionStyles.surface} ${inspectionStyles.page}`}
       >
         <header className={inspectionStyles.dataHeader}>
-          <h2>Data</h2>
-          <fieldset aria-label="Data format" className={inspectionStyles.dataModes}>
+          <h2>Structure</h2>
+          <fieldset aria-label="Structure format" className={inspectionStyles.dataModes}>
             {(['structure', 'code'] as const).map((mode) => (
               <button
                 type="button"
@@ -1312,7 +1312,7 @@ export function StateStructureView({
                 aria-pressed={dataMode === mode}
                 onClick={() => onDataModeChange?.(mode)}
               >
-                {mode === 'structure' ? 'Structure' : 'Code'}
+                {mode === 'structure' ? 'Tree' : 'Code'}
               </button>
             ))}
           </fieldset>

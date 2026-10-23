@@ -2052,7 +2052,7 @@ function WorkspaceReviewSummary({
           {preparing ? 'Preparing…' : 'Prepare review'}
         </button>
         <button onClick={onOpenChecks} type="button">
-          Open checks <ExternalLink aria-hidden="true" />
+          Open Run <ExternalLink aria-hidden="true" />
         </button>
         <NextLink href={historyHref}>View History</NextLink>
       </div>

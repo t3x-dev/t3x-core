@@ -29,7 +29,7 @@ export function WorkspaceChecksRedirect({
   }, [router, href]);
   return (
     <p className="p-6 text-sm">
-      Opening repository Checks… <Link href={href}>Continue to Checks</Link>
+      Opening repository Run… <Link href={href}>Continue to Run</Link>
     </p>
   );
 }

@@ -25,7 +25,7 @@ describe('DiscoverHeader navigation', () => {
       'State',
       'Schemas',
       'Workspaces',
-      'Checks',
+      'Run',
       'Pull requests',
       'Community',
       'Settings',
