@@ -1,25 +1,11 @@
-.page {
-  width: 100%;
-  max-width: var(--project-page-max-width, 1264px);
-  margin: 0 auto;
-  padding: 0 24px 32px;
-  min-height: 100%;
-  background: white;
-  color: #16181d;
-  font:
-    13px / 1.45 -apple-system,
-    BlinkMacSystemFont,
-    "Inter",
-    system-ui,
-    sans-serif;
-}
-
+.page,
 .listPage {
   width: 100%;
   max-width: var(--project-page-max-width, 1264px);
+  min-width: 0;
   min-height: 100%;
   margin: 0 auto;
-  padding: 0 32px 32px;
+  padding: 0 var(--project-page-gutter, 24px) 32px;
   background: var(--surface-card);
   color: var(--text-primary);
   font-size: 14px;
@@ -29,28 +15,37 @@
 .pageHeader {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  padding: 28px 0 24px;
+  gap: 12px;
+  padding: 12px 0 20px;
+}
+
+.pageHeader > div {
+  flex: 1;
+  min-width: 0;
 }
 
 .pageHeader h1 {
-  font-size: 24px;
-  font-weight: 650;
-  line-height: 1.25;
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .pageHeader p {
-  margin-top: 6px;
+  margin-top: 4px;
   color: var(--text-secondary);
   font-size: 13px;
 }
 
 .newButton {
   height: auto;
-  min-height: 36px;
-  padding: 7px 12px;
+  min-height: 32px;
+  padding: 5px 12px;
   border-radius: var(--radius-workbench-group);
   font-size: 13px;
   font-weight: 500;
@@ -446,24 +441,14 @@
   width: 27%;
 }
 
-@media (max-width: 720px) {
-  .page {
-    padding: 0 16px 24px;
-  }
-
+@media (max-width: 800px) {
+  .page,
   .listPage {
     padding: 0 16px 24px;
   }
+}
 
-  .pageHeader {
-    align-items: flex-start;
-    padding-top: 24px;
-  }
-
-  .pageHeader h1 {
-    font-size: 22px;
-  }
-
+@media (max-width: 720px) {
   .search {
     flex-basis: 100%;
     max-width: none;

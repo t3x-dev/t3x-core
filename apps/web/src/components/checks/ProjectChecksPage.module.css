@@ -1,9 +1,12 @@
 .page {
-  max-width: 1180px;
+  width: 100%;
+  max-width: var(--project-page-max-width, 1264px);
+  min-width: 0;
   margin: 0 auto;
-  padding: 24px;
+  padding: 0 var(--project-page-gutter, 24px) 32px;
   color: var(--text-primary);
   font-size: 14px;
+  line-height: 1.5;
 }
 .header,
 .title,
@@ -19,12 +22,25 @@
 .header {
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 24px;
+  padding: 12px 0 20px;
+}
+.header > div {
+  flex: 1;
+  min-width: 0;
+}
+.header > div > p {
+  margin: 4px 0 0;
+  font-size: 13px;
 }
 .page h1 {
-  font-size: 20px;
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  font-size: 18px;
   font-weight: 600;
-  margin: 6px 0;
+  line-height: 1.5;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 .page h2 {
   font-size: 16px;
@@ -54,6 +70,10 @@
   align-items: center;
   gap: 6px;
   font-size: 13px;
+}
+.back {
+  min-height: 32px;
+  margin-bottom: 8px;
 }
 .toolbar {
   margin-bottom: 14px;
@@ -265,10 +285,12 @@
   outline: 2px solid var(--text-primary);
   outline-offset: 3px;
 }
-@media (max-width: 760px) {
+@media (max-width: 800px) {
   .page {
-    padding: 16px;
+    padding: 0 16px 24px;
   }
+}
+@media (max-width: 760px) {
   .workbench {
     grid-template-columns: minmax(0, 1fr);
     gap: 20px;

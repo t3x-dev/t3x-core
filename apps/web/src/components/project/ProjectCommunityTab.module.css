@@ -1,27 +1,36 @@
 .page {
   width: 100%;
-  max-width: 960px;
+  max-width: var(--project-page-max-width, 1264px);
   min-width: 0;
   margin-inline: auto;
-  padding: 24px 32px 48px;
+  padding: 0 var(--project-page-gutter, 24px) 48px;
   color: var(--text-primary);
   font-size: 14px;
   line-height: 1.5;
 }
 
 .intro {
-  margin-bottom: 20px;
+  padding: 12px 0 20px;
 }
 
 .intro h2 {
-  font-size: 20px;
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  font-size: 18px;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .intro p {
-  margin-top: 6px;
+  margin-top: 4px;
   color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.destinationList,
+.layout {
+  max-width: 960px;
 }
 
 .destinationList {
@@ -317,11 +326,13 @@
   outline-offset: -3px;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 800px) {
   .page {
-    padding: 20px 20px 32px;
+    padding: 0 16px 32px;
   }
+}
 
+@media (max-width: 600px) {
   .destinationCopy {
     grid-template-columns: minmax(0, 1fr);
   }

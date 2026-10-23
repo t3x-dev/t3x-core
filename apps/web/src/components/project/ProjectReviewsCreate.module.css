@@ -3,7 +3,7 @@
   max-width: var(--project-page-max-width, 1264px);
   min-height: 100%;
   margin: 0 auto;
-  padding: 28px 32px 40px;
+  padding: 12px var(--project-page-gutter, 24px) 40px;
   background: var(--surface-card);
   color: var(--text-primary);
   font-size: 14px;
@@ -14,8 +14,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: 32px;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .breadcrumb button,
@@ -43,14 +44,14 @@
 }
 
 .header h1 {
-  margin-top: 12px;
-  font-size: 24px;
-  font-weight: 650;
-  line-height: 1.25;
+  margin-top: 8px;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.5;
 }
 
 .header > p {
-  margin-top: 6px;
+  margin-top: 4px;
   color: var(--text-secondary);
   font-size: 13px;
 }
@@ -642,7 +643,7 @@
 
 @media (max-width: 800px) {
   .page {
-    padding: 24px 20px 160px;
+    padding: 12px 16px 160px;
   }
   .branchBar {
     flex-wrap: wrap;
@@ -715,7 +716,7 @@
     align-items: center;
     gap: 8px 16px;
     margin: 0;
-    padding: 12px 20px max(12px, env(safe-area-inset-bottom));
+    padding: 12px 16px max(12px, env(safe-area-inset-bottom));
     border-top: 1px solid var(--stroke-default);
     background: var(--surface-card);
   }
@@ -749,10 +750,6 @@
 }
 
 @media (max-width: 520px) {
-  .page {
-    padding-right: 16px;
-    padding-left: 16px;
-  }
   .branchField {
     flex-basis: calc(50% - 20px);
   }
@@ -770,8 +767,6 @@
     margin-top: 16px;
   }
   .actionBar {
-    padding-right: 16px;
-    padding-left: 16px;
     gap: 8px;
   }
 }
