@@ -846,3 +846,34 @@
 .app > .body:only-child {
   grid-row: 1 / -1;
 }
+
+.body[data-mode="data"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.body[data-mode="data"] .canvas {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-card);
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+}
+.body[data-mode="data"] .ctop {
+  position: static;
+  flex-shrink: 0;
+  padding: 12px;
+  border-bottom: 1px solid var(--stroke-divider);
+}
+.body [hidden] {
+  display: none;
+}
+.dataEditor {
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.body .dataActions {
+  display: flex;
+  gap: 16px;
+  margin-left: auto;
+  font-size: 13px;
+}

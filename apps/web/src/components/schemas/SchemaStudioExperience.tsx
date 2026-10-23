@@ -4,7 +4,7 @@ import type { SchemaPreparationTarget, StudioCandidate, StudioPreview } from '@t
 import { ArrowRight, Layers } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -30,6 +30,7 @@ import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import moduleStyles from './AddModulesDialog.module.css';
 import { SchemaContentPreparationDialog } from './SchemaContentPreparationDialog';
+import { SchemaDataEditor } from './SchemaDataEditor';
 import { SchemaDefinitionWorkbench } from './SchemaDefinitionWorkbench';
 import { SchemaStudioSurface } from './SchemaStudioSurface';
 import { StudioChanges, StudioImpactPreview } from './StudioDefinitionPreview';
@@ -191,6 +192,12 @@ export function SchemaStudioExperience({
   const [activeModuleId, setActiveModuleId] = useState('requirements');
   const [advanced, setAdvanced] = useState(params?.get('mode') === 'compose');
   const [definitionOpen, setDefinitionOpen] = useState(false);
+  const [dataDirty, setDataDirty] = useState(false);
+  const dataDirtyRef = useRef(false);
+  const updateDataDirty = useCallback((dirty: boolean) => {
+    dataDirtyRef.current = dirty;
+    setDataDirty(dirty);
+  }, []);
   const [editorBase, setEditorBase] = useState<{
     schema: Record<string, unknown>;
     hash: string;
@@ -368,7 +375,7 @@ export function SchemaStudioExperience({
     requested,
   ]);
   useEffect(() => {
-    if (schemaEdit.loading || candidates.loading) return;
+    if (schemaEdit.loading || candidates.loading || dataDirtyRef.current) return;
     const identity = `${projectId}:${workspaceId}:${recoveredCandidateKey}`;
     if (recoveredEditIdentity.current === identity) return;
     if (schemaEdit.candidate?.baseSources?.length) {
@@ -406,6 +413,7 @@ export function SchemaStudioExperience({
     candidates.loading,
     projectId,
     recoveredCandidateKey,
+    dataDirty,
     schemaEdit.candidate,
     schemaEdit.loading,
     workspaceId,
@@ -443,6 +451,12 @@ export function SchemaStudioExperience({
   );
   const preview = hasSchemaEdit ? localPreview : basePreview;
   const data = preview.data;
+  // Do not initialize Data with the base result while a saved edit is being recovered.
+  const recoveredDefinitionReady =
+    !schemaEdit.loading &&
+    (!schemaEdit.candidate ||
+      (savedCandidateRef?.candidateId === schemaEdit.candidate.candidateId &&
+        savedCandidateRef.revision === schemaEdit.candidate.revision));
   const locked = new Set(
     data?.modules.filter((item) => item.requiredBy.length).map((item) => item.candidateId)
   );
@@ -506,6 +520,7 @@ export function SchemaStudioExperience({
     (workspaceId ? 'Workspace unavailable' : (draftWorkspaces[0]?.title ?? 'No draft workspace'));
 
   function choose(module: StudioModule) {
+    if (dataDirtyRef.current) return;
     recoveredSelection.current = recoveryKey;
     setActiveModuleId(module.id);
     if (!module.candidate) return;
@@ -625,7 +640,7 @@ export function SchemaStudioExperience({
     setDefinitionOpen(open);
   }
 
-  const canReview = !!target && data?.workspace?.id === target.id && !applying;
+  const canReview = !!target && data?.workspace?.id === target.id && !applying && !dataDirty;
   const browseParams = new URLSearchParams({
     view: 'browse',
     type: 'schemas',
@@ -658,6 +673,63 @@ export function SchemaStudioExperience({
       ) : null}
       <SchemaStudioSurface
         navigation={navigation}
+        contextLocked={dataDirty || definitionOpen}
+        dataEditor={
+          <SchemaDataEditor
+            key={`${projectId}:${workspaceId}:${candidateSelectionKey}`}
+            initialDefinition={
+              editorBase?.initial ??
+              (selection.length && recoveredDefinitionReady && data
+                ? !hasSchemaEdit && basePreview.data?.workspace?.boundSchema
+                  ? basePreview.data.workspace.boundSchema
+                  : data.schema
+                : undefined)
+            }
+            revisionKey={`${workspaceId}:${recoveredCandidateKey}:${candidateSelectionKey}`}
+            disabledReason={
+              !persistedTarget
+                ? 'Select a saved Workspace to edit its Schema.'
+                : !selection.length
+                  ? 'Choose a Schema or Module in Composition to start editing.'
+                  : undefined
+            }
+            pending={schemaEdit.pending}
+            previewError={preview.error}
+            onDirtyChange={updateDataDirty}
+            onPreview={(definition) => {
+              if (!editorBase && basePreview.data && data) {
+                setEditorBase({
+                  schema: structuredClone(
+                    schemaEdit.candidate?.baseDefinition ??
+                      basePreview.data.workspace?.boundSchema ??
+                      basePreview.data.schema
+                  ),
+                  hash: schemaEdit.candidate?.baseDefinition
+                    ? String(schemaEdit.candidate.authoringDraft?.base.schemaHash)
+                    : basePreview.data.schemaHash,
+                  initial: structuredClone(
+                    !hasSchemaEdit && basePreview.data.workspace?.boundSchema
+                      ? basePreview.data.workspace.boundSchema
+                      : data.schema
+                  ),
+                });
+              }
+              setSchemaDefinition(definition);
+              setSavedCandidateRef(undefined);
+              setReview(undefined);
+            }}
+            onDiscard={() => {
+              updateDataDirty(false);
+              setEditorBase(undefined);
+              changeDefinitionOpen(false);
+            }}
+            onSave={async (definition, intent) => {
+              await saveDefinition(definition, intent);
+              setEditorBase(undefined);
+              updateDataDirty(false);
+            }}
+          />
+        }
         browseHref={browseHref}
         workspaceTitle={selectedWorkspaceTitle}
         workspaceId={workspaceId}
@@ -677,7 +749,9 @@ export function SchemaStudioExperience({
           setSelection((current) => current.filter((value) => value !== id));
           void candidates.remove(id).catch((cause) => setError(cause.message));
         }}
-        locked={locked}
+        locked={
+          dataDirty || definitionOpen ? new Set(candidates.items.map((item) => item.id)) : locked
+        }
         pending={applying || preview.loading || candidates.pending}
         loading={candidates.loading}
         error={
@@ -691,7 +765,7 @@ export function SchemaStudioExperience({
         }}
         onAdd={() => setAdvanced(true)}
         onEditDefinition={
-          activeModule && persistedTarget && selection.length
+          !dataDirty && activeModule && persistedTarget && selection.length
             ? () => {
                 if (!basePreview.data || !data) return;
                 setEditorBase({
@@ -716,10 +790,14 @@ export function SchemaStudioExperience({
         onReview={openReview}
         canReview={canReview}
         onDownload={downloadDefinition}
-        onClear={() => {
-          recoveredSelection.current = recoveryKey;
-          setSelection([]);
-        }}
+        onClear={
+          dataDirty
+            ? undefined
+            : () => {
+                recoveredSelection.current = recoveryKey;
+                setSelection([]);
+              }
+        }
       />
       <SchemaDefinitionWorkbench
         baseSchema={definitionOpen ? editorBase?.schema : basePreview.data?.schema}

@@ -22,7 +22,7 @@
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 }
 .surface,
-.surface * {
+.surface *:where(:not([data-schema-editor], [data-schema-editor] *)) {
   box-sizing: border-box;
   margin: 0;
   padding: 0;

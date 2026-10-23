@@ -1,0 +1,136 @@
+.editor {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  color: var(--text-primary);
+  background: var(--surface-card);
+}
+.toolbar,
+.footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--stroke-divider);
+}
+.toolbar input,
+.footer input {
+  min-width: 140px;
+  height: 36px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  padding: 0 10px;
+  color: var(--text-primary);
+}
+.toolbar input {
+  flex: 1;
+  max-width: 360px;
+}
+.toolbar output {
+  margin-left: auto;
+}
+.content {
+  display: grid;
+  grid-template-columns: minmax(360px, 1fr) minmax(240px, 320px);
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+}
+.list {
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+}
+.columns {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) 180px 100px;
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid var(--stroke-divider);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.inline {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+}
+.inline select {
+  min-width: 80px;
+  max-width: 125px;
+  height: 34px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  padding: 0 6px;
+  font-size: 13px;
+}
+.inline input {
+  width: 16px;
+  height: 16px;
+}
+.properties {
+  border-left: 1px solid var(--stroke-divider);
+  min-height: 0;
+  overflow: auto;
+}
+.tabs {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid var(--stroke-divider);
+  font-size: 13px;
+}
+.tabs button[aria-pressed="true"] {
+  font-weight: 600;
+  color: var(--accent-commit);
+}
+.settings {
+  padding: 16px;
+}
+.settings h3 {
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  margin-bottom: 16px;
+}
+.footer {
+  border-top: 1px solid var(--stroke-divider);
+  border-bottom: 0;
+}
+.footer input {
+  flex: 1;
+}
+.feedback {
+  padding: 20px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.error {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--status-error);
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1100px) {
+  .content {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+  .list {
+    overflow: visible;
+  }
+  .properties {
+    border-left: 0;
+    border-top: 1px solid var(--stroke-divider);
+    overflow: visible;
+  }
+}

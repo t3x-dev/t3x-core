@@ -2,7 +2,6 @@
 
 import {
   Box,
-  ChevronRight,
   CircleSlash,
   Hash,
   List,
@@ -14,6 +13,8 @@ import {
   Type,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { StructureTreeRow, visibleTreeRows } from '@/components/structure/StructureTree';
+import styles from '@/components/structure/StructureTree.module.css';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,7 +36,6 @@ import {
   parseDraftValue,
   walkDraftStructure,
 } from '@/domain/workspaces/draftStructure';
-import styles from './DraftStructureEditor.module.css';
 
 type Intent =
   | { kind: 'add'; node: DraftStructureNode }
@@ -129,14 +129,7 @@ export function DraftStructureEditor({
     onEditingChange(next !== null);
   };
   const [localError, setLocalError] = useState<string | null>(null);
-  const visible = useMemo(() => {
-    const hidden = new Set<string>();
-    for (const node of nodes) {
-      if (node.parentPath === null) continue;
-      if (collapsed[node.parentPath] || hidden.has(node.parentPath)) hidden.add(node.path);
-    }
-    return nodes.filter((node) => !hidden.has(node.path));
-  }, [collapsed, nodes]);
+  const visible = useMemo(() => visibleTreeRows(nodes, collapsed), [collapsed, nodes]);
 
   const publish = async (operations: DraftYOp[]) => {
     setLocalError(null);
@@ -261,104 +254,84 @@ function StructureRow({
   const { Icon, type } = structureType(node);
   const label = /\[\d+\]$/.test(node.path) ? `[${node.key}]` : node.key || 'root';
   return (
-    <div
-      aria-expanded={node.expandable ? !collapsed : undefined}
-      aria-selected={selected}
-      aria-level={node.depth + 1}
-      className={styles.row}
-      data-kind={node.kind}
-      data-picking={intent?.kind === 'pick-destination' || undefined}
-      data-selected={selected || undefined}
-      onClick={onSelect}
-      onKeyDown={(event) => {
-        if (event.target !== event.currentTarget) return;
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onSelect();
-        }
-      }}
-      role="treeitem"
-      style={{ paddingLeft: 8 + Math.min(node.depth, 8) * 16 }}
-      tabIndex={0}
-    >
-      <span className={styles.identity} title={node.path || 'root'}>
-        <ChevronRight
-          className={styles.chevron}
-          data-visible={node.expandable}
-          aria-hidden="true"
-        />
-        <span className={styles.typeIcon} title={type}>
-          <Icon aria-hidden="true" />
-        </span>
-        <span className={styles.label}>{label}</span>
-      </span>
-      <span className={styles.preview} title={node.kind === 'scalar' ? node.preview : type}>
-        {node.kind === 'scalar' ? node.preview : type}
-      </span>
-      {readOnly ? (
-        <span className={styles.readOnly}>Read only</span>
-      ) : (
-        <span className={styles.actions}>
-          {node.kind !== 'scalar' ? (
+    <StructureTreeRow
+      path={node.path}
+      depth={node.depth}
+      expanded={node.expandable ? !collapsed : undefined}
+      selected={selected}
+      picking={intent?.kind === 'pick-destination'}
+      kind={node.kind}
+      onSelect={onSelect}
+      label={label}
+      icon={<Icon aria-hidden="true" />}
+      iconTitle={type}
+      preview={node.kind === 'scalar' ? node.preview : type}
+      actions={
+        readOnly ? (
+          <span className={styles.readOnly}>Read only</span>
+        ) : (
+          <span className={styles.actions}>
+            {node.kind !== 'scalar' ? (
+              <button
+                aria-label={`Add inside ${node.key}`}
+                disabled={pending}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onAdd();
+                }}
+                type="button"
+              >
+                <Plus size={14} />
+              </button>
+            ) : null}
             <button
-              aria-label={`Add inside ${node.key}`}
-              disabled={pending}
+              aria-label={`Edit ${node.key}`}
+              disabled={pending || !node.path}
               onClick={(event) => {
                 event.stopPropagation();
-                onAdd();
+                onEdit();
               }}
               type="button"
             >
-              <Plus size={14} />
+              <Pencil size={14} />
             </button>
-          ) : null}
-          <button
-            aria-label={`Edit ${node.key}`}
-            disabled={pending || !node.path}
-            onClick={(event) => {
-              event.stopPropagation();
-              onEdit();
-            }}
-            type="button"
-          >
-            <Pencil size={14} />
-          </button>
-          <button
-            aria-label={`Delete ${node.key}`}
-            data-danger="true"
-            disabled={pending || !node.path}
-            onClick={(event) => {
-              event.stopPropagation();
-              onDelete();
-            }}
-            type="button"
-          >
-            <Trash2 size={14} />
-          </button>
-          {ops.length > 0 ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  aria-label={`More operations for ${node.key}`}
-                  disabled={pending}
-                  onClick={(event) => event.stopPropagation()}
-                  type="button"
-                >
-                  <MoreHorizontal size={14} />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
-                {ops.map((name) => (
-                  <DropdownMenuItem key={name} onSelect={() => onRun(name)}>
-                    {OP_LABELS[name]}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
-        </span>
-      )}
-    </div>
+            <button
+              aria-label={`Delete ${node.key}`}
+              data-danger="true"
+              disabled={pending || !node.path}
+              onClick={(event) => {
+                event.stopPropagation();
+                onDelete();
+              }}
+              type="button"
+            >
+              <Trash2 size={14} />
+            </button>
+            {ops.length > 0 ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    aria-label={`More operations for ${node.key}`}
+                    disabled={pending}
+                    onClick={(event) => event.stopPropagation()}
+                    type="button"
+                  >
+                    <MoreHorizontal size={14} />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
+                  {ops.map((name) => (
+                    <DropdownMenuItem key={name} onSelect={() => onRun(name)}>
+                      {OP_LABELS[name]}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+          </span>
+        )
+      }
+    />
   );
 }
 

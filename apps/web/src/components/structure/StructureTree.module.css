@@ -279,3 +279,16 @@
     opacity: 1;
   }
 }
+
+.row[data-editable="true"] {
+  grid-template-columns: minmax(150px, 1fr) 180px 100px;
+}
+.row[data-editable="true"] .label {
+  flex: 1;
+  white-space: normal;
+}
+@media (max-width: 600px) {
+  .row[data-editable="true"] {
+    grid-template-columns: minmax(0, 1fr) 100px;
+  }
+}

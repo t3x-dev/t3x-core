@@ -3,6 +3,7 @@ import type { StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
 import { dump } from 'js-yaml';
 import Link from 'next/link';
 import { type ReactNode, useMemo, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { ReferenceIcon as Icon } from './DiscoverReference';
 import shared from './ExploreDiscoverySurface.module.css';
 import s from './SchemaStudioExperience.module.css';
@@ -19,6 +20,8 @@ export type StudioVisualModule = {
 };
 export function SchemaStudioSurface({
   navigation,
+  dataEditor,
+  contextLocked = false,
   browseHref,
   workspaceTitle = 'No draft workspace',
   workspaceId = '',
@@ -44,6 +47,8 @@ export function SchemaStudioSurface({
   onClear,
 }: {
   navigation?: ReactNode;
+  dataEditor?: ReactNode;
+  contextLocked?: boolean;
   browseHref: string;
   workspaceTitle?: string;
   workspaceId?: string;
@@ -68,7 +73,9 @@ export function SchemaStudioSurface({
   onDownload?: () => void;
   onClear?: () => void;
 }) {
-  const [mode, setMode] = useState<'structure' | 'yaml'>('structure');
+  const [mode, setMode] = useState<'data' | 'structure' | 'yaml'>(
+    dataEditor ? 'data' : 'structure'
+  );
   const [panel, setPanel] = useState<'Inspector' | 'Checks' | 'Changes'>('Inspector');
   const [zoom, setZoom] = useState(1);
   const [query, setQuery] = useState('');
@@ -104,7 +111,7 @@ export function SchemaStudioSurface({
               aria-label="Target Workspace"
               value={workspaceId}
               onChange={(event) => onWorkspace?.(event.target.value)}
-              disabled={!onWorkspace}
+              disabled={!onWorkspace || contextLocked}
             >
               {workspaces.length ? (
                 workspaces.map((item) => (
@@ -136,23 +143,24 @@ export function SchemaStudioSurface({
             className={`${shared.btn} ${s.b2}`}
             aria-label="Add modules"
             onClick={onAdd}
-            disabled={!onAdd}
+            disabled={!onAdd || contextLocked}
           >
             <Icon name="plus" />
             Add modules
           </button>
-          <button
-            className={`${shared.btn} ${shared.primary} ${s.b2}`}
+          <Button
+            variant="commit"
+            size="sm"
             aria-label="Review changes"
             disabled={!canReview}
             onClick={onReview}
           >
             Review changes
-          </button>
+          </Button>
         </div>
       </SchemaToolbarSlot>
-      <div className={s.body}>
-        <aside aria-label="Studio sources" className={s.col}>
+      <div className={s.body} data-mode={mode}>
+        <aside aria-label="Studio sources" className={s.col} hidden={mode === 'data'}>
           <div className={s.ch}>
             <b>Sources</b>
             <span className={s.n}>{modules.length}</span>
@@ -252,10 +260,16 @@ export function SchemaStudioSurface({
             ) : null}
           </div>
         </aside>
-        <section aria-label="Composed structure" className={s.canvas}>
+        <section
+          aria-label={mode === 'data' ? 'Schema definition' : 'Composed structure'}
+          className={s.canvas}
+        >
           <div className={s.ctop}>
             <div className={s.seg} role="tablist" aria-label="Studio view">
-              {(['structure', 'yaml'] as const).map((view) => (
+              {(dataEditor
+                ? (['data', 'structure', 'yaml'] as const)
+                : (['structure', 'yaml'] as const)
+              ).map((view) => (
                 <button
                   type="button"
                   role="tab"
@@ -265,12 +279,40 @@ export function SchemaStudioSurface({
                   key={view}
                 >
                   <Icon name={view === 'structure' ? 'layers' : 'braces'} size={13} />
-                  {view === 'structure' ? 'Structure' : 'YAML'}
+                  {view === 'data' ? 'Data' : view === 'structure' ? 'Composition' : 'YAML'}
                 </button>
               ))}
             </div>
+            {mode === 'data' ? (
+              <div className={s.dataActions}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('structure');
+                    setPanel('Checks');
+                    onCheck?.();
+                  }}
+                >
+                  Checks
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('structure');
+                    setPanel('Changes');
+                  }}
+                >
+                  Changes
+                </button>
+              </div>
+            ) : null}
           </div>
-          {mode === 'yaml' ? (
+          {dataEditor ? (
+            <div className={s.dataEditor} hidden={mode !== 'data'}>
+              {dataEditor}
+            </div>
+          ) : null}
+          {mode === 'data' ? null : mode === 'yaml' ? (
             <pre className={s.yaml}>{yaml}</pre>
           ) : composition.length ? (
             <div className={s.canvasScroll}>
@@ -316,7 +358,7 @@ export function SchemaStudioSurface({
           ) : (
             <StudioEmptyCanvas browseHref={browseHref} onAdd={onAdd} />
           )}
-          <div className={s.float}>
+          <div className={s.float} hidden={mode === 'data'}>
             <button
               aria-label="Zoom out"
               onClick={() => setZoom((value) => Math.max(0.5, value - 0.1))}
@@ -346,7 +388,7 @@ export function SchemaStudioSurface({
             </button>
           </div>
         </section>
-        <aside aria-label="Module details" className={s.insp}>
+        <aside aria-label="Module details" className={s.insp} hidden={mode === 'data'}>
           <div className={s.seg} role="tablist" aria-label="Module panel">
             {(['Inspector', 'Checks', 'Changes'] as const).map((tab) => (
               <button
