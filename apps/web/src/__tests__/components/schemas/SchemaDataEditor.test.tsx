@@ -253,13 +253,16 @@ it('shows exact node sources without selecting or changing the node and marks su
     />
   );
   fireEvent.click(screen.getByRole('button', { name: 'Source for checklist: Checklist @ 1.2.0' }));
-  const link = await screen.findByRole('link', { name: 'View exact release ↗' });
+  const link = await screen.findByRole('link', { name: 'View release ↗' });
   const query = new URL(link.getAttribute('href')!, 'https://example.test').searchParams;
   expect(query.get('catalogHash')).toBe(pin.hash);
   expect(query.get('catalogVersion')).toBe(pin.version);
   expect(query.get('sourceProjectId')).toBe(pin.projectId);
   expect(link).toHaveAttribute('target', '_blank');
-  expect(screen.getByText('Original Commit link unavailable for this source.')).toBeVisible();
+  expect(screen.getByText('Original commit unavailable.')).not.toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+  expect(screen.getByText(pin.hash)).toBeVisible();
+  expect(screen.getByText('Original commit unavailable.')).toBeVisible();
   expect(handlers.onPreview).not.toHaveBeenCalled();
   expect(handlers.onSave).not.toHaveBeenCalled();
   fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
@@ -310,14 +313,13 @@ it('opens the verified original project and Commit without replacing it with the
   fireEvent.click(
     screen.getByRole('button', { name: 'Source for checklist: team/released @ 2.0.0' })
   );
+  fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
   const link = await screen.findByRole('link', { name: 'View source Commit ↗' });
   const url = new URL(link.getAttribute('href')!, 'https://example.test');
   expect(url.pathname).toBe('/project/original%2Fproject/history');
   expect(url.searchParams.get('commit')).toBe(commitDigest);
   expect(link).toHaveAttribute('target', '_blank');
   expect(screen.getByText('original/checklist')).toBeVisible();
-  expect(screen.getByRole('link', { name: 'View exact release ↗' })).toBeVisible();
-  expect(
-    screen.queryByText('Original Commit link unavailable for this source.')
-  ).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'View release ↗' })).toBeVisible();
+  expect(screen.queryByText('Original commit unavailable.')).not.toBeInTheDocument();
 });
