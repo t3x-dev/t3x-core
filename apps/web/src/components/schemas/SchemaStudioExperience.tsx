@@ -43,7 +43,7 @@ import { SchemaDataEditor } from './SchemaDataEditor';
 import { SchemaDefinitionWorkbench } from './SchemaDefinitionWorkbench';
 import { SchemaSourceCompositionDialog } from './SchemaSourceCompositionDialog';
 import { SchemaStudioSurface } from './SchemaStudioSurface';
-import { StudioChanges, StudioImpactPreview } from './StudioDefinitionPreview';
+import { StudioChanges, StudioChecks, StudioImpactPreview } from './StudioDefinitionPreview';
 import { StudioPublishDialog } from './StudioPublishDialog';
 import type { SchemaEditorNavigation } from './useSchemaNavigationGuard';
 
@@ -686,7 +686,7 @@ export function SchemaStudioExperience({
   }
 
   function openReview() {
-    if (target && data?.workspace?.id === target.id) setReview(data);
+    if (data) setReview(data);
   }
 
   function downloadDefinition() {
@@ -755,7 +755,7 @@ export function SchemaStudioExperience({
   }
 
   const currentBinding = persistedTarget?.schemaBindings?.[0];
-  const canReview = !!target && data?.workspace?.id === target.id && !applying && !dataDirty;
+  const canReview = !!data && !applying && !preview.loading && !editorInvalid;
   const browseHref = schemaBrowseHref(
     projectId,
     workspaceId,
@@ -797,8 +797,9 @@ export function SchemaStudioExperience({
         navigation={navigation}
         contextLocked={dataDirty || definitionOpen}
         editorInvalid={editorInvalid}
-        dataEditor={(view) => (
+        dataEditor={(view, chrome) => (
           <SchemaDataEditor
+            chrome={chrome}
             navigationRef={navigationRef}
             view={view}
             onValidationChange={setEditorInvalid}
@@ -881,9 +882,6 @@ export function SchemaStudioExperience({
         sourceHref={sourceHref}
         workspaceHref={target ? workspaceLink : undefined}
         branch={target?.targetBranch}
-        draftStatus={
-          dataDirty ? 'Unsaved changes' : savedCandidateRef ? 'Candidate saved' : undefined
-        }
         bindingStatus={
           persistedTarget
             ? currentBinding
@@ -916,11 +914,6 @@ export function SchemaStudioExperience({
           candidates.error || schemaEdit.error || preview.error || workspaces.error || undefined
         }
         data={data}
-        onCheck={() => {
-          preview.refresh();
-          pendingSchema.refresh();
-          void workspaces.refresh();
-        }}
         onAdd={() => composeSources()}
         onEditDefinition={
           !dataDirty && persistedTarget && selection.length
@@ -1060,11 +1053,11 @@ export function SchemaStudioExperience({
       >
         <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden sm:max-w-4xl">
           <DialogHeader className="shrink-0">
-            <DialogTitle>
-              {review?.workspace?.canBind ? 'Apply exact definition' : 'Review Schema changes'}
-            </DialogTitle>
+            <DialogTitle>Review changes</DialogTitle>
             <DialogDescription>
-              {review?.workspace?.canBind ? (
+              {!target || review?.workspace?.id !== target.id ? (
+                'Inspect this definition and its checks. Select a valid Workspace before applying it.'
+              ) : review?.workspace?.canBind ? (
                 `${target?.title} · revision ${review.workspace.revision}. Bind this exact Schema to the empty Workspace. Fill required content later; Review and Commit still validate it.`
               ) : (
                 <>
@@ -1086,6 +1079,7 @@ export function SchemaStudioExperience({
                     </p>
                   ))}
                 </div>
+                <StudioChecks preview={review} />
                 <div className="grid min-w-0 gap-6 sm:grid-cols-2">
                   <section aria-label="Schema definition changes" className="min-w-0">
                     <h3 className="text-sm font-medium">Definition changes</h3>
@@ -1096,7 +1090,7 @@ export function SchemaStudioExperience({
                     <StudioImpactPreview impact={review.impact ?? null} />
                   </div>
                 </div>
-                {hasSchemaEdit && !savedCandidateRef ? (
+                {dataDirty || (hasSchemaEdit && !savedCandidateRef) ? (
                   <p className="text-xs text-[var(--text-secondary)]">
                     Save the local candidate before adopting it.
                   </p>
@@ -1115,6 +1109,10 @@ export function SchemaStudioExperience({
                   variant="outline"
                   disabled={
                     applying ||
+                    dataDirty ||
+                    preview.loading ||
+                    !target ||
+                    review.workspace?.id !== target.id ||
                     !savedCandidateRef ||
                     !review.impact?.canPublish ||
                     !review.report.valid ||
@@ -1133,6 +1131,10 @@ export function SchemaStudioExperience({
                   variant="outline"
                   disabled={
                     applying ||
+                    dataDirty ||
+                    preview.loading ||
+                    !target ||
+                    review.workspace?.id !== target.id ||
                     !review.report.valid ||
                     !review.adoption.allowed ||
                     review.impact?.status === 'blocked' ||
@@ -1160,6 +1162,10 @@ export function SchemaStudioExperience({
                 <Button
                   disabled={
                     applying ||
+                    dataDirty ||
+                    preview.loading ||
+                    !target ||
+                    review.workspace?.id !== target.id ||
                     (hasSchemaEdit && !savedCandidateRef) ||
                     !review.impact?.canAdopt ||
                     !review.report.valid ||

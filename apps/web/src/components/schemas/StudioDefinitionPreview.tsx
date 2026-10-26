@@ -204,3 +204,37 @@ export function StudioImpactPreview({ impact }: { impact: SchemaEvolutionImpact 
     </section>
   );
 }
+
+export function StudioChecks({ preview }: { preview: StudioPreview }) {
+  return (
+    <section aria-label="Schema checks" className="space-y-3">
+      <h3 className="text-sm font-medium">Schema checks</h3>
+      <p className="text-xs">
+        {preview.report.valid && preview.adoption.allowed && preview.impact?.canAdopt !== false
+          ? 'All blocking checks passed'
+          : 'Changes require attention'}
+      </p>
+      {(preview.report.layers ?? []).map((layer) => (
+        <div
+          key={layer.id}
+          className="space-y-1 border-t border-[var(--stroke-divider)] pt-2 text-xs"
+        >
+          <div className="flex justify-between gap-3">
+            <span>{layer.label}</span>
+            <span>
+              {
+                { passed: 'Passed', warning: 'Warning', failed: 'Failed', not_run: 'Not run' }[
+                  layer.status
+                ]
+              }
+            </span>
+          </div>
+          {layer.summary ? <p>{layer.summary}</p> : null}
+          {layer.issues.map((issue, index) => (
+            <p key={`${issue.code}-${index}`}>{issue.message}</p>
+          ))}
+        </div>
+      ))}
+    </section>
+  );
+}

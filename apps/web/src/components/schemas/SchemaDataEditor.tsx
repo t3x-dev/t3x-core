@@ -1,8 +1,9 @@
 'use client';
 
 import type { StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
-import { Box, FileText, Plus, Trash2 } from 'lucide-react';
+import { Box, FileText, MoreHorizontal, Plus, Trash2, X } from 'lucide-react';
 import { type RefObject, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { StructureTreeRow, visibleTreeRows } from '@/components/structure/StructureTree';
 import tree from '@/components/structure/StructureTree.module.css';
 import { Button } from '@/components/ui/button';
@@ -14,8 +15,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   addSchemaField,
-  addSchemaRelation,
   changeSchemaField,
   importSchemaField,
   moveSchemaField,
@@ -39,12 +45,14 @@ import {
   SchemaFieldValidation,
 } from './SchemaDefinitionStructure';
 import { SchemaSourceBadge } from './SchemaSourceBadge';
+import type { SchemaEditorChrome } from './SchemaToolbarSlot';
 import { SchemaVisualEditor } from './SchemaVisualEditor';
 import type { SchemaSourceItem } from './SchemaVisualSources';
 import { type SchemaEditorNavigation, useSchemaNavigationGuard } from './useSchemaNavigationGuard';
 
 export function SchemaDataEditor({
   navigationRef,
+  chrome = {},
   view = 'data',
   layoutKey = 'schema',
   sources,
@@ -68,6 +76,7 @@ export function SchemaDataEditor({
   baseDefinition,
   initialSourceMappings = [],
 }: {
+  chrome?: SchemaEditorChrome;
   navigationRef?: RefObject<SchemaEditorNavigation | null>;
   onValidationChange?: (invalid: boolean) => void;
   view?: 'data' | 'visual';
@@ -229,18 +238,6 @@ export function SchemaDataEditor({
     const row = rows.find((item) => item.path === path);
     if (row) transfer(row, target);
   }
-  function relate(from: string, to: string) {
-    const source = rows.find((item) => item.path === from),
-      target = rows.find((item) => item.path === to);
-    if (!definition || !source || !target) return;
-    try {
-      change(addSchemaRelation(definition, source, target));
-      setPanel('rules');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not add this relation.');
-    }
-  }
-
   function select(row: SchemaFieldRow) {
     if (validationError) return;
     setSelected(row.path);
@@ -365,29 +362,67 @@ export function SchemaDataEditor({
     };
   }, [navigationRef, navigation.requestNavigation]);
 
+  const statusControls = (
+    <>
+      <output>{dirty ? 'Unsaved changes' : 'Saved definition'}</output>
+      <Button
+        variant="canvas-outline"
+        size="sm"
+        disabled={busy || !history.length || !!validationError || stale}
+        onClick={undo}
+      >
+        Undo
+      </Button>
+    </>
+  );
+  const moreMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="sm" aria-label="More Schema actions">
+          <MoreHorizontal size={16} />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem
+          disabled={!definition || busy || !!disabledReason || !!validationError}
+          onSelect={() => setPanel('rules')}
+        >
+          Relations &amp; rules
+        </DropdownMenuItem>
+        {chrome.navigationActions}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
   if (!definition)
     return (
-      <div className={styles.feedback}>
-        {previewError ? (
-          <p role="alert">{previewError}</p>
-        ) : (
-          <output>
-            {disabledReason ??
-              (loading
-                ? 'Loading Schema definition…'
-                : 'Schema definition unavailable. Retry or choose a source in Sources.')}
-          </output>
-        )}
-        {onRetry && (previewError || (!loading && !disabledReason)) ? (
-          <Button variant="canvas-outline" size="sm" onClick={onRetry}>
-            Retry Schema
-          </Button>
-        ) : null}
+      <div className={styles.editor}>
+        {chrome.menuTarget ? createPortal(moreMenu, chrome.menuTarget) : moreMenu}
+        <header className={styles.toolbar}>{chrome.viewControls}</header>
+        <div className={styles.feedback}>
+          {previewError ? (
+            <p role="alert">{previewError}</p>
+          ) : (
+            <output>
+              {disabledReason ??
+                (loading
+                  ? 'Loading Schema definition…'
+                  : 'Schema definition unavailable. Retry or choose a source in Sources.')}
+            </output>
+          )}
+          {onRetry && (previewError || (!loading && !disabledReason)) ? (
+            <Button variant="canvas-outline" size="sm" onClick={onRetry}>
+              Retry Schema
+            </Button>
+          ) : null}
+        </div>
       </div>
     );
   return (
     <section aria-label="Schema data editor" className={styles.editor} data-schema-editor>
+      {chrome.statusTarget ? createPortal(statusControls, chrome.statusTarget) : null}
+      {chrome.menuTarget ? createPortal(moreMenu, chrome.menuTarget) : null}
       <header className={styles.toolbar}>
+        {chrome.viewControls}
         {view === 'data' ? (
           <input
             aria-label="Find a Schema field"
@@ -398,15 +433,9 @@ export function SchemaDataEditor({
           />
         ) : null}
         <span>{rows.length} fields</span>
-        <output>{dirty ? 'Unsaved changes' : 'Saved definition'}</output>
-        <Button
-          variant="canvas-outline"
-          size="sm"
-          disabled={busy || !history.length || !!validationError || stale}
-          onClick={undo}
-        >
-          Undo
-        </Button>
+        <span className={styles.toolbarSpacer} />
+        {!chrome.statusTarget ? statusControls : null}
+        {!chrome.menuTarget ? moreMenu : null}
         <Button
           variant="canvas-outline"
           size="sm"
@@ -424,7 +453,11 @@ export function SchemaDataEditor({
             : error || validationError || previewError}
         </p>
       ) : null}
-      <fieldset className={styles.content} disabled={busy || !!disabledReason}>
+      <fieldset
+        className={styles.content}
+        data-details={!active && panel !== 'rules' ? 'closed' : 'open'}
+        disabled={busy || !!disabledReason}
+      >
         <SchemaFieldValidation key={resetKey} onValidationChange={setFieldError}>
           <div className={styles.list} hidden={view !== 'data'}>
             <div className={styles.columns}>
@@ -587,7 +620,7 @@ export function SchemaDataEditor({
               definition={definition}
               rows={rows}
               selected={selected}
-              layoutKey={layoutKey}
+              key={layoutKey}
               disabled={busy || !!disabledReason || !!validationError || stale}
               onSelect={select}
               onAdd={(row) => add(row, 'slot')}
@@ -597,7 +630,6 @@ export function SchemaDataEditor({
               onClearSelection={() => {
                 if (!validationError) setSelected(undefined);
               }}
-              onRelation={relate}
               onRules={() => {
                 if (!validationError) setPanel('rules');
               }}
@@ -606,23 +638,24 @@ export function SchemaDataEditor({
               onSource={onComposeSources}
             />
           ) : null}
-          <aside className={styles.properties} aria-label="Schema properties">
+          <aside
+            className={styles.properties}
+            aria-label="Schema properties"
+            hidden={!active && panel !== 'rules'}
+          >
             <div className={styles.tabs}>
+              <h2>{panel === 'rules' ? 'Relations & rules' : 'Properties'}</h2>
               <button
                 type="button"
-                aria-pressed={panel === 'properties'}
+                className={styles.closeProperties}
+                aria-label="Close properties"
                 disabled={!!validationError}
-                onClick={() => setPanel('properties')}
+                onClick={() => {
+                  setSelected(undefined);
+                  setPanel('properties');
+                }}
               >
-                Properties
-              </button>
-              <button
-                type="button"
-                aria-pressed={panel === 'rules'}
-                disabled={!!validationError}
-                onClick={() => setPanel('rules')}
-              >
-                Relations & rules
+                <X size={16} aria-hidden="true" />
               </button>
             </div>
             <div hidden={panel !== 'properties'}>

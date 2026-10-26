@@ -24,8 +24,18 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import type { StudioCandidate } from '@t3x-dev/api-client';
-import { GripVertical } from 'lucide-react';
+import { ChevronDown, GripVertical } from 'lucide-react';
 import { type ButtonHTMLAttributes, type ReactNode, useMemo, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   type SchemaDefinition,
   type SchemaFieldRow,
@@ -70,7 +80,6 @@ function DropCanvas({ children, disabled }: { children: ReactNode; disabled: boo
     </div>
   );
 }
-type PositionMap = Record<string, { x: number; y: number }>;
 type CardData = {
   row: SchemaFieldRow;
   fields: SchemaFieldRow[];
@@ -91,8 +100,13 @@ function SchemaCard({ data }: NodeProps<Node<CardData>>) {
       data-drop-target={isOver || undefined}
       aria-label={`Node ${row.semanticPath}`}
     >
-      <Handle type="target" position={Position.Left} />
-      <header className="schema-drag-handle">
+      <Handle
+        type="target"
+        position={Position.Left}
+        isConnectable={false}
+        className={styles.anchor}
+      />
+      <header>
         <div className={styles.nodeHeading}>
           {source}
           <DragButton
@@ -100,16 +114,15 @@ function SchemaCard({ data }: NodeProps<Node<CardData>>) {
             value={row.path}
             label={row.semanticPath}
             disabled={disabled}
-            className={`${styles.moveHandle} nodrag nopan`}
+            className={`${styles.nodeTitle} nodrag nopan`}
             aria-label={`Move node ${row.semanticPath}`}
-            title="Move this node into another node or to the root on empty canvas"
+            aria-pressed={selected === row.path}
+            title="Drag into a node to move it, or onto empty canvas to move it to the root"
             onClick={() => select(row)}
           >
             <GripVertical aria-hidden="true" size={16} />
+            <span>{row.name}</span>
           </DragButton>
-          <button type="button" onClick={() => select(row)} aria-pressed={selected === row.path}>
-            {row.name}
-          </button>
         </div>
         <span>
           {row.definition.repeated ? 'Repeated node' : 'Node'} · Parent:{' '}
@@ -142,7 +155,12 @@ function SchemaCard({ data }: NodeProps<Node<CardData>>) {
           + Add field
         </button>
       </div>
-      <Handle type="source" position={Position.Right} />
+      <Handle
+        type="source"
+        position={Position.Right}
+        isConnectable={false}
+        className={styles.anchor}
+      />
     </section>
   );
 }
@@ -152,29 +170,14 @@ const schemaCollision: CollisionDetection = (args) => {
   const nodes = hits.filter((hit) => hit.id !== 'schema-canvas');
   return nodes.length ? nodes : hits;
 };
-function readPositions(key: string): PositionMap {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(key) ?? '{}');
-    return Object.fromEntries(
-      Object.entries(schemaRecord(parsed)).filter(([, value]) => {
-        const point = schemaRecord(value);
-        return Number.isFinite(point.x) && Number.isFinite(point.y);
-      })
-    ) as PositionMap;
-  } catch {
-    return {};
-  }
-}
 export function SchemaVisualEditor({
   definition,
   rows,
   selected,
-  layoutKey,
   disabled,
   onSelect,
   onAdd,
   onMove,
-  onRelation,
   onRules,
   sources = [],
   onSource,
@@ -186,12 +189,10 @@ export function SchemaVisualEditor({
   definition: SchemaDefinition;
   rows: SchemaFieldRow[];
   selected?: string;
-  layoutKey: string;
   disabled: boolean;
   onSelect: (row: SchemaFieldRow) => void;
   onAdd: (row: SchemaFieldRow) => void;
   onMove: (path: string, target: SchemaFieldRow | null) => void;
-  onRelation: (from: string, to: string) => void;
   onRules: () => void;
   sources?: StudioCandidate[];
   onSource?: (id: string) => void;
@@ -200,14 +201,11 @@ export function SchemaVisualEditor({
   onImport?: (item: SchemaSourceItem, target: SchemaFieldRow | null) => void;
   onClearSelection?: () => void;
 }) {
-  const storageKey = `t3x-schema-layout:${layoutKey}`;
-  const [positions, setPositions] = useState<PositionMap>(() => readPositions(storageKey));
   const [dimensions, setDimensions] = useState<Record<string, { width: number; height: number }>>(
     {}
   );
   const [destination, setDestination] = useState('');
-  const [relationFrom, setRelationFrom] = useState('');
-  const [relationTo, setRelationTo] = useState('');
+  const [moveOpen, setMoveOpen] = useState(false);
   const [dragLabel, setDragLabel] = useState('');
   const [lineMode, setLineMode] = useState('focus');
   const [dragPath, setDragPath] = useState<string>();
@@ -229,20 +227,33 @@ export function SchemaVisualEditor({
   const destinationRow = destinations.find((row) => row.path === destination);
   const canMove =
     !!active && (destinationRow || (active.kind === 'node' && destination === 'root'));
+  const fieldsFor = (row: SchemaFieldRow) =>
+    rows.filter((field) => field.kind === 'slot' && field.parentPath === row.path);
+  const heightOf = (row: SchemaFieldRow) =>
+    dimensions[row.path]?.height ?? 120 + fieldsFor(row).length * 42;
+  const rowTops = [0];
+  for (let index = 2; index < nodeRows.length; index += 2) {
+    rowTops.push(
+      rowTops.at(-1)! +
+        Math.max(heightOf(nodeRows[index - 2]!), heightOf(nodeRows[index - 1]!)) +
+        40
+    );
+  }
   const nodes = nodeRows.map(
     (row, index): Node<CardData> => ({
       id: row.path,
       type: 'schema',
-      dragHandle: '.schema-drag-handle',
-      position: positions[row.path] ?? { x: (index % 2) * 310, y: Math.floor(index / 2) * 300 },
+      position: { x: (index % 2) * 310, y: rowTops[Math.floor(index / 2)]! },
       measured: dimensions[row.path],
       data: {
         row,
-        fields: rows.filter((field) => field.kind === 'slot' && field.parentPath === row.path),
+        fields: fieldsFor(row),
         selected,
         disabled,
         select: (item) => {
           setSourceItem(undefined);
+          setDestination('');
+          setMoveOpen(false);
           onSelect(item);
         },
         add: onAdd,
@@ -293,14 +304,6 @@ export function SchemaVisualEditor({
     }
     return result;
   }, [rows, definition.relationTypes, selected, lineMode, dragPath, overPath]);
-  function persist(next: PositionMap) {
-    setPositions(next);
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(next));
-    } catch {
-      /* Layout still works for this session. */
-    }
-  }
   return (
     <DndContext
       sensors={sensors}
@@ -308,7 +311,7 @@ export function SchemaVisualEditor({
       accessibility={{
         screenReaderInstructions: {
           draggable:
-            'Drag a node by its move handle into another node or onto empty canvas. Fields and objects can be dragged into nodes. You can also select an item and use the destination controls.',
+            'Drag a node title into another node or onto empty canvas to change its parent. Fields and objects can be dragged into nodes. You can also select an item and use Move to or Import to.',
         },
         announcements: {
           onDragStart: ({ active }) => `Dragging ${active.data.current?.label ?? 'item'}.`,
@@ -347,75 +350,70 @@ export function SchemaVisualEditor({
           else if (over.id === 'schema-canvas') onMove(String(drag.value), null);
         } else if (drag?.kind === 'field' && over.data.current?.row) {
           const target = over.data.current.row as SchemaFieldRow;
-          if (drag.value === 'new') onAdd(target);
-          else onMove(String(drag.value), target);
+          onMove(String(drag.value), target);
         }
       }}
     >
       <section className={styles.editor} aria-label="Schema visual editor">
         <div className={styles.tools}>
-          <DragButton
-            kind="field"
-            value="new"
-            label="New field"
-            disabled={disabled || !nodeRows.length}
-            onClick={() => {
-              const target = active?.kind === 'node' ? active : nodeRows[0];
-              if (target) onAdd(target);
-            }}
-          >
-            + Field · drag to a node
-          </DragButton>
-          <select
-            aria-label={`Move ${movableKind} to ${active?.kind === 'node' ? 'parent' : 'node'}`}
-            value={destination}
-            disabled={disabled || !active}
-            onChange={(event) => setDestination(event.target.value)}
-          >
-            <option value="">Destination node</option>
-            {active?.kind === 'node' ? <option value="root">Root</option> : null}
-            {destinations.map((row) => (
-              <option key={row.path} value={row.path}>
-                {row.semanticPath}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            disabled={disabled || !canMove}
-            onClick={() => {
-              if (active && canMove) {
-                if (sourceItem) onImport?.(sourceItem, destinationRow ?? null);
-                else onMove(active.path, destinationRow ?? null);
-              }
-            }}
-          >
-            {sourceItem ? 'Import' : 'Move'} {movableKind}
-          </button>
-          <button type="button" onClick={() => persist({})}>
-            Reset layout
-          </button>
-          <label>
-            Parent lines{' '}
-            <select
-              aria-label="Parent lines"
-              value={lineMode}
-              onChange={(event) => setLineMode(event.target.value)}
-            >
-              <option value="focus">On selection</option>
-              <option value="off">Hidden</option>
-              <option value="all">All</option>
-            </select>
-          </label>
-          <button
-            type="button"
-            onClick={() => {
-              setSourceItem(undefined);
-              onClearSelection?.();
-            }}
-          >
-            Clear selection
-          </button>
+          <span className={styles.selection}>
+            {active ? active.semanticPath : 'Drag nodes or objects into a node to combine.'}
+          </span>
+          {active ? (
+            <Popover open={moveOpen} onOpenChange={setMoveOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="canvas-outline" size="sm" disabled={disabled}>
+                  {sourceItem ? 'Import to…' : 'Move to…'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className={styles.moveMenu}>
+                <label>
+                  {sourceItem ? 'Import' : 'Move'} {active.semanticPath} to
+                  <select
+                    aria-label={`Move ${movableKind} to ${active.kind === 'node' ? 'parent' : 'node'}`}
+                    value={destination}
+                    disabled={disabled}
+                    onChange={(event) => setDestination(event.target.value)}
+                  >
+                    <option value="">Choose a node</option>
+                    {active.kind === 'node' ? <option value="root">Root</option> : null}
+                    {destinations.map((row) => (
+                      <option key={row.path} value={row.path}>
+                        {row.semanticPath}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <Button
+                  size="sm"
+                  disabled={disabled || !canMove}
+                  onClick={() => {
+                    if (!canMove) return;
+                    setMoveOpen(false);
+                    if (sourceItem) onImport?.(sourceItem, destinationRow ?? null);
+                    else onMove(active.path, destinationRow ?? null);
+                  }}
+                >
+                  {sourceItem ? 'Import' : 'Move'} {movableKind}
+                </Button>
+              </PopoverContent>
+            </Popover>
+          ) : null}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="canvas-outline" size="sm" aria-label="Canvas options">
+                Canvas <ChevronDown size={14} aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Parent lines</DropdownMenuLabel>
+              <DropdownMenuRadioGroup value={lineMode} onValueChange={setLineMode}>
+                <DropdownMenuRadioItem value="focus">On selection</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="off">Hidden</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
         <div className={styles.workarea}>
           <section className={styles.sources} aria-label="Available Schema sources">
@@ -438,6 +436,8 @@ export function SchemaVisualEditor({
                     onSelect={(item) => {
                       setSourceItem(item);
                       setDestination('');
+                      setMoveOpen(false);
+                      onClearSelection?.();
                     }}
                   />
                 ) : (
@@ -464,8 +464,10 @@ export function SchemaVisualEditor({
               fitViewOptions={{ maxZoom: 1 }}
               minZoom={0.25}
               maxZoom={1.8}
-              nodesDraggable={!disabled}
-              nodesConnectable={!disabled}
+              nodesDraggable={false}
+              nodesConnectable={false}
+              zoomOnScroll={false}
+              preventScrolling={false}
               deleteKeyCode={null}
               onNodesChange={(changes) => {
                 setDimensions((current) => {
@@ -480,20 +482,10 @@ export function SchemaVisualEditor({
                       next = { ...next, [change.id]: change.dimensions };
                   return next;
                 });
-                setPositions((current) => {
-                  let next = current;
-                  for (const change of changes)
-                    if (change.type === 'position' && change.position)
-                      next = { ...next, [change.id]: change.position };
-                  return next;
-                });
-              }}
-              onNodeDragStop={(_, node) => persist({ ...positions, [node.id]: node.position })}
-              onConnect={({ source, target }) => {
-                if (source && target && !disabled) onRelation(source, target);
               }}
               onPaneClick={() => {
                 setSourceItem(undefined);
+                setMoveOpen(false);
                 onClearSelection?.();
               }}
               onNodeClick={() => setSourceItem(undefined)}
@@ -506,44 +498,6 @@ export function SchemaVisualEditor({
               <Controls showInteractive={false} />
             </ReactFlow>
           </DropCanvas>
-        </div>
-        <div className={styles.tools}>
-          <select
-            aria-label="Relation from node"
-            value={relationFrom}
-            onChange={(event) => setRelationFrom(event.target.value)}
-            disabled={disabled}
-          >
-            <option value="">From node</option>
-            {nodeRows.map((row) => (
-              <option key={row.path} value={row.path}>
-                {row.semanticPath}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="Relation to node"
-            value={relationTo}
-            onChange={(event) => setRelationTo(event.target.value)}
-            disabled={disabled}
-          >
-            <option value="">To node</option>
-            {nodeRows.map((row) => (
-              <option key={row.path} value={row.path}>
-                {row.semanticPath}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            disabled={disabled || !relationFrom || !relationTo}
-            onClick={() => onRelation(relationFrom, relationTo)}
-          >
-            Add relation
-          </button>
-          <span>
-            Drag headers to arrange cards. Drag the move handle to change a node's parent.
-          </span>
         </div>
       </section>
       <DragOverlay>

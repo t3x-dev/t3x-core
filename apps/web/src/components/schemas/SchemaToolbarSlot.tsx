@@ -7,3 +7,10 @@ export function SchemaToolbarSlot({ children }: { children: ReactNode }) {
   const target = useContext(SchemaToolbarContext);
   return target ? createPortal(children, target) : children;
 }
+
+export type SchemaEditorChrome = {
+  viewControls?: ReactNode;
+  statusTarget?: HTMLElement | null;
+  menuTarget?: HTMLElement | null;
+  navigationActions?: ReactNode;
+};

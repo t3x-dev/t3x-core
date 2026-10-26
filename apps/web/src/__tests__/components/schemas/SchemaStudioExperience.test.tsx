@@ -214,7 +214,9 @@ it('does not review another Workspace when the deep-linked target is missing', (
   expect(screen.getByRole('alert')).toHaveTextContent(
     'Workspace missing was not found in this project'
   );
-  expect(screen.getByRole('button', { name: 'Review Schema changes' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
+  expect(screen.getByRole('button', { name: 'Adopt & return to Workspace' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel', exact: true }));
   expect(screen.getByRole('link', { name: 'Browse source releases' })).toHaveAttribute(
     'href',
     '/explore?view=browse&type=schemas&studioTarget=p&workspace=missing'
@@ -230,23 +232,20 @@ it('keeps a required provider checked and locked while blocking a failed definit
   expect(composition).toContainElement(sources);
   expect(composition).toContainElement(screen.getByRole('region', { name: 'Schema definition' }));
   expect(within(sources).getByRole('button', { name: 'Manage sources' })).toBeVisible();
-  expect(within(controls).getByRole('button', { name: 'Review Schema changes' })).toBeDisabled();
+  expect(within(controls).getByRole('button', { name: 'Review changes' })).toBeEnabled();
   expect(screen.getByLabelText('Target Workspace')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Zoom out' })).not.toBeInTheDocument();
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).toBeChecked();
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Remove Shared foundation' })).toBeDisabled();
-  expect(screen.getByRole('button', { name: 'Review Schema changes' })).toBeDisabled();
-  const checkSchema = screen.getByRole('button', { name: 'Schema checks', exact: true });
-  fireEvent.click(checkSchema);
-  expect(screen.getByRole('button', { name: 'Schema checks', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true'
-  );
+  expect(screen.getByRole('button', { name: 'Review changes' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
+  expect(screen.getByRole('button', { name: 'Adopt & return to Workspace' })).toBeDisabled();
   expect(screen.getByText('Missing service capability')).toBeVisible();
   expect(screen.getByText('Composition dependencies')).toBeVisible();
   expect(screen.getByText('Failed')).toBeVisible();
   expect(screen.getByText('Changes require attention')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel', exact: true }));
   fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }));
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).not.toBeChecked();
   expect(mocks.apply).not.toHaveBeenCalled();
@@ -420,14 +419,14 @@ it('previews a recovered Schema edit by server-managed candidate revision', asyn
       schemaEditCandidate: { candidateId: 'schema-edit', revision: 3 },
     })
   );
-  expect(screen.getByRole('button', { name: 'Review Schema changes' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Review changes' })).toBeEnabled();
 });
 
 it('does not offer the selected candidate as its own comparison', () => {
   render(<SchemaStudioExperience projectId="p" />);
   openSources();
   expect(screen.queryByRole('option', { name: 'Shared foundation · 1.0' })).not.toBeInTheDocument();
-  expect(screen.getByText('Create a Workspace to review and adopt this definition.')).toBeVisible();
+  expect(screen.getByText('Create a Workspace to apply this definition.')).toBeVisible();
 });
 
 it('opens source composition without applying or discarding the current candidate', () => {
@@ -657,11 +656,11 @@ it.each([
   await waitFor(() =>
     expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).toBeChecked()
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Review Schema changes' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
   expect(mocks.apply).not.toHaveBeenCalled();
   expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Review Schema changes' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
   fireEvent.click(screen.getByRole('button', { name: 'Adopt & return to Workspace' }));
   expect(mocks.apply).toHaveBeenCalledWith({
     candidateIds: ['provider'],
@@ -729,8 +728,8 @@ it('shows unsafe content impact while preventing confirmation, then discards a s
   mocks.data = preview;
   const { rerender } = render(<SchemaStudioExperience projectId="p" />);
   openSources();
-  fireEvent.click(screen.getByRole('button', { name: 'Review Schema changes' }));
-  const dialog = screen.getByRole('dialog', { name: 'Review Schema changes' });
+  fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
+  const dialog = screen.getByRole('dialog', { name: 'Review changes' });
   expect(within(dialog).getByText('Map existing content before removing product.')).toBeVisible();
   expect(
     within(dialog).getByRole('button', { name: 'Adopt & return to Workspace' })
@@ -777,11 +776,9 @@ it('reuses Confirm & apply for an empty first binding without opening content mi
   render(<SchemaStudioExperience projectId="p" />);
   openSources();
   expect(screen.queryByRole('button', { name: 'Bind Schema' })).not.toBeInTheDocument();
-  await waitFor(() =>
-    expect(screen.getByRole('button', { name: 'Review Schema changes' })).toBeEnabled()
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Review Schema changes' }));
-  const dialog = screen.getByRole('dialog', { name: 'Apply exact definition' });
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Review changes' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
+  const dialog = screen.getByRole('dialog', { name: 'Review changes' });
   expect(
     within(dialog).queryByRole('button', { name: 'Prepare content & mappings' })
   ).not.toBeInTheDocument();
@@ -841,10 +838,8 @@ it('opens private publication from the checked saved candidate without applying 
   };
   render(<SchemaStudioExperience projectId="p" />);
   openSources();
-  await waitFor(() =>
-    expect(screen.getByRole('button', { name: 'Review Schema changes' })).toBeEnabled()
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Review Schema changes' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Review changes' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
   fireEvent.click(screen.getByRole('button', { name: 'Publish public Schema' }));
   expect(screen.getByRole('dialog', { name: 'Publish public Schema' })).toBeVisible();
   expect(screen.getByRole('button', { name: 'Publish public version' })).toBeEnabled();
@@ -893,7 +888,11 @@ it('edits Schema fields in the default Data view and saves through the existing 
   expect(screen.getByRole('tab', { name: 'Fields' })).toHaveAttribute('aria-selected', 'true');
   fireEvent.click(screen.getByLabelText('Required checklist/title'));
   expect(screen.getByLabelText('Target Workspace')).toBeEnabled();
-  expect(screen.getByRole('button', { name: 'Review Schema changes' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Review changes' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
+  expect(screen.getByRole('button', { name: 'Adopt & return to Workspace' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Publish public Schema' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel', exact: true }));
   openSources();
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).toBeDisabled();
   openYaml();
@@ -1063,18 +1062,24 @@ it.each([
   );
 });
 
-it('opens checks and definition changes without replacing the current editor view', () => {
+it('groups checks and changes in Review without replacing the editor view', () => {
   render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('button', { name: 'Schema checks', exact: true }));
-  expect(screen.getByRole('tab', { name: 'Fields' })).toHaveAttribute('aria-selected', 'true');
-  expect(screen.getByRole('complementary', { name: 'Schema checks' })).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Definition changes', exact: true }));
-  expect(screen.getByRole('tab', { name: 'Fields' })).toHaveAttribute('aria-selected', 'true');
-  expect(screen.getByRole('complementary', { name: 'Definition changes' })).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Close inspection panel' }));
   expect(
-    screen.queryByRole('complementary', { name: 'Definition changes' })
+    screen.queryByRole('button', { name: 'Schema checks', exact: true })
   ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Definition changes', exact: true })
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
+  const review = screen.getByRole('dialog', { name: 'Review changes' });
+  expect(within(review).getByRole('region', { name: 'Schema checks' })).toBeVisible();
+  expect(within(review).getByRole('region', { name: 'Schema definition changes' })).toBeVisible();
+  expect(
+    within(review).getByRole('button', { name: 'Adopt & return to Workspace' })
+  ).toBeDisabled();
+  fireEvent.click(within(review).getByRole('button', { name: 'Cancel', exact: true }));
+  expect(screen.getByRole('tab', { name: 'Fields' })).toHaveAttribute('aria-selected', 'true');
+  expect(mocks.apply).not.toHaveBeenCalled();
 });
 
 it('uses the resolved branch target in all outbound Studio links and normalizes its URL', () => {
@@ -1089,15 +1094,16 @@ it('uses the resolved branch target in all outbound Studio links and normalizes 
   expect(mocks.replace).toHaveBeenCalledWith(expect.stringContaining('workspace=feature-draft'), {
     scroll: false,
   });
+  fireEvent.keyDown(screen.getByRole('button', { name: 'More Schema actions' }), { key: 'Enter' });
   for (const name of ['Browse schemas', 'Back to source', 'Open Workspace']) {
     const url = new URL(
-      screen.getByRole('link', { name, exact: true }).getAttribute('href')!,
+      screen.getByRole('menuitem', { name, exact: true }).getAttribute('href')!,
       'http://local'
     );
     expect(url.searchParams.get('workspace')).toBe('feature-draft');
     expect(url.searchParams.get('branch')).toBe('feature');
   }
-  expect(screen.getByRole('link', { name: 'Browse schemas', exact: true })).not.toHaveAttribute(
+  expect(screen.getByRole('menuitem', { name: 'Browse schemas', exact: true })).not.toHaveAttribute(
     'href',
     expect.stringContaining('catalogName')
   );
@@ -1154,7 +1160,9 @@ it('keeps only Fields and Visual while sources and candidate YAML start collapse
   expect(screen.getByText(/^YAML/, { selector: 'summary' }).closest('details')).not.toHaveAttribute(
     'open'
   );
+  fireEvent.keyDown(screen.getByRole('button', { name: 'More Schema actions' }), { key: 'Enter' });
   expect(screen.getByText('In use: team/base · 1.0')).toBeVisible();
+  fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
   openYaml();
   expect(screen.getByText(/yschema: '0.1'/, { selector: 'code' })).toBeVisible();
   expect(screen.getByRole('tab', { name: 'Fields' })).toHaveAttribute('aria-selected', 'true');

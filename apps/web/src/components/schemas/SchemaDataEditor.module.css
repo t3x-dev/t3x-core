@@ -30,8 +30,8 @@
   flex: 1;
   max-width: 360px;
 }
-.toolbar output {
-  margin-left: auto;
+.toolbarSpacer {
+  flex: 1;
 }
 .content {
   display: grid;
@@ -41,6 +41,9 @@
   min-width: 0;
   border: 0;
   padding: 0;
+}
+.content[data-details="closed"] {
+  grid-template-columns: minmax(0, 1fr);
 }
 .list {
   min-height: 0;
@@ -89,9 +92,15 @@
   border-bottom: 1px solid var(--stroke-divider);
   font-size: 13px;
 }
-.tabs button[aria-pressed="true"] {
+.tabs h2 {
   font-weight: 600;
-  color: var(--accent-commit);
+}
+.closeProperties {
+  display: grid;
+  place-items: center;
+  margin-left: auto;
+  min-width: 28px;
+  min-height: 28px;
 }
 .settings {
   padding: 16px;
