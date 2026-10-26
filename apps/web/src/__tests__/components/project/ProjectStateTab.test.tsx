@@ -1619,7 +1619,9 @@ describe('ProjectStateTab', () => {
 
     expect(await screen.findByRole('link', { name: 'Actual branch tip' })).toBeInTheDocument();
     expect(screen.queryByText('Timestamp-newer parent')).not.toBeInTheDocument();
-    expect(hookMocks.loadOperations).toHaveBeenCalledWith(tip.hash, 'proj_test');
+    await waitFor(() => {
+      expect(hookMocks.loadOperations).toHaveBeenCalledWith(tip.hash, 'proj_test');
+    });
   });
 
   it('rejects commit rows that do not belong to the selected project', async () => {
@@ -1650,7 +1652,10 @@ describe('ProjectStateTab', () => {
     hookMocks.loadCommits.mockResolvedValue([source, merged, PRD_COMMIT]);
     renderStateTab(null);
     expect(await screen.findByRole('link', { name: 'Merged branch HEAD' })).toBeInTheDocument();
-    expect(hookMocks.loadOperations).toHaveBeenCalledWith(merged.hash, 'proj_test');
+    // Change details load in a separate effect after the committed state is visible.
+    await waitFor(() => {
+      expect(hookMocks.loadOperations).toHaveBeenCalledWith(merged.hash, 'proj_test');
+    });
     expect(
       screen.queryByText('Commit response does not match the selected project and branch.')
     ).not.toBeInTheDocument();
