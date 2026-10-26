@@ -122,3 +122,15 @@
   min-width: 0;
   flex: 1;
 }
+.card header .moveHandle {
+  display: grid;
+  place-items: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  cursor: grab;
+}
+.moveHandle:hover {
+  background: var(--hover-bg);
+}

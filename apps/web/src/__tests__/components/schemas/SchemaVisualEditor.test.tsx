@@ -31,6 +31,65 @@ const definition = {
     owner: { slots: {} },
   },
 };
+it('moves object fields and whole node subtrees while keeping Fields and Visual in sync', async () => {
+  const object = {
+    type: 'object',
+    properties: { enabled: { type: 'boolean' } },
+    additionalProperties: false,
+  };
+  const initialDefinition = {
+    ...definition,
+    nodes: {
+      ...definition.nodes,
+      config: {
+        slots: { options: object },
+        requiredSlots: ['options'],
+        children: { nested: { slots: {} } },
+      },
+    },
+  };
+  const handlers = {
+    onPreview: vi.fn(),
+    onSave: vi.fn().mockResolvedValue(undefined),
+    onDirtyChange: vi.fn(),
+    onDiscard: vi.fn(),
+  };
+  const view = render(
+    <SchemaDataEditor
+      initialDefinition={initialDefinition}
+      revisionKey="move"
+      view="visual"
+      {...handlers}
+    />
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Select object config/options' }));
+  fireEvent.change(screen.getByLabelText('Move object to node'), {
+    target: { value: '["nodes","owner"]' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Move object' }));
+  expect(handlers.onPreview.mock.lastCall?.[0]).toHaveProperty('nodes.owner.slots.options', object);
+  fireEvent.click(screen.getByRole('button', { name: 'Move node config' }));
+  fireEvent.change(screen.getByLabelText('Move node to parent'), {
+    target: { value: '["nodes","tasks"]' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Move node', exact: true }));
+  expect(handlers.onPreview.mock.lastCall?.[0]).toHaveProperty(
+    'nodes.tasks.children.config.children.nested'
+  );
+  expect(handlers.onPreview.mock.lastCall?.[0]).not.toHaveProperty('nodes.config');
+  view.rerender(
+    <SchemaDataEditor
+      initialDefinition={initialDefinition}
+      revisionKey="move"
+      view="data"
+      {...handlers}
+    />
+  );
+  expect(screen.getByLabelText('Name tasks/config/nested')).toBeVisible();
+  expect(screen.getByLabelText('Required owner/options')).toBeChecked();
+  fireEvent.click(screen.getByRole('button', { name: 'Save candidate' }));
+  await waitFor(() => expect(handlers.onSave).toHaveBeenCalledOnce());
+});
 it('shares definition and selection across Data/Visual, moves a field, adds a relation and saves once', async () => {
   const handlers = {
     onPreview: vi.fn(),

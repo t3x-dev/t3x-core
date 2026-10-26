@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addSchemaField,
   changeSchemaField,
+  moveSchemaField,
   schemaFieldRows,
 } from '@/domain/schemas/schemaFieldEditing';
 
@@ -23,6 +24,81 @@ const schema = {
   },
 };
 describe('Schema field edits', () => {
+  it('moves an entire node subtree between parents and back to the root', () => {
+    const source = { ...schema, nodes: { ...schema.nodes, destination: { slots: {} } } };
+    const rows = schemaFieldRows(source);
+    const original = rows.find((row) => row.semanticPath === 'checklist')!;
+    const target = rows.find((row) => row.name === 'destination')!;
+    const moved = moveSchemaField(source, original, target);
+    expect(moved).not.toHaveProperty('nodes.checklist');
+    expect(moved).toHaveProperty('nodes.destination.children.checklist', schema.nodes.checklist);
+    const restored = moveSchemaField(
+      moved,
+      schemaFieldRows(moved).find((row) => row.semanticPath === 'destination/checklist')!,
+      null
+    );
+    expect(restored).toHaveProperty('nodes.checklist', schema.nodes.checklist);
+    expect(source.nodes.checklist).toEqual(schema.nodes.checklist);
+  });
+  it('moves an object field with its complete definition and required status', () => {
+    const object = {
+      type: 'object',
+      properties: { owner: { type: 'string' } },
+      required: ['owner'],
+      additionalProperties: false,
+    };
+    const source = {
+      nodes: { a: { slots: { config: object }, requiredSlots: ['config'] }, b: { slots: {} } },
+    };
+    const rows = schemaFieldRows(source);
+    const moved = moveSchemaField(
+      source,
+      rows.find((row) => row.name === 'config')!,
+      rows.find((row) => row.name === 'b')!
+    );
+    expect(moved).toHaveProperty('nodes.b.slots.config', object);
+    expect(moved).toHaveProperty('nodes.b.requiredSlots', ['config']);
+    expect(moved).not.toHaveProperty('nodes.a.requiredSlots');
+    expect(moved).not.toHaveProperty('nodes.a.slots.config');
+    expect(source.nodes.a.slots.config).toEqual(object);
+  });
+  it('rejects cyclic, repeated, unrestricted, conflicting and referenced node destinations atomically', () => {
+    const source = {
+      ...schema,
+      nodes: {
+        ...schema.nodes,
+        open: { children: 'any' },
+        duplicate: { children: { checklist: { slots: {} } } },
+      },
+    };
+    const rows = schemaFieldRows(source);
+    const root = rows.find((row) => row.name === 'checklist')!;
+    expect(() => moveSchemaField(source, root, root)).toThrow('itself');
+    expect(() => moveSchemaField(source, root, rows.find((row) => row.name === 'items')!)).toThrow(
+      'descendants'
+    );
+    expect(() =>
+      moveSchemaField(
+        source,
+        rows.find((row) => row.name === 'open')!,
+        rows.find((row) => row.name === 'items')!
+      )
+    ).toThrow('repeated');
+    expect(() => moveSchemaField(source, root, rows.find((row) => row.name === 'open')!)).toThrow(
+      'unrestricted'
+    );
+    expect(() =>
+      moveSchemaField(source, root, rows.find((row) => row.name === 'duplicate')!)
+    ).toThrow('already has');
+    const linked = {
+      ...source,
+      relationTypes: { link: { from: 'checklist/items', to: 'duplicate' } },
+    };
+    expect(() => moveSchemaField(linked, rows.find((row) => row.name === 'items')!, null)).toThrow(
+      'referenced'
+    );
+    expect(source.nodes.checklist).toEqual(schema.nodes.checklist);
+  });
   it('renames and removes required fields atomically without losing nested or advanced definitions', () => {
     const row = schemaFieldRows(schema).find((item) => item.semanticPath === 'checklist/title')!;
     const renamed = changeSchemaField(schema, row, 'heading', row.definition);

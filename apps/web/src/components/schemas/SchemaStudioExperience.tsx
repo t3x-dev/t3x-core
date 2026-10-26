@@ -362,7 +362,26 @@ export function SchemaStudioExperience({
     persistedTarget?.revision
   );
   const recoveredSelection = useRef('');
-  const recoveredEditIdentity = useRef('');
+  const [recoveredEditIdentity, setRecoveredEditIdentity] = useState('');
+  const [usingSavedCandidate, setUsingSavedCandidate] = useState(false);
+  const activeCandidate = usingSavedCandidate ? schemaEdit.candidate : null;
+  const editIdentity = `${projectId}:${workspaceId}:${recoveredCandidateKey}`;
+  const missingEditSources = (schemaEdit.candidate?.baseSources ?? []).filter(
+    (base) =>
+      !candidates.items.some(
+        (candidate) =>
+          candidate.available &&
+          candidate.source &&
+          schemaSourceKey(candidate.source) === schemaSourceKey(base)
+      )
+  );
+  const recoveryError =
+    !schemaEdit.loading &&
+    !candidates.loading &&
+    recoveredEditIdentity !== editIdentity &&
+    missingEditSources.length
+      ? `The saved Schema candidate needs missing sources: ${missingEditSources.map((source) => `${source.canonicalName} @ ${source.version}`).join(', ')}. Restore them in Sources, or select another source to start a new definition. The saved candidate is preserved until you save.`
+      : undefined;
   const recoveryKey = `${projectId}:${persistedTarget?.id ?? ''}`;
   useEffect(() => {
     if (
@@ -418,13 +437,13 @@ export function SchemaStudioExperience({
   ]);
   useEffect(() => {
     if (schemaEdit.loading || candidates.loading || dataDirtyRef.current) return;
-    const identity = `${projectId}:${workspaceId}:${recoveredCandidateKey}`;
-    if (recoveredEditIdentity.current === identity) return;
+    if (recoveredEditIdentity === editIdentity) return;
     if (schemaEdit.candidate?.baseSources?.length) {
       const ids = schemaEdit.candidate.baseSources.map(
         (base) =>
           candidates.items.find(
             (candidate) =>
+              candidate.available &&
               candidate.source?.artifactVersionId === base.artifactVersionId &&
               candidate.source.hash === base.hash &&
               candidate.source.projectId === base.projectId &&
@@ -435,7 +454,8 @@ export function SchemaStudioExperience({
       if (ids.some((id) => !id)) return;
       setSelection(ids as string[]);
     }
-    recoveredEditIdentity.current = identity;
+    setRecoveredEditIdentity(editIdentity);
+    setUsingSavedCandidate(!!schemaEdit.candidate);
     setReview(undefined);
     setPublishReview(undefined);
     setDefinitionOpen(false);
@@ -453,8 +473,10 @@ export function SchemaStudioExperience({
   }, [
     candidates.items,
     candidates.loading,
+    editIdentity,
     projectId,
     recoveredCandidateKey,
+    recoveredEditIdentity,
     dataDirty,
     schemaEdit.candidate,
     schemaEdit.loading,
@@ -468,7 +490,7 @@ export function SchemaStudioExperience({
   }, [workspaceId]);
 
   const previewInput = {
-    ...(schemaEdit.candidate?.composition ? { composition: schemaEdit.candidate.composition } : {}),
+    ...(activeCandidate?.composition ? { composition: activeCandidate.composition } : {}),
     candidateIds: selection,
     ...(persistedTarget ? { workspaceId: persistedTarget.id } : {}),
   };
@@ -518,11 +540,7 @@ export function SchemaStudioExperience({
       ? data.sources[0]
       : undefined;
   // Do not initialize Data with the base result while a saved edit is being recovered.
-  const recoveredDefinitionReady =
-    !schemaEdit.loading &&
-    (!schemaEdit.candidate ||
-      (savedCandidateRef?.candidateId === schemaEdit.candidate.candidateId &&
-        savedCandidateRef.revision === schemaEdit.candidate.revision));
+  const recoveredDefinitionReady = !schemaEdit.loading && recoveredEditIdentity === editIdentity;
   const locked = new Set(
     data?.modules.filter((item) => item.requiredBy.length).map((item) => item.candidateId)
   );
@@ -587,12 +605,12 @@ export function SchemaStudioExperience({
       revision: schemaEdit.candidate?.revision ?? 0,
       base: structuredClone(
         editorBase?.schema ??
-          schemaEdit.candidate?.baseDefinition ??
+          activeCandidate?.baseDefinition ??
           basePreview.data?.workspace?.boundSchema ??
           basePreview.data?.schema
       ),
       current: structuredClone(schemaDefinition ?? data?.schema),
-      choices: sourceId && !selection.includes(sourceId) ? {} : schemaEdit.candidate?.composition,
+      choices: sourceId && !selection.includes(sourceId) ? {} : activeCandidate?.composition,
     });
   }
 
@@ -601,6 +619,10 @@ export function SchemaStudioExperience({
     recoveredSelection.current = recoveryKey;
     if (!module.candidate) return;
     const candidate = module.candidate;
+    setRecoveredEditIdentity(editIdentity);
+    setUsingSavedCandidate(false);
+    setEditorBase(undefined);
+    setLocalContribution({});
     setSavedCandidateRef(undefined);
     setSchemaDefinition(undefined);
     setSelection((current) =>
@@ -687,6 +709,7 @@ export function SchemaStudioExperience({
         ? {
             schemaDefinition: contribution,
             baseSchemaHash: editorBase?.hash ?? basePreview.data?.schemaHash,
+            ...(!usingSavedCandidate && schemaEdit.candidate ? { rebase: true } : {}),
           }
         : {}),
     });
@@ -703,12 +726,12 @@ export function SchemaStudioExperience({
   function changeDefinitionOpen(open: boolean) {
     if (!open) {
       setSchemaDefinition(undefined);
-      setLocalContribution(structuredClone(schemaEdit.candidate?.localContribution ?? {}));
+      setLocalContribution(structuredClone(activeCandidate?.localContribution ?? {}));
       setSavedCandidateRef(
-        schemaEdit.candidate
+        activeCandidate
           ? {
-              candidateId: schemaEdit.candidate.candidateId,
-              revision: schemaEdit.candidate.revision,
+              candidateId: activeCandidate.candidateId,
+              revision: activeCandidate.revision,
             }
           : undefined
       );
@@ -788,18 +811,24 @@ export function SchemaStudioExperience({
                   : undefined
             }
             pending={schemaEdit.pending}
-            previewError={preview.error}
+            loading={preview.loading || schemaEdit.loading || candidates.loading}
+            previewError={recoveryError || schemaEdit.error || candidates.error || preview.error}
+            onRetry={() => {
+              void candidates.refresh();
+              void schemaEdit.refresh();
+              preview.refresh();
+            }}
             onDirtyChange={updateDataDirty}
             onPreview={(definition) => {
               if (!editorBase && basePreview.data && data) {
                 setEditorBase({
                   schema: structuredClone(
-                    schemaEdit.candidate?.baseDefinition ??
+                    activeCandidate?.baseDefinition ??
                       basePreview.data.workspace?.boundSchema ??
                       basePreview.data.schema
                   ),
-                  hash: schemaEdit.candidate?.baseDefinition
-                    ? String(schemaEdit.candidate.authoringDraft?.base.schemaHash)
+                  hash: activeCandidate?.baseDefinition
+                    ? String(activeCandidate.authoringDraft?.base.schemaHash)
                     : basePreview.data.schemaHash,
                   initial: structuredClone(
                     !hasSchemaEdit && basePreview.data.workspace?.boundSchema
@@ -875,12 +904,12 @@ export function SchemaStudioExperience({
                 if (!basePreview.data || !data) return;
                 setEditorBase({
                   schema: structuredClone(
-                    schemaEdit.candidate?.baseDefinition ??
+                    activeCandidate?.baseDefinition ??
                       basePreview.data.workspace?.boundSchema ??
                       basePreview.data.schema
                   ),
-                  hash: schemaEdit.candidate?.baseDefinition
-                    ? String(schemaEdit.candidate.authoringDraft?.base.schemaHash)
+                  hash: activeCandidate?.baseDefinition
+                    ? String(activeCandidate.authoringDraft?.base.schemaHash)
                     : basePreview.data.schemaHash,
                   initial: structuredClone(
                     !hasSchemaEdit && basePreview.data.workspace?.boundSchema
@@ -900,6 +929,12 @@ export function SchemaStudioExperience({
             ? undefined
             : () => {
                 recoveredSelection.current = recoveryKey;
+                setRecoveredEditIdentity(editIdentity);
+                setUsingSavedCandidate(false);
+                setSavedCandidateRef(undefined);
+                setEditorBase(undefined);
+                setSchemaDefinition(undefined);
+                setLocalContribution({});
                 setSelection([]);
               }
         }
@@ -959,8 +994,8 @@ export function SchemaStudioExperience({
         pending={schemaEdit.pending}
         previewError={preview.error}
         recoveryLabel={
-          schemaEdit.candidate
-            ? `Recovered candidate revision ${schemaEdit.candidate.revision} · ${schemaEdit.candidate.origin.channel}`
+          activeCandidate
+            ? `Recovered candidate revision ${activeCandidate.revision} · ${activeCandidate.origin.channel}`
             : schemaEdit.loading
               ? 'Recovering the Workspace candidate…'
               : 'New Workspace-local candidate'

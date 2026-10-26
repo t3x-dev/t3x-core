@@ -1,9 +1,12 @@
 'use client';
 
 import {
+  type CollisionDetection,
   DndContext,
   DragOverlay,
   PointerSensor,
+  pointerWithin,
+  rectIntersection,
   useDraggable,
   useDroppable,
   useSensor,
@@ -21,6 +24,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import type { StudioCandidate } from '@t3x-dev/api-client';
+import { GripVertical } from 'lucide-react';
 import { type ButtonHTMLAttributes, type ReactNode, useMemo, useState } from 'react';
 import {
   type SchemaDefinition,
@@ -36,7 +40,7 @@ function DragButton({
   disabled,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
-  kind: 'field' | 'source';
+  kind: 'node' | 'field' | 'source';
   value: string;
   label: string;
 }) {
@@ -58,7 +62,7 @@ function DragButton({
   );
 }
 function DropCanvas({ children, disabled }: { children: ReactNode; disabled: boolean }) {
-  const { setNodeRef } = useDroppable({ id: 'schema-canvas', disabled });
+  const { setNodeRef } = useDroppable({ id: 'schema-canvas', data: { kind: 'root' }, disabled });
   return (
     <div ref={setNodeRef} className={styles.canvas}>
       {children}
@@ -89,6 +93,18 @@ function SchemaCard({ data }: NodeProps<Node<CardData>>) {
       <header className="schema-drag-handle">
         <div className={styles.nodeHeading}>
           {source}
+          <DragButton
+            kind="node"
+            value={row.path}
+            label={row.semanticPath}
+            disabled={disabled}
+            className={`${styles.moveHandle} nodrag nopan`}
+            aria-label={`Move node ${row.semanticPath}`}
+            title="Move this node into another node or to the root on empty canvas"
+            onClick={() => select(row)}
+          >
+            <GripVertical aria-hidden="true" size={16} />
+          </DragButton>
           <button type="button" onClick={() => select(row)} aria-pressed={selected === row.path}>
             {row.semanticPath}
           </button>
@@ -105,7 +121,7 @@ function SchemaCard({ data }: NodeProps<Node<CardData>>) {
             disabled={disabled}
             className={styles.field}
             aria-pressed={selected === field.path}
-            aria-label={`Select field ${field.semanticPath}`}
+            aria-label={`Select ${field.definition.type === 'object' ? 'object' : 'field'} ${field.semanticPath}`}
             onClick={() => select(field)}
           >
             <span>{field.name}</span>
@@ -124,6 +140,11 @@ function SchemaCard({ data }: NodeProps<Node<CardData>>) {
   );
 }
 const nodeTypes = { schema: SchemaCard };
+const schemaCollision: CollisionDetection = (args) => {
+  const hits = args.pointerCoordinates ? pointerWithin(args) : rectIntersection(args);
+  const nodes = hits.filter((hit) => hit.id !== 'schema-canvas');
+  return nodes.length ? nodes : hits;
+};
 function readPositions(key: string): PositionMap {
   try {
     const parsed = JSON.parse(localStorage.getItem(key) ?? '{}');
@@ -159,7 +180,7 @@ export function SchemaVisualEditor({
   disabled: boolean;
   onSelect: (row: SchemaFieldRow) => void;
   onAdd: (row: SchemaFieldRow) => void;
-  onMove: (path: string, target: SchemaFieldRow) => void;
+  onMove: (path: string, target: SchemaFieldRow | null) => void;
   onRelation: (from: string, to: string) => void;
   onRules: () => void;
   sources?: StudioCandidate[];
@@ -178,6 +199,18 @@ export function SchemaVisualEditor({
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const nodeRows = rows.filter((row) => row.kind === 'node');
   const active = rows.find((row) => row.path === selected);
+  const movableKind =
+    active?.kind === 'node' ? 'node' : active?.definition.type === 'object' ? 'object' : 'field';
+  const destinations = nodeRows.filter(
+    (row) =>
+      active?.kind !== 'node' ||
+      (!active.location.every((key, index) => row.location[index] === key) &&
+        !row.definition.repeated &&
+        row.definition.children !== 'any')
+  );
+  const destinationRow = destinations.find((row) => row.path === destination);
+  const canMove =
+    !!active && (destinationRow || (active.kind === 'node' && destination === 'root'));
   const nodes = nodeRows.map(
     (row, index): Node<CardData> => ({
       id: row.path,
@@ -238,10 +271,11 @@ export function SchemaVisualEditor({
   return (
     <DndContext
       sensors={sensors}
+      collisionDetection={schemaCollision}
       accessibility={{
         screenReaderInstructions: {
           draggable:
-            'Press Enter to use this item, or drag it into the canvas. Fields can also be moved using the destination controls.',
+            'Drag a node by its move handle into another node or onto empty canvas. Fields and objects can be dragged into nodes. You can also select an item and use the destination controls.',
         },
         announcements: {
           onDragStart: ({ active }) => `Dragging ${active.data.current?.label ?? 'item'}.`,
@@ -263,7 +297,11 @@ export function SchemaVisualEditor({
         if (!over || disabled) return;
         const drag = active.data.current;
         if (drag?.kind === 'source') onSource?.(String(drag.value));
-        else if (drag?.kind === 'field' && over.data.current?.row) {
+        else if (drag?.kind === 'node') {
+          const target = over.data.current?.row as SchemaFieldRow | undefined;
+          if (target && target.path !== drag.value) onMove(String(drag.value), target);
+          else if (over.id === 'schema-canvas') onMove(String(drag.value), null);
+        } else if (drag?.kind === 'field' && over.data.current?.row) {
           const target = over.data.current.row as SchemaFieldRow;
           if (drag.value === 'new') onAdd(target);
           else onMove(String(drag.value), target);
@@ -285,13 +323,14 @@ export function SchemaVisualEditor({
             + Field · drag to a node
           </DragButton>
           <select
-            aria-label="Move field to node"
+            aria-label={`Move ${movableKind} to ${active?.kind === 'node' ? 'parent' : 'node'}`}
             value={destination}
-            disabled={disabled || active?.kind !== 'slot'}
+            disabled={disabled || !active}
             onChange={(event) => setDestination(event.target.value)}
           >
             <option value="">Destination node</option>
-            {nodeRows.map((row) => (
+            {active?.kind === 'node' ? <option value="root">Root</option> : null}
+            {destinations.map((row) => (
               <option key={row.path} value={row.path}>
                 {row.semanticPath}
               </option>
@@ -299,13 +338,12 @@ export function SchemaVisualEditor({
           </select>
           <button
             type="button"
-            disabled={disabled || active?.kind !== 'slot' || !destination}
+            disabled={disabled || !canMove}
             onClick={() => {
-              const target = rows.find((row) => row.path === destination);
-              if (active && target) onMove(active.path, target);
+              if (active && canMove) onMove(active.path, destinationRow ?? null);
             }}
           >
-            Move field
+            Move {movableKind}
           </button>
           <button type="button" onClick={() => persist({})}>
             Reset layout
@@ -406,7 +444,9 @@ export function SchemaVisualEditor({
           >
             Add relation
           </button>
-          <span>Card positions are saved in this browser.</span>
+          <span>
+            Drag headers to arrange cards. Drag the move handle to change a node's parent.
+          </span>
         </div>
       </section>
       <DragOverlay>

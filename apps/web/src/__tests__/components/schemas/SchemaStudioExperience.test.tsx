@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
     localContribution: Record<string, unknown>;
     origin: { channel: string };
     baseSources?: StudioSchemaEditCandidate['baseSources'];
+    baseDefinition?: StudioSchemaEditCandidate['baseDefinition'];
   },
   previewInputs: [] as unknown[],
   workspaces: [] as Array<{
@@ -986,6 +987,80 @@ it('waits for the saved candidate preview instead of initializing Data from its 
   view.rerender(<SchemaStudioExperience projectId="p" />);
   await waitFor(() => expect(screen.getByLabelText('Type saved/title')).toHaveValue('number'));
   expect(screen.queryByLabelText('Type base/title')).not.toBeInTheDocument();
+});
+
+it.each([
+  false,
+  true,
+])('allows explicit source selection after saved candidate recovery (missing source: %s)', async (missing) => {
+  mocks.workspaces = [
+    { id: 'saved', revision: 2, status: 'draft', targetBranch: 'main', title: 'Saved' },
+  ];
+  mocks.query = 'workspace=saved&candidate=provider';
+  mocks.schemaEditCandidate = {
+    candidateId: 'saved-edit',
+    revision: 2,
+    localContribution: {},
+    origin: { channel: 'studio' },
+    ...(missing
+      ? {
+          baseSources: [
+            {
+              projectId: null,
+              artifactVersionId: 'missing-v1',
+              canonicalName: 'team/missing',
+              version: '1.0',
+              hash: 'sha256:missing',
+            },
+          ],
+        }
+      : {}),
+  };
+  mocks.data = {
+    ...(mocks.data as object),
+    modules: [],
+    schema: { yschema: '0.1', nodes: { chosen: { slots: { title: { type: 'string' } } } } },
+  };
+  render(<SchemaStudioExperience projectId="p" />);
+  if (missing) {
+    expect(screen.getByRole('alert')).toHaveTextContent('team/missing @ 1.0');
+    expect(screen.getByRole('button', { name: 'Retry Schema' })).toBeVisible();
+    expect(screen.queryByText('Loading Schema definition…')).not.toBeInTheDocument();
+  } else {
+    await waitFor(() => expect(screen.getByLabelText('Type chosen/title')).toBeVisible());
+  }
+  openSources();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' }));
+  await waitFor(() => expect(screen.getByLabelText('Type chosen/title')).toBeVisible());
+  expect(screen.queryByText('Loading Schema definition…')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('tab', { name: 'Visual' }));
+  expect(screen.getByRole('region', { name: 'Schema visual editor' })).toBeVisible();
+  fireEvent.click(screen.getByRole('tab', { name: 'Fields' }));
+  mocks.schemaEditCandidate!.baseDefinition = { yschema: '0.1', nodes: {} };
+  fireEvent.change(screen.getByLabelText('Type chosen/title'), { target: { value: 'object' } });
+  await waitFor(() =>
+    expect(mocks.previewInputs).toContainEqual(
+      expect.objectContaining({
+        schemaDefinition: expect.anything(),
+        baseSchemaHash: 'definition-hash',
+      })
+    )
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+  await waitFor(() => expect(screen.getByLabelText('Type chosen/title')).toHaveValue('string'));
+  expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText('Type chosen/title'), { target: { value: 'object' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save candidate' }));
+  await waitFor(() =>
+    expect(mocks.saveSchemaEdit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ifRevision: 2,
+        baseSchemaHash: 'definition-hash',
+        rebase: true,
+      })
+    )
+  );
 });
 
 it('opens checks and definition changes without replacing the current editor view', () => {

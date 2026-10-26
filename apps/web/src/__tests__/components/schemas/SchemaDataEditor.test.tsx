@@ -25,6 +25,22 @@ const callbacks = () => ({
 });
 
 describe('Schema data editor', () => {
+  it('shows a failed preview and retry instead of an endless loading placeholder', () => {
+    const onRetry = vi.fn();
+    render(
+      <SchemaDataEditor
+        revisionKey="failed"
+        loading={false}
+        previewError="Source unavailable"
+        onRetry={onRetry}
+        {...callbacks()}
+      />
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('Source unavailable');
+    expect(screen.queryByText('Loading Schema definition…')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry Schema' }));
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
   it('restores the visible name when a referenced node cannot be renamed', () => {
     const handlers = callbacks();
     render(

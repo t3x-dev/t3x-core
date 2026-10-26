@@ -98,7 +98,7 @@ function guardReferences(schema: SchemaDefinition, row: SchemaFieldRow) {
   };
   if (references.some(matches))
     throw new Error(
-      'This field is referenced by a relation or rule. Update those references before renaming or deleting it.'
+      'This field is referenced by a relation or rule. Update those references before moving, renaming or deleting it.'
     );
 }
 
@@ -170,21 +170,37 @@ export function addSchemaField(
 export function moveSchemaField(
   schema: SchemaDefinition,
   row: SchemaFieldRow,
-  target: SchemaFieldRow
+  target: SchemaFieldRow | null
 ) {
-  if (row.kind !== 'slot' || target.kind !== 'node') throw new Error('Move a field into a node.');
-  if (JSON.stringify(row.owner) === JSON.stringify(target.location)) return schema;
-  guardReferences(schema, row);
+  if (row.kind === 'slot' && !target) throw new Error('Fields and objects must belong to a node.');
+  if (
+    target &&
+    !schemaFieldRows(schema).some((item) => item.path === target.path && item.kind === 'node')
+  )
+    throw new Error('The destination node is unavailable. Select it again.');
+  if (row.kind === 'node' && target) {
+    if (row.location.every((key, index) => target.location[index] === key))
+      throw new Error('A node cannot be moved into itself or one of its descendants.');
+    if (target.definition.repeated)
+      throw new Error('A repeated node cannot also define child nodes.');
+    if (target.definition.children === 'any')
+      throw new Error('Change unrestricted children before moving a node into this destination.');
+  }
+  const location = target
+    ? [...target.location, row.kind === 'slot' ? 'slots' : 'children']
+    : ['nodes'];
+  if (JSON.stringify(row.location.slice(0, -1)) === JSON.stringify(location)) return schema;
   const next = changeSchemaField(schema, row, row.name, undefined);
-  const node = at(next, target.location);
-  const slots = schemaRecord(node.slots);
-  if (Object.hasOwn(slots, row.name))
-    throw new Error('The destination already has a field with this name.');
-  node.slots = { ...slots, [row.name]: structuredClone(row.definition) };
-  if (row.required)
+  const destination = at(next, location);
+  if (Object.hasOwn(destination, row.name))
+    throw new Error('The destination already has an item with this name.');
+  destination[row.name] = structuredClone(row.definition);
+  if (row.kind === 'slot' && row.required && target) {
+    const node = at(next, target.location);
     node.requiredSlots = [
       ...new Set([...(Array.isArray(node.requiredSlots) ? node.requiredSlots : []), row.name]),
     ];
+  }
   return next;
 }
 

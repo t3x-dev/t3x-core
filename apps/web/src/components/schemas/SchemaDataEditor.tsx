@@ -41,7 +41,9 @@ export function SchemaDataEditor({
   initialDefinition,
   revisionKey,
   pending = false,
+  loading = true,
   previewError,
+  onRetry,
   onPreview,
   onSave,
   onDirtyChange,
@@ -60,7 +62,9 @@ export function SchemaDataEditor({
   initialDefinition?: SchemaDefinition;
   revisionKey: string;
   pending?: boolean;
+  loading?: boolean;
   previewError?: string;
+  onRetry?: () => void;
   disabledReason?: string;
   onPreview: (definition: SchemaDefinition) => void;
   onSave: (definition: SchemaDefinition, intent: string) => Promise<void>;
@@ -143,12 +147,22 @@ export function SchemaDataEditor({
   }, [rows, collapsed, query]);
   const active = rows.find((row) => row.path === selected);
 
-  function move(path: string, target: SchemaFieldRow) {
+  function move(path: string, target: SchemaFieldRow | null) {
     const row = rows.find((item) => item.path === path);
     if (!definition || !row) return;
     try {
-      change(moveSchemaField(definition, row, target));
-      setSelected(JSON.stringify([...target.location, 'slots', row.name]));
+      const next = moveSchemaField(definition, row, target);
+      if (next === definition) return;
+      change(next);
+      setSelected(
+        JSON.stringify(
+          target
+            ? [...target.location, row.kind === 'slot' ? 'slots' : 'children', row.name]
+            : ['nodes', row.name]
+        )
+      );
+      if (target) setCollapsed((current) => ({ ...current, [target.path]: false }));
+      setNotice(`Moved ${row.semanticPath} to ${target?.semanticPath ?? 'the root'}.`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not move this field.');
     }
@@ -254,7 +268,23 @@ export function SchemaDataEditor({
 
   if (!definition)
     return (
-      <output className={styles.feedback}>{disabledReason ?? 'Loading Schema definition…'}</output>
+      <div className={styles.feedback}>
+        {previewError ? (
+          <p role="alert">{previewError}</p>
+        ) : (
+          <output>
+            {disabledReason ??
+              (loading
+                ? 'Loading Schema definition…'
+                : 'Schema definition unavailable. Retry or choose a source in Sources.')}
+          </output>
+        )}
+        {onRetry && (previewError || (!loading && !disabledReason)) ? (
+          <Button variant="canvas-outline" size="sm" onClick={onRetry}>
+            Retry Schema
+          </Button>
+        ) : null}
+      </div>
     );
   return (
     <section aria-label="Schema data editor" className={styles.editor} data-schema-editor>
