@@ -205,7 +205,7 @@ export function SchemaStudioSurface({
           {error}
         </p>
       ) : null}
-      <div className={s.body} data-panel={panel ? 'open' : 'closed'}>
+      <div className={s.body} data-panel={panel ? 'open' : 'closed'} data-view={mode}>
         <section aria-label="Schema definition" className={s.canvas}>
           <div className={s.dataEditor}>{dataEditor?.(mode)}</div>
         </section>

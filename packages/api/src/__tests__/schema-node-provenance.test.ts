@@ -380,6 +380,88 @@ it('preserves source references through saved edits, apply and reload, without r
   expect(reloaded.nodeProvenance.byPath['checklist/items']).toBeUndefined();
 });
 
+it('keeps original Commit links for moved nodes and imported slots through publication and reload', async () => {
+  const added = await candidate(consumerId, released);
+  await workspace(consumerId, 'moved-origin');
+  const initial = await reviewed(consumerId, 'moved-origin', added.id);
+  const definition = normalizeYSchemaObject(initial.preview.schema);
+  definition.nodes.target = {
+    slots: { reviewer: definition.nodes.checklist!.slots!.title! },
+    children: { copied: definition.nodes.checklist! },
+  };
+  const mappingSource = { candidateId: added.id, schemaHash: initial.preview.schemaHash };
+  const sourceMappings = [
+    {
+      path: ['nodes', 'target', 'children', 'copied'],
+      from: ['nodes', 'checklist'],
+      source: mappingSource,
+    },
+    {
+      path: ['nodes', 'target', 'children', 'copied', 'children', 'items'],
+      from: ['nodes', 'checklist', 'children', 'items'],
+      source: mappingSource,
+    },
+    {
+      path: ['nodes', 'target', 'slots', 'reviewer'],
+      from: ['nodes', 'checklist', 'slots', 'title'],
+      source: mappingSource,
+    },
+  ];
+  const saved = await data(
+    await request(
+      consumerId,
+      'edit-candidates/moved-origin',
+      {
+        workspaceId: 'moved-origin',
+        candidateIds: [added.id],
+        ifRevision: 1,
+        retryKey: 'mapped-origin',
+        origin: 'studio',
+        intent: 'Compose nodes and fields',
+        localContribution: {},
+        schemaDefinition: definition,
+        baseSchemaHash: initial.preview.schemaHash,
+        sourceMappings,
+      },
+      'PUT'
+    )
+  );
+  const edit = { candidateId: saved.candidate.candidateId, revision: saved.candidate.revision };
+  const preview = await data(
+    await request(consumerId, 'preview', {
+      workspaceId: 'moved-origin',
+      candidateIds: [added.id],
+      schemaEditCandidate: edit,
+    })
+  );
+  expect(preview.nodeProvenance.byPath['target/copied'][0].commitRef).toMatchObject({
+    commitDigest,
+    sourcePath: 'checklist',
+  });
+  expect(preview.nodeProvenance.byPath['target/reviewer'][0].commitRef).toMatchObject({
+    commitDigest,
+    sourcePath: 'checklist',
+  });
+  const published = await data(
+    await request(consumerId, 'publish/moved-origin', {
+      ...initial.input,
+      schemaEditCandidate: edit,
+      ifRevision: preview.workspace.revision,
+      reviewHash: preview.reviewHash,
+    })
+  );
+  const imported = await candidate(consumerId, published.source);
+  const reloaded = await data(
+    await request(consumerId, 'preview', { candidateIds: [imported.id] })
+  );
+  expect(reloaded.nodeProvenance.byPath['target/reviewer'][0].commitRef.commitDigest).toBe(
+    commitDigest
+  );
+  expect(reloaded.nodeProvenance.byPath['target/copied/items'][0].commitRef.sourcePath).toBe(
+    'checklist/items'
+  );
+});
+
 it('keeps old Releases unrecorded and never uses an introduction Commit', () => {
   expect(readNodeProvenance(undefined).byPath).toEqual({});
   const provenance = composeNodeProvenance(

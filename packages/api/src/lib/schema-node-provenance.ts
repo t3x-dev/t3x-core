@@ -2,6 +2,7 @@ import {
   type SchemaNodeProvenance,
   SchemaNodeProvenanceSchema,
   type StudioPreview,
+  StudioSourceSchema,
 } from '@t3x-dev/api-client';
 import {
   type AnyDB,
@@ -24,6 +25,19 @@ import { recoverCommittedSchema, unboundWorkspaceSchema } from './workspace-sche
 
 type Source = StudioPreview['sources'][number];
 type Entry = SchemaNodeProvenance['byPath'][string][number];
+/** Pins embedded by the server in moved/imported origins, separate from the editing Base. */
+export function schemaOriginSources(origins: Record<string, unknown>): Source[] {
+  const sources = new Map<string, Source>();
+  function visit(value: unknown, depth = 0) {
+    if (depth > 8) return;
+    const origin = record(value);
+    const parsed = StudioSourceSchema.safeParse(origin.source);
+    if (parsed.success) sources.set(canonicalizeProtocolValue(parsed.data), parsed.data);
+    if (Array.isArray(origin.sources)) origin.sources.forEach((entry) => visit(entry, depth + 1));
+  }
+  Object.values(origins).forEach((origin) => visit(origin));
+  return [...sources.values()];
+}
 export const emptyNodeProvenance = (): SchemaNodeProvenance => ({ version: 1, byPath: {} });
 export function readNodeProvenance(value: unknown): SchemaNodeProvenance {
   const parsed = SchemaNodeProvenanceSchema.safeParse(value);
@@ -64,7 +78,11 @@ export function composeNodeProvenance(
     ...entry,
     provenance: readNodeProvenance(record(entry.manifest.registry).nodeProvenance),
   }));
-  for (const path of schemaNodes(schema).keys()) {
+  const paths = [...schemaNodes(schema)].flatMap(([path, node]) => [
+    path,
+    ...Object.keys(node.slots ?? {}).map((slot) => `${path}/${slot}`),
+  ]);
+  for (const path of paths) {
     const refs: Entry[] = [];
     const add = (entry: (typeof available)[number]) => {
       for (const ref of entry.provenance.byPath[path] ?? [])
@@ -248,7 +266,19 @@ export function publicSchemaOrigins(origins: Record<string, unknown>, sources: S
         (source) => source.canonicalName === origin.artifact && source.version === origin.version
       )
     )
-      return { kind: origin.kind, artifact: origin.artifact, version: origin.version };
+      return {
+        kind: origin.kind,
+        artifact: origin.artifact,
+        version: origin.version,
+        ...(origin.source &&
+        sources.some(
+          (pin) =>
+            canonicalizeProtocolValue(pin) ===
+            canonicalizeProtocolValue(origin.source as ProtocolValue)
+        )
+          ? { source: origin.source }
+          : {}),
+      };
     return undefined;
   }
   return Object.fromEntries(

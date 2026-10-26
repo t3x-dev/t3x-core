@@ -7,15 +7,29 @@ import { StructureTreeRow, visibleTreeRows } from '@/components/structure/Struct
 import tree from '@/components/structure/StructureTree.module.css';
 import { Button } from '@/components/ui/button';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   addSchemaField,
   addSchemaRelation,
   changeSchemaField,
+  importSchemaField,
   moveSchemaField,
   type SchemaDefinition,
   type SchemaFieldRow,
+  SchemaNameConflict,
   schemaFieldRows,
 } from '@/domain/schemas/schemaFieldEditing';
 import { type SchemaSourcePin, schemaNodeProvenance } from '@/domain/schemas/schemaProvenance';
+import {
+  pruneSchemaMappings,
+  type SchemaSourceMappings,
+  transferSchemaMappings,
+} from '@/domain/schemas/schemaSourceMappings';
 import type { SchemaSourceIdentity } from '@/hooks/schemas/useSchemaSourceIdentities';
 import styles from './SchemaDataEditor.module.css';
 import {
@@ -26,6 +40,7 @@ import {
 } from './SchemaDefinitionStructure';
 import { SchemaSourceBadge } from './SchemaSourceBadge';
 import { SchemaVisualEditor } from './SchemaVisualEditor';
+import type { SchemaSourceItem } from './SchemaVisualSources';
 import { type SchemaEditorNavigation, useSchemaNavigationGuard } from './useSchemaNavigationGuard';
 
 export function SchemaDataEditor({
@@ -49,6 +64,9 @@ export function SchemaDataEditor({
   onDirtyChange,
   onDiscard,
   disabledReason,
+  projectId,
+  baseDefinition,
+  initialSourceMappings = [],
 }: {
   navigationRef?: RefObject<SchemaEditorNavigation | null>;
   onValidationChange?: (invalid: boolean) => void;
@@ -66,8 +84,15 @@ export function SchemaDataEditor({
   previewError?: string;
   onRetry?: () => void;
   disabledReason?: string;
-  onPreview: (definition: SchemaDefinition) => void;
-  onSave: (definition: SchemaDefinition, intent: string) => Promise<void>;
+  projectId?: string;
+  baseDefinition?: SchemaDefinition;
+  initialSourceMappings?: SchemaSourceMappings;
+  onPreview: (definition: SchemaDefinition, mappings?: SchemaSourceMappings) => void;
+  onSave: (
+    definition: SchemaDefinition,
+    intent: string,
+    mappings?: SchemaSourceMappings
+  ) => Promise<void>;
   onDirtyChange: (dirty: boolean) => void;
   onDiscard: () => void;
 }) {
@@ -84,6 +109,17 @@ export function SchemaDataEditor({
   const [resetKey, setResetKey] = useState(0);
   const [intent, setIntent] = useState('Edit Schema fields.');
   const [saving, setSaving] = useState(false);
+  const [sourceMappings, setSourceMappings] = useState<SchemaSourceMappings>([]);
+  const [history, setHistory] = useState<
+    Array<{ definition: SchemaDefinition; mappings: SchemaSourceMappings; selected?: string }>
+  >([]);
+  const [conflict, setConflict] = useState<{
+    row: SchemaFieldRow;
+    target: SchemaFieldRow | null;
+    item?: SchemaSourceItem;
+  }>();
+  const [conflictName, setConflictName] = useState('');
+  const [conflictError, setConflictError] = useState('');
   const loaded = useRef<string | undefined>(undefined);
   const validationError = fieldError || rulesError;
   const busy = pending || saving;
@@ -93,7 +129,9 @@ export function SchemaDataEditor({
     if (!initialDefinition || dirty || loaded.current === revisionKey) return;
     loaded.current = revisionKey;
     setDefinition(structuredClone(initialDefinition));
-  }, [initialDefinition, revisionKey, dirty]);
+    setSourceMappings(structuredClone(initialSourceMappings));
+    setHistory([]);
+  }, [initialDefinition, revisionKey, dirty, initialSourceMappings]);
   useEffect(() => {
     onValidationChange?.(!!validationError);
   }, [validationError, onValidationChange]);
@@ -147,25 +185,49 @@ export function SchemaDataEditor({
   }, [rows, collapsed, query]);
   const active = rows.find((row) => row.path === selected);
 
-  function move(path: string, target: SchemaFieldRow | null) {
-    const row = rows.find((item) => item.path === path);
+  function transfer(
+    row: SchemaFieldRow,
+    target: SchemaFieldRow | null,
+    item?: SchemaSourceItem,
+    name = row.name
+  ) {
     if (!definition || !row) return;
     try {
-      const next = moveSchemaField(definition, row, target);
+      const location = target
+        ? [...target.location, row.kind === 'slot' ? 'slots' : 'children', name]
+        : ['nodes', name];
+      const next = item
+        ? importSchemaField(definition, item.preview.schema, row, target, name).definition
+        : moveSchemaField(definition, row, target, name);
       if (next === definition) return;
-      change(next);
-      setSelected(
-        JSON.stringify(
-          target
-            ? [...target.location, row.kind === 'slot' ? 'slots' : 'children', row.name]
-            : ['nodes', row.name]
-        )
+      const mappings = transferSchemaMappings(
+        sourceMappings,
+        item?.preview.schema ?? definition,
+        row,
+        location,
+        item ? { candidateId: item.candidateId, schemaHash: item.preview.schemaHash } : undefined,
+        baseDefinition ?? initialDefinition
       );
+      change(next, mappings);
+      setSelected(JSON.stringify(location));
+      setConflict(undefined);
       if (target) setCollapsed((current) => ({ ...current, [target.path]: false }));
-      setNotice(`Moved ${row.semanticPath} to ${target?.semanticPath ?? 'the root'}.`);
+      setNotice(
+        `${item ? 'Imported' : 'Moved'} ${row.semanticPath} to ${target?.semanticPath ?? 'the root'}.`
+      );
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not move this field.');
+      if (cause instanceof SchemaNameConflict) {
+        setConflict({ row, target, item });
+        if (!conflict) setConflictName(`${row.name}_copy`);
+        setConflictError(cause.message);
+      } else if (conflict)
+        setConflictError(cause instanceof Error ? cause.message : 'Could not move this item.');
+      else setError(cause instanceof Error ? cause.message : 'Could not move this item.');
     }
+  }
+  function move(path: string, target: SchemaFieldRow | null) {
+    const row = rows.find((item) => item.path === path);
+    if (row) transfer(row, target);
   }
   function relate(from: string, to: string) {
     const source = rows.find((item) => item.path === from),
@@ -185,12 +247,32 @@ export function SchemaDataEditor({
     setPanel('properties');
   }
 
-  function change(next: SchemaDefinition) {
+  function change(next: SchemaDefinition, mappings = sourceMappings) {
+    if (definition)
+      setHistory((current) => [
+        ...current.slice(-29),
+        { definition, mappings: sourceMappings, selected },
+      ]);
+    const retained = pruneSchemaMappings(mappings, next);
+    setSourceMappings(retained);
     setDefinition(next);
     setDirty(true);
     setError(undefined);
     setNotice('');
-    onPreview(next);
+    onPreview(next, retained);
+  }
+  function undo() {
+    const previous = history.at(-1);
+    if (!previous) return;
+    setHistory((current) => current.slice(0, -1));
+    setDefinition(previous.definition);
+    setSourceMappings(previous.mappings);
+    setSelected(previous.selected);
+    setDirty(true);
+    setError(undefined);
+    setNotice('Undid the last definition change.');
+    setResetKey((value) => value + 1);
+    onPreview(previous.definition, previous.mappings);
   }
   function update(
     row: SchemaFieldRow,
@@ -200,7 +282,20 @@ export function SchemaDataEditor({
   ) {
     if (!definition) return false;
     try {
-      change(changeSchemaField(definition, row, name, value, required));
+      const next = changeSchemaField(definition, row, name, value, required);
+      change(
+        next,
+        value !== undefined && name !== row.name
+          ? transferSchemaMappings(
+              sourceMappings,
+              definition,
+              row,
+              [...row.location.slice(0, -1), name],
+              undefined,
+              baseDefinition ?? initialDefinition
+            )
+          : sourceMappings
+      );
       if (value === undefined) setSelected(undefined);
       else if (selected === row.path)
         setSelected(JSON.stringify([...row.location.slice(0, -1), name]));
@@ -228,8 +323,9 @@ export function SchemaDataEditor({
     setSaving(true);
     setError(undefined);
     try {
-      await onSave(definition, intent.trim() || 'Edit Schema fields.');
+      await onSave(definition, intent.trim() || 'Edit Schema fields.', sourceMappings);
       setDirty(false);
+      setHistory([]);
       setNotice('Schema candidate saved.');
       return true;
     } catch (cause) {
@@ -246,6 +342,9 @@ export function SchemaDataEditor({
     setFieldError(undefined);
     setRulesError(undefined);
     setError(undefined);
+    setNotice('');
+    setHistory([]);
+    setConflict(undefined);
     setSelected(undefined);
     loaded.current = undefined;
     setDefinition(undefined);
@@ -303,6 +402,14 @@ export function SchemaDataEditor({
         <Button
           variant="canvas-outline"
           size="sm"
+          disabled={busy || !history.length || !!validationError || stale}
+          onClick={undo}
+        >
+          Undo
+        </Button>
+        <Button
+          variant="canvas-outline"
+          size="sm"
           disabled={busy || !!disabledReason || !!validationError}
           onClick={() => add(null, 'node')}
         >
@@ -347,7 +454,11 @@ export function SchemaDataEditor({
                       <FileText aria-hidden="true" />
                     )
                   }
-                  leading={row.kind === 'node' ? renderSource(row) : undefined}
+                  leading={
+                    row.kind === 'node' || row.definition.type === 'object'
+                      ? renderSource(row)
+                      : undefined
+                  }
                   iconTitle={row.kind}
                   label={
                     <span
@@ -481,6 +592,11 @@ export function SchemaDataEditor({
               onSelect={select}
               onAdd={(row) => add(row, 'slot')}
               onMove={move}
+              projectId={projectId}
+              onImport={(item, target) => transfer(item.row, target, item)}
+              onClearSelection={() => {
+                if (!validationError) setSelected(undefined);
+              }}
               onRelation={relate}
               onRules={() => {
                 if (!validationError) setPanel('rules');
@@ -612,6 +728,49 @@ export function SchemaDataEditor({
         </Button>
       </footer>
       {navigation.dialog}
+      <Dialog
+        open={!!conflict}
+        onOpenChange={(open) => {
+          if (!open) setConflict(undefined);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Name already exists</DialogTitle>
+            <DialogDescription>
+              Choose a new name to keep both definitions, or cancel this operation.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (conflict) transfer(conflict.row, conflict.target, conflict.item, conflictName);
+            }}
+          >
+            <label className="flex flex-col gap-2">
+              New name
+              <input
+                aria-label="New name"
+                value={conflictName}
+                onChange={(event) => setConflictName(event.target.value)}
+                className="rounded border p-2"
+                autoFocus
+              />
+            </label>
+            {conflictError ? (
+              <p role="alert" className={styles.error}>
+                {conflictError}
+              </p>
+            ) : null}
+            <div className="mt-4 flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setConflict(undefined)}>
+                Cancel
+              </Button>
+              <Button type="submit">Rename and continue</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

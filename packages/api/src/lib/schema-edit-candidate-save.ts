@@ -4,6 +4,7 @@ import {
 } from '@t3x-dev/api-client';
 import {
   type DraftDocument,
+  parseSchemaSourceMappings,
   parseWorkspaceSchemaEditCandidate,
   saveWorkspaceSchemaEditCandidate,
   type WorkspaceSchemaEditOrigin,
@@ -19,6 +20,10 @@ import {
 } from '@t3x-dev/storage';
 import { normalizeYSchemaObject, sha256CompositionValue } from '@t3x-dev/yschema';
 import { readNodeProvenance } from './schema-node-provenance';
+import {
+  applySchemaSourceMappings,
+  type ResolveSchemaMappingSource,
+} from './schema-source-mappings';
 import { type compileStudioSelection, StudioError } from './schema-studio-preview';
 import type { WorkspaceSchemaEditBasis } from './workspace-schema-edit-basis';
 
@@ -33,7 +38,8 @@ export async function saveStudioEditCandidate(
     workspaceRevision: number;
     assistantSchemaSettings: unknown;
     basis?: WorkspaceSchemaEditBasis;
-  }
+  },
+  resolveMappingSource?: ResolveSchemaMappingSource
 ) {
   if ((input.rebase || Object.keys(input.composition ?? {}).length) && !input.schemaDefinition)
     throw new StudioError(
@@ -95,6 +101,18 @@ export async function saveStudioEditCandidate(
   const applied = input.schemaDefinition
     ? await compileWorkspaceSchemaDefinition(baseSchema, input.schemaDefinition)
     : null;
+  if (input.sourceMappings?.length && !applied)
+    throw new StudioError(
+      'INVALID_REQUEST',
+      'Source mappings require a complete Schema definition.'
+    );
+  if (applied && input.sourceMappings)
+    await applySchemaSourceMappings(
+      { ...selection, ...(base ?? {}), schema: { ...baseSchema } },
+      { ...applied.schema },
+      input.sourceMappings,
+      resolveMappingSource
+    );
   if (applied && selection.modules.length) {
     await saveYSchemaCompositionSnapshot(db, {
       snapshot_id: `studio-authoring-base:${projectId}:${selection.selectionHash}`,
@@ -177,6 +195,9 @@ export async function saveStudioEditCandidate(
                       }),
                 effect: { profile: 'yops.ops.v1' as const, operations: applied.operations },
                 resultSchemaHash: applied.schemaHash,
+                ...(input.sourceMappings
+                  ? { sourceMappings: parseSchemaSourceMappings(input.sourceMappings) }
+                  : {}),
               },
             }
           : {}),

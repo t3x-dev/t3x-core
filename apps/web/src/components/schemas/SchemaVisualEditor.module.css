@@ -10,6 +10,7 @@
   flex: 1 0 360px;
   min-height: 360px;
   background: var(--surface-app);
+  min-width: 0;
 }
 .tools,
 .sources {
@@ -133,4 +134,68 @@
 }
 .moveHandle:hover {
   background: var(--hover-bg);
+}
+.workarea {
+  display: flex;
+  flex: 1;
+  min-height: 430px;
+}
+.workarea .sources {
+  width: 190px;
+  max-height: 550px;
+  flex: 0 0 190px;
+  align-content: flex-start;
+  align-items: stretch;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  border-right: 1px solid var(--stroke-divider);
+}
+.workarea .sources:empty {
+  display: none;
+}
+.sourceGroup {
+  width: 100%;
+  padding-bottom: 8px;
+}
+.sourceGroup summary {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.sourceGroup small {
+  display: block;
+  color: var(--text-secondary);
+}
+.sourceGroup .sourceItem {
+  width: 100%;
+  text-align: left;
+  margin-top: 6px;
+  cursor: grab;
+  overflow-wrap: anywhere;
+}
+.sourceItem[aria-pressed="true"] {
+  background: var(--accent-commit-soft);
+}
+.fieldRow {
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+}
+.fieldRow .field {
+  min-width: 0;
+}
+@media (max-width: 900px) {
+  .workarea {
+    flex-direction: column;
+  }
+  .workarea .sources {
+    width: auto;
+    flex-basis: auto;
+    max-height: 170px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-right: 0;
+  }
+  .sourceGroup {
+    flex: 1 0 180px;
+  }
 }

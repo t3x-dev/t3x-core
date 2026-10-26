@@ -9,7 +9,7 @@ import {
 import { normalizeYSchemaObject, sha256CompositionValue, type YSchema } from '@t3x-dev/yschema';
 import type { Context } from 'hono';
 import type { z } from 'zod';
-import { readNodeProvenance } from './schema-node-provenance';
+import { readNodeProvenance, schemaOriginSources } from './schema-node-provenance';
 import { resolveStudioSource, schemaSourceAdoptionReason } from './schema-studio';
 import { StudioError } from './schema-studio-preview';
 import { ensureBuiltInYSchemaArtifacts } from './yschema-artifact-registry';
@@ -123,7 +123,7 @@ export async function resolveWorkspaceSchemaEditBasis(
       'CONFLICT',
       'The bound snapshot has no exact recoverable source provenance.'
     );
-  for (const source of parsed.data) {
+  for (const source of [...parsed.data, ...schemaOriginSources(snapshot?.originsJson ?? {})]) {
     const view = await resolveStudioSource(c, db, {
       sourceProjectId: source.projectId,
       canonicalName: source.canonicalName,

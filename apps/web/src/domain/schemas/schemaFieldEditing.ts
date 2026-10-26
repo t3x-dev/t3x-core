@@ -170,7 +170,8 @@ export function addSchemaField(
 export function moveSchemaField(
   schema: SchemaDefinition,
   row: SchemaFieldRow,
-  target: SchemaFieldRow | null
+  target: SchemaFieldRow | null,
+  name = row.name
 ) {
   if (row.kind === 'slot' && !target) throw new Error('Fields and objects must belong to a node.');
   if (
@@ -189,19 +190,64 @@ export function moveSchemaField(
   const location = target
     ? [...target.location, row.kind === 'slot' ? 'slots' : 'children']
     : ['nodes'];
-  if (JSON.stringify(row.location.slice(0, -1)) === JSON.stringify(location)) return schema;
+  if (JSON.stringify(row.location.slice(0, -1)) === JSON.stringify(location))
+    return name === row.name ? schema : changeSchemaField(schema, row, name, row.definition);
+  validateName(name);
   const next = changeSchemaField(schema, row, row.name, undefined);
   const destination = at(next, location);
-  if (Object.hasOwn(destination, row.name))
-    throw new Error('The destination already has an item with this name.');
-  destination[row.name] = structuredClone(row.definition);
+  if (Object.hasOwn(destination, name)) throw new SchemaNameConflict(name);
+  destination[name] = structuredClone(row.definition);
   if (row.kind === 'slot' && row.required && target) {
     const node = at(next, target.location);
     node.requiredSlots = [
-      ...new Set([...(Array.isArray(node.requiredSlots) ? node.requiredSlots : []), row.name]),
+      ...new Set([...(Array.isArray(node.requiredSlots) ? node.requiredSlots : []), name]),
     ];
   }
   return next;
+}
+
+export class SchemaNameConflict extends Error {
+  constructor(name: string) {
+    super(`The destination already has ${name}. Choose a different name.`);
+  }
+}
+function validateName(name: string) {
+  if (!/^[a-z][a-z0-9_]*$/.test(name))
+    throw new Error(
+      'Use a lowercase letter followed by lowercase letters, numbers or underscores.'
+    );
+}
+export function importSchemaField(
+  schema: SchemaDefinition,
+  source: SchemaDefinition,
+  row: SchemaFieldRow,
+  target: SchemaFieldRow | null,
+  name = row.name
+) {
+  validateName(name);
+  guardReferences(source, row);
+  if (!target && row.kind === 'slot') throw new Error('Fields and objects must belong to a node.');
+  if (
+    target &&
+    !schemaFieldRows(schema).some((item) => item.path === target.path && item.kind === 'node')
+  )
+    throw new Error('The destination node is unavailable.');
+  if (row.kind === 'node' && (target?.definition.repeated || target?.definition.children === 'any'))
+    throw new Error('This destination cannot contain child node definitions.');
+  const location = target
+    ? [...target.location, row.kind === 'node' ? 'children' : 'slots', name]
+    : ['nodes', name];
+  const next = structuredClone(schema),
+    container = at(next, location.slice(0, -1));
+  if (Object.hasOwn(container, name)) throw new SchemaNameConflict(name);
+  container[name] = structuredClone(row.definition);
+  if (target && row.kind === 'slot' && row.required) {
+    const node = at(next, target.location);
+    node.requiredSlots = [
+      ...new Set([...(Array.isArray(node.requiredSlots) ? node.requiredSlots : []), name]),
+    ];
+  }
+  return { definition: next, location };
 }
 
 export function addSchemaRelation(

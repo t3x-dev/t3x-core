@@ -1,4 +1,8 @@
-import type { SchemaSourceCommit, StudioPreview } from '@t3x-dev/api-client';
+import {
+  type SchemaSourceCommit,
+  type StudioPreview,
+  StudioSourceSchema,
+} from '@t3x-dev/api-client';
 import { type SchemaFieldRow, schemaRecord } from './schemaFieldEditing';
 
 export type SchemaSourcePin = StudioPreview['sources'][number];
@@ -75,7 +79,12 @@ export function schemaNodeProvenance(
         (source) => source.canonicalName === origin.artifact && source.version === origin.version
       );
       const pins = new Map(matches.map((source) => [schemaSourceKey(source), source]));
-      const pin = pins.size === 1 ? [...pins.values()][0] : undefined;
+      const embedded = StudioSourceSchema.safeParse(origin.source);
+      const pin = embedded.success
+        ? embedded.data
+        : pins.size === 1
+          ? [...pins.values()][0]
+          : undefined;
       const key = pin ? schemaSourceKey(pin) : JSON.stringify([origin.artifact, origin.version]);
       found.set(key, { key, name: origin.artifact, version: origin.version, pin });
       if (!pin) result.unknown = true;

@@ -170,6 +170,10 @@
 .body[data-panel="open"] {
   grid-template-columns: minmax(0, 1fr) 300px;
 }
+.body[data-view="visual"] {
+  flex-basis: 640px;
+  min-height: 640px;
+}
 .canvas {
   display: flex;
   min-height: 0;

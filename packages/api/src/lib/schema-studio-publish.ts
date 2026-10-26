@@ -17,6 +17,7 @@ import {
   publicSchemaOrigins,
   publicSchemaRenderPlan,
   publicSchemaSources,
+  schemaOriginSources,
 } from './schema-node-provenance';
 import { resolveSchemaPublisher } from './schema-publisher';
 import { resolveStudioSource } from './schema-studio';
@@ -99,7 +100,10 @@ export async function publishStudioSchema(
       );
       if (sourceViews.some((source) => !source))
         throw new StudioError('NOT_FOUND', 'A pinned source is no longer available.');
-      const publicSources = await publicSchemaSources(tx, preview.sources);
+      const publicSources = await publicSchemaSources(tx, [
+        ...preview.sources,
+        ...schemaOriginSources(preview.origins),
+      ]);
       const publicProject = (await findProjectById(tx, projectId))?.visibility === 'public';
       const nodeProvenance = await publicNodeProvenance(
         c,

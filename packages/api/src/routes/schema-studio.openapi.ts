@@ -411,7 +411,15 @@ schemaStudioRoutes.openapi(saveSchemaEditCandidateRoute, async (c) => {
         };
       }
     }
-    const result = await saveStudioEditCandidate(db, projectId, input, selection, origin, guard);
+    const result = await saveStudioEditCandidate(
+      db,
+      projectId,
+      input,
+      selection,
+      origin,
+      guard,
+      (id) => compileStudioSelection(c, db, projectId, [id])
+    );
     return c.json({ success: true as const, data: result }, 200);
   } catch (error) {
     if (error instanceof WorkspaceSchemaYOpsError)

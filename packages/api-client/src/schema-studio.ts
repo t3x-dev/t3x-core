@@ -125,6 +125,21 @@ export const StudioPreviewInputSchema = z
     localContribution: StudioSchemaEditLocalContributionSchema.optional(),
     schemaDefinition: StudioSchemaEditLocalContributionSchema.optional(),
     baseSchemaHash: digest.optional(),
+    sourceMappings: z
+      .array(
+        z
+          .object({
+            path: z.array(z.string()).min(2).max(100),
+            from: z.array(z.string()).min(2).max(100),
+            source: z
+              .object({ candidateId: z.string().min(1).max(300), schemaHash: digest })
+              .strict()
+              .optional(),
+          })
+          .strict()
+      )
+      .max(10000)
+      .optional(),
     schemaEditCandidate: StudioSchemaEditCandidateRefSchema.optional(),
   })
   .strict()
@@ -442,6 +457,7 @@ export const SaveStudioSchemaEditCandidateInputSchema = z
     localContribution: StudioSchemaEditLocalContributionSchema,
     schemaDefinition: StudioSchemaEditLocalContributionSchema.optional(),
     baseSchemaHash: digest.optional(),
+    sourceMappings: StudioPreviewInputSchema.shape.sourceMappings,
   })
   .strict();
 
@@ -465,6 +481,7 @@ export const StudioSchemaEditCandidateSchema = z.object({
         operations: z.array(z.record(z.string(), z.unknown())),
       }),
       resultSchemaHash: digest.optional(),
+      sourceMappings: StudioPreviewInputSchema.shape.sourceMappings,
     })
     .optional(),
   intent: z.string().min(1),

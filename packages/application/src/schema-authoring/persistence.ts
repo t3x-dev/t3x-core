@@ -7,9 +7,57 @@ import {
   type WorkspaceSchemaAuthoringBase,
   type WorkspaceSchemaAuthoringDraft,
   type WorkspaceSchemaCompositionBase,
+  type WorkspaceSchemaSourceMapping,
 } from './types';
 
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
+
+export function parseSchemaSourceMappings(value: unknown): WorkspaceSchemaSourceMapping[] {
+  if (!Array.isArray(value) || value.length > 10000)
+    throw new TypeError('Schema source mappings must be an array of at most 10000 entries');
+  const paths = new Set<string>();
+  const location = (raw: unknown): string[] => {
+    if (
+      !Array.isArray(raw) ||
+      raw.length < 2 ||
+      raw.length > 100 ||
+      raw.length % 2 ||
+      raw.some(
+        (part, i) =>
+          typeof part !== 'string' ||
+          (i % 2
+            ? !/^[a-z][a-z0-9_]*$/.test(part)
+            : i === 0
+              ? part !== 'nodes'
+              : part !== 'children' && !(part === 'slots' && i === raw.length - 2))
+      )
+    )
+      throw new TypeError('Invalid Schema source location');
+    return [...raw];
+  };
+  return value.map((raw) => {
+    const entry = record(raw, 'Schema source mapping');
+    exactKeys(entry, ['path', 'from', 'source'], 'Schema source mapping');
+    const path = location(entry.path),
+      from = location(entry.from);
+    if ((path.at(-2) === 'slots') !== (from.at(-2) === 'slots'))
+      throw new TypeError('Schema source and destination kinds must match');
+    const key = JSON.stringify(path);
+    if (paths.has(key)) throw new TypeError('Duplicate Schema source destination');
+    paths.add(key);
+    if (entry.source === undefined) return { path, from };
+    const source = record(entry.source, 'Schema mapping source');
+    exactKeys(source, ['candidateId', 'schemaHash'], 'Schema mapping source');
+    return {
+      path,
+      from,
+      source: {
+        candidateId: nonEmptyString(source.candidateId, 'Source candidate id'),
+        schemaHash: digest(source.schemaHash, 'Source Schema hash'),
+      },
+    };
+  });
+}
 
 function record(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -107,7 +155,7 @@ export function parseWorkspaceSchemaAuthoringDraft(value: unknown): WorkspaceSch
   const draft = record(value, 'Workspace Schema authoring draft');
   exactKeys(
     draft,
-    ['schema', 'revision', 'base', 'effect', 'resultSchemaHash'],
+    ['schema', 'revision', 'base', 'effect', 'resultSchemaHash', 'sourceMappings'],
     'Workspace Schema authoring draft'
   );
   if (draft.schema !== WORKSPACE_SCHEMA_AUTHORING_DRAFT_SCHEMA) {
@@ -134,6 +182,9 @@ export function parseWorkspaceSchemaAuthoringDraft(value: unknown): WorkspaceSch
     ...(draft.resultSchemaHash === undefined
       ? {}
       : { resultSchemaHash: digest(draft.resultSchemaHash, 'Result Schema hash') }),
+    ...(draft.sourceMappings === undefined
+      ? {}
+      : { sourceMappings: parseSchemaSourceMappings(draft.sourceMappings) }),
   };
   return structuredClone(parsed);
 }

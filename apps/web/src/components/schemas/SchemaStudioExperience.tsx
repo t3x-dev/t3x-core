@@ -14,12 +14,17 @@ import {
 } from '@/components/ui/dialog';
 import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
 import { getProjectIdWorkspacePath } from '@/domain/project/repoPath';
+import { schemaFieldRows } from '@/domain/schemas/schemaFieldEditing';
 import {
   schemaBrowseHref,
   schemaSourceHref,
   schemaWorkspaceHref,
 } from '@/domain/schemas/schemaNavigation';
 import { type SchemaSourcePin, schemaSourceKey } from '@/domain/schemas/schemaProvenance';
+import {
+  pruneSchemaMappings,
+  type SchemaSourceMappings,
+} from '@/domain/schemas/schemaSourceMappings';
 import {
   listStudioDraftWorkspaces,
   listStudioWorkspacesForBranches,
@@ -222,6 +227,7 @@ export function SchemaStudioExperience({
   }>();
   const [localContribution, setLocalContribution] = useState<Record<string, unknown>>({});
   const [schemaDefinition, setSchemaDefinition] = useState<Record<string, unknown>>();
+  const [sourceMappings, setSourceMappings] = useState<SchemaSourceMappings>([]);
   const [savedCandidateRef, setSavedCandidateRef] = useState<{
     candidateId: string;
     revision: number;
@@ -456,6 +462,7 @@ export function SchemaStudioExperience({
     }
     setRecoveredEditIdentity(editIdentity);
     setUsingSavedCandidate(!!schemaEdit.candidate);
+    setSourceMappings(structuredClone(schemaEdit.candidate?.authoringDraft?.sourceMappings ?? []));
     setReview(undefined);
     setPublishReview(undefined);
     setDefinitionOpen(false);
@@ -507,6 +514,7 @@ export function SchemaStudioExperience({
             : schemaDefinition
               ? {
                   schemaDefinition,
+                  sourceMappings,
                   baseSchemaHash: editorBase?.hash ?? basePreview.data?.schemaHash,
                 }
               : { localContribution }),
@@ -519,7 +527,7 @@ export function SchemaStudioExperience({
   const sourcePins = useMemo(
     () => [
       ...candidates.items
-        .filter((candidate) => selection.includes(candidate.id))
+        .filter((candidate) => candidate.available)
         .map((candidate) => candidate.source)
         .filter((source): source is SchemaSourcePin => !!source),
       ...Object.values(data?.nodeProvenance?.byPath ?? {}).flatMap((refs) =>
@@ -621,6 +629,7 @@ export function SchemaStudioExperience({
     const candidate = module.candidate;
     setRecoveredEditIdentity(editIdentity);
     setUsingSavedCandidate(false);
+    setSourceMappings([]);
     setEditorBase(undefined);
     setLocalContribution({});
     setSavedCandidateRef(undefined);
@@ -693,7 +702,11 @@ export function SchemaStudioExperience({
     URL.revokeObjectURL(url);
   }
 
-  async function saveDefinition(contribution: Record<string, unknown>, intent: string) {
+  async function saveDefinition(
+    contribution: Record<string, unknown>,
+    intent: string,
+    mappings = sourceMappings
+  ) {
     if (!persistedTarget)
       throw new Error('Create or select a persisted Workspace before saving a Schema candidate.');
     if (!selection.length) throw new Error('Select at least one base Schema or Module.');
@@ -708,6 +721,7 @@ export function SchemaStudioExperience({
       ...(contribution.yschema === '0.1'
         ? {
             schemaDefinition: contribution,
+            sourceMappings: pruneSchemaMappings(mappings, contribution),
             baseSchemaHash: editorBase?.hash ?? basePreview.data?.schemaHash,
             ...(!usingSavedCandidate && schemaEdit.candidate ? { rebase: true } : {}),
           }
@@ -727,6 +741,7 @@ export function SchemaStudioExperience({
     if (!open) {
       setSchemaDefinition(undefined);
       setLocalContribution(structuredClone(activeCandidate?.localContribution ?? {}));
+      setSourceMappings(structuredClone(activeCandidate?.authoringDraft?.sourceMappings ?? []));
       setSavedCandidateRef(
         activeCandidate
           ? {
@@ -790,7 +805,15 @@ export function SchemaStudioExperience({
             provenance={data}
             sourceIdentities={sourceIdentities}
             wholeSchemaSource={wholeSchemaSource}
-            sources={candidates.items.filter((candidate) => !selection.includes(candidate.id))}
+            projectId={projectId}
+            sources={candidates.items}
+            baseDefinition={
+              editorBase?.schema ??
+              activeCandidate?.baseDefinition ??
+              basePreview.data?.workspace?.boundSchema ??
+              basePreview.data?.schema
+            }
+            initialSourceMappings={activeCandidate?.authoringDraft?.sourceMappings}
             onComposeSources={persistedTarget ? composeSources : undefined}
             layoutKey={`${projectId}:${workspaceId}`}
             key={`${projectId}:${workspaceId}:${candidateSelectionKey}:${editorReset}`}
@@ -819,7 +842,8 @@ export function SchemaStudioExperience({
               preview.refresh();
             }}
             onDirtyChange={updateDataDirty}
-            onPreview={(definition) => {
+            onPreview={(definition, mappings) => {
+              setSourceMappings(mappings ?? []);
               if (!editorBase && basePreview.data && data) {
                 setEditorBase({
                   schema: structuredClone(
@@ -846,8 +870,8 @@ export function SchemaStudioExperience({
               setEditorBase(undefined);
               changeDefinitionOpen(false);
             }}
-            onSave={async (definition, intent) => {
-              await saveDefinition(definition, intent);
+            onSave={async (definition, intent, mappings) => {
+              await saveDefinition(definition, intent, mappings);
               setEditorBase(undefined);
               updateDataDirty(false);
             }}
@@ -931,6 +955,7 @@ export function SchemaStudioExperience({
                 recoveredSelection.current = recoveryKey;
                 setRecoveredEditIdentity(editIdentity);
                 setUsingSavedCandidate(false);
+                setSourceMappings([]);
                 setSavedCandidateRef(undefined);
                 setEditorBase(undefined);
                 setSchemaDefinition(undefined);
@@ -951,6 +976,28 @@ export function SchemaStudioExperience({
           onClose={() => setCompositionRequest(undefined)}
           onSave={async (ids, composition, combined, definition) => {
             if (!persistedTarget) throw new Error('Select a saved Workspace.');
+            const retainedMappings = pruneSchemaMappings(sourceMappings, definition);
+            const previousRows = new Map(
+              schemaFieldRows(compositionRequest.base ?? {}).map((row) => [row.path, row])
+            );
+            const nextRows = new Map(
+              schemaFieldRows(combined.schema).map((row) => [row.path, row])
+            );
+            for (const mapping of retainedMappings.filter((entry) => !entry.source)) {
+              const key = JSON.stringify(mapping.from),
+                previous = previousRows.get(key),
+                next = nextRows.get(key);
+              if (
+                !previous ||
+                !next ||
+                JSON.stringify(previous.definition) !== JSON.stringify(next.definition) ||
+                JSON.stringify(basePreview.data?.origins[previous.semanticPath]) !==
+                  JSON.stringify(combined.origins[next.semanticPath])
+              )
+                throw new Error(
+                  'This combination changes the source of a moved item. Undo that move before changing its source selection. Your draft is preserved.'
+                );
+            }
             const saved = await schemaEdit.save({
               workspaceId: persistedTarget.id,
               candidateIds: ids,
@@ -960,6 +1007,7 @@ export function SchemaStudioExperience({
               intent: 'Combine pinned Schema sources and preserve local edits.',
               localContribution: {},
               schemaDefinition: definition,
+              sourceMappings: retainedMappings,
               baseSchemaHash: combined.schemaHash,
               composition,
               rebase: true,
@@ -985,8 +1033,10 @@ export function SchemaStudioExperience({
         initialDefinition={schemaDefinition ?? (definitionOpen ? editorBase?.initial : undefined)}
         onOpenChange={changeDefinitionOpen}
         onPreview={(contribution) => {
-          if (contribution.yschema === '0.1') setSchemaDefinition(contribution);
-          else setLocalContribution(contribution);
+          if (contribution.yschema === '0.1') {
+            setSchemaDefinition(contribution);
+            setSourceMappings((current) => pruneSchemaMappings(current, contribution));
+          } else setLocalContribution(contribution);
           setSavedCandidateRef(undefined);
         }}
         onSave={saveDefinition}

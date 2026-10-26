@@ -87,6 +87,86 @@ beforeAll(async () => {
   });
 });
 afterAll(async () => cleanup?.());
+it('saves an imported object independently of Base selection and restores its exact Release origin', async () => {
+  const id = await source('objects', {
+    person: { slots: { owner: { type: 'object', default: { name: 'Reviewer' } } } },
+  });
+  await upsertWorkspaceDraft(db, {
+    project_id: project,
+    workspace_id: 'object-import',
+    target_branch: 'object-import',
+    title: 'Object import',
+    workspace_state: { targetBranch: 'object-import', schemaBindings: [] },
+  });
+  const basePreview = (await request('preview', { candidateIds: [a] })).body.data;
+  const sourcePreview = (await request('preview', { candidateIds: [id] })).body.data;
+  const definition = structuredClone(basePreview.schema);
+  definition.nodes.checklist.slots.reviewer = sourcePreview.schema.nodes.person.slots.owner;
+  const sourceMappings = [
+    {
+      path: ['nodes', 'checklist', 'slots', 'reviewer'],
+      from: ['nodes', 'person', 'slots', 'owner'],
+      source: { candidateId: id, schemaHash: sourcePreview.schemaHash },
+    },
+  ];
+  const input = {
+    workspaceId: 'object-import',
+    candidateIds: [a],
+    ifRevision: 0,
+    retryKey: 'import-object',
+    intent: 'Import reviewer object',
+    origin: 'studio',
+    localContribution: {},
+    schemaDefinition: definition,
+    baseSchemaHash: basePreview.schemaHash,
+    sourceMappings,
+  };
+  const saved = await request('edit-candidates/object-import', input, 'PUT');
+  expect(saved.status, JSON.stringify(saved.body)).toBe(200);
+  expect(saved.body.data.candidate.baseSources).toHaveLength(1);
+  const recovered = (await request('edit-candidates/object-import')).body.data;
+  expect(recovered.authoringDraft.sourceMappings).toEqual(sourceMappings);
+  const preview = await request('preview', {
+    candidateIds: [a],
+    workspaceId: 'object-import',
+    schemaEditCandidate: { candidateId: recovered.candidateId, revision: recovered.revision },
+  });
+  expect(preview.status, JSON.stringify(preview.body)).toBe(200);
+  expect(preview.body.data.schema.nodes.checklist.slots.reviewer).toEqual(
+    definition.nodes.checklist.slots.reviewer
+  );
+  expect(preview.body.data.origins['checklist/reviewer']).toMatchObject({
+    artifact: 'team/objects',
+    source: sourcePreview.sources[0],
+  });
+  const stale = await request(
+    'edit-candidates/object-import',
+    {
+      ...input,
+      ifRevision: 1,
+      retryKey: 'invalid-hash',
+      sourceMappings: [
+        {
+          ...sourceMappings[0],
+          source: { candidateId: id, schemaHash: `sha256:${'0'.repeat(64)}` },
+        },
+      ],
+    },
+    'PUT'
+  );
+  expect(stale.status).toBe(409);
+  const missing = await request(
+    'edit-candidates/object-import',
+    {
+      ...input,
+      ifRevision: 1,
+      retryKey: 'missing-path',
+      sourceMappings: [{ ...sourceMappings[0], from: ['nodes', 'missing', 'slots', 'owner'] }],
+    },
+    'PUT'
+  );
+  expect(missing.status).toBe(400);
+});
 it('requires explicit root ownership, combines intact definitions, saves and recovers exact provenance', async () => {
   const unresolved = await request('preview', { candidateIds: [a, b] });
   expect(unresolved.status).toBe(200);

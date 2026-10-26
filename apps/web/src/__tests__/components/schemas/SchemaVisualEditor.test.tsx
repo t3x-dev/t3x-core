@@ -5,7 +5,20 @@ import { expect, it, vi } from 'vitest';
 import { SchemaDataEditor } from '@/components/schemas/SchemaDataEditor';
 import { schemaSourceKey } from '@/domain/schemas/schemaProvenance';
 
-const flow = vi.hoisted(() => ({ props: undefined as any }));
+const flow = vi.hoisted(() => ({
+  props: undefined as any,
+  source: undefined as
+    | {
+        schema: Record<string, unknown>;
+        schemaHash: string;
+        report: { valid: boolean };
+        adoption: { allowed: boolean };
+      }
+    | undefined,
+}));
+vi.mock('@/hooks/schemas/useStudioPreview', () => ({
+  useStudioPreview: () => ({ data: flow.source, refresh: vi.fn() }),
+}));
 vi.mock('@xyflow/react', () => ({
   Position: { Left: 'left', Right: 'right' },
   Handle: () => null,
@@ -203,4 +216,107 @@ it('uses the same exact source badges in Structure and Visual', () => {
   view.rerender(<SchemaDataEditor {...props} view="visual" />);
   expect(screen.getByRole('button', { name: 'Source for tasks: Tasks @ 1.0' })).toBeVisible();
   expect(handlers.onPreview).not.toHaveBeenCalled();
+});
+
+it('shows parent lines on selection while keeping business relations independent', () => {
+  render(
+    <SchemaDataEditor
+      initialDefinition={{
+        ...definition,
+        nodes: { ...definition.nodes, project: { children: { task: { slots: {} } } } },
+        relationTypes: { assigned: { from: 'tasks', to: 'owner' } },
+      }}
+      revisionKey="lines"
+      view="visual"
+      onPreview={vi.fn()}
+      onSave={vi.fn()}
+      onDirtyChange={vi.fn()}
+      onDiscard={vi.fn()}
+    />
+  );
+  expect(flow.props.edges.map((edge: { id: string }) => edge.id)).toEqual(['relation:assigned']);
+  fireEvent.click(screen.getByRole('button', { name: 'Move node project', exact: true }));
+  expect(flow.props.edges).toHaveLength(2);
+  fireEvent.change(screen.getByLabelText('Parent lines'), { target: { value: 'off' } });
+  expect(flow.props.edges.map((edge: { id: string }) => edge.id)).toEqual(['relation:assigned']);
+  fireEvent.change(screen.getByLabelText('Parent lines'), { target: { value: 'focus' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }));
+  expect(flow.props.edges).toHaveLength(1);
+});
+
+it('imports source objects with a rename decision, undo, and source mappings in the saved candidate', async () => {
+  const object = {
+    type: 'object',
+    default: { name: 'Reviewer' },
+  };
+  flow.source = {
+    schema: { nodes: { person: { slots: { owner: object }, requiredSlots: ['owner'] } } },
+    schemaHash: `sha256:${'a'.repeat(64)}`,
+    report: { valid: true },
+    adoption: { allowed: true },
+  };
+  const onPreview = vi.fn(),
+    onSave = vi.fn().mockResolvedValue(undefined);
+  render(
+    <SchemaDataEditor
+      projectId="project"
+      initialDefinition={{ nodes: { project: { slots: { owner: { type: 'object' } } } } }}
+      revisionKey="imports"
+      view="visual"
+      sources={[
+        {
+          id: 'people',
+          projectId: 'project',
+          studioId: 'main',
+          createdAt: '',
+          title: 'People',
+          available: true,
+          source: null,
+          description: null,
+          kind: 'schema',
+          license: null,
+          reason: null,
+        },
+      ]}
+      onPreview={onPreview}
+      onSave={onSave}
+      onDirtyChange={vi.fn()}
+      onDiscard={vi.fn()}
+    />
+  );
+  fireEvent.click(screen.getByText('People'));
+  fireEvent.click(await screen.findByRole('button', { name: 'Select source object person/owner' }));
+  fireEvent.change(screen.getByLabelText('Move object to node'), {
+    target: { value: '["nodes","project"]' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Import object' }));
+  expect(screen.getByRole('dialog')).toBeVisible();
+  expect(onPreview).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel', exact: true }));
+  expect(onPreview).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Import object' }));
+  fireEvent.change(screen.getByLabelText('New name'), { target: { value: 'reviewer' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Rename and continue' }));
+  expect(onPreview.mock.lastCall?.[0]).toHaveProperty('nodes.project.slots.reviewer', object);
+  expect(onPreview.mock.lastCall?.[1]).toEqual([
+    {
+      path: ['nodes', 'project', 'slots', 'reviewer'],
+      from: ['nodes', 'person', 'slots', 'owner'],
+      source: { candidateId: 'people', schemaHash: flow.source.schemaHash },
+    },
+  ]);
+  fireEvent.click(screen.getByRole('button', { name: 'Undo', exact: true }));
+  expect(onPreview.mock.lastCall?.[0]).not.toHaveProperty('nodes.project.slots.reviewer');
+  expect(onPreview.mock.lastCall?.[1]).toEqual([]);
+  fireEvent.click(screen.getByText('People'));
+  fireEvent.click(await screen.findByRole('button', { name: 'Select source object person/owner' }));
+  fireEvent.change(screen.getByLabelText('Move object to node'), {
+    target: { value: '["nodes","project"]' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Import object' }));
+  fireEvent.change(screen.getByLabelText('New name'), { target: { value: 'reviewer' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Rename and continue' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save candidate' }));
+  await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+  expect(onSave.mock.lastCall?.[2]).toEqual(onPreview.mock.lastCall?.[1]);
 });

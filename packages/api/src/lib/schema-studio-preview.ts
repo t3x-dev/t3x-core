@@ -35,6 +35,7 @@ import {
   composeNodeProvenance,
   readNodeProvenance,
 } from './schema-node-provenance';
+import { applySchemaSourceMappings } from './schema-source-mappings';
 import { resolveStudioSource, schemaSourceAdoptionReason } from './schema-studio';
 import { resolveStudioComposition, type StudioComposition } from './schema-studio-composition';
 import { workspaceAuthoringState } from './workspace-authoring';
@@ -502,11 +503,21 @@ export async function previewStudio(
         }
       };
       recordOrigins(applied.schema.nodes, selected.schema.nodes);
+      const mapped = await applySchemaSourceMappings(
+        selected,
+        { ...applied.schema },
+        authoring?.sourceMappings ?? input.sourceMappings,
+        (id) => compileStudioSelection(c, db, projectId, [id])
+      );
       selected = {
         ...selected,
         schema: applied.schema,
         schemaHash: applied.schemaHash,
-        origins,
+        origins: { ...origins, ...mapped.origins },
+        nodeProvenance: {
+          version: 1,
+          byPath: { ...selected.nodeProvenance.byPath, ...mapped.nodeProvenance.byPath },
+        },
       } as typeof selected;
     } catch (error) {
       if (error instanceof WorkspaceSchemaYOpsError)

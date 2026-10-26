@@ -21,7 +21,7 @@ export {
   saveWorkspaceSchemaEditCandidate,
   WORKSPACE_SCHEMA_EDIT_CANDIDATE_SCHEMA,
 } from './edit-candidate';
-export { parseWorkspaceSchemaAuthoringDraft } from './persistence';
+export { parseSchemaSourceMappings, parseWorkspaceSchemaAuthoringDraft } from './persistence';
 export type {
   AppliedWorkspaceSchemaYOps,
   WorkspaceSchemaEditCommand,
@@ -40,6 +40,7 @@ export type {
   WorkspaceSchemaAuthoringDraft,
   WorkspaceSchemaAuthoringEffect,
   WorkspaceSchemaCompositionBase,
+  WorkspaceSchemaSourceMapping,
 } from './types';
 export {
   WORKSPACE_SCHEMA_AUTHORING_DRAFT_SCHEMA,
