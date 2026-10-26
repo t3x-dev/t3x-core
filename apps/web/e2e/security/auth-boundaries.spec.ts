@@ -78,7 +78,7 @@ test.describe('authenticated browser boundaries', () => {
     expect(
       (await browserApi(page, aliceKey, 'POST', '/namespaces', { slug: `alice-${runId}` })).status
     ).toBe(201);
-    const aliceProjectName = `Alice Private ${runId}`;
+    const aliceProjectName = `Alice-Private-${runId}`;
     const aliceProject = await browserApi<{ project_id: string }>(
       page,
       aliceKey,
@@ -100,7 +100,7 @@ test.describe('authenticated browser boundaries', () => {
       expect(
         (await browserApi(bobPage, bobKey, 'POST', '/namespaces', { slug: `bob-${runId}` })).status
       ).toBe(201);
-      const bobProjectName = `Bob Visible ${runId}`;
+      const bobProjectName = `Bob-Visible-${runId}`;
       const bobProject = await browserApi<{ project_id: string }>(
         bobPage,
         bobKey,
@@ -108,6 +108,7 @@ test.describe('authenticated browser boundaries', () => {
         '/projects',
         {
           name: bobProjectName,
+          namespace: `bob-${runId}`,
           owner_id: aliceSession.id,
         }
       );
