@@ -9,10 +9,7 @@ const overview = vi.hoisted(() => vi.fn());
 vi.mock('@/hooks/commits/useStateOverview', () => ({ useStateOverview: overview }));
 
 function renderIntroduction(ui: Parameters<typeof render>[0]) {
-  const view = render(ui);
-  const summary = view.container.querySelector('details > summary');
-  if (summary) fireEvent.click(summary);
-  return view;
+  return render(ui);
 }
 
 const props = {
@@ -63,12 +60,16 @@ it('keeps author Markdown inert and prevents remote image requests', () => {
   expect(screen.queryByRole('link', { name: 'Blocked' })).toBeNull();
   expect(screen.getByRole('link', { name: 'Good' })).toHaveAttribute('rel', 'noopener noreferrer');
 });
-it('shows actual State before the collapsed introduction without an expand step', () => {
-  const { container } = render(<StateOverviewView {...props} />);
+it('shows README immediately before the complementary State structure', () => {
+  render(<StateOverviewView {...props} />);
   expect(screen.getByText('Empty-key content')).toBeVisible();
-  expect(container.querySelector('details')).not.toHaveAttribute('open');
+  expect(screen.getByRole('heading', { name: 'Guide' })).toBeVisible();
+  const introduction = screen.getByRole('region', { name: 'Version introduction' });
+  const sidebar = screen.getByRole('complementary', { name: 'State information' });
+  expect(
+    introduction.compareDocumentPosition(sidebar) & Node.DOCUMENT_POSITION_FOLLOWING
+  ).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Expand rendered State' })).toBeNull();
-  fireEvent.click(container.querySelector('details > summary')!);
   fireEvent.click(screen.getByRole('button', { name: 'Contents' }));
   fireEvent.click(screen.getByRole('button', { name: 'Guide' }));
   expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalled();
@@ -117,7 +118,7 @@ it.each([
   expect(screen.getByText('Loading committed State…')).toBeVisible();
 });
 
-it('shows repository identity once and keeps committed values primary', () => {
+it('shows repository identity once and retains committed values in Structure', () => {
   renderIntroduction(
     <StateOverviewView
       {...props}
@@ -397,4 +398,25 @@ it('preserves an unsaved repository README when the viewed business Commit chang
   expect(screen.getByRole('textbox', { name: 'Repository README' })).toHaveValue('Unsaved work');
   fireEvent.click(screen.getByRole('button', { name: 'Cancel', exact: true }));
   expect(ownProps.onSaveRepositoryProfile).not.toHaveBeenCalled();
+});
+
+it('locates a committed path from the sidebar and retains the complete inspector entry', () => {
+  overview.mockReturnValue({ data: undefined, loading: false });
+  const inspect = vi.fn();
+  render(
+    <StateOverviewView
+      {...props}
+      introductionSource="repository"
+      commit={commit}
+      onViewStructure={inspect}
+    />
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Inspect document/title' }));
+  expect(inspect).toHaveBeenLastCalledWith('document/title');
+  fireEvent.click(screen.getByRole('button', { name: 'Collapse document' }));
+  expect(screen.queryByRole('button', { name: 'Inspect document/title' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Expand document' }));
+  expect(screen.getByRole('button', { name: 'Inspect document/title' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: /Open full view/ }));
+  expect(inspect).toHaveBeenLastCalledWith();
 });

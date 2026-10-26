@@ -724,7 +724,10 @@ export function ProjectStateTab({
                   introductionSource={focusedCommitHash ? 'version' : 'repository'}
                   schemaName={schemaName}
                   schemaHref={schemaHref}
-                  onViewStructure={() => updateActiveView('structure')}
+                  onViewStructure={(path) => {
+                    setPathQuery(path ?? '');
+                    updateActiveView('structure');
+                  }}
                   validationLabel={readinessLabel}
                   refName={branchFocus}
                   onAuthorRevision={(digest) => {
