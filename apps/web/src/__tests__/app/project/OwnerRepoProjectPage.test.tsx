@@ -111,7 +111,7 @@ it.each([
 it.each([
   { schemaView: 'discover', view: 'discover', retainedView: null },
   { schemaView: 'browse', view: 'browse', retainedView: null },
-  { schemaView: 'active', view: 'browse', retainedView: 'active' },
+  { schemaView: 'active', view: 'schemas', retainedView: 'active' },
   { schemaView: 'release', view: 'browse', retainedView: 'release' },
 ])('migrates a historical Schemas $schemaView address and then settles', async ({
   schemaView,
@@ -175,7 +175,7 @@ it('opens canonical settings and nested changes without bouncing to an ID URL', 
 it.each([
   'history',
   'diff',
-])('keeps %s under History while loading and opens its nested route', async (view) => {
+])('keeps %s under State while loading and opens its nested route', async (view) => {
   mocks.params.repoPath = ['Repo', view];
   mocks.query = 'branch=feature%2Frelease&commit=sha256%3Aabc&view=list';
   useProjectStore.setState({
@@ -196,7 +196,7 @@ it.each([
     })
   );
   render(<OwnerRepoProjectPage />);
-  expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute('aria-current', 'page');
+  expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
   await act(async () =>
     resolveAddress({
       project_id: 'proj_outside_list',

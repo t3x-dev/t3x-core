@@ -103,6 +103,7 @@ describe('ProjectTabs', () => {
       'state',
       'schemas',
       'workspaces',
+      'checks',
       'reviews',
       'community',
       'settings',
@@ -113,9 +114,8 @@ describe('ProjectTabs', () => {
     expect(isProjectTabSegment('reviews')).toBe(false);
     expect(parseProjectTab('pull-requests')).toBe('reviews');
     expect(parseProjectTab('reviews')).toBe('state');
-    expect(parseProjectTab('outputs')).toBe('outputs');
-    expect(isProjectTabSegment('outputs')).toBe(true);
-    expect(getProjectTabSegment('outputs')).toBe('outputs');
+    expect(parseProjectTab('outputs')).toBe('state');
+    expect(isProjectTabSegment('outputs')).toBe(false);
     expect(parseProjectTab('discover')).toBe('discover');
     expect(parseProjectTab('browse')).toBe('browse');
   });

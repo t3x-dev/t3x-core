@@ -131,7 +131,14 @@ describe('ProjectDirectoryPage', () => {
     );
     expect(screen.queryByRole('link', { name: 'Docs' })).not.toBeInTheDocument();
     const header = within(screen.getByRole('link', { name: 'T3X home' }).closest('header')!);
-    expect(header.getByRole('link', { name: 'Explore' })).toHaveAttribute('href', '/templates');
+    expect(header.getByRole('link', { name: 'Discover' })).toHaveAttribute(
+      'href',
+      '/explore?view=discover'
+    );
+    expect(header.getByRole('link', { name: 'Browse' })).toHaveAttribute(
+      'href',
+      '/explore?view=browse'
+    );
     expect(header.queryByRole('link', { name: 'New repository' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'New repository' })).toHaveAttribute(
       'href',

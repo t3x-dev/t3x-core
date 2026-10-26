@@ -41,10 +41,10 @@ describe('project foundation previews', () => {
     expect(screen.getByRole('tab', { name: 'Compose' })).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('opens Schema discovery without preselecting or applying a definition', () => {
+  it('opens Schema Studio without applying a definition', () => {
     render(<ProjectSchemasTab projectId="proj_other" />);
 
-    expect(screen.getByRole('heading', { name: 'Curated schemas' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Schema Studio' })).toBeInTheDocument();
     expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   });
 
