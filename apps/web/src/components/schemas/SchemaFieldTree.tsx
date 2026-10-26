@@ -141,7 +141,7 @@ export function SchemaFieldTree({
           <div className={styles.columns}>
             <span>Field</span>
             <span>Type · Required</span>
-            <span>Actions</span>
+            <span className="sr-only">Actions</span>
           </div>
           {active ? (
             <div className={styles.moveToolbar}>
@@ -182,8 +182,16 @@ export function SchemaFieldTree({
                 </PopoverContent>
               </Popover>
             </div>
-          ) : null}
-          <div role="tree" aria-label="Schema fields" className={tree.tree}>
+          ) : (
+            <div className={styles.moveToolbar}>
+              <span className={styles.selectionHint}>Select a field to edit</span>
+            </div>
+          )}
+          <div
+            role="tree"
+            aria-label="Schema fields"
+            className={`${tree.tree} ${styles.fieldTree}`}
+          >
             {visible.map((row) => (
               <DraggableRow
                 key={row.path}
@@ -240,6 +248,16 @@ function DraggableRow({
       className={styles.dragRow}
       data-drop-target={drop.isOver || undefined}
     >
+      <span className={styles.treeGuides} aria-hidden="true">
+        {[0, 1, 2, 3, 4, 5, 6, 7].slice(0, row.depth).map((level) => (
+          <span
+            key={level}
+            className={styles.treeGuide}
+            style={{ left: 14 + level * 16 }}
+            data-branch={level === Math.min(row.depth, 8) - 1 || undefined}
+          />
+        ))}
+      </span>
       {render(
         <button
           type="button"

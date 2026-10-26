@@ -389,7 +389,12 @@ export function SchemaDataEditor({
       </div>
     );
   return (
-    <section aria-label="Schema data editor" className={styles.editor} data-schema-editor>
+    <section
+      aria-label="Schema data editor"
+      className={styles.editor}
+      data-schema-editor
+      data-view={view}
+    >
       <header className={styles.toolbar}>
         {view === 'data' ? (
           <input
@@ -477,6 +482,7 @@ export function SchemaDataEditor({
                   iconTitle={row.kind}
                   label={
                     <span
+                      className={styles.fieldName}
                       onFocus={selectRow}
                       onClick={(event) => event.stopPropagation()}
                       onKeyDown={(event) => event.stopPropagation()}
@@ -500,49 +506,62 @@ export function SchemaDataEditor({
                     <span
                       className={styles.inline}
                       onFocus={selectRow}
-                      onClick={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        selectRow();
+                      }}
                       onKeyDown={(event) => event.stopPropagation()}
                       role="presentation"
                     >
-                      {row.kind === 'slot' ? (
-                        <select
-                          aria-label={`Type ${row.semanticPath}`}
-                          value={String(row.definition.type ?? '')}
-                          onChange={(event) => {
-                            const next = { ...row.definition };
-                            if (event.target.value) next.type = event.target.value;
-                            else delete next.type;
-                            update(row, row.name, next);
-                          }}
-                        >
-                          <option value="">Any type</option>
-                          {[
-                            'string',
-                            'number',
-                            'integer',
-                            'boolean',
-                            'array',
-                            'object',
-                            'null',
-                          ].map((type) => (
-                            <option key={type}>{type}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span>{row.definition.repeated ? 'Repeated node' : 'Node'}</span>
-                      )}
-                      <input
-                        type="checkbox"
-                        aria-label={`Required ${row.semanticPath}`}
-                        checked={row.required}
-                        onChange={(event) =>
-                          update(row, row.name, row.definition, event.target.checked)
-                        }
-                      />
+                      <span className={styles.fieldSummary}>
+                        {row.kind === 'slot'
+                          ? String(row.definition.type || 'Any type')
+                          : row.definition.repeated
+                            ? 'Repeated node'
+                            : 'Node'}
+                        {row.required ? ' · Required' : ' · Optional'}
+                      </span>
+                      <span className={styles.fieldControls}>
+                        {row.kind === 'slot' ? (
+                          <select
+                            aria-label={`Type ${row.semanticPath}`}
+                            value={String(row.definition.type ?? '')}
+                            onChange={(event) => {
+                              const next = { ...row.definition };
+                              if (event.target.value) next.type = event.target.value;
+                              else delete next.type;
+                              update(row, row.name, next);
+                            }}
+                          >
+                            <option value="">Any type</option>
+                            {[
+                              'string',
+                              'number',
+                              'integer',
+                              'boolean',
+                              'array',
+                              'object',
+                              'null',
+                            ].map((type) => (
+                              <option key={type}>{type}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span>{row.definition.repeated ? 'Repeated node' : 'Node'}</span>
+                        )}
+                        <input
+                          type="checkbox"
+                          aria-label={`Required ${row.semanticPath}`}
+                          checked={row.required}
+                          onChange={(event) =>
+                            update(row, row.name, row.definition, event.target.checked)
+                          }
+                        />
+                      </span>
                     </span>
                   }
                   actions={
-                    <span className={tree.actions}>
+                    <span className={`${tree.actions} ${styles.fieldActions}`}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button
@@ -723,6 +742,7 @@ export function SchemaDataEditor({
               )}
             </div>
             <div hidden={panel !== 'rules'}>
+              <p className={styles.rulesScope}>Applies to the whole Schema.</p>
               <SchemaDefinitionStructure
                 value={definition}
                 onChange={change}
