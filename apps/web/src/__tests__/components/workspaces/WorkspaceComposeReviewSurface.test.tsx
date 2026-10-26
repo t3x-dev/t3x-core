@@ -87,6 +87,18 @@ vi.mock('@/components/workspaces/WorkspaceCommitHistoryPanel', () => ({
 const activityMocks = vi.hoisted(() => ({
   value: undefined as ReturnType<typeof useComposeActivity> | undefined,
 }));
+const conversationMocks = vi.hoisted(() => ({
+  value: {
+    data: { conversations: [] as Array<Record<string, unknown>> },
+    loading: false,
+    error: null as Error | null,
+    refetch: vi.fn(),
+    update: vi.fn(),
+  },
+}));
+vi.mock('@/hooks/workspaces/useWorkspaceConversations', () => ({
+  useWorkspaceConversations: () => conversationMocks.value,
+}));
 const schemaCardMocks = vi.hoisted(() => ({
   record: null as AssistantSchemaSettingsView | null,
   error: undefined,
@@ -172,6 +184,7 @@ const modelSelectionMocks = vi.hoisted(() => ({
 }));
 const sourceGenerationMocks = vi.hoisted(() => ({
   options: null as null | {
+    conversationId?: string;
     workspaceAssistant?: {
       allowProposal?: boolean;
       onCandidate?: (transitionId: string, turnId: string) => void;
@@ -189,6 +202,7 @@ vi.mock('@/hooks/shared/useChatModelSelection', () => ({
 }));
 vi.mock('@/hooks/sourceThreads/useSourceThreadGeneration', () => ({
   useSourceThreadGeneration: (options: {
+    conversationId?: string;
     workspaceAssistant?: {
       allowProposal?: boolean;
       onCandidate?: (transitionId: string, turnId: string) => void;
@@ -253,6 +267,9 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     localStorage.removeItem('t3x-workspace-draft-width');
     localStorage.removeItem('t3x-workspace-draft-collapsed');
     localStorage.removeItem('t3x-workspace-discussion-width');
+    localStorage.removeItem(
+      `t3x-workspace-chat-folders:proj_1:${getProjectWorkspaceStarterCandidate('proj_1').id}`
+    );
     snapshotMocks.list.mockReset().mockResolvedValue({ snapshots: [] });
     snapshotMocks.detail.mockReset();
     activityMocks.value = undefined;
@@ -264,6 +281,11 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     bootstrapMocks.value.cancel.mockReset();
     modelSelectionMocks.handleModelChange.mockReset();
     sourceGenerationMocks.options = null;
+    conversationMocks.value.data.conversations = [];
+    conversationMocks.value.loading = false;
+    conversationMocks.value.error = null;
+    conversationMocks.value.refetch.mockReset();
+    conversationMocks.value.update.mockReset().mockResolvedValue(undefined);
     schemaDiscussion.mockReset();
     navigationMocks.push.mockReset();
     navigationMocks.replace.mockReset();
@@ -273,19 +295,28 @@ describe('WorkspaceComposeReviewSurface composer', () => {
   function renderResizableCompose() {
     return {
       ...renderCompose(),
-      splitter: screen.getByRole('separator', { name: 'Resize current Draft panel' }),
+      splitter: screen.getByRole('separator', { name: 'Resize conversation panel' }),
     };
   }
 
-  it('puts the read-only commit graph below the current Draft and scopes it to the workspace', () => {
+  it('moves Draft structure and commit history into the right-side workspace tools', () => {
     renderCompose();
-    const sidebar = screen.getByRole('complementary', { name: 'Current Draft navigation' });
-    const draft = within(sidebar).getByRole('region', { name: 'Current Draft' });
-    const graph = within(sidebar).getByRole('region', { name: 'Commit graph' });
+    const sidebar = screen.getByRole('complementary', { name: 'Workspace conversations' });
+    expect(within(sidebar).getByRole('region', { name: 'Workspace chat list' })).toBeVisible();
+    expect(
+      within(sidebar).queryByRole('region', { name: 'Current Draft' })
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      within(screen.getByRole('navigation', { name: 'Workspace tools' })).getByRole('button', {
+        name: 'Structure',
+      })
+    );
+    expect(screen.getByRole('region', { name: 'Current Draft' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'History' }));
+    const graph = screen.getByRole('region', { name: 'Commit graph' });
     expect(graph).toHaveTextContent('Graph for proj_1 · main');
-    expect(draft.nextElementSibling).toBe(graph);
-    fireEvent.click(within(sidebar).getByRole('button', { name: 'Collapse current Draft panel' }));
-    expect(screen.queryByRole('region', { name: 'Commit graph' })).not.toBeInTheDocument();
+    fireEvent.click(within(sidebar).getByRole('button', { name: 'Collapse conversation panel' }));
+    expect(screen.getByRole('region', { name: 'Commit graph' })).toBeVisible();
   });
 
   function renderCompose() {
@@ -341,6 +372,139 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(onModeChange).not.toHaveBeenCalledWith('review');
   });
 
+  function enableComposeActivity(createAssistantConversation = vi.fn()) {
+    activityMocks.value = {
+      enabled: true,
+      loading: false,
+      error: null,
+      view: {
+        schema: 't3x.application/workspace-authoring-view/v1',
+        projectionVersion: 1,
+        workspaceRevision: 1,
+        compositionRevision: 1,
+        basis: { refName: 'main', refHead: null, baseDigest: 'base' },
+        actions: [],
+        selected: null,
+        current: {},
+        netDiff: [],
+        node: null,
+        nextBeforeSequence: null,
+      },
+      actions: [],
+      cards: {},
+      cursor: null,
+      node: null,
+      nodeLoading: false,
+      nodeError: null,
+      nodeCursor: null,
+      notice: null,
+      newActivity: null,
+      compositionRevision: 1,
+      workspaceRevision: 1,
+      basis: { refName: 'main', refHead: null, baseDigest: 'base' },
+      refresh: vi.fn(),
+      loadOlder: vi.fn(),
+      loadLatest: vi.fn(),
+      inspectNode: vi.fn(),
+      selectActionNode: vi.fn(),
+      loadOlderNode: vi.fn(),
+      publish: vi.fn(),
+      publishCandidate: vi.fn(),
+      createAssistantConversation,
+    } as unknown as ReturnType<typeof useComposeActivity>;
+  }
+
+  it('switches independent chat histories and starts a new conversation blank', async () => {
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    conversationMocks.value.data.conversations = [
+      {
+        conversation_id: 'chat-alpha',
+        project_id: 'proj_1',
+        title: 'Alpha plan',
+        created_at: '2026-10-26T09:00:00Z',
+        metadata: { workspace_id: candidate.id },
+      },
+      {
+        conversation_id: 'chat-beta',
+        project_id: 'proj_1',
+        title: 'Beta review',
+        created_at: '2026-10-26T10:00:00Z',
+        metadata: { workspace_id: candidate.id },
+      },
+    ];
+    const createAssistantConversation = vi.fn().mockResolvedValue('chat-new');
+    enableComposeActivity(createAssistantConversation);
+    renderCompose();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Alpha plan' }));
+    await waitFor(() => expect(sourceGenerationMocks.options?.conversationId).toBe('chat-alpha'));
+    expect(screen.getByRole('button', { name: 'Alpha plan' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Beta review' }));
+    await waitFor(() => expect(sourceGenerationMocks.options?.conversationId).toBe('chat-beta'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'New conversation' }));
+    await waitFor(() => expect(createAssistantConversation).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(sourceGenerationMocks.options?.conversationId).toBe('chat-new'));
+    expect(conversationMocks.value.update).toHaveBeenCalledWith('chat-new', {
+      title: 'New conversation',
+      metadata: { workspace_id: candidate.id },
+    });
+  });
+
+  it('creates folders and renames or moves conversations from the Codex-style menu', async () => {
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    conversationMocks.value.data.conversations = [
+      {
+        conversation_id: 'chat-alpha',
+        project_id: 'proj_1',
+        title: 'Alpha plan',
+        created_at: '2026-10-26T09:00:00Z',
+        metadata: { workspace_id: candidate.id },
+      },
+    ];
+    enableComposeActivity();
+    const prompt = vi.spyOn(window, 'prompt');
+    prompt.mockReturnValueOnce('Planning');
+    renderCompose();
+
+    fireEvent.click(screen.getByRole('button', { name: 'New folder' }));
+    expect(screen.getByText('Planning')).toBeVisible();
+    prompt.mockReturnValueOnce('Roadmap');
+    fireEvent.click(screen.getByRole('button', { name: 'Rename folder Planning' }));
+    expect(screen.getByText('Roadmap')).toBeVisible();
+
+    prompt.mockReturnValueOnce('Alpha renamed');
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Actions for Alpha plan' }), {
+      key: 'Enter',
+    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Rename' }));
+    await waitFor(() =>
+      expect(conversationMocks.value.update).toHaveBeenCalledWith('chat-alpha', {
+        title: 'Alpha renamed',
+      })
+    );
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Actions for Alpha plan' }), {
+      key: 'Enter',
+    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Move to Roadmap' }));
+    await waitFor(() =>
+      expect(conversationMocks.value.update).toHaveBeenCalledWith(
+        'chat-alpha',
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            workspace_id: candidate.id,
+            workspace_folder_name: 'Roadmap',
+          }),
+        })
+      )
+    );
+    prompt.mockRestore();
+  });
+
   it('replaces only the center with historical cards and restores the same live Draft on Return', () => {
     schemaCardMocks.record = {
       settingsId: 'pending-owner',
@@ -361,6 +525,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     renderCompose();
     const confirmation = screen.getByRole('button', { name: 'Confirm' });
     const toolbar = screen.getByRole('button', { name: 'New change' });
+    fireEvent.click(screen.getByRole('button', { name: 'History' }));
     fireEvent.click(screen.getByRole('button', { name: 'Open earlier Commit' }));
     expect(screen.getByRole('region', { name: 'Committed changes' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Inspect committed owner' }));
@@ -379,10 +544,10 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       })
     );
     expect(screen.queryByRole('region', { name: 'Committed changes' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Confirm' })).toBe(confirmation);
-    expect(confirmation).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Confirm' })).toBeVisible();
     expect(schemaCardMocks.generate).not.toHaveBeenCalled();
     expect(navigationMocks.push).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'History' }));
     fireEvent.click(screen.getByRole('button', { name: 'Open earlier Commit' }));
     expect(screen.queryByText('Archived owner')).not.toBeInTheDocument();
   });
@@ -412,7 +577,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       )
     ).toBeVisible();
     expect(
-      within(screen.getByRole('complementary', { name: 'Discuss change' })).queryByRole('region', {
+      within(screen.getByRole('region', { name: 'Workspace AI chat' })).queryByRole('region', {
         name: 'Schema change candidate',
       })
     ).not.toBeInTheDocument();
@@ -447,9 +612,9 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       name: 'Inspect Schema change: requirements/advantage',
     });
     fireEvent.click(inspect);
-    const discussion = screen.getByRole('complementary', { name: 'Discuss change' });
-    expect(within(discussion).getByRole('heading', { name: 'Details', exact: true })).toBeVisible();
-    const details = within(discussion).getByRole('region', {
+    const generated = screen.getByRole('complementary', { name: 'Generated changes' });
+    expect(within(generated).getByRole('heading', { name: 'Details', exact: true })).toBeVisible();
+    const details = within(generated).getByRole('region', {
       name: 'Selected Schema change details',
     });
     expect(within(details).getByRole('heading', { name: 'Advantage', exact: true })).toBeVisible();
@@ -467,11 +632,11 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(schemaDiscussion).toHaveBeenCalledWith('修改 Schema 结构 requirements/advantage：');
     expect(inspect).toHaveAttribute('aria-pressed', 'false');
     expect(
-      within(discussion).queryByRole('region', { name: 'Selected Schema change details' })
+      within(generated).queryByRole('region', { name: 'Selected Schema change details' })
     ).not.toBeInTheDocument();
   });
 
-  it('resizes the Draft rail with keyboard controls, resets it, and restores its saved width', () => {
+  it('resizes the conversation rail with keyboard controls, resets it, and restores its saved width', () => {
     const { splitter, unmount } = renderResizableCompose();
     expect(splitter).toHaveAttribute('aria-valuenow', '260');
     fireEvent.keyDown(splitter, { key: 'ArrowRight' });
@@ -489,24 +654,24 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(renderResizableCompose().splitter).toHaveAttribute('aria-valuenow', '240');
   });
 
-  it('collapses the Draft rail to a narrow strip and remembers the choice', () => {
+  it('collapses the conversation rail to a narrow strip and remembers the choice', () => {
     const { splitter, unmount } = renderResizableCompose();
     const board = splitter.parentElement!;
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse current Draft panel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse conversation panel' }));
     expect(board).toHaveAttribute('data-draft-collapsed', 'true');
-    expect(screen.queryByRole('region', { name: 'Current Draft' })).toBeNull();
-    expect(screen.queryByRole('separator', { name: 'Resize current Draft panel' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Workspace chat list' })).toBeNull();
+    expect(screen.queryByRole('separator', { name: 'Resize conversation panel' })).toBeNull();
     expect(localStorage.getItem('t3x-workspace-draft-collapsed')).toBe('true');
     unmount();
     renderCompose();
-    expect(screen.queryByRole('region', { name: 'Current Draft' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Expand current Draft panel' }));
-    expect(screen.getByRole('region', { name: 'Current Draft' })).toBeVisible();
-    expect(screen.getByRole('separator', { name: 'Resize current Draft panel' })).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'Workspace chat list' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Expand conversation panel' }));
+    expect(screen.getByRole('region', { name: 'Workspace chat list' })).toBeVisible();
+    expect(screen.getByRole('separator', { name: 'Resize conversation panel' })).toBeVisible();
     expect(localStorage.getItem('t3x-workspace-draft-collapsed')).toBe('false');
   });
 
-  it('drags the Draft divider and stops resizing on release or cancellation', () => {
+  it('drags the conversation divider and stops resizing on release or cancellation', () => {
     const originalPointerEvent = window.PointerEvent;
     window.PointerEvent = MouseEvent as typeof PointerEvent;
     try {
@@ -534,7 +699,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     }
   });
 
-  it('limits Draft width so changes and Chat retain room, and ignores invalid saved preferences', () => {
+  it('limits conversation width so changes and Chat retain room, and ignores invalid saved preferences', () => {
     localStorage.setItem('t3x-workspace-draft-width', 'not-a-width');
     const { splitter } = renderResizableCompose();
     expect(splitter).toHaveAttribute('aria-valuenow', '260');
@@ -548,10 +713,10 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       'aria-valuenow',
       '440'
     );
-    expect(screen.getByRole('complementary', { name: 'Discuss change' })).toBeVisible();
+    expect(screen.getByRole('complementary', { name: 'Generated changes' })).toBeVisible();
   });
 
-  it('selects list rows directly and keeps Details or Chat permanently visible', async () => {
+  it('keeps AI Chat centered and stacks generated cards above resizable Details', async () => {
     schemaCardMocks.record = {
       settingsId: 'schema-row',
       revision: 1,
@@ -672,21 +837,23 @@ describe('WorkspaceComposeReviewSurface composer', () => {
 
     expect(screen.getByRole('tab', { name: 'Compose' })).toBeInTheDocument();
     expect(screen.queryByRole('tablist', { name: 'Change context' })).not.toBeInTheDocument();
-    const discussion = screen.getByRole('complementary', { name: 'Discuss change' });
-    const draftNavigation = screen.getByRole('complementary', { name: 'Current Draft navigation' });
-    expect(draftNavigation).toContainElement(screen.getByRole('region', { name: 'Current Draft' }));
+    const chat = screen.getByRole('region', { name: 'Workspace AI chat' });
+    const generated = screen.getByRole('complementary', { name: 'Generated changes' });
+    const draftNavigation = screen.getByRole('complementary', { name: 'Workspace conversations' });
+    expect(draftNavigation).toContainElement(
+      screen.getByRole('region', { name: 'Workspace chat list' })
+    );
+    expect(within(chat).queryByRole('region', { name: 'Current Draft' })).not.toBeInTheDocument();
+    const workspace = screen.getByRole('main');
     expect(
-      within(discussion).queryByRole('region', { name: 'Current Draft' })
-    ).not.toBeInTheDocument();
-    const changes = screen.getByRole('main');
-    expect(
-      draftNavigation.compareDocumentPosition(changes) & Node.DOCUMENT_POSITION_FOLLOWING
+      draftNavigation.compareDocumentPosition(workspace) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
     expect(
-      changes.compareDocumentPosition(discussion) & Node.DOCUMENT_POSITION_FOLLOWING
+      workspace.compareDocumentPosition(generated) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
-    expect(within(discussion).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
-    expect(within(discussion).getByTitle(candidate.title)).toBeVisible();
+    expect(within(chat).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
+    expect(within(chat).getByTitle(candidate.title)).toBeVisible();
+    expect(generated).toHaveAttribute('data-panel', 'changes');
     expect(screen.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute(
       'aria-pressed',
       'true'
@@ -734,19 +901,47 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       expect(row).toHaveAttribute('aria-pressed', 'false');
     }
     expect(
-      within(discussion).getByRole('region', { name: 'Selected Schema change details' })
+      within(generated).getByRole('region', { name: 'Selected Schema change details' })
     ).toBeVisible();
+    expect(generated).toHaveAttribute('data-panel', 'split');
+    const detailsSplitter = within(generated).getByRole('separator', {
+      name: 'Resize generated cards and details',
+    });
+    expect(detailsSplitter).toHaveAttribute('aria-orientation', 'horizontal');
+    expect(detailsSplitter).toHaveAttribute('aria-valuenow', '260');
+    const originalPointerEvent = window.PointerEvent;
+    window.PointerEvent = MouseEvent as typeof PointerEvent;
+    try {
+      Object.assign(detailsSplitter, {
+        setPointerCapture: vi.fn(),
+        hasPointerCapture: () => true,
+        releasePointerCapture: vi.fn(),
+      });
+      fireEvent.pointerDown(detailsSplitter, { button: 0, clientY: 260 });
+      expect(generated.parentElement).toHaveAttribute('data-details-resizing', 'true');
+      fireEvent.pointerMove(detailsSplitter, { clientY: 320 });
+      expect(detailsSplitter).toHaveAttribute('aria-valuenow', '320');
+      expect(localStorage.getItem('t3x-workspace-generated-panel-height')).toBe('320');
+      fireEvent.pointerUp(detailsSplitter, { clientY: 320 });
+      expect(generated.parentElement).not.toHaveAttribute('data-details-resizing');
+      fireEvent.keyDown(detailsSplitter, { key: 'ArrowUp' });
+      expect(detailsSplitter).toHaveAttribute('aria-valuenow', '300');
+    } finally {
+      window.PointerEvent = originalPointerEvent;
+    }
+    expect(within(chat).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
     expect(activityMocks.value.inspectNode).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Inspect Approval: rollout/approval' }));
     expect(inspectSchema).toHaveAttribute('aria-pressed', 'false');
     expect(
-      within(discussion).queryByRole('region', { name: 'Selected Schema change details' })
+      within(generated).queryByRole('region', { name: 'Selected Schema change details' })
     ).not.toBeInTheDocument();
-    expect(within(discussion).getByRole('heading', { name: 'Details' })).toBeVisible();
+    expect(within(generated).getByRole('heading', { name: 'Details' })).toBeVisible();
     expect(
       screen.getByRole('button', { name: 'Inspect Approval: rollout/approval' })
     ).toHaveAttribute('aria-pressed', 'true');
-    fireEvent.click(within(discussion).getByRole('button', { name: 'Ask AI' }));
+    fireEvent.click(within(generated).getByRole('button', { name: 'Ask AI' }));
+    expect(generated).toHaveAttribute('data-panel', 'changes');
     expect(screen.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute(
       'aria-pressed',
       'true'
@@ -755,15 +950,15 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     fireEvent.click(allChanges);
     expect(allChanges).toHaveAttribute('aria-selected', 'true');
     fireEvent.click(screen.getByRole('button', { name: 'Inspect Approval: rollout/approval' }));
-    expect(within(discussion).getByRole('heading', { name: 'Details' })).toBeVisible();
+    expect(within(generated).getByRole('heading', { name: 'Details' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute(
       'aria-pressed',
-      'false'
+      'true'
     );
-    fireEvent.click(within(discussion).getByRole('button', { name: 'Ask AI' }));
-    expect(within(discussion).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
+    fireEvent.click(within(generated).getByRole('button', { name: 'Ask AI' }));
+    expect(within(chat).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Chat', exact: true }));
-    expect(within(discussion).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
+    expect(within(chat).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
     expect(screen.queryByText('Before event')).not.toBeInTheDocument();
     fireEvent.click(latestAction);
     expect(latestAction).toHaveAttribute('aria-selected', 'true');
@@ -788,7 +983,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
 
     expect(screen.queryByRole('button', { name: 'Close discussion' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Show discussion' })).not.toBeInTheDocument();
-    expect(screen.getByRole('complementary', { name: 'Discuss change' })).toBeVisible();
+    expect(screen.getByRole('complementary', { name: 'Generated changes' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Chat', exact: true }));
     vi.stubGlobal('crypto', {
       ...globalThis.crypto,
@@ -894,12 +1089,17 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save change' }));
     expect(publish).not.toHaveBeenCalled();
     expect(screen.getByText('Ungrouped manual changes')).toBeInTheDocument();
-    const draftSidebar = screen.getByRole('region', { name: 'Current Draft' });
-    expect(within(draftSidebar).getByText('30')).toBeVisible();
-    expect(within(draftSidebar).getByText(/ungrouped local changes/)).toBeVisible();
     expect(
       screen.getByRole('checkbox', { name: 'Include Allocation in the next P' })
     ).toBeChecked();
+    fireEvent.click(
+      within(screen.getByRole('navigation', { name: 'Workspace tools' })).getByRole('button', {
+        name: 'Structure',
+      })
+    );
+    const draftSidebar = screen.getByRole('region', { name: 'Current Draft' });
+    expect(within(draftSidebar).getByText('30')).toBeVisible();
+    expect(within(draftSidebar).getByText(/ungrouped local changes/)).toBeVisible();
 
     fireEvent.keyDown(screen.getByRole('button', { name: 'New change' }), { key: 'Enter' });
     expect(screen.queryByRole('menuitem', { name: 'Add manually' })).not.toBeInTheDocument();
@@ -921,6 +1121,11 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     await waitFor(() => expect(within(dialog).getByText('regions')).toBeInTheDocument());
     expect(publish).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getAllByRole('button', { name: 'Close' })[0]!);
+    fireEvent.click(
+      within(screen.getByRole('navigation', { name: 'Workspace tools' })).getByRole('button', {
+        name: 'Changes',
+      })
+    );
     await waitFor(() =>
       expect(screen.getByRole('checkbox', { name: 'Include Regions in the next P' })).toBeChecked()
     );

@@ -16,13 +16,17 @@ import {
   FileCode2,
   FileText,
   FileUp,
+  Folder,
+  FolderPlus,
   GitBranch,
   Globe2,
   Hash,
   Layers,
   ListTree,
   MessageSquare,
+  MessageSquarePlus,
   Minus,
+  MoreHorizontal,
   PanelLeftOpen,
   Pencil,
   Percent,
@@ -125,8 +129,9 @@ import { useViewPreference } from '@/hooks/shared/useViewPreference';
 import { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import { useWorkspaceAuthoringBootstrap } from '@/hooks/workspaces/useWorkspaceAuthoringBootstrap';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
+import { useWorkspaceConversations } from '@/hooks/workspaces/useWorkspaceConversations';
 import { validateWorkspaceCandidateYOps } from '@/hooks/workspaces/useWorkspaceYOps';
-import type { ApiCommit } from '@/types/api';
+import type { ApiCommit, Conversation } from '@/types/api';
 import type {
   SourceBundleItem,
   WorkspaceCandidate,
@@ -695,14 +700,20 @@ function ComposeSurface({
   const boardRef = useRef<HTMLDivElement>(null);
   const dragOrigin = useRef<{ x: number; width: number } | null>(null);
   const draftDragOrigin = useRef<{ x: number; width: number } | null>(null);
+  const detailsDragOrigin = useRef<{ y: number; height: number } | null>(null);
   const [draftWidth, setDraftWidth] = useState(260);
   const [draftCollapsed, setDraftCollapsed] = useState(false);
   const [discussionWidth, setDiscussionWidth] = useState(440);
+  const [generatedPanelHeight, setGeneratedPanelHeight] = useState(260);
   const [resizing, setResizing] = useState(false);
+  const [detailsResizing, setDetailsResizing] = useState(false);
   useEffect(() => {
     try {
       const stored = Number(localStorage.getItem('t3x-workspace-discussion-width'));
       if (stored >= 320 && stored <= 680) setDiscussionWidth(stored);
+      const generatedHeight = Number(localStorage.getItem('t3x-workspace-generated-panel-height'));
+      if (generatedHeight >= 160 && generatedHeight <= 720)
+        setGeneratedPanelHeight(generatedHeight);
       const draftStored = Number(localStorage.getItem('t3x-workspace-draft-width'));
       if (draftStored >= 180 && draftStored <= 560) setDraftWidth(draftStored);
       if (localStorage.getItem('t3x-workspace-draft-collapsed') === 'true') setDraftCollapsed(true);
@@ -720,7 +731,7 @@ function ComposeSurface({
   };
   const resizeDiscussion = (width: number) => {
     const actualDraftWidth =
-      boardRef.current?.querySelector<HTMLElement>('[aria-label="Current Draft navigation"]')
+      boardRef.current?.querySelector<HTMLElement>('[aria-label="Workspace conversations"]')
         ?.offsetWidth || draftWidth;
     const maximum = Math.min(
       680,
@@ -736,7 +747,7 @@ function ComposeSurface({
   };
   const resizeDraft = (width: number) => {
     const measuredDiscussionWidth = boardRef.current
-      ?.querySelector('[aria-label="Discuss change"]')
+      ?.querySelector('[data-compose-rail]')
       ?.getBoundingClientRect().width;
     const actualDiscussionWidth = measuredDiscussionWidth
       ? measuredDiscussionWidth + 16
@@ -753,9 +764,22 @@ function ComposeSurface({
       /* Resizing still works without storage. */
     }
   };
+  const resizeGeneratedPanel = (height: number) => {
+    const railHeight =
+      boardRef.current?.querySelector<HTMLElement>('[data-compose-rail]')?.clientHeight || 720;
+    const maximum = Math.max(160, railHeight - 240);
+    const next = Math.round(Math.max(160, Math.min(maximum, height)));
+    setGeneratedPanelHeight(next);
+    try {
+      localStorage.setItem('t3x-workspace-generated-panel-height', String(next));
+    } catch {
+      /* Resizing still works without storage. */
+    }
+  };
 
   const preferenceKey = `t3x.workspace-view:${candidate.projectId}:${candidate.id}`;
   const [sidePanel, setSidePanel] = useState<'history' | 'chat'>('chat');
+  const [rightView, setRightView] = useState<'changes' | 'structure' | 'history'>('changes');
   const [changeScope, setChangeScope] = useViewPreference(
     `${preferenceKey}:scope`,
     CHANGE_SCOPES,
@@ -897,10 +921,16 @@ function ComposeSurface({
     (source) =>
       source.type === 'chat' && source.title === 'Compose assistant' && source.conversationId
   )?.conversationId;
+  const [activeConversationId, setActiveConversationId] = useState<string | undefined>(
+    sourceConversationId
+  );
+  useEffect(() => {
+    setActiveConversationId(sourceConversationId);
+  }, [candidate.id, sourceConversationId]);
   const schemaSettings = useAssistantSchemaSettings(
     candidate.projectId,
     candidate.id,
-    schemaConversationId ?? sourceConversationId,
+    schemaConversationId ?? activeConversationId,
     String(activity.view?.workspaceRevision ?? candidate.revision) + ':' + schemaCandidateEpoch
   );
   const selectedSchema =
@@ -920,6 +950,13 @@ function ComposeSurface({
     setSidePanel('chat');
   };
   const showingDetails = (activity.enabled || Boolean(selectedSchema)) && sidePanel === 'history';
+  const createConversation = useCallback(async () => {
+    const conversationId = await activity.createAssistantConversation();
+    setActiveConversationId(conversationId);
+    setSchemaConversationId(undefined);
+    setSidePanel('chat');
+    return conversationId;
+  }, [activity.createAssistantConversation]);
 
   return (
     <div
@@ -928,8 +965,11 @@ function ComposeSurface({
         {
           '--draft-width': `${draftWidth}px`,
           '--discussion-width': `${discussionWidth}px`,
+          '--generated-panel-height': `${generatedPanelHeight}px`,
         } as CSSProperties
       }
+      data-details-open={showingDetails || undefined}
+      data-details-resizing={detailsResizing || undefined}
       data-resizing={resizing || undefined}
       data-draft-collapsed={draftCollapsed || undefined}
       className={composeStyles.composeBoard}
@@ -945,7 +985,7 @@ function ComposeSurface({
           onModeChange(mode);
         }}
         onOpenChat={openChat}
-        chatOpen={!showingDetails}
+        chatOpen={!historicalCommit}
       />
       <div style={{ display: historicalCommit ? 'none' : 'contents' }}>
         <SourceToolbar
@@ -991,7 +1031,7 @@ function ComposeSurface({
         onPointerDown={(event) => {
           if (event.button !== 0) return;
           event.preventDefault();
-          const sidebar = boardRef.current?.querySelector('aside[aria-label="Discuss change"]');
+          const sidebar = boardRef.current?.querySelector('[data-compose-rail]');
           dragOrigin.current = {
             x: event.clientX,
             width: sidebar ? sidebar.getBoundingClientRect().width + 16 : discussionWidth,
@@ -1029,7 +1069,7 @@ function ComposeSurface({
         // biome-ignore lint/a11y/useSemanticElements: This is an interactive window splitter, not a thematic break.
         <div
           role="separator"
-          aria-label="Resize current Draft panel"
+          aria-label="Resize conversation panel"
           aria-orientation="vertical"
           aria-valuemin={180}
           aria-valuemax={560}
@@ -1040,7 +1080,7 @@ function ComposeSurface({
             if (event.button !== 0) return;
             event.preventDefault();
             const sidebar = boardRef.current?.querySelector(
-              '[aria-label="Current Draft navigation"]'
+              '[aria-label="Workspace conversations"]'
             );
             draftDragOrigin.current = {
               x: event.clientX,
@@ -1081,47 +1121,33 @@ function ComposeSurface({
           }}
         />
       )}
-      <aside aria-label="Current Draft navigation" className={composeStyles.currentDraftSidebar}>
+      <aside aria-label="Workspace conversations" className={composeStyles.currentDraftSidebar}>
         {draftCollapsed ? (
           <button
             type="button"
-            aria-label="Expand current Draft panel"
-            title="Expand current Draft"
+            aria-label="Expand conversation panel"
+            title="Expand conversations"
             className={composeStyles.currentDraftRail}
             onClick={() => toggleDraft(false)}
           >
             <PanelLeftOpen aria-hidden="true" />
-            <Layers aria-hidden="true" />
-            <span>Current Draft</span>
+            <MessageSquare aria-hidden="true" />
+            <span>Chats</span>
           </button>
         ) : (
-          <>
-            <WorkspaceCurrentDraft
-              key={candidate.id}
-              candidate={candidate}
-              current={workingCurrent}
-              revision={activity.compositionRevision}
-              loading={activity.loading}
-              error={activity.error}
-              enabled={activity.enabled}
-              stagedCount={staged.length}
-              authoring={activity.view}
-              onCollapse={() => toggleDraft(true)}
-            />
-            <WorkspaceCommitGraph
-              key={`graph:${candidate.id}`}
-              projectId={candidate.projectId}
-              branch={candidate.targetBranch}
-              refreshKey={candidate.baseCommitHash ?? undefined}
-              selectedCommitHash={historicalCommit?.hash}
-              onSelectCommit={(commit) => {
-                if (commit.project_id === candidate.projectId) {
-                  setCommitInspection(null);
-                  setCommitSelection({ scope: commitScope, commit });
-                }
-              }}
-            />
-          </>
+          <WorkspaceConversationSidebar
+            key={candidate.id}
+            candidate={candidate}
+            activeConversationId={activeConversationId}
+            canCreate={Boolean(activity.enabled && activity.view)}
+            onCollapse={() => toggleDraft(true)}
+            onCreate={createConversation}
+            onSelect={(conversationId) => {
+              setActiveConversationId(conversationId);
+              setSchemaConversationId(undefined);
+              setSidePanel('chat');
+            }}
+          />
         )}
       </aside>
       <main className={composeStyles.composeMain}>
@@ -1130,145 +1156,38 @@ function ComposeSurface({
             key={`${commitScope}:${historicalCommit.hash}`}
             projectId={candidate.projectId}
             commit={historicalCommit}
-            onReturn={() => setCommitSelection(null)}
+            onReturn={() => {
+              setCommitSelection(null);
+              setRightView('changes');
+            }}
             selectedId={historicalInspection?.id}
             onInspect={(value) => setCommitInspection({ scope: commitScope, value })}
           />
         ) : null}
-        <div hidden={Boolean(historicalCommit)}>
-          {schemaSettings.error && !schemaSettings.record ? (
-            <p role="alert">{schemaSettings.error}</p>
-          ) : null}
-          {activity.newActivity ? (
-            <output className={composeStyles.newActivity}>
-              <span>
-                New activity · Draft r{activity.newActivity.compositionRevision}. Your inspected
-                node remains open.
-              </span>
-              <button onClick={() => void activity.loadLatest()} type="button">
-                Load latest
-              </button>
-            </output>
-          ) : null}
-
-          <ProposedDraftPanel
-            activity={activity}
-            activitySelection={activitySelection}
-            schemaSelected={Boolean(showingDetails && selectedSchema)}
-            onActivitySelect={selectActivity}
-            candidate={candidate}
-            changeFilter="all"
-            changeScope={changeScope}
-            staging={stagingControls}
-            schemaEvent={
-              schemaSettings.record
-                ? {
-                    id:
-                      schemaSettings.record.cards?.[0]?.settingsId ??
-                      schemaSettings.record.settingsId,
-                    timestamp:
-                      schemaSettings.record.cards?.[0]?.createdAt ??
-                      schemaSettings.record.createdAt ??
-                      candidate.updatedAt,
-                    content: (
-                      <AssistantSchemaSettingsTimeline
-                        projectId={candidate.projectId}
-                        workspaceId={candidate.id}
-                        state={schemaSettings}
-                        selectedId={showingDetails ? selectedSchema?.settingsId : undefined}
-                        onInspect={(record) => {
-                          setActivitySelection(null);
-                          setSchemaSelection({
-                            workspaceId: candidate.id,
-                            settingsId: record.settingsId,
-                          });
-                          setSidePanel('history');
-                        }}
-                        disabled={staged.length > 0}
-                        onChanged={() => {
-                          setSchemaCandidateEpoch((value) => value + 1);
-                          activity.refresh();
-                        }}
-                      />
-                    ),
-                  }
-                : undefined
-            }
-          />
-        </div>
-      </main>
-
-      <aside
-        aria-label="Discuss change"
-        className={composeStyles.discussionSidebar}
-        data-panel={historicalCommit || showingDetails ? 'details' : 'chat'}
-      >
-        {historicalCommit ? (
-          <>
-            <header className={composeStyles.discussionHeader}>
-              <Layers aria-hidden="true" />
-              <h2>Details</h2>
-              <span className={composeStyles.discussionWorkspace}>Commit · Read-only</span>
-            </header>
-            <WorkspaceCommitChangeDetails
-              key={`${commitScope}:${historicalCommit.hash}:${historicalInspection?.id ?? 'empty'}`}
-              inspection={historicalInspection}
-            />
-          </>
-        ) : null}
-        <div
+        <section
           hidden={Boolean(historicalCommit)}
-          style={historicalCommit ? undefined : { display: 'contents' }}
+          className={composeStyles.chatPanel}
+          aria-label="Workspace AI chat"
         >
           <header className={composeStyles.discussionHeader}>
-            {showingDetails ? <Layers aria-hidden="true" /> : <MessageSquare aria-hidden="true" />}
-            <h2>{showingDetails ? 'Details' : 'Chat'}</h2>
-            {!showingDetails ? (
-              <span className={composeStyles.discussionWorkspace} title={candidate.title}>
-                {candidate.title}
-              </span>
-            ) : null}
+            <MessageSquare aria-hidden="true" />
+            <h2>Chat</h2>
+            <span className={composeStyles.discussionWorkspace} title={candidate.title}>
+              {candidate.title}
+            </span>
           </header>
-          {!activity.enabled || sidePanel === 'history' || !activity.view ? (
+          {!activity.enabled || !activity.view ? (
             <WorkspaceSourcesMenu candidate={candidate} controller={controller} />
           ) : null}
-          {showingDetails && selectedSchema ? (
-            <AssistantSchemaSettingsDetails
-              key={candidate.id + ':' + selectedSchema.settingsId}
-              record={selectedSchema}
-              projectId={candidate.projectId}
-              workspaceId={candidate.id}
-              onDiscuss={() => {
-                const settings = selectedSchema.settings;
-                const path = [
-                  settings.targetNodePath ?? settings.nodePath,
-                  settings.newName ?? settings.name,
-                ]
-                  .filter(Boolean)
-                  .join('/');
-                setActivitySelection(null);
-                controller.prefillAssistant(`修改 Schema 结构 ${path}：`);
-                openChat();
-              }}
-            />
-          ) : !activity.enabled ? (
+          {!activity.enabled ? (
             <ComposeDraftPreparation
               key={candidate.id}
               bootstrap={authoringBootstrap}
               onPrepare={enableActivity}
             />
-          ) : sidePanel === 'history' ? (
-            <ComposeNodeHistoryPanel
-              activity={activity}
-              selection={activitySelection}
-              onOpenAction={openHistoryAction}
-              onDiscuss={openChat}
-              onOpenStructure={setFieldDialog}
-              onSubmit={stageManualOps}
-              workingCurrent={workingCurrent}
-            />
           ) : activity.view ? (
             <ComposeAuthoringAssistant
+              key={`${candidate.id}:${activeConversationId ?? 'new'}`}
               allowProposal={staged.length === 0}
               context={{
                 workspaceId: candidate.id,
@@ -1277,12 +1196,16 @@ function ComposeSurface({
                 selectedActionId: selectedSchema ? undefined : activitySelection?.meta.actionId,
                 selectedNodeId: selectedSchema ? undefined : activitySelection?.operation.id,
               }}
-              conversationId={sourceConversationId}
+              conversationId={activeConversationId}
               initialPendingCandidate={
                 activity.view?.pendingCandidates?.find((item) => item.status === 'candidate')
                   ?.transitionId
               }
               onCreateConversation={activity.createAssistantConversation}
+              onConversationChange={(conversationId) => {
+                setActiveConversationId(conversationId);
+                setSchemaConversationId(undefined);
+              }}
               onPublishCandidate={activity.publishCandidate}
               activityActions={activity.actions}
               activityCards={activity.cards}
@@ -1304,6 +1227,246 @@ function ComposeSurface({
               {activity.error ?? 'Loading Draft activity…'}
             </p>
           )}
+        </section>
+      </main>
+
+      <aside
+        aria-label={historicalCommit ? 'Discuss change' : 'Generated changes'}
+        className={composeStyles.discussionSidebar}
+        data-compose-rail
+        data-panel={historicalCommit ? 'details' : showingDetails ? 'split' : 'changes'}
+      >
+        {historicalCommit ? (
+          <>
+            <header className={composeStyles.discussionHeader}>
+              <Layers aria-hidden="true" />
+              <h2>Details</h2>
+              <span className={composeStyles.discussionWorkspace}>Commit · Read-only</span>
+            </header>
+            <WorkspaceCommitChangeDetails
+              key={`${commitScope}:${historicalCommit.hash}:${historicalInspection?.id ?? 'empty'}`}
+              inspection={historicalInspection}
+            />
+          </>
+        ) : null}
+        <div
+          hidden={Boolean(historicalCommit)}
+          style={historicalCommit ? undefined : { display: 'contents' }}
+        >
+          <section className={composeStyles.generatedChangesPanel} aria-label="Generated card list">
+            <nav className={composeStyles.workspaceToolTabs} aria-label="Workspace tools">
+              {(['changes', 'structure', 'history'] as const).map((view) => (
+                <button
+                  key={view}
+                  type="button"
+                  aria-pressed={rightView === view}
+                  onClick={() => {
+                    setRightView(view);
+                    setSidePanel('chat');
+                  }}
+                >
+                  {view === 'changes' ? (
+                    <Sparkles aria-hidden="true" />
+                  ) : view === 'structure' ? (
+                    <ListTree aria-hidden="true" />
+                  ) : (
+                    <GitBranch aria-hidden="true" />
+                  )}
+                  {view === 'changes' ? 'Changes' : view === 'structure' ? 'Structure' : 'History'}
+                </button>
+              ))}
+            </nav>
+            {rightView === 'structure' ? (
+              <WorkspaceCurrentDraft
+                key={candidate.id}
+                candidate={candidate}
+                current={workingCurrent}
+                revision={activity.compositionRevision}
+                loading={activity.loading}
+                error={activity.error}
+                enabled={activity.enabled}
+                stagedCount={staged.length}
+                authoring={activity.view}
+              />
+            ) : rightView === 'history' ? (
+              <WorkspaceCommitGraph
+                key={`graph:${candidate.id}`}
+                projectId={candidate.projectId}
+                branch={candidate.targetBranch}
+                refreshKey={candidate.baseCommitHash ?? undefined}
+                selectedCommitHash={historicalCommit?.hash}
+                onSelectCommit={(commit) => {
+                  if (commit.project_id === candidate.projectId) {
+                    setCommitInspection(null);
+                    setCommitSelection({ scope: commitScope, commit });
+                  }
+                }}
+              />
+            ) : (
+              <>
+                {schemaSettings.error && !schemaSettings.record ? (
+                  <p role="alert">{schemaSettings.error}</p>
+                ) : null}
+                {activity.newActivity ? (
+                  <output className={composeStyles.newActivity}>
+                    <span>
+                      New activity · Draft r{activity.newActivity.compositionRevision}. Your
+                      inspected node remains open.
+                    </span>
+                    <button onClick={() => void activity.loadLatest()} type="button">
+                      Load latest
+                    </button>
+                  </output>
+                ) : null}
+                <ProposedDraftPanel
+                  activity={activity}
+                  activitySelection={activitySelection}
+                  schemaSelected={Boolean(showingDetails && selectedSchema)}
+                  onActivitySelect={selectActivity}
+                  candidate={candidate}
+                  changeFilter="all"
+                  changeScope={changeScope}
+                  staging={stagingControls}
+                  schemaEvent={
+                    schemaSettings.record
+                      ? {
+                          id:
+                            schemaSettings.record.cards?.[0]?.settingsId ??
+                            schemaSettings.record.settingsId,
+                          timestamp:
+                            schemaSettings.record.cards?.[0]?.createdAt ??
+                            schemaSettings.record.createdAt ??
+                            candidate.updatedAt,
+                          content: (
+                            <AssistantSchemaSettingsTimeline
+                              projectId={candidate.projectId}
+                              workspaceId={candidate.id}
+                              state={schemaSettings}
+                              selectedId={showingDetails ? selectedSchema?.settingsId : undefined}
+                              onInspect={(record) => {
+                                setActivitySelection(null);
+                                setSchemaSelection({
+                                  workspaceId: candidate.id,
+                                  settingsId: record.settingsId,
+                                });
+                                setSidePanel('history');
+                              }}
+                              disabled={staged.length > 0}
+                              onChanged={() => {
+                                setSchemaCandidateEpoch((value) => value + 1);
+                                activity.refresh();
+                              }}
+                            />
+                          ),
+                        }
+                      : undefined
+                  }
+                />
+              </>
+            )}
+          </section>
+          {showingDetails ? (
+            <>
+              {/* biome-ignore lint/a11y/useSemanticElements: This is an interactive window splitter, not a thematic break. */}
+              <div
+                role="separator"
+                aria-label="Resize generated cards and details"
+                aria-orientation="horizontal"
+                aria-valuemin={160}
+                aria-valuemax={720}
+                aria-valuenow={generatedPanelHeight}
+                tabIndex={0}
+                className={composeStyles.detailsResize}
+                onPointerDown={(event) => {
+                  if (event.button !== 0) return;
+                  event.preventDefault();
+                  const cards = boardRef.current?.querySelector<HTMLElement>(
+                    '[aria-label="Generated card list"]'
+                  );
+                  detailsDragOrigin.current = {
+                    y: event.clientY,
+                    height: cards?.getBoundingClientRect().height || generatedPanelHeight,
+                  };
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  setDetailsResizing(true);
+                }}
+                onPointerMove={(event) => {
+                  if (detailsDragOrigin.current)
+                    resizeGeneratedPanel(
+                      detailsDragOrigin.current.height + event.clientY - detailsDragOrigin.current.y
+                    );
+                }}
+                onPointerUp={(event) => {
+                  detailsDragOrigin.current = null;
+                  setDetailsResizing(false);
+                  if (event.currentTarget.hasPointerCapture(event.pointerId))
+                    event.currentTarget.releasePointerCapture(event.pointerId);
+                }}
+                onLostPointerCapture={() => {
+                  detailsDragOrigin.current = null;
+                  setDetailsResizing(false);
+                }}
+                onPointerCancel={() => {
+                  detailsDragOrigin.current = null;
+                  setDetailsResizing(false);
+                }}
+                onDoubleClick={() => resizeGeneratedPanel(260)}
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    resizeGeneratedPanel(
+                      generatedPanelHeight + (event.key === 'ArrowDown' ? 20 : -20)
+                    );
+                  } else if (event.key === 'Home') {
+                    event.preventDefault();
+                    resizeGeneratedPanel(160);
+                  } else if (event.key === 'End') {
+                    event.preventDefault();
+                    resizeGeneratedPanel(720);
+                  }
+                }}
+              />
+              <section
+                className={composeStyles.changeDetailsPanel}
+                aria-label="Selected change details"
+              >
+                <header className={composeStyles.discussionHeader}>
+                  <Layers aria-hidden="true" />
+                  <h2>Details</h2>
+                </header>
+                {selectedSchema ? (
+                  <AssistantSchemaSettingsDetails
+                    key={candidate.id + ':' + selectedSchema.settingsId}
+                    record={selectedSchema}
+                    projectId={candidate.projectId}
+                    workspaceId={candidate.id}
+                    onDiscuss={() => {
+                      const settings = selectedSchema.settings;
+                      const path = [
+                        settings.targetNodePath ?? settings.nodePath,
+                        settings.newName ?? settings.name,
+                      ]
+                        .filter(Boolean)
+                        .join('/');
+                      setActivitySelection(null);
+                      controller.prefillAssistant(`修改 Schema 结构 ${path}：`);
+                      openChat();
+                    }}
+                  />
+                ) : (
+                  <ComposeNodeHistoryPanel
+                    activity={activity}
+                    selection={activitySelection}
+                    onOpenAction={openHistoryAction}
+                    onDiscuss={openChat}
+                    onOpenStructure={setFieldDialog}
+                    onSubmit={stageManualOps}
+                    workingCurrent={workingCurrent}
+                  />
+                )}
+              </section>
+            </>
+          ) : null}
         </div>
       </aside>
       {fieldDialog && !historicalCommit ? (
@@ -1324,6 +1487,322 @@ function ComposeSurface({
         />
       ) : null}
     </div>
+  );
+}
+
+interface WorkspaceConversationFolder {
+  id: string;
+  name: string;
+}
+
+function conversationMetadataValue(conversation: Conversation, key: string): string | undefined {
+  const value = conversation.metadata?.[key];
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+function WorkspaceConversationSidebar({
+  activeConversationId,
+  candidate,
+  canCreate,
+  onCollapse,
+  onCreate,
+  onSelect,
+}: {
+  activeConversationId?: string;
+  candidate: WorkspaceCandidate;
+  canCreate: boolean;
+  onCollapse: () => void;
+  onCreate: () => Promise<string>;
+  onSelect: (conversationId: string) => void;
+}) {
+  const conversationsQuery = useWorkspaceConversations(candidate.projectId);
+  const storageKey = `t3x-workspace-chat-folders:${candidate.projectId}:${candidate.id}`;
+  const [folders, setFolders] = useState<WorkspaceConversationFolder[]>(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(storageKey) ?? '[]');
+      return Array.isArray(stored)
+        ? stored.filter(
+            (item): item is WorkspaceConversationFolder =>
+              Boolean(item) && typeof item.id === 'string' && typeof item.name === 'string'
+          )
+        : [];
+    } catch {
+      return [];
+    }
+  });
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const linkedConversationIds = useMemo(
+    () =>
+      new Set(
+        candidate.sourceBundle.flatMap((source) =>
+          source.type === 'chat' && source.conversationId ? [source.conversationId] : []
+        )
+      ),
+    [candidate.sourceBundle]
+  );
+  const conversations = useMemo(
+    () =>
+      (conversationsQuery.data?.conversations ?? [])
+        .filter(
+          (conversation) =>
+            linkedConversationIds.has(conversation.conversation_id) ||
+            conversationMetadataValue(conversation, 'workspace_id') === candidate.id
+        )
+        .sort((left, right) => right.created_at.localeCompare(left.created_at)),
+    [candidate.id, conversationsQuery.data?.conversations, linkedConversationIds]
+  );
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(folders));
+    } catch {
+      /* Folder organization remains available for the current session. */
+    }
+  }, [folders, storageKey]);
+  useEffect(() => {
+    const known = new Set(folders.map((folder) => folder.id));
+    const inferred = conversations.flatMap((conversation) => {
+      const id = conversationMetadataValue(conversation, 'workspace_folder_id');
+      if (!id || known.has(id)) return [];
+      known.add(id);
+      return [
+        {
+          id,
+          name: conversationMetadataValue(conversation, 'workspace_folder_name') ?? 'Folder',
+        },
+      ];
+    });
+    if (inferred.length) setFolders((current) => [...current, ...inferred]);
+  }, [conversations, folders]);
+
+  const createFolder = () => {
+    const name = window.prompt('Folder name', 'New folder')?.trim();
+    if (!name) return;
+    setFolders((current) => [...current, { id: `folder:${crypto.randomUUID()}`, name }]);
+  };
+  const renameFolder = async (folder: WorkspaceConversationFolder) => {
+    const name = window.prompt('Rename folder', folder.name)?.trim();
+    if (!name || name === folder.name) return;
+    setFolders((current) =>
+      current.map((item) => (item.id === folder.id ? { ...item, name } : item))
+    );
+    setError(null);
+    try {
+      await Promise.all(
+        conversations
+          .filter(
+            (conversation) =>
+              conversationMetadataValue(conversation, 'workspace_folder_id') === folder.id
+          )
+          .map((conversation) =>
+            conversationsQuery.update(conversation.conversation_id, {
+              metadata: {
+                ...(conversation.metadata ?? {}),
+                workspace_id: candidate.id,
+                workspace_folder_id: folder.id,
+                workspace_folder_name: name,
+              },
+            })
+          )
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not rename the folder.');
+    }
+  };
+  const createChat = async (folder?: WorkspaceConversationFolder) => {
+    if (!canCreate || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const conversationId = await onCreate();
+      await conversationsQuery.update(conversationId, {
+        title: 'New conversation',
+        metadata: {
+          workspace_id: candidate.id,
+          ...(folder ? { workspace_folder_id: folder.id, workspace_folder_name: folder.name } : {}),
+        },
+      });
+      onSelect(conversationId);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not create the conversation.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const renameConversation = async (conversation: Conversation) => {
+    const title = window
+      .prompt('Rename conversation', conversation.title ?? 'New conversation')
+      ?.trim();
+    if (!title || title === conversation.title) return;
+    setError(null);
+    try {
+      await conversationsQuery.update(conversation.conversation_id, { title });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not rename the conversation.');
+    }
+  };
+  const moveConversation = async (
+    conversation: Conversation,
+    folder?: WorkspaceConversationFolder
+  ) => {
+    const metadata: Record<string, unknown> = {
+      ...(conversation.metadata ?? {}),
+      workspace_id: candidate.id,
+    };
+    if (folder) {
+      metadata.workspace_folder_id = folder.id;
+      metadata.workspace_folder_name = folder.name;
+    } else {
+      delete metadata.workspace_folder_id;
+      delete metadata.workspace_folder_name;
+    }
+    setError(null);
+    try {
+      await conversationsQuery.update(conversation.conversation_id, { metadata });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not move the conversation.');
+    }
+  };
+  const renderConversation = (conversation: Conversation) => {
+    const title = conversation.title?.trim() || 'New conversation';
+    const selected = conversation.conversation_id === activeConversationId;
+    return (
+      <div className={composeStyles.conversationRow} key={conversation.conversation_id}>
+        <button
+          type="button"
+          aria-current={selected ? 'page' : undefined}
+          title={title}
+          onClick={() => onSelect(conversation.conversation_id)}
+        >
+          <MessageSquare aria-hidden="true" />
+          <span>{title}</span>
+        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" aria-label={`Actions for ${title}`}>
+              <MoreHorizontal aria-hidden="true" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onSelect={() => void renameConversation(conversation)}>
+              Rename
+            </DropdownMenuItem>
+            {folders.map((folder) => (
+              <DropdownMenuItem
+                key={folder.id}
+                onSelect={() => void moveConversation(conversation, folder)}
+              >
+                Move to {folder.name}
+              </DropdownMenuItem>
+            ))}
+            {conversationMetadataValue(conversation, 'workspace_folder_id') ? (
+              <DropdownMenuItem onSelect={() => void moveConversation(conversation)}>
+                Move out of folder
+              </DropdownMenuItem>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    );
+  };
+  const unfiled = conversations.filter(
+    (conversation) => !conversationMetadataValue(conversation, 'workspace_folder_id')
+  );
+
+  return (
+    <section className={composeStyles.conversationSidebar} aria-label="Workspace chat list">
+      <header>
+        <div>
+          <MessageSquare aria-hidden="true" />
+          <h2>Chats</h2>
+        </div>
+        <span>
+          <button type="button" aria-label="New folder" title="New folder" onClick={createFolder}>
+            <FolderPlus aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            aria-label="New conversation"
+            title="New conversation"
+            disabled={!canCreate || busy}
+            onClick={() => void createChat()}
+          >
+            <MessageSquarePlus aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            aria-label="Collapse conversation panel"
+            title="Collapse conversations"
+            onClick={onCollapse}
+          >
+            <PanelLeftOpen aria-hidden="true" />
+          </button>
+        </span>
+      </header>
+      <div className={composeStyles.conversationList}>
+        {folders.map((folder) => {
+          const collapsed = collapsedFolders.has(folder.id);
+          const folderConversations = conversations.filter(
+            (conversation) =>
+              conversationMetadataValue(conversation, 'workspace_folder_id') === folder.id
+          );
+          return (
+            <section className={composeStyles.conversationFolder} key={folder.id}>
+              <header>
+                <button
+                  type="button"
+                  aria-expanded={!collapsed}
+                  onClick={() =>
+                    setCollapsedFolders((current) => {
+                      const next = new Set(current);
+                      if (next.has(folder.id)) next.delete(folder.id);
+                      else next.add(folder.id);
+                      return next;
+                    })
+                  }
+                >
+                  {collapsed ? (
+                    <ChevronRight aria-hidden="true" />
+                  ) : (
+                    <ChevronDown aria-hidden="true" />
+                  )}
+                  <Folder aria-hidden="true" />
+                  <span>{folder.name}</span>
+                </button>
+                <button
+                  type="button"
+                  aria-label={`New conversation in ${folder.name}`}
+                  title={`New conversation in ${folder.name}`}
+                  disabled={!canCreate || busy}
+                  onClick={() => void createChat(folder)}
+                >
+                  <Plus aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Rename folder ${folder.name}`}
+                  title={`Rename ${folder.name}`}
+                  onClick={() => void renameFolder(folder)}
+                >
+                  <MoreHorizontal aria-hidden="true" />
+                </button>
+              </header>
+              {!collapsed ? folderConversations.map(renderConversation) : null}
+            </section>
+          );
+        })}
+        {unfiled.map(renderConversation)}
+        {!conversationsQuery.loading && conversations.length === 0 ? (
+          <p>No conversations yet. Create one to start with a blank chat.</p>
+        ) : null}
+        {conversationsQuery.loading ? <p>Loading conversations…</p> : null}
+        {error || conversationsQuery.error ? (
+          <p role="alert">{error ?? conversationsQuery.error?.message}</p>
+        ) : null}
+      </div>
+    </section>
   );
 }
 

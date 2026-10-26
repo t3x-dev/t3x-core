@@ -92,6 +92,16 @@ vi.mock('@/hooks/workspaces/useWorkspaceProposalGeneration', () => ({
   }),
 }));
 
+vi.mock('@/hooks/workspaces/useWorkspaceConversations', () => ({
+  useWorkspaceConversations: () => ({
+    data: { conversations: [] },
+    loading: false,
+    error: null,
+    refetch: vi.fn(),
+    update: vi.fn(),
+  }),
+}));
+
 vi.mock('@/hooks/shared/useChatModelSelection', () => ({
   useChatModelSelection: () => ({
     availabilityError: null,
@@ -287,9 +297,7 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
       release.title
     );
     expect(
-      within(screen.getByRole('complementary', { name: 'Discuss change' })).getByTitle(
-        release.title
-      )
+      within(screen.getByRole('region', { name: 'Workspace AI chat' })).getByTitle(release.title)
     ).toBeVisible();
   });
 

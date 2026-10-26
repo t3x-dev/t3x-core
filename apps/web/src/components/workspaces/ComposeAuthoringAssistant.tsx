@@ -62,10 +62,12 @@ export function ComposeAuthoringAssistant({
   proposalBlockedHint,
   contextLabel,
   onSchemaCandidateChange,
+  onConversationChange,
   beforeComposer,
 }: {
   projectId: string;
   onSchemaCandidateChange?: (conversationId?: string) => void;
+  onConversationChange?: (conversationId: string) => void;
   beforeComposer?: ReactNode;
   conversationId?: string;
   context: WorkspaceAssistantContext;
@@ -139,7 +141,7 @@ export function ComposeAuthoringAssistant({
     if (initialPendingCandidate) setPendingCandidate(initialPendingCandidate);
   }, [initialPendingCandidate, setPendingCandidate]);
   useEffect(() => {
-    if (initialConversationId) setConversationId(initialConversationId);
+    setConversationId(initialConversationId);
   }, [initialConversationId, setConversationId]);
   const publishTransition = useCallback(
     async (transitionId: string, turnId?: string) => {
@@ -191,7 +193,10 @@ export function ComposeAuthoringAssistant({
         void publishTransition(transitionId, turnId);
       },
     },
-    onConversationCreated: setConversationId,
+    onConversationCreated: (nextConversationId) => {
+      setConversationId(nextConversationId);
+      onConversationChange?.(nextConversationId);
+    },
     createConversation: onCreateConversation,
   });
   const { setInput } = chat;
