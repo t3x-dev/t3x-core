@@ -22,6 +22,7 @@ import {
   getProjectListAuthority,
 } from '../lib/project-access';
 import { projectMetadataFields } from '../lib/repository-profile';
+import { readReleaseNodeProvenance } from '../lib/schema-node-provenance';
 import { resolveStudioSource } from '../lib/schema-studio';
 import { ensureBuiltInYSchemaArtifacts } from '../lib/yschema-artifact-registry';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -256,6 +257,7 @@ exploreRoutes.openapi(schemaReleaseRoute, async (c) => {
         artifactHash: view.artifactHash,
         readme: typeof view.manifest.readme === 'string' ? view.manifest.readme : null,
         manifest: view.manifest,
+        nodeProvenance: await readReleaseNodeProvenance(c, db, view.manifest),
       }),
     },
     200

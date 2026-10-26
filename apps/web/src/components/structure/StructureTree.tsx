@@ -15,6 +15,7 @@ export function StructureTreeRow({
   kind,
   label,
   icon,
+  leading,
   iconTitle,
   preview,
   actions,
@@ -30,6 +31,7 @@ export function StructureTreeRow({
   kind: string;
   label: ReactNode;
   icon: ReactNode;
+  leading?: ReactNode;
   iconTitle: string;
   preview: ReactNode;
   actions: ReactNode;
@@ -77,6 +79,7 @@ export function StructureTreeRow({
             aria-hidden="true"
           />
         )}
+        {leading}
         <span className={styles.typeIcon} title={iconTitle}>
           {icon}
         </span>

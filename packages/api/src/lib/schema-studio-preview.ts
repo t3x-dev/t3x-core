@@ -30,6 +30,11 @@ import {
 } from '@t3x-dev/yschema';
 import type { Context } from 'hono';
 import { assessWorkspaceSchemaImpact, workspaceContent } from './schema-evolution-impact';
+import {
+  accessibleNodeProvenance,
+  composeNodeProvenance,
+  readNodeProvenance,
+} from './schema-node-provenance';
 import { resolveStudioSource, schemaSourceAdoptionReason } from './schema-studio';
 import { resolveStudioComposition, type StudioComposition } from './schema-studio-composition';
 import { workspaceAuthoringState } from './workspace-authoring';
@@ -183,6 +188,12 @@ export async function compileStudioSelection(
         report: { valid: true, issues: [] },
         renderPlan: (registry.renderPlan ?? []) as Record<string, unknown>[],
         origins: (registry.originsByPath ?? {}) as Record<string, unknown>,
+        nodeProvenance: composeNodeProvenance(
+          schema,
+          {},
+          [{ source: sources[0]!, manifest: view.manifest, whole: true }],
+          true
+        ),
         modules: [],
         adoption: { allowed: !adoptionReason, reason: adoptionReason },
       };
@@ -262,6 +273,15 @@ export async function compileStudioSelection(
     report: compiled.report,
     renderPlan: compiled.renderPlan,
     origins: compiled.originsByPath,
+    nodeProvenance: composeNodeProvenance(
+      compiled.schema,
+      compiled.originsByPath,
+      entries.map(({ view }, index) => ({
+        source: sources[index]!,
+        manifest: view.manifest,
+        whole: view.kind === 'schema',
+      }))
+    ),
     // A presentation projection of declared required imports. The compiler remains
     // the authority for validity; only the last matching provider is locked.
     modules: modules.map((provider, index) => ({
@@ -380,6 +400,7 @@ export async function previewStudio(
               schemaHash: basis.schemaHash,
               renderPlan: basis.renderPlan,
               origins: basis.origins,
+              nodeProvenance: basis.nodeProvenance,
             } as typeof selected;
         }
       } catch (error) {
@@ -417,6 +438,7 @@ export async function previewStudio(
           schemaHash: base.schemaHash,
           renderPlan: snapshot.renderPlanJson as typeof selected.renderPlan,
           origins: snapshot.originsJson as typeof selected.origins,
+          nodeProvenance: readNodeProvenance(snapshot.manifestJson.nodeProvenance),
         } as typeof selected;
       }
       const expected = authoring?.base.schemaHash ?? input.baseSchemaHash;
@@ -618,8 +640,16 @@ export async function previewStudio(
     })) ?? [],
     editCandidate
   );
+  const inherited = readNodeProvenance(selected.nodeProvenance);
+  const paths = new Set(Object.keys(selected.origins));
+  // Deleted paths must not survive an edit or be resurrected by a later save.
+  if (editCandidate?.authoringDraft || input.schemaDefinition)
+    for (const path of Object.keys(inherited.byPath))
+      if (!paths.has(path)) delete inherited.byPath[path];
+  const nodeProvenance = await accessibleNodeProvenance(c, db, inherited);
   return {
     ...selected,
+    nodeProvenance,
     localSample:
       input.sample === undefined
         ? null

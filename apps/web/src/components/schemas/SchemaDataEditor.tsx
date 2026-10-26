@@ -1,6 +1,6 @@
 'use client';
 
-import type { StudioCandidate } from '@t3x-dev/api-client';
+import type { StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
 import { Box, FileText, Plus, Trash2 } from 'lucide-react';
 import { type RefObject, useEffect, useMemo, useRef, useState } from 'react';
 import { StructureTreeRow, visibleTreeRows } from '@/components/structure/StructureTree';
@@ -15,6 +15,8 @@ import {
   type SchemaFieldRow,
   schemaFieldRows,
 } from '@/domain/schemas/schemaFieldEditing';
+import { type SchemaSourcePin, schemaNodeProvenance } from '@/domain/schemas/schemaProvenance';
+import type { SchemaSourceIdentity } from '@/hooks/schemas/useSchemaSourceIdentities';
 import styles from './SchemaDataEditor.module.css';
 import {
   SchemaDefinitionStructure,
@@ -22,6 +24,7 @@ import {
   SchemaFieldProperties,
   SchemaFieldValidation,
 } from './SchemaDefinitionStructure';
+import { SchemaSourceBadge } from './SchemaSourceBadge';
 import { SchemaVisualEditor } from './SchemaVisualEditor';
 import { type SchemaEditorNavigation, useSchemaNavigationGuard } from './useSchemaNavigationGuard';
 
@@ -30,6 +33,9 @@ export function SchemaDataEditor({
   view = 'data',
   layoutKey = 'schema',
   sources,
+  provenance,
+  sourceIdentities = {},
+  wholeSchemaSource,
   onComposeSources,
   onValidationChange,
   initialDefinition,
@@ -47,6 +53,9 @@ export function SchemaDataEditor({
   view?: 'data' | 'visual';
   layoutKey?: string;
   sources?: StudioCandidate[];
+  provenance?: Pick<StudioPreview, 'schema' | 'origins' | 'sources' | 'nodeProvenance'>;
+  sourceIdentities?: Record<string, SchemaSourceIdentity>;
+  wholeSchemaSource?: SchemaSourcePin;
   onComposeSources?: (sourceId?: string) => void;
   initialDefinition?: SchemaDefinition;
   revisionKey: string;
@@ -98,6 +107,25 @@ export function SchemaDataEditor({
   }, [dirty, validationError]);
 
   const rows = useMemo(() => (definition ? schemaFieldRows(definition) : []), [definition]);
+  const sourceRows = useMemo(
+    () =>
+      new Map((provenance ? schemaFieldRows(provenance.schema) : []).map((row) => [row.path, row])),
+    [provenance?.schema]
+  );
+  const renderSource = (row: SchemaFieldRow) => (
+    <SchemaSourceBadge
+      path={row.semanticPath}
+      identities={sourceIdentities}
+      provenance={schemaNodeProvenance(
+        row,
+        sourceRows.get(row.path),
+        provenance?.origins,
+        provenance?.sources ?? [],
+        wholeSchemaSource,
+        provenance?.nodeProvenance
+      )}
+    />
+  );
   const visible = useMemo(() => {
     if (!query.trim()) return visibleTreeRows(rows, collapsed);
     const matches = new Set(
@@ -289,6 +317,7 @@ export function SchemaDataEditor({
                       <FileText aria-hidden="true" />
                     )
                   }
+                  leading={row.kind === 'node' ? renderSource(row) : undefined}
                   iconTitle={row.kind}
                   label={
                     <span
@@ -426,6 +455,7 @@ export function SchemaDataEditor({
               onRules={() => {
                 if (!validationError) setPanel('rules');
               }}
+              renderSource={renderSource}
               sources={sources}
               onSource={onComposeSources}
             />

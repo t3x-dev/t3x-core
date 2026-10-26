@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { SchemaCatalogItemSchema } from './schema-catalog.js';
+import { SchemaNodeProvenanceSchema } from './schema-provenance';
 
 /** Public directory projection. Never includes arbitrary repository metadata or State. */
 export const PublicProjectSchema = z
@@ -34,6 +35,7 @@ export const ExploreSchemaReleaseSchema = z.object({
   artifactHash: z.string(),
   readme: z.string().nullable(),
   manifest: z.record(z.string(), z.unknown()),
+  nodeProvenance: SchemaNodeProvenanceSchema.optional(),
 });
 export type PublicProject = z.infer<typeof PublicProjectSchema>;
 export type PublicProjectDetail = z.infer<typeof PublicProjectDetailSchema>;

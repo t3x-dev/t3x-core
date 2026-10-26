@@ -2,6 +2,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   AddStudioCandidateSchema,
   SaveStudioSchemaEditCandidateInputSchema,
+  SchemaNodeProvenanceSchema,
   StudioAdoptResultSchema,
   StudioApplyInputSchema,
   StudioCandidateListSchema,
@@ -38,6 +39,7 @@ import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess, getProjectAccessPrincipal } from '../lib/project-access';
 import { saveStudioEditCandidate } from '../lib/schema-edit-candidate-save';
+import { readReleaseNodeProvenance } from '../lib/schema-node-provenance';
 import { projectStudioCandidate, resolveStudioSource } from '../lib/schema-studio';
 import {
   compileStudioSelection,
@@ -134,6 +136,7 @@ const readSourceRoute = createRoute({
               artifactHash: z.string(),
               readme: z.string().nullable(),
               manifest: z.record(z.string(), z.unknown()),
+              nodeProvenance: SchemaNodeProvenanceSchema.optional(),
             })
           ),
         },
@@ -214,6 +217,7 @@ schemaStudioRoutes.openapi(readSourceRoute, async (c) => {
         artifactHash: view.artifactHash,
         readme: typeof view.manifest.readme === 'string' ? view.manifest.readme : null,
         manifest: view.manifest,
+        nodeProvenance: await readReleaseNodeProvenance(c, db, view.manifest),
       },
     },
     200
@@ -543,6 +547,7 @@ schemaStudioRoutes.openapi(applyRoute, async (c) => {
             sources: preview.sources,
             selectionHash: preview.selectionHash,
             studioComposition: preview.composition,
+            nodeProvenance: preview.nodeProvenance,
           },
           schema_json: preview.schema,
           render_plan_json: preview.renderPlan,

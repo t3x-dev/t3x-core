@@ -18,6 +18,7 @@ import {
   saveYSchemaCompositionSnapshot,
 } from '@t3x-dev/storage';
 import { normalizeYSchemaObject, sha256CompositionValue } from '@t3x-dev/yschema';
+import { readNodeProvenance } from './schema-node-provenance';
 import { type compileStudioSelection, StudioError } from './schema-studio-preview';
 import type { WorkspaceSchemaEditBasis } from './workspace-schema-edit-basis';
 
@@ -77,6 +78,7 @@ export async function saveStudioEditCandidate(
         selectionHash: selection.selectionHash,
         renderPlan: snapshot.renderPlanJson as Record<string, unknown>[],
         origins: snapshot.originsJson,
+        nodeProvenance: readNodeProvenance(snapshot.manifestJson.nodeProvenance),
       };
     }
   }
@@ -106,6 +108,7 @@ export async function saveStudioEditCandidate(
         sources: selection.sources,
         selectionHash: selection.selectionHash,
         studioComposition: selection.composition,
+        nodeProvenance: selection.nodeProvenance,
       },
       schema_json: { ...selection.schema },
       render_plan_json: selection.renderPlan,
@@ -126,6 +129,7 @@ export async function saveStudioEditCandidate(
         sources: base.sources,
         selectionHash: base.selectionHash,
         studioComposition: selection.composition,
+        nodeProvenance: base.nodeProvenance,
       },
       schema_json: { ...base.schema },
       render_plan_json: base.renderPlan,

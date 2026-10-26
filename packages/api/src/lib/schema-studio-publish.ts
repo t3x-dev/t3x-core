@@ -2,6 +2,7 @@ import type { StudioPublishInput, StudioPublishResult } from '@t3x-dev/api-clien
 import { parseWorkspaceSchemaEditCandidate } from '@t3x-dev/application';
 import {
   type AnyDB,
+  findProjectById,
   findWorkspaceDraft,
   publishYSchemaArtifactVersion,
   transactWorkspaceAuthoring,
@@ -9,6 +10,14 @@ import {
 import { type NodeSchema, normalizeYSchemaObject, sha256CompositionValue } from '@t3x-dev/yschema';
 import type { Context } from 'hono';
 import { assertProjectAccess } from './project-access';
+import {
+  emptyNodeProvenance,
+  inheritWorkspaceCommitSources,
+  publicNodeProvenance,
+  publicSchemaOrigins,
+  publicSchemaRenderPlan,
+  publicSchemaSources,
+} from './schema-node-provenance';
 import { resolveSchemaPublisher } from './schema-publisher';
 import { resolveStudioSource } from './schema-studio';
 import { previewStudio, StudioError } from './schema-studio-preview';
@@ -90,6 +99,20 @@ export async function publishStudioSchema(
       );
       if (sourceViews.some((source) => !source))
         throw new StudioError('NOT_FOUND', 'A pinned source is no longer available.');
+      const publicSources = await publicSchemaSources(tx, preview.sources);
+      const publicProject = (await findProjectById(tx, projectId))?.visibility === 'public';
+      const nodeProvenance = await publicNodeProvenance(
+        c,
+        tx,
+        await inheritWorkspaceCommitSources(
+          tx,
+          projectId,
+          draft.workspace_state ?? undefined,
+          normalizeYSchemaObject(preview.schema),
+          preview.sources,
+          preview.nodeProvenance ?? emptyNodeProvenance()
+        )
+      );
       const manifest = {
         apiVersion: 't3x.dev/yschema-blueprint/v1',
         canonicalName: input.canonicalName,
@@ -105,7 +128,10 @@ export async function publishStudioSchema(
           compositionId: `studio:${preview.selectionHash}`,
           compositionRevision: candidate.revision,
           modules: preview.sources
-            .filter((_, index) => sourceViews[index]?.kind !== 'schema')
+            .filter(
+              (source, index) =>
+                sourceViews[index]?.kind !== 'schema' && publicSources.includes(source)
+            )
             .map((source, index) => ({
               canonicalName: source.canonicalName,
               version: source.version,
@@ -113,30 +139,35 @@ export async function publishStudioSchema(
               presentationOrder: index * 10,
             })),
           // A whole-Schema base is not relabelled as a Module; keep all exact original source references.
-          baseSources: preview.sources,
+          baseSources: publicSources,
           // Publish the checked result, not guarded edit preimages, chat intent or raw
           // local inputs: those may retain private/removed definitions from the Workspace.
-          authoring: {
-            workspaceId,
-            candidateId: candidate.candidateId,
-            revision: candidate.revision,
-            requestDigest: candidate.requestDigest,
-          },
+          ...(publicProject
+            ? {
+                authoring: {
+                  workspaceId,
+                  candidateId: candidate.candidateId,
+                  revision: candidate.revision,
+                  requestDigest: candidate.requestDigest,
+                },
+              }
+            : {}),
         },
         schema,
         registry: {
           origin: 'composition',
           publisherNamespaceId,
           // Historical provenance only; it must not confer access or cascade ownership.
-          sourceProjectId: projectId,
+          ...(publicProject ? { sourceProjectId: projectId } : {}),
           studio: true,
           compilerVersion: 'yschema-v2',
           compositionHash,
           compiledSchemaHash: preview.schemaHash,
           schemaHash,
           reportHash: await sha256CompositionValue(preview.report),
-          renderPlan: preview.renderPlan,
-          originsByPath: preview.origins,
+          renderPlan: publicSchemaRenderPlan(preview.renderPlan, publicSources),
+          originsByPath: publicSchemaOrigins(preview.origins, publicSources),
+          nodeProvenance,
           releaseNotes: input.releaseNotes,
         },
       };

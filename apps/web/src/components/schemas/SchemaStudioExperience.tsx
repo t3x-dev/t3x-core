@@ -19,11 +19,13 @@ import {
   schemaSourceHref,
   schemaWorkspaceHref,
 } from '@/domain/schemas/schemaNavigation';
+import { type SchemaSourcePin, schemaSourceKey } from '@/domain/schemas/schemaProvenance';
 import {
   listStudioDraftWorkspaces,
   listStudioWorkspacesForBranches,
   resolveStudioWorkspaceId,
 } from '@/domain/workspaces/studioTargets';
+import { useSchemaSourceIdentities } from '@/hooks/schemas/useSchemaSourceIdentities';
 import { useStudioCandidates } from '@/hooks/schemas/useStudioCandidates';
 import { useApplyStudioSelection, useStudioPreview } from '@/hooks/schemas/useStudioPreview';
 import { useStudioSchemaEditCandidate } from '@/hooks/schemas/useStudioSchemaEditCandidate';
@@ -492,6 +494,29 @@ export function SchemaStudioExperience({
   );
   const preview = hasSchemaEdit ? localPreview : basePreview;
   const data = preview.data;
+  const sourcePins = useMemo(
+    () => [
+      ...candidates.items
+        .filter((candidate) => selection.includes(candidate.id))
+        .map((candidate) => candidate.source)
+        .filter((source): source is SchemaSourcePin => !!source),
+      ...Object.values(data?.nodeProvenance?.byPath ?? {}).flatMap((refs) =>
+        refs.flatMap((ref) => (ref.source ? [ref.source] : []))
+      ),
+    ],
+    [candidates.items, selection, data?.nodeProvenance]
+  );
+  const sourceIdentities = useSchemaSourceIdentities(sourcePins);
+  const wholeSchemaSource =
+    data?.sources.length === 1 &&
+    candidates.items.some(
+      (candidate) =>
+        candidate.kind === 'schema' &&
+        candidate.source &&
+        schemaSourceKey(candidate.source) === schemaSourceKey(data.sources[0])
+    )
+      ? data.sources[0]
+      : undefined;
   // Do not initialize Data with the base result while a saved edit is being recovered.
   const recoveredDefinitionReady =
     !schemaEdit.loading &&
@@ -739,6 +764,9 @@ export function SchemaStudioExperience({
             navigationRef={navigationRef}
             view={view}
             onValidationChange={setEditorInvalid}
+            provenance={data}
+            sourceIdentities={sourceIdentities}
+            wholeSchemaSource={wholeSchemaSource}
             sources={candidates.items.filter((candidate) => !selection.includes(candidate.id))}
             onComposeSources={persistedTarget ? composeSources : undefined}
             layoutKey={`${projectId}:${workspaceId}`}

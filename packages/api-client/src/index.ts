@@ -23,6 +23,12 @@ export * from './explore.js';
 export * from './merge-workspace';
 export * from './repository-profile.js';
 export * from './schema-catalog.js';
+export {
+  type SchemaNodeProvenance,
+  SchemaNodeProvenanceSchema,
+  type SchemaSourceCommit,
+  SchemaSourceCommitSchema,
+} from './schema-provenance';
 export * from './schema-studio';
 export { type StateExportArtifact, StateExportArtifactSchema } from './state-export.js';
 export * from './state-overview';

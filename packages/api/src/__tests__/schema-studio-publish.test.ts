@@ -215,14 +215,16 @@ it('publishes a public namespace-owned Schema without mutating Workspace or upst
     },
     blueprint: {
       modules: [],
-      baseSources: [{ hash: baseHash, projectId: source }],
-      authoring: { workspaceId: 'private-release', revision: 1 },
+      baseSources: [],
     },
     registry: { schemaHash: release.schemaHash, compiledSchemaHash: preview.schemaHash },
   });
   expect(await sha256CompositionValue(stored!.manifest)).toBe(release.source.hash);
   expect(stored!.manifest.blueprint).not.toHaveProperty('authoringDraft');
   expect(stored!.manifest.blueprint).not.toHaveProperty('localContribution');
+  expect(JSON.stringify(stored!.manifest)).not.toContain('team/publish-base');
+  expect(JSON.stringify(stored!.manifest)).not.toContain(source);
+  expect(stored!.manifest.registry).not.toHaveProperty('sourceProjectId');
   expect(stored!.manifest.blueprint).not.toHaveProperty('authoring.intent');
   expect(stored!.manifest.blueprint).not.toHaveProperty('authoring.origin');
   expect(await sha256CompositionValue(stored!.manifest.schema)).toBe(release.schemaHash);
@@ -521,9 +523,7 @@ it('publishes Module composition and local contribution through the same path, b
   });
   expect(stored!.manifest).toMatchObject({
     blueprint: {
-      modules: [
-        { canonicalName: module.manifest.canonicalName, version: '1.0.0', hash: module.hash },
-      ],
+      modules: [],
     },
     schema: { nodes: { product: {}, advantage: {} } },
   });

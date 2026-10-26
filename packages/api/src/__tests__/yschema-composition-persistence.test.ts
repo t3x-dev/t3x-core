@@ -88,8 +88,21 @@ const storageMock = vi.hoisted(() => {
 
 vi.mock('@t3x-dev/storage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@t3x-dev/storage')>();
+  const { sha256CompositionValue } = await import('@t3x-dev/yschema');
   return {
     ...actual,
+    findYSchemaArtifactVersion: vi.fn(async (_db, input) => {
+      const manifest = { canonicalName: input.canonical_name, version: input.version };
+      return {
+        ...manifest,
+        manifest,
+        ownerProjectId: null,
+        visibility: 'official',
+        kind: 'module',
+        artifactVersionId: `${input.canonical_name}@${input.version}`,
+        artifactHash: await sha256CompositionValue(manifest),
+      };
+    }),
     findProjectById: storageMock.findProjectById,
     findWorkspaceDraft: storageMock.findWorkspaceDraft,
     saveWorkspaceSchemaPreparation: storageMock.saveWorkspaceSchemaPreparation,

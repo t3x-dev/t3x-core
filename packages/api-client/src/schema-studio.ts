@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import { SchemaNodeProvenanceSchema, StudioSourceSchema } from './schema-provenance';
+
+export { StudioSourceSchema } from './schema-provenance';
 
 const digest = z.string().regex(/^sha256:[0-9a-f]{64}$/);
 const recursiveJsonValue = z.json();
@@ -21,13 +24,6 @@ const schemaJsonValue = z
     return parsed.data;
   });
 export { schemaJsonValue as SchemaJsonValueSchema };
-export const StudioSourceSchema = z.object({
-  projectId: z.string().min(1).nullable(),
-  canonicalName: z.string().min(1).max(240),
-  version: z.string().min(1).max(80),
-  artifactVersionId: z.string(),
-  hash: digest,
-});
 export const AddStudioCandidateSchema = z
   .object({
     sourceProjectId: z.string().min(1).optional(),
@@ -205,6 +201,7 @@ export const StudioPreviewSchema = z.object({
   }),
   renderPlan: z.array(z.record(z.string(), z.unknown())),
   origins: z.record(z.string(), z.unknown()),
+  nodeProvenance: SchemaNodeProvenanceSchema.optional(),
   modules: z
     .array(z.object({ candidateId: z.string(), requiredBy: z.array(z.string()) }))
     .default([]),

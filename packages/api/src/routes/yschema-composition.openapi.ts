@@ -11,6 +11,7 @@ import { createStatePresentation } from '@t3x-dev/application';
 import {
   ConflictError,
   decodeCursor,
+  findProjectById,
   findStatePresentation,
   findWorkspaceDraft,
   getVerifiedTransitionCommitGraph,
@@ -39,6 +40,11 @@ import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
 import { readSchemaEditorPicks } from '../lib/schema-editor-picks';
 import { assessWorkspaceSchemaImpact } from '../lib/schema-evolution-impact';
+import {
+  compositionPublicationSources,
+  publicSchemaOrigins,
+  publicSchemaRenderPlan,
+} from '../lib/schema-node-provenance';
 import { resolveSchemaPublisher } from '../lib/schema-publisher';
 import { SchemaSourceUnavailableError } from '../lib/schema-studio';
 import { StudioError } from '../lib/schema-studio-preview';
@@ -1066,6 +1072,7 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
   }
 
   let presentationRef: z.infer<typeof SchemaReleasePresentationReferenceSchema> | undefined;
+  const publicProject = (await findProjectById(db, projectId))?.visibility === 'public';
   if (input.presentation_ref) {
     const reference = input.presentation_ref;
     const graph = await getVerifiedTransitionCommitGraph(db, projectId, reference.commitDigest);
@@ -1183,6 +1190,15 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
       description: input.description || preview.schema.description,
     });
     const schemaHash = await sha256CompositionValue(schema);
+    const attribution = await compositionPublicationSources(
+      c,
+      db,
+      projectId,
+      draft.workspace_state,
+      preview.schema,
+      preview.originsByPath,
+      persisted.composition.modules
+    );
     const schemaTags = projectSchemaTags(input.tags, 'community');
     const comparison = await findCompositionComparison({
       canonicalName: input.canonical_name,
@@ -1192,7 +1208,9 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
       projectId,
       schema,
     });
-    const manifest: PublishedYSchemaBlueprintV1 = {
+    const manifest: Omit<PublishedYSchemaBlueprintV1, 'registry'> & {
+      registry: Record<string, unknown>;
+    } = {
       apiVersion: 't3x.dev/yschema-blueprint/v1',
       canonicalName: input.canonical_name,
       version: input.version,
@@ -1206,21 +1224,26 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
         compositionApiVersion: persisted.composition.apiVersion,
         compositionId: persisted.composition.id,
         compositionRevision: persisted.composition.revision,
-        modules: pinnedModules,
+        modules: pinnedModules.filter((ref) =>
+          attribution.sources.some(
+            (source) => source.canonicalName === ref.canonicalName && source.version === ref.version
+          )
+        ),
       },
       schema,
       registry: {
         origin: 'composition',
         publisherNamespaceId,
-        sourceProjectId: projectId,
-        ...(presentationRef ? { presentationRef } : {}),
+        ...(publicProject ? { sourceProjectId: projectId } : {}),
+        ...(publicProject && presentationRef ? { presentationRef } : {}),
         compilerVersion: 'yschema-v2',
         compositionHash: preview.compositionHash,
         compiledSchemaHash: preview.compiledSchemaHash,
         reportHash: preview.reportHash,
         schemaHash,
-        renderPlan: preview.renderPlan,
-        originsByPath: preview.originsByPath,
+        renderPlan: publicSchemaRenderPlan(preview.renderPlan, attribution.sources),
+        originsByPath: publicSchemaOrigins(preview.originsByPath, attribution.sources),
+        nodeProvenance: attribution.nodeProvenance,
         releaseNotes: input.release_notes ?? '',
         ...(comparison ? { comparison } : {}),
       },
@@ -1309,6 +1332,15 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
     description: input.description || preview.schema.description,
   });
   const schemaHash = await sha256CompositionValue(schema);
+  const attribution = await compositionPublicationSources(
+    c,
+    db,
+    projectId,
+    draft.workspace_state,
+    preview.schema,
+    preview.originsByPath,
+    [persisted.composition.core, ...persisted.composition.modules]
+  );
   const schemaTags = projectSchemaTags(input.tags, 'community');
   const comparison = await findCompositionComparison({
     canonicalName: input.canonical_name,
@@ -1343,16 +1375,21 @@ yschemaCompositionRoutes.openapi(publishWorkspaceCompositionRoute, async (c) => 
     registry: {
       origin: 'composition',
       publisherNamespaceId,
-      sourceProjectId: projectId,
-      ...(presentationRef ? { presentationRef } : {}),
+      ...(publicProject ? { sourceProjectId: projectId } : {}),
+      ...(publicProject && presentationRef ? { presentationRef } : {}),
       compositionId: persisted.composition.id,
       compositionRevision: persisted.composition.revision,
       compositionHash: preview.compositionHash,
       sourceCompiledSchemaHash: preview.compiledSchemaHash,
       schemaHash,
-      renderPlan: preview.renderPlan,
-      originsByPath: preview.originsByPath,
-      modules: persisted.composition.modules,
+      renderPlan: publicSchemaRenderPlan(preview.renderPlan, attribution.sources),
+      originsByPath: publicSchemaOrigins(preview.originsByPath, attribution.sources),
+      nodeProvenance: attribution.nodeProvenance,
+      modules: persisted.composition.modules.filter((ref) =>
+        attribution.sources.some(
+          (source) => source.canonicalName === ref.canonicalName && source.version === ref.version
+        )
+      ),
       releaseNotes: input.release_notes ?? '',
       ...(comparison ? { comparison } : {}),
     },

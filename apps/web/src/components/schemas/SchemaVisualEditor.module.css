@@ -111,3 +111,14 @@
   opacity: 0.5;
   cursor: default;
 }
+
+.nodeHeading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.nodeHeading > button:last-child {
+  min-width: 0;
+  flex: 1;
+}

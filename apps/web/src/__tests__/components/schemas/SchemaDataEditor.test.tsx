@@ -3,6 +3,7 @@ import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { SchemaDataEditor } from '@/components/schemas/SchemaDataEditor';
+import { schemaSourceKey } from '@/domain/schemas/schemaProvenance';
 
 const definition = {
   yschema: '0.1',
@@ -109,4 +110,98 @@ describe('Schema data editor', () => {
       expect(screen.getByRole('button', { name: 'Save candidate' })).toBeEnabled()
     );
   });
+});
+
+it('shows exact node sources without selecting or changing the node and marks subsequent local edits', async () => {
+  const handlers = callbacks();
+  const pin = {
+    projectId: 'source-project',
+    canonicalName: '@team/checklist',
+    version: '1.2.0',
+    artifactVersionId: 'checklist-v1',
+    hash: `sha256:${'a'.repeat(64)}`,
+  };
+  render(
+    <SchemaDataEditor
+      initialDefinition={definition}
+      revisionKey="source-test"
+      {...handlers}
+      provenance={{
+        schema: definition,
+        sources: [pin],
+        origins: {
+          checklist: { kind: 'module', artifact: pin.canonicalName, version: pin.version },
+        },
+      }}
+      sourceIdentities={{ [schemaSourceKey(pin)]: { name: 'Checklist', projectId: pin.projectId } }}
+    />
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Source for checklist: Checklist @ 1.2.0' }));
+  const link = await screen.findByRole('link', { name: 'View exact release ↗' });
+  const query = new URL(link.getAttribute('href')!, 'https://example.test').searchParams;
+  expect(query.get('catalogHash')).toBe(pin.hash);
+  expect(query.get('catalogVersion')).toBe(pin.version);
+  expect(query.get('sourceProjectId')).toBe(pin.projectId);
+  expect(link).toHaveAttribute('target', '_blank');
+  expect(screen.getByText('Original Commit link unavailable for this source.')).toBeVisible();
+  expect(handlers.onPreview).not.toHaveBeenCalled();
+  expect(handlers.onSave).not.toHaveBeenCalled();
+  fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+  fireEvent.click(screen.getByLabelText('Required checklist'));
+  expect(
+    screen.getByRole('button', { name: 'Source for checklist: Checklist @ 1.2.0 + local edits' })
+  ).toBeVisible();
+});
+
+it('opens the verified original project and Commit without replacing it with the current Release', async () => {
+  const commitDigest = `sha256:${'c'.repeat(64)}`;
+  const pin = {
+    projectId: null,
+    canonicalName: 'team/released',
+    version: '2.0.0',
+    artifactVersionId: 'released-2',
+    hash: `sha256:${'d'.repeat(64)}`,
+  };
+  render(
+    <SchemaDataEditor
+      initialDefinition={definition}
+      revisionKey="committed"
+      {...callbacks()}
+      wholeSchemaSource={pin}
+      provenance={{
+        schema: definition,
+        sources: [pin],
+        origins: {},
+        nodeProvenance: {
+          version: 1,
+          byPath: {
+            checklist: [
+              {
+                source: pin,
+                commitRef: {
+                  projectId: 'original/project',
+                  commitDigest,
+                  schemaHash: `sha256:${'e'.repeat(64)}`,
+                  sourcePath: 'original/checklist',
+                },
+              },
+            ],
+          },
+        },
+      }}
+    />
+  );
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Source for checklist: team/released @ 2.0.0' })
+  );
+  const link = await screen.findByRole('link', { name: 'View source Commit ↗' });
+  const url = new URL(link.getAttribute('href')!, 'https://example.test');
+  expect(url.pathname).toBe('/project/original%2Fproject/history');
+  expect(url.searchParams.get('commit')).toBe(commitDigest);
+  expect(link).toHaveAttribute('target', '_blank');
+  expect(screen.getByText('original/checklist')).toBeVisible();
+  expect(screen.getByRole('link', { name: 'View exact release ↗' })).toBeVisible();
+  expect(
+    screen.queryByText('Original Commit link unavailable for this source.')
+  ).not.toBeInTheDocument();
 });

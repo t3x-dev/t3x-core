@@ -3,6 +3,7 @@ import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import { SchemaDataEditor } from '@/components/schemas/SchemaDataEditor';
+import { schemaSourceKey } from '@/domain/schemas/schemaProvenance';
 
 const flow = vi.hoisted(() => ({ props: undefined as any }));
 vi.mock('@xyflow/react', () => ({
@@ -111,4 +112,36 @@ it('persists card positions separately without changing or saving the Schema', a
     />
   );
   expect(flow.props.nodes[0].position).toEqual({ x: 810, y: 240 });
+});
+
+it('uses the same exact source badges in Structure and Visual', () => {
+  const pin = {
+    projectId: 'source',
+    canonicalName: '@team/tasks',
+    version: '1.0',
+    artifactVersionId: 'v1',
+    hash: `sha256:${'b'.repeat(64)}`,
+  };
+  const handlers = {
+    onPreview: vi.fn(),
+    onSave: vi.fn(),
+    onDirtyChange: vi.fn(),
+    onDiscard: vi.fn(),
+  };
+  const props = {
+    initialDefinition: definition,
+    revisionKey: 'provenance',
+    ...handlers,
+    provenance: {
+      schema: definition,
+      sources: [pin],
+      origins: { tasks: { kind: 'module', artifact: pin.canonicalName, version: pin.version } },
+    },
+    sourceIdentities: { [schemaSourceKey(pin)]: { name: 'Tasks', projectId: 'source' } },
+  };
+  const view = render(<SchemaDataEditor {...props} view="data" />);
+  expect(screen.getByRole('button', { name: 'Source for tasks: Tasks @ 1.0' })).toBeVisible();
+  view.rerender(<SchemaDataEditor {...props} view="visual" />);
+  expect(screen.getByRole('button', { name: 'Source for tasks: Tasks @ 1.0' })).toBeVisible();
+  expect(handlers.onPreview).not.toHaveBeenCalled();
 });

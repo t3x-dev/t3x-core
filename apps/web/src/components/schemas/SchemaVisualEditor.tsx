@@ -73,9 +73,10 @@ type CardData = {
   disabled: boolean;
   select: (row: SchemaFieldRow) => void;
   add: (row: SchemaFieldRow) => void;
+  source?: ReactNode;
 };
 function SchemaCard({ data }: NodeProps<Node<CardData>>) {
-  const { row, fields, selected, disabled, select, add } = data;
+  const { row, fields, selected, disabled, select, add, source } = data;
   const { setNodeRef, isOver } = useDroppable({ id: row.path, data: { row }, disabled });
   return (
     <section
@@ -86,9 +87,12 @@ function SchemaCard({ data }: NodeProps<Node<CardData>>) {
     >
       <Handle type="target" position={Position.Left} />
       <header className="schema-drag-handle">
-        <button type="button" onClick={() => select(row)} aria-pressed={selected === row.path}>
-          {row.semanticPath}
-        </button>
+        <div className={styles.nodeHeading}>
+          {source}
+          <button type="button" onClick={() => select(row)} aria-pressed={selected === row.path}>
+            {row.semanticPath}
+          </button>
+        </div>
         <span>{row.definition.repeated ? 'Repeated node' : 'Node'}</span>
       </header>
       <div className="nodrag nopan">
@@ -146,6 +150,7 @@ export function SchemaVisualEditor({
   onRules,
   sources = [],
   onSource,
+  renderSource,
 }: {
   definition: SchemaDefinition;
   rows: SchemaFieldRow[];
@@ -159,6 +164,7 @@ export function SchemaVisualEditor({
   onRules: () => void;
   sources?: StudioCandidate[];
   onSource?: (id: string) => void;
+  renderSource?: (row: SchemaFieldRow) => ReactNode;
 }) {
   const storageKey = `t3x-schema-layout:${layoutKey}`;
   const [positions, setPositions] = useState<PositionMap>(() => readPositions(storageKey));
@@ -186,6 +192,7 @@ export function SchemaVisualEditor({
         disabled,
         select: onSelect,
         add: onAdd,
+        source: renderSource?.(row),
       },
     })
   );

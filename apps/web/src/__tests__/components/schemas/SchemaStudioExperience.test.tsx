@@ -42,6 +42,9 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/team/project/schemas',
   useSearchParams: () => new URLSearchParams(mocks.query),
 }));
+vi.mock('@/hooks/schemas/useSchemaSourceIdentities', () => ({
+  useSchemaSourceIdentities: () => ({}),
+}));
 vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
   useStudioCandidates: () => ({
     items: [
@@ -136,6 +139,7 @@ beforeEach(() => {
     reviewHash: 'review',
     renderPlan: [],
     origins: {},
+    sources: [],
     modules: [{ candidateId: 'provider', requiredBy: ['team/consumer'] }],
     report: {
       valid: false,

@@ -399,7 +399,10 @@ export async function listProjectYSchemaVersionHistory(
       eq(yschemaArtifacts.ownerProjectId, options.project_id),
       and(
         eq(yschemaArtifacts.visibility, 'community'),
-        sql`${yschemaArtifactVersions.manifestJson}->'registry'->>'sourceProjectId' = ${options.project_id}`
+        or(
+          eq(yschemaArtifactVersions.createdBy, `project:${options.project_id}`),
+          sql`${yschemaArtifactVersions.manifestJson}->'registry'->>'sourceProjectId' = ${options.project_id}`
+        )
       )
     ),
   ];

@@ -9,6 +9,7 @@ import {
 import { normalizeYSchemaObject, sha256CompositionValue, type YSchema } from '@t3x-dev/yschema';
 import type { Context } from 'hono';
 import type { z } from 'zod';
+import { readNodeProvenance } from './schema-node-provenance';
 import { resolveStudioSource, schemaSourceAdoptionReason } from './schema-studio';
 import { StudioError } from './schema-studio-preview';
 import { ensureBuiltInYSchemaArtifacts } from './yschema-artifact-registry';
@@ -22,6 +23,7 @@ export interface WorkspaceSchemaEditBasis {
   selectionHash: string;
   renderPlan: Record<string, unknown>[];
   origins: Record<string, unknown>;
+  nodeProvenance: import('@t3x-dev/api-client').SchemaNodeProvenance;
 }
 const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)
@@ -55,6 +57,7 @@ export async function resolveWorkspaceSchemaEditBasis(
   )
     throw new StudioError('CONFLICT', 'The exact bound Schema snapshot is unavailable or changed.');
   const manifest = record(snapshot?.manifestJson);
+  let nodeProvenance = readNodeProvenance(manifest.nodeProvenance);
   let sources: unknown = manifest.sources ?? binding.studioSources;
   if (!sources && snapshot) {
     const receipts = Array.isArray(workspace.schemaPreparations)
@@ -101,7 +104,7 @@ export async function resolveWorkspaceSchemaEditBasis(
       view &&
       record(view.manifest).schema &&
       (await sha256CompositionValue(normalizeYSchemaObject(view.manifest.schema))) === schemaHash
-    )
+    ) {
       sources = [
         {
           projectId: view.ownerProjectId,
@@ -111,6 +114,8 @@ export async function resolveWorkspaceSchemaEditBasis(
           hash: view.artifactHash,
         },
       ];
+      nodeProvenance = readNodeProvenance(record(view.manifest.registry).nodeProvenance);
+    }
   }
   const parsed = StudioSourceSchema.array().min(1).safeParse(sources);
   if (!parsed.success)
@@ -165,5 +170,6 @@ export async function resolveWorkspaceSchemaEditBasis(
     },
     renderPlan: (snapshot?.renderPlanJson ?? []) as Record<string, unknown>[],
     origins: (snapshot?.originsJson ?? {}) as Record<string, unknown>,
+    nodeProvenance,
   };
 }
