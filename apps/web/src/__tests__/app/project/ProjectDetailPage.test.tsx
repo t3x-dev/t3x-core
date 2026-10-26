@@ -7,6 +7,8 @@ import { COMMIT_CREATED_EVENT } from '@/hooks/commits/commitEvents';
 
 const stateHookMocks = vi.hoisted(() => ({
   loadCommits: vi.fn(),
+  loadCommit: vi.fn(),
+  branchHeads: { main: null } as Record<string, string | null>,
   loadOperations: vi.fn(),
   refreshBranches: vi.fn(),
   refreshWorkspaces: vi.fn(),
@@ -78,7 +80,7 @@ vi.mock('@/hooks/pins/usePinsCrud', () => ({
 vi.mock('@/hooks/shared/useBranches', () => ({
   useBranches: () => ({
     branches: ['main'],
-    branchHeads: { main: null },
+    branchHeads: stateHookMocks.branchHeads,
     create: vi.fn(),
     loading: false,
     refresh: stateHookMocks.refreshBranches,
@@ -92,6 +94,10 @@ vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
     refresh: stateHookMocks.refreshWorkspaces,
     workspaces: [],
   }),
+}));
+
+vi.mock('@/hooks/commits/useCommitByHash', () => ({
+  useCommitByHash: () => ({ loadCommit: stateHookMocks.loadCommit }),
 }));
 
 vi.mock('@/hooks/commits/useCommitsList', () => ({
@@ -164,6 +170,8 @@ beforeEach(() => {
   window.history.replaceState({}, '', '/');
   canvasSurfaceMocks.fetchPins.mockResolvedValue(undefined);
   canvasSurfaceMocks.loadCanvas.mockResolvedValue(undefined);
+  stateHookMocks.branchHeads = { main: null };
+  stateHookMocks.loadCommit.mockReset();
   stateHookMocks.loadCommits.mockResolvedValue([]);
   stateHookMocks.loadOperations.mockResolvedValue({
     commit_hash: STATE_COMMIT.hash,
@@ -233,7 +241,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
       expect(screen.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument()
     );
     expect(replaceMock).not.toHaveBeenCalled();
-    expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Schema' })).toHaveAttribute(
       'href',
       '/project/proj_test?tab=schemas'
     );
@@ -317,17 +325,14 @@ describe('ProjectDetailPage — project-first shell states', () => {
       <ProjectDetailPageContent initialTabOverride="schemas" projectIdOverride="proj_test" />
     );
 
-    expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Schema' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('region', { name: 'Schema Studio' })).toBeInTheDocument();
 
     view.rerender(
       <ProjectDetailPageContent initialTabOverride="workspaces" projectIdOverride="proj_test" />
     );
 
-    expect(screen.getByRole('link', { name: 'Workspaces' })).toHaveAttribute(
-      'aria-current',
-      'page'
-    );
+    expect(screen.getByRole('link', { name: 'Workspace' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('tab', { name: 'Compose' })).toBeInTheDocument();
   });
 
@@ -432,7 +437,8 @@ describe('ProjectDetailPage — project-first shell states', () => {
   });
 
   it('renders a verified YSchema badge from the latest validation run', async () => {
-    stateHookMocks.loadCommits.mockResolvedValue([STATE_COMMIT]);
+    stateHookMocks.branchHeads = { main: STATE_COMMIT.hash };
+    stateHookMocks.loadCommit.mockResolvedValue(STATE_COMMIT);
     vi.mocked(fetchLatestYSchemaValidation).mockResolvedValueOnce({
       commit_hash: 'sha256:abcdef1234567890',
       created_at: '2026-07-02T00:00:00.000Z',
@@ -457,14 +463,16 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     expect((await screen.findAllByText('Validated at HEAD')).length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
-    expect(await screen.findByRole('heading', { name: 'Committed PRD state' })).toBeInTheDocument();
+    expect(stateHookMocks.loadCommit).toHaveBeenCalledWith(STATE_COMMIT.hash, 'proj_test');
+    expect((await screen.findAllByText('Committed PRD state')).length).toBeGreaterThan(0);
     expect(screen.queryByRole('region', { name: 'State overview' })).not.toBeInTheDocument();
     expect(screen.queryByText('output-ready')).not.toBeInTheDocument();
   });
 
   it('shows failed YSchema gaps and can rerun validation from State', async () => {
     searchParamsValue = new URLSearchParams('tab=state&view=structure');
-    stateHookMocks.loadCommits.mockResolvedValue([STATE_COMMIT]);
+    stateHookMocks.branchHeads = { main: STATE_COMMIT.hash };
+    stateHookMocks.loadCommit.mockResolvedValue(STATE_COMMIT);
     vi.mocked(fetchLatestYSchemaValidation).mockResolvedValueOnce({
       commit_hash: STATE_COMMIT.hash,
       created_at: '2026-07-02T00:00:00.000Z',
@@ -564,7 +572,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(replaceMock).not.toHaveBeenCalled();
 
     expect(replaceMock).not.toHaveBeenCalled();
-    expect(screen.getByRole('link', { name: 'Workspaces' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Workspace' })).toHaveAttribute(
       'href',
       '/project/proj_test?tab=workspaces'
     );
@@ -592,10 +600,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     renderProjectContent();
 
-    expect(screen.getByRole('link', { name: 'Workspaces' })).toHaveAttribute(
-      'aria-current',
-      'page'
-    );
+    expect(screen.getByRole('link', { name: 'Workspace' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('tab', { name: 'Compose' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Workspace detail' })).toHaveAccessibleDescription(
       'Main workspace'
@@ -609,7 +614,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
   it('opens Studio directly from the Schemas project tab', () => {
     searchParamsValue = new URLSearchParams('tab=schemas');
     renderProjectContent();
-    expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Schema' })).toHaveAttribute('aria-current', 'page');
     const studio = screen.getByRole('region', { name: 'Schema Studio' });
     expect(studio.closest('main')).toHaveClass('overflow-hidden');
     expect(screen.queryByRole('navigation', { name: 'Schema views' })).not.toBeInTheDocument();
@@ -617,30 +622,16 @@ describe('ProjectDetailPage — project-first shell states', () => {
   });
 
   it.each([
-    'tab=discover',
-    'tab=schemas&schemaView=discover',
-  ])('opens Discover with the matching primary navigation for %s', (query) => {
+    ['tab=discover', 'discover'],
+    ['tab=schemas&schemaView=discover', 'discover'],
+    ['tab=browse', 'browse'],
+    ['tab=schemas&schemaView=browse', 'browse'],
+  ])('redirects legacy catalog address %s to global Explore', (query, view) => {
     searchParamsValue = new URLSearchParams(query);
     renderProjectContent();
-    expect(screen.getByRole('link', { name: 'Discover' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('heading', { name: 'Curated schemas' })).toBeInTheDocument();
-    expect(screen.queryByRole('navigation', { name: 'Schema views' })).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('searchbox', { name: 'Search projects and schemas' })
-    ).toBeInTheDocument();
-  });
-
-  it.each([
-    'tab=browse',
-    'tab=schemas&schemaView=browse',
-  ])('opens Browse with the matching primary navigation for %s', (query) => {
-    searchParamsValue = new URLSearchParams(query);
-    renderProjectContent();
-    expect(screen.getByRole('link', { name: 'Browse', exact: true })).toHaveAttribute(
-      'aria-current',
-      'page'
-    );
-    expect(screen.getByRole('complementary', { name: 'Catalog filters' })).toBeInTheDocument();
+    const destination = `/explore?view=${view}&type=schemas&studioTarget=proj_test`;
+    expect(replaceMock).toHaveBeenCalledWith(destination);
+    expect(screen.getByRole('link', { name: 'Explore' })).toHaveAttribute('href', destination);
     expect(screen.queryByRole('region', { name: 'Schema Studio' })).not.toBeInTheDocument();
   });
 

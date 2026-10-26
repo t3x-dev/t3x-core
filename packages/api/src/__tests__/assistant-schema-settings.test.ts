@@ -37,6 +37,10 @@ let counter = 0;
 const actor = { kind: 'human' as const, id: 'human:local-user' };
 const denied = new Set<string>();
 const model = vi.hoisted(() => ({ tools: vi.fn(), structured: vi.fn(), text: vi.fn() }));
+vi.mock('@t3x-dev/storage', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@t3x-dev/storage')>();
+  return { ...actual, findWorkspaceDraft: vi.fn(actual.findWorkspaceDraft) };
+});
 vi.mock('../lib/provider-resolver', () => ({
   resolveProviderAndModel: async () => ({
     ok: true,
@@ -1648,6 +1652,38 @@ describe('Assistant Schema settings using Studio', () => {
     ]);
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
+  });
+  it('rejects a stale confirmation even when its basis read sees the newer workspace revision', async () => {
+    const ws = await fixture();
+    const shown = await run(ws, (s) => s.show(slot, 'stale-confirmation'));
+    const actual = await vi.importActual<typeof import('@t3x-dev/storage')>('@t3x-dev/storage');
+    let resume!: () => void;
+    let notifyRead!: () => void;
+    const blocked = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
+    const read = new Promise<void>((resolve) => {
+      notifyRead = resolve;
+    });
+    vi.mocked(findWorkspaceDraft).mockImplementationOnce(async (...args) => {
+      const snapshot = await actual.findWorkspaceDraft(...args);
+      notifyRead();
+      await blocked;
+      return snapshot;
+    });
+    const stale = run(ws, (s) =>
+      s.confirm(shown.settingsId, shown.revision, { ...slot, name: 'stale' })
+    );
+    await read;
+    try {
+      await run(ws, (s) =>
+        s.confirm(shown.settingsId, shown.revision, { ...slot, name: 'winner' })
+      );
+    } finally {
+      resume();
+    }
+    await expect(stale).rejects.toThrow('Settings changed');
+    expect((await run(ws, (s) => s.read()))?.settings.name).toBe('winner');
   });
   it('rejects cross-user access, changed parent and an unconfirmed revision', async () => {
     const ws = await fixture();

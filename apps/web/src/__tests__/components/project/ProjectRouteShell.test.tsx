@@ -136,10 +136,7 @@ describe('ProjectRouteShell', () => {
       </ProjectRouteShell>
     );
 
-    expect(screen.getByRole('link', { name: 'Workspaces' })).toHaveAttribute(
-      'aria-current',
-      'page'
-    );
+    expect(screen.getByRole('link', { name: 'Workspace' })).toHaveAttribute('aria-current', 'page');
   });
 
   it.each([

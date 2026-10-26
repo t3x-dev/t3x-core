@@ -11,7 +11,11 @@ import { z } from 'zod';
 const LLMSourceSchema = z.object({
   type: z.literal('llm'),
   model: z.string().optional(),
-  at: z.preprocess((v) => (v instanceof Date ? v.toISOString() : v), z.string()).optional(),
+  // Keep the exported pipe type stable across Zod's preprocess implementation changes.
+  at: z
+    .transform((v) => (v instanceof Date ? v.toISOString() : v))
+    .pipe(z.string())
+    .optional(),
   turn_ref: z.object({
     turn_hash: z.string().min(1),
     quote: z.string().min(1),

@@ -350,6 +350,8 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
       { name: 'Deployment', description: 'Public deployment capability discovery' },
       { name: 'Health', description: 'Health check endpoints' },
       { name: 'Projects', description: 'Project management' },
+      { name: 'Checks', description: 'Project checks and verification records' },
+      { name: 'Explore', description: 'Public project and schema discovery' },
       { name: 'Namespaces', description: 'Personal and organization namespaces' },
       {
         name: 'Collaboration',

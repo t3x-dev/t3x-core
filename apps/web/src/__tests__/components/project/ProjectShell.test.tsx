@@ -53,10 +53,7 @@ describe('ProjectShell', () => {
     expect(screen.getByText('t3x-dev')).toBeInTheDocument();
     expect(screen.getByText('Public')).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Global' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Workspaces' })).toHaveAttribute(
-      'aria-current',
-      'page'
-    );
+    expect(screen.getByRole('link', { name: 'Workspace' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
       '/t3x-dev/Test-Project/settings?returnTo=%2Ft3x-dev%2FTest-Project%3Ftab%3Dworkspaces'
@@ -77,7 +74,7 @@ describe('ProjectShell', () => {
     );
     expect(screen.getByText('orbit-labs')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: 'Schemas' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: 'Schema' })).not.toHaveAttribute('aria-current');
 
     view.rerender(
       <ProjectShell activeTab="state" project={project} projectIdNavigation>
@@ -116,7 +113,7 @@ describe('ProjectShell', () => {
 
     expect(screen.getByRole('banner')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'T3X home' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Schema' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByText('Studio content').closest('main')).toHaveClass(
       'min-h-0',
       'flex-1',
