@@ -4,9 +4,11 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { expect, it, vi } from 'vitest';
 import { PullRequestMergeReviewPanel } from '@/components/project/PullRequestMergeReviewPanel';
 
-it('shows Schema-only changes and their combined contract without claiming they are applied', async () => {
+it.each([false, true])('shows Schema-only changes and respects readOnly=%s', async (readOnly) => {
+  const save = vi.fn();
   render(
     <PullRequestMergeReviewPanel
+      readOnly={readOnly}
       projectId="p"
       pullRequest={{
         number: 1,
@@ -36,7 +38,7 @@ it('shows Schema-only changes and their combined contract without claiming they 
           ],
         },
       })}
-      saveMergeDecision={vi.fn()}
+      saveMergeDecision={save}
       onResolutionChange={vi.fn()}
       onRerun={vi.fn()}
       rerunning={false}
@@ -46,6 +48,13 @@ it('shows Schema-only changes and their combined contract without claiming they 
   expect(within(changes).getByText('nodes.requirements.slots.owner')).toBeVisible();
   expect(within(changes).getByText('Combined Schema · not yet merged')).toBeVisible();
   expect(within(changes).getByTitle(`sha256:${'a'.repeat(64)}`)).toBeVisible();
+  if (readOnly) {
+    expect(screen.queryByRole('button', { name: 'Add content change' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Save & recheck Schema and content' })
+    ).not.toBeInTheDocument();
+    expect(save).not.toHaveBeenCalled();
+  }
 });
 
 it('keeps Schema choices editable and blocks publication until the exact edits are saved and rechecked', async () => {
@@ -53,6 +62,7 @@ it('keeps Schema choices editable and blocks publication until the exact edits a
   const save = vi.fn().mockResolvedValue(5);
   const rerun = vi.fn();
   const resolution = vi.fn();
+  const saveState = vi.fn();
   render(
     <PullRequestMergeReviewPanel
       projectId="p"
@@ -83,11 +93,13 @@ it('keeps Schema choices editable and blocks publication until the exact edits a
       })}
       saveMergeDecision={save}
       onResolutionChange={resolution}
+      onSaveStateChange={saveState}
       onRerun={rerun}
       rerunning={false}
     />
   );
   fireEvent.click(await screen.findByRole('button', { name: 'Use dev', exact: true }));
+  expect(saveState).toHaveBeenLastCalledWith('saving');
   await waitFor(() => expect(resolution.mock.lastCall?.[1].unresolved).toBeGreaterThan(0));
   fireEvent.change(screen.getByRole('textbox', { name: `Custom Schema value ${path}` }), {
     target: { value: '{bad' },
@@ -98,6 +110,7 @@ it('keeps Schema choices editable and blocks publication until the exact edits a
   });
   fireEvent.click(screen.getByRole('button', { name: 'Save & recheck Schema and content' }));
   await waitFor(() => expect(rerun).toHaveBeenCalledTimes(1));
+  expect(saveState).toHaveBeenLastCalledWith('saved');
   expect(save.mock.calls.at(-1)).toEqual([
     'draft-2',
     expect.objectContaining({

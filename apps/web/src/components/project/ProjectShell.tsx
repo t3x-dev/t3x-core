@@ -1,5 +1,9 @@
 import type { ReactNode } from 'react';
-import { getProjectTabSegment, type ProjectTabId } from '@/components/project/projectTabModel';
+import {
+  getProjectTabSegment,
+  type ProjectTabId,
+  projectTabKeepsWorkspace,
+} from '@/components/project/projectTabModel';
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 import { getProjectRepoPath } from '@/domain/project/repoPath';
 import type { YSchemaValidationSummary } from '@/domain/project/yschemaValidation';
@@ -30,6 +34,7 @@ export interface ProjectShellProps {
   children: ReactNode;
   project: ProjectShellProject;
   workspaceId?: string | null;
+  settingsReturnTo?: string;
 }
 
 export function ProjectShell({
@@ -41,6 +46,7 @@ export function ProjectShell({
   ownerSlug,
   pullRequestNumber,
   workspaceId,
+  settingsReturnTo,
 }: ProjectShellProps) {
   const visibilityLabel =
     project.visibility === 'public'
@@ -55,23 +61,25 @@ export function ProjectShell({
     returnParams.set('tab', getProjectTabSegment(activeTab));
   }
   if (branch) returnParams.set('branch', branch);
-  if (workspaceId && (activeTab === 'workspaces' || activeTab === 'schemas')) {
+  if (workspaceId && projectTabKeepsWorkspace(activeTab)) {
     returnParams.set('workspace', workspaceId);
   }
   if (pullRequestNumber && activeTab === 'reviews') {
     returnParams.set('pr', String(pullRequestNumber));
   }
   const returnQuery = returnParams.toString();
-  const returnTo = returnQuery ? `${repoPath}?${returnQuery}` : repoPath;
-  const settingsHref = `${repoPath}/settings?returnTo=${encodeURIComponent(returnTo)}`;
+  const returnTo = settingsReturnTo ?? (returnQuery ? `${repoPath}?${returnQuery}` : repoPath);
+  const settingsHref =
+    activeTab === 'settings' && settingsReturnTo
+      ? settingsReturnTo
+      : `${repoPath}/settings?returnTo=${encodeURIComponent(returnTo)}`;
   const actualOwner = project.namespace ?? ownerSlug;
-  const ownerLabel = actualOwner || 'Projects';
   const newRepositoryHref = actualOwner ? `/${encodeURIComponent(actualOwner)}/new` : '/';
   return (
     <div className="flex h-dvh min-h-[680px] flex-col overflow-hidden bg-[var(--surface-app)] text-[var(--text-primary)] [--text-base:14px] [--text-lg:16px] [--text-sm:13px] [--text-xs:12px]">
       <DiscoverHeader
-        activeTab={activeTab}
-        owner={ownerLabel}
+        activeTab={activeTab === 'history' ? 'state' : activeTab}
+        owner={actualOwner || undefined}
         projectName={project.name}
         newProjectHref={newRepositoryHref}
         repoPath={repoPath}
@@ -89,9 +97,15 @@ export function ProjectShell({
       )}
       <main
         className={
-          immersive || activeTab === 'state' || activeTab === 'workspaces'
+          immersive ||
+          activeTab === 'state' ||
+          activeTab === 'workspaces' ||
+          activeTab === 'history'
             ? 'relative min-h-0 flex-1 overflow-hidden'
-            : activeTab === 'reviews' || activeTab === 'community' || activeTab === 'settings'
+            : activeTab === 'reviews' ||
+                activeTab === 'checks' ||
+                activeTab === 'community' ||
+                activeTab === 'settings'
               ? 'relative min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable_both-edges] bg-[var(--surface-card)]'
               : 'relative min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable_both-edges]'
         }

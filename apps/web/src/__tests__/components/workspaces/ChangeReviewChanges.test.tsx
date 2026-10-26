@@ -33,9 +33,7 @@ describe('ChangeReviewChanges', () => {
 
     const scroller = screen.getByRole('region', { name: 'Field changes' });
     expect(scroller).toHaveAttribute('tabindex', '0');
-    expect(scroller.closest('[data-slot="state-scroll-area"]')).toHaveClass(
-      'h-[clamp(18rem,calc(100dvh-28rem),40rem)]'
-    );
+    expect(scroller).toHaveClass('h-auto', 'max-h-[40rem]');
     expect(screen.getByLabelText('Vertical scrollbar')).toBeInTheDocument();
     expect(within(scroller).getByText('Knowledge assistant')).toBeInTheDocument();
   });

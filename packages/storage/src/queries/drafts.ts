@@ -697,6 +697,8 @@ function assertAppendOnlyWorkspace(
   if (!before) return;
   if (
     !isDeepStrictEqual(previous.authoringBasis, next.authoringBasis) ||
+    !isDeepStrictEqual(previous.authoringHistory, next.authoringHistory) ||
+    !isDeepStrictEqual(previous.authoringReconciliations, next.authoringReconciliations) ||
     !isDeepStrictEqual(before.base, after.base) ||
     before.schema !== after.schema ||
     before.version !== after.version ||
@@ -722,6 +724,57 @@ export async function transactWorkspaceAuthoring<T>(
     draft: Draft
   ) => Promise<{ workspace: Record<string, unknown> | null; value: T }>
 ): Promise<{ draft: Draft; value: T }> {
+  return transactAuthoring(db, input, command, false);
+}
+
+/** Explicit basis changes must retain the exact retired ledger and all other Workspace data. */
+export async function transactWorkspaceReconciliation<T>(
+  db: AnyDB,
+  input: { projectId: string; workspaceId: string; refName: string },
+  command: (
+    tx: AnyDB,
+    draft: Draft
+  ) => Promise<{ workspace: Record<string, unknown> | null; value: T }>
+): Promise<{ draft: Draft; value: T }> {
+  return transactAuthoring(db, input, command, true);
+}
+
+function assertReconciledWorkspace(
+  previous: Record<string, unknown>,
+  next: Record<string, unknown>
+) {
+  const before = (previous.authoringReconciliations ?? []) as unknown[];
+  const after = next.authoringReconciliations as Array<{ ledger: unknown; basis: unknown }>;
+  const changed = new Set([
+    'authoringLedger',
+    'authoringBasis',
+    'authoringReconciliations',
+    'baseCommitHash',
+  ]);
+  const retained = (value: Record<string, unknown>) =>
+    Object.fromEntries(Object.entries(value).filter(([key]) => !changed.has(key)));
+  if (
+    !previous.authoringLedger ||
+    !Array.isArray(after) ||
+    after.length !== before.length + 1 ||
+    !isDeepStrictEqual(before, after.slice(0, -1)) ||
+    !isDeepStrictEqual(after.at(-1)?.ledger, previous.authoringLedger) ||
+    !isDeepStrictEqual(after.at(-1)?.basis, previous.authoringBasis) ||
+    !isDeepStrictEqual(retained(previous), retained(next))
+  )
+    throw new DraftAuthoringConflictError('Reconciliation must preserve the previous Workspace');
+  assertAppendOnlyWorkspace({}, next);
+}
+
+async function transactAuthoring<T>(
+  db: AnyDB,
+  input: { projectId: string; workspaceId: string; refName: string },
+  command: (
+    tx: AnyDB,
+    draft: Draft
+  ) => Promise<{ workspace: Record<string, unknown> | null; value: T }>,
+  reconciliation: boolean
+): Promise<{ draft: Draft; value: T }> {
   type TxRunner = { transaction<R>(fn: (tx: unknown) => Promise<R>): Promise<R> };
   return (db as unknown as TxRunner).transaction(async (rawTx) => {
     const tx = rawTx as AnyDB;
@@ -741,11 +794,15 @@ export async function transactWorkspaceAuthoring<T>(
     const result = await command(tx, draft);
     if (!result.workspace) return { draft, value: result.value };
     if (draft.status !== 'editing') throw new DraftAuthoringConflictError('Draft is not editable');
-    assertAppendOnlyWorkspace(draft.workspace_state ?? {}, result.workspace);
+    if (reconciliation) assertReconciledWorkspace(draft.workspace_state ?? {}, result.workspace);
+    else assertAppendOnlyWorkspace(draft.workspace_state ?? {}, result.workspace);
     const [saved] = await tx
       .update(drafts)
       .set({
         workspaceStateJson: result.workspace,
+        ...(reconciliation
+          ? { parentCommitHash: result.workspace.baseCommitHash as string | null }
+          : {}),
         revision: draft.revision + 1,
         updatedAt: new Date(),
       })

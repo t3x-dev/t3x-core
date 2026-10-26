@@ -12,12 +12,9 @@
 import {
   ArrowLeftRight,
   Copy,
-  Eye,
-  FileOutput,
   GitBranch,
   GitMerge,
   MessageSquarePlus,
-  Share2,
   Trash2,
   ZoomIn,
 } from 'lucide-react';
@@ -96,22 +93,6 @@ export function buildUnitNodeMenu(opts: {
   }
 
   return groups;
-}
-
-export function buildLeafNodeMenu(opts: {
-  onOpenDetail: () => void;
-  onShare: () => void;
-  onExport: () => void;
-}): ContextMenuGroup[] {
-  return [
-    {
-      items: [
-        { label: 'Open Detail', icon: <Eye size={14} />, action: opts.onOpenDetail },
-        { label: 'Export', icon: <FileOutput size={14} />, action: opts.onExport },
-        { label: 'Share', icon: <Share2 size={14} />, action: opts.onShare },
-      ],
-    },
-  ];
 }
 
 export function buildBackgroundMenu(opts: { onFitView: () => void }): ContextMenuGroup[] {

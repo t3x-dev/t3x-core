@@ -34,6 +34,9 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
   const [nodeCursor, setNodeCursor] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [newActivity, setNewActivity] = useState<WorkspaceAuthoringView | null>(null);
+  const [reconciling, setReconciling] = useState(false);
+  const [reconciliationError, setReconciliationError] = useState<string | null>(null);
+  const reconciliationRequest = useRef<{ facts: string; id: string } | null>(null);
   const nodeRequestRef = useRef(0);
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -127,7 +130,9 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
           if (
             active &&
             viewRef.current &&
-            next.compositionRevision !== viewRef.current.compositionRevision
+            (next.workspaceRevision !== viewRef.current.workspaceRevision ||
+              next.synchronization?.currentRefHead !==
+                viewRef.current.synchronization?.currentRefHead)
           )
             setNewActivity(next);
         })
@@ -140,6 +145,43 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
       window.clearInterval(timer);
     };
   }, [candidate.id, candidate.projectId, enabled]);
+
+  const reconcile = useCallback(async () => {
+    if (reconciling) return false;
+    setReconciling(true);
+    setReconciliationError(null);
+    try {
+      const api = getSharedApiClient().workspaces.authoring;
+      const latest = await api.read(candidate.projectId, candidate.id);
+      if (latest.synchronization?.required) {
+        const input = {
+          expected_workspace_revision: latest.workspaceRevision,
+          expected_ref_head: latest.synchronization.currentRefHead,
+        };
+        const facts = JSON.stringify([candidate.id, candidate.projectId, input]);
+        const request =
+          reconciliationRequest.current?.facts === facts
+            ? reconciliationRequest.current
+            : { facts, id: crypto.randomUUID() };
+        reconciliationRequest.current = request;
+        await api.reconcile(candidate.projectId, candidate.id, {
+          ...input,
+          request_id: request.id,
+        });
+      }
+      await load();
+      reconciliationRequest.current = null;
+      setNotice(
+        'Workspace synced with the branch. Existing edits and earlier history are preserved.'
+      );
+      return true;
+    } catch (cause) {
+      setReconciliationError(cause instanceof Error ? cause.message : 'Could not sync Workspace');
+      return false;
+    } finally {
+      setReconciling(false);
+    }
+  }, [candidate.id, candidate.projectId, load, reconciling]);
 
   const inspectNode = useCallback(
     async (nodeId: string, actionId?: string) => {
@@ -371,6 +413,9 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
     nodeCursor,
     notice,
     newActivity,
+    reconciling,
+    reconciliationError,
+    reconcile,
     compositionRevision: view?.compositionRevision,
     workspaceRevision: view?.workspaceRevision,
     basis: view?.basis,

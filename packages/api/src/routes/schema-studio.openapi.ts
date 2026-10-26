@@ -2,6 +2,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   AddStudioCandidateSchema,
   SaveStudioSchemaEditCandidateInputSchema,
+  SchemaNodeProvenanceSchema,
   StudioAdoptResultSchema,
   StudioApplyInputSchema,
   StudioCandidateListSchema,
@@ -38,8 +39,14 @@ import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess, getProjectAccessPrincipal } from '../lib/project-access';
 import { saveStudioEditCandidate } from '../lib/schema-edit-candidate-save';
+import { readReleaseNodeProvenance } from '../lib/schema-node-provenance';
 import { projectStudioCandidate, resolveStudioSource } from '../lib/schema-studio';
-import { compileStudioSelection, previewStudio, StudioError } from '../lib/schema-studio-preview';
+import {
+  compileStudioSelection,
+  previewStudio,
+  readStudioComposition,
+  StudioError,
+} from '../lib/schema-studio-preview';
 import { workspaceAuthoringState } from '../lib/workspace-authoring';
 import { resolveWorkspaceSchemaEditBasis } from '../lib/workspace-schema-edit-basis';
 import {
@@ -129,6 +136,7 @@ const readSourceRoute = createRoute({
               artifactHash: z.string(),
               readme: z.string().nullable(),
               manifest: z.record(z.string(), z.unknown()),
+              nodeProvenance: SchemaNodeProvenanceSchema.optional(),
             })
           ),
         },
@@ -209,6 +217,7 @@ schemaStudioRoutes.openapi(readSourceRoute, async (c) => {
         artifactHash: view.artifactHash,
         readme: typeof view.manifest.readme === 'string' ? view.manifest.readme : null,
         manifest: view.manifest,
+        nodeProvenance: await readReleaseNodeProvenance(c, db, view.manifest),
       },
     },
     200
@@ -298,6 +307,7 @@ schemaStudioRoutes.openapi(readSchemaEditCandidateRoute, async (c) => {
   }
   c.header('Cache-Control', 'private, no-store');
   let baseDefinition: Record<string, unknown> | undefined;
+  let composition: Record<string, string> | undefined;
   if (candidate.authoringDraft?.base.kind === 'composition') {
     const base = candidate.authoringDraft.base;
     const snapshot = await findYSchemaCompositionSnapshot(db, {
@@ -314,11 +324,13 @@ schemaStudioRoutes.openapi(readSchemaEditCandidateRoute, async (c) => {
     )
       return errorResponse(c, 'CONFLICT', 'The exact saved Schema Base is unavailable.');
     baseDefinition = { ...normalizeYSchemaObject(snapshot.schemaJson) };
+    composition = (snapshot.manifestJson as { studioComposition?: Record<string, string> })
+      .studioComposition;
   }
   return c.json(
     {
       success: true as const,
-      data: StudioSchemaEditCandidateSchema.parse({ ...candidate, baseDefinition }),
+      data: StudioSchemaEditCandidateSchema.parse({ ...candidate, baseDefinition, composition }),
     },
     200
   );
@@ -334,7 +346,25 @@ schemaStudioRoutes.openapi(saveSchemaEditCandidateRoute, async (c) => {
   if (access instanceof Response) return access;
 
   try {
-    const selection = await compileStudioSelection(c, db, projectId, input.candidateIds);
+    let composition = input.composition;
+    if (!input.rebase && !composition) {
+      const draft = await findWorkspaceDraft(db, projectId, workspaceId);
+      const stored = draft?.workspace_state?.schemaEditCandidate;
+      const base = stored
+        ? parseWorkspaceSchemaEditCandidate(stored).authoringDraft?.base
+        : undefined;
+      if (base?.kind === 'composition')
+        composition = await readStudioComposition(db, projectId, base);
+    }
+    let selection = await compileStudioSelection(
+      c,
+      db,
+      projectId,
+      input.candidateIds,
+      undefined,
+      undefined,
+      composition
+    );
     const principal = getProjectAccessPrincipal(c);
     const origin: WorkspaceSchemaEditOrigin = principal
       ? {
@@ -346,7 +376,7 @@ schemaStudioRoutes.openapi(saveSchemaEditCandidateRoute, async (c) => {
         }
       : { channel: input.origin, actor: { kind: 'local', id: 'auth-disabled-local' } };
     let guard: Parameters<typeof saveStudioEditCandidate>[5];
-    if (input.schemaDefinition && input.baseSchemaHash !== selection.schemaHash) {
+    if (!input.rebase && input.schemaDefinition && input.baseSchemaHash !== selection.schemaHash) {
       const draft = await findWorkspaceDraft(db, projectId, workspaceId);
       if (!draft?.workspace_state)
         return errorResponse(c, 'NOT_FOUND', 'Target Workspace is unavailable.');
@@ -362,6 +392,16 @@ schemaStudioRoutes.openapi(saveSchemaEditCandidateRoute, async (c) => {
           draft.workspace_state,
           resolved.schema
         );
+        if (!composition && basis.composition)
+          selection = await compileStudioSelection(
+            c,
+            db,
+            projectId,
+            input.candidateIds,
+            undefined,
+            undefined,
+            basis.composition
+          );
         if (basis.selectionHash !== selection.selectionHash)
           throw new StudioError('CONFLICT', 'The selected sources do not match the bound Schema.');
         guard = {
@@ -371,7 +411,15 @@ schemaStudioRoutes.openapi(saveSchemaEditCandidateRoute, async (c) => {
         };
       }
     }
-    const result = await saveStudioEditCandidate(db, projectId, input, selection, origin, guard);
+    const result = await saveStudioEditCandidate(
+      db,
+      projectId,
+      input,
+      selection,
+      origin,
+      guard,
+      (id) => compileStudioSelection(c, db, projectId, [id])
+    );
     return c.json({ success: true as const, data: result }, 200);
   } catch (error) {
     if (error instanceof WorkspaceSchemaYOpsError)
@@ -502,7 +550,13 @@ schemaStudioRoutes.openapi(applyRoute, async (c) => {
           composition_hash: compositionHash,
           compiled_schema_hash: preview.schemaHash,
           compiler_version: 'studio-selection@1',
-          manifest_json: { apiVersion: 't3x.dev/studio-selection/v1', sources: preview.sources },
+          manifest_json: {
+            apiVersion: 't3x.dev/studio-selection/v1',
+            sources: preview.sources,
+            selectionHash: preview.selectionHash,
+            studioComposition: preview.composition,
+            nodeProvenance: preview.nodeProvenance,
+          },
           schema_json: preview.schema,
           render_plan_json: preview.renderPlan,
           origins_json: preview.origins,

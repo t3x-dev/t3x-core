@@ -14,6 +14,9 @@ const navigation = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({
+  notFound: () => {
+    throw new Error('NEXT_HTTP_ERROR_FALLBACK;404');
+  },
   useRouter: () => ({ replace: navigation.replace }),
   usePathname: () => navigation.pathname,
   useSearchParams: () => new URLSearchParams(navigation.search),
@@ -87,6 +90,25 @@ describe('ProjectRouteShell', () => {
     expect(screen.getByText('Index page owns its shell')).toBeInTheDocument();
   });
 
+  it('keeps the known repository header while its fresh lookup is pending', () => {
+    navigation.load.mockReturnValue(new Promise(() => {}));
+    useProjectStore.setState({
+      details: {
+        [project.id]: { ...project, namespace: 'team', canonical_path: '/team/Test-Project' },
+      },
+    });
+
+    render(
+      <ProjectRouteShell projectId="proj_test">
+        <div>Change review</div>
+      </ProjectRouteShell>
+    );
+
+    expect(screen.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Project', exact: true })).not.toBeInTheDocument();
+    expect(navigation.replace).not.toHaveBeenCalled();
+  });
+
   it('redirects project ID pull request links to the public repository route', async () => {
     navigation.pathname = '/project/proj_test';
     navigation.search = 'tab=pull-requests&branch=feature%2Frelease&pr=7';
@@ -114,9 +136,86 @@ describe('ProjectRouteShell', () => {
       </ProjectRouteShell>
     );
 
-    expect(screen.getByRole('link', { name: 'Workspaces' })).toHaveAttribute(
-      'aria-current',
-      'page'
+    expect(screen.getByRole('link', { name: 'Workspace' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it.each([
+    '/project/proj_test/history',
+    '/team/Test-Project/history',
+    '/team/Test-Project/diff',
+  ])('owns %s in State and preserves the exact Settings return destination', async (pathname) => {
+    navigation.pathname = pathname;
+    navigation.search = 'branch=feature%2Frelease&view=list&commit=sha256%3Aabc&q=fix';
+    render(
+      <ProjectRouteShell projectId="proj_test">
+        <div>History content</div>
+      </ProjectRouteShell>
+    );
+    expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('link', { name: 'History' })).toBeNull();
+    await waitFor(() => {
+      const settings = new URL(
+        screen.getByRole('link', { name: 'Settings' }).getAttribute('href')!,
+        'http://localhost'
+      );
+      expect(settings.searchParams.get('returnTo')).toBe(`${pathname}?${navigation.search}`);
+      expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute(
+        'href',
+        '/team/Test-Project?branch=feature%2Frelease'
+      );
+    });
+  });
+
+  it('does not mistake a repository name for the active route', () => {
+    navigation.pathname = '/team/history/settings';
+    navigation.search = 'returnTo=%2Fteam%2Fhistory%2Fhistory%3Fcommit%3Dsha256%253Aabc';
+    render(
+      <ProjectRouteShell projectId="proj_test">
+        <div>Settings content</div>
+      </ProjectRouteShell>
+    );
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'href',
+      `${navigation.pathname}?${navigation.search}`
+    );
+    expect(screen.getByRole('link', { name: 'State' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('canonicalizes History query links with their full detail context', async () => {
+    navigation.pathname = '/project/proj_test';
+    navigation.search =
+      'tab=history&branch=feature%2Frelease&commit=sha256%3Aabc&view=list&author=Maya&q=fix&returnTo=%2Fteam%2FTest-Project%2Fcommunity';
+    render(
+      <ProjectRouteShell projectId="proj_test">
+        <div>History</div>
+      </ProjectRouteShell>
+    );
+    await waitFor(() =>
+      expect(navigation.replace).toHaveBeenCalledWith(
+        `/team/Test-Project/history?${navigation.search.replace('tab=history&', '')}`,
+        { scroll: false }
+      )
     );
   });
+});
+
+it.each([
+  { suffix: '/outputs', query: '' },
+  { suffix: '/leaf/old', query: '' },
+  { suffix: '', query: 'tab=outputs&leaf=old' },
+])('does not canonicalize retired ID routes $suffix $query', ({ suffix, query }) => {
+  navigation.pathname = `/project/proj_test${suffix}`;
+  navigation.search = query;
+  navigation.replace.mockClear();
+  navigation.load.mockClear();
+  expect(() =>
+    render(
+      <ProjectRouteShell projectId="proj_test">
+        <div>Archive</div>
+      </ProjectRouteShell>
+    )
+  ).toThrow('NEXT_HTTP_ERROR_FALLBACK;404');
+  expect(navigation.replace).not.toHaveBeenCalled();
+  expect(navigation.load).not.toHaveBeenCalled();
 });

@@ -102,7 +102,7 @@ export function StudioPublishDialog({
   }
   const releaseHref = result
     ? `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({
-        tab: 'schemas',
+        tab: 'browse',
         schemaView: 'release',
         catalogName: result.source.canonicalName,
         catalogVersion: result.source.version,

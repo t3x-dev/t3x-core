@@ -110,6 +110,55 @@ export function StudioDefinitionPreview({
     </div>
   );
 }
+export function StudioChecks({ preview }: { preview: StudioPreview }) {
+  const passed =
+    preview.report.valid && preview.adoption.allowed && preview.impact?.canAdopt !== false;
+  const layers = preview.report.layers ?? [];
+  const layerIssues = new Set(
+    layers.flatMap((layer) => layer.issues.map((issue) => issue.message))
+  );
+  return (
+    <section aria-label="Schema checks" className="space-y-3 text-xs">
+      <h3 className="text-sm font-medium">Schema checks</h3>
+      <p>{passed ? 'All blocking checks passed' : 'Changes require attention'}</p>
+      {!preview.adoption.allowed && preview.adoption.reason ? (
+        <p>{preview.adoption.reason}</p>
+      ) : null}
+      {layers.map((layer) => (
+        <div key={layer.id} className="space-y-2 border-t border-[var(--stroke-divider)] pt-3">
+          <div className="flex items-center justify-between gap-3 font-medium">
+            <span>{layer.label}</span>
+            <span
+              className={
+                layer.status === 'passed'
+                  ? 'text-[var(--status-success)]'
+                  : 'text-[var(--status-warning)]'
+              }
+            >
+              {layer.status === 'not_run'
+                ? 'Not run'
+                : layer.status === 'passed'
+                  ? 'Passed'
+                  : layer.status === 'warning'
+                    ? 'Warning'
+                    : 'Failed'}
+            </span>
+          </div>
+          {layer.summary ? <p>{layer.summary}</p> : null}
+          {layer.issues.map((issue, index) => (
+            <p key={`${issue.code}-${index}`}>{issue.message}</p>
+          ))}
+        </div>
+      ))}
+      {preview.report.issues
+        .filter((issue) => !layerIssues.has(issue.message))
+        .map((issue, index) => (
+          <p key={`${issue.code}-${index}`}>{issue.message}</p>
+        ))}
+    </section>
+  );
+}
+
 export function StudioChanges({
   changes,
 }: {

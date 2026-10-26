@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
   configurable: true,
@@ -81,6 +81,7 @@ const emptyBaseCompareCandidate = {
 };
 
 beforeEach(() => {
+  localStorage.clear();
   vi.clearAllMocks();
   changePreview.mockReturnValue({ changes: undefined, error: null, loading: false });
   pullRequestApi.fetchPullRequests.mockResolvedValue({
@@ -93,6 +94,8 @@ beforeEach(() => {
   });
   pullRequestApi.createPullRequest.mockReturnValue(new Promise(() => {}));
 });
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe('ProjectReviewsTab', () => {
   it('opens a linked PR number from Community against the real project API', async () => {
@@ -142,18 +145,106 @@ describe('ProjectReviewsTab', () => {
 
     expect(screen.getByRole('heading', { name: 'Pull requests' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create PR' })).toHaveTextContent('New pull request');
-    expect(screen.getByPlaceholderText('Search by title or branch...')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Search title, branch, or #number')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '3 Open' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '1 Merged' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '0 Closed' })).toBeInTheDocument();
     expect(screen.getByText('Release note cleanup')).toBeInTheDocument();
     expect(screen.getByText('PRD Schema v3 rollout')).toBeInTheDocument();
     expect(screen.getByText('Audience handoff updates')).toBeInTheDocument();
-    expect(screen.getByText('ready to merge')).toBeInTheDocument();
-    expect(screen.getByText('needs decision')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /View PR #17:/ })).toHaveTextContent(
+      'Ready to merge'
+    );
+    expect(screen.getByRole('button', { name: /View PR #18:/ })).toHaveTextContent(
+      'Needs decision'
+    );
     expect(screen.queryByRole('button', { name: 'Dismiss' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Owners/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Release lane/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps a number search across groups and clears only the Open status filter', () => {
+    render(<ProjectReviewsTab />);
+    const search = screen.getByRole('searchbox', { name: 'Search pull requests' });
+    fireEvent.change(search, { target: { value: '#14' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Pull request status' }), {
+      target: { value: 'ready' },
+    });
+    expect(screen.getByRole('heading', { name: 'No matching pull requests' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: '1 Merged' }));
+    expect(search).toHaveValue('#14');
+    expect(screen.queryByRole('combobox', { name: 'Pull request status' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /View PR #14:/ })).toBeInTheDocument();
+    expect(screen.getByText('1 of 1')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: '3 Open' }));
+    expect(screen.getByRole('combobox', { name: 'Pull request status' })).toHaveValue('all');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Clear filters' })[0]);
+    expect(search).toHaveValue('');
+    expect(search).toHaveFocus();
+    expect(screen.getAllByRole('button', { name: /^View PR #/ })).toHaveLength(3);
+    fireEvent.change(search, { target: { value: '17' } });
+    expect(screen.getAllByRole('button', { name: /^View PR #/ })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /View PR #17:/ })).toBeInTheDocument();
+  });
+
+  it('preserves the list context when returning from an existing PR', () => {
+    render(<ProjectReviewsTab />);
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search pull requests' }), {
+      target: { value: '#17' },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Pull request status' }), {
+      target: { value: 'ready' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /View PR #17:/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Pull requests \/ #17/ }));
+    expect(screen.getByRole('searchbox', { name: 'Search pull requests' })).toHaveValue('#17');
+    expect(screen.getByRole('combobox', { name: 'Pull request status' })).toHaveValue('ready');
+    expect(screen.getByRole('tab', { name: '3 Open' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('supports keyboard group navigation and distinguishes an empty group from a filtered list', () => {
+    render(<ProjectReviewsTab />);
+    fireEvent.keyDown(screen.getByRole('tab', { name: '3 Open' }), { key: 'End' });
+    expect(screen.getByRole('tab', { name: '0 Closed' })).toHaveFocus();
+    expect(screen.getByRole('heading', { name: 'No closed pull requests' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
+
+    fireEvent.keyDown(screen.getByRole('tab', { name: '0 Closed' }), { key: 'ArrowRight' });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Pull request status' }), {
+      target: { value: 'checking' },
+    });
+    expect(screen.getByRole('heading', { name: 'No matching pull requests' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'No open pull requests' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows loading and failure separately from empty data and retries the list request', async () => {
+    let rejectList!: (error: Error) => void;
+    pullRequestApi.fetchPullRequests.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectList = reject;
+        })
+    );
+    render(<ProjectReviewsTab projectId="proj_real" />);
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-busy', 'true');
+    expect(screen.queryByText('Propose your first change')).not.toBeInTheDocument();
+    expect(screen.getByRole('searchbox')).toBeDisabled();
+
+    rejectList(new Error('Connection unavailable'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Connection unavailable');
+    expect(screen.queryByText('Propose your first change')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(
+      await screen.findByRole('heading', { name: 'Propose your first change' })
+    ).toBeInTheDocument();
+    expect(pullRequestApi.fetchPullRequests).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: 'New pull request' })).toBeInTheDocument();
+    expect(screen.getByRole('searchbox')).toBeEnabled();
   });
 
   it('opens a compare-first create flow with available PR branches', () => {
@@ -162,7 +253,9 @@ describe('ProjectReviewsTab', () => {
     fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
 
     expect(screen.getByRole('heading', { name: 'New pull request' })).toBeInTheDocument();
-    expect(screen.getByText('Ready to open')).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Creation summary' })).toHaveTextContent(
+      'Ready to create'
+    );
     expect(screen.getByRole('combobox', { name: 'Source branch' })).toHaveTextContent(
       'outputs/bundle-refresh'
     );
@@ -177,6 +270,161 @@ describe('ProjectReviewsTab', () => {
       'data-variant',
       'commit'
     );
+  });
+
+  it('preserves edited fields across source and base changes while updating untouched defaults', async () => {
+    pullRequestApi.fetchCompareCandidates.mockImplementation((_projectId: string, base: string) =>
+      Promise.resolve({
+        base_branches: ['main', 'release/2026-07'],
+        compare_branches: [
+          { ...realCompareCandidate, base_branch: base },
+          { ...behindCompareCandidate, base_branch: base },
+        ],
+      })
+    );
+    render(<ProjectReviewsTab projectId="proj_real" />);
+    fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
+    await screen.findByDisplayValue('Real feature');
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'My review title' } });
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Source branch' }), {
+      key: 'ArrowDown',
+    });
+    fireEvent.click(await screen.findByRole('option', { name: /feature\/behind/i }));
+    expect(screen.getByLabelText('Title')).toHaveValue('My review title');
+    expect(screen.getByLabelText('Description')).toHaveValue(behindCompareCandidate.description);
+    expect(screen.getByRole('combobox', { name: 'Source branch' })).not.toHaveTextContent(
+      'Behind base'
+    );
+
+    fireEvent.change(screen.getByLabelText('Description'), {
+      target: { value: 'My review notes' },
+    });
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Base branch' }), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: 'release/2026-07' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Create pull request' })).toBeEnabled()
+    );
+    expect(screen.getByRole('combobox', { name: 'Source branch' })).toHaveTextContent(
+      'real/feature'
+    );
+    expect(screen.getByLabelText('Title')).toHaveValue('My review title');
+    expect(screen.getByLabelText('Description')).toHaveValue('My review notes');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh branch comparisons' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Create pull request' })).toBeEnabled()
+    );
+    expect(screen.getByLabelText('Title')).toHaveValue('My review title');
+    expect(screen.getByLabelText('Description')).toHaveValue('My review notes');
+    fireEvent.click(screen.getByRole('button', { name: 'Create pull request' }));
+    expect(pullRequestApi.createPullRequest).toHaveBeenCalledWith(
+      'proj_real',
+      expect.objectContaining({
+        title: 'My review title',
+        description: 'My review notes',
+        source_branch: 'real/feature',
+        target_branch: 'release/2026-07',
+      })
+    );
+  });
+
+  it('offers the existing PR without claiming the comparison is ready to create', async () => {
+    pullRequestApi.fetchCompareCandidates.mockResolvedValue({
+      base_branches: ['main'],
+      compare_branches: [
+        {
+          ...realCompareCandidate,
+          status: 'already_open',
+          status_label: 'PR #7 already open',
+          open_pull_request_number: 7,
+        },
+      ],
+    });
+    const navigate = vi.fn();
+    render(<ProjectReviewsTab projectId="proj_real" onPullRequestNumberChange={navigate} />);
+    fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
+    const existing = await screen.findByRole('button', { name: 'View PR #7' });
+    expect(screen.getByRole('complementary', { name: 'Creation summary' })).toHaveTextContent(
+      'PR #7 already open'
+    );
+    expect(screen.queryByText('Ready to create')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create pull request' })).toBeDisabled();
+    expect(screen.queryByText('YOps (you)')).not.toBeInTheDocument();
+    fireEvent.click(existing);
+    expect(navigate).toHaveBeenCalledWith(7);
+    expect(pullRequestApi.createPullRequest).not.toHaveBeenCalled();
+  });
+
+  it('distinguishes a failed comparison from empty branches and recovers without losing the form', async () => {
+    pullRequestApi.fetchCompareCandidates
+      .mockResolvedValueOnce({ base_branches: ['main'], compare_branches: [realCompareCandidate] })
+      .mockRejectedValueOnce(new Error('Comparison request failed'))
+      .mockResolvedValue({ base_branches: ['main'], compare_branches: [realCompareCandidate] });
+    render(<ProjectReviewsTab projectId="proj_real" />);
+    fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
+    await screen.findByDisplayValue('Real feature');
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Keep this title' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh branch comparisons' }));
+    expect(await screen.findByText('Comparison request failed')).toBeInTheDocument();
+    expect(
+      screen.queryByText('No other committed branches can be compared with this base.')
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create pull request' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Create pull request' })).toBeEnabled()
+    );
+    expect(screen.getByLabelText('Title')).toHaveValue('Keep this title');
+  });
+
+  it('loads an existing PR by number when it is absent from the list and no route callback is provided', async () => {
+    pullRequestApi.fetchCompareCandidates.mockResolvedValue({
+      base_branches: ['main'],
+      compare_branches: [
+        {
+          ...realCompareCandidate,
+          status: 'already_open',
+          status_label: 'PR #1 already open',
+          open_pull_request_number: 1,
+        },
+      ],
+    });
+    pullRequestApi.fetchPullRequest.mockResolvedValue(blockedPullRequestDetail);
+    pullRequestApi.fetchMergeReview.mockResolvedValue(conflictReview);
+    render(<ProjectReviewsTab projectId="proj_real" />);
+    fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
+    fireEvent.click(await screen.findByRole('button', { name: 'View PR #1' }));
+    expect(
+      await screen.findByRole('heading', { name: blockedPullRequest.title })
+    ).toBeInTheDocument();
+    expect(pullRequestApi.fetchPullRequest).toHaveBeenCalledWith('proj_real', 1);
+    expect(pullRequestApi.createPullRequest).not.toHaveBeenCalled();
+  });
+
+  it('locks the submitted form and preserves its content for retry after a failed create', async () => {
+    let rejectCreate!: (error: Error) => void;
+    pullRequestApi.createPullRequest.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectCreate = reject;
+        })
+    );
+    render(<ProjectReviewsTab projectId="proj_real" />);
+    fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
+    await screen.findByDisplayValue('Real feature');
+    fireEvent.change(screen.getByLabelText('Description'), {
+      target: { value: 'Keep these notes' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create pull request' }));
+    expect(screen.getByRole('button', { name: 'Creating...' })).toBeDisabled();
+    expect(screen.getByLabelText('Title')).toBeDisabled();
+    expect(screen.getByLabelText('Description')).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: 'Source branch' })).toBeDisabled();
+    rejectCreate(new Error('The source branch changed. Refresh and try again.'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('The source branch changed.');
+    expect(screen.getByLabelText('Description')).toHaveValue('Keep these notes');
+    expect(screen.getByLabelText('Description')).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Create pull request' })).toBeEnabled();
   });
 
   it('shows both sides of a field instead of a truncated one-line diff', () => {
@@ -422,14 +670,14 @@ describe('ProjectReviewsTab', () => {
     expect(screen.getByRole('tab', { name: '4 Open' })).toBeInTheDocument();
     expect(screen.getByText('Output bundle refresh')).toBeInTheDocument();
     expect(screen.getByText('New')).toBeInTheDocument();
-    expect(screen.getByText('checks queued')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /View PR #20:/ })).toHaveTextContent('Checks queued');
     expect(screen.queryByText('Merge simulation')).not.toBeInTheDocument();
   });
 
   it('opens existing PRs into a structured PR detail skeleton', () => {
     render(<ProjectReviewsTab />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'View PR' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^View PR #/ })[0]);
 
     expect(screen.getByText('Overview')).toBeInTheDocument();
     expect(screen.getByText('Changes')).toBeInTheDocument();
@@ -437,7 +685,7 @@ describe('ProjectReviewsTab', () => {
     expect(screen.getByText('Merged result preview')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Overview'));
     expect(screen.getByText('Merge readiness')).toBeInTheDocument();
-    expect(screen.getByText('Branch relationship')).toBeInTheDocument();
+    expect(screen.getByText('Change summary')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /View all checks/i })).toBeInTheDocument();
     fireEvent.click(screen.getByText('Changes'));
     expect(screen.getByText('changedNodes')).toBeInTheDocument();
@@ -454,19 +702,19 @@ describe('ProjectReviewsTab', () => {
     fireEvent.click(screen.getByRole('button', { name: /Create PR/i }));
     expect(screen.getByRole('heading', { name: 'New pull request' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Create pull request' }));
-    fireEvent.click(screen.getAllByRole('button', { name: 'View PR' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^View PR #/ })[0]);
 
-    expect(screen.getByText('checks queued')).toBeInTheDocument();
+    expect(screen.getByText('Checks queued')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Rerun readiness' }));
 
-    expect(screen.getByText('ready to merge')).toBeInTheDocument();
+    expect(screen.getByText('Ready to merge')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Merge PR' })).toBeEnabled();
   });
 
   it('moves a merged PR into the closed list after merge succeeds', () => {
     render(<ProjectReviewsTab />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'View PR' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^View PR #/ })[0]);
     fireEvent.click(screen.getByRole('button', { name: 'Merge PR' }));
 
     expect(screen.getByRole('heading', { name: 'Pull requests' })).toBeInTheDocument();
@@ -474,10 +722,10 @@ describe('ProjectReviewsTab', () => {
     expect(screen.getByRole('tab', { name: '2 Merged' })).toBeInTheDocument();
     expect(screen.getByText('Release note cleanup')).toBeInTheDocument();
     expect(screen.getByText('New')).toBeInTheDocument();
-    expect(screen.getAllByText('merged').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/^Merged$/).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByText('Release note cleanup').closest('button')!);
-    expect(screen.getByText('merged')).toBeInTheDocument();
+    expect(screen.getByText('Merged')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Merge PR' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Rerun readiness' })).not.toBeInTheDocument();
   });
@@ -485,10 +733,13 @@ describe('ProjectReviewsTab', () => {
   it('closes an open PR without merging and moves it into the closed list', () => {
     render(<ProjectReviewsTab />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'View PR' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^View PR #/ })[0]);
     fireEvent.click(screen.getByRole('button', { name: 'Close PR' }));
 
     expect(screen.getByText(/Close without merging/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('button', { name: 'Confirm close' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close PR' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Confirm close' }));
 
@@ -497,10 +748,10 @@ describe('ProjectReviewsTab', () => {
     expect(screen.getByRole('tab', { name: '1 Closed' })).toBeInTheDocument();
     expect(screen.getByText('Release note cleanup')).toBeInTheDocument();
     expect(screen.getByText('New')).toBeInTheDocument();
-    expect(screen.getAllByText('closed').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/^Closed$/).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByText('Release note cleanup').closest('button')!);
-    expect(screen.getByText('closed')).toBeInTheDocument();
+    expect(screen.getByText('Closed')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Merge PR' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Rerun readiness' })).not.toBeInTheDocument();
   });
@@ -508,10 +759,12 @@ describe('ProjectReviewsTab', () => {
   it('applies a selected conflict side and enables merge on a blocked PR', () => {
     render(<ProjectReviewsTab />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'View PR' })[1]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^View PR #/ })[1]);
     fireEvent.click(screen.getByText('Changes'));
 
-    expect(screen.getByText('Choose 1 conflict to continue.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Review the blocked checks and unresolved changes.')
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Merge PR' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Apply resolution' })).not.toBeInTheDocument();
 
@@ -546,7 +799,7 @@ describe('ProjectReviewsTab', () => {
 
     render(<ProjectReviewsTab projectId="proj_real" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'View PR' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^View PR #/ }));
     expect(await screen.findByRole('heading', { name: 'Resolve conflict' })).toBeInTheDocument();
     expect(await screen.findByText('2 of 2 conflicts still need a decision.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Merge PR' })).toBeDisabled();
@@ -560,7 +813,8 @@ describe('ProjectReviewsTab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Next conflict/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Use review/pr-demo' }));
-    expect(screen.getByText('All conflicts decided. Merge is ready.')).toBeInTheDocument();
+    expect(screen.getByText('All conflicts decided. Saving decisions…')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Merge PR' })).toBeDisabled();
 
     const decisions = {
       conflictResolutions: {
@@ -591,6 +845,7 @@ describe('ProjectReviewsTab', () => {
       { timeout: 3000 }
     );
 
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Merge PR' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Merge PR' }));
     await waitFor(() => {
       expect(pullRequestApi.mergePullRequest).toHaveBeenCalledWith('proj_real', {
@@ -600,6 +855,221 @@ describe('ProjectReviewsTab', () => {
         decisions,
       });
     });
+  });
+
+  it('uses the actual merge comparison for Overview and exposes each check status', async () => {
+    pullRequestApi.fetchPullRequest.mockResolvedValue({
+      ...blockedPullRequestDetail,
+      diff_summary: { changed_nodes: 99, yops_operations: 0, output_impacts: 0, source_refs: 0 },
+      checks: [
+        {
+          ...blockedPullRequestDetail.checks[0],
+          id: 'failed',
+          title: 'Failed evidence',
+          status: 'failed',
+          message: 'Verification failed.',
+        },
+        {
+          ...blockedPullRequestDetail.checks[0],
+          id: 'running',
+          title: 'Running evidence',
+          status: 'running',
+          message: 'Verification is running.',
+        },
+        {
+          ...blockedPullRequestDetail.checks[0],
+          id: 'provider',
+          title: 'Constraints',
+          status: 'passed',
+          message: 'No CommitV2 Statement constraint provider configured.',
+        },
+        {
+          ...blockedPullRequestDetail.checks[0],
+          id: 'long',
+          title: 'Long evidence',
+          status: 'warning',
+          message: 'Evidence detail. '.repeat(30),
+        },
+      ],
+    });
+    pullRequestApi.fetchMergeReview.mockResolvedValue({
+      ...conflictReview,
+      merge_base_commit_id: 'sha256:abcdef123456',
+    });
+    render(<ProjectReviewsTab projectId="proj_real" initialPullRequestNumber={1} />);
+    await screen.findByRole('heading', { name: 'Resolve conflict' });
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+    expect(await screen.findByText('3 changed nodes · 5 changed fields')).toBeInTheDocument();
+    const overview = screen.getByRole('tabpanel', { name: 'Overview' });
+    expect(within(overview).getByText('Conflicts').nextElementSibling).toHaveTextContent('2');
+    expect(screen.getByText('abcdef1')).toBeInTheDocument();
+    expect(screen.queryByText('rollout.stage')).not.toBeInTheDocument();
+    expect(screen.queryByText('release_plan.rollout.branch')).not.toBeInTheDocument();
+    expect(within(overview).getByText('Failed')).toBeInTheDocument();
+    expect(within(overview).getByText('Running')).toBeInTheDocument();
+
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Overview' }), { key: 'End' });
+    expect(screen.getByRole('tab', { name: 'Checks' })).toHaveFocus();
+    expect(screen.getByRole('tab', { name: 'Checks' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('No CommitV2 Statement constraint provider configured.')).toBeVisible();
+    expect(screen.getByText('Failed')).toBeVisible();
+    const evidence = screen.getByText('View full evidence');
+    fireEvent.click(evidence);
+    expect(evidence.closest('details')).toHaveAttribute('open');
+  });
+
+  it('preserves pending decisions across tabs and retries a failed save', async () => {
+    pullRequestApi.fetchPullRequest.mockResolvedValue(blockedPullRequestDetail);
+    pullRequestApi.fetchMergeReview.mockResolvedValue(conflictReview);
+    pullRequestApi.saveMergeDecision
+      .mockRejectedValueOnce(new Error('Connection unavailable'))
+      .mockResolvedValue(1);
+    render(<ProjectReviewsTab projectId="proj_real" initialPullRequestNumber={1} />);
+    await screen.findByRole('heading', { name: 'Resolve conflict' });
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+    await screen.findByText('3 changed nodes · 5 changed fields');
+    fireEvent.click(screen.getByRole('tab', { name: 'Changes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Keep main' }));
+    expect(screen.getByText('Saving decisions…')).toBeVisible();
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+    expect(await screen.findByText('Save failed')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Merge PR' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Review save error' }));
+    expect(screen.getByRole('radio', { name: 'Keep main for problem' })).toBeChecked();
+    expect(screen.getByRole('alert')).toHaveTextContent('Connection unavailable');
+    fireEvent.click(screen.getByRole('button', { name: 'Retry saving' }));
+    expect(await screen.findByText('Decisions saved')).toBeVisible();
+    expect(pullRequestApi.saveMergeDecision).toHaveBeenCalledTimes(2);
+    expect(pullRequestApi.fetchMergeReview).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Merge PR' })).toBeEnabled();
+  });
+
+  it('does not mark newer choices saved when an earlier save finishes', async () => {
+    let finishFirst!: (revision: number) => void;
+    let finishSecond!: (revision: number) => void;
+    pullRequestApi.fetchPullRequest.mockResolvedValue(blockedPullRequestDetail);
+    pullRequestApi.fetchMergeReview.mockResolvedValue(conflictReview);
+    pullRequestApi.saveMergeDecision
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishFirst = resolve;
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishSecond = resolve;
+          })
+      );
+    render(<ProjectReviewsTab projectId="proj_real" initialPullRequestNumber={1} />);
+    await screen.findByRole('heading', { name: 'Resolve conflict' });
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+    await screen.findByText('3 changed nodes · 5 changed fields');
+    fireEvent.click(screen.getByRole('tab', { name: 'Changes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Keep main' }));
+    await waitFor(() => expect(pullRequestApi.saveMergeDecision).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('radio', { name: 'Use review/pr-demo for problem' }));
+    await act(async () => finishFirst(1));
+    expect(screen.getByText('Saving decisions…')).toBeVisible();
+    expect(screen.queryByText('Decisions saved')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Merge PR' })).toBeDisabled();
+    await waitFor(() => expect(pullRequestApi.saveMergeDecision).toHaveBeenCalledTimes(2));
+    expect(pullRequestApi.saveMergeDecision).toHaveBeenLastCalledWith(
+      'mdraft_1',
+      expect.any(Object),
+      1
+    );
+    await act(async () => finishSecond(2));
+    expect(screen.getByText('Decisions saved')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Merge PR' })).toBeEnabled();
+  });
+
+  it('keeps ended PR decisions read-only and shows the final outcome', async () => {
+    pullRequestApi.fetchPullRequest.mockResolvedValue({
+      ...blockedPullRequestDetail,
+      status: 'merged',
+      merge_commit_id: 'sha256:merged',
+    });
+    pullRequestApi.fetchMergeReview.mockResolvedValue(conflictReview);
+    render(<ProjectReviewsTab projectId="proj_real" initialPullRequestNumber={1} />);
+    await screen.findByText('3 changed nodes · 5 changed fields');
+    expect(screen.getByRole('heading', { name: 'Outcome' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Changes' }));
+    expect(screen.getByText('Merged into main.')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Recorded decision' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Keep main for problem' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Keep main' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Merge PR' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Rerun readiness' })).not.toBeInTheDocument();
+    expect(pullRequestApi.saveMergeDecision).not.toHaveBeenCalled();
+  });
+
+  it('retries an unavailable comparison without inventing zero changes', async () => {
+    pullRequestApi.fetchPullRequest.mockResolvedValue(blockedPullRequestDetail);
+    pullRequestApi.fetchMergeReview
+      .mockRejectedValueOnce(new Error('Comparison unavailable'))
+      .mockResolvedValue(conflictReview);
+    render(<ProjectReviewsTab projectId="proj_real" initialPullRequestNumber={1} />);
+    await screen.findByRole('button', { name: 'Retry comparison' });
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+    expect(await screen.findByText('Comparison unavailable: Comparison unavailable')).toBeVisible();
+    expect(screen.queryByText('0 changed nodes')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'View changes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry comparison' }));
+    expect(await screen.findByRole('heading', { name: 'Resolve conflict' })).toBeInTheDocument();
+    expect(pullRequestApi.fetchMergeReview).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+    expect(screen.getByText('3 changed nodes · 5 changed fields')).toBeVisible();
+  });
+
+  it('brings the selected change into reach on a narrow screen and expands long values', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: true }))
+    );
+    const longValue = 'A long field value '.repeat(20);
+    pullRequestApi.fetchPullRequest.mockResolvedValue(blockedPullRequestDetail);
+    pullRequestApi.fetchMergeReview.mockResolvedValue({
+      ...conflictReview,
+      nodes: [
+        ...conflictReview.nodes,
+        {
+          path: 'candidate/long',
+          status: 'auto',
+          presence: { base: true, source: true, target: true },
+          slots: [
+            {
+              key: 'description',
+              base: 'Before',
+              target: 'Before',
+              source: longValue,
+              merged: longValue,
+              conflict: false,
+            },
+          ],
+        },
+      ],
+    });
+    render(<ProjectReviewsTab projectId="proj_real" initialPullRequestNumber={1} />);
+    await screen.findByRole('heading', { name: 'Resolve conflict' });
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+    await screen.findByText('4 changed nodes · 6 changed fields');
+    fireEvent.click(screen.getByRole('tab', { name: 'Changes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect candidate.long' }));
+    const inspector = screen.getByRole('complementary', { name: 'Change inspector' });
+    await waitFor(() => expect(inspector).toHaveFocus());
+    const expand = within(inspector).getByRole('button', { name: 'Show full value' });
+    fireEvent.click(expand);
+    expect(expand).toHaveAttribute('aria-expanded', 'true');
+    expect(within(inspector).getByText(longValue.trim())).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to changes' }));
+    expect(screen.getByRole('button', { name: 'Inspect candidate.long' })).toHaveFocus();
+    fireEvent.click(screen.getByRole('button', { name: 'Conflicts' }));
+    expect(within(inspector).getByText('candidate.product')).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Inspect candidate.long' })
+    ).not.toBeInTheDocument();
   });
 
   it('opens the conflict page as soon as a new PR finds conflicts', async () => {

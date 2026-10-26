@@ -1,7 +1,7 @@
 import type { ReviewSnapshotV1 } from '@t3x-dev/api-client';
 import type { TransitionViewV1 } from '@t3x-dev/core';
-import { useCallback, useEffect, useState } from 'react';
-import { workspaceSchemaCommitBlocker } from '@/domain/workspaces/changeDecision';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { workspaceCommitBlocker } from '@/domain/workspaces/changeDecision';
 import { dispatchCommitCreated } from '@/hooks/commits/commitEvents';
 import type {
   WorkspaceTransitionDecisionResponse,
@@ -39,9 +39,11 @@ export function useWorkspaceReviewSnapshot(
     loading: true,
   });
   const [overrideReason, setOverrideReason] = useState('');
+  const decidingRef = useRef(false);
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
+      if (decidingRef.current) return;
       setState((current) => ({ ...current, deciding: false, error: null, loading: true }));
       try {
         const data = await fetchWorkspaceTransitionReviewSnapshot(
@@ -75,6 +77,7 @@ export function useWorkspaceReviewSnapshot(
       outcome: WorkspaceTransitionOutcome,
       decisionReasonInput?: string
     ): Promise<WorkspaceReviewSnapshotCommitResult | null> => {
+      if (decidingRef.current || state.loading) return null;
       const snapshot = state.data?.snapshot ?? null;
       if (!snapshot) {
         setState((current) => ({
@@ -93,10 +96,7 @@ export function useWorkspaceReviewSnapshot(
         return null;
       }
       if (state.deciding) return null;
-      const commitBlocker = workspaceSchemaCommitBlocker(
-        state.data?.schema_review,
-        snapshot.transition
-      );
+      const commitBlocker = workspaceCommitBlocker(state.data?.schema_review, snapshot.transition);
       if (outcome !== 'rejected' && commitBlocker) {
         setState((current) => ({
           ...current,
@@ -115,6 +115,7 @@ export function useWorkspaceReviewSnapshot(
         return null;
       }
 
+      decidingRef.current = true;
       setState((current) => ({ ...current, deciding: true, error: null }));
       try {
         const decided = await decideWorkspaceTransition(projectId, workspaceId, {
@@ -153,9 +154,11 @@ export function useWorkspaceReviewSnapshot(
           loading: false,
         }));
         return null;
+      } finally {
+        decidingRef.current = false;
       }
     },
-    [projectId, state.data, state.deciding, workspaceId]
+    [projectId, state.data, state.deciding, state.loading, workspaceId]
   );
 
   return { decide, load, overrideReason, setOverrideReason, state };

@@ -1,0 +1,81 @@
+.badge {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+.badge:hover {
+  background: var(--hover-bg);
+}
+.badge:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.badge svg {
+  width: 15px;
+  height: 15px;
+}
+.badge img {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  object-fit: contain;
+}
+.modified {
+  position: absolute;
+  right: -3px;
+  bottom: -5px;
+  font-size: 18px;
+  background: var(--surface-card);
+}
+.details {
+  width: min(360px, calc(100vw - 32px));
+  max-height: 70dvh;
+  overflow: auto;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.details h3 {
+  font-size: 14px;
+  font-weight: 600;
+}
+.details code {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.details p {
+  margin-top: 10px;
+}
+.source {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--stroke-divider);
+  overflow-wrap: anywhere;
+}
+.source > span,
+.note {
+  color: var(--text-secondary);
+}
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 4px;
+  color: var(--accent-commit);
+}
+.links a:hover {
+  text-decoration: underline;
+}

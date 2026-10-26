@@ -351,7 +351,6 @@ export async function getApiCommitHistory(commitHash: string, limit = 50): Promi
 // ApiCommit helper functions
 // ============================================================================
 // Moved to @/domain/commitContent (v2 §2.2 pure functions). Re-export
-// here for backward compat so existing non-component consumers (e.g.
-// app/insights/page.tsx) keep working without a churn PR.
+// here for backward compatibility with existing non-component consumers.
 
 export { getSemanticContent, treeSummaryText } from '@/domain/commitContent';

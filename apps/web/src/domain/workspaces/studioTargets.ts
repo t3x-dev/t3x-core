@@ -6,10 +6,13 @@ export function listStudioDraftWorkspaces(workspaces: WorkspaceCandidate[]): Wor
 
 export function resolveStudioWorkspaceId(
   workspaces: WorkspaceCandidate[],
-  requestedId: string
+  requestedId: string,
+  branch?: string | null
 ): string {
   const drafts = listStudioDraftWorkspaces(workspaces);
-  if (drafts.some((workspace) => workspace.id === requestedId)) return requestedId;
+  // Explicit targets must never silently fall back to a different Workspace.
+  if (requestedId) return requestedId;
+  if (branch) return drafts.find((workspace) => workspace.targetBranch === branch)?.id ?? '';
   return drafts[0]?.id ?? '';
 }
 

@@ -76,6 +76,7 @@ import {
   deploymentCapabilitiesRoutes,
   diffRoutes,
   docsYopsRoutes,
+  exploreRoutes,
   exportRoutes,
   extractionFeedbackRoutes,
   gateRoutes,
@@ -92,6 +93,7 @@ import {
   namespaceRoutes,
   notificationsRoutes,
   pinsRoutes,
+  projectChecksRoutes,
   projectRoutes,
   promptCompileRoutes,
   providersRoutes,
@@ -270,6 +272,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', yopsValidateRoutes); // /v1/yops/validate
   api.route('/', yschemaValidationRoutes); // /v1/projects/:projectId/yschema-validation/*
   api.route('/', schemaStudioRoutes);
+  api.route('/', exploreRoutes);
   api.route('/', yschemaCompositionRoutes); // /v1/yschema/artifacts and /v1/yschema/compositions/preview
   api.route('/', promptCompileRoutes); // /v1/prompts/compile-preview
   api.route('/', skillArtifactRoutes); // /v1/projects/:projectId/commits/:commitHash/artifacts/skill
@@ -302,6 +305,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   }
   api.route('/', autopilotRoutes);
   api.route('/', checkRoutes);
+  api.route('/', projectChecksRoutes);
   api.route('/', contextRoutes);
   api.route('/', relationsRoutes);
   api.route('/', extractionFeedbackRoutes);
@@ -346,6 +350,8 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
       { name: 'Deployment', description: 'Public deployment capability discovery' },
       { name: 'Health', description: 'Health check endpoints' },
       { name: 'Projects', description: 'Project management' },
+      { name: 'Checks', description: 'Project checks and verification records' },
+      { name: 'Explore', description: 'Public project and schema discovery' },
       { name: 'Namespaces', description: 'Personal and organization namespaces' },
       {
         name: 'Collaboration',

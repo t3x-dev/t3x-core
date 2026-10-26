@@ -19,6 +19,7 @@ import {
 import {
   dispatchProjectDeleted,
   PROJECT_DELETED_EVENT,
+  PROJECT_RESTORED_EVENT,
   type ProjectDeletedDetail,
 } from '@/hooks/shared/deleteEvents';
 import { deleteProject, listProjects } from '@/infrastructure/projects';
@@ -62,6 +63,14 @@ export function useProjects(limit = 50, namespaceSlug?: string): UseProjectsResu
     return () => {
       requestIdRef.current += 1;
     };
+  }, [refresh]);
+
+  useEffect(() => {
+    const restored = () => {
+      void refresh();
+    };
+    window.addEventListener(PROJECT_RESTORED_EVENT, restored);
+    return () => window.removeEventListener(PROJECT_RESTORED_EVENT, restored);
   }, [refresh]);
 
   useEffect(() => {

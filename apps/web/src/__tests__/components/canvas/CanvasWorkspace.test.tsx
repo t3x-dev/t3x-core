@@ -447,7 +447,7 @@ describe('CanvasWorkspace initial fit view', () => {
     });
   });
 
-  it('reanchors an open commit action panel after dragging the selected node', async () => {
+  it('does not reopen an empty legacy action panel after dragging a commit', async () => {
     useCanvasStore.setState({
       nodes: useCanvasStore.getState().nodes.map((node) => ({
         ...node,
@@ -487,10 +487,7 @@ describe('CanvasWorkspace initial fit view', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(260);
     });
-    expect(screen.getByTestId('commit-action-panel')).toBeInTheDocument();
-
-    const firstPanel = screen.getByTestId('commit-action-panel');
-    expect(firstPanel).toHaveStyle({ left: '200px', top: '308px' });
+    expect(screen.queryByTestId('commit-action-panel')).not.toBeInTheDocument();
 
     act(() => {
       flowMocks.reactFlowProps?.onNodeDragStart?.({ target: clickTarget }, node);
@@ -519,8 +516,7 @@ describe('CanvasWorkspace initial fit view', () => {
       );
     });
 
-    const reanchoredPanel = screen.getByTestId('commit-action-panel');
-    expect(reanchoredPanel).toHaveStyle({ left: '460px', top: '468px' });
+    expect(screen.queryByTestId('commit-action-panel')).not.toBeInTheDocument();
   });
 
   it('uses the selection panel actions instead of a floating panel on xl viewports', () => {
@@ -620,7 +616,7 @@ describe('CanvasWorkspace initial fit view', () => {
     expect(navigationMocks.routerPush).not.toHaveBeenCalled();
   });
 
-  it('opens an existing Leaf inside the repository Outputs workspace', () => {
+  it('does not offer navigation to retired Leaf pages for commits with archived Leaves', () => {
     viewportMocks.selectionPanelVisible = true;
     const node = {
       ...unitNode('sha256:with-leaf'),
@@ -640,11 +636,8 @@ describe('CanvasWorkspace initial fit view', () => {
         node
       );
     });
-    screen.getByRole('button', { name: 'Open Leaf' }).click();
-
-    expect(navigationMocks.routerPush).toHaveBeenCalledWith(
-      '/project/proj_test?tab=outputs&leaf=leaf_audience'
-    );
+    expect(screen.queryByRole('button', { name: 'Open Leaf' })).not.toBeInTheDocument();
+    expect(navigationMocks.routerPush).not.toHaveBeenCalled();
   });
 
   it('does not use double click as committed node detail navigation', () => {

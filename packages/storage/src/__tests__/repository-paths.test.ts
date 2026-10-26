@@ -5,7 +5,9 @@ import { insertPersonalNamespace } from '../queries/namespaces';
 import {
   deleteProject,
   findProjectById,
+  findProjects,
   insertProject,
+  permanentDeleteProject,
   restoreProject,
   updateProject,
 } from '../queries/projects';
@@ -123,6 +125,75 @@ describe('repository path constraints on real PostgreSQL', () => {
     expect((await findRepositoryClaim(setup.db, otherNamespaceId, moving.name))?.projectId).toBe(
       occupied.projectId
     );
+  });
+
+  it('retains all aliases while deleted and restores the same identity and addresses', async () => {
+    const p = await insertProject(setup.db, { name: 'Restore-Old', namespaceId });
+    await updateProject(setup.db, p.projectId, { name: 'Restore-New' });
+    await deleteProject(setup.db, p.projectId);
+    for (const name of ['Restore-Old', 'Restore-New']) {
+      expect((await findRepositoryClaim(setup.db, namespaceId, name))?.projectId).toBe(p.projectId);
+      expect(await resolveRepositoryProject(setup.db, 'paths-test', name)).toBeNull();
+      await expect(insertProject(setup.db, { name, namespaceId })).rejects.toThrow();
+    }
+    expect(
+      (await findProjects(setup.db, { status: 'deleted', namespace_id: namespaceId })).some(
+        (row) => row.projectId === p.projectId
+      )
+    ).toBe(true);
+    expect((await restoreProject(setup.db, p.projectId))?.projectId).toBe(p.projectId);
+    for (const name of ['Restore-Old', 'Restore-New']) {
+      expect((await resolveRepositoryProject(setup.db, 'paths-test', name))?.projectId).toBe(
+        p.projectId
+      );
+    }
+  });
+
+  it('releases current, historical and transferred addresses only on permanent deletion', async () => {
+    const p = await insertProject(setup.db, { name: 'Release-Old', namespaceId });
+    await updateProject(setup.db, p.projectId, { name: 'Release-New' });
+    await setup.db
+      .update(projects)
+      .set({ namespaceId: otherNamespaceId })
+      .where(eq(projects.projectId, p.projectId));
+    await deleteProject(setup.db, p.projectId);
+    const claims = [
+      [namespaceId, 'Release-Old'],
+      [namespaceId, 'Release-New'],
+      [otherNamespaceId, 'Release-New'],
+    ];
+    for (const [ns, name] of claims) {
+      expect((await findRepositoryClaim(setup.db, ns, name))?.projectId).toBe(p.projectId);
+    }
+    expect(await permanentDeleteProject(setup.db, p.projectId)).toBe(true);
+    expect(await restoreProject(setup.db, p.projectId)).toBeNull();
+    for (const [ns, name] of claims) {
+      expect(await findRepositoryClaim(setup.db, ns, name)).toBeNull();
+      const replacement = await insertProject(setup.db, { namespaceId: ns, name });
+      expect(replacement.projectId).not.toBe(p.projectId);
+    }
+    const replacement = await resolveRepositoryProject(setup.db, 'paths-test', 'Release-Old');
+    expect(replacement?.name).toBe('Release-Old');
+    expect(replacement?.projectId).not.toBe(p.projectId);
+  });
+
+  it('rolls address release back with failed deletion and still arbitrates name reuse', async () => {
+    const p = await insertProject(setup.db, { name: 'Atomic-Release', namespaceId });
+    await expect(
+      setup.db.transaction(async (tx) => {
+        await permanentDeleteProject(tx, p.projectId);
+        throw new Error('rollback deletion');
+      })
+    ).rejects.toThrow('rollback deletion');
+    expect((await findRepositoryClaim(setup.db, namespaceId, p.name))?.projectId).toBe(p.projectId);
+    expect(await findProjectById(setup.db, p.projectId)).not.toBeNull();
+    await permanentDeleteProject(setup.db, p.projectId);
+    const created = await Promise.allSettled([
+      insertProject(setup.db, { name: p.name, namespaceId }),
+      insertProject(setup.db, { name: p.name.toLowerCase(), namespaceId }),
+    ]);
+    expect(created.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(created.filter((result) => result.status === 'rejected')).toHaveLength(1);
   });
 
   it('migrates clean historical rows without renaming and blocks ambiguous legacy candidates', async () => {

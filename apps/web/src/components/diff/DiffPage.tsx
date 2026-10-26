@@ -29,7 +29,7 @@ import {
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { TreeGraphView } from '@/components/tree-graph';
 import { formatUserFacingError } from '@/domain/format/errors';
-import { getProjectIdCanvasPath } from '@/domain/project/repoPath';
+import { getProjectIdHistoryPath } from '@/domain/project/repoPath';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
@@ -267,10 +267,10 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
   // Project name for breadcrumb
   const getProject = useProjectStore((s) => s.getProject);
   const project = getProject(projectId);
-  const fallbackCanvasHref = getProjectIdCanvasPath(projectId);
+  const fallbackHistoryHref = getProjectIdHistoryPath(projectId);
   const returnHref = useMemo(
-    () => safeInternalReturnTo(searchParams.get('returnTo'), fallbackCanvasHref),
-    [fallbackCanvasHref, searchParams]
+    () => safeInternalReturnTo(searchParams.get('returnTo'), fallbackHistoryHref),
+    [fallbackHistoryHref, searchParams]
   );
   const currentReturnTo = useMemo(
     () => buildReturnTo(pathname, searchParams),
@@ -441,6 +441,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
             className="text-[12px]"
             segments={[
               { label: project?.name ?? 'Project', href: `/project/${projectId}` },
+              { label: 'History', href: fallbackHistoryHref },
               { label: 'Diff' },
             ]}
           />

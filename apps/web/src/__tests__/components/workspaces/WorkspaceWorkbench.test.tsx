@@ -225,6 +225,7 @@ function mockComparison(summary: Record<string, string>, title?: string) {
 
 describe('WorkspaceWorkbench Compose/Review integration', () => {
   beforeEach(() => {
+    localStorage.clear();
     vi.clearAllMocks();
     mocks.readAuthoring.mockRejectedValue(new Error('This draft has no authoring ledger.'));
     mocks.validateComparison.mockReset();
@@ -331,8 +332,10 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     expect(within(title).getByText('Canary rollout')).toBeVisible();
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
 
+    expect(screen.getByRole('button', { name: 'Changes' })).toHaveAttribute('aria-current', 'page');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     expect(screen.getByLabelText('Rendered result')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Structure diff' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
 
     expect(screen.getByText('Loading the exact before and after values…')).toBeInTheDocument();
     expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
@@ -426,7 +429,7 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
 
     expect(screen.queryByRole('combobox', { name: 'Compare scenario' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Structure diff' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
     expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
     expect(within(screen.getByRole('table')).getByTitle('prd/summary/outcome')).toBeInTheDocument();
     expect(
@@ -450,7 +453,7 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     );
 
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Structure diff' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
     fireEvent.click(screen.getByRole('button', { name: 'View in State' }));
 
     expect(mocks.onViewCommitInState).toHaveBeenCalledWith(
@@ -471,8 +474,10 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Prepare review' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No structured changes yet');
-    expect(screen.getByRole('button', { name: 'Render' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('button', { name: 'Commit changes' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Changes' })).toHaveAttribute('aria-current', 'page');
+    expect(
+      screen.queryByRole('button', { name: /Commit changes|Approve and commit/i })
+    ).not.toBeInTheDocument();
     expect(mocks.saveDraft).not.toHaveBeenCalled();
   });
 

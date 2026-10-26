@@ -58,7 +58,8 @@ interface HistoryCanvasProps {
   branches: Branch[];
   commits: CanvasCommit[];
   selectedBranch: string;
-  onBack: () => void;
+  onBack?: () => void;
+  focusedCommitHash?: string | null;
   onBranchChange: (branch: string) => void;
   onListView: () => void;
   onViewDiff: (hash: string) => void;
@@ -223,6 +224,7 @@ function HistoryCanvasInner({
   onBranchChange,
   onListView,
   onViewDiff,
+  focusedCommitHash,
 }: HistoryCanvasProps) {
   const layout = useMemo(() => layoutHistoryLanes(commits.map((item) => item.commit)), [commits]);
   const diffStatsByHash = useMemo(
@@ -230,7 +232,7 @@ function HistoryCanvasInner({
     [commits]
   );
   const latestHash = layout.nodes.at(-1)?.hash ?? '';
-  const [selectedHash, setSelectedHash] = useState(latestHash);
+  const [selectedHash, setSelectedHash] = useState(focusedCommitHash || latestHash);
   const [canvasTool, setCanvasTool] = useState<'select' | 'pan'>('select');
   const { fitView, setCenter, zoomIn, zoomOut } = useReactFlow();
   const { zoom } = useViewport();
@@ -380,15 +382,19 @@ function HistoryCanvasInner({
     <div className={styles.page}>
       <header className={styles.header}>
         <div className={styles.headerGroup}>
-          <button
-            className={`${styles.headerButton} ${styles.headerBack}`}
-            onClick={onBack}
-            type="button"
-          >
-            <ArrowLeft size={16} strokeWidth={2.5} />
-            Back to History
-          </button>
-          <span className={styles.headerDivider} />
+          {onBack ? (
+            <>
+              <button
+                className={`${styles.headerButton} ${styles.headerBack}`}
+                onClick={onBack}
+                type="button"
+              >
+                <ArrowLeft size={16} strokeWidth={2.5} />
+                Back to previous page
+              </button>
+              <span className={styles.headerDivider} />
+            </>
+          ) : null}
           <h1 className={styles.title}>History Canvas</h1>
         </div>
         <button className={styles.headerButton} onClick={onListView} type="button">

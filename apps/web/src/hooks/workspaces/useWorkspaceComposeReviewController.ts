@@ -12,6 +12,7 @@ import {
   authoringDeterministicValidation,
   authoringReviewDocuments,
 } from '@/domain/workspaces/authoringReview';
+import { EMPTY_WORKSPACE_REVIEW } from '@/domain/workspaces/changeDecision';
 import {
   DEFAULT_WORKSPACE_SCHEMA_BINDING,
   rebindWorkspaceCandidate,
@@ -352,128 +353,140 @@ export function useWorkspaceComposeReviewController({
     [addMaterial, candidate.projectId, materialUpload]
   );
 
-  const prepareReview = useCallback(async () => {
-    if (busyAction) return false;
-    const generation = reviewGenerationRef.current + 1;
-    reviewGenerationRef.current = generation;
-    setReview(EMPTY_REVIEW);
-    setBusyAction('review.prepare');
-    setLocalError(null);
-    setNotice('Preparing the exact deterministic result…');
-    try {
-      let authoringView: WorkspaceAuthoringView | null = null;
+  const prepareReview = useCallback(
+    async (onPrepared?: (snapshot: ReviewSnapshotV1) => void) => {
+      if (busyAction) return false;
+      const generation = reviewGenerationRef.current + 1;
+      reviewGenerationRef.current = generation;
+      setReview(EMPTY_REVIEW);
+      setBusyAction('review.prepare');
+      setLocalError(null);
+      setNotice('Preparing the exact deterministic result…');
       try {
-        authoringView = await getSharedApiClient().workspaces.authoring.read(
-          workingCandidate.projectId,
-          workingCandidate.id
+        let authoringView: WorkspaceAuthoringView | null = null;
+        try {
+          authoringView = await getSharedApiClient().workspaces.authoring.read(
+            workingCandidate.projectId,
+            workingCandidate.id
+          );
+        } catch (error) {
+          if (workingCandidate.authoringLedger) throw error;
+          authoringView = null;
+        }
+        if (authoringView?.hasChanges === false) {
+          throw new Error(EMPTY_WORKSPACE_REVIEW);
+        }
+        const documents = authoringReviewDocuments(
+          authoringView ? { ...authoringView, selected: null } : null
         );
-      } catch (error) {
-        if (workingCandidate.authoringLedger) throw error;
-        authoringView = null;
-      }
-      const documents = authoringReviewDocuments(
-        authoringView ? { ...authoringView, selected: null } : null
-      );
-      if (workingCandidate.authoringLedger && !documents) {
-        throw new Error('The complete Authoring Draft is unavailable. Retry Workspace Review.');
-      }
-      if (authoringView && documents) {
-        const reviewed = await getSharedApiClient().workspaces.authoring.prepareReview(
-          workingCandidate.projectId,
-          workingCandidate.id,
-          {
-            request_id: crypto.randomUUID(),
-            expected_workspace_revision: authoringView.workspaceRevision,
-            expected_revision: authoringView.compositionRevision,
-            expected_ref_head: authoringView.basis.refHead,
-            reason: `Review ${authoringView.netDiff.length} authoring Workspace changes.`,
-          }
-        );
+        if (workingCandidate.authoringLedger && !documents) {
+          throw new Error('The complete Authoring Draft is unavailable. Retry Workspace Review.');
+        }
+        if (authoringView && documents) {
+          const reviewed = await getSharedApiClient().workspaces.authoring.prepareReview(
+            workingCandidate.projectId,
+            workingCandidate.id,
+            {
+              request_id: crypto.randomUUID(),
+              expected_workspace_revision: authoringView.workspaceRevision,
+              expected_revision: authoringView.compositionRevision,
+              expected_ref_head: authoringView.basis.refHead,
+              reason: `Review ${authoringView.netDiff.length} authoring Workspace changes.`,
+            }
+          );
+          if (generation !== reviewGenerationRef.current) return false;
+          const latest = await getSharedApiClient().workspaces.getLatestReviewSnapshot(
+            workingCandidate.projectId,
+            workingCandidate.id,
+            {
+              transition_id: reviewed.view.transition_id,
+            }
+          );
+          if (generation !== reviewGenerationRef.current) return false;
+          if (!latest?.snapshot)
+            throw new Error('The saved review snapshot is unavailable. Prepare Review again.');
+          setReview({
+            changeProjection: latest?.change_projection ?? null,
+            content: documents.current,
+            deterministicValidation: authoringDeterministicValidation(
+              documents,
+              authoringView.netDiff.length
+            ),
+            precondition: {
+              workspace_revision: reviewed.view.precondition.workspace_revision,
+              ref_head: reviewed.view.precondition.ref_head,
+              effect_digest: reviewed.view.precondition.effect_digest,
+              proposal_digest: reviewed.view.precondition.proposal_digest,
+              statement_digests: reviewed.view.precondition.statement_digests,
+              policy_digest: reviewed.view.precondition.policy_digest ?? '',
+            },
+            reviewSnapshot: latest?.snapshot ?? null,
+            transitionId: reviewed.view.transition_id,
+            view: reviewed.view.transition,
+            schemaReview: reviewed.schemaReview ?? latest?.schema_review ?? null,
+          });
+          setNotice('Immutable review prepared from the current draft.');
+          onPrepared?.(latest.snapshot);
+          return true;
+        }
+
+        if (!onPrepareDraft) {
+          throw new Error('Prepare the current Compose draft before Review.');
+        }
+        const prepared = await onPrepareDraft(workingCandidate, {});
         if (generation !== reviewGenerationRef.current) return false;
-        const latest = await getSharedApiClient()
-          .workspaces.getLatestReviewSnapshot(workingCandidate.projectId, workingCandidate.id, {
-            transition_id: reviewed.view.transition_id,
-          })
-          .catch(() => null);
+        setWorkingCandidate(prepared);
+        if (prepared.yopsDraft.operations.length === 0) {
+          throw new Error('No YOps operations were generated from the selected source evidence.');
+        }
+
+        const deterministicValidation = await validateWorkspaceCandidateYOps(prepared);
+        if (!deterministicValidation.ok) {
+          throw new Error(
+            deterministicValidation.error?.message ?? 'Deterministic YOps validation failed.'
+          );
+        }
+        const content = {
+          trees: deterministicValidation.previewTrees ?? deterministicValidation.baselineTrees,
+          relations:
+            deterministicValidation.previewRelations ?? deterministicValidation.baselineRelations,
+        };
+        const saved = await persistCandidate(prepared, 'review.prepare');
+        if (saved.revision === undefined) {
+          throw new Error('Saved Workspace did not return a review revision.');
+        }
+        const reviewed = await reviewWorkspaceTransition(
+          saved.projectId,
+          saved.id,
+          content,
+          `Review ${saved.yopsDraft.operations.length} structured Workspace changes.`,
+          saved.revision
+        );
         if (generation !== reviewGenerationRef.current) return false;
         setReview({
-          changeProjection: latest?.change_projection ?? null,
-          content: documents.current,
-          deterministicValidation: authoringDeterministicValidation(
-            documents,
-            authoringView.netDiff.length
-          ),
-          precondition: {
-            workspace_revision: reviewed.view.precondition.workspace_revision,
-            ref_head: reviewed.view.precondition.ref_head,
-            effect_digest: reviewed.view.precondition.effect_digest,
-            proposal_digest: reviewed.view.precondition.proposal_digest,
-            statement_digests: reviewed.view.precondition.statement_digests,
-            policy_digest: reviewed.view.precondition.policy_digest ?? '',
-          },
-          reviewSnapshot: latest?.snapshot ?? null,
-          transitionId: reviewed.view.transition_id,
-          view: reviewed.view.transition,
-          schemaReview: reviewed.schemaReview ?? latest?.schema_review ?? null,
+          changeProjection: reviewed.change_projection,
+          content,
+          deterministicValidation,
+          precondition: reviewed.precondition,
+          reviewSnapshot: reviewed.review_snapshot,
+          transitionId: reviewed.transition_id,
+          view: reviewed.transition,
         });
         setNotice('Immutable review prepared from the current draft.');
+        onPrepared?.(reviewed.review_snapshot);
         return true;
+      } catch (error) {
+        if (generation !== reviewGenerationRef.current) return false;
+        setReview(EMPTY_REVIEW);
+        setLocalError(formatUserFacingError(error, 'Workspace review preparation failed.'));
+        setNotice(null);
+        return false;
+      } finally {
+        setBusyAction(null);
       }
-
-      if (!onPrepareDraft) {
-        throw new Error('Prepare the current Compose draft before Review.');
-      }
-      const prepared = await onPrepareDraft(workingCandidate, {});
-      if (generation !== reviewGenerationRef.current) return false;
-      setWorkingCandidate(prepared);
-      if (prepared.yopsDraft.operations.length === 0) {
-        throw new Error('No YOps operations were generated from the selected source evidence.');
-      }
-
-      const deterministicValidation = await validateWorkspaceCandidateYOps(prepared);
-      if (!deterministicValidation.ok) {
-        throw new Error(
-          deterministicValidation.error?.message ?? 'Deterministic YOps validation failed.'
-        );
-      }
-      const content = {
-        trees: deterministicValidation.previewTrees ?? deterministicValidation.baselineTrees,
-        relations:
-          deterministicValidation.previewRelations ?? deterministicValidation.baselineRelations,
-      };
-      const saved = await persistCandidate(prepared, 'review.prepare');
-      if (saved.revision === undefined) {
-        throw new Error('Saved Workspace did not return a review revision.');
-      }
-      const reviewed = await reviewWorkspaceTransition(
-        saved.projectId,
-        saved.id,
-        content,
-        `Review ${saved.yopsDraft.operations.length} structured Workspace changes.`,
-        saved.revision
-      );
-      if (generation !== reviewGenerationRef.current) return false;
-      setReview({
-        changeProjection: reviewed.change_projection,
-        content,
-        deterministicValidation,
-        precondition: reviewed.precondition,
-        reviewSnapshot: reviewed.review_snapshot,
-        transitionId: reviewed.transition_id,
-        view: reviewed.transition,
-      });
-      setNotice('Immutable review prepared from the current draft.');
-      return true;
-    } catch (error) {
-      if (generation !== reviewGenerationRef.current) return false;
-      setReview(EMPTY_REVIEW);
-      setLocalError(formatUserFacingError(error, 'Workspace review preparation failed.'));
-      setNotice(null);
-      return false;
-    } finally {
-      setBusyAction(null);
-    }
-  }, [busyAction, onPrepareDraft, persistCandidate, workingCandidate]);
+    },
+    [busyAction, onPrepareDraft, persistCandidate, workingCandidate]
+  );
 
   const decide = useCallback(
     async (outcome: WorkspaceTransitionOutcome, reason?: string) => {

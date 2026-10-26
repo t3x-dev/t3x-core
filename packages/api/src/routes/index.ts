@@ -21,6 +21,7 @@ export { deployAgentRoutes } from './deploy-agents.openapi';
 export { deploymentCapabilitiesRoutes } from './deployment-capabilities.openapi';
 export { diffRoutes } from './diff.openapi';
 export { docsYopsRoutes } from './docs-yops.openapi';
+export { exploreRoutes } from './explore.openapi';
 export { exportRoutes } from './export.openapi';
 export { extractionFeedbackRoutes } from './extraction-feedback.openapi';
 export { gateRoutes } from './gate.openapi';
@@ -36,6 +37,7 @@ export { mergeRoutes } from './merge.openapi';
 export { namespaceRoutes } from './namespaces.openapi';
 export { notificationsRoutes } from './notifications.openapi';
 export { pinsRoutes } from './pins.openapi';
+export { projectChecksRoutes } from './project-checks.openapi';
 export {
   createProjectVisibilityRoutes,
   projectVisibilityRoutes,

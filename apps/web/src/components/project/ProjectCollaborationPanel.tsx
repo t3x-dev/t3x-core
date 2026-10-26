@@ -16,6 +16,7 @@ import {
 import { buildInvitationUrl } from '@/domain/collaboration/invitationLink';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { useProjectCollaboration } from '@/hooks/accounts/useProjectCollaboration';
+import palette from '@/styles/management-palette.module.css';
 import { SettingsSection } from './settings/SettingsSection';
 
 const PROJECT_ROLES: readonly ProjectGrantRole[] = ['admin', 'editor', 'viewer'];
@@ -138,7 +139,7 @@ export function ProjectCollaborationPanel({ projectId }: { projectId: string }) 
     >
       <div className="space-y-4">
         {guestsQuery.error ? (
-          <p className="text-sm text-destructive">
+          <p className="text-sm text-[var(--status-error)]">
             {formatUserFacingError(guestsQuery.error, 'Failed to load project guests.')}
           </p>
         ) : guestsQuery.isLoading && !guestsQuery.data ? (
@@ -177,7 +178,7 @@ export function ProjectCollaborationPanel({ projectId }: { projectId: string }) 
                         <SelectTrigger className="w-28" size="sm" aria-label="Project guest role">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className={palette.scope}>
                           {PROJECT_ROLES.map((role) => (
                             <SelectItem key={role} value={role}>
                               {role}
@@ -232,7 +233,7 @@ export function ProjectCollaborationPanel({ projectId }: { projectId: string }) 
                   <SelectTrigger className="w-full" aria-label="Project invitation role">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className={palette.scope}>
                     {PROJECT_ROLES.map((role) => (
                       <SelectItem key={role} value={role}>
                         {role}
@@ -256,7 +257,7 @@ export function ProjectCollaborationPanel({ projectId }: { projectId: string }) 
               )}
 
               {invitationsQuery.error && (
-                <p className="text-sm text-destructive">
+                <p className="text-sm text-[var(--status-error)]">
                   {formatUserFacingError(
                     invitationsQuery.error,
                     'Failed to load project invitations.'

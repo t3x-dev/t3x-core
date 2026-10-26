@@ -11,7 +11,7 @@ export function SettingsReturnLink() {
   const returnTo = safeInternalReturnTo(params.get('returnTo'), '');
   if (!returnTo) return null;
   return (
-    <div className="mx-auto max-w-3xl px-6 pt-6">
+    <div className="mx-auto w-full max-w-[1120px] px-5 pt-6 sm:px-8 lg:px-12">
       <Link
         className="mb-4 inline-block text-sm underline"
         href={returnTo}

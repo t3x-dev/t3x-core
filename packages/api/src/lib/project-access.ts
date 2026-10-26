@@ -235,7 +235,8 @@ export function getProjectAccessPrincipal(c: Context): ProjectAccessPrincipal | 
 export async function listAuthorizedProjectActions(
   c: Context,
   db: AnyDB,
-  projectId: string
+  projectId: string,
+  options: { includeDeleted?: boolean } = {}
 ): Promise<ProjectAction[]> {
   const credential = getProjectAccessPrincipal(c);
   if (!credential) return isAuthenticationDisabled() ? [...PROJECT_ACTIONS] : [];
@@ -245,6 +246,7 @@ export async function listAuthorizedProjectActions(
   const stored = await findProjectAuthorityFacts(db, {
     projectId,
     principal: { kind: principal.kind, principalId: principal.principal_id },
+    includeDeleted: options.includeDeleted,
   });
   if (!stored) return [];
   const facts = trustedProjectAuthorityFacts(stored, principal, credential);
@@ -255,12 +257,18 @@ export async function listAuthorizedProjectActions(
 /** Principal shape used by tenant-safe project list queries. */
 export function getProjectListAuthority(
   c: Context
-): { principal_kind: 'human' | 'agent' | 'service'; principal_id: string } | undefined {
+):
+  | { principal_kind: 'human' | 'agent' | 'service'; principal_id: string; project_id?: string }
+  | undefined {
   const principal = getProjectAccessPrincipal(c);
   if (!principal) return undefined;
   const canonical = canonicalPrincipal(principal);
   return canonical
-    ? { principal_kind: canonical.kind, principal_id: canonical.principal_id }
+    ? {
+        principal_kind: canonical.kind,
+        principal_id: canonical.principal_id,
+        ...(principal.projectId ? { project_id: principal.projectId } : {}),
+      }
     : undefined;
 }
 

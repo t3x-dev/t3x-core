@@ -9,11 +9,13 @@ import {
 import { normalizeYSchemaObject, sha256CompositionValue, type YSchema } from '@t3x-dev/yschema';
 import type { Context } from 'hono';
 import type { z } from 'zod';
+import { readNodeProvenance, schemaOriginSources } from './schema-node-provenance';
 import { resolveStudioSource, schemaSourceAdoptionReason } from './schema-studio';
 import { StudioError } from './schema-studio-preview';
 import { ensureBuiltInYSchemaArtifacts } from './yschema-artifact-registry';
 
 export interface WorkspaceSchemaEditBasis {
+  composition?: Record<string, string>;
   schema: YSchema;
   schemaHash: string;
   reference: WorkspaceSchemaCompositionBase;
@@ -21,6 +23,7 @@ export interface WorkspaceSchemaEditBasis {
   selectionHash: string;
   renderPlan: Record<string, unknown>[];
   origins: Record<string, unknown>;
+  nodeProvenance: import('@t3x-dev/api-client').SchemaNodeProvenance;
 }
 const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)
@@ -54,6 +57,7 @@ export async function resolveWorkspaceSchemaEditBasis(
   )
     throw new StudioError('CONFLICT', 'The exact bound Schema snapshot is unavailable or changed.');
   const manifest = record(snapshot?.manifestJson);
+  let nodeProvenance = readNodeProvenance(manifest.nodeProvenance);
   let sources: unknown = manifest.sources ?? binding.studioSources;
   if (!sources && snapshot) {
     const receipts = Array.isArray(workspace.schemaPreparations)
@@ -100,7 +104,7 @@ export async function resolveWorkspaceSchemaEditBasis(
       view &&
       record(view.manifest).schema &&
       (await sha256CompositionValue(normalizeYSchemaObject(view.manifest.schema))) === schemaHash
-    )
+    ) {
       sources = [
         {
           projectId: view.ownerProjectId,
@@ -110,6 +114,8 @@ export async function resolveWorkspaceSchemaEditBasis(
           hash: view.artifactHash,
         },
       ];
+      nodeProvenance = readNodeProvenance(record(view.manifest.registry).nodeProvenance);
+    }
   }
   const parsed = StudioSourceSchema.array().min(1).safeParse(sources);
   if (!parsed.success)
@@ -117,7 +123,7 @@ export async function resolveWorkspaceSchemaEditBasis(
       'CONFLICT',
       'The bound snapshot has no exact recoverable source provenance.'
     );
-  for (const source of parsed.data) {
+  for (const source of [...parsed.data, ...schemaOriginSources(snapshot?.originsJson ?? {})]) {
     const view = await resolveStudioSource(c, db, {
       sourceProjectId: source.projectId,
       canonicalName: source.canonicalName,
@@ -133,6 +139,9 @@ export async function resolveWorkspaceSchemaEditBasis(
     apiVersion: 't3x.dev/studio-selection/v1',
     projectId,
     sources: parsed.data,
+    ...(Object.keys(record(manifest.studioComposition)).length
+      ? { composition: manifest.studioComposition }
+      : {}),
   });
   if (manifest.selectionHash && manifest.selectionHash !== selectionHash)
     throw new StudioError(
@@ -147,6 +156,7 @@ export async function resolveWorkspaceSchemaEditBasis(
       schemaHash,
     }));
   return {
+    composition: manifest.studioComposition as Record<string, string> | undefined,
     schema,
     schemaHash,
     sources: parsed.data,
@@ -160,5 +170,6 @@ export async function resolveWorkspaceSchemaEditBasis(
     },
     renderPlan: (snapshot?.renderPlanJson ?? []) as Record<string, unknown>[],
     origins: (snapshot?.originsJson ?? {}) as Record<string, unknown>,
+    nodeProvenance,
   };
 }

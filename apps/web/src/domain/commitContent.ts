@@ -27,7 +27,7 @@ export function getSemanticContent(commit: CommitWithContent): SemanticContent {
 
 /**
  * Generate human-readable summary text from a commit's trees.
- * Used by export / insights flows.
+ * Used by export flows.
  */
 export function treeSummaryText(commit: CommitWithContent): string {
   const { trees } = getSemanticContent(commit);

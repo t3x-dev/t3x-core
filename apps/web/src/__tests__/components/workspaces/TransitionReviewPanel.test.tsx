@@ -303,9 +303,9 @@ describe('TransitionReviewPanel', () => {
     expect(screen.getByText('Committed')).toBeInTheDocument();
     expect(screen.getByText('feature/prd-audience')).toBeInTheDocument();
     expect(screen.getByText('7')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open Changes' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Open Review' })).toHaveAttribute(
       'href',
-      '/project/proj_1/changes/workspace_prd_handoff/rvs_review_snapshot_panel'
+      '/project/proj_1?tab=workspaces&workspace=workspace_prd_handoff&workspaceMode=review&branch=feature%2Fprd-audience&reviewSnapshot=rvs_review_snapshot_panel'
     );
   });
 });

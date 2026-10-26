@@ -1,5 +1,6 @@
 import type { ReviewSnapshotV1 } from '@t3x-dev/api-client';
 import { ArrowRight } from 'lucide-react';
+import { workspaceReviewHref } from '@/domain/workspaces/reviewNavigation';
 
 export function ChangeDecisionHandoff({
   reviewSnapshot,
@@ -9,24 +10,23 @@ export function ChangeDecisionHandoff({
   compact?: boolean;
 }) {
   const href = reviewSnapshot
-    ? reviewSnapshotHref(
-        reviewSnapshot.projectId,
-        reviewSnapshot.workspaceId,
-        reviewSnapshot.snapshotId
-      )
+    ? workspaceReviewHref(reviewSnapshot.projectId, reviewSnapshot.workspaceId, {
+        snapshotId: reviewSnapshot.snapshotId,
+        branch: reviewSnapshot.review.precondition.refName,
+      })
     : null;
 
   return (
     <aside
-      aria-label="Changes decision handoff"
+      aria-label="Review snapshot handoff"
       className="flex flex-col gap-3 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4"
     >
       <div>
-        <h3 className="text-sm font-semibold text-[var(--text-primary)]">Decide in Changes</h3>
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">Decide in Review</h3>
         <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
           {compact
             ? 'Review the checks and decide whether to commit this revision.'
-            : 'This Workspace has produced an immutable ReviewSnapshot. Accept, reject, override, and commit actions now live in Changes so Web has one review lifecycle.'}
+            : 'A fixed snapshot is ready. Open Workspace Review to approve and commit or reject this revision. Detailed evidence is available in Run.'}
         </p>
       </div>
       {href ? (
@@ -35,7 +35,7 @@ export function ChangeDecisionHandoff({
           style={{ color: 'var(--on-accent)' }}
           href={href}
         >
-          Open Changes
+          Open Review
           <ArrowRight aria-hidden="true" className="size-4" />
         </a>
       ) : (
@@ -45,22 +45,4 @@ export function ChangeDecisionHandoff({
       )}
     </aside>
   );
-}
-
-function reviewSnapshotHref(projectId: string, workspaceId: string, snapshotId: string): string {
-  return `/project/${encodePathSegment(projectId)}/changes/${encodePathSegment(
-    workspaceId
-  )}/${encodePathSegment(snapshotId)}`;
-}
-
-function encodePathSegment(value: string): string {
-  return encodeURIComponent(safeDecodeURIComponent(value));
-}
-
-function safeDecodeURIComponent(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
 }

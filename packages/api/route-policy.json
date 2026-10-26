@@ -1017,6 +1017,20 @@
       "rationale": "Project-scoped visibility mutation guarded by explicit visibility-management authority."
     },
     {
+      "source": "project-checks.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/checks",
+      "policy": "project",
+      "rationale": "Read-only check evidence requires canonical project access and project-scoped record lookup."
+    },
+    {
+      "source": "project-checks.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/checks/{recordId}",
+      "policy": "project",
+      "rationale": "Read-only check evidence requires canonical project access and project-scoped record lookup."
+    },
+    {
       "source": "projects.openapi.ts",
       "method": "GET",
       "path": "/v1/projects",
@@ -2188,6 +2202,13 @@
     {
       "source": "workspace-authoring.openapi.ts",
       "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/reconciliation",
+      "policy": "project",
+      "rationale": "Requires project access and Transition propose authority; server-owned actor, exact Workspace/ref CAS, immutable archived edits, and deterministic reconciliation without advancing the ref."
+    },
+    {
+      "source": "workspace-authoring.openapi.ts",
+      "method": "POST",
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/reviews",
       "policy": "project",
       "rationale": "Requires project edit and Transition propose/verify authority; freezes complete server-owned authoring history, never a selected UI subset."
@@ -2205,6 +2226,34 @@
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/source-chat/assistant/operations/{operationId}",
       "policy": "project",
       "rationale": "Project-scoped Workspace Assistant; rechecks current project/Transition authority, uses only saved source user turns and server-bound operation identities."
+    },
+    {
+      "source": "explore.openapi.ts",
+      "method": "GET",
+      "path": "/v1/explore/projects",
+      "policy": "authenticated",
+      "rationale": "Public-only introduction projection; does not grant project authority."
+    },
+    {
+      "source": "explore.openapi.ts",
+      "method": "GET",
+      "path": "/v1/explore/projects/{projectId}",
+      "policy": "authenticated",
+      "rationale": "Rechecks public visibility and deletion; only introduction fields are exposed."
+    },
+    {
+      "source": "explore.openapi.ts",
+      "method": "GET",
+      "path": "/v1/explore/schema-targets",
+      "policy": "authenticated",
+      "rationale": "Lists only projects with current edit capability; candidate writes recheck authority."
+    },
+    {
+      "source": "explore.openapi.ts",
+      "method": "GET",
+      "path": "/v1/explore/schema-release",
+      "policy": "authenticated",
+      "rationale": "Exact release read verifies source project authority, lifecycle, visibility and integrity without a destination."
     }
   ]
 }

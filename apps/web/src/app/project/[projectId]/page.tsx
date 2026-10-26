@@ -3,10 +3,10 @@
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasWorkspace } from '@/components/canvas';
+import { ProjectChecksPage } from '@/components/checks/ProjectChecksPage';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { ProjectDemoTourOverlay } from '@/components/onboarding/ProjectDemoTourOverlay';
 import { ProjectCommunityTab } from '@/components/project/ProjectCommunityTab';
-import { ProjectOutputsTab } from '@/components/project/ProjectOutputsTab';
 import { ProjectReviewsTab } from '@/components/project/ProjectReviewsTab';
 import { ProjectSchemasTab } from '@/components/project/ProjectSchemasTab';
 import { ProjectShell } from '@/components/project/ProjectShell';
@@ -16,9 +16,11 @@ import {
   getProjectTabSegment,
   type ProjectTabId,
   parseProjectTab,
+  resolveProjectTab,
 } from '@/components/project/projectTabModel';
 import { isRefHeadIntegrityInvalid } from '@/domain/format/errors';
 import { getProjectIdRepoPath, getProjectRepoPath } from '@/domain/project/repoPath';
+import { repositoryLocation } from '@/domain/project/repositoryLocation';
 import { toYSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 import { useCanvasDeletionWiring } from '@/hooks/canvas/useCanvasDeletionWiring';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
@@ -65,24 +67,15 @@ function withCurrentQuery(path: string, searchParams: { toString: () => string }
   return query ? `${path}?${query}` : path;
 }
 
-function getProjectTabPath(
-  project: { id?: string; name: string },
-  tab: ProjectTabId,
-  ownerSlug?: string
-) {
-  const basePath = getProjectRepoPath(project, ownerSlug);
-  return tab === 'state' ? basePath : `${basePath}/${getProjectTabSegment(tab)}`;
-}
-
 function getProjectCanonicalPath(
   project: { id?: string; name: string },
   searchParams: URLSearchParams,
-  ownerSlug?: string
+  ownerSlug?: string,
+  hash = ''
 ) {
-  return withCurrentQuery(
-    getProjectTabPath(project, parseProjectTab(searchParams.get('tab')), ownerSlug),
-    searchParams
-  );
+  const next = new URLSearchParams(searchParams);
+  next.set('tab', getProjectTabSegment(parseProjectTab(next.get('tab'))));
+  return repositoryLocation(getProjectRepoPath(project, ownerSlug), '', next.toString(), hash);
 }
 
 function hasProjectUiQuery(searchParams: { has: (key: string) => boolean }) {
@@ -103,10 +96,14 @@ export function ProjectDetailPageContent({
 
   const searchParams = useSearchParams();
   const isCanvasSurface = surface === 'canvas';
-  const activeTab = initialTabOverride ?? parseProjectTab(searchParams.get('tab'));
+  const activeTab = resolveProjectTab(
+    initialTabOverride ?? parseProjectTab(searchParams.get('tab')),
+    searchParams.get('schemaView')
+  );
   const isSettingsRedirect = activeTab === 'settings';
-  const isSchemaStudio = activeTab === 'schemas' && searchParams.get('schemaView') === 'studio';
-  const isSchemaRelease = activeTab === 'schemas' && searchParams.get('schemaView') === 'release';
+  const isHistoryRedirect = activeTab === 'history';
+  const isSchemaStudio = activeTab === 'schemas';
+  const isSchemaRelease = activeTab === 'browse' && searchParams.get('schemaView') === 'release';
   const isEmbeddedCanvasSurface =
     !isCanvasSurface && activeTab === 'state' && searchParams.get('view') === 'canvas';
   const isCanvasActive = isCanvasSurface || isEmbeddedCanvasSurface;
@@ -123,13 +120,13 @@ export function ProjectDetailPageContent({
   }, [showIntroDemo]);
 
   useEffect(() => {
-    if (!isSettingsRedirect) return;
+    if (!isSettingsRedirect && !isHistoryRedirect) return;
     const query = new URLSearchParams(searchParams.toString());
     query.delete('tab');
     router.replace(
-      `/project/${encodeURIComponent(projectId)}/settings${query.size ? `?${query}` : ''}${window.location.hash}`
+      `/project/${encodeURIComponent(projectId)}/${isHistoryRedirect ? 'history' : 'settings'}${query.size ? `?${query}` : ''}${window.location.hash}`
     );
-  }, [isSettingsRedirect, projectId, router, searchParams]);
+  }, [isHistoryRedirect, isSettingsRedirect, projectId, router, searchParams]);
 
   const projectFromStore = useProjectStore(
     (state) => state.details?.[projectId] ?? state.projects.find((item) => item.id === projectId)
@@ -193,7 +190,8 @@ export function ProjectDetailPageContent({
         ? getProjectCanonicalPath(
             project,
             new URLSearchParams(searchParams.toString()),
-            ownerSlugOverride
+            ownerSlugOverride,
+            window.location.hash
           )
         : withCurrentQuery(pathname, searchParams);
     router.replace(nextPath, { scroll: false });
@@ -350,7 +348,7 @@ export function ProjectDetailPageContent({
   // direct/new project URL that is not present in the list cache yet.
   const projectLookupPending = !projectFromStore && !fetchedProject && !projectLookupError;
 
-  if (isSettingsRedirect) {
+  if (isSettingsRedirect || isHistoryRedirect) {
     return null;
   }
 
@@ -467,14 +465,30 @@ export function ProjectDetailPageContent({
 
   const activeContent = (() => {
     switch (activeTab) {
+      case 'checks':
+        return <ProjectChecksPage projectId={projectId} />;
       case 'schemas':
-        return <ProjectSchemasTab projectId={projectId} schemaBindings={schemaBindings} />;
+      case 'discover':
+      case 'browse':
+        return (
+          <ProjectSchemasTab
+            projectId={projectId}
+            schemaBindings={schemaBindings}
+            tab={activeTab}
+          />
+        );
       case 'workspaces':
         return <ProjectWorkspacesTab projectId={projectId} schemaBindings={schemaBindings} />;
       case 'reviews':
         return (
           <ProjectReviewsTab
             initialPullRequestNumber={Number(searchParams.get('pr')) || undefined}
+            initialDetailTab={searchParams.get('prTab') ?? undefined}
+            onDetailTabChange={(tab) => {
+              const next = new URLSearchParams(searchParams.toString());
+              next.set('prTab', tab);
+              router.replace(`${pathname}?${next}`, { scroll: false });
+            }}
             key={projectId}
             onPullRequestNumberChange={(number) => {
               const next = new URLSearchParams(searchParams.toString());
@@ -486,8 +500,6 @@ export function ProjectDetailPageContent({
             projectId={projectId}
           />
         );
-      case 'outputs':
-        return <ProjectOutputsTab key={projectId} projectId={projectId} />;
       case 'community':
         return <ProjectCommunityTab branch={searchParams.get('branch')} projectId={projectId} />;
       default:

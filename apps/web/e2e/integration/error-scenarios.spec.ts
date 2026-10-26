@@ -30,12 +30,12 @@ test.describe('Error Scenarios', () => {
     await expect(errorMsg.first()).toBeVisible({ timeout: 15000 });
   });
 
-  // ES-03: Invalid leaf ID shows error
-  test('ES-03: Invalid leaf shows error', async ({ page }) => {
+  // ES-03: Retired Leaf routes show not found
+  test('ES-03: Retired Leaf shows not found', async ({ page }) => {
     await page.goto('/project/proj_invalid/leaf/leaf_invalid');
 
     await expect(
-      page.getByRole('alert').filter({ hasText: 'Leaf not found: leaf_invalid' })
+      page.getByRole('heading', { name: '404', exact: true })
     ).toBeVisible({ timeout: 15000 });
   });
 
@@ -84,7 +84,7 @@ test.describe('Error Scenarios', () => {
     });
 
     // Visit multiple key routes
-    const routes = ['/', '/insights', '/deploy'];
+    const routes = ['/', '/deploy'];
 
     for (const route of routes) {
       errors.length = 0;

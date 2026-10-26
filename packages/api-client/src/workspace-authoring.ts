@@ -52,6 +52,7 @@ export interface WorkspaceAuthoringView {
   workspaceRevision: number;
   compositionRevision: number;
   basis: { refName: string; refHead: string | null; baseDigest: string };
+  synchronization?: { currentRefHead: string | null; required: boolean };
   sources?: Array<{
     id: string;
     title?: string;
@@ -78,6 +79,8 @@ export interface WorkspaceAuthoringView {
   current?: TransitionProtocolValue;
   /** Exact effective binding at workspaceRevision, not the latest Studio candidate. */
   currentSchema?: WorkspaceSchemaDefinitionSnapshot;
+  /** Net content or effective Schema change. Omitted when the Base contract is unknown. */
+  hasChanges?: boolean;
   netDiff: WorkspaceAuthoringCard[];
   node: {
     nodeId: string;
@@ -128,6 +131,11 @@ export interface WorkspaceAuthoringOutcome {
   receipt?: { actionId: string; outcome: 'no_change'; message: string };
 }
 export interface WorkspaceAuthoringCapability {
+  reconcile(
+    projectId: string,
+    workspaceId: string,
+    input: Omit<InitializeWorkspaceAuthoringInput, 'legacy_document'>
+  ): Promise<{ kind: 'reconciled' | 'reused' | 'no_change'; workspaceRevision: number }>;
   confirmDeletion(
     projectId: string,
     workspaceId: string,

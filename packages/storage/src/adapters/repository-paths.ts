@@ -1,7 +1,7 @@
 import { inspectRepositoryName, RESERVED_REPOSITORY_NAMES } from '@t3x-dev/application';
 import type postgres from 'postgres';
 
-/** Schema v76. No project names/ownership are rewritten. Ambiguous legacy
+/** Schema v76/v77. No project names/ownership are rewritten. Ambiguous legacy
  * candidates are reserved without an owner until an operator resolves them.
  * Keep the hard SQL guards aligned with application/repository-names tests.
  */
@@ -9,7 +9,7 @@ export const REPOSITORY_PATHS_SQL = `
   CREATE TABLE IF NOT EXISTS repository_paths (
     namespace_id TEXT NOT NULL REFERENCES namespaces(namespace_id) ON DELETE RESTRICT,
     name_key TEXT NOT NULL CHECK (name_key = lower(name_key COLLATE "C")),
-    project_id TEXT REFERENCES projects(project_id) ON DELETE SET NULL,
+    project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
     resolvable BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (namespace_id, name_key)
@@ -17,6 +17,24 @@ export const REPOSITORY_PATHS_SQL = `
   -- Early local v76 bootstraps predate the explicit resolvability flag.
   ALTER TABLE repository_paths ADD COLUMN IF NOT EXISTS resolvable BOOLEAN NOT NULL DEFAULT FALSE;
   CREATE INDEX IF NOT EXISTS repository_paths_project ON repository_paths(project_id);
+
+  -- v77: release every address of a permanently deleted project atomically.
+  -- Null-owner legacy records are deliberately untouched: their origin is unknown.
+  DO $$
+  DECLARE old_constraint TEXT;
+  BEGIN
+    FOR old_constraint IN
+      SELECT conname FROM pg_constraint
+      WHERE conrelid = 'repository_paths'::regclass AND contype = 'f'
+        AND confrelid = 'projects'::regclass
+        AND conkey = ARRAY[(SELECT attnum FROM pg_attribute
+          WHERE attrelid = 'repository_paths'::regclass AND attname = 'project_id')]
+    LOOP
+      EXECUTE format('ALTER TABLE repository_paths DROP CONSTRAINT %I', old_constraint);
+    END LOOP;
+    ALTER TABLE repository_paths ADD CONSTRAINT repository_paths_project_id_fkey
+      FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE;
+  END $$;
 
   CREATE OR REPLACE FUNCTION enforce_repository_path() RETURNS trigger AS $$
   DECLARE claimed_id TEXT;

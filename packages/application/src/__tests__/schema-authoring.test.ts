@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  parseSchemaSourceMappings,
   parseWorkspaceSchemaAuthoringDraft,
   WORKSPACE_SCHEMA_AUTHORING_DRAFT_SCHEMA,
   WORKSPACE_SCHEMA_AUTHORING_EFFECT_PROFILE,
@@ -39,6 +40,22 @@ function compositionDraft() {
 }
 
 describe('Workspace Schema authoring draft contract', () => {
+  it('persists exact source locations and rejects duplicate or invalid mapping paths', () => {
+    const mapping = {
+      path: ['nodes', 'target', 'slots', 'owner'],
+      from: ['nodes', 'source', 'slots', 'owner'],
+      source: { candidateId: 'pinned', schemaHash: digest('d') },
+    };
+    const draft = { ...compositionDraft(), sourceMappings: [mapping] };
+    expect(parseWorkspaceSchemaAuthoringDraft(draft)).toEqual(draft);
+    expect(() => parseSchemaSourceMappings([mapping, mapping])).toThrow('Duplicate');
+    expect(() => parseSchemaSourceMappings([{ ...mapping, from: ['nodes', 'source'] }])).toThrow(
+      'kinds'
+    );
+    expect(() =>
+      parseSchemaSourceMappings([{ ...mapping, path: ['__proto__', 'polluted'] }])
+    ).toThrow('location');
+  });
   it('parses a Composition-based draft without changing Composition V2', () => {
     const draft = compositionDraft();
     expect(parseWorkspaceSchemaAuthoringDraft(draft)).toEqual(draft);

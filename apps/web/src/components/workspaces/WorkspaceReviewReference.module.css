@@ -4,21 +4,22 @@
 .views {
   width: 100%;
   max-width: var(--project-page-max-width, 1264px);
-  margin: 0 auto 8px;
+  margin: 0 auto;
   min-height: 44px;
-  border: 0;
-  padding: 0 24px;
+  border-bottom: 1px solid var(--stroke-divider);
+  padding: 6px 16px;
   gap: 18px;
 }
 .views > div:first-child {
-  border-radius: 10px;
-  padding: 3px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  padding: 2px;
   gap: 2px;
   background: var(--surface-app);
 }
 .views > div:first-child button {
   height: 28px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   padding: 0 14px;
   font-size: 13px;
   font-weight: 500;
@@ -26,22 +27,111 @@
 .views > div:first-child button[aria-current="page"] {
   background: var(--surface-card);
   color: var(--text-primary);
-  box-shadow: var(--fx-shadow-sm);
+  font-weight: 600;
 }
-.views > .secondaryViews {
-  border: 0;
-  padding: 0;
-  gap: 18px;
-}
-.secondaryViews button {
-  padding: 0;
-  background: transparent;
+.readiness {
+  box-sizing: border-box;
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 24px;
+  width: 100%;
+  max-width: var(--project-page-max-width, 1264px);
+  margin: 0 auto 12px;
+  padding: 12px 24px;
+  border-block: 1px solid var(--stroke-divider);
+  background: var(--surface-panel);
   font-size: 13px;
-  font-weight: 400;
-  color: var(--text-tertiary);
 }
-.secondaryViews button[aria-current="page"] {
+.readinessSummary {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.readinessSummary > span,
+.readinessSummary summary {
+  color: var(--text-secondary);
+}
+.readinessSummary summary {
+  cursor: pointer;
+}
+.readinessSummary ul {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+.readinessSummary li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.readinessActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.readinessActions button,
+.readinessActions a,
+.toolHeading button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
   color: var(--text-primary);
+  font-size: 13px;
+}
+.readinessActions svg,
+.toolHeading svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.readinessActions .decisionAction {
+  background: var(--accent-commit);
+  color: var(--on-accent);
+  border-color: var(--accent-commit);
+}
+.readinessActions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.readinessActions button:focus-visible,
+.readinessActions a:focus-visible,
+.toolHeading button:focus-visible,
+.readinessSummary summary:focus-visible {
+  outline: 2px solid var(--accent-commit);
+  outline-offset: 2px;
+}
+.toolHeading {
+  flex: none;
+  width: 100%;
+  max-width: var(--project-page-max-width, 1264px);
+  margin: 0 auto;
+  padding: 12px 24px 20px;
+}
+.toolHeading h1 {
+  margin-top: 16px;
+  font-size: 20px;
+  font-weight: 600;
+}
+.toolHeading p {
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+.toolBody {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 24px 24px;
 }
 .renderSurface {
   min-height: 0;
@@ -361,6 +451,13 @@
   .views {
     padding-inline: 16px;
     gap: 12px;
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+  .readiness,
+  .toolHeading,
+  .toolBody {
+    padding-inline: 16px;
   }
   .columns {
     grid-template-columns: minmax(0, 1fr);
@@ -381,9 +478,6 @@
   background: var(--surface-app);
   color: var(--text-secondary);
   font-size: 12.5px;
-}
-.views > .secondaryViews {
-  border-left: 0;
 }
 .rail {
   position: sticky;

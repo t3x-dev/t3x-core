@@ -21,7 +21,7 @@ describe('ProjectShell', () => {
       </ProjectShell>
     );
 
-    for (const activeTab of ['workspaces'] as const) {
+    for (const activeTab of ['schemas', 'discover', 'browse', 'workspaces'] as const) {
       view.rerender(
         <ProjectShell activeTab={activeTab} project={project}>
           <div>{activeTab} content</div>
@@ -53,10 +53,7 @@ describe('ProjectShell', () => {
     expect(screen.getByText('t3x-dev')).toBeInTheDocument();
     expect(screen.getByText('Public')).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Global' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Workspaces' })).toHaveAttribute(
-      'aria-current',
-      'page'
-    );
+    expect(screen.getByRole('link', { name: 'Workspace' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
       '/t3x-dev/Test-Project/settings?returnTo=%2Ft3x-dev%2FTest-Project%3Ftab%3Dworkspaces'
@@ -71,20 +68,20 @@ describe('ProjectShell', () => {
         <div>State content</div>
       </ProjectShell>
     );
-    expect(screen.getByRole('link', { name: 'Create new' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'New repository' })).toHaveAttribute(
       'href',
       '/orbit-labs/new'
     );
     expect(screen.getByText('orbit-labs')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: 'Schemas' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: 'Schema' })).not.toHaveAttribute('aria-current');
 
     view.rerender(
       <ProjectShell activeTab="state" project={project} projectIdNavigation>
         <div>State content</div>
       </ProjectShell>
     );
-    expect(screen.getByRole('link', { name: 'Browse projects' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: 'Browse repositories' })).toHaveAttribute('href', '/');
     expect(screen.queryByText('orbit-labs')).not.toBeInTheDocument();
   });
 
@@ -115,12 +112,39 @@ describe('ProjectShell', () => {
     );
 
     expect(screen.getByRole('banner')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to projects' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'T3X home' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Schema' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByText('Studio content').closest('main')).toHaveClass(
       'min-h-0',
       'flex-1',
       'overflow-hidden'
     );
+  });
+
+  it.each([
+    'discover',
+    'browse',
+  ] as const)('returns from Settings to the same %s view, branch, and Workspace', (activeTab) => {
+    render(
+      <ProjectShell
+        activeTab={activeTab}
+        branch="feature/release"
+        workspaceId="workspace_branch:feature/release"
+        project={{ ...project, namespace: 'orbit', canonical_path: '/orbit/Repo' }}
+      >
+        <div>Catalog content</div>
+      </ProjectShell>
+    );
+
+    const settingsUrl = new URL(
+      screen.getByRole('link', { name: 'Settings' }).getAttribute('href')!,
+      'http://localhost'
+    );
+    expect(settingsUrl.pathname).toBe('/orbit/Repo/settings');
+    const returnUrl = new URL(settingsUrl.searchParams.get('returnTo')!, 'http://localhost');
+    expect(returnUrl.pathname).toBe('/orbit/Repo');
+    expect(returnUrl.searchParams.get('tab')).toBe(activeTab);
+    expect(returnUrl.searchParams.get('branch')).toBe('feature/release');
+    expect(returnUrl.searchParams.get('workspace')).toBe('workspace_branch:feature/release');
   });
 });

@@ -2,16 +2,14 @@
 
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
+import Changes from '@/app/project/[projectId]/changes/[workspaceId]/[snapshotId]/page';
+import { ProjectChecksPage } from '@/components/checks/ProjectChecksPage';
 import { RepositoryRouteContext } from '@/hooks/projects/repositoryRouteContext';
 import { ProjectRouteShell } from './ProjectRouteShell';
 
 const Settings = dynamic(() => import('@/app/project/[projectId]/settings/page'));
 const Diff = dynamic(() => import('@/app/project/[projectId]/diff/page'));
 const Merge = dynamic(() => import('@/app/project/[projectId]/merge/[mergeId]/page'));
-const Changes = dynamic(
-  () => import('@/app/project/[projectId]/changes/[workspaceId]/[snapshotId]/page')
-);
-const Leaf = dynamic(() => import('@/app/project/[projectId]/leaf/[leafId]/page'));
 const History = dynamic(() =>
   import('@/components/history/CommitHistoryPage').then((m) => m.CommitHistoryPage)
 );
@@ -36,12 +34,14 @@ export function RepositoryNestedPage({
   const params = {
     projectId,
     mergeId: first,
-    leafId: first,
     workspaceId: first,
     snapshotId: second,
   };
   let content;
   switch (view) {
+    case 'checks':
+      content = <ProjectChecksPage projectId={projectId} recordId={first || undefined} />;
+      break;
     case 'settings':
       content = <Settings />;
       break;
@@ -53,9 +53,6 @@ export function RepositoryNestedPage({
       break;
     case 'changes':
       content = <Changes />;
-      break;
-    case 'leaf':
-      content = <Leaf />;
       break;
     case 'history':
       content = <History projectId={projectId} />;

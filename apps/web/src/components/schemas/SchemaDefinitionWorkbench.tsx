@@ -41,6 +41,7 @@ export function SchemaDefinitionWorkbench({
   previewError,
   onPreview,
   onSave,
+  initialMode = 'structure',
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -53,6 +54,7 @@ export function SchemaDefinitionWorkbench({
   previewError?: string;
   onPreview: (contribution: LocalContribution) => void;
   onSave: (contribution: LocalContribution, intent: string) => Promise<void>;
+  initialMode?: 'structure' | 'yaml';
 }) {
   const [mode, setMode] = useState<'structure' | 'yaml'>('structure');
   const [contribution, setContribution] = useState<LocalContribution>(EMPTY_CONTRIBUTION);
@@ -71,12 +73,13 @@ export function SchemaDefinitionWorkbench({
     // reinitialize an open editor or clear errors in other unfinished fields.
     if (initialized.current) return;
     initialized.current = true;
+    setMode(initialMode);
     const next = structuredClone(initialDefinition ?? initialContribution ?? EMPTY_CONTRIBUTION);
     setContribution(next);
     setYaml(renderYaml(next));
     setError(undefined);
     setStructureError(undefined);
-  }, [initialDefinition, initialContribution, open]);
+  }, [initialDefinition, initialContribution, initialMode, open]);
 
   function commit(next: LocalContribution) {
     setContribution(next);

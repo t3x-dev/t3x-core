@@ -1,14 +1,6 @@
 'use client';
 
-import {
-  Check,
-  ChevronRight,
-  Copy,
-  FileText,
-  GitBranch,
-  GitCommitHorizontal,
-  Pencil,
-} from 'lucide-react';
+import { Check, Copy, FileText, GitBranch, GitCommitHorizontal, Pencil } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -29,9 +21,7 @@ function CopyValue({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className={styles.copyField}>
-      <code className="min-w-0 flex-1 truncate font-mono text-xs text-[var(--text-primary)]">
-        {value}
-      </code>
+      <code className="min-w-0 flex-1 font-mono text-xs text-[var(--text-primary)]">{value}</code>
       <Button
         aria-label={`Copy ${label}`}
         className="size-7"
@@ -132,16 +122,14 @@ export function ProjectGeneralSettings({
   }
 
   return (
-    <section className={styles.general} id="general" aria-labelledby="general-heading">
-      <div className={styles.breadcrumb}>
-        Settings <ChevronRight size={12} aria-hidden="true" /> General
-      </div>
-      <h1 id="general-heading">General</h1>
-      <p className={styles.lead}>
-        Name and describe this project, and find the identifiers other tools use to reach it.
-      </p>
+    <section
+      className={styles.general}
+      id="general"
+      aria-labelledby="general-heading"
+      tabIndex={-1}
+    >
+      <h2 id="general-heading">General</h2>
       <form className={styles.details} onSubmit={handleSubmit}>
-        <h2>Project details</h2>
         <SettingsField
           hint="Shown in the header and in links."
           htmlFor="settings-repo-name"
@@ -158,7 +146,7 @@ export function ProjectGeneralSettings({
             }}
             value={name}
           />
-          <RepositoryNameFeedback check={nameCheck} />
+          {nameEdited ? <RepositoryNameFeedback check={nameCheck} /> : null}
           {slugChanges && (
             <p className="mt-1.5 text-xs text-[var(--status-warning)]">
               Previous repository addresses will remain reserved and redirect to this repository.
@@ -181,7 +169,7 @@ export function ProjectGeneralSettings({
               placeholder="Add a description"
               value={description}
             />
-            <p className="mt-1 text-right text-[11px] tabular-nums text-[var(--text-tertiary)]">
+            <p className="text-right text-xs tabular-nums text-[var(--text-secondary)]">
               {description.length} / {DESCRIPTION_LIMIT}
             </p>
           </div>
@@ -210,29 +198,26 @@ export function ProjectGeneralSettings({
           >
             Discard
           </Button>
-          <Button
-            disabled={!dirty || saving || (nameEdited && !nameCheck.canSubmit)}
-            type="submit"
-            variant="commit"
-          >
+          <Button disabled={!dirty || saving || (nameEdited && !nameCheck.canSubmit)} type="submit">
             {saving ? 'Saving…' : 'Save changes'}
           </Button>
         </div>
       </form>
 
-      <div className={styles.identifiers}>
-        <h2>Identifiers</h2>
-        <SettingsField hint="Stable and read-only." label="Project ID">
-          <CopyValue label="project ID" value={project.project_id} />
-        </SettingsField>
-        <SettingsField hint="Keeps working if the project is renamed." label="Stable link">
-          <CopyValue label="stable link" value={stableLink} />
-        </SettingsField>
-      </div>
-      <div className={styles.contents}>
-        <h2>Contents</h2>
-        <p>What this project currently holds.</p>
-        <RepositoryStats project={project} />
+      <div className={styles.referenceInfo}>
+        <div className={styles.identifiers}>
+          <h3>Identifiers</h3>
+          <SettingsField hint="Stable and read-only." label="Project ID">
+            <CopyValue label="project ID" value={project.project_id} />
+          </SettingsField>
+          <SettingsField hint="Keeps working if the project is renamed." label="Stable link">
+            <CopyValue label="stable link" value={stableLink} />
+          </SettingsField>
+        </div>
+        <div className={styles.contents}>
+          <h3>Contents</h3>
+          <RepositoryStats project={project} />
+        </div>
       </div>
     </section>
   );

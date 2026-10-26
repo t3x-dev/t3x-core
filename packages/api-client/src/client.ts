@@ -4,7 +4,7 @@ import {
   type StatePresentationResult,
   StatePresentationResultSchema,
 } from './state-presentation.js';
-import type { RepositoryAddress, RepositoryNameCheck } from './types';
+import type { ListProjectsParams, RepositoryAddress, RepositoryNameCheck } from './types';
 import {
   type WorkspaceDeliveryInput,
   type WorkspaceDeliveryResult,
@@ -217,6 +217,8 @@ export class T3xClient {
       `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/authoring`;
     this.workspaces = Object.freeze<RepositoryWorkspaceCapability>({
       authoring: Object.freeze({
+        reconcile: (projectId, workspaceId, input) =>
+          this.request('POST', `${authoringPath(projectId, workspaceId)}/reconciliation`, input),
         prepareReview: (projectId, workspaceId, input) =>
           this.request('POST', `${authoringPath(projectId, workspaceId)}/reviews`, input),
         read: (projectId, workspaceId, query) =>
@@ -595,7 +597,7 @@ export class T3xClient {
   // Projects
   // ============================================
 
-  async listProjects(params?: PaginationParams): Promise<ListProjectsResponse> {
+  async listProjects(params?: ListProjectsParams): Promise<ListProjectsResponse> {
     return this.request<ListProjectsResponse>(
       'GET',
       '/v1/projects',
@@ -644,12 +646,17 @@ export class T3xClient {
     );
   }
 
-  async deleteProject(id: string, options?: { permanent?: boolean }): Promise<void> {
+  async deleteProject(
+    id: string,
+    options?: { permanent?: boolean; onlyIfDeleted?: boolean }
+  ): Promise<void> {
     await this.request<void>(
       'DELETE',
       `/v1/projects/${id}`,
       undefined,
-      options?.permanent ? { permanent: 'true' } : undefined
+      options?.permanent
+        ? { permanent: 'true', ...(options.onlyIfDeleted ? { only_if_deleted: 'true' } : {}) }
+        : undefined
     );
   }
 

@@ -1,0 +1,257 @@
+.editor {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  color: var(--text-primary);
+  background: var(--surface-card);
+}
+.toolbar,
+.footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--stroke-divider);
+}
+.toolbar input,
+.footer input {
+  min-width: 140px;
+  height: 36px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  padding: 0 10px;
+  color: var(--text-primary);
+}
+.toolbar input {
+  flex: 1;
+  max-width: 360px;
+}
+.toolbar output {
+  margin-left: auto;
+}
+.content {
+  display: grid;
+  grid-template-columns: minmax(360px, 1fr) minmax(240px, 320px);
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+}
+.content[data-details="closed"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.list {
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+}
+.columns {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) 180px 44px;
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid var(--stroke-divider);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.inline {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+}
+.inline select {
+  min-width: 80px;
+  max-width: 125px;
+  height: 34px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  padding: 0 6px;
+  font-size: 13px;
+}
+.inline input {
+  width: 16px;
+  height: 16px;
+}
+.dragHandle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 24px;
+  min-height: 28px;
+  touch-action: none;
+  cursor: grab;
+  color: var(--text-tertiary);
+}
+.dragHandle:disabled {
+  cursor: default;
+}
+.dragRow [role="treeitem"] {
+  grid-template-columns: minmax(150px, 1fr) 180px 44px;
+}
+.dragRow[data-drop-target],
+.rootDrop[data-drop-target] {
+  outline: 2px solid var(--accent-commit);
+  outline-offset: -2px;
+}
+.rootDrop,
+.dragPreview {
+  padding: 12px;
+  background: var(--surface-card);
+  border: 1px dashed var(--stroke-default);
+  font-size: 13px;
+}
+.moveToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--stroke-divider);
+  font-size: 12px;
+}
+.moveToolbar > span {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.moveMenu,
+.moveMenu label {
+  display: grid;
+  gap: 12px;
+}
+.moveMenu select {
+  min-width: 0;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-primary);
+}
+.importSources {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 12px;
+  border-right: 1px solid var(--stroke-divider);
+  background: var(--surface-app);
+  min-height: 0;
+  overflow: auto;
+  font-size: 13px;
+}
+.sourceHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.importSources p {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.importSources button {
+  padding: 8px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-primary);
+}
+.fieldWorkarea {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+.fieldWorkarea[data-sources] {
+  grid-template-columns: 180px minmax(0, 1fr);
+}
+.fieldMain {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+.properties {
+  border-left: 1px solid var(--stroke-divider);
+  min-height: 0;
+  overflow: auto;
+}
+.tabs {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid var(--stroke-divider);
+  font-size: 13px;
+}
+.tabs button[aria-pressed="true"] {
+  font-weight: 600;
+  color: var(--accent-commit);
+}
+.closeProperties {
+  display: grid;
+  place-items: center;
+  margin-left: auto;
+  min-width: 28px;
+  min-height: 28px;
+}
+.settings {
+  padding: 16px;
+}
+.settings h3 {
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  margin-bottom: 16px;
+}
+.footer {
+  border-top: 1px solid var(--stroke-divider);
+  border-bottom: 0;
+}
+.footer input {
+  flex: 1;
+}
+.feedback {
+  padding: 20px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.error {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--status-error);
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1100px) {
+  .content {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+  .list {
+    overflow: visible;
+  }
+  .properties {
+    border-left: 0;
+    border-top: 1px solid var(--stroke-divider);
+    overflow: visible;
+  }
+}
+@media (max-width: 900px) {
+  .fieldWorkarea[data-sources] {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
+  .importSources {
+    max-height: 200px;
+    border-right: 0;
+    border-bottom: 1px solid var(--stroke-divider);
+  }
+}

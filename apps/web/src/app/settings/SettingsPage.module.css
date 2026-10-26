@@ -1,0 +1,42 @@
+.page {
+  width: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
+  padding: 32px clamp(20px, 4vw, 48px) 56px;
+  color: var(--text-primary);
+}
+
+.header {
+  margin-bottom: 28px;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 32px;
+}
+
+.header p {
+  max-width: 72ch;
+  margin: 10px 0 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.content {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+
+.notice {
+  padding: 16px 20px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 22px;
+  background: var(--surface-panel);
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+}

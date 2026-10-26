@@ -5,6 +5,7 @@ import {
   WorkspaceSchemaDefinitionSnapshotSchema,
 } from '@t3x-dev/api-client';
 import { currentComposition, parseDraftActionLedger } from '@t3x-dev/application';
+import { describeTransitionObject } from '@t3x-dev/core';
 import {
   type AnyDB,
   DraftAuthoringConflictError,
@@ -12,7 +13,7 @@ import {
   getTransitionViewForCommit,
   type ResolvedTransitionProposalGraph,
 } from '@t3x-dev/storage';
-import { canonicalizeProtocolValue } from '@t3x-dev/transition';
+import { canonicalizeProtocolValue, type State } from '@t3x-dev/transition';
 import { diffYSchemas, normalizeYSchemaObject, sha256CompositionValue } from '@t3x-dev/yschema';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
 
@@ -185,6 +186,32 @@ export function frozenWorkspaceSchemaReview(
     : null;
 }
 
+/** Net content and effective Schema changes, independent of the action/operation count. */
+export function workspaceSchemaReviewHasChanges(review: WorkspaceFullSchemaReview) {
+  if (
+    canonicalizeProtocolValue(review.baseContent) !== canonicalizeProtocolValue(review.draftContent)
+  )
+    return true;
+  if (review.base.status === 'unknown' || review.draft.status === 'unknown') return undefined;
+  return (
+    review.base.status !== review.draft.status || review.base.schemaHash !== review.draft.schemaHash
+  );
+}
+
+export function assertWorkspaceReviewHasChanges(
+  base: State,
+  result: State,
+  review: WorkspaceFullSchemaReview | null
+) {
+  if (
+    describeTransitionObject(base).digest === describeTransitionObject(result).digest &&
+    (!review || workspaceSchemaReviewHasChanges(review) === false)
+  )
+    throw new DraftAuthoringConflictError(
+      'No changes to commit. Content and Schema match the Base. Edit the Draft before preparing Review.'
+    );
+}
+
 /** Shared locked Decision/Commit check. A Studio check or an old manifest cannot authorize publication. */
 export async function assertWorkspaceSchemaReview(
   db: AnyDB,
@@ -195,6 +222,7 @@ export async function assertWorkspaceSchemaReview(
 ) {
   if (!workspace.authoringLedger) return;
   const frozen = frozenWorkspaceSchemaReview(graph);
+  if (requireComplete) assertWorkspaceReviewHasChanges(graph.base, graph.result, frozen);
   // Non-schema legacy authoring callers still use their existing full-ledger preparation contract.
   if (!frozen) {
     if (Array.isArray(workspace.schemaPreparations) && workspace.schemaPreparations.length)

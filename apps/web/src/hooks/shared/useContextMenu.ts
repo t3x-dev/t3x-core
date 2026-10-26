@@ -1,26 +1,15 @@
 'use client';
 
 import type { Node } from '@xyflow/react';
-import { useCallback, useEffect, useState, useTransition } from 'react';
+import { useCallback, useState, useTransition } from 'react';
 import { formatUserFacingError } from '@/domain/format/errors';
-import { getProjectOutputsPath } from '@/domain/project/repoPath';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData, NodeKind } from '@/types/nodes';
 import {
   buildBackgroundMenu,
-  buildLeafNodeMenu,
   buildUnitNodeMenu,
   type ContextMenuGroup,
 } from '@/utils/canvasMenuBuilders';
-
-/**
- * Module-level ref for the leaf context menu handler.
- * Storing a React callback in Zustand state causes setState on every re-render.
- * Consumers (CanvasNodes) read from this ref instead of from the Zustand store.
- */
-export const leafContextMenuHandlerRef: {
-  current: ((event: React.MouseEvent, leafId: string, _nodeId: string) => void) | null;
-} = { current: null };
 
 export interface ContextMenuState {
   x: number;
@@ -32,21 +21,14 @@ interface UseContextMenuOptions {
   addNode: (kind: NodeKind, position?: { x: number; y: number }) => Promise<void>;
   isDeveloperMode: boolean;
   notify: ((message: string, type: 'success' | 'error' | 'warning') => void) | null;
-  projectId: string | null;
-  projectName: string;
   fitView: (options?: { padding?: number; duration?: number }) => void;
-  /** Router push for page navigation */
-  onNavigate?: (url: string) => void;
 }
 
 export function useContextMenu({
   addNode,
   isDeveloperMode,
   notify,
-  projectId,
-  projectName,
   fitView,
-  onNavigate,
 }: UseContextMenuOptions) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [, startTransition] = useTransition();
@@ -109,56 +91,10 @@ export function useContextMenu({
     [fitView]
   );
 
-  // Leaf context menu handler — called from CanvasNodes when right-clicking a leaf inside a unit node
-  const handleLeafContextMenu = useCallback(
-    (event: React.MouseEvent, leafId: string, _nodeId: string) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const leafHref = projectId
-        ? getProjectOutputsPath({ id: projectId, name: projectName }, leafId)
-        : undefined;
-      const groups = buildLeafNodeMenu({
-        onOpenDetail: () => {
-          if (leafHref) {
-            if (onNavigate) {
-              onNavigate(leafHref);
-            } else {
-              window.location.href = leafHref;
-            }
-          }
-        },
-        onShare: () => {
-          if (leafHref) {
-            const url = `${window.location.origin}${leafHref}`;
-            navigator.clipboard.writeText(url);
-            notify?.('Link copied to clipboard', 'success');
-          }
-        },
-        onExport: () => {
-          if (leafHref) {
-            window.open(leafHref, '_blank');
-          }
-        },
-      });
-      setContextMenu({ x: event.clientX, y: event.clientY, groups });
-    },
-    [projectId, projectName, notify, onNavigate]
-  );
-
-  // Keep the module-level ref up to date so CanvasNodes can call the handler
-  // without triggering Zustand setState on every render of the parent component
-  useEffect(() => {
-    leafContextMenuHandlerRef.current = handleLeafContextMenu;
-    return () => {
-      leafContextMenuHandlerRef.current = null;
-    };
-  }, [handleLeafContextMenu]);
-
   return {
     contextMenu,
     closeContextMenu,
     handleNodeContextMenu,
     handlePaneContextMenu,
-    handleLeafContextMenu,
   };
 }

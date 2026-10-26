@@ -6,6 +6,7 @@ import { SchemaContentPreparationDialog } from '@/components/schemas/SchemaConte
 import { Button } from '@/components/ui/button';
 import { getProjectIdRepoPath } from '@/domain/project/repoPath';
 import { useWorkspaceSchemaPending } from '@/hooks/schemas/useWorkspaceSchemaPending';
+import { WorkspaceNotice } from './WorkspaceNotice';
 
 export function WorkspaceSchemaPendingNotice({
   projectId,
@@ -23,6 +24,23 @@ export function WorkspaceSchemaPendingNotice({
   const [preparing, setPreparing] = useState(false);
   const pending = useWorkspaceSchemaPending(projectId, workspaceId, revision);
   if (pending.loading || pending.data?.status === 'none') return null;
+  if (pending.error) {
+    return (
+      <WorkspaceNotice
+        label="Schema preparation status"
+        title="Schema preparation status unavailable"
+        tone="error"
+        actions={
+          <Button size="sm" variant="outline" onClick={pending.refresh}>
+            Retry
+          </Button>
+        }
+      >
+        <p>{pending.error}</p>
+      </WorkspaceNotice>
+    );
+  }
+  const awaitingPreparation = pending.data?.status === 'pending_preparation';
   const params = new URLSearchParams({
     tab: 'schemas',
     schemaView: 'studio',
@@ -32,43 +50,38 @@ export function WorkspaceSchemaPendingNotice({
   if (pending.data?.pending?.source.kind === 'composition') params.set('mode', 'compose');
   const href = `${getProjectIdRepoPath(projectId)}?${params}`;
   return (
-    <aside
-      aria-label="Pending Schema preparation"
-      className="shrink-0 border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-5 py-3 text-sm"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="font-medium">
-            {pending.data?.status === 'pending_preparation'
-              ? 'Schema change awaiting preparation'
-              : 'Schema candidate needs a new preview'}
-          </p>
-          <p className="mt-1 text-xs text-[var(--text-secondary)]">
-            Current Schema and content are unchanged. The candidate is saved for preparation and
-            full review.
-          </p>
-          {pending.data?.reason || pending.error ? (
-            <p className="mt-1 text-xs text-[var(--status-warning)]">
-              {pending.data?.reason ?? pending.error}
-            </p>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            disabled={pending.data?.status !== 'pending_preparation' || !revision}
-            onClick={() => setPreparing(true)}
-          >
-            Prepare content
-          </Button>
-          <Link
-            className="rounded border border-[var(--stroke-divider)] px-3 py-2 text-xs"
-            href={href}
-          >
-            Review saved candidate
-          </Link>
-        </div>
-      </div>
+    <>
+      <WorkspaceNotice
+        label="Pending Schema preparation"
+        title={
+          awaitingPreparation
+            ? 'Schema change awaiting preparation'
+            : 'Schema candidate needs a new preview'
+        }
+        tone={awaitingPreparation ? 'info' : 'warning'}
+        actions={
+          <>
+            {awaitingPreparation ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!revision}
+                onClick={() => setPreparing(true)}
+              >
+                Prepare content
+              </Button>
+            ) : null}
+            <Button size="sm" variant={awaitingPreparation ? 'ghost' : 'outline'} asChild>
+              <Link href={href}>Review saved candidate</Link>
+            </Button>
+          </>
+        }
+      >
+        <p>
+          {pending.data?.reason ?? 'The candidate is saved for preparation and full review.'}{' '}
+          Current Schema and content are unchanged.
+        </p>
+      </WorkspaceNotice>
       {preparing && pending.data?.pending && revision ? (
         <SchemaContentPreparationDialog
           projectId={projectId}
@@ -84,6 +97,6 @@ export function WorkspaceSchemaPendingNotice({
           }}
         />
       ) : null}
-    </aside>
+    </>
   );
 }

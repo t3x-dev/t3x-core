@@ -38,6 +38,18 @@ export interface ApiPullRequestMergeReview {
   nodes: ApiPullRequestMergeReviewNode[];
 }
 
+export function summarizeMergeReview(review: Pick<ApiPullRequestMergeReview, 'nodes'>) {
+  return {
+    nodes: review.nodes.length,
+    fields: review.nodes.reduce((count, node) => count + changedSlots(node).length, 0),
+    added: review.nodes.filter((node) => node.status === 'source_only').length,
+    autoMerged: review.nodes.filter(
+      (node) => node.status === 'auto' || node.status === 'target_only'
+    ).length,
+    conflicts: review.nodes.filter((node) => node.status === 'conflict').length,
+  };
+}
+
 /** `target` keeps the base branch value, `source` takes the PR branch value. */
 export type MergeSlotChoice =
   | { kind: 'target' }

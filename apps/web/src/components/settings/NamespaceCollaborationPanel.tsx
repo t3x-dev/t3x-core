@@ -20,6 +20,7 @@ import {
   selectActiveNamespaceAccount,
   useNamespaceAccountStore,
 } from '@/store/namespaceAccountStore';
+import palette from '@/styles/management-palette.module.css';
 
 const MEMBER_ROLES: readonly NamespaceMemberRole[] = ['admin', 'editor', 'viewer'];
 
@@ -161,7 +162,7 @@ export function NamespaceCollaborationPanel() {
       </div>
 
       {membersQuery.error ? (
-        <p className="text-sm text-destructive">
+        <p className="text-sm text-[var(--status-error)]">
           {formatUserFacingError(membersQuery.error, 'Failed to load members.')}
         </p>
       ) : membersQuery.isLoading && !membersQuery.data ? (
@@ -191,7 +192,7 @@ export function NamespaceCollaborationPanel() {
                   <SelectTrigger className="w-28" size="sm" aria-label="Member role">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className={palette.scope}>
                     {MEMBER_ROLES.map((role) => (
                       <SelectItem key={role} value={role}>
                         {role}
@@ -254,7 +255,7 @@ export function NamespaceCollaborationPanel() {
               <SelectTrigger className="w-full" aria-label="Invitation role">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className={palette.scope}>
                 {MEMBER_ROLES.map((role) => (
                   <SelectItem key={role} value={role}>
                     {role}

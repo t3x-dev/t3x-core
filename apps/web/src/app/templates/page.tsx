@@ -1,9 +1,13 @@
-import { Suspense } from 'react';
-import { TemplatesCatalogExperience } from '@/components/schemas/TemplatesCatalogExperience';
-export default function TemplatesPage() {
-  return (
-    <Suspense fallback={null}>
-      <TemplatesCatalogExperience />
-    </Suspense>
-  );
+import { redirect } from 'next/navigation';
+export default async function TemplatesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(await searchParams)) {
+    for (const item of Array.isArray(value) ? value : value ? [value] : [])
+      params.append(key, item);
+  }
+  redirect(`/explore${params.size ? `?${params}` : ''}`);
 }

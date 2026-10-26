@@ -252,17 +252,18 @@ describe('SourceTransitionTab', () => {
     expect(onViewChange).toHaveBeenCalledWith('preview');
   });
 
-  it('hands source decisions to Changes instead of rendering Workspace decision controls', () => {
+  it('hands source decisions to Review instead of rendering Workspace decision controls', () => {
     mockSourceTransition(transitionView());
     render(<SourceTransitionTab active candidate={candidate} view="commit" />);
 
-    expect(screen.getByRole('heading', { name: 'Decide in Changes' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Decide in Review' })).toBeInTheDocument();
     expect(
       screen
-        .getAllByRole('link', { name: 'Open Changes' })
+        .getAllByRole('link', { name: 'Open Review' })
         .some(
           (link) =>
-            link.getAttribute('href') === `/project/proj_1/changes/workspace_esphome/${snapshotId}`
+            link.getAttribute('href') ===
+            `/project/proj_1?tab=workspaces&workspace=workspace_esphome&workspaceMode=review&branch=main&reviewSnapshot=${snapshotId}`
         )
     ).toBe(true);
     expect(

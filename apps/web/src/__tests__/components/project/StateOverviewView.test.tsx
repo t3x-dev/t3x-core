@@ -1,17 +1,31 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { StateOverviewView } from '@/components/project/StateOverviewView';
+import type { ApiCommit } from '@/types/api';
 
 const overview = vi.hoisted(() => vi.fn());
 vi.mock('@/hooks/commits/useStateOverview', () => ({ useStateOverview: overview }));
+
+function renderIntroduction(ui: Parameters<typeof render>[0]) {
+  return render(ui);
+}
+
 const props = {
   projectId: 'p',
   commitDigest: `sha256:${'a'.repeat(64)}`,
   projectName: 'Evaluation schema',
   introductionSource: 'version' as const,
 };
+const commit = {
+  hash: props.commitDigest,
+  project_id: props.projectId,
+  content: {
+    trees: [{ key: 'document', slots: { title: 'Already loaded State' }, children: [] }],
+    relations: [],
+  },
+} as ApiCommit;
 beforeEach(() => {
   HTMLElement.prototype.scrollIntoView = vi.fn();
   overview.mockReturnValue({
@@ -39,36 +53,73 @@ beforeEach(() => {
   });
 });
 it('keeps author Markdown inert and prevents remote image requests', () => {
-  const { container } = render(<StateOverviewView {...props} />);
+  const { container } = renderIntroduction(<StateOverviewView {...props} />);
   expect(screen.getByText('Author description')).toBeVisible();
   expect(container.querySelector('script')).toBeNull();
   expect(container.querySelector('img')).toBeNull();
   expect(screen.queryByRole('link', { name: 'Blocked' })).toBeNull();
   expect(screen.getByRole('link', { name: 'Good' })).toHaveAttribute('rel', 'noopener noreferrer');
 });
-it('focuses even an empty JSON key and supports expanding/restoring the render', () => {
+it('shows README immediately before the complementary State structure', () => {
   render(<StateOverviewView {...props} />);
+  expect(screen.getByText('Empty-key content')).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Guide' })).toBeVisible();
+  const introduction = screen.getByRole('region', { name: 'Version introduction' });
+  const sidebar = screen.getByRole('complementary', { name: 'State information' });
+  expect(
+    introduction.compareDocumentPosition(sidebar) & Node.DOCUMENT_POSITION_FOLLOWING
+  ).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Expand rendered State' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Contents' }));
   fireEvent.click(screen.getByRole('button', { name: 'Guide' }));
   expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Expand rendered State' }));
-  fireEvent.click(screen.getByRole('button', { name: '(empty key)' }));
-  expect(screen.getByRole('button', { name: /All sections/ })).toBeVisible();
-  expect(screen.queryByRole('region', { name: 'Version introduction' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Restore split view' }));
-  expect(screen.getByRole('region', { name: 'Version introduction' })).toBeVisible();
 });
 it('shows a retryable failure without showing old author content', () => {
   const retry = vi.fn();
   overview.mockReturnValue({ error: 'Revision unavailable', retry });
-  render(<StateOverviewView {...props} />);
+  renderIntroduction(<StateOverviewView {...props} />);
   expect(screen.queryByText('Author description')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Retry State' }));
   expect(retry).toHaveBeenCalledOnce();
 });
 
-it('uses actual metadata and committed values for the release layout and handles absent commit authors', () => {
-  render(
+it('reads current committed content without requesting the overview again', () => {
+  overview.mockReturnValue({ data: undefined, loading: false });
+  render(<StateOverviewView {...props} introductionSource="repository" commit={commit} />);
+  expect(overview).toHaveBeenCalledWith(props.projectId, null);
+  expect(screen.getByText('Already loaded State')).toBeVisible();
+  expect(screen.queryByText('Loading committed State…')).not.toBeInTheDocument();
+});
+
+it('keeps historical State readable while its introduction loads or fails', () => {
+  const retry = vi.fn();
+  overview.mockReturnValue({ data: undefined, loading: true, retry });
+  const view = renderIntroduction(<StateOverviewView {...props} commit={commit} />);
+  expect(overview).toHaveBeenCalledWith(props.projectId, props.commitDigest);
+  expect(screen.getByText('Already loaded State')).toBeVisible();
+  expect(screen.getByText('Loading version introduction…')).toBeVisible();
+  expect(screen.queryByText('Loading committed State…')).not.toBeInTheDocument();
+
+  overview.mockReturnValue({ error: 'Introduction unavailable', loading: false, retry });
+  view.rerender(<StateOverviewView {...props} commit={commit} />);
+  expect(screen.getByText('Already loaded State')).toBeVisible();
+  expect(screen.queryByText('State unavailable')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry introduction' }));
+  expect(retry).toHaveBeenCalledOnce();
+});
+
+it.each([
+  { ...commit, hash: 'different-version' },
+  { ...commit, project_id: 'other-project' },
+])('never uses committed content from another version or repository', (staleCommit) => {
+  overview.mockReturnValue({ data: undefined, loading: true });
+  render(<StateOverviewView {...props} commit={staleCommit} />);
+  expect(screen.queryByText('Already loaded State')).not.toBeInTheDocument();
+  expect(screen.getByText('Loading committed State…')).toBeVisible();
+});
+
+it('shows repository identity once and retains committed values in Structure', () => {
+  renderIntroduction(
     <StateOverviewView
       {...props}
       projectName="test-bug"
@@ -76,6 +127,7 @@ it('uses actual metadata and committed values for the release layout and handles
       projectVisibility="private"
       schemaName="Actual schema"
       historyHref="/history"
+      historyReturnTo="/team/repo?branch=release%2Fcandidate"
       workspaceHref="/workspace"
       commits={[
         {
@@ -87,15 +139,10 @@ it('uses actual metadata and committed values for the release layout and handles
       ]}
     />
   );
-  expect(screen.getAllByText('Actual owner')).toHaveLength(2);
-  expect(screen.getAllByText('Private')).toHaveLength(2);
+  expect(screen.getAllByText('Actual owner')).toHaveLength(1);
+  expect(screen.getAllByText('Private')).toHaveLength(1);
   expect(screen.getByText('Empty-key content')).toBeVisible();
   expect(screen.queryByText('Monitoring enabled')).toBeNull();
-  expect(screen.getByText(/Author not recorded/)).toBeVisible();
-  expect(screen.getByRole('link', { name: 'Actual commit' })).toHaveAttribute(
-    'href',
-    expect.stringContaining('branch=release%2Fcandidate')
-  );
   expect(screen.getByRole('link', { name: 'Propose change' })).toHaveAttribute(
     'href',
     '/workspace'
@@ -104,7 +151,7 @@ it('uses actual metadata and committed values for the release layout and handles
 
 it('renders an empty repository with its own metadata and no committed state', () => {
   overview.mockReturnValue({ data: undefined, loading: false });
-  render(
+  renderIntroduction(
     <StateOverviewView
       {...props}
       commitDigest={null}
@@ -125,6 +172,11 @@ it('renders an empty repository with its own metadata and no committed state', (
   expect(screen.queryByText('Release with evidence')).toBeNull();
   expect(screen.getByText('No README added yet.')).toBeVisible();
   expect(screen.getByText('No commits yet')).toBeVisible();
+  expect(
+    within(screen.getByRole('region', { name: 'Committed State' })).getByRole('link', {
+      name: 'Propose change',
+    })
+  ).toHaveAttribute('href', '/project/empty?tab=workspaces');
   expect(screen.queryByText('Committed')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Expand rendered State' })).toBeNull();
   expect(screen.getAllByRole('link', { name: 'Propose change' })[0]).toHaveAttribute(
@@ -135,7 +187,9 @@ it('renders an empty repository with its own metadata and no committed state', (
 
 it('renders the empty repository header instead of hiding it', () => {
   overview.mockReturnValue({ data: undefined, loading: false });
-  render(<StateOverviewView {...props} commitDigest={null} headerOnly projectName="ew" />);
+  renderIntroduction(
+    <StateOverviewView {...props} commitDigest={null} headerOnly projectName="ew" />
+  );
   expect(screen.getByRole('heading', { name: 'ew' })).toBeVisible();
 });
 
@@ -145,7 +199,7 @@ it('shows current repository information across heads without borrowing version 
       '# Current repository\n\n![Missing](images/mark.png)\n\n<script>alert(1)</script>\n\n[Bad](javascript:alert)\n\n[Good](https://example.test)',
     tags: ['当前'],
   };
-  const { rerender, container } = render(
+  const { rerender, container } = renderIntroduction(
     <StateOverviewView
       {...props}
       introductionSource="repository"
@@ -188,7 +242,7 @@ it('shows current repository information across heads without borrowing version 
 it('keeps missing historical introductions empty even with current repository information', () => {
   const data = overview().data;
   overview.mockReturnValue({ data: { ...data, author: null }, loading: false });
-  render(
+  renderIntroduction(
     <StateOverviewView
       {...props}
       repositoryProfile={{ readme: '# Current repository', tags: ['Current tag'] }}
@@ -216,7 +270,7 @@ it('offers authorized editing with no Commit and keeps failed input, cancellatio
     canEditRepository: true,
     onSaveRepositoryProfile: save,
   };
-  const { rerender } = render(<StateOverviewView {...repositoryProps} />);
+  const { rerender } = renderIntroduction(<StateOverviewView {...repositoryProps} />);
   fireEvent.click(screen.getByRole('button', { name: 'Edit README' }));
   expect(screen.getByRole('textbox', { name: 'Repository README' })).toHaveValue('Saved README');
   fireEvent.change(screen.getByRole('textbox', { name: 'Repository README' }), {
@@ -254,7 +308,7 @@ it('saves only normalized tags and blocks duplicate submission while pending', a
       })
   );
   overview.mockReturnValue({ data: undefined, loading: false });
-  render(
+  renderIntroduction(
     <StateOverviewView
       {...props}
       introductionSource="repository"
@@ -289,7 +343,7 @@ it('prefills only an empty README draft from current repository metadata and per
     canEditRepository: true,
     onSaveRepositoryProfile: save,
   };
-  const { rerender } = render(<StateOverviewView {...repositoryProps} />);
+  const { rerender } = renderIntroduction(<StateOverviewView {...repositoryProps} />);
   fireEvent.click(screen.getByRole('button', { name: 'Add README', exact: true }));
   expect(screen.getByRole('dialog', { name: 'Add repository README' })).toBeVisible();
   expect(screen.getByRole('textbox', { name: 'Repository README' })).toHaveValue(
@@ -313,7 +367,7 @@ it('keeps repository information visible when State fails, without executable vi
     error: 'State request failed',
     retry: vi.fn(),
   });
-  render(
+  renderIntroduction(
     <StateOverviewView
       {...props}
       introductionSource="repository"
@@ -335,7 +389,7 @@ it('preserves an unsaved repository README when the viewed business Commit chang
     canEditRepository: true,
     onSaveRepositoryProfile: vi.fn(),
   };
-  const { rerender } = render(<StateOverviewView {...ownProps} />);
+  const { rerender } = renderIntroduction(<StateOverviewView {...ownProps} />);
   fireEvent.click(screen.getByRole('button', { name: 'Edit README', exact: true }));
   fireEvent.change(screen.getByRole('textbox', { name: 'Repository README' }), {
     target: { value: 'Unsaved work' },
@@ -344,4 +398,25 @@ it('preserves an unsaved repository README when the viewed business Commit chang
   expect(screen.getByRole('textbox', { name: 'Repository README' })).toHaveValue('Unsaved work');
   fireEvent.click(screen.getByRole('button', { name: 'Cancel', exact: true }));
   expect(ownProps.onSaveRepositoryProfile).not.toHaveBeenCalled();
+});
+
+it('locates a committed path from the sidebar and retains the complete inspector entry', () => {
+  overview.mockReturnValue({ data: undefined, loading: false });
+  const inspect = vi.fn();
+  render(
+    <StateOverviewView
+      {...props}
+      introductionSource="repository"
+      commit={commit}
+      onViewStructure={inspect}
+    />
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Inspect document/title' }));
+  expect(inspect).toHaveBeenLastCalledWith('document/title');
+  fireEvent.click(screen.getByRole('button', { name: 'Collapse document' }));
+  expect(screen.queryByRole('button', { name: 'Inspect document/title' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Expand document' }));
+  expect(screen.getByRole('button', { name: 'Inspect document/title' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: /Open full view/ }));
+  expect(inspect).toHaveBeenLastCalledWith();
 });

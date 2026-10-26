@@ -1,22 +1,45 @@
 'use client';
 
+import {
+  BookOpen,
+  Boxes,
+  Braces,
+  Building2,
+  CheckCircle2,
+  CircleUserRound,
+  Compass,
+  Database,
+  FolderGit2,
+  GitPullRequest,
+  History,
+  LayoutGrid,
+  type LucideIcon,
+  Plus,
+  Settings,
+  UsersRound,
+} from 'lucide-react';
 import Link from 'next/link';
 import {
   getProjectTabSegment,
   PROJECT_TABS,
   type ProjectTabId,
+  projectTabKeepsWorkspace,
 } from '@/components/project/projectTabModel';
-import { useProjectStore } from '@/store/projectStore';
-import { cx, ReferenceIcon } from './DiscoverReference';
+import { Button } from '@/components/ui/button';
+import palette from '@/styles/management-palette.module.css';
+import styles from './DiscoverHeader.module.css';
 
-const tabIcons: Record<ProjectTabId, string> = {
-  state: 'db',
-  schemas: 'braces',
-  workspaces: 'layers',
-  reviews: 'pr',
-  community: 'grid',
-  settings: 'settings',
-  outputs: 'file',
+const tabIcons: Record<ProjectTabId, LucideIcon> = {
+  state: Database,
+  schemas: Braces,
+  discover: Compass,
+  browse: BookOpen,
+  workspaces: Boxes,
+  reviews: GitPullRequest,
+  checks: CheckCircle2,
+  history: History,
+  community: LayoutGrid,
+  settings: Settings,
 };
 
 export function DiscoverHeader({
@@ -25,165 +48,200 @@ export function DiscoverHeader({
   projectIdNavigation = false,
   branch,
   workspaceId,
-  visibility = 'Private',
+  visibility,
+  contextLabel,
   activeTab = 'schemas',
   owner,
   projectName,
   newProjectHref,
   namespaceTab,
+  exploreNavigation,
 }: {
+  exploreNavigation?: {
+    view: 'discover' | 'browse';
+    discoverHref: string;
+    browseHref: string;
+  };
   namespaceTab?: 'repositories' | 'settings';
   repoPath?: string;
   settingsHref?: string;
   projectIdNavigation?: boolean;
   branch?: string | null;
   workspaceId?: string | null;
-  visibility?: string;
+  visibility?: 'Private' | 'Unlisted' | 'Public';
+  contextLabel?: 'Personal' | 'Organization' | 'Account';
   activeTab?: ProjectTabId;
   owner?: string;
   projectName?: string;
   newProjectHref?: string;
 }) {
-  const projects = useProjectStore((state) => state.projects);
+  const isExplore = !namespaceTab && !repoPath;
+  const exploreView = exploreNavigation?.view ?? 'discover';
+  const discoverHref = exploreNavigation?.discoverHref ?? '/explore?view=discover';
+  const browseHref = exploreNavigation?.browseHref ?? '/explore?view=browse';
+  const exploreLabel = exploreView === 'browse' ? 'Browse' : 'Discover';
+  const ExploreIcon = exploreView === 'browse' ? BookOpen : Compass;
+  const ownerHref = owner ? `/${encodeURIComponent(owner)}` : '/';
+  const createLabel = newProjectHref === '/' ? 'Browse repositories' : 'New repository';
+  const OwnerIcon =
+    contextLabel === 'Organization'
+      ? Building2
+      : contextLabel === 'Personal' || contextLabel === 'Account'
+        ? CircleUserRound
+        : UsersRound;
+
   function tabHref(tab: ProjectTabId) {
     if (tab === 'settings') return settingsHref;
-    if (!repoPath) return tab === 'schemas' ? '/templates' : '/';
+    if (!repoPath) return tab === 'schemas' ? '/explore' : '/';
     const params = new URLSearchParams();
     if (projectIdNavigation && tab !== 'state') params.set('tab', getProjectTabSegment(tab));
     if (branch) params.set('branch', branch);
-    if (workspaceId && (tab === 'schemas' || tab === 'workspaces'))
-      params.set('workspace', workspaceId);
+    if (workspaceId && projectTabKeepsWorkspace(tab)) params.set('workspace', workspaceId);
     const path =
       projectIdNavigation || tab === 'state'
         ? repoPath
         : `${repoPath}/${getProjectTabSegment(tab)}`;
     return params.size ? `${path}?${params}` : path;
   }
+
   return (
-    <header className={cx('surface hdr')}>
-      <div className={cx('r1 nw')}>
-        <Link className={cx('brand')} href="/" aria-label="Back to projects">
-          <svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26">
-            <rect width="26" height="26" rx="7" fill="var(--text-primary)" />
-            <path d="M7 8.5h12M13 8.5v10" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" />
-            <circle cx="19" cy="17.5" r="2.2" fill="var(--accent-conversation)" />
-          </svg>
-          <span className={cx('wm')}>T3X</span>
-        </Link>
-        <span className={cx('sl')} aria-hidden="true">
-          <svg width="12" height="22" viewBox="0 0 12 22">
-            <path d="M9 2 3 20" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-          </svg>
-        </span>
-        <Link className={cx('ctx')} href={owner ? `/${encodeURIComponent(owner)}` : '/'}>
-          <span className={cx('av chive')} style={{ width: 22, height: 22 }}>
-            P
+    <header
+      className={`${palette.scope} ${styles.header}${isExplore ? ` ${styles.exploreHeader}` : ''}`}
+    >
+      <div className={styles.topRow}>
+        <div className={styles.identity}>
+          <Link className={styles.brand} href="/" aria-label="T3X home">
+            <svg aria-hidden="true" width="28" height="28" viewBox="0 0 26 26">
+              <rect width="26" height="26" rx="7" fill="var(--text-primary)" />
+              <path
+                d="M7 8.5h12M13 8.5v10"
+                stroke="var(--surface-card)"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+              />
+              <circle cx="19" cy="17.5" r="2.2" fill="var(--accent-commit)" />
+            </svg>
+            <span>T3X</span>
+          </Link>
+          <span className={styles.separator} aria-hidden="true">
+            /
           </span>
-          <span className={cx('n s')}>{owner || 'Projects'}</span>
-          {!owner && <span className={cx('tx3 small')}>{projects.length}</span>}
-          <ReferenceIcon name="updown" size={13} className={cx('tx3')} />
-        </Link>
-        {projectName ? (
-          <>
-            <span className={cx('sl')} aria-hidden="true">
-              /
-            </span>
-            <Link href={repoPath || '/'} className={cx('ctx')} style={{ fontWeight: 550 }}>
-              <h1>{projectName}</h1>
-              <ReferenceIcon name="updown" size={13} className={cx('tx3')} />
+          <div className={styles.context}>
+            <Link
+              className={`${styles.owner}${!projectName ? ` ${styles.currentContext}` : ''}`}
+              href={isExplore ? (exploreView === 'browse' ? browseHref : discoverHref) : ownerHref}
+            >
+              {isExplore ? (
+                <ExploreIcon aria-hidden="true" />
+              ) : owner ? (
+                <OwnerIcon aria-hidden="true" />
+              ) : (
+                <FolderGit2 aria-hidden="true" />
+              )}
+              <span>{isExplore ? exploreLabel : owner || 'Repositories'}</span>
             </Link>
-          </>
-        ) : null}
-        <span className={cx('tagp')} style={{ marginLeft: 6 }}>
-          <ReferenceIcon name="shield" size={10} />
-          {visibility}
-        </span>
-        <div className={cx('grow')} />
-        <nav aria-label="Global" className={cx('row')}>
-          <Link className={cx('rl')} href="/templates">
-            Explore
-          </Link>
-          <Link className={cx('rl')} href="/">
-            Your projects
-          </Link>
-        </nav>
-        <button
-          type="button"
-          className={cx('gs')}
-          onClick={() =>
-            document.dispatchEvent(
-              new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true })
-            )
-          }
-        >
-          <ReferenceIcon name="search" />
-          <span className={cx('grow')}>Search</span>
-          <span className={cx('kbd')}>⌘K</span>
-        </button>
-        {newProjectHref ? (
-          <Link href={newProjectHref} className={cx('btn')} style={{ height: 32, borderRadius: 8 }}>
-            <ReferenceIcon name="plus" />
-            {newProjectHref === '/' ? 'Browse projects' : 'Create new'}
-          </Link>
-        ) : null}
-        <span className={cx('ib')} aria-label="Notifications preview">
-          <ReferenceIcon name="bell" size={17} />
-          {!repoPath ? <span className={cx('dt')} /> : null}
-        </span>
-        <Link
-          className={cx('me')}
-          href="/settings/provider-credentials"
-          aria-label="Account settings"
-        >
-          P
-        </Link>
+            {projectName ? (
+              <>
+                <span className={styles.separator} aria-hidden="true">
+                  /
+                </span>
+                <Link href={repoPath || '/'} className={styles.repository}>
+                  <h1>{projectName}</h1>
+                </Link>
+              </>
+            ) : null}
+            {contextLabel ? <span className={styles.contextBadge}>{contextLabel}</span> : null}
+            {visibility ? <span className={styles.contextBadge}>{visibility}</span> : null}
+          </div>
+        </div>
+
+        <div className={styles.utilities}>
+          {newProjectHref ? (
+            <Button asChild variant="outline" size="sm" className={styles.create}>
+              <Link href={newProjectHref} aria-label={createLabel} title={createLabel}>
+                {newProjectHref === '/' ? (
+                  <FolderGit2 aria-hidden="true" />
+                ) : (
+                  <Plus aria-hidden="true" />
+                )}
+                <span className={styles.createLabel}>{createLabel}</span>
+              </Link>
+            </Button>
+          ) : null}
+          <nav aria-label="Global" className={styles.globalNav}>
+            <Link
+              href={discoverHref}
+              aria-current={isExplore && exploreView === 'discover' ? 'page' : undefined}
+            >
+              Discover
+            </Link>
+            <Link
+              href={browseHref}
+              aria-current={isExplore && exploreView === 'browse' ? 'page' : undefined}
+            >
+              Browse
+            </Link>
+            <Link href="/">Your repositories</Link>
+          </nav>
+          <div className={styles.actions}>
+            <Button asChild variant="ghost" size="icon-sm" className={styles.account}>
+              <Link href="/settings/profile" aria-label="Account settings" title="Account settings">
+                <CircleUserRound aria-hidden="true" />
+              </Link>
+            </Button>
+          </div>
+        </div>
       </div>
-      <nav
-        className={cx('r2 nw')}
-        aria-label={namespaceTab ? 'Namespace navigation' : 'Project views'}
-      >
-        {namespaceTab
-          ? [
-              {
-                id: 'repositories',
-                label: 'Repositories',
-                href: `/${encodeURIComponent(owner || '')}`,
-                icon: 'layers',
-              },
-              { id: 'settings', label: 'Settings', href: settingsHref, icon: 'settings' },
-            ].map((tab) => (
-              <Link
-                key={tab.id}
-                href={tab.href}
-                scroll={false}
-                className={cx(`t${namespaceTab === tab.id ? ' on' : ''}`)}
-                aria-current={namespaceTab === tab.id ? 'page' : undefined}
-              >
-                <span>
-                  <ReferenceIcon name={tab.icon} size={15} />
-                  {tab.label}
-                </span>
-              </Link>
-            ))
-          : PROJECT_TABS.map((tab) => (
-              <Link
-                key={tab.id}
-                href={tabHref(tab.id)}
-                scroll={false}
-                className={cx(`t${tab.id === activeTab ? ' on' : ''}`)}
-                aria-label={tab.label}
-                aria-current={tab.id === activeTab ? 'page' : undefined}
-              >
-                <span>
-                  <ReferenceIcon name={tabIcons[tab.id]} size={15} />
-                  {tab.id === 'reviews' ? 'PRs' : tab.label}
-                  {!repoPath && (tab.id === 'workspaces' || tab.id === 'reviews') ? (
-                    <span className={cx('c')}>{tab.id === 'workspaces' ? 2 : 1}</span>
-                  ) : null}
-                </span>
-              </Link>
-            ))}
-      </nav>
+
+      {namespaceTab || repoPath ? (
+        <nav
+          className={styles.tabs}
+          aria-label={namespaceTab ? 'Namespace navigation' : 'Project views'}
+        >
+          {namespaceTab
+            ? [
+                {
+                  id: 'repositories',
+                  label: 'Repositories',
+                  href: ownerHref,
+                  icon: FolderGit2,
+                },
+                { id: 'settings', label: 'Settings', href: settingsHref, icon: Settings },
+              ].map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <Link
+                    key={tab.id}
+                    href={tab.href}
+                    scroll={false}
+                    className={styles.tab}
+                    aria-current={namespaceTab === tab.id ? 'page' : undefined}
+                  >
+                    <Icon aria-hidden="true" />
+                    {tab.label}
+                  </Link>
+                );
+              })
+            : PROJECT_TABS.map((tab) => {
+                const Icon = tabIcons[tab.id];
+                const selected =
+                  tab.id === activeTab || (tab.id === 'discover' && activeTab === 'browse');
+                return (
+                  <Link
+                    key={tab.id}
+                    href={tabHref(tab.id)}
+                    scroll={false}
+                    className={styles.tab}
+                    aria-label={tab.label}
+                    aria-current={selected ? 'page' : undefined}
+                  >
+                    <Icon aria-hidden="true" />
+                    {tab.label}
+                  </Link>
+                );
+              })}
+        </nav>
+      ) : null}
     </header>
   );
 }

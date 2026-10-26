@@ -93,7 +93,7 @@ function InviteDialog({
         <header>
           <div>
             <h2 id="invite-member-title">Invite member</h2>
-            <p>Invite someone to join this organization.</p>
+            <p>Invite someone to join this namespace.</p>
           </div>
           <button type="button" aria-label="Close invitation dialog" onClick={onClose}>
             <X size={18} />
@@ -184,7 +184,7 @@ export function MembersSettingsPanel() {
   const invitations = (invitationsQuery.data?.invitations ?? []).filter(
     (invitation) => invitation.status === 'pending'
   );
-  const organizationName = activeAccount?.namespace.display_name ?? 'orbit-labs';
+  const namespaceName = activeAccount?.namespace.display_name ?? 'No active namespace';
   const loading = accountsLoading || membersQuery.isLoading;
   const error = accountsError ?? membersQuery.error;
 
@@ -223,7 +223,7 @@ export function MembersSettingsPanel() {
   }
 
   async function remove(member: NamespaceMembership) {
-    if (!window.confirm(`Remove ${memberName(member)} from this organization?`)) return;
+    if (!window.confirm(`Remove ${memberName(member)} from this namespace?`)) return;
     setBusyId(member.membership_id);
     try {
       await revokeMember(member.membership_id);
@@ -258,7 +258,7 @@ export function MembersSettingsPanel() {
         <nav className={styles.breadcrumb} aria-label="Breadcrumb">
           <Link href="/settings">Settings</Link>
           <span>/</span>
-          <Link href="/settings">{organizationName}</Link>
+          <Link href="/settings">{namespaceName}</Link>
           <span>/</span>
           <strong>Members</strong>
         </nav>
@@ -266,10 +266,14 @@ export function MembersSettingsPanel() {
         <div className={styles.toolbar}>
           <div className={styles.titleGroup}>
             <h1>Members</h1>
-            <span className={styles.organizationBadge}>
-              <Building2 size={14} />
-              Organization
-            </span>
+            {activeAccount && (
+              <span className={styles.organizationBadge}>
+                <Building2 size={14} />
+                {activeAccount.namespace.kind === 'personal'
+                  ? 'Personal namespace'
+                  : 'Organization'}
+              </span>
+            )}
           </div>
           <div className={styles.controls}>
             <label className={styles.searchBox}>
@@ -328,7 +332,7 @@ export function MembersSettingsPanel() {
           </div>
         ) : null}
 
-        <section className={styles.tableCard} aria-label="Organization members">
+        <section className={styles.tableCard} aria-label="Namespace members">
           <div className={styles.memberHeader}>
             <span>Member</span>
             <span>Role</span>
@@ -349,11 +353,11 @@ export function MembersSettingsPanel() {
             </div>
           ) : null}
           {!error && !loading && !activeAccount ? (
-            <div className={styles.emptyState}>Select an organization to manage its members.</div>
+            <div className={styles.emptyState}>Select a namespace to manage its members.</div>
           ) : null}
           {!error && !loading && activeAccount && !canReadMembers ? (
             <div className={styles.emptyState}>
-              You do not have permission to view organization members.
+              You do not have permission to view members of this namespace.
             </div>
           ) : null}
           {!error && !loading && canReadMembers && members.length === 0 ? (

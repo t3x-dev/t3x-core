@@ -2,7 +2,11 @@ import type { TransitionProtocolValue, WorkspaceAuthoringCard } from '@t3x-dev/a
 import { applyYOps, resolvePath, type YOp, type YValue } from '@t3x-dev/yops';
 import { activityOperation } from '@/domain/composeActivity';
 import type { WorkspaceYOpsDraftOperation } from '@/types/workspaces';
-import { type ComposeObjectCard, composeObjectChangeCards } from './composeObjectChanges';
+import {
+  type ComposeObjectCard,
+  composeObjectChangeCards,
+  composeValuesEqual,
+} from './composeObjectChanges';
 import {
   type DraftYOp,
   draftOpReason,
@@ -18,6 +22,7 @@ export interface StagedManualCard {
   reason: string;
   selected: boolean;
   createdAt: string;
+  beforeDocument?: unknown;
 }
 
 export interface ManualStagingControls {
@@ -90,6 +95,7 @@ export function stageDraftOp(
     item: {
       id: `staged-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
       operation,
+      beforeDocument: current,
       card: cardFromDraftOp(current, next, operation),
       reason,
       selected: true,
@@ -127,6 +133,29 @@ export function previewStagedCurrent<T>(
 
 export function selectedStagedItems(items: readonly StagedManualCard[]) {
   return items.filter((item) => item.selected);
+}
+
+/** Keep browser-only edits, but never apply stale values over a changed branch silently. */
+export function assertStagedEditsCurrent(published: unknown, items: readonly StagedManualCard[]) {
+  let current = published;
+  const equal = (left: unknown, right: unknown) =>
+    composeValuesEqual(
+      left as TransitionProtocolValue | undefined,
+      right as TransitionProtocolValue | undefined
+    );
+  for (const item of items) {
+    const name = Object.keys(item.operation)[0];
+    const path = item.card.beforePath ?? item.card.path;
+    const canCompareField = (name === 'set' || name === 'unset') && !/\[\d+\]/.test(path);
+    const unchanged = canCompareField
+      ? equal(draftValueAt(current, path), item.card.before)
+      : equal(current, item.beforeDocument);
+    if (!unchanged)
+      throw new Error(
+        `The branch changed at ${path}. Your ungrouped edits are preserved; review them against the latest value before saving.`
+      );
+    current = applyDraftOpsToCurrent(current, [item.operation]);
+  }
 }
 
 export function remainingStagedItems(items: readonly StagedManualCard[]) {

@@ -490,7 +490,6 @@ export default function RunDetailPage() {
                   ? [
                       {
                         label: run.leaf.title || run.leaf.id,
-                        href: `/project/${run.project_id}/leaf/${run.leaf.id}`,
                       },
                     ]
                   : []),

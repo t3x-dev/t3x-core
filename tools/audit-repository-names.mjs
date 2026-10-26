@@ -51,6 +51,38 @@ export function auditRepositoryNames(rows, claims = []) {
   });
 }
 
+/** Inventory every claim, including tombstones that no longer have a project row.
+ * A null owner does not prove deletion: legacy collisions use the same shape. */
+export function auditRepositoryClaims(rows, claims = []) {
+  const projects = new Map(rows.map((row) => [row.project_id, row]));
+  return claims.map((claim) => {
+    const project = projects.get(claim.project_id);
+    const candidates = rows.filter(
+      (row) =>
+        row.namespace_id === claim.namespace_id &&
+        inspectRepositoryName(row.name).name.toLowerCase() === claim.name_key
+    );
+    return {
+      namespace_id: claim.namespace_id,
+      namespace: claim.namespace ?? null,
+      name_key: claim.name_key,
+      project_id: claim.project_id,
+      resolvable: claim.resolvable ?? null,
+      classification: project
+        ? project.deleted_at
+          ? 'soft_deleted_project'
+          : 'active_project'
+        : claim.project_id === null
+          ? 'unknown_origin'
+          : 'missing_project',
+      candidate_project_ids: candidates.map((row) => row.project_id),
+      // Even a resolvable null-owner claim is evidence to review, not permission
+      // to release it. This command never changes data or starts a migration.
+      action: 'retain',
+    };
+  });
+}
+
 async function main() {
   if (!process.env.DATABASE_URL)
     throw new Error(
@@ -66,9 +98,13 @@ async function main() {
       const [table] =
         await tx`SELECT to_regclass('public.repository_paths') IS NOT NULL AS present`;
       const claims = table.present
-        ? await tx`SELECT namespace_id, name_key, project_id FROM repository_paths`
+        ? await tx`SELECT p.namespace_id, n.slug AS namespace, p.name_key, p.project_id,
+            (to_jsonb(p)->>'resolvable')::boolean AS resolvable
+            FROM repository_paths p LEFT JOIN namespaces n USING (namespace_id)
+            ORDER BY p.namespace_id, p.name_key`
         : [];
       const entries = auditRepositoryNames(rows, claims);
+      const pathClaims = auditRepositoryClaims(rows, claims);
       return {
         generated_at: new Date().toISOString(),
         read_only: true,
@@ -76,6 +112,11 @@ async function main() {
         total: entries.length,
         anomalous: entries.filter((e) => e.reasons.length).length,
         entries,
+        claims: pathClaims,
+        unattributed_claims: pathClaims.filter(
+          (claim) =>
+            claim.classification === 'unknown_origin' || claim.classification === 'missing_project'
+        ),
       };
     });
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);

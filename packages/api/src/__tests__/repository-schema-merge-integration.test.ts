@@ -496,7 +496,18 @@ describe('Schema/content merge across verified Commits', () => {
   });
 
   it('allows a Schema-only PR and commits its verified contract without requiring content changes', async () => {
-    const input = await branches(schema({ owner: { type: 'string' } }), base, {}, {});
+    const projectId = (await insertProject(db, { name: 'Schema-only merge' })).projectId;
+    await ensureMainBranch(db, projectId);
+    const targetDigest = await commit(projectId, 'main', base, content({}));
+    await insertBranch(db, { projectId, name: 'dev', parentBranch: 'main' });
+    const sourceDigest = await commit(
+      projectId,
+      'dev',
+      schema({ owner: { type: 'string' } }),
+      content({})
+    );
+    // Keep the target at its existing Commit instead of preparing an empty Review.
+    const input = { projectId, sourceDigest, targetDigest };
     const app = new Hono().route('/', pullRequestRoutes);
     const response = await app.request(`/v1/projects/${input.projectId}/pull-requests`, {
       method: 'POST',

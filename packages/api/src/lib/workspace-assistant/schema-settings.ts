@@ -151,6 +151,17 @@ async function assertFresh(
   record: StoredSettings
 ) {
   const live = await currentBasis(db, projectId, workspaceId);
+  const currentSettings = Stored.safeParse(live.draft.workspace_state?.assistantSchemaSettings);
+  // The workspace may have advanced after read() but before currentBasis(). Do not
+  // use its newer revision to authorize writing an older confirmation card.
+  if (
+    !currentSettings.success ||
+    currentSettings.data.settingsId !== record.settingsId ||
+    currentSettings.data.revision !== record.revision ||
+    currentSettings.data.status !== record.status ||
+    currentSettings.data.confirmationDigest !== record.confirmationDigest
+  )
+    throw new StudioError('CONFLICT', 'Settings changed. Refresh the card.');
   const edit = live.draft.workspace_state?.schemaEditCandidate;
   const revision = edit ? parseWorkspaceSchemaEditCandidate(edit).revision : 0;
   if (

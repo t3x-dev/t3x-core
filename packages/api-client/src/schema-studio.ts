@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import { SchemaNodeProvenanceSchema, StudioSourceSchema } from './schema-provenance';
+
+export { StudioSourceSchema } from './schema-provenance';
 
 const digest = z.string().regex(/^sha256:[0-9a-f]{64}$/);
 const recursiveJsonValue = z.json();
@@ -21,13 +24,6 @@ const schemaJsonValue = z
     return parsed.data;
   });
 export { schemaJsonValue as SchemaJsonValueSchema };
-export const StudioSourceSchema = z.object({
-  projectId: z.string().min(1).nullable(),
-  canonicalName: z.string().min(1).max(240),
-  version: z.string().min(1).max(80),
-  artifactVersionId: z.string(),
-  hash: digest,
-});
 export const AddStudioCandidateSchema = z
   .object({
     sourceProjectId: z.string().min(1).optional(),
@@ -109,15 +105,41 @@ export const StudioSchemaEditCandidateRefSchema = z.object({
   candidateId: z.string().min(1),
   revision: z.number().int().positive(),
 });
+export const StudioCompositionSchema = z.record(
+  z.string().min(1).max(300),
+  z.string().min(1).max(300)
+);
+export const StudioCompositionConflictSchema = z.object({
+  definitions: z.record(z.string(), z.unknown()).default({}),
+  path: z.string(),
+  candidates: z.array(z.string()),
+  selected: z.string().nullable(),
+});
 export const StudioPreviewInputSchema = z
   .object({
     candidateIds: ids,
     workspaceId: z.string().min(1).optional(),
     compareToCandidateIds: ids.optional(),
+    composition: StudioCompositionSchema.optional(),
     sample: StudioSampleValueSchema.optional(),
     localContribution: StudioSchemaEditLocalContributionSchema.optional(),
     schemaDefinition: StudioSchemaEditLocalContributionSchema.optional(),
     baseSchemaHash: digest.optional(),
+    sourceMappings: z
+      .array(
+        z
+          .object({
+            path: z.array(z.string()).min(2).max(100),
+            from: z.array(z.string()).min(2).max(100),
+            source: z
+              .object({ candidateId: z.string().min(1).max(300), schemaHash: digest })
+              .strict()
+              .optional(),
+          })
+          .strict()
+      )
+      .max(10000)
+      .optional(),
     schemaEditCandidate: StudioSchemaEditCandidateRefSchema.optional(),
   })
   .strict()
@@ -178,6 +200,8 @@ export const StudioCheckLayerSchema = z.object({
   summary: z.string().optional(),
 });
 export const StudioPreviewSchema = z.object({
+  composition: StudioCompositionSchema.optional(),
+  compositionConflicts: z.array(StudioCompositionConflictSchema).default([]),
   impact: SchemaEvolutionImpactSchema.nullable().default(null),
   samples: z.array(StudioSampleSchema).default([]),
   localSample: StudioSampleSchema.nullable().default(null),
@@ -192,6 +216,7 @@ export const StudioPreviewSchema = z.object({
   }),
   renderPlan: z.array(z.record(z.string(), z.unknown())),
   origins: z.record(z.string(), z.unknown()),
+  nodeProvenance: SchemaNodeProvenanceSchema.optional(),
   modules: z
     .array(z.object({ candidateId: z.string(), requiredBy: z.array(z.string()) }))
     .default([]),
@@ -421,6 +446,8 @@ export const StudioSchemaEditOriginChannelSchema = z.enum(['studio', 'assistant'
 
 export const SaveStudioSchemaEditCandidateInputSchema = z
   .object({
+    composition: StudioCompositionSchema.optional(),
+    rebase: z.boolean().optional(),
     workspaceId: z.string().min(1),
     candidateIds: ids,
     ifRevision: z.number().int().nonnegative(),
@@ -430,10 +457,12 @@ export const SaveStudioSchemaEditCandidateInputSchema = z
     localContribution: StudioSchemaEditLocalContributionSchema,
     schemaDefinition: StudioSchemaEditLocalContributionSchema.optional(),
     baseSchemaHash: digest.optional(),
+    sourceMappings: StudioPreviewInputSchema.shape.sourceMappings,
   })
   .strict();
 
 export const StudioSchemaEditCandidateSchema = z.object({
+  composition: StudioCompositionSchema.optional(),
   schema: z.literal('t3x.application/workspace-schema-edit-candidate/v1'),
   candidateId: z.string().min(1),
   workspaceId: z.string().min(1),
@@ -452,6 +481,7 @@ export const StudioSchemaEditCandidateSchema = z.object({
         operations: z.array(z.record(z.string(), z.unknown())),
       }),
       resultSchemaHash: digest.optional(),
+      sourceMappings: StudioPreviewInputSchema.shape.sourceMappings,
     })
     .optional(),
   intent: z.string().min(1),

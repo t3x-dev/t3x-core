@@ -51,9 +51,6 @@ export function CanvasShortcutsDialog({ open, onOpenChange }: CanvasShortcutsDia
               <ShortcutRow label="Show this help">
                 <Kbd>?</Kbd>
               </ShortcutRow>
-              <ShortcutRow label="Command palette">
-                <Kbd>{'\u2318'}K</Kbd>
-              </ShortcutRow>
             </div>
           </div>
           <Divider />

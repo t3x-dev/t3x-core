@@ -51,4 +51,13 @@ export interface WorkspaceSchemaAuthoringDraft {
   readonly effect: WorkspaceSchemaAuthoringEffect;
   /** Derived verification/cache key. The replayed Schema remains authoritative. */
   readonly resultSchemaHash?: SchemaAuthoringDigest;
+  /** Source locations are independent of the destination layout and replayed definition. */
+  readonly sourceMappings?: readonly WorkspaceSchemaSourceMapping[];
+}
+
+export interface WorkspaceSchemaSourceMapping {
+  readonly path: readonly string[];
+  readonly from: readonly string[];
+  /** Omitted for the frozen authoring Base. External sources are pinned by compiled hash. */
+  readonly source?: { readonly candidateId: string; readonly schemaHash: SchemaAuthoringDigest };
 }

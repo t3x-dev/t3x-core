@@ -38,7 +38,11 @@ import {
   deletionSubject,
   matchingDeletionAuthorization,
 } from './workspace-deletion-authorization';
-import { captureWorkspaceSchema } from './workspace-schema-review';
+import {
+  buildWorkspaceSchemaReview,
+  captureWorkspaceSchema,
+  workspaceSchemaReviewHasChanges,
+} from './workspace-schema-review';
 
 export interface WorkspaceAuthoringBasis {
   schema: 't3x.application/workspace-authoring-basis/v1';
@@ -348,6 +352,10 @@ export async function readWorkspaceAuthoring(
 ) {
   const draft = await requireWorkspace(db, input.projectId, input.workspaceId);
   const { ledger, basis } = workspaceAuthoringState(draft.workspace_state!);
+  const head = await getTransitionRefHead(db, {
+    projectId: input.projectId,
+    refName: basis.refName,
+  });
   const limit = Math.min(100, Math.max(1, input.limit ?? 20));
   const actions = listDraftActions(ledger)
     .filter((a) => input.beforeSequence === undefined || a.sequence < input.beforeSequence)
@@ -361,20 +369,29 @@ export async function readWorkspaceAuthoring(
   const history = input.nodeId ? nodeHistory(ledger, input.nodeId, input.actionId) : null;
   // Resolve from the same Workspace revision as current content, including
   // immutable prepared snapshots. A missing contract must not hide Draft activity.
-  const currentSchema = await captureWorkspaceSchema(
+  const schemaReview = await buildWorkspaceSchemaReview(
     db,
     input.projectId,
     draft.workspace_state!
   ).catch((error: unknown) => {
     if (!(error instanceof DraftAuthoringConflictError)) throw error;
-    return { status: 'unknown' as const, schemaHash: null, definition: null, bindings: [] };
+    return null;
   });
+  const currentSchema =
+    schemaReview?.draft ??
+    (await captureWorkspaceSchema(db, input.projectId, draft.workspace_state!).catch(
+      (error: unknown) => {
+        if (!(error instanceof DraftAuthoringConflictError)) throw error;
+        return { status: 'unknown' as const, schemaHash: null, definition: null, bindings: [] };
+      }
+    ));
   return {
     schema: 't3x.application/workspace-authoring-view/v1' as const,
     projectionVersion: 1,
     workspaceRevision: draft.revision,
     compositionRevision: ledger.compositionRevision,
     basis: { refName: basis.refName, refHead: basis.refHead, baseDigest: basis.baseDigest },
+    synchronization: { currentRefHead: head.head, required: head.head !== basis.refHead },
     sources: (Array.isArray(draft.workspace_state?.sourceBundle)
       ? draft.workspace_state.sourceBundle
       : []
@@ -420,6 +437,7 @@ export async function readWorkspaceAuthoring(
     base: ledger.base,
     current: currentComposition(ledger),
     currentSchema,
+    hasChanges: schemaReview ? workspaceSchemaReviewHasChanges(schemaReview) : undefined,
     netDiff: netDiffCards(ledger),
     node: history
       ? {
@@ -490,6 +508,9 @@ export function buildAuthoringPreparation(workspace: Record<string, unknown>) {
     ledger,
     basis,
     bindings: buildAuthoringEffect(ledger).bindings,
+    ...(Array.isArray(workspace.authoringReconciliations)
+      ? { reconciliations: workspace.authoringReconciliations }
+      : {}),
     schemaBindings: workspace.schemaBindings ?? [],
     deletionAuthorizations: deletionAuthorizations(workspace),
     workspaceSchemaBase: workspace.workspaceSchemaBase ?? null,
@@ -518,6 +539,14 @@ export async function findRetiredAuthoringLedger(
     ? (workspace.authoringHistory as WorkspaceAuthoringHistoryEntry[])
     : [];
   const canonicalBasis = canonicalizeProtocolValue(JSON.parse(JSON.stringify(basis ?? null)));
+  const reconciliations = (workspace.authoringReconciliations ?? []) as Array<{
+    basis: unknown;
+    ledger: unknown;
+  }>;
+  const archived = reconciliations.find(
+    (entry) => canonicalizeProtocolValue(JSON.parse(JSON.stringify(entry.basis))) === canonicalBasis
+  );
+  if (archived) return parseDraftActionLedger(archived.ledger);
   const entry = history.find(
     (item) => canonicalizeProtocolValue(JSON.parse(JSON.stringify(item.basis))) === canonicalBasis
   );

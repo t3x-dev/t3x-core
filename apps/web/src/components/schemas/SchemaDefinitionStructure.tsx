@@ -70,7 +70,9 @@ export function SchemaDefinitionStructure({
   value,
   onChange,
   onValidationChange,
+  showNodes = true,
 }: {
+  showNodes?: boolean;
   value: Definition;
   onChange: (value: Definition) => void;
   onValidationChange: (error?: string) => void;
@@ -92,7 +94,7 @@ export function SchemaDefinitionStructure({
   return (
     <reportErrorContext.Provider value={reportError}>
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4">
-        {value.yschema !== undefined ? (
+        {showNodes && value.yschema !== undefined ? (
           <details className={panelClass}>
             <summary className={disclosureClass}>Schema metadata (read-only)</summary>
             <p className="text-[11px] text-[var(--text-tertiary)]">
@@ -108,10 +110,12 @@ export function SchemaDefinitionStructure({
             </dl>
           </details>
         ) : null}
-        <NodesEditor
-          nodes={record(value.nodes)}
-          onChange={(nodes) => onChange({ ...value, nodes })}
-        />
+        {showNodes ? (
+          <NodesEditor
+            nodes={record(value.nodes)}
+            onChange={(nodes) => onChange({ ...value, nodes })}
+          />
+        ) : null}
         <section aria-label="Relation types" className="space-y-3">
           <SectionHeader
             title="Relation types"
@@ -916,7 +920,7 @@ function NameField({
   names: string[];
   keyPattern?: boolean;
   readOnly?: boolean;
-  onChange: (name: string) => void;
+  onChange: (name: string) => void | boolean;
 }) {
   const id = useId();
   const reportError = useContext(reportErrorContext);
@@ -953,13 +957,79 @@ function NameField({
           const message = validate(draft);
           setError(message);
           reportError(id, message);
-          if (!message && draft !== name) onChange(draft);
+          if (!message && draft !== name && onChange(draft) === false) setDraft(name);
         }}
       />
       {error ? (
         <p id={`${id}-error`} className="mt-1 text-[11px] text-[var(--destructive)]" role="alert">
           {error}
         </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** Shared validation and attribute controls for the main Studio data editor. */
+export function SchemaFieldValidation({
+  children,
+  onValidationChange,
+}: {
+  children: import('react').ReactNode;
+  onValidationChange: (error?: string) => void;
+}) {
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const reportError = useCallback((id: string, error?: string) => {
+    setErrors((current) =>
+      current[id] === error ? current : (withField(current, id, error) as Record<string, string>)
+    );
+  }, []);
+  useEffect(() => {
+    onValidationChange(Object.values(errors)[0]);
+  }, [errors, onValidationChange]);
+  return <reportErrorContext.Provider value={reportError}>{children}</reportErrorContext.Provider>;
+}
+
+export { NameField as SchemaFieldName };
+
+export function SchemaFieldProperties({
+  kind,
+  path,
+  value,
+  onChange,
+}: {
+  kind: 'node' | 'slot';
+  path: string;
+  value: Definition;
+  onChange: (next: Definition) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <Fields
+        context={`${kind} ${path}`}
+        value={value}
+        fields={
+          kind === 'slot'
+            ? slotFields
+            : [...descriptions, contentKind, { key: 'repeated', kind: 'boolean' }]
+        }
+        onChange={onChange}
+      />
+      {kind === 'slot' ? (
+        <fieldset className="space-y-2">
+          <legend className="text-xs">YOps hint</legend>
+          <Fields
+            context={`YOps hint ${path}`}
+            value={record(value.yopsHint)}
+            fields={[
+              { key: 'preferredOp', options: ['define', 'set', 'populate', 'append'] },
+              { key: 'path' },
+              { key: 'slot' },
+            ]}
+            onChange={(hint) =>
+              onChange(withField(value, 'yopsHint', Object.keys(hint).length ? hint : undefined))
+            }
+          />
+        </fieldset>
       ) : null}
     </div>
   );

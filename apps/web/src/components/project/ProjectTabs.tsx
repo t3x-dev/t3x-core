@@ -3,6 +3,7 @@ import {
   getProjectTabSegment,
   PROJECT_TABS,
   type ProjectTabId,
+  projectTabKeepsWorkspace,
 } from '@/components/project/projectTabModel';
 import { cn } from '@/utils/cn';
 
@@ -30,12 +31,14 @@ export function ProjectTabs({
       aria-label="Project views"
       className={cn(
         'flex min-h-10 min-w-0 items-center gap-1 overflow-x-auto pb-1',
-        !stacked &&
-          'min-[1200px]:flex-1 min-[1200px]:justify-center min-[1200px]:gap-2 min-[1200px]:pb-0'
+        !stacked && 'min-[1200px]:flex-1 min-[1200px]:gap-2 min-[1200px]:pb-0'
       )}
     >
       {PROJECT_TABS.map((tab) => {
-        const selected = activeTab === tab.id;
+        const selected =
+          activeTab === tab.id ||
+          (tab.id === 'state' && activeTab === 'history') ||
+          (tab.id === 'discover' && activeTab === 'browse');
         const visibleLabel = tab.id === 'reviews' ? 'PRs' : tab.label;
         const baseHref =
           tab.id === 'settings'
@@ -49,7 +52,7 @@ export function ProjectTabs({
         if (branch && tab.id !== 'settings') {
           context.set('branch', branch);
         }
-        if (workspaceId && (tab.id === 'schemas' || tab.id === 'workspaces')) {
+        if (workspaceId && projectTabKeepsWorkspace(tab.id)) {
           context.set('workspace', workspaceId);
         }
         const contextQuery = context.toString();

@@ -23,8 +23,5 @@ test('shared project shell keeps navigation separate from long project names', a
       await expect(page.getByRole('link', { name: 'Workspaces', exact: true })).toHaveAttribute('aria-current', 'page');
       if (width === 1480) await page.screenshot({ path: testInfo.outputPath('workspace-shell.png') });
     }
-    await page.goto(`/project/${projectId}?tab=outputs`, { waitUntil: 'networkidle' });
-    await expect(page.getByRole('navigation', { name: 'Project views' })).toBeVisible();
-    await expect(page.getByText('No legacy Leaves saved.', { exact: true })).toBeVisible();
   } finally { await cleanupProject(request, projectId); }
 });

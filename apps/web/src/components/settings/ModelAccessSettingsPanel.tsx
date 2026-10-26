@@ -1,6 +1,6 @@
 'use client';
 
-import { Building2, Cloud, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -224,22 +224,16 @@ export function ModelAccessSettingsPanel() {
         <nav className={styles.breadcrumb} aria-label="Breadcrumb">
           <Link href="/settings">Settings</Link>
           <span>/</span>
-          <Link href="/settings">orbit-labs</Link>
-          <span>/</span>
           <strong>Model access</strong>
         </nav>
 
         <div className={styles.titleGroup}>
           <h1>Model access</h1>
-          <span>
-            <Building2 size={14} />
-            Organization
-          </span>
-          <span>
-            <Cloud size={14} />
-            Cloud
-          </span>
+          <span>Deployment</span>
         </div>
+        <p className="mb-6 mt-2 text-sm leading-6 text-[var(--text-secondary)]">
+          Manage the models and defaults shared by this deployment.
+        </p>
 
         {loading ? (
           <div className={styles.loading}>

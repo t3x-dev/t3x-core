@@ -1,6 +1,7 @@
 'use client';
 
 import { ExternalLink, Github } from 'lucide-react';
+import styles from '../SettingsPage.module.css';
 
 interface ResourceRowProps {
   icon: React.ReactNode;
@@ -15,7 +16,7 @@ function ResourceRow({ icon, title, description, href }: ResourceRowProps) {
       <div className="shrink-0 text-[var(--text-tertiary)]">{icon}</div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-[var(--text-primary)]">{title}</p>
-        <p className="text-xs text-[var(--text-secondary)] mt-0.5">{description}</p>
+        <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">{description}</p>
       </div>
       {href && <ExternalLink className="h-4 w-4 shrink-0 text-[var(--text-tertiary)]" />}
     </div>
@@ -34,13 +35,12 @@ function ResourceRow({ icon, title, description, href }: ResourceRowProps) {
 
 export default function HelpPage() {
   return (
-    <div className="mx-auto max-w-2xl px-8 py-8">
-      <h1 className="text-xl font-semibold text-[var(--text-primary)]">Help & Resources</h1>
-      <p className="text-sm text-[var(--text-secondary)] mt-1 mb-8">
-        External links, documentation, and community resources.
-      </p>
-
-      <section className="flex flex-col gap-3">
+    <div className={styles.page}>
+      <header className={styles.header}>
+        <h1>Help & Resources</h1>
+        <p>External links, documentation, and community resources.</p>
+      </header>
+      <section className={styles.content}>
         <ResourceRow
           icon={<Github className="h-5 w-5" />}
           title="GitHub Repository"

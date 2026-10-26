@@ -8,7 +8,6 @@ import {
   useReactFlow,
 } from '@xyflow/react';
 import { HelpCircle } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getLayoutedElements } from '@/components/canvas/elkLayout';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
@@ -46,7 +45,6 @@ const edgeTypes = {
 import { Button } from '@/components/ui/button';
 import { ZoomSlider } from '@/components/ui/zoom-slider';
 import { formatUserFacingError } from '@/domain/format/errors';
-import { getProjectOutputsPath } from '@/domain/project/repoPath';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
 import type { CanvasNodeData } from '@/types/nodes';
@@ -112,22 +110,11 @@ function CanvasWorkspaceInner({
   const canvasRef = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, getNodes, getEdges, setNodes, fitView, setCenter } = useReactFlow();
   const { resolvedTheme } = useTheme();
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const [isAdding, setIsAdding] = useState(false);
   const { isDeveloperMode } = useTerminology();
   const compactViewport = useCompactViewport();
   const selectionPanelVisible = useCompactViewport('(min-width: 1280px)');
   const canvasMinZoom = compactViewport ? 0.55 : 0.25;
-  const introDemoActive = searchParams.get('introDemo') === '1';
-  const withIntroDemo = useCallback(
-    (href: string) => {
-      if (!introDemoActive) return href;
-      return href.includes('?') ? `${href}&introDemo=1` : `${href}?introDemo=1`;
-    },
-    [introDemoActive]
-  );
-
   // Map next-themes to xyflow colorMode
   const colorMode: ColorMode = resolvedTheme === 'dark' ? 'dark' : 'light';
   const {
@@ -232,10 +219,7 @@ function CanvasWorkspaceInner({
       addNode,
       isDeveloperMode,
       notify,
-      projectId,
-      projectName,
       fitView,
-      onNavigate: (url: string) => router.push(url),
     });
 
   // Path highlight (extracted hook)
@@ -424,21 +408,9 @@ function CanvasWorkspaceInner({
       parentNode?.data.commitHash ??
       parentNode?.data.commit?.hash ??
       (parentEdge?.source?.startsWith('sha') ? parentEdge.source : undefined);
-    const firstLeaf = node.data.leaves?.[0];
 
     return {
-      actions: buildCommitActions({
-        onOpenLeaf:
-          firstLeaf?.id && projectId
-            ? () => {
-                router.push(
-                  withIntroDemo(
-                    getProjectOutputsPath({ id: projectId, name: projectName }, firstLeaf.id)
-                  )
-                );
-              }
-            : undefined,
-      }),
+      actions: buildCommitActions({}),
       canMerge: false,
       parentHash,
     };
@@ -520,13 +492,7 @@ function CanvasWorkspaceInner({
 
               const data = node.data as CanvasNodeData;
 
-              // Leaf nodes -> navigate to leaf detail page (always single click)
-              if (data.kind === 'leaf' && data.leafId && projectId) {
-                router.push(
-                  getProjectOutputsPath({ id: projectId, name: projectName }, data.leafId)
-                );
-                return;
-              }
+              if (data.kind === 'leaf') return;
 
               // Pending nodes stay on the canvas when selected. Their explicit action
               // opens the inline workflow; selection must remain available for Delete.

@@ -26,12 +26,13 @@ import {
   UserRound,
 } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FeatureTourOverlay,
   type FeatureTourStep,
 } from '@/components/onboarding/FeatureTourOverlay';
 import { formatUserFacingError } from '@/domain/format/errors';
+import { getProjectIdRepoPath } from '@/domain/project/repoPath';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
@@ -39,8 +40,9 @@ import { useIntroDemoQueryFlag } from '@/hooks/onboarding/useIntroDemoQueryFlag'
 import { useBranchesList } from '@/hooks/shared/useBranchesList';
 import { useDiffRaw } from '@/hooks/shared/useDiffRaw';
 import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
+import { useViewPreference } from '@/hooks/shared/useViewPreference';
 import type { ApiCommit, Branch } from '@/types/api';
-import { safeInternalReturnTo } from '@/utils/navigationReturn';
+import { buildReturnTo, safeInternalReturnTo, withReturnTo } from '@/utils/navigationReturn';
 import { CommitHistoryDiffView } from './CommitHistoryDiffView';
 import { CommitHistoryRow } from './CommitHistoryRow';
 import { HistoryCanvas } from './HistoryCanvas';
@@ -107,16 +109,31 @@ const HISTORY_TOUR_STEPS: FeatureTourStep[] = [
 // Component
 // ============================================================================
 
+const HISTORY_VIEWS = ['list', 'canvas'] as const;
+
 export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const query = searchParams.toString();
+  const queryRef = useRef(query);
+  queryRef.current = query;
   const branchFromUrl = searchParams.get('branch')?.trim() || 'all';
-  const historyView = searchParams.get('view') === 'list' ? 'list' : 'canvas';
-  const returnHref = safeInternalReturnTo(
-    searchParams.get('returnTo'),
-    `/project/${encodeURIComponent(projectId)}`
+  const [preferredView, rememberView] = useViewPreference(
+    `t3x.history-view:${projectId}`,
+    HISTORY_VIEWS,
+    'list'
   );
+  const requestedView = searchParams.get('view');
+  const historyView =
+    requestedView === 'canvas' || requestedView === 'list' ? requestedView : preferredView;
+  const stateHref = `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ view: 'overview', ...(branchFromUrl !== 'all' ? { branch: branchFromUrl } : {}) }).toString()}`;
+  const returnHref = safeInternalReturnTo(searchParams.get('returnTo'), stateHref);
+  const selectedCommitHash = searchParams.get('commit')?.trim() || null;
+  const authorFilter = searchParams.get('author') || 'all';
+  const searchQuery = searchParams.get('q') || '';
+  const [searchInput, setSearchInput] = useState(searchQuery);
+  useEffect(() => setSearchInput(searchQuery), [searchQuery]);
   const introDemoRequested = useIntroDemoQueryFlag();
   const { completeIntroDemo } = useIntroDemoCompletion(projectId);
 
@@ -127,43 +144,64 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tourOpen, setTourOpen] = useState(false);
-  const [selectedCommitHash, setSelectedCommitHash] = useState<string | null>(null);
+  const [resolvedCommit, setResolvedCommit] = useState<{
+    projectId: string;
+    hash: string;
+    commit?: ApiCommit;
+    error?: string;
+  } | null>(null);
   const [parentCommit, setParentCommit] = useState<ApiCommit | null>(null);
   const [parentLoading, setParentLoading] = useState(false);
   const [parentError, setParentError] = useState<string | null>(null);
-  const [authorFilter, setAuthorFilter] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
   const { loadBranches } = useBranchesList();
   const { loadCommit } = useCommitByHash();
   const { loadCommits } = useCommitsList();
   const { loadDiff } = useDiffRaw();
-  const selectedCommit = useMemo(
-    () => commits.find((item) => item.commit.hash === selectedCommitHash)?.commit ?? null,
-    [commits, selectedCommitHash]
+  const listedCommit = useMemo(
+    () =>
+      commits.find(
+        (item) => item.commit.hash === selectedCommitHash && item.commit.project_id === projectId
+      )?.commit ?? null,
+    [commits, projectId, selectedCommitHash]
   );
+  const selectedResult =
+    resolvedCommit?.projectId === projectId && resolvedCommit.hash === selectedCommitHash
+      ? resolvedCommit
+      : null;
+  const selectedCommit = listedCommit ?? selectedResult?.commit ?? null;
+  const selectedError = selectedResult?.error;
+
+  const updateQuery = useCallback(
+    (changes: Record<string, string | null>, push = false) => {
+      const params = new URLSearchParams(queryRef.current);
+      for (const [key, value] of Object.entries(changes)) {
+        if (value === null) params.delete(key);
+        else params.set(key, value);
+      }
+      queryRef.current = params.toString();
+      const href = buildReturnTo(pathname, params);
+      if (push) router.push(href, { scroll: false });
+      // These controls only change this client view. Native history updates keep
+      // Next's search params in sync without a server navigation on every key.
+      else window.history.replaceState(null, '', href);
+    },
+    [pathname, router]
+  );
+  const closeCommit = useCallback(() => updateQuery({ commit: null }), [updateQuery]);
 
   const handleBranchChange = useCallback(
     (branch: string) => {
-      setSelectedCommitHash(null);
-      const params = new URLSearchParams(searchParams.toString());
-      if (branch === 'all') params.delete('branch');
-      else params.set('branch', branch);
-      const query = params.toString();
-      router.replace(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
+      updateQuery({ branch: branch === 'all' ? null : branch, commit: null, focus: null });
     },
-    [pathname, router, searchParams]
+    [updateQuery]
   );
 
   const handleViewChange = useCallback(
     (view: 'canvas' | 'list') => {
-      setSelectedCommitHash(null);
-      const params = new URLSearchParams(searchParams.toString());
-      if (view === 'canvas') params.delete('view');
-      else params.set('view', 'list');
-      const query = params.toString();
-      router.replace(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
+      rememberView(view);
+      updateQuery({ view, commit: null });
     },
-    [pathname, router, searchParams]
+    [rememberView, updateQuery]
   );
 
   // Fetch branches
@@ -185,6 +223,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
     const load = async () => {
       setLoading(true);
       setError(null);
+      setCommits([]);
       try {
         const branch = selectedBranch === 'all' ? undefined : selectedBranch;
         const commitList = await loadCommits(projectId, branch, 100);
@@ -241,6 +280,31 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
       cancelled = true;
     };
   }, [projectId, selectedBranch, loadCommits, loadDiff]);
+
+  // A permalink may point outside the latest 100 commits or the selected branch.
+  // Resolve it by exact identity rather than silently returning to the list.
+  useEffect(() => {
+    if (!selectedCommitHash || listedCommit || loading) return;
+    let cancelled = false;
+    const identity = { projectId, hash: selectedCommitHash };
+    setResolvedCommit(null);
+    void loadCommit(selectedCommitHash, projectId)
+      .then((commit) => {
+        if (commit.hash !== selectedCommitHash || commit.project_id !== projectId)
+          throw new Error('Commit response does not match the requested historical revision.');
+        if (!cancelled) setResolvedCommit({ ...identity, commit });
+      })
+      .catch((err) => {
+        if (!cancelled)
+          setResolvedCommit({
+            ...identity,
+            error: formatUserFacingError(err, 'Failed to load this historical revision.'),
+          });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [listedCommit, loadCommit, loading, projectId, selectedCommitHash]);
 
   // Resolve a selected commit's first parent when it is not present in the
   // current branch-filtered history result. Root commits intentionally diff
@@ -299,7 +363,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
     return [...authors].sort((a, b) => a.localeCompare(b));
   }, [commits]);
   const visibleCommits = useMemo(() => {
-    const query = searchQuery.trim().toLocaleLowerCase();
+    const query = searchInput.trim().toLocaleLowerCase();
     return commits.filter(({ commit }) => {
       const author = commit.author?.name || commit.author?.type || 'Unknown';
       if (authorFilter !== 'all' && author !== authorFilter) return false;
@@ -308,16 +372,19 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
         .filter((value): value is string => Boolean(value))
         .some((value) => value.toLocaleLowerCase().includes(query));
     });
-  }, [authorFilter, commits, searchQuery]);
+  }, [authorFilter, commits, searchInput]);
   const commitHashes = useMemo(
     () => visibleCommits.map((item) => item.commit.hash),
     [visibleCommits]
   );
 
-  const handleNavOpen = useCallback((hash: string) => {
-    setSelectedCommitHash(hash);
-    setTourOpen(false);
-  }, []);
+  const handleNavOpen = useCallback(
+    (hash: string) => {
+      updateQuery({ commit: hash, ...(historyView === 'canvas' ? { focus: hash } : {}) }, true);
+      setTourOpen(false);
+    },
+    [historyView, updateQuery]
+  );
 
   useEffect(() => {
     if (introDemoRequested) setTourOpen(true);
@@ -332,29 +399,49 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
       }
     },
     onAction: handleNavOpen,
-    enabled: !loading && !selectedCommit,
+    enabled: !loading && !selectedCommitHash,
   });
 
   useEffect(() => {
-    if (!selectedCommit) return;
+    if (!selectedCommitHash) return;
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setSelectedCommitHash(null);
+      if (event.key === 'Escape') closeCommit();
     };
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [selectedCommit]);
+  }, [closeCommit, selectedCommitHash]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render
   // ─────────────────────────────────────────────────────────────────────────
 
-  if (!loading && !error && !selectedCommit && commits.length > 0 && historyView === 'canvas') {
+  if (selectedCommitHash && !selectedCommit) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.feedback}>
+          <div>
+            {selectedError ? (
+              <p role="alert">{selectedError}</p>
+            ) : (
+              <output>Loading historical revision…</output>
+            )}
+            <button className={styles.backButton} onClick={closeCommit} type="button">
+              Back to history
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!loading && !error && !selectedCommitHash && commits.length > 0 && historyView === 'canvas') {
     return (
       <HistoryCanvas
         branches={branches}
         commits={commits}
         selectedBranch={selectedBranch}
-        onBack={() => router.replace(returnHref)}
+        focusedCommitHash={searchParams.get('focus')}
+        onBack={returnHref ? () => router.push(returnHref) : undefined}
         onBranchChange={handleBranchChange}
         onListView={() => handleViewChange('list')}
         onViewDiff={handleNavOpen}
@@ -389,27 +476,53 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
                 <ArrowUpRight size={14} strokeWidth={2} />
               </button>
             </div>
-            <button
-              aria-label="Back to current State"
-              className={styles.backButton}
-              onClick={() => router.replace(returnHref)}
-              type="button"
-            >
-              <ArrowLeft size={15} strokeWidth={2} />
-              <span>Back to current State</span>
-            </button>
+            {returnHref ? (
+              <button
+                className={styles.backButton}
+                onClick={() => router.push(returnHref)}
+                type="button"
+              >
+                <ArrowLeft size={15} strokeWidth={2} />
+                <span>{returnHref === stateHref ? 'Back to State' : 'Back to previous page'}</span>
+              </button>
+            ) : null}
           </header>
 
           <div className={styles.controls}>
+            <label className={styles.filterControl}>
+              <GitBranch size={15} strokeWidth={2} />
+              <select
+                aria-label="History branch filter"
+                value={selectedBranch}
+                onChange={(event) => handleBranchChange(event.target.value)}
+              >
+                <option value="all">All branches</option>
+                {Array.from(
+                  new Set([
+                    ...branches.map((branch) => branch.name),
+                    ...(selectedBranch === 'all' ? [] : [selectedBranch]),
+                  ])
+                ).map((branch) => (
+                  <option key={branch} value={branch}>
+                    {branch}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className={styles.filterChevron} size={13} strokeWidth={2} />
+            </label>
             <label className={styles.filterControl} data-intro-target="history-branch-filter">
               <UserRound size={15} strokeWidth={2} />
               <select
                 aria-label="Author filter"
                 value={authorFilter}
-                onChange={(event) => setAuthorFilter(event.target.value)}
+                onChange={(event) =>
+                  updateQuery({ author: event.target.value === 'all' ? null : event.target.value })
+                }
               >
                 <option value="all">All authors</option>
-                {authorOptions.map((author) => (
+                {Array.from(
+                  new Set([...authorOptions, ...(authorFilter === 'all' ? [] : [authorFilter])])
+                ).map((author) => (
                   <option key={author} value={author}>
                     {author}
                   </option>
@@ -424,8 +537,11 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
                 aria-label="Search commits"
                 placeholder="Search commits..."
                 type="search"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
+                value={searchInput}
+                onChange={(event) => {
+                  setSearchInput(event.target.value);
+                  updateQuery({ q: event.target.value || null });
+                }}
               />
             </label>
           </div>
@@ -455,7 +571,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
               <p className="text-sm text-[var(--status-error)]">{parentError}</p>
               <button
                 type="button"
-                onClick={() => setSelectedCommitHash(null)}
+                onClick={closeCommit}
                 className="mt-3 text-xs text-[var(--status-info)] hover:underline"
               >
                 Back to history
@@ -465,8 +581,16 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
             <CommitHistoryDiffView
               key={selectedCommit.hash}
               commit={selectedCommit}
-              onBack={() => setSelectedCommitHash(null)}
+              onBack={closeCommit}
               parentCommit={selectedCommit.parents.length === 0 ? null : parentCommit}
+              stateHref={withReturnTo(
+                `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({
+                  view: 'overview',
+                  branch: selectedCommit.branch,
+                  commit: selectedCommit.hash,
+                })}`,
+                buildReturnTo(pathname, query)
+              )}
             />
           )
         ) : (

@@ -5,11 +5,14 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import type React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectDirectoryPage } from '@/components/project/ProjectDirectoryPage';
-import { checkRepositoryName } from '@/queries/projects';
+import { checkRepositoryName, fetchDeletedProjects } from '@/queries/projects';
 import { useProjectStore } from '@/store/projectStore';
 import type { Project } from '@/types/api';
 
-vi.mock('@/queries/projects', () => ({ checkRepositoryName: vi.fn() }));
+vi.mock('@/queries/projects', () => ({
+  checkRepositoryName: vi.fn(),
+  fetchDeletedProjects: vi.fn(),
+}));
 
 const routerPush = vi.fn();
 const createProject = vi.fn();
@@ -19,17 +22,22 @@ const renameProject = vi.fn();
 let hookError: string | null = null;
 let hookLoading = false;
 let hookProjects: Project[] = [];
+let currentPath = '/';
+let currentQuery = '';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: routerPush }),
+  usePathname: () => currentPath,
+  useSearchParams: () => new URLSearchParams(currentQuery),
 }));
 
 vi.mock('next/link', () => ({
   default: ({
     children,
     href,
+    scroll: _scroll,
     ...props
-  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string; scroll?: boolean }) => (
     <a href={href} {...props}>
       {children}
     </a>
@@ -84,6 +92,11 @@ const projects: Project[] = [
 describe('ProjectDirectoryPage', () => {
   beforeEach(() => {
     vi.mocked(checkRepositoryName).mockReset();
+    vi.mocked(fetchDeletedProjects)
+      .mockReset()
+      .mockResolvedValue({ projects: [], limit: 21, offset: 0 });
+    currentPath = '/';
+    currentQuery = '';
     routerPush.mockReset();
     createProject.mockReset();
     refreshProjects.mockReset();
@@ -106,7 +119,8 @@ describe('ProjectDirectoryPage', () => {
     render(<ProjectDirectoryPage />);
 
     expect(screen.getByRole('heading', { name: 't3x-dev' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Pinned repositories' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Recently opened' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Pinned repositories' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Repositories' })).toBeInTheDocument();
     expect(
       screen.queryByRole('link', { name: 'Projects', current: 'page' })
@@ -116,7 +130,20 @@ describe('ProjectDirectoryPage', () => {
       '/settings/provider-credentials?owner=t3x-dev'
     );
     expect(screen.queryByRole('link', { name: 'Docs' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Templates' })).not.toBeInTheDocument();
+    const header = within(screen.getByRole('link', { name: 'T3X home' }).closest('header')!);
+    expect(header.getByRole('link', { name: 'Discover' })).toHaveAttribute(
+      'href',
+      '/explore?view=discover'
+    );
+    expect(header.getByRole('link', { name: 'Browse' })).toHaveAttribute(
+      'href',
+      '/explore?view=browse'
+    );
+    expect(header.queryByRole('link', { name: 'New repository' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'New repository' })).toHaveAttribute(
+      'href',
+      '/t3x-dev/new'
+    );
     expect(screen.queryByText('hi@t3x.dev')).not.toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /prd-workflow/i })[0]).toHaveAttribute(
       'href',
@@ -137,7 +164,9 @@ describe('ProjectDirectoryPage', () => {
     expect(screen.queryByText('People')).not.toBeInTheDocument();
     expect(screen.queryByText('Topics')).not.toBeInTheDocument();
     expect(screen.queryByText('Outputs 2')).not.toBeInTheDocument();
-    expect(screen.getAllByText('Commits 18').length).toBeGreaterThan(0);
+    expect(screen.getByText('18 commits')).toBeInTheDocument();
+    expect(screen.getAllByText(/^Created /).length).toBe(projects.length);
+    expect(screen.queryByText(/^Updated /)).not.toBeInTheDocument();
     expect(screen.queryByText('3 members')).not.toBeInTheDocument();
     expect(screen.queryByText('Outputs 19')).not.toBeInTheDocument();
     expect(screen.queryByText('YSchema pending')).not.toBeInTheDocument();
@@ -153,9 +182,7 @@ describe('ProjectDirectoryPage', () => {
     render(<ProjectDirectoryPage ownerSlug="lqw905" />);
 
     expect(screen.getByRole('heading', { name: 'lqw905' })).toBeInTheDocument();
-    expect(
-      screen.getByText('Personal namespace for structured state repositories.')
-    ).toBeInTheDocument();
+    expect(screen.getByText(/A home for your structured state/)).toBeInTheDocument();
     expect(screen.getByText('Personal namespace')).toBeInTheDocument();
     expect(screen.queryByText('3 members')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
@@ -172,13 +199,13 @@ describe('ProjectDirectoryPage', () => {
     }
   });
 
-  it('orders pinned repositories from local recent-open state', () => {
+  it('shows recently opened repositories only from local recent-open state', () => {
     window.localStorage.setItem('t3x:recent-projects', JSON.stringify(['proj_core', 'proj_prd']));
 
     render(<ProjectDirectoryPage />);
 
     const recentSection = screen
-      .getByRole('heading', { name: 'Pinned repositories' })
+      .getByRole('heading', { name: 'Recently opened' })
       .closest('section');
     expect(recentSection).not.toBeNull();
 
@@ -193,7 +220,7 @@ describe('ProjectDirectoryPage', () => {
     const search = screen.getByPlaceholderText('Find a repository...');
     fireEvent.change(search, { target: { value: 'core' } });
 
-    expect(screen.getAllByRole('link', { name: /t3x-core/i })).toHaveLength(2);
+    expect(screen.getAllByRole('link', { name: /t3x-core/i })).toHaveLength(1);
     expect(screen.queryByRole('link', { name: /prd-workflow/i })).not.toBeInTheDocument();
   });
 
@@ -219,9 +246,8 @@ describe('ProjectDirectoryPage', () => {
     expect(screen.getByRole('heading', { name: "Couldn't load repositories" })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'No repositories yet' })).not.toBeInTheDocument();
-    expect(screen.getByText('— repos')).toBeInTheDocument();
-    expect(screen.getByText('— commits')).toBeInTheDocument();
-    expect(screen.getByText('Repository data is unavailable.')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Repositories' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Recently opened' })).not.toBeInTheDocument();
   });
 
   it('retries a failed initial repository load from the failure state', () => {
@@ -274,5 +300,51 @@ describe('ProjectDirectoryPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => expect(removeProject).toHaveBeenCalledWith('proj_prd'));
+    expect(
+      await screen.findByRole('link', { name: 'Manage deleted repositories' })
+    ).toHaveAttribute('href', '/?view=deleted');
+  });
+
+  it.each(['empty', 'error'])('keeps a toolbar entry when the active list is %s', (state) => {
+    hookProjects = [];
+    if (state === 'error') hookError = 'Offline';
+    currentPath = '/alice';
+    render(<ProjectDirectoryPage ownerSlug="alice" />);
+    const entry = screen.getByRole('link', { name: 'Deleted repositories' });
+    expect(entry.parentElement).toContainElement(
+      screen.getByRole('button', { name: 'Refresh repositories' })
+    );
+    expect(entry).toHaveAttribute('href', '/alice?view=deleted');
+  });
+
+  it('opens the URL-selected deleted view and preserves the active filter on return', async () => {
+    const { rerender } = render(<ProjectDirectoryPage />);
+    fireEvent.change(screen.getByPlaceholderText('Find a repository...'), {
+      target: { value: 'core' },
+    });
+    currentQuery = 'view=deleted';
+    rerender(<ProjectDirectoryPage />);
+    expect(
+      await screen.findByText('No deleted repositories to manage in this namespace.')
+    ).toBeInTheDocument();
+    expect(fetchDeletedProjects).toHaveBeenCalledWith(21, 0, 't3x-dev');
+    expect(screen.getByRole('link', { name: 'Back to repositories' })).toHaveAttribute('href', '/');
+    currentQuery = '';
+    rerender(<ProjectDirectoryPage />);
+    expect(screen.getByPlaceholderText('Find a repository...')).toHaveValue('core');
+  });
+
+  it('keeps an unconfirmed delete in the dialog and asks for a refresh', async () => {
+    removeProject.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    render(<ProjectDirectoryPage />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Delete repository prd-workflow' })[0]);
+    expect(screen.getByRole('dialog')).toHaveTextContent('Its data and all names stay reserved');
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not be confirmed');
+    expect(
+      screen.queryByRole('link', { name: 'Manage deleted repositories' })
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh list' }));
+    expect(refreshProjects).toHaveBeenCalledOnce();
   });
 });

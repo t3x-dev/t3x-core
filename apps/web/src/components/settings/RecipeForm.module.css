@@ -71,14 +71,14 @@
   width: 100%;
   height: 52px;
   padding: 8px 12px;
-  background: var(--surface-elevated);
-  border-color: var(--stroke-default);
+  background: var(--management-control-bg);
+  border-color: var(--stroke-strong);
 }
 
 .choiceTrigger > svg:first-child {
   width: 20px;
   height: 20px;
-  color: var(--accent-commit);
+  color: var(--text-secondary);
 }
 
 .choiceCopy {
@@ -104,7 +104,7 @@
   max-width: 100%;
   overflow: hidden;
   color: var(--text-tertiary);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 15px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -123,7 +123,7 @@
 
 .projectRow span {
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 15px;
   white-space: nowrap;
 }
@@ -136,7 +136,7 @@
 
 .enabledRow span {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 16px;
 }
 
@@ -150,7 +150,7 @@
 
 .previewTitle {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 16px;
 }
@@ -182,13 +182,13 @@
   flex: 0 0 auto;
   width: 18px;
   height: 18px;
-  color: var(--accent-commit);
+  color: var(--text-secondary);
 }
 
 .previewFlow > div span {
   overflow: hidden;
   color: var(--text-primary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 500;
   line-height: 14px;
   text-overflow: ellipsis;

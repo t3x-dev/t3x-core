@@ -21,7 +21,7 @@ import {
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
-import { yschemaArtifacts } from '../../../storage/src/schema';
+import { projects, yschemaArtifacts } from '../../../storage/src/schema';
 import { statePresentations } from '../../../storage/src/schema-presentations';
 import { projectGrants } from '../../../storage/src/schema-trees';
 import { commitRepositoryYOpsState } from '../lib/repository-state-transition';
@@ -74,6 +74,7 @@ beforeAll(async () => {
       ownerId: 'release-editor',
     })
   ).projectId;
+  await db.update(projects).set({ visibility: 'public' }).where(eq(projects.projectId, projectId));
   const foreign = (await insertProject(db, testData.project({ name: 'Foreign' }))).projectId;
   for (const id of [projectId, foreign]) {
     await ensureMainBranch(db, id);
@@ -316,6 +317,7 @@ it('allows viewers to read but denies schema publish, identity edits and archive
 });
 
 it('does not expose a private introduction reference through public or another project catalog', async () => {
+  await db.update(projects).set({ visibility: 'private' }).where(eq(projects.projectId, projectId));
   const versions = await listProjectYSchemaVersionHistory(db, { project_id: projectId });
   const artifactId = versions[0].artifactId;
   await db
@@ -348,9 +350,35 @@ it('does not expose a private introduction reference through public or another p
     ).toBe(true);
   } finally {
     await db
+      .update(projects)
+      .set({ visibility: 'public' })
+      .where(eq(projects.projectId, projectId));
+    await db
       .update(yschemaArtifacts)
       .set({ visibility: 'community' })
       .where(eq(yschemaArtifacts.artifactId, artifactId));
+  }
+});
+
+it('omits private project and introduction references from newly published manifests', async () => {
+  await db.update(projects).set({ visibility: 'private' }).where(eq(projects.projectId, projectId));
+  try {
+    const response = await publish(input('5.0.0'));
+    expect(response.status, await response.clone().text()).toBe(200);
+    const manifest = (await response.json()).data;
+    expect(manifest.registry.sourceProjectId).toBeUndefined();
+    expect(manifest.registry.presentationRef).toBeUndefined();
+    expect(JSON.stringify(manifest)).not.toContain(projectId);
+    expect(
+      (await listProjectYSchemaVersionHistory(db, { project_id: projectId })).some(
+        (release) => release.version === '5.0.0'
+      )
+    ).toBe(true);
+  } finally {
+    await db
+      .update(projects)
+      .set({ visibility: 'public' })
+      .where(eq(projects.projectId, projectId));
   }
 });
 

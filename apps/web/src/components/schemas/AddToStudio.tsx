@@ -1,8 +1,10 @@
 'use client';
 import type { AddStudioCandidate } from '@t3x-dev/api-client';
-import { ArrowRight, Box, Check, FileText, LockKeyhole } from 'lucide-react';
+import { ArrowRight, Box, Check, LockKeyhole, Plus } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -11,69 +13,58 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { useProjects } from '@/hooks/projects/useProjects';
+import { safeExploreReturn } from '@/domain/project/exploreLocation';
+import { DEFAULT_OWNER_SLUG } from '@/domain/project/repoPath';
+import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
+import { useSchemaTargets } from '@/hooks/explore/useExploreData';
 import { useStudioCandidates } from '@/hooks/schemas/useStudioCandidates';
-export function AddToStudio({
-  source,
-  title,
-  defaultProjectId,
-  defaultWorkspaceId,
-  layout = 'sheet',
-  onAdded,
-}: {
+import palette from '@/styles/management-palette.module.css';
+
+type Props = {
   source: AddStudioCandidate;
   title: string;
   defaultProjectId: string;
   defaultWorkspaceId?: string;
+  branch?: string;
+  returnTo?: string;
+  requireSelection?: boolean;
+  disabled?: boolean;
   layout?: 'sheet' | 'inline';
   onAdded?: () => void;
-}) {
+};
+export function AddToStudio(props: Props) {
   const [open, setOpen] = useState(false);
-  if (layout === 'inline') {
-    return (
-      <Destination
-        source={source}
-        defaultProjectId={defaultProjectId}
-        defaultWorkspaceId={defaultWorkspaceId}
-        embedded
-        onDone={() => onAdded?.()}
-      />
-    );
+  function done(openStudio: boolean) {
+    setOpen(false);
+    if (!openStudio) props.onAdded?.();
   }
+  if (props.layout === 'inline') return <Destination {...props} onDone={done} />;
   return (
     <>
-      <Button onClick={() => setOpen(true)}>
-        Add to Studio <ArrowRight className="size-4" />
+      <Button disabled={props.disabled} onClick={() => setOpen(true)}>
+        Use Schema <ArrowRight className="size-4" />
       </Button>
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent className="flex w-full flex-col gap-0 overflow-hidden bg-[var(--surface-card)] sm:max-w-[400px]">
-          <SheetHeader className="shrink-0 gap-0 px-6 pb-5 pt-6">
-            <SheetTitle className="pr-7 text-sm">Add to Studio</SheetTitle>
-            <SheetDescription className="mt-6 flex items-center gap-3">
-              <span className="flex size-12 shrink-0 items-center justify-center rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-app)]">
-                <Box className="size-6 text-[var(--accent-commit)]" />
-              </span>
+        <SheetContent
+          className={`${palette.scope} flex w-full flex-col gap-0 overflow-y-auto bg-[var(--surface-card)] sm:max-w-[430px]`}
+        >
+          <SheetHeader className="px-6 pb-6 pt-6">
+            <SheetTitle>Use Schema</SheetTitle>
+            <SheetDescription className="mt-4 flex items-center gap-3">
+              <Box className="size-9 shrink-0 text-[var(--accent-commit)]" />
               <span className="min-w-0">
-                <span className="block break-words text-[13px] font-semibold text-[var(--text-primary)]">
-                  {title}
+                <span className="block break-words font-semibold text-[var(--text-primary)]">
+                  {props.title}
                 </span>
-                <span className="mt-1 block break-all font-mono text-[11px] leading-4">
-                  {source.version}
-                </span>
+                <span className="mt-1 block font-mono text-xs">{props.source.version}</span>
               </span>
             </SheetDescription>
           </SheetHeader>
-          {open ? (
-            <Destination
-              source={source}
-              defaultProjectId={defaultProjectId}
-              defaultWorkspaceId={defaultWorkspaceId}
-              onDone={() => {
-                setOpen(false);
-                onAdded?.();
-              }}
-            />
-          ) : null}
+          {open && (
+            <div className="px-6 pb-6">
+              <Destination {...props} onDone={done} />
+            </div>
+          )}
         </SheetContent>
       </Sheet>
     </>
@@ -83,195 +74,207 @@ function Destination({
   source,
   defaultProjectId,
   defaultWorkspaceId,
-  embedded = false,
+  branch,
+  returnTo,
+  requireSelection,
   onDone,
-}: {
-  source: AddStudioCandidate;
-  defaultProjectId: string;
-  defaultWorkspaceId?: string;
-  embedded?: boolean;
-  onDone: () => void;
-}) {
-  const { projects, error } = useProjects(100);
-  const [projectId, setProjectId] = useState(defaultProjectId);
+}: Props & { onDone: (openStudio: boolean) => void }) {
+  const [query, setQuery] = useState('');
+  const [search, setSearch] = useState('');
+  const [projectId, setProjectId] = useState(requireSelection ? '' : defaultProjectId);
+  const targets = useSchemaTargets(
+    new URLSearchParams({ limit: '30', ...(query ? { q: query } : {}) }).toString()
+  );
+  const { activeAccount, accounts } = useNamespaceAccounts();
+  const owner = activeAccount?.namespace.slug ?? accounts[0]?.namespace.slug ?? DEFAULT_OWNER_SLUG;
+  const safeReturn = safeExploreReturn(returnTo);
+  const newProjectHref = `/${encodeURIComponent(owner)}/new${safeReturn ? `?${new URLSearchParams({ returnTo: safeReturn })}` : ''}`;
+  const items = targets.data?.items ?? [];
+  const selected = items.find((item) => item.projectId === projectId);
   return (
-    <div className={`chat-scrollbar min-h-0 flex-1 overflow-y-auto ${embedded ? '' : 'px-6'}`}>
-      <label className="block text-xs font-medium text-[var(--text-secondary)]">
-        Destination project
-        <select
-          aria-label="Destination project"
-          value={projectId}
-          onChange={(event) => setProjectId(event.target.value)}
-          className="mb-5 mt-2 h-9 w-full rounded-[5px] border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2.5 text-[13px] text-[var(--text-primary)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-        >
-          {!defaultProjectId ? <option value="">Select a project</option> : null}
-          {defaultProjectId &&
-          !projects.some((project) => project.project_id === defaultProjectId) ? (
-            <option value={defaultProjectId}>Current project</option>
-          ) : null}
-          {projects.map((project) => (
-            <option key={project.project_id} value={project.project_id}>
-              {project.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      {error ? (
-        <p role="alert" className="text-sm text-[var(--status-error)]">
-          {error}
+    <div className="flex flex-col gap-4">
+      <div>
+        <p className="mb-2 text-xs font-medium">Destination project</p>
+        <p className="text-xs leading-5 text-[var(--text-secondary)]">
+          Choose a project you can edit. This saves a candidate to its Studio; you’ll review a
+          Workspace before applying it.
         </p>
-      ) : null}
-      {projectId ? (
-        <CandidateConfirmation
-          key={projectId}
-          projectId={projectId}
-          workspaceId={projectId === defaultProjectId ? defaultWorkspaceId : undefined}
-          source={source}
-          embedded={embedded}
-          onDone={onDone}
+      </div>
+      <form
+        className="flex gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setProjectId('');
+          setQuery(search.trim());
+        }}
+      >
+        <input
+          className="h-9 min-w-0 flex-1 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 text-xs"
+          aria-label="Find destination project"
+          placeholder="Find a project…"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
         />
-      ) : (
-        <p className="text-sm text-[var(--text-tertiary)]">
-          Choose a destination project to add this release.
+        <Button variant="outline" size="sm" type="submit">
+          Find
+        </Button>
+      </form>
+      <select
+        aria-label="Destination project"
+        className="h-10 w-full rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 text-sm"
+        value={selected ? projectId : ''}
+        onChange={(event) => setProjectId(event.target.value)}
+        disabled={targets.loading}
+      >
+        <option value="">{targets.loading ? 'Loading projects…' : 'Select a project'}</option>
+        {items.map((item) => (
+          <option key={item.projectId} value={item.projectId}>
+            {item.namespace ? `${item.namespace} / ` : ''}
+            {item.name}
+            {item.projectId === defaultProjectId ? ' · from your link' : ''}
+          </option>
+        ))}
+      </select>
+      {targets.error && (
+        <div role="alert" className="text-xs text-[var(--status-error)]">
+          {targets.error}
+          <button type="button" onClick={targets.retry} className="ml-2 underline">
+            Retry
+          </button>
+        </div>
+      )}
+      {!targets.loading && !targets.error && !items.length && (
+        <p className="text-sm text-[var(--text-secondary)]">
+          {query
+            ? 'No editable projects match your search.'
+            : 'You don’t have an editable project yet.'}
         </p>
       )}
+      {targets.data?.has_more && (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={targets.morePending}
+          onClick={() => void targets.loadMore()}
+        >
+          {targets.morePending ? 'Loading…' : 'Load more projects'}
+        </Button>
+      )}
+      <Link
+        className="flex items-center gap-1 text-xs text-[var(--accent-commit)]"
+        href={newProjectHref}
+      >
+        <Plus size={14} />
+        New project{safeReturn ? ' & return to this release' : ''}
+      </Link>
+      {selected ? (
+        <CandidateConfirmation
+          key={`${projectId}:${source.canonicalName}:${source.version}:${source.expectedHash}`}
+          projectId={projectId}
+          workspaceId={projectId === defaultProjectId ? defaultWorkspaceId : undefined}
+          branch={projectId === defaultProjectId ? branch : undefined}
+          source={source}
+          returnTo={safeReturn}
+          onDone={onDone}
+        />
+      ) : null}
     </div>
   );
 }
 function CandidateConfirmation({
   projectId,
   workspaceId,
+  branch,
   source,
-  embedded = false,
+  returnTo,
   onDone,
 }: {
   projectId: string;
   workspaceId?: string;
+  branch?: string;
   source: AddStudioCandidate;
-  embedded?: boolean;
-  onDone: () => void;
+  returnTo?: string;
+  onDone: (openStudio: boolean) => void;
 }) {
   const studio = useStudioCandidates(projectId);
   const router = useRouter();
+  const busy = useRef(false);
   const [error, setError] = useState<string>();
-  const [added, setAdded] = useState(false);
   const existing = studio.items.find(
     (item) =>
       item.source?.projectId === (source.sourceProjectId ?? null) &&
       item.source?.canonicalName === source.canonicalName &&
       item.source.version === source.version &&
-      (!source.expectedHash || item.source.hash === source.expectedHash)
+      item.source.hash === source.expectedHash
   );
   async function save(open: boolean) {
+    if (busy.current) return;
+    busy.current = true;
     setError(undefined);
     try {
-      const candidate = existing ?? (await studio.add(source));
+      // The idempotent endpoint rechecks live destination/source authority even for existing candidates.
+      const candidate = await studio.add(source);
       if (!candidate) return;
-      setAdded(true);
-      onDone();
-      if (open) {
+      toast.success('Schema saved to Studio');
+      onDone(open);
+      if (open)
         router.push(
-          `/project/${encodeURIComponent(projectId)}?${new URLSearchParams({ tab: 'schemas', schemaView: 'studio', candidate: candidate.id, ...(workspaceId ? { workspace: workspaceId } : {}) })}`
+          `/project/${encodeURIComponent(projectId)}?${new URLSearchParams({ tab: 'schemas', schemaView: 'studio', candidate: candidate.id, ...(workspaceId ? { workspace: workspaceId } : {}), ...(branch ? { branch } : {}), ...(returnTo ? { returnTo } : {}) })}`
         );
-      }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not add candidate');
+      setError(cause instanceof Error ? cause.message : 'Could not save this candidate.');
+    } finally {
+      busy.current = false;
     }
   }
   return (
-    <div className="flex flex-col gap-5">
-      <div className="min-w-0">
-        <p className="text-xs font-medium text-[var(--text-secondary)]">Source release</p>
-        <p className="mt-2 break-all text-[13px] leading-5">{source.canonicalName}</p>
-        <p className="mt-2 flex min-h-9 items-center gap-2 rounded-[5px] border border-[var(--stroke-default)] px-2.5 font-mono text-xs text-[var(--text-secondary)]">
-          <LockKeyhole className="size-3" />
+    <div className="flex flex-col gap-4 border-t border-[var(--stroke-divider)] pt-5">
+      <div>
+        <p className="text-xs font-medium text-[var(--text-secondary)]">Pinned source release</p>
+        <p className="mt-2 break-all text-sm">{source.canonicalName}</p>
+        <p className="mt-2 flex items-center gap-2 font-mono text-xs text-[var(--text-secondary)]">
+          <LockKeyhole size={13} />
           {source.version}
         </p>
-        {source.expectedHash ? (
+        {source.expectedHash && (
           <details className="mt-3 text-xs text-[var(--text-tertiary)]">
             <summary className="cursor-pointer">Exact source hash</summary>
-            <p className="mt-2 break-all font-mono text-[11px]">{source.expectedHash}</p>
+            <p className="mt-2 break-all font-mono">{source.expectedHash}</p>
           </details>
-        ) : null}
-      </div>
-      <div className="border-t border-[var(--stroke-divider)] pt-5">
-        <h3 className="mb-3 text-xs font-medium text-[var(--text-secondary)]">
-          Already in this Studio
-        </h3>
-        {studio.loading ? (
-          <output>Loading candidates…</output>
-        ) : studio.items.length ? (
-          <ul className="space-y-2">
-            {studio.items.map((item) => (
-              <li
-                key={item.id}
-                className={`flex min-h-10 items-center gap-2 rounded-[5px] border px-2.5 py-2 text-xs ${existing?.id === item.id ? 'border-[var(--accent-commit)] bg-[var(--status-info-muted)]' : 'border-[var(--stroke-divider)]'}`}
-              >
-                <FileText
-                  aria-hidden="true"
-                  className="size-4 shrink-0 text-[var(--text-tertiary)]"
-                />
-                <span className="min-w-0 flex-1 break-words leading-5">
-                  {item.title ?? 'Unavailable source'}
-                </span>
-                <span className="shrink-0 text-[var(--text-secondary)]">
-                  {item.source?.version}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-[var(--text-tertiary)]">Your first candidate.</p>
         )}
       </div>
-      {error || studio.error ? (
-        <p role="alert" className="text-sm text-[var(--status-error)]">
-          {error ?? studio.error}
+      {studio.loading && <output className="text-xs">Checking this Studio…</output>}
+      {existing && (
+        <p className="flex items-center gap-2 text-xs text-[var(--status-success)]">
+          <Check size={14} />
+          This exact release is already saved in this Studio.
         </p>
-      ) : null}
-      {added || existing ? (
-        <p className="flex items-center gap-2 text-sm text-[var(--status-success)]">
-          <Check className="size-4" />
-          Saved as a candidate
-        </p>
-      ) : null}
-      <div
-        className={
-          embedded
-            ? 'mt-1 border-t border-[var(--stroke-divider)] pt-4'
-            : 'sticky bottom-0 -mx-6 mt-auto border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] px-6 pb-5 pt-4'
-        }
-      >
-        <p className="mb-4 text-xs leading-5 text-[var(--text-secondary)]">
-          Explore and compare before applying to a Workspace.
-        </p>
-        <div className="grid gap-2">
-          <Button
-            className="h-10 w-full rounded-[5px] bg-[var(--accent-commit)] text-[var(--on-accent)] hover:bg-[var(--accent-commit)] hover:brightness-95"
-            disabled={studio.pending || studio.loading}
-            onClick={() => void save(true)}
-          >
-            {existing || added ? 'Open Studio' : 'Add & open Studio'}{' '}
-            <ArrowRight className="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            className="h-9 text-xs text-[var(--accent-commit)]"
-            disabled={studio.pending || studio.loading}
-            onClick={() => void save(false)}
-          >
-            Add & keep browsing
-          </Button>
-          {embedded ? null : (
-            <Button
-              variant="ghost"
-              className="h-8 text-xs text-[var(--text-tertiary)]"
-              onClick={onDone}
-            >
-              Close
-            </Button>
+      )}
+      {(error || studio.error) && (
+        <p role="alert" className="text-xs text-[var(--status-error)]">
+          {error || studio.error}
+          {studio.error && (
+            <button type="button" onClick={() => void studio.refresh()} className="ml-2 underline">
+              Retry
+            </button>
           )}
-        </div>
+        </p>
+      )}
+      <div className="grid gap-2">
+        <Button
+          disabled={studio.pending || studio.loading || !!studio.error}
+          onClick={() => void save(true)}
+        >
+          {studio.pending ? 'Saving…' : existing ? 'Open Studio' : 'Add & open Studio'}
+          <ArrowRight size={14} />
+        </Button>
+        <Button
+          variant="outline"
+          disabled={studio.pending || studio.loading || !!studio.error}
+          onClick={() => void save(false)}
+        >
+          Add & keep browsing
+        </Button>
       </div>
     </div>
   );

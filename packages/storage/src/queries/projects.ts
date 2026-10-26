@@ -4,9 +4,27 @@
  * CRUD operations for projects using Drizzle ORM.
  */
 
-import { inspectRepositoryName } from '@t3x-dev/application';
+import {
+  inspectRepositoryName,
+  NAMESPACE_ROLES,
+  namespaceRoleAllows,
+  PROJECT_GRANT_ROLES,
+  projectGrantRoleAllows,
+} from '@t3x-dev/application';
 import { generateProjectId } from '@t3x-dev/core';
-import { and, desc, eq, inArray, isNull, lt, or, type SQL, sql } from 'drizzle-orm';
+import {
+  and,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  or,
+  type SQL,
+  sql,
+} from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import {
   agentDrafts,
@@ -33,6 +51,13 @@ export interface CreateProjectInput {
 }
 
 export interface ListProjectsOptions {
+  /** Deleted repositories remain private management resources. Defaults to active. */
+  status?: 'active' | 'deleted';
+  visibility?: 'public';
+  q?: string;
+  tag?: string;
+  /** Server-selected capability, applied before pagination. */
+  required_action?: 'project:edit';
   limit?: number;
   offset?: number;
   /** Opaque cursor for keyset pagination. Empty string = first page in cursor mode. */
@@ -45,6 +70,7 @@ export interface ListProjectsOptions {
   authority?: {
     principal_kind: 'human' | 'agent' | 'service';
     principal_id: string;
+    project_id?: string;
   };
 }
 
@@ -142,8 +168,35 @@ export async function findProjects(
   const namespaceCondition = options.namespace_id
     ? eq(projects.namespaceId, options.namespace_id)
     : undefined;
+  const deleted = options.status === 'deleted';
+  const statusCondition = deleted ? isNotNull(projects.deletedAt) : isNull(projects.deletedAt);
+  const namespaceRoles = NAMESPACE_ROLES.filter((role) =>
+    options.required_action
+      ? namespaceRoleAllows(role, options.required_action)
+      : namespaceRoleAllows(role, 'project:restore') || namespaceRoleAllows(role, 'project:delete')
+  );
+  const grantRoles = PROJECT_GRANT_ROLES.filter((role) =>
+    options.required_action
+      ? projectGrantRoleAllows(role, options.required_action)
+      : projectGrantRoleAllows(role, 'project:restore') ||
+        projectGrantRoleAllows(role, 'project:delete')
+  );
   const authorityCondition = options.authority
     ? sql<boolean>`(
+        ${(deleted || options.required_action) && options.authority.principal_kind !== 'human' && !options.authority.project_id ? sql`FALSE` : sql`TRUE`}
+        AND ${options.authority.project_id ? eq(projects.projectId, options.authority.project_id) : sql`TRUE`}
+        AND ${
+          deleted || options.required_action
+            ? sql`NOT EXISTS (
+          SELECT 1 FROM namespace_memberships AS inactive_membership
+          WHERE inactive_membership.namespace_id = ${projects.namespaceId}
+            AND inactive_membership.principal_kind = ${options.authority.principal_kind}
+            AND inactive_membership.principal_id = ${options.authority.principal_id}
+            AND inactive_membership.status <> 'active'
+        )`
+            : sql`TRUE`
+        }
+        AND (
         EXISTS (
           SELECT 1
           FROM namespace_memberships AS membership
@@ -151,6 +204,14 @@ export async function findProjects(
             AND membership.principal_kind = ${options.authority.principal_kind}
             AND membership.principal_id = ${options.authority.principal_id}
             AND membership.status = 'active'
+            AND ${
+              deleted || options.required_action
+                ? sql`membership.role IN (${sql.join(
+                    namespaceRoles.map((role) => sql`${role}`),
+                    sql`, `
+                  )})`
+                : sql`TRUE`
+            }
         )
         OR EXISTS (
           SELECT 1
@@ -160,14 +221,37 @@ export async function findProjects(
             AND project_grant.principal_kind = ${options.authority.principal_kind}
             AND project_grant.principal_id = ${options.authority.principal_id}
             AND project_grant.status = 'active'
+            AND ${
+              deleted || options.required_action
+                ? sql`project_grant.role IN (${sql.join(
+                    grantRoles.map((role) => sql`${role}`),
+                    sql`, `
+                  )})`
+                : sql`TRUE`
+            }
             AND (project_grant.expires_at IS NULL OR project_grant.expires_at > NOW())
+        )
         )
       )`
     : undefined;
 
+  const escapedSearch = options.q?.replace(/[\\%_]/g, '\\$&');
+  const discoveryConditions = [
+    options.visibility ? eq(projects.visibility, options.visibility) : undefined,
+    escapedSearch
+      ? or(
+          ilike(projects.name, `%${escapedSearch}%`),
+          sql<boolean>`${projects.metadataJson}::jsonb->>'description' ILIKE ${`%${escapedSearch}%`}`
+        )
+      : undefined,
+    options.tag
+      ? sql<boolean>`coalesce(${projects.metadataJson}::jsonb->'repository_profile'->'tags', '[]'::jsonb) @> ${JSON.stringify([options.tag])}::jsonb`
+      : undefined,
+  ].filter((condition): condition is SQL => !!condition);
+
   if (options.cursor !== undefined) {
     // Cursor pagination mode
-    const conditions = [isNull(projects.deletedAt)];
+    const conditions = [statusCondition, ...discoveryConditions];
 
     if (ownerCondition) conditions.push(ownerCondition);
     if (namespaceCondition) conditions.push(namespaceCondition);
@@ -200,7 +284,7 @@ export async function findProjects(
 
   // Legacy offset/limit mode
   const offset = options.offset ?? 0;
-  const conditions = [isNull(projects.deletedAt)];
+  const conditions = [statusCondition, ...discoveryConditions];
   if (ownerCondition) conditions.push(ownerCondition);
   if (namespaceCondition) conditions.push(namespaceCondition);
   if (authorityCondition) conditions.push(authorityCondition);
@@ -209,7 +293,7 @@ export async function findProjects(
     .select()
     .from(projects)
     .where(and(...conditions))
-    .orderBy(desc(projects.createdAt))
+    .orderBy(desc(projects.createdAt), desc(projects.projectId))
     .limit(limit)
     .offset(offset);
 }
@@ -346,10 +430,23 @@ export async function restoreProject(db: AnyDB, projectId: string): Promise<Proj
 /**
  * Permanently delete a project and all project-scoped data through cascades,
  * including the trusted Decision audit ledger. Normal soft deletion preserves
- * that audit history and remains restorable.
+ * that audit history and remains restorable. Permanent deletion also releases
+ * current/historical address claims through the repository_paths foreign key.
  */
-export async function permanentDeleteProject(db: AnyDB, projectId: string): Promise<boolean> {
-  const result = await db.delete(projects).where(eq(projects.projectId, projectId)).returning();
+export async function permanentDeleteProject(
+  db: AnyDB,
+  projectId: string,
+  options?: { onlyIfDeleted?: boolean }
+): Promise<boolean> {
+  const result = await db
+    .delete(projects)
+    .where(
+      and(
+        eq(projects.projectId, projectId),
+        options?.onlyIfDeleted ? sql`${projects.deletedAt} IS NOT NULL` : undefined
+      )
+    )
+    .returning();
 
   return result.length > 0;
 }

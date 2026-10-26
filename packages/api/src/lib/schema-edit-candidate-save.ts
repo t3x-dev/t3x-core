@@ -4,6 +4,7 @@ import {
 } from '@t3x-dev/api-client';
 import {
   type DraftDocument,
+  parseSchemaSourceMappings,
   parseWorkspaceSchemaEditCandidate,
   saveWorkspaceSchemaEditCandidate,
   type WorkspaceSchemaEditOrigin,
@@ -18,6 +19,11 @@ import {
   saveYSchemaCompositionSnapshot,
 } from '@t3x-dev/storage';
 import { normalizeYSchemaObject, sha256CompositionValue } from '@t3x-dev/yschema';
+import { readNodeProvenance } from './schema-node-provenance';
+import {
+  applySchemaSourceMappings,
+  type ResolveSchemaMappingSource,
+} from './schema-source-mappings';
 import { type compileStudioSelection, StudioError } from './schema-studio-preview';
 import type { WorkspaceSchemaEditBasis } from './workspace-schema-edit-basis';
 
@@ -32,10 +38,21 @@ export async function saveStudioEditCandidate(
     workspaceRevision: number;
     assistantSchemaSettings: unknown;
     basis?: WorkspaceSchemaEditBasis;
-  }
+  },
+  resolveMappingSource?: ResolveSchemaMappingSource
 ) {
+  if ((input.rebase || Object.keys(input.composition ?? {}).length) && !input.schemaDefinition)
+    throw new StudioError(
+      'INVALID_REQUEST',
+      'Source combination requires a complete Schema definition and its exact Base hash.'
+    );
+  if (!selection.report.valid && (input.rebase || input.schemaDefinition))
+    throw new StudioError(
+      'REVIEW_REQUIRED',
+      'Resolve all source composition conflicts before saving.'
+    );
   let base = guard?.basis;
-  if (!base && input.schemaDefinition) {
+  if (!base && input.schemaDefinition && !input.rebase) {
     const previous = await findWorkspaceDraft(db, projectId, input.workspaceId);
     const stored = previous?.workspace_state?.schemaEditCandidate;
     const edit = stored ? parseWorkspaceSchemaEditCandidate(stored) : null;
@@ -50,6 +67,9 @@ export async function saveStudioEditCandidate(
       if (
         !snapshot ||
         snapshot.compositionHash !== reference.compositionHash ||
+        ((snapshot.manifestJson as { selectionHash?: string }).selectionHash &&
+          (snapshot.manifestJson as { selectionHash?: string }).selectionHash !==
+            selection.selectionHash) ||
         (await sha256CompositionValue(normalizeYSchemaObject(snapshot.schemaJson))) !==
           reference.schemaHash ||
         (await sha256CompositionValue(edit!.baseSources)) !==
@@ -64,6 +84,7 @@ export async function saveStudioEditCandidate(
         selectionHash: selection.selectionHash,
         renderPlan: snapshot.renderPlanJson as Record<string, unknown>[],
         origins: snapshot.originsJson,
+        nodeProvenance: readNodeProvenance(snapshot.manifestJson.nodeProvenance),
       };
     }
   }
@@ -80,6 +101,18 @@ export async function saveStudioEditCandidate(
   const applied = input.schemaDefinition
     ? await compileWorkspaceSchemaDefinition(baseSchema, input.schemaDefinition)
     : null;
+  if (input.sourceMappings?.length && !applied)
+    throw new StudioError(
+      'INVALID_REQUEST',
+      'Source mappings require a complete Schema definition.'
+    );
+  if (applied && input.sourceMappings)
+    await applySchemaSourceMappings(
+      { ...selection, ...(base ?? {}), schema: { ...baseSchema } },
+      { ...applied.schema },
+      input.sourceMappings,
+      resolveMappingSource
+    );
   if (applied && selection.modules.length) {
     await saveYSchemaCompositionSnapshot(db, {
       snapshot_id: `studio-authoring-base:${projectId}:${selection.selectionHash}`,
@@ -89,7 +122,12 @@ export async function saveStudioEditCandidate(
       composition_hash: selection.selectionHash,
       compiled_schema_hash: selection.schemaHash,
       compiler_version: 'yschema-v2',
-      manifest_json: { sources: selection.sources },
+      manifest_json: {
+        sources: selection.sources,
+        selectionHash: selection.selectionHash,
+        studioComposition: selection.composition,
+        nodeProvenance: selection.nodeProvenance,
+      },
       schema_json: { ...selection.schema },
       render_plan_json: selection.renderPlan,
       origins_json: selection.origins,
@@ -105,7 +143,12 @@ export async function saveStudioEditCandidate(
       composition_hash: base.reference.compositionHash,
       compiled_schema_hash: base.schemaHash,
       compiler_version: 'workspace-schema-edit-base@1',
-      manifest_json: { sources: base.sources, selectionHash: base.selectionHash },
+      manifest_json: {
+        sources: base.sources,
+        selectionHash: base.selectionHash,
+        studioComposition: selection.composition,
+        nodeProvenance: base.nodeProvenance,
+      },
       schema_json: { ...base.schema },
       render_plan_json: base.renderPlan,
       origins_json: base.origins,
@@ -152,6 +195,9 @@ export async function saveStudioEditCandidate(
                       }),
                 effect: { profile: 'yops.ops.v1' as const, operations: applied.operations },
                 resultSchemaHash: applied.schemaHash,
+                ...(input.sourceMappings
+                  ? { sourceMappings: parseSchemaSourceMappings(input.sourceMappings) }
+                  : {}),
               },
             }
           : {}),
@@ -171,6 +217,7 @@ export async function saveStudioEditCandidate(
         workspaceRevision: draft.revision,
         candidate: StudioSchemaEditCandidateSchema.parse({
           ...result.candidate,
+          composition: selection.composition,
           ...(result.candidate.authoringDraft?.base.kind === 'composition'
             ? { baseDefinition: { ...baseSchema } }
             : {}),
@@ -189,6 +236,7 @@ export async function saveStudioEditCandidate(
         workspaceRevision: saved.revision,
         candidate: StudioSchemaEditCandidateSchema.parse({
           ...result.candidate,
+          composition: selection.composition,
           ...(result.candidate.authoringDraft?.base.kind === 'composition'
             ? { baseDefinition: { ...baseSchema } }
             : {}),

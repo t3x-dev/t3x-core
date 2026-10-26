@@ -1,22 +1,18 @@
 'use client';
 
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { notFound, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useEffect, useState } from 'react';
 import { getProjectIdRepoPath } from '@/domain/project/repoPath';
 import {
+  isRetiredRepositoryLocation,
   isSupportedRepositorySuffix,
   repositoryLocation,
 } from '@/domain/project/repositoryLocation';
 import { useProjectDetail } from '@/hooks/projects/useProjectDetail';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
+import { buildReturnTo } from '@/utils/navigationReturn';
 import { ProjectShell } from './ProjectShell';
-import { type ProjectTabId, parseProjectTab } from './projectTabModel';
-
-function activeProjectTab(pathname: string, searchParams: URLSearchParams): ProjectTabId {
-  if (pathname.includes('/changes/')) return 'workspaces';
-  if (pathname.includes('/settings')) return 'settings';
-  return parseProjectTab(searchParams.get('tab'));
-}
+import { resolveProjectRouteTab } from './projectTabModel';
 
 function isProjectIndex(pathname: string): boolean {
   return /^\/project\/[^/]+\/?$/.test(pathname);
@@ -78,24 +74,35 @@ export function ProjectRouteShell({
     );
   }, [resolvedProject?.canonical_path, pathname, query, projectId, router]);
 
+  const suffix = `/${pathname.split('/').slice(3).join('/')}`;
+  if (isRetiredRepositoryLocation(suffix, searchParams)) notFound();
+
   // The project index already owns ProjectShell because it also controls the
   // tab content. Nested project routes use this route-level shell so the
   // shared title/navigation header never disappears during navigation.
   if (isProjectIndex(pathname)) return children;
 
-  const project = resolvedProject ?? {
-    id: projectId,
-    name: fallbackProjectName,
-    description: 'Structured state repository',
-    status: 'active' as const,
-    visibility: 'private' as const,
-  };
+  // Keep the known repository header while refreshing its details. Redirects
+  // still use the freshly resolved project above, rather than a cached address.
+  const project = resolvedProject ??
+    storedProject ?? {
+      id: projectId,
+      name: fallbackProjectName,
+      description: 'Structured state repository',
+      status: 'active' as const,
+      visibility: 'private' as const,
+    };
 
   return (
     <ProjectShell
-      activeTab={activeProjectTab(pathname, new URLSearchParams(searchParams.toString()))}
+      activeTab={resolveProjectRouteTab(
+        pathname.split('/').filter(Boolean)[2] ?? null,
+        new URLSearchParams(query)
+      )}
+      branch={searchParams.get('branch') === 'all' ? null : searchParams.get('branch')}
       project={project}
       projectIdNavigation={Boolean(projectId)}
+      settingsReturnTo={buildReturnTo(pathname, query)}
     >
       {children}
     </ProjectShell>

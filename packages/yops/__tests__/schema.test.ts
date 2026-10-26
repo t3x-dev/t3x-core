@@ -48,6 +48,27 @@ describe('YOpSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it.each([
+    ['2026-04-15T10:00:00Z', '2026-04-15T10:00:00Z'],
+    [new Date('2026-04-15T10:00:00Z'), '2026-04-15T10:00:00.000Z'],
+    [undefined, undefined],
+  ])('preserves LLM source timestamp normalization for %s', (at, expected) => {
+    const result = YOpSchema.parse({
+      define: { path: 'trip' },
+      source: { type: 'llm', at, turn_ref: { turn_hash: 'sha256:abc', quote: 'trip' } },
+    });
+    expect(result.source).toMatchObject({ type: 'llm', at: expected });
+  });
+
+  it.each([null, 42, {}])('rejects an invalid LLM source timestamp %s', (at) => {
+    expect(
+      YOpSchema.safeParse({
+        define: { path: 'trip' },
+        source: { type: 'llm', at, turn_ref: { turn_hash: 'sha256:abc', quote: 'trip' } },
+      }).success
+    ).toBe(false);
+  });
+
   it('accepts a human source with the optional surface field', () => {
     for (const surface of ['tree', 'script', 'inline'] as const) {
       const result = YOpSchema.safeParse({

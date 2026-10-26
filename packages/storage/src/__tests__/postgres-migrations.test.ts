@@ -17,7 +17,9 @@ afterEach(async () => {
 });
 
 describe('PostgreSQL schema migrations', () => {
-  it('upgrades v76 with independent public publisher ownership without publishing historical private data', async () => {
+  it.each([
+    76, 77,
+  ])('upgrades v%s with independent public publisher ownership without publishing historical private data', async (version) => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;
     await setup.sql.unsafe(`
@@ -26,7 +28,7 @@ describe('PostgreSQL schema migrations', () => {
         VALUES ('legacy-schema-owner', 'Legacy-schema-owner', 'ns_t3x_dev', NOW());
       INSERT INTO yschema_artifacts(artifact_id, canonical_name, family, kind, owner_project_id, visibility)
         VALUES ('legacy-private', 'legacy/private', 'open', 'schema', 'legacy-schema-owner', 'private');
-      UPDATE _schema_version SET version = 76;
+      UPDATE _schema_version SET version = ${version};
     `);
     await closePostgresStorage();
     await createPostgresBootstrapStorage({ connectionString: setup.connectionString });
@@ -59,6 +61,7 @@ describe('PostgreSQL schema migrations', () => {
         ('ns_t3x_dev', 'needs-confirmation', 'v76-abnormal'),
         ('ns_t3x_dev', 'uncertain-history', 'v76-clean'),
         ('ns_t3x_dev', 'blocked-name', NULL);
+      UPDATE _schema_version SET version = 76;
     `);
     await closePostgresStorage();
     await createPostgresBootstrapStorage({ connectionString: setup.connectionString });
@@ -85,6 +88,62 @@ describe('PostgreSQL schema migrations', () => {
     ).toMatchObject([{ resolvable: true }]);
     await expect(
       setup.sql.unsafe("UPDATE projects SET name = 'Blocked-Name' WHERE project_id = 'v76-clean'")
+    ).rejects.toThrow();
+  });
+
+  it.each([
+    76, 77,
+  ])('upgrades v%s deletion policy without releasing unattributed legacy records', async (version) => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+    await setup.sql.unsafe(`
+      ALTER TABLE repository_paths DROP CONSTRAINT repository_paths_project_id_fkey;
+      ALTER TABLE repository_paths ADD CONSTRAINT legacy_path_owner_fk
+        FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE SET NULL;
+      INSERT INTO projects(project_id, name, namespace_id, created_at) VALUES
+        ('v76-deleted', 'Before-Rename', 'ns_t3x_dev', NOW()),
+        ('v76-purged', 'Legacy-Tombstone', 'ns_t3x_dev', NOW());
+      UPDATE projects SET name = 'After-Rename', deleted_at = NOW() WHERE project_id = 'v76-deleted';
+      DELETE FROM projects WHERE project_id = 'v76-purged';
+      INSERT INTO repository_paths(namespace_id, name_key, project_id, resolvable)
+        VALUES ('ns_t3x_dev', 'legacy-collision', NULL, FALSE);
+      UPDATE _schema_version SET version = ${version};
+    `);
+    await closePostgresStorage();
+    await createPostgresBootstrapStorage({ connectionString: setup.connectionString });
+    expect(await setup.sql.unsafe('SELECT version FROM _schema_version')).toMatchObject([
+      { version: POSTGRES_SCHEMA_VERSION },
+    ]);
+    expect(
+      await setup.sql.unsafe(
+        'SELECT name_key FROM repository_paths WHERE project_id IS NULL ORDER BY name_key'
+      )
+    ).toEqual([{ name_key: 'legacy-collision' }, { name_key: 'legacy-tombstone' }]);
+    expect(
+      await setup.sql.unsafe(
+        "SELECT name_key FROM repository_paths WHERE project_id = 'v76-deleted' ORDER BY name_key"
+      )
+    ).toEqual([{ name_key: 'after-rename' }, { name_key: 'before-rename' }]);
+    await setup.sql.unsafe(
+      "UPDATE projects SET deleted_at = NULL WHERE project_id = 'v76-deleted'"
+    );
+    await setup.sql.unsafe("DELETE FROM projects WHERE project_id = 'v76-deleted'");
+    expect(
+      await setup.sql.unsafe(
+        "SELECT name_key FROM repository_paths WHERE name_key IN ('before-rename', 'after-rename')"
+      )
+    ).toEqual([]);
+    await closePostgresStorage();
+    await createPostgresBootstrapStorage({ connectionString: setup.connectionString });
+    expect(
+      await setup.sql.unsafe(
+        'SELECT name_key FROM repository_paths WHERE project_id IS NULL ORDER BY name_key'
+      )
+    ).toEqual([{ name_key: 'legacy-collision' }, { name_key: 'legacy-tombstone' }]);
+    await expect(
+      setup.sql.unsafe(
+        "INSERT INTO projects(project_id, name, namespace_id, created_at) VALUES ('blocked-reuse', 'Legacy-Tombstone', 'ns_t3x_dev', NOW())"
+      )
     ).rejects.toThrow();
   });
 

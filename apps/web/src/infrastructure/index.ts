@@ -15,7 +15,6 @@ export * from './core';
 export * from './deploy';
 export * from './diff';
 export * from './export';
-export * from './extraction-feedback';
 export * from './generation';
 export * from './health';
 export * from './knowledge-graph';

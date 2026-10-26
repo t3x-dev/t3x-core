@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { cn } from '@/utils/cn';
+import styles from './ProjectSettingsNav.module.css';
 
 export const PROJECT_SETTINGS_GROUPS: Array<{
   label: string;
@@ -81,6 +82,13 @@ function useActiveSection(present: Set<string>): string {
           const top = document.getElementById(id)?.getBoundingClientRect().top;
           if (top !== undefined && top <= line) current = id;
         }
+        // The final section may be too short to reach the active line at the
+        // bottom of the scroll container. Keep its navigation item selected.
+        const lastId = ids.at(-1);
+        const lastRect = lastId ? document.getElementById(lastId)?.getBoundingClientRect() : null;
+        if (lastId && lastRect && lastRect.top > 0 && lastRect.bottom <= window.innerHeight + 1) {
+          current = lastId;
+        }
         if (current) setActive(current);
       });
     };
@@ -102,51 +110,60 @@ export function ProjectSettingsNav() {
     ...group,
     items: group.items.filter((item) => present.has(item.id)),
   })).filter((group) => group.items.length > 0);
+
+  function navigateToSection(id: string) {
+    const target = document.getElementById(id);
+    if (!target) return;
+    const reducedMotion =
+      document.documentElement.dataset.reducedMotion === 'true' ||
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    target.scrollIntoView({ behavior: reducedMotion ? 'instant' : 'smooth', block: 'start' });
+    target.focus({ preventScroll: true });
+    window.history.replaceState(null, '', `#${id}`);
+  }
+
   return (
-    <nav aria-label="Settings sections" className="grid gap-5">
-      {groups.map((group) => (
-        <div className="grid gap-0.5" key={group.label || 'danger'}>
-          {group.label ? (
-            <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--text-tertiary)]">
-              {group.label}
-            </p>
-          ) : (
-            <div className="mb-2 border-t border-[var(--stroke-divider)]" />
-          )}
-          {group.items.map(({ icon: Icon, id, label }) => {
-            const selected = active === id;
-            const danger = id === 'danger';
-            return (
-              <a
-                aria-current={selected ? 'true' : undefined}
-                className={cn(
-                  'flex h-8 items-center gap-2 rounded-[var(--radius-md)] px-3 text-[13px] font-medium transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50',
-                  selected
-                    ? danger
-                      ? 'bg-[var(--status-error)]/10 font-semibold text-[var(--status-error)]'
-                      : 'bg-[var(--accent-commit-soft)] font-semibold text-[var(--accent-commit)]'
-                    : danger
-                      ? 'text-[var(--status-error)] hover:bg-[var(--status-error)]/8'
-                      : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
-                )}
-                href={`#${id}`}
-                key={id}
-                onClick={(event) => {
-                  const target = document.getElementById(id);
-                  if (!target) return;
-                  event.preventDefault();
-                  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  window.history.replaceState(null, '', `#${id}`);
-                }}
-              >
-                <Icon aria-hidden="true" className="size-3.5 shrink-0" />
-                {label}
-              </a>
-            );
-          })}
-        </div>
-      ))}
-    </nav>
+    <>
+      <label className={styles.mobile}>
+        Settings section
+        <select value={active} onChange={(event) => navigateToSection(event.target.value)}>
+          {groups.map((group) => (
+            <optgroup key={group.label || 'danger'} label={group.label || 'Danger zone'}>
+              {group.items.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </label>
+      <nav aria-label="Settings sections" className={styles.desktop}>
+        {groups.map((group) => (
+          <div className={styles.group} key={group.label || 'danger'}>
+            {group.label ? <p className={styles.groupTitle}>{group.label}</p> : null}
+            {group.items.map(({ icon: Icon, id, label }) => {
+              const selected = active === id;
+              const danger = id === 'danger';
+              return (
+                <a
+                  aria-current={selected ? 'true' : undefined}
+                  className={cn(styles.link, selected && styles.active, danger && styles.danger)}
+                  href={`#${id}`}
+                  key={id}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    navigateToSection(id);
+                  }}
+                >
+                  <Icon aria-hidden="true" className="size-3.5 shrink-0" />
+                  {label}
+                </a>
+              );
+            })}
+          </div>
+        ))}
+      </nav>
+    </>
   );
 }

@@ -28,6 +28,7 @@ import {
 import { stateYamlLinePaths } from '@/domain/diff/stateYamlReview';
 import { buildStructuredStateDiff } from '@/domain/diff/structuredStateDiff';
 import { shortHash } from '@/domain/format/formatters';
+import { getProjectIdRepoPath } from '@/domain/project/repoPath';
 import { buildCanonicalStateYaml, buildStatePointRows } from '@/domain/project/stateViewModel';
 import type { ApiCommit } from '@/types/api';
 import styles from './CommitHistoryDiffView.module.css';
@@ -38,6 +39,7 @@ interface CommitHistoryDiffViewProps {
   commit: ApiCommit;
   onBack: () => void;
   parentCommit: ApiCommit | null;
+  stateHref?: string;
 }
 
 type ViewMode = 'structure' | 'yaml';
@@ -140,6 +142,7 @@ export function CommitHistoryDiffView({
   commit,
   onBack,
   parentCommit,
+  stateHref,
 }: CommitHistoryDiffViewProps) {
   const baseline = parentCommit?.content ?? EMPTY_CONTENT;
   const changes = useMemo(
@@ -202,10 +205,6 @@ export function CommitHistoryDiffView({
       <header className={styles.pageHeader}>
         <div className={styles.headerMain}>
           <nav aria-label="Breadcrumb" className={styles.breadcrumbs}>
-            <button type="button" onClick={onBack}>
-              State
-            </button>
-            <ChevronRight aria-hidden="true" />
             <button type="button" onClick={onBack}>
               History
             </button>
@@ -387,9 +386,16 @@ export function CommitHistoryDiffView({
             </button>
             <Link
               className={styles.workspaceButton}
-              href={`/project/${encodeURIComponent(commit.project_id)}`}
+              href={
+                stateHref ??
+                `${getProjectIdRepoPath(commit.project_id)}?${new URLSearchParams({
+                  view: 'overview',
+                  branch: commit.branch,
+                  commit: commit.hash,
+                })}`
+              }
             >
-              <SquareArrowOutUpRight /> Open in Workspace Editor
+              <SquareArrowOutUpRight /> View this version in State
             </Link>
           </section>
         </aside>

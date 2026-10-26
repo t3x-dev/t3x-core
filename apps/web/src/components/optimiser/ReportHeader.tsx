@@ -156,12 +156,7 @@ export function ReportHeader({
           {leafId && (
             <>
               <ChevronRight className="h-3 w-3" aria-hidden="true" />
-              <Link
-                href={`/project/${projectId}/leaf/${leafId}`}
-                className="hover:text-foreground transition-colors"
-              >
-                {leafTitle || 'Leaf'}
-              </Link>
+              <span>{leafTitle || 'Leaf'}</span>
             </>
           )}
           <ChevronRight className="h-3 w-3" aria-hidden="true" />

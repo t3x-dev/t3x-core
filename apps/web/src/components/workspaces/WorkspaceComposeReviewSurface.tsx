@@ -1,13 +1,8 @@
-import type {
-  WorkspaceAuthoringCard,
-  WorkspaceTransitionReviewSnapshotEnvelope,
-} from '@t3x-dev/api-client';
+import type { WorkspaceAuthoringCard } from '@t3x-dev/api-client';
 import type { SemanticContent } from '@t3x-dev/core';
 import type { LucideIcon } from 'lucide-react';
 import {
-  AlertTriangle,
   ArrowLeft,
-  ArrowRight,
   Box as BoxIcon,
   Check,
   CheckCircle2,
@@ -37,7 +32,6 @@ import {
   Percent,
   Play,
   Plus,
-  RefreshCw,
   Settings,
   Share2,
   Sparkles,
@@ -48,10 +42,11 @@ import NextLink from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { ChangeEvent, CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { WorkspaceChecksRedirect } from '@/components/checks/WorkspaceChecksRedirect';
 import { DOCUMENT_SOURCE_ACCEPTED_TYPES } from '@/components/import/documentAcceptTypes';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
-import navigationStyles from '@/components/project/StateNavigationControls.module.css';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -67,6 +62,7 @@ import { OutputTargetsTab } from '@/components/workspaces/OutputTargetsTab';
 import { SourceArtifactRoleEditor } from '@/components/workspaces/SourceArtifactRoleEditor';
 import { SourceTransitionTab } from '@/components/workspaces/SourceTransitionTab';
 import { WorkspaceContentEditor } from '@/components/workspaces/WorkspaceContentEditor';
+import { WorkspaceNotice } from '@/components/workspaces/WorkspaceNotice';
 import { WorkspaceSchemaReviewPanel } from '@/components/workspaces/WorkspaceSchemaReviewPanel';
 import type { WorkspaceYOpsFlowView } from '@/components/workspaces/YOpsDraftTab';
 import { getSchemaRegistryPreview } from '@/data/schemaReleases';
@@ -89,6 +85,8 @@ import {
   type StructuredDiffChange,
   type StructuredDiffKind,
 } from '@/domain/diff/structuredStateDiff';
+import { checksHref, checksReturnTo } from '@/domain/project/checks';
+import { getProjectIdHistoryPath } from '@/domain/project/repoPath';
 import {
   buildCanonicalStateYaml,
   buildStatePointRows,
@@ -102,10 +100,12 @@ import {
   authoringVisibleCards,
   buildAuthoringReviewProjection,
 } from '@/domain/workspaces/authoringReview';
+import { EMPTY_WORKSPACE_REVIEW } from '@/domain/workspaces/changeDecision';
 import { composeDraftChangeCards } from '@/domain/workspaces/composeDraftChanges';
 import { composeValuesEqual } from '@/domain/workspaces/composeObjectChanges';
 import { type DraftYOp, nextAuthoringRequestId } from '@/domain/workspaces/draftStructure';
 import {
+  assertStagedEditsCurrent,
   MANUAL_STAGING_EVENT_ID,
   type ManualStagingControls,
   previewStagedCurrent,
@@ -117,6 +117,7 @@ import {
   stagedObjectGroups,
   UNGROUPED_MANUAL_HINT,
 } from '@/domain/workspaces/manualStaging';
+import { workspaceReviewHref } from '@/domain/workspaces/reviewNavigation';
 import {
   DEFAULT_WORKSPACE_SCHEMA_CHOICE_ID,
   listWorkspaceSchemaChoices,
@@ -124,11 +125,11 @@ import {
 } from '@/domain/workspaces/schemaBindings';
 import { useAssistantSchemaSettings } from '@/hooks/schemas/useAssistantSchemaSettings';
 import { useProjectYSchemaVersions } from '@/hooks/schemas/useProjectYSchemaVersions';
+import { useViewPreference } from '@/hooks/shared/useViewPreference';
 import { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import { useWorkspaceAuthoringBootstrap } from '@/hooks/workspaces/useWorkspaceAuthoringBootstrap';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import { useWorkspaceConversations } from '@/hooks/workspaces/useWorkspaceConversations';
-import { useWorkspaceReviewHistory } from '@/hooks/workspaces/useWorkspaceReviewHistory';
 import { validateWorkspaceCandidateYOps } from '@/hooks/workspaces/useWorkspaceYOps';
 import type { ApiCommit, Conversation } from '@/types/api';
 import type {
@@ -164,21 +165,23 @@ import { WorkspaceReviewCodeView } from './WorkspaceReviewCodeView';
 import diffStyles from './WorkspaceReviewDiff.module.css';
 import reviewStyles from './WorkspaceReviewReference.module.css';
 import stageHeaderStyles from './WorkspaceStageHeader.module.css';
+import { WorkspaceStageNavigation } from './WorkspaceStageNavigation';
 
 type WorkspaceSurfaceMode = 'compose' | 'review';
-type ReviewPane = 'rendered' | 'changes' | 'yaml' | 'checks' | 'source' | 'edit' | 'delivery';
+type ReviewPane = 'rendered' | 'changes' | 'yaml' | 'checks';
+type WorkspaceTool = 'source' | 'edit' | 'delivery';
 type ReviewCheckStatus = 'failed' | 'passed' | 'pending';
 type ComposeChangeFilter = 'all' | 'modified' | 'added' | 'attention';
+const WORKSPACE_MODES = ['compose', 'review'] as const;
+const REVIEW_VIEWS = ['changes', 'rendered', 'yaml'] as const;
+const CHANGE_SCOPES = ['latest', 'all'] as const;
 
 function parseReviewPane(value: string | null): ReviewPane {
-  return value === 'changes' ||
-    value === 'yaml' ||
-    value === 'checks' ||
-    value === 'source' ||
-    value === 'edit' ||
-    value === 'delivery'
-    ? value
-    : 'rendered';
+  return value === 'rendered' || value === 'yaml' || value === 'checks' ? value : 'changes';
+}
+
+function parseWorkspaceTool(value: string | null): WorkspaceTool | null {
+  return value === 'source' || value === 'edit' || value === 'delivery' ? value : null;
 }
 
 function parseWorkspaceSurfaceMode(
@@ -187,6 +190,7 @@ function parseWorkspaceSurfaceMode(
 ): WorkspaceSurfaceMode | null {
   if (modeValue === 'compose' || modeValue === 'review') return modeValue;
   if (
+    paneValue === 'rendered' ||
     paneValue === 'changes' ||
     paneValue === 'yaml' ||
     paneValue === 'checks' ||
@@ -220,6 +224,25 @@ export function WorkspaceComposeReviewSurface({
   const router = useRouter();
   const searchParams = useSearchParams();
   const routeQuery = searchParams.toString();
+  const routeParams = new URLSearchParams(routeQuery);
+  const preferenceKey = `t3x.workspace-view:${candidate.projectId}:${candidate.id}`;
+  const [preferredMode, rememberMode, modeReady] = useViewPreference(
+    `${preferenceKey}:mode`,
+    WORKSPACE_MODES,
+    'compose'
+  );
+  const [preferredReviewPane, rememberReviewPane, paneReady] = useViewPreference(
+    `${preferenceKey}:review`,
+    REVIEW_VIEWS,
+    'changes'
+  );
+  const workspaceTool =
+    parseWorkspaceTool(routeParams.get('workspaceTool')) ??
+    parseWorkspaceTool(routeParams.get('reviewPane'));
+  const toolReturnTo =
+    workspaceTool === 'delivery'
+      ? checksReturnTo(routeParams.get('returnTo'), candidate.projectId, pathname)
+      : null;
   const lastSyncedRouteQueryRef = useRef<string | null>(null);
   const [reviewPane, setReviewPaneState] = useState<ReviewPane>(() =>
     parseReviewPane(new URLSearchParams(routeQuery).get('reviewPane'))
@@ -230,19 +253,22 @@ export function WorkspaceComposeReviewSurface({
   );
   // Compose publication and Review must observe the same current Draft projection.
   const activity = useComposeActivity(controller.candidate, authoringBootstrap.active);
+  const syncRequired = (activity.newActivity ?? activity.view)?.synchronization?.required;
 
   const writeWorkspaceSurfaceUrl = useCallback(
     (nextMode: WorkspaceSurfaceMode, nextPane?: ReviewPane) => {
       const params = new URLSearchParams(routeQuery);
+      params.delete('workspaceTool');
+      params.delete('returnTo');
       if (nextMode === 'review') {
         params.set('workspaceMode', 'review');
-        if (nextPane && nextPane !== 'rendered') {
+        if (nextPane && nextPane !== 'changes') {
           params.set('reviewPane', nextPane);
         } else {
           params.delete('reviewPane');
         }
       } else {
-        params.delete('workspaceMode');
+        params.set('workspaceMode', 'compose');
         params.delete('reviewPane');
       }
 
@@ -254,32 +280,88 @@ export function WorkspaceComposeReviewSurface({
 
   const setSurfaceMode = useCallback(
     (nextMode: WorkspaceSurfaceMode) => {
+      rememberMode(nextMode);
       writeWorkspaceSurfaceUrl(nextMode, reviewPane);
       onModeChange(nextMode);
     },
-    [onModeChange, reviewPane, writeWorkspaceSurfaceUrl]
+    [onModeChange, rememberMode, reviewPane, writeWorkspaceSurfaceUrl]
   );
 
   const setReviewPane = useCallback(
     (nextPane: ReviewPane) => {
+      if (nextPane === 'checks') {
+        const source = new URLSearchParams(routeQuery);
+        source.set('workspaceMode', 'review');
+        source.delete('workspaceTool');
+        if (reviewPane !== 'changes') source.set('reviewPane', reviewPane);
+        else source.delete('reviewPane');
+        const snapshotId = controller.review?.reviewSnapshot?.snapshotId;
+        router.push(
+          checksHref(candidate.projectId, {
+            recordId: snapshotId ? `review:${snapshotId}` : undefined,
+            workspace: snapshotId ? undefined : candidate.id,
+            returnTo: `${pathname}?${source}`,
+          })
+        );
+        return;
+      }
+      rememberReviewPane(nextPane);
       setReviewPaneState(nextPane);
       writeWorkspaceSurfaceUrl('review', nextPane);
     },
-    [writeWorkspaceSurfaceUrl]
+    [
+      writeWorkspaceSurfaceUrl,
+      routeQuery,
+      controller.review?.reviewSnapshot?.snapshotId,
+      router,
+      candidate.projectId,
+      candidate.id,
+      pathname,
+      reviewPane,
+      rememberReviewPane,
+    ]
   );
 
   useEffect(() => {
-    if (lastSyncedRouteQueryRef.current === routeQuery) return;
-    lastSyncedRouteQueryRef.current = routeQuery;
+    if (!modeReady || !paneReady) return;
+    const routeKey = `${preferenceKey}:${routeQuery}`;
+    if (lastSyncedRouteQueryRef.current === routeKey) return;
+    lastSyncedRouteQueryRef.current = routeKey;
     const params = new URLSearchParams(routeQuery);
     const rawPane = params.get('reviewPane');
-    setReviewPaneState(parseReviewPane(rawPane));
-    const routeMode = parseWorkspaceSurfaceMode(params.get('workspaceMode'), rawPane) ?? 'compose';
+    const legacyTool = parseWorkspaceTool(rawPane);
+    if (legacyTool) {
+      params.set('workspaceTool', legacyTool);
+      params.delete('reviewPane');
+      params.set('workspaceMode', legacyTool === 'delivery' ? 'review' : 'compose');
+      router.replace(`${pathname}?${params}`, { scroll: false });
+      if (legacyTool !== 'delivery' && mode !== 'compose') onModeChange('compose');
+      return;
+    }
+    setReviewPaneState(
+      rawPane || params.get('workspaceMode') === 'review'
+        ? parseReviewPane(rawPane)
+        : preferredReviewPane
+    );
+    const routeMode =
+      parseWorkspaceSurfaceMode(params.get('workspaceMode'), rawPane) ?? preferredMode;
     if (routeMode !== mode) onModeChange(routeMode);
     if (rawPane === 'validation') {
-      writeWorkspaceSurfaceUrl('review', 'rendered');
+      writeWorkspaceSurfaceUrl('review', 'changes');
     }
-  }, [mode, onModeChange, routeQuery, writeWorkspaceSurfaceUrl]);
+  }, [
+    mode,
+    onModeChange,
+    pathname,
+    routeQuery,
+    router,
+    writeWorkspaceSurfaceUrl,
+    modeReady,
+    paneReady,
+    preferenceKey,
+    preferredMode,
+    preferredReviewPane,
+  ]);
 
   return (
     <div
@@ -288,6 +370,25 @@ export function WorkspaceComposeReviewSurface({
         composeStyles.workspaceTheme
       )}
     >
+      {syncRequired ? (
+        <WorkspaceNotice
+          label="Workspace synchronization"
+          title="The branch has new commits"
+          actions={
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={activity.reconciling}
+              onClick={() => void activity.reconcile()}
+            >
+              {activity.reconciling ? 'Syncing…' : 'Sync latest branch'}
+            </Button>
+          }
+        >
+          <p>Sync this Workspace to continue editing. Saved edits and history will be preserved.</p>
+          {activity.reconciliationError ? <p role="alert">{activity.reconciliationError}</p> : null}
+        </WorkspaceNotice>
+      ) : null}
       <div className={composeStyles.workspaceBody}>
         <div
           className={cn(
@@ -295,7 +396,56 @@ export function WorkspaceComposeReviewSurface({
             mode === 'review' && reviewStyles.workspace
           )}
         >
-          {mode === 'review' ? (
+          {workspaceTool ? (
+            <>
+              <WorkspaceStageHeader
+                branchOptions={branchOptions}
+                candidate={controller.candidate ?? candidate}
+                controller={controller}
+                mode={workspaceTool === 'delivery' ? undefined : 'compose'}
+                onBranchChange={onBranchChange}
+                onModeChange={setSurfaceMode}
+              />
+              <div className={reviewStyles.toolHeading}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    toolReturnTo
+                      ? router.push(toolReturnTo)
+                      : setSurfaceMode(workspaceTool === 'delivery' ? mode : 'compose')
+                  }
+                >
+                  <ArrowLeft aria-hidden="true" /> Back to{' '}
+                  {toolReturnTo
+                    ? 'Review snapshot'
+                    : workspaceTool === 'delivery' && mode === 'review'
+                      ? 'Review'
+                      : 'Compose'}
+                </button>
+                <h1>
+                  {workspaceTool === 'delivery'
+                    ? 'Delivery'
+                    : workspaceTool === 'source'
+                      ? 'Source configuration'
+                      : 'Edit structured State'}
+                </h1>
+                <p>
+                  {workspaceTool === 'delivery'
+                    ? 'Download committed State and inspect delivery history.'
+                    : 'Prepare a change in Compose, then review its exact result before deciding.'}
+                </p>
+              </div>
+              {workspaceTool === 'edit' ? (
+                <WorkspaceContentEditor key={candidate.id} candidate={controller.candidate} />
+              ) : workspaceTool === 'source' ? (
+                <WorkspaceSourceTools key={candidate.id} controller={controller} />
+              ) : (
+                <div className={reviewStyles.toolBody}>
+                  <OutputTargetsTab candidate={controller.candidate} />
+                </div>
+              )}
+            </>
+          ) : mode === 'review' ? (
             <>
               <WorkspaceStageHeader
                 branchOptions={branchOptions}
@@ -306,9 +456,9 @@ export function WorkspaceComposeReviewSurface({
                 onModeChange={setSurfaceMode}
               />
               <WorkspaceReviewToolbar
-                controller={controller}
                 onPaneChange={setReviewPane}
                 pane={reviewPane}
+                onEdit={() => setSurfaceMode('compose')}
               />
               <WorkspaceSchemaReviewPanel review={controller.review.schemaReview} />
               <ReviewSurface
@@ -393,7 +543,7 @@ function WorkspaceStageHeader({
   branchOptions: string[];
   candidate: WorkspaceCandidate;
   controller?: WorkspaceComposeReviewController;
-  mode: WorkspaceSurfaceMode;
+  mode?: WorkspaceSurfaceMode;
   onBranchChange?: (branch: string) => Promise<void> | void;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
   onOpenChat?: () => void;
@@ -423,25 +573,9 @@ function WorkspaceStageHeader({
           showCreate={false}
         />
       </div>
-      <div aria-label="Workspace stage" className={navigationStyles.segments} role="tablist">
-        <button
-          aria-selected={mode === 'compose'}
-          onClick={() => onModeChange('compose')}
-          role="tab"
-          type="button"
-        >
-          <Pencil aria-hidden="true" /> Compose
-        </button>
-        <button
-          aria-selected={mode === 'review'}
-          onClick={() => onModeChange('review')}
-          role="tab"
-          type="button"
-        >
-          <CheckCircle2 aria-hidden="true" /> Review
-        </button>
-      </div>
+      <WorkspaceStageNavigation mode={mode} onModeChange={onModeChange} />
       <div className={stageHeaderStyles.meta}>
+        <WorkspaceToolsMenu candidate={candidate} />
         {controller ? (
           <WorkspaceSchemaSelect candidate={candidate} controller={controller} />
         ) : null}
@@ -460,78 +594,82 @@ function WorkspaceStageHeader({
   );
 }
 
+function WorkspaceToolsMenu({ candidate }: { candidate: WorkspaceCandidate }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const openTool = (tool: WorkspaceTool) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('workspaceTool', tool);
+    if (tool !== 'delivery') {
+      params.set('workspaceMode', 'compose');
+      params.delete('reviewPane');
+    }
+    router.push(`${pathname}?${params}`, { scroll: false });
+  };
+  const hasYamlSource = candidate.sourceBundle.some(
+    (source) =>
+      source.materialId && (source.format === 'yaml' || /\.ya?ml$/i.test(source.fileName ?? ''))
+  );
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className={stageHeaderStyles.chatToggle} type="button">
+          Workspace tools <ChevronDown aria-hidden="true" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel>Compose tools</DropdownMenuLabel>
+        <DropdownMenuItem onSelect={() => openTool('edit')}>
+          <Pencil aria-hidden="true" className="mr-2 size-4" /> Edit structured State
+        </DropdownMenuItem>
+        {hasYamlSource ? (
+          <DropdownMenuItem onSelect={() => openTool('source')}>
+            <FileCode2 aria-hidden="true" className="mr-2 size-4" /> Source configuration
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>Committed State</DropdownMenuLabel>
+        <DropdownMenuItem onSelect={() => openTool('delivery')}>
+          <Share2 aria-hidden="true" className="mr-2 size-4" /> Delivery
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function WorkspaceReviewToolbar({
-  controller,
   onPaneChange,
+  onEdit,
   pane,
 }: {
-  controller: WorkspaceComposeReviewController;
   onPaneChange: (pane: ReviewPane) => void;
+  onEdit: () => void;
   pane: ReviewPane;
 }) {
-  const toolClassName = (toolPane: ReviewPane) =>
-    cn(composeStyles.reviewTool, pane === toolPane && composeStyles.reviewToolActive);
-
+  const views: Array<{ id: ReviewPane; label: string; icon: LucideIcon }> = [
+    { id: 'changes', label: 'Changes', icon: GitBranch },
+    { id: 'rendered', label: 'Preview', icon: Eye },
+    { id: 'yaml', label: 'YAML', icon: Code2 },
+  ];
   return (
     <nav aria-label="Review views" className={cn(composeStyles.reviewToolbar, reviewStyles.views)}>
       <div className={composeStyles.reviewToolbarGroup}>
-        <button
-          aria-current={pane === 'rendered' ? 'page' : undefined}
-          className={toolClassName('rendered')}
-          onClick={() => onPaneChange('rendered')}
-          type="button"
-        >
-          <Eye aria-hidden="true" /> Render
-        </button>
-        <button
-          aria-current={pane === 'changes' ? 'page' : undefined}
-          className={toolClassName('changes')}
-          onClick={() => onPaneChange('changes')}
-          type="button"
-        >
-          <GitBranch aria-hidden="true" /> Structure diff
-        </button>
-        <button
-          aria-current={pane === 'yaml' ? 'page' : undefined}
-          className={toolClassName('yaml')}
-          onClick={() => onPaneChange('yaml')}
-          type="button"
-        >
-          <Code2 aria-hidden="true" /> Rendered YAML
-        </button>
-      </div>
-      <div className={cn(composeStyles.reviewToolbarGroup, reviewStyles.secondaryViews)}>
-        {controller.candidate.sourceBundle.some(
-          (source) =>
-            source.materialId &&
-            (source.format === 'yaml' || /\.ya?ml$/i.test(source.fileName ?? ''))
-        ) ? (
+        {views.map(({ id, label, icon: Icon }) => (
           <button
-            aria-current={pane === 'source' ? 'page' : undefined}
-            className={toolClassName('source')}
-            onClick={() => onPaneChange('source')}
+            key={id}
+            aria-current={pane === id ? 'page' : undefined}
+            className={cn(composeStyles.reviewTool, pane === id && composeStyles.reviewToolActive)}
+            onClick={() => onPaneChange(id)}
             type="button"
           >
-            <FileCode2 aria-hidden="true" /> Source configuration
+            <Icon aria-hidden="true" /> {label}
           </button>
-        ) : null}
-        <button
-          aria-current={pane === 'edit' ? 'page' : undefined}
-          className={toolClassName('edit')}
-          onClick={() => onPaneChange('edit')}
-          type="button"
-        >
-          Edit structured State
-        </button>
-        <button
-          aria-current={pane === 'delivery' ? 'page' : undefined}
-          className={toolClassName('delivery')}
-          onClick={() => onPaneChange('delivery')}
-          type="button"
-        >
-          Delivery
-        </button>
+        ))}
       </div>
+      <button className={composeStyles.reviewTool} onClick={onEdit} type="button">
+        <Pencil aria-hidden="true" /> Edit in Compose
+      </button>
     </nav>
   );
 }
@@ -639,9 +777,14 @@ function ComposeSurface({
     }
   };
 
+  const preferenceKey = `t3x.workspace-view:${candidate.projectId}:${candidate.id}`;
   const [sidePanel, setSidePanel] = useState<'history' | 'chat'>('chat');
   const [rightView, setRightView] = useState<'changes' | 'structure' | 'history'>('changes');
-  const [changeScope, setChangeScope] = useState<'latest' | 'all'>('latest');
+  const [changeScope, setChangeScope] = useViewPreference(
+    `${preferenceKey}:scope`,
+    CHANGE_SCOPES,
+    'latest'
+  );
   const [commitSelection, setCommitSelection] = useState<{
     scope: string;
     commit: ApiCommit;
@@ -711,6 +854,7 @@ function ComposeSurface({
     setStructurePending(true);
     setStructureError(null);
     try {
+      assertStagedEditsCurrent(publishedCurrent, selected);
       await activity.publish({
         request_id: nextAuthoringRequestId(),
         operations: selected.map((item) => item.operation),
@@ -724,7 +868,7 @@ function ComposeSurface({
     } finally {
       setStructurePending(false);
     }
-  }, [activity, staged]);
+  }, [activity, staged, publishedCurrent]);
   const stagingControls = useMemo(
     () => ({
       items: staged,
@@ -771,7 +915,7 @@ function ComposeSurface({
         selectActivity(selection, 'history');
       });
     },
-    [activity.selectActionNode, selectActivity]
+    [activity.selectActionNode, selectActivity, setChangeScope]
   );
   const sourceConversationId = candidate.sourceBundle.find(
     (source) =>
@@ -1806,8 +1950,8 @@ function SourceToolbar({
   return (
     <section className={composeStyles.sourcesSection}>
       <div className={composeStyles.sourcesHeading}>
-        <h2 className="sr-only">Proposed changes</h2>
-        <span className="sr-only">{proposedChangeCount} changes</span>
+        <h2>Proposed changes</h2>
+        <span className={composeStyles.changeCount}>{proposedChangeCount}</span>
         <div className={composeStyles.composeToolbarActions}>
           <div className={composeStyles.changeScope} role="tablist" aria-label="Change scope">
             <button
@@ -2176,6 +2320,26 @@ function ReviewSurface({
       ),
     [activity.view, controller.candidate, controller.review]
   );
+  const router = useRouter();
+  const reviewMounted = useRef(true);
+  useEffect(() => {
+    reviewMounted.current = true;
+    return () => {
+      reviewMounted.current = false;
+    };
+  }, []);
+  const prepareReview = () =>
+    controller.prepareReview((snapshot) => {
+      if (!reviewMounted.current) return;
+      router.replace(
+        workspaceReviewHref(snapshot.projectId, snapshot.workspaceId, {
+          snapshotId: snapshot.snapshotId,
+          branch: snapshot.review.precondition.refName,
+          pane,
+        }),
+        { scroll: false }
+      );
+    });
   const candidate = authoringReview?.candidate ?? controller.candidate;
   const operations = candidate.yopsDraft.operations;
   const [comparison, setComparison] = useState<{
@@ -2220,12 +2384,17 @@ function ReviewSurface({
     [candidate, comparisonReview]
   );
   const [selectedStructureRowId, setSelectedStructureRowId] = useState<string | null>(null);
-  const projection = controller.review.changeProjection;
   const view = controller.review.view;
   const checks = getReviewChecks(controller);
   const preparing = controller.busyAction === 'review.prepare';
-  const currentness = preparing ? 'preparing' : projection && view ? 'ready' : 'drafting';
-  const snapshotCurrent = currentness === 'ready' && Boolean(view);
+  const authoring = activity.newActivity ?? activity.view;
+  const snapshotCurrent =
+    Boolean(controller.review.reviewSnapshot) &&
+    !preparing &&
+    (!authoring ||
+      (!authoring.synchronization?.required &&
+        controller.review.reviewSnapshot?.review?.precondition.workspaceRevision ===
+          authoring.workspaceRevision));
   const committedId =
     committedReviewId(view) ??
     (controller.candidate.status === 'committed'
@@ -2253,53 +2422,48 @@ function ReviewSurface({
     structureModel.rows[0] ??
     null;
 
-  if (pane === 'source') {
-    return <WorkspaceSourceTools key={controller.candidate.id} controller={controller} />;
-  }
-
-  if (pane === 'edit') {
-    return (
-      <WorkspaceContentEditor key={controller.candidate.id} candidate={controller.candidate} />
-    );
-  }
-
-  if (pane === 'delivery') {
-    return (
-      <div className="min-h-0 flex-1 overflow-y-auto bg-[var(--surface-app)] p-4 md:p-6">
-        <OutputTargetsTab candidate={controller.candidate} />
-      </div>
-    );
-  }
+  const summary = (
+    <WorkspaceReviewSummary
+      candidate={candidate}
+      controller={controller}
+      snapshotCurrent={snapshotCurrent}
+      hasChanges={authoring?.hasChanges}
+      historyHref={getProjectIdHistoryPath(candidate.projectId, {
+        branch: authoring?.basis?.refName ?? candidate.targetBranch,
+        returnTo: workspaceReviewHref(candidate.projectId, candidate.id, {
+          branch: authoring?.basis?.refName ?? candidate.targetBranch,
+          pane,
+        }),
+      })}
+      onOpenChecks={() => setPane('checks')}
+      onPrepare={() => void prepareReview()}
+    />
+  );
 
   if (pane === 'rendered') {
     return (
-      <WorkspaceRenderedReview
-        authoringCards={authoringVisibleCards(expandAuthoringCards(activity.view?.netDiff ?? []))}
-        authoringPreview={Boolean(authoringReview)}
-        candidate={candidate}
-        review={comparisonReview}
-        controller={controller}
-        onModeChange={onModeChange}
-        onOpenChecks={() => setPane('checks')}
-        onStructureDiff={() => setPane('changes')}
-      />
+      <>
+        {summary}
+        <WorkspaceRenderedReview
+          authoringCards={authoringVisibleCards(expandAuthoringCards(activity.view?.netDiff ?? []))}
+          authoringPreview={Boolean(authoringReview)}
+          candidate={candidate}
+          review={comparisonReview}
+          controller={controller}
+          onModeChange={onModeChange}
+          onStructureDiff={() => setPane('changes')}
+        />
+      </>
     );
   }
 
   if (pane === 'checks') {
-    return (
-      <WorkspaceReviewChecksView
-        checks={checks}
-        controller={controller}
-        onBack={() => setPane('rendered')}
-        onOpenCompose={() => onModeChange('compose')}
-        onOpenStructure={() => setPane('changes')}
-      />
-    );
+    return <WorkspaceChecksRedirect projectId={candidate.projectId} workspaceId={candidate.id} />;
   }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-card)] text-[var(--text-primary)]">
+      {summary}
       {comparisonScenario ? (
         <div className="shrink-0 border-b border-[var(--stroke-divider)] bg-[var(--status-info-muted)] px-4 py-2 text-[11px] text-[var(--text-secondary)] md:px-6">
           Compared with {comparisonScenario.label}: {comparisonScenario.operationCount} operations ·{' '}
@@ -2333,7 +2497,8 @@ function ReviewSurface({
                     <button
                       type="button"
                       className="mt-3 text-[var(--accent-commit)]"
-                      onClick={() => void controller.prepareReview()}
+                      disabled={controller.isBusy || authoring?.hasChanges === false}
+                      onClick={() => void prepareReview()}
                     >
                       Prepare exact review
                     </button>
@@ -2384,6 +2549,75 @@ function ReviewSurface({
         </div>
       </div>
     </div>
+  );
+}
+
+function WorkspaceReviewSummary({
+  candidate,
+  controller,
+  snapshotCurrent,
+  hasChanges,
+  historyHref,
+  onOpenChecks,
+  onPrepare,
+}: {
+  candidate: WorkspaceCandidate;
+  controller: WorkspaceComposeReviewController;
+  snapshotCurrent: boolean;
+  hasChanges: boolean | undefined;
+  historyHref: string;
+  onOpenChecks: () => void;
+  onPrepare: () => void;
+}) {
+  const snapshot = controller.review.reviewSnapshot;
+  const checks = getReviewChecks(controller);
+  const preparing = controller.busyAction === 'review.prepare';
+  const status = preparing
+    ? 'Preparing review…'
+    : hasChanges === false
+      ? EMPTY_WORKSPACE_REVIEW
+      : snapshot && !snapshotCurrent
+        ? 'The branch or Draft changed. Prepare review again.'
+        : snapshot
+          ? 'Review snapshot ready for decision.'
+          : 'Prepare a fixed snapshot to approve and commit here.';
+  return (
+    <section aria-label="Review readiness" className={reviewStyles.readiness}>
+      <div className={reviewStyles.readinessSummary}>
+        <strong>
+          Draft r{candidate.revision ?? 1} → {candidate.targetBranch || 'main'}
+        </strong>
+        <span aria-live="polite">{status}</span>
+        <details>
+          <summary>
+            Check summary · {checks.filter((check) => check.status === 'passed').length}/
+            {checks.length} passed
+          </summary>
+          <ul>
+            {checks.map((check) => (
+              <li key={check.label}>
+                <CheckStatusMark status={check.status} />
+                <span>{check.label}</span>
+                <CheckStatusBadge status={check.status} />
+              </li>
+            ))}
+          </ul>
+        </details>
+      </div>
+      <div className={reviewStyles.readinessActions}>
+        <button
+          disabled={controller.isBusy || hasChanges === false}
+          onClick={onPrepare}
+          type="button"
+        >
+          {preparing ? 'Preparing…' : 'Prepare review'}
+        </button>
+        <button onClick={onOpenChecks} type="button">
+          Open Run <ExternalLink aria-hidden="true" />
+        </button>
+        <NextLink href={historyHref}>View History</NextLink>
+      </div>
+    </section>
   );
 }
 
@@ -2542,7 +2776,6 @@ function WorkspaceRenderedReview({
   review,
   controller,
   onModeChange,
-  onOpenChecks,
   onStructureDiff,
 }: {
   authoringCards?: WorkspaceAuthoringCard[];
@@ -2551,11 +2784,8 @@ function WorkspaceRenderedReview({
   review: WorkspaceComposeReviewController['review'];
   controller: WorkspaceComposeReviewController;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
-  onOpenChecks: () => void;
   onStructureDiff: () => void;
 }) {
-  const router = useRouter();
-  const reviewSnapshot = controller.review.reviewSnapshot;
   const structure = useMemo(
     () => buildWorkspaceReviewStructureModel(candidate, review),
     [candidate, review]
@@ -2603,7 +2833,6 @@ function WorkspaceRenderedReview({
     setSelectedPath((exact ?? child)?.path ?? path);
   };
   const selectedKind = selectedRow?.diff?.kind;
-  const reviewChecks = getReviewChecks(controller);
   const copyPath = () => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       void navigator.clipboard.writeText(selectedRow?.path ?? 'prd');
@@ -2745,25 +2974,6 @@ function WorkspaceRenderedReview({
               <p>{notes ? formatOperationValue(notes.value) : 'No notes recorded.'}</p>
             </section>
           ) : null}
-          <footer className={reviewStyles.commitFooter}>
-            <button
-              disabled={!reviewSnapshot}
-              onClick={() => {
-                if (reviewSnapshot)
-                  router.push(
-                    `/project/${encodeURIComponent(reviewSnapshot.projectId)}/changes/${encodeURIComponent(reviewSnapshot.workspaceId)}/${encodeURIComponent(reviewSnapshot.snapshotId)}`
-                  );
-              }}
-              type="button"
-            >
-              <Share2 aria-hidden="true" /> Commit changes
-            </button>
-            <span>
-              {reviewSnapshot
-                ? 'Review snapshot ready for decision.'
-                : 'Review snapshot not prepared.'}
-            </span>
-          </footer>
         </section>
         <aside aria-label="Review details" className={reviewStyles.rail}>
           <section aria-label="Selected section" className={reviewStyles.panel}>
@@ -2785,367 +2995,9 @@ function WorkspaceRenderedReview({
               <Sparkles aria-hidden="true" /> Ask AI to revise
             </button>
           </section>
-          <section
-            aria-label={`Checks for draft r${candidate.revision ?? 1}`}
-            className={reviewStyles.panel}
-          >
-            <header>
-              <h2>
-                <CheckCircle2 aria-hidden="true" /> Checks for draft r{candidate.revision ?? 1}
-              </h2>
-            </header>
-            {reviewChecks.map((check) => (
-              <div className={reviewStyles.check} key={check.label}>
-                <CheckStatusMark status={check.status} />
-                <div>
-                  <strong>{check.label}</strong>
-                  <small>{check.detail}</small>
-                </div>
-                <CheckStatusBadge status={check.status} />
-              </div>
-            ))}
-            <div className={reviewStyles.check}>
-              <CircleDot aria-hidden="true" />
-              <div>
-                <strong>Review snapshot</strong>
-                <small>{reviewSnapshot ? 'Prepared' : 'Not prepared'}</small>
-              </div>
-              <button
-                disabled={controller.isBusy}
-                onClick={() => void controller.prepareReview()}
-                type="button"
-              >
-                {controller.isBusy ? 'Preparing…' : 'Prepare review'}
-              </button>
-            </div>
-            <button className={reviewStyles.primary} onClick={onOpenChecks} type="button">
-              Open checks <ArrowRight aria-hidden="true" />
-            </button>
-          </section>
         </aside>
       </main>
     </div>
-  );
-}
-
-function WorkspaceReviewChecksView({
-  checks,
-  controller,
-  onBack,
-  onOpenCompose,
-  onOpenStructure,
-}: {
-  checks: ReviewCheckView[];
-  controller: WorkspaceComposeReviewController;
-  onBack: () => void;
-  onOpenCompose: () => void;
-  onOpenStructure: () => void;
-}) {
-  const candidate = controller.candidate;
-  const projectId = candidate.projectId;
-  const workspaceId = candidate.id;
-  const currentSnapshotId = controller.review.reviewSnapshot?.snapshotId ?? null;
-  const {
-    history,
-    historyError,
-    historyLoading,
-    selectedSnapshotId,
-    setSelectedSnapshotId,
-    selectedSnapshot,
-    snapshotError,
-    snapshotLoading,
-  } = useWorkspaceReviewHistory(projectId, workspaceId, currentSnapshotId);
-
-  const activeSnapshot = selectedSnapshotId ? selectedSnapshot : null;
-  const activeChecks = selectedSnapshotId
-    ? activeSnapshot
-      ? checksFromSnapshot(activeSnapshot)
-      : []
-    : checks;
-  const initialIndex = Math.max(
-    0,
-    activeChecks.findIndex((check) => check.status === 'failed')
-  );
-  const [selectedIndex, setSelectedIndex] = useState(initialIndex);
-  useEffect(() => {
-    setSelectedIndex(initialIndex);
-  }, [selectedSnapshotId, initialIndex]);
-  const selected = activeChecks[selectedIndex] ?? activeChecks[0];
-  const passedCount = activeChecks.filter((check) => check.status === 'passed').length;
-  const failedCount = activeChecks.filter((check) => check.status === 'failed').length;
-  const pendingCount = activeChecks.length - passedCount - failedCount;
-  const candidateLabel = candidate.id || `draft-v${String(candidate.revision ?? 1)}`;
-  const compactCandidate =
-    candidateLabel.length > 18 ? `${candidateLabel.slice(0, 15)}…` : candidateLabel;
-  const schemaLabel = activeSnapshot
-    ? 'Snapshot projection'
-    : _formatProposalSchemaLabel(candidate);
-  const selectedStatus = selected?.status ?? 'pending';
-  const gaps = schemaValidationGaps(
-    selectedSnapshotId
-      ? selectedSnapshot?.snapshot.transition.checks.validation
-      : controller.review.view?.checks.validation
-  );
-  const selectedReady = selectedStatus === 'passed';
-
-  return (
-    <section aria-label="Workspace review checks" className={checksStyles.surface}>
-      <header className={checksStyles.breadcrumbBar}>
-        <div>
-          <button onClick={onBack} type="button">
-            <ArrowLeft aria-hidden="true" /> Back to Review
-          </button>
-          <i />
-          <nav aria-label="Checks breadcrumb">
-            <span>Workspaces</span>
-            <b>/</b>
-            <span>Review</span>
-            <b>/</b>
-            <strong>Checks</strong>
-          </nav>
-        </div>
-        <div className={checksStyles.draftBadge}>
-          <BoxIcon aria-hidden="true" />
-          <span>Draft v{candidate.revision ?? 1}</span>
-          <b>·</b>
-          <code>candidate {compactCandidate}</code>
-        </div>
-      </header>
-
-      <div className={checksStyles.titleBar}>
-        <div>
-          <h1>Checks</h1>
-          <span className={checksStyles.passedSummary}>
-            <Check aria-hidden="true" />
-            {passedCount} passed
-          </span>
-          {failedCount > 0 ? (
-            <>
-              <i />
-              <span className={checksStyles.failedSummary}>
-                <X aria-hidden="true" />
-                {failedCount} failed
-              </span>
-            </>
-          ) : null}
-          {pendingCount > 0 ? (
-            <>
-              <i />
-              <span className={checksStyles.pendingSummary}>
-                <CircleDot aria-hidden="true" />
-                {pendingCount} pending
-              </span>
-            </>
-          ) : null}
-        </div>
-        <button onClick={onOpenCompose} type="button">
-          <Settings aria-hidden="true" />
-          Configure checks
-        </button>
-      </div>
-
-      <div className={checksStyles.checksBody}>
-        <aside className={checksStyles.projectChecks}>
-          <h2>Project checks</h2>
-          <div>
-            {activeChecks.map((check, index) => (
-              <button
-                className={index === selectedIndex ? checksStyles.selectedItem : undefined}
-                key={check.label}
-                onClick={() => setSelectedIndex(index)}
-                type="button"
-              >
-                <CheckStatusMark status={check.status} />
-                <span>
-                  <b>{check.label}</b>
-                  <small>
-                    {check.requirement === 'system'
-                      ? 'T3X system check'
-                      : `${schemaLabel} · required`}
-                  </small>
-                </span>
-                <CheckStatusBadge status={check.status} />
-              </button>
-            ))}
-          </div>
-        </aside>
-
-        <aside className={checksStyles.runHistory}>
-          <h2>Run history</h2>
-          {historyLoading ? <output>Loading review snapshots…</output> : null}
-          {historyError ? <p role="alert">{historyError}</p> : null}
-          <button
-            className={!selectedSnapshotId ? checksStyles.selectedItem : undefined}
-            onClick={() => setSelectedSnapshotId(null)}
-            type="button"
-          >
-            <CheckStatusMark
-              status={
-                checks.some((check) => check.status === 'failed')
-                  ? 'failed'
-                  : currentSnapshotId && checks.every((check) => check.status === 'passed')
-                    ? 'passed'
-                    : 'pending'
-              }
-            />
-            <span>
-              <b>Current candidate</b>
-              <small>{currentSnapshotId ?? 'Not reviewed yet'}</small>
-            </span>
-          </button>
-          {history.map((snapshot) => (
-            <button
-              className={
-                selectedSnapshotId === snapshot.snapshot_id ? checksStyles.selectedItem : undefined
-              }
-              key={snapshot.snapshot_id}
-              onClick={() => setSelectedSnapshotId(snapshot.snapshot_id)}
-              type="button"
-            >
-              <CheckStatusMark status={snapshotCheckStatus(snapshot)} />
-              <span>
-                <b>Revision {snapshot.snapshot.review.precondition.workspaceRevision}</b>
-                <small>
-                  {new Date(snapshot.created_at).toLocaleString()} · {snapshot.snapshot_id}
-                </small>
-              </span>
-              <CheckStatusBadge status={snapshotCheckStatus(snapshot)} />
-            </button>
-          ))}
-          {!historyLoading && !historyError && history.length === 0 ? (
-            <div className={checksStyles.noHistory}>No review snapshots recorded.</div>
-          ) : null}
-        </aside>
-
-        <main className={checksStyles.checkDetail}>
-          <div className={checksStyles.detailHeading}>
-            <div>
-              <CheckStatusMark status={selectedStatus} large />
-              <h2>
-                {selected?.label ?? 'Check'} ·{' '}
-                {selectedSnapshotId ? 'Saved review' : 'Current candidate'}
-              </h2>
-              <CheckStatusBadge status={selectedStatus} ready />
-            </div>
-            <button
-              disabled={controller.isBusy}
-              onClick={() => void controller.prepareReview()}
-              type="button"
-            >
-              <RefreshCw aria-hidden="true" />
-              {controller.isBusy ? 'Preparing…' : 'Prepare current review'}
-            </button>
-          </div>
-
-          <section className={checksStyles.metadataCard}>
-            {[
-              [
-                'Candidate',
-                activeSnapshot
-                  ? activeSnapshot.snapshot.request.id
-                  : selectedSnapshotId
-                    ? 'Loading saved review'
-                    : compactCandidate,
-              ],
-              ['Schema', selectedSnapshotId ? 'Snapshot projection' : schemaLabel],
-              ['Profile', selected?.requirement ?? 'required'],
-              ['Snapshot', selectedSnapshotId ?? currentSnapshotId ?? 'Not prepared'],
-            ].map(([label, value]) => (
-              <div key={label}>
-                <span>{label}</span>
-                <p>
-                  <b>{value}</b>
-                  <Copy aria-hidden="true" />
-                </p>
-              </div>
-            ))}
-          </section>
-
-          {snapshotLoading ? <output>Loading selected review…</output> : null}
-          {snapshotError ? <p role="alert">{snapshotError}</p> : null}
-
-          {!selectedSnapshotId || activeSnapshot ? (
-            <section className={checksStyles.detailCard}>
-              <h3>Validation result</h3>
-              <div className={checksStyles.validationResult}>
-                <span
-                  className={
-                    selectedStatus === 'passed'
-                      ? checksStyles.validResult
-                      : checksStyles.invalidResult
-                  }
-                >
-                  <Check aria-hidden="true" />
-                  <b>Status:</b> {selectedStatus}
-                </span>
-                <span
-                  className={selectedReady ? checksStyles.validResult : checksStyles.invalidResult}
-                >
-                  {selectedReady ? <Check aria-hidden="true" /> : <X aria-hidden="true" />}
-                  <b>Ready:</b> {selectedReady ? 'Yes' : 'No'}
-                </span>
-                <p>
-                  {failedCount} failed · {pendingCount} pending · {passedCount} passed
-                </p>
-              </div>
-            </section>
-          ) : null}
-
-          {activeSnapshot?.schema_review ? (
-            <WorkspaceSchemaReviewPanel review={activeSnapshot.schema_review} historical />
-          ) : null}
-          {gaps.length > 0 ? (
-            <section className={checksStyles.detailCard}>
-              <h3>Gap ({gaps.length})</h3>
-              {gaps.map((gap) => (
-                <div className={checksStyles.gapCard} key={`${gap.code}:${gap.path}`}>
-                  <AlertTriangle aria-hidden="true" />
-                  <div>
-                    <strong>{gap.code}</strong>
-                    <code>{gap.path}</code>
-                    <p>{gap.message}</p>
-                  </div>
-                  <button onClick={onOpenStructure} type="button">
-                    <ExternalLink aria-hidden="true" />
-                    View in structure
-                  </button>
-                </div>
-              ))}
-            </section>
-          ) : null}
-
-          {!selectedSnapshotId || activeSnapshot ? (
-            <section className={checksStyles.detailCard}>
-              <div className={checksStyles.cardTitle}>
-                <h3>Check detail</h3>
-                <button onClick={onOpenCompose} type="button">
-                  <ExternalLink aria-hidden="true" />
-                  Open current Compose
-                </button>
-              </div>
-              <p className={checksStyles.suggestion}>
-                {gaps.length > 0
-                  ? gaps.map((gap) => gap.message).join(' ')
-                  : (selected?.detail ?? 'No check detail is available.')}
-              </p>
-            </section>
-          ) : null}
-
-          {gaps.length > 0 ? (
-            <section className={checksStyles.detailCard}>
-              <h3>Definition</h3>
-              {gaps.map((gap) => (
-                <div className={checksStyles.definition} key={`${gap.code}:${gap.path}`}>
-                  <code>{gap.path}</code>
-                  <b>·</b>
-                  <span>{gap.code}</span>
-                </div>
-              ))}
-            </section>
-          ) : null}
-        </main>
-      </div>
-    </section>
   );
 }
 
@@ -3302,7 +3154,6 @@ function WorkspaceReviewStructureView({
         </div>
         <WorkspaceReviewNodeInspector
           candidate={candidate}
-          checks={checks}
           controller={controller}
           onEditInCompose={onEditInCompose}
           selectedRow={selectedRow}
@@ -3613,14 +3464,12 @@ function WorkspaceReviewDiffMarker({ kind }: { kind: StructuredDiffKind }) {
 
 function WorkspaceReviewNodeInspector({
   candidate,
-  checks,
   controller,
   onEditInCompose,
   selectedRow,
   sourceLabel,
 }: {
   candidate: WorkspaceCandidate;
-  checks: ReviewCheckView[];
   controller: WorkspaceComposeReviewController;
   onEditInCompose: () => void;
   selectedRow: WorkspaceReviewStructureRow | null;
@@ -3632,8 +3481,6 @@ function WorkspaceReviewNodeInspector({
   return (
     <aside aria-label="Workspace selected change" className={diffStyles.inspector}>
       <WorkspaceReviewChangeReviewPanel
-        candidate={candidate}
-        checks={checks}
         controller={controller}
         onEditInCompose={onEditInCompose}
         row={selectedRow}
@@ -3644,15 +3491,11 @@ function WorkspaceReviewNodeInspector({
 }
 
 function WorkspaceReviewChangeReviewPanel({
-  candidate,
-  checks,
   controller,
   onEditInCompose,
   row,
   source,
 }: {
-  candidate: WorkspaceCandidate;
-  checks: ReviewCheckView[];
   controller: WorkspaceComposeReviewController;
   onEditInCompose: () => void;
   row: WorkspaceReviewStructureRow | null;
@@ -3672,117 +3515,54 @@ function WorkspaceReviewChangeReviewPanel({
   };
 
   return (
-    <>
-      <section className={diffStyles.card} aria-label="Selected change">
-        <header className={diffStyles.cardHeader}>
-          <h2>Selected change</h2>
-          <button className={diffStyles.copyButton} onClick={copyPath} type="button">
-            <Copy aria-hidden="true" className="size-3.5" /> Copy path
-          </button>
-        </header>
-        <div className={diffStyles.changeContent}>
-          <code className={diffStyles.path} title={row.path}>
-            {row.path.split('/').filter(Boolean).join('.')}
-          </code>
-          <span
-            className={cn(
-              diffStyles.badge,
-              workspaceReviewDiffBadgeClass(row.diff?.kind ?? 'modified')
-            )}
-          >
-            {workspaceReviewDiffSymbol(row.diff?.kind ?? 'modified')}{' '}
-            {workspaceReviewKindLabel(row)}
-          </span>
-          <div className={diffStyles.field}>
-            <span className={diffStyles.fieldLabel}>Before</span>
-            <div className={cn(diffStyles.fieldValue, diffStyles.before)}>{beforeValue}</div>
-          </div>
-          <div className={diffStyles.field}>
-            <span className={diffStyles.fieldLabel}>After</span>
-            <div className={cn(diffStyles.fieldValue, diffStyles.after)}>{resultValue}</div>
-          </div>
-          <p className={diffStyles.why}>
-            <strong>Why</strong>
-            {workspaceReviewEffectText(row)}
-          </p>
-          <span className={diffStyles.fieldLabel}>Source</span>
-          {source.href ? (
-            <NextLink className={diffStyles.source} href={source.href}>
-              <FileText aria-hidden="true" className="size-4 shrink-0 text-[var(--source)]" />
-              <span>{source.label}</span>
-            </NextLink>
-          ) : (
-            <div className={diffStyles.source}>
-              <FileText aria-hidden="true" className="size-4 shrink-0 text-[var(--source)]" />
-              <span>{source.label}</span>
-            </div>
+    <section className={diffStyles.card} aria-label="Selected change">
+      <header className={diffStyles.cardHeader}>
+        <h2>Selected change</h2>
+        <button className={diffStyles.copyButton} onClick={copyPath} type="button">
+          <Copy aria-hidden="true" className="size-3.5" /> Copy path
+        </button>
+      </header>
+      <div className={diffStyles.changeContent}>
+        <code className={diffStyles.path} title={row.path}>
+          {row.path.split('/').filter(Boolean).join('.')}
+        </code>
+        <span
+          className={cn(
+            diffStyles.badge,
+            workspaceReviewDiffBadgeClass(row.diff?.kind ?? 'modified')
           )}
-          <button className={diffStyles.revise} onClick={revise} type="button">
-            <Sparkles aria-hidden="true" className="size-4" /> Ask AI to revise
-          </button>
+        >
+          {workspaceReviewDiffSymbol(row.diff?.kind ?? 'modified')} {workspaceReviewKindLabel(row)}
+        </span>
+        <div className={diffStyles.field}>
+          <span className={diffStyles.fieldLabel}>Before</span>
+          <div className={cn(diffStyles.fieldValue, diffStyles.before)}>{beforeValue}</div>
         </div>
-      </section>
-      <section
-        className={diffStyles.card}
-        aria-label={`Checks for draft r${candidate.revision ?? 1}`}
-      >
-        <header className={diffStyles.cardHeader}>
-          <h2>Checks for draft r{candidate.revision ?? 1}</h2>
-        </header>
-        <div className={diffStyles.checkList}>
-          {checks.map((check) => (
-            <div className={diffStyles.checkRow} key={check.label}>
-              <span
-                className={diffStyles.checkIcon}
-                style={{
-                  background:
-                    check.status === 'passed' ? 'var(--status-success)' : 'var(--surface-app)',
-                  color: check.status === 'passed' ? 'var(--on-status)' : 'var(--text-tertiary)',
-                }}
-              >
-                {check.status === 'passed' ? (
-                  <Check aria-hidden="true" className="size-3" />
-                ) : (
-                  <CircleDot aria-hidden="true" className="size-3" />
-                )}
-              </span>
-              <span className={diffStyles.checkCopy}>
-                <strong>{check.label}</strong>
-                <span title={check.detail}>{check.detail}</span>
-              </span>
-              <span
-                className={diffStyles.checkStatus}
-                style={{
-                  background:
-                    check.status === 'passed'
-                      ? 'var(--status-success-muted)'
-                      : 'var(--surface-app)',
-                  color:
-                    check.status === 'passed' ? 'var(--status-success)' : 'var(--text-secondary)',
-                }}
-              >
-                {check.status === 'passed'
-                  ? 'Passed'
-                  : check.status === 'failed'
-                    ? 'Failed'
-                    : check.status === 'pending'
-                      ? 'Pending'
-                      : 'Not run'}
-              </span>
-            </div>
-          ))}
-          {checks.some((check) => check.status === 'pending') ? (
-            <button
-              className={diffStyles.runChecks}
-              onClick={() => void controller.prepareReview()}
-              type="button"
-            >
-              Run checks
-            </button>
-          ) : null}
+        <div className={diffStyles.field}>
+          <span className={diffStyles.fieldLabel}>After</span>
+          <div className={cn(diffStyles.fieldValue, diffStyles.after)}>{resultValue}</div>
         </div>
-      </section>
-    </>
+        <p className={diffStyles.why}>
+          <strong>Why</strong>
+          {workspaceReviewEffectText(row)}
+        </p>
+        <span className={diffStyles.fieldLabel}>Source</span>
+        {source.href ? (
+          <NextLink className={diffStyles.source} href={source.href}>
+            <FileText aria-hidden="true" className="size-4 shrink-0 text-[var(--source)]" />
+            <span>{source.label}</span>
+          </NextLink>
+        ) : (
+          <div className={diffStyles.source}>
+            <FileText aria-hidden="true" className="size-4 shrink-0 text-[var(--source)]" />
+            <span>{source.label}</span>
+          </div>
+        )}
+        <button className={diffStyles.revise} onClick={revise} type="button">
+          <Sparkles aria-hidden="true" className="size-4" /> Ask AI to revise
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -4552,43 +4332,6 @@ function getReviewChecks(controller: WorkspaceComposeReviewController): ReviewCh
         : 'Protocol object integrity will be checked when the review snapshot is prepared.',
   });
   return checks;
-}
-
-function schemaValidationGaps(
-  validation: { runs?: ReadonlyArray<{ predicate: object }> } | null | undefined
-): Array<{ code: string; message: string; path: string }> {
-  return (validation?.runs ?? []).flatMap((run) =>
-    'gaps' in run.predicate && Array.isArray(run.predicate.gaps)
-      ? (run.predicate.gaps as Array<{ code: string; message: string; path: string }>)
-      : []
-  );
-}
-
-function checksFromSnapshot(
-  snapshot: WorkspaceTransitionReviewSnapshotEnvelope
-): ReviewCheckView[] {
-  const checks = snapshot.snapshot.transition.checks;
-  return [
-    statementCheck('Deterministic replay', checks.replay, 'required', 'Replay not observed.'),
-    statementCheck('Schema validation', checks.validation, 'required', 'Validation not observed.'),
-    {
-      label: 'Object integrity',
-      requirement: 'system',
-      status: checks.objectIntegrity === 'verified' ? 'passed' : 'pending',
-      detail:
-        checks.objectIntegrity === 'verified'
-          ? 'Protocol object integrity verified.'
-          : 'Object integrity was not verified in this snapshot.',
-    },
-  ];
-}
-
-function snapshotCheckStatus(
-  snapshot: WorkspaceTransitionReviewSnapshotEnvelope
-): ReviewCheckStatus {
-  const checks = checksFromSnapshot(snapshot);
-  if (checks.some((check) => check.status === 'failed')) return 'failed';
-  return checks.every((check) => check.status === 'passed') ? 'passed' : 'pending';
 }
 
 function statementCheck(

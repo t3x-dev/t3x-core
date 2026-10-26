@@ -8,9 +8,12 @@ import {
 } from '@/infrastructure/projects';
 import { ProjectPersistenceError } from './errors';
 
-export async function deleteProject(id: string): Promise<DeleteProjectResponse> {
+export async function deleteProject(
+  id: string,
+  options?: { permanent?: boolean; onlyIfDeleted?: boolean }
+): Promise<DeleteProjectResponse> {
   try {
-    return await deleteProjectInfra(id);
+    return await deleteProjectInfra(id, options);
   } catch (cause) {
     throw new ProjectPersistenceError(
       cause instanceof Error ? cause.message : 'deleteProject failed',

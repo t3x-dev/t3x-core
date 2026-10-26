@@ -18,6 +18,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
+  ArrowLeft,
   Bot,
   CheckCircle2,
   Circle,
@@ -26,7 +27,8 @@ import {
   RotateCcw,
   Sparkles,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { AutopilotSettings } from '@/components/autopilot/AutopilotSettings';
 import { ProjectCollaborationPanel } from '@/components/project/ProjectCollaborationPanel';
@@ -40,6 +42,7 @@ import { ProjectIntegritySettings } from '@/components/project/settings/ProjectI
 import { ProjectSettingsNav } from '@/components/project/settings/ProjectSettingsNav';
 import { SettingsSection } from '@/components/project/settings/SettingsSection';
 import { ModelSelector } from '@/components/shared/ModelSelector';
+import { getDeletedRepositoriesPath } from '@/domain/project/repoPath';
 import { useRepositoryRouteParams as useParams } from '@/hooks/projects/repositoryRouteContext';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { projectDescription, useProjectSettings } from '@/hooks/projects/useProjectSettings';
@@ -49,8 +52,10 @@ import {
   fetchProviderRoles,
   fetchProviders,
 } from '@/queries/providers';
+import palette from '@/styles/management-palette.module.css';
 import type { ProviderInfo, RoleAssignment } from '@/types/api';
 import { cn } from '@/utils/cn';
+import { safeInternalReturnTo } from '@/utils/navigationReturn';
 
 type RoleGroup = 'generation' | 'embedding' | 'extraction' | 'merge';
 
@@ -100,6 +105,7 @@ function SortableProviderCard({
       <div className="flex items-center gap-3">
         {isDraggable ? (
           <button
+            aria-label={`Reorder ${provider.name}`}
             type="button"
             className="cursor-grab active:cursor-grabbing text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] touch-none"
             {...attributes}
@@ -234,6 +240,8 @@ export default function ProjectSettingsPage() {
 function ProjectSettingsPageContent() {
   const { projectId } = useParams<{ projectId: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnHref = safeInternalReturnTo(searchParams.get('returnTo'), '');
   const settings = useProjectSettings(projectId);
   const { saveProjectProviderConfig } = useProviderCommands();
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
@@ -271,7 +279,7 @@ function ProjectSettingsPageContent() {
 
   const handleDelete = async () => {
     await settings.remove();
-    router.push('/');
+    router.push(getDeletedRepositoriesPath(settings.project?.namespace));
   };
 
   const loadData = useCallback(async () => {
@@ -398,18 +406,36 @@ function ProjectSettingsPageContent() {
   const project = settings.project;
 
   return (
-    <div className={generalStyles.layout}>
+    <div className={`${palette.scope} ${generalStyles.layout}`}>
       <aside className={generalStyles.sidebar}>
-        <div className="sticky top-8">
-          <ProjectSettingsNav />
-        </div>
+        <ProjectSettingsNav />
       </aside>
 
-      <div className="min-w-0 space-y-6">
+      <div className={generalStyles.content}>
+        <header className={generalStyles.pageHeading}>
+          {returnHref ? (
+            <Link
+              className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)] hover:underline"
+              href={returnHref}
+            >
+              <ArrowLeft aria-hidden="true" className="size-3.5" />
+              Back to previous page
+            </Link>
+          ) : null}
+          {project ? (
+            <span className={generalStyles.scope}>
+              {project.namespace ? `${project.namespace} / ` : ''}
+              {project.name}
+            </span>
+          ) : null}
+          <h1>Repository settings</h1>
+          <p>Manage details, access, and defaults for this repository.</p>
+        </header>
         {settings.loading ? (
-          <div className="flex h-40 items-center justify-center rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-elevated)]">
-            <Loader2 className="size-5 animate-spin text-[var(--text-tertiary)]" />
-          </div>
+          <output className="flex min-h-32 items-center justify-center gap-2 text-sm text-[var(--text-secondary)]">
+            <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+            Loading repository settings…
+          </output>
         ) : !project ? (
           <p
             className="rounded-xl border border-[var(--status-error)]/25 bg-[var(--surface-elevated)] p-5 text-[13px] text-[var(--status-error)]"
@@ -479,6 +505,7 @@ function ProjectSettingsPageContent() {
                 </output>
               ) : projectModel ? (
                 <ModelSelector
+                  contentClassName={palette.scope}
                   initialModel={projectModel.model}
                   initialProvider={projectModel.provider}
                   key={modelVersion}
