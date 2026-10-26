@@ -2308,6 +2308,82 @@
   background: var(--surface-panel);
   box-shadow: none;
 }
+.chatPanel,
+.generatedChangesPanel,
+.changeDetailsPanel {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+.chatPanel {
+  height: 100%;
+  overflow: hidden;
+  background: var(--surface-panel);
+}
+.generatedChangesPanel {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.workspaceToolTabs {
+  position: sticky;
+  z-index: 3;
+  top: 0;
+  display: grid;
+  flex: none;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  border-bottom: 1px solid var(--stroke-divider);
+  padding: 8px;
+  background: color-mix(in srgb, var(--surface-panel) 94%, transparent);
+  backdrop-filter: blur(10px);
+}
+.workspaceToolTabs button {
+  display: flex;
+  min-width: 0;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border-radius: 6px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+}
+.workspaceToolTabs button:hover {
+  background: var(--surface-app);
+  color: var(--text-primary);
+}
+.workspaceToolTabs button[aria-pressed="true"] {
+  background: var(--surface-app);
+  box-shadow: inset 0 0 0 1px var(--stroke-default);
+  color: var(--text-primary);
+}
+.workspaceToolTabs svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+.generatedChangesPanel > .currentDraft {
+  flex: 1;
+}
+.changeDetailsPanel {
+  overflow: hidden;
+  border-top: 1px solid var(--stroke-divider);
+  background: var(--surface-panel);
+}
+.composeBoard .discussionSidebar[data-panel="split"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows:
+    minmax(160px, var(--generated-panel-height, 260px)) 12px
+    minmax(240px, 1fr);
+  overflow: hidden;
+}
+.composeBoard .discussionSidebar[data-panel="changes"] .generatedChangesPanel {
+  width: 100%;
+}
 .composeBoard .discussionHeader {
   min-height: 60px;
   padding: 14px 20px;
@@ -2321,6 +2397,40 @@
   min-height: 48px;
   padding-block: 12px 0;
   border-bottom: 0;
+}
+.composeBoard .changeDetailsPanel .discussionHeader {
+  min-height: 48px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--stroke-divider);
+}
+.detailsResize {
+  position: relative;
+  z-index: 4;
+  height: 12px;
+  cursor: row-resize;
+  touch-action: none;
+  outline: none;
+}
+.detailsResize::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 16px;
+  left: 16px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--stroke-divider);
+  transition: background 120ms ease;
+}
+.detailsResize:hover::after,
+.detailsResize:focus-visible::after,
+.composeBoard[data-details-resizing] .detailsResize::after {
+  background: var(--accent-commit);
+}
+.composeBoard[data-details-resizing],
+.composeBoard[data-details-resizing] * {
+  cursor: row-resize;
+  user-select: none;
 }
 .composeBoard .discussionComposer {
   margin: 0;
@@ -2463,6 +2573,12 @@
     margin: 8px 16px 16px;
     min-height: 340px;
     height: auto;
+  }
+  .composeBoard .discussionSidebar[data-panel="split"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .composeBoard .changeDetailsPanel {
+    min-height: 340px;
   }
   .composeBoard .proposedHeading {
     flex-basis: 100%;
@@ -2663,6 +2779,139 @@
 .currentDraftSidebar > .currentDraft {
   max-height: 55%;
   flex: 0 1 auto;
+}
+.conversationSidebar {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--surface-panel);
+}
+.conversationSidebar > header {
+  display: flex;
+  min-height: 44px;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
+}
+.conversationSidebar > header > div,
+.conversationSidebar > header > span {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+.conversationSidebar > header > div {
+  gap: 7px;
+}
+.conversationSidebar > header h2 {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conversationSidebar > header button,
+.conversationFolder > header > button:not(:first-child),
+.conversationRow > button:last-child {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  place-items: center;
+  border-radius: 5px;
+  color: var(--text-tertiary);
+}
+.conversationSidebar > header button:hover,
+.conversationFolder > header > button:not(:first-child):hover,
+.conversationRow > button:last-child:hover {
+  background: var(--surface-app);
+  color: var(--text-primary);
+}
+.conversationSidebar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.conversationSidebar svg {
+  width: 14px;
+  height: 14px;
+}
+.conversationList {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 2px 6px 12px;
+  scrollbar-width: thin;
+}
+.conversationList > p {
+  margin: 8px 7px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.conversationList > p[role="alert"] {
+  color: var(--status-danger);
+}
+.conversationFolder {
+  margin-bottom: 5px;
+}
+.conversationFolder > header,
+.conversationRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+.conversationFolder > header > button:first-child,
+.conversationRow > button:first-child {
+  display: flex;
+  min-width: 0;
+  height: 30px;
+  flex: 1;
+  align-items: center;
+  gap: 7px;
+  border-radius: 6px;
+  padding: 0 7px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-align: left;
+}
+.conversationFolder > header > button:first-child {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.conversationFolder > header > button:first-child:hover,
+.conversationRow > button:first-child:hover {
+  background: var(--surface-app);
+  color: var(--text-primary);
+}
+.conversationFolder > header > button:first-child span,
+.conversationRow > button:first-child span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conversationFolder .conversationRow {
+  padding-left: 14px;
+}
+.conversationRow > button:first-child[aria-current="page"] {
+  background: color-mix(in srgb, var(--accent-commit) 10%, var(--surface-panel));
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.conversationRow > button:last-child {
+  opacity: 0;
+}
+.conversationRow:hover > button:last-child,
+.conversationRow:focus-within > button:last-child {
+  opacity: 1;
 }
 .currentDraft {
   display: flex;
