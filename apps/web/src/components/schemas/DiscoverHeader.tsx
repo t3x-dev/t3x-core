@@ -231,7 +231,7 @@ export function DiscoverHeader({
                     key={tab.id}
                     href={tabHref(tab.id)}
                     scroll={false}
-                    className={`${styles.tab}${tab.id === 'settings' ? ` ${styles.settingsTab}` : ''}`}
+                    className={styles.tab}
                     aria-label={tab.label}
                     aria-current={selected ? 'page' : undefined}
                   >

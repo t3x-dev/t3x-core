@@ -20,8 +20,8 @@ export interface ProjectTabDefinition {
 
 export const PROJECT_TABS: ProjectTabDefinition[] = [
   { id: 'state', label: 'State' },
-  { id: 'schemas', label: 'Schemas' },
-  { id: 'workspaces', label: 'Workspaces' },
+  { id: 'schemas', label: 'Schema' },
+  { id: 'workspaces', label: 'Workspace' },
   { id: 'checks', label: 'Run' },
   { id: 'reviews', label: 'Pull requests', segment: 'pull-requests' },
   { id: 'community', label: 'Community' },

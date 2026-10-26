@@ -23,18 +23,18 @@ describe('DiscoverHeader navigation', () => {
     const tabs = within(screen.getByRole('navigation', { name: 'Project views' }));
     expect(tabs.getAllByRole('link').map((link) => link.getAttribute('aria-label'))).toEqual([
       'State',
-      'Schemas',
-      'Workspaces',
+      'Schema',
+      'Workspace',
       'Run',
       'Pull requests',
       'Community',
       'Settings',
     ]);
     expect(tabs.queryByRole('link', { name: 'Browse' })).not.toBeInTheDocument();
-    for (const label of ['Schemas', 'Workspaces']) {
+    for (const label of ['Schema', 'Workspace']) {
       const link = tabs.getByRole('link', { name: label });
       const target = new URL(link.getAttribute('href')!, 'http://localhost');
-      expect(target.pathname).toBe(`/orbit/release/${label.toLowerCase()}`);
+      expect(target.pathname).toBe(`/orbit/release/${label.toLowerCase()}s`);
       expect(target.searchParams.get('branch')).toBe('feature/release');
       expect(target.searchParams.get('workspace')).toBe('workspace_branch:feature/release');
     }
@@ -46,7 +46,7 @@ describe('DiscoverHeader navigation', () => {
     expect(pullRequests.searchParams.get('branch')).toBe('feature/release');
     expect(pullRequests.searchParams.has('workspace')).toBe(false);
     expect(tabs.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', settingsHref);
-    expect(tabs.getByRole('link', { name: 'Workspaces' })).toHaveAttribute('aria-current', 'page');
+    expect(tabs.getByRole('link', { name: 'Workspace' })).toHaveAttribute('aria-current', 'page');
     const globalNavigation = within(screen.getByRole('navigation', { name: 'Global' }));
     expect(globalNavigation.getByRole('link', { name: 'Discover' })).toHaveAttribute(
       'href',

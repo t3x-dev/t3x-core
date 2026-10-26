@@ -92,64 +92,6 @@
   min-height: 44px;
   padding-block: 8px;
 }
-.seg {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--stroke-default);
-  border-radius: var(--radius-md);
-  background: var(--surface-app);
-}
-.seg button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  padding: 0 10px;
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-.seg button[aria-selected="true"] {
-  background: var(--surface-card);
-  color: var(--text-primary);
-  font-weight: 600;
-}
-.seg svg {
-  width: 14px;
-  height: 14px;
-}
-.seg button:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-.panelControls {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  padding: 3px;
-  gap: 2px;
-  background: var(--surface-canvas);
-  border: 1px solid var(--stroke-divider);
-  border-radius: var(--radius-md);
-}
-.panelControls button {
-  min-height: 28px;
-  padding: 4px 10px;
-  font-size: 13px;
-  color: var(--text-secondary);
-  border-radius: var(--radius-sm);
-}
-.panelControls button[aria-pressed="true"] {
-  background: var(--surface-card);
-  color: var(--text-primary);
-  box-shadow: var(--shadow-xs);
-}
-.panelControls {
-  margin-left: auto;
-}
 .draftStatus,
 .bindingStatus {
   color: var(--text-secondary);
@@ -167,13 +109,6 @@
   position: relative;
   gap: 16px;
 }
-.body[data-panel="open"] {
-  grid-template-columns: minmax(0, 1fr) 300px;
-}
-.body[data-view="visual"] {
-  flex-basis: 640px;
-  min-height: 640px;
-}
 .canvas {
   display: flex;
   min-height: 0;
@@ -189,109 +124,15 @@
   flex: 1;
   overflow: hidden;
 }
-.insp {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  min-width: 0;
-}
 .app [hidden] {
   display: none;
 }
-.panelHeading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 4px 0 12px;
-  font-size: 13px;
-  font-weight: 600;
-}
-.panelHeading button {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-sm);
-}
-.panelHeading button:hover,
-.navLink:hover {
-  background: var(--surface-canvas);
-}
-.inspectionToolbar button:focus-visible,
-.panelHeading button:focus-visible,
-.navLink:focus-visible,
-.disclosure summary:focus-visible,
-.ws:focus-within {
-  outline: 2px solid var(--accent-commit);
-  outline-offset: 2px;
-}
-.seg button:disabled,
-.inspectionToolbar button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.inspectorScroll {
-  min-height: 0;
-  overflow: auto;
-  flex: 1;
-}
-.sec {
-  padding: 4px 0 16px;
-}
-.sec-h {
-  display: flex;
-  align-items: center;
-  margin-bottom: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-.grow {
-  flex: 1;
-}
-.passed {
-  color: var(--status-success);
-}
-.warning {
-  color: var(--status-warning);
-}
-.explanation,
 .feedback {
   color: var(--text-secondary);
   line-height: 1.6;
 }
 .feedback {
   padding-block: 8px;
-}
-.issue {
-  margin-top: 8px;
-  padding: 8px;
-  background: var(--surface-canvas);
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-}
-.details {
-  flex-shrink: 0;
-  margin-top: 12px;
-  border-block: 1px solid var(--stroke-divider);
-}
-.disclosure + .disclosure {
-  border-top: 1px solid var(--stroke-divider);
-}
-.disclosure summary {
-  padding: 12px 4px;
-  cursor: pointer;
-  font-weight: 600;
-}
-.disclosure summary > span {
-  margin-left: 12px;
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--text-secondary);
-}
-.disclosureContent {
-  padding: 0 4px 12px;
 }
 .sourceToolbar {
   margin-bottom: 8px;
@@ -378,22 +219,6 @@
   font-size: 12px;
   line-height: 1.7;
 }
-@media (max-width: 900px) {
-  .body[data-panel="open"] {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .body > .insp {
-    position: absolute;
-    z-index: 5;
-    inset: 0 0 0 auto;
-    width: min(340px, 100%);
-    padding: 12px;
-    background: var(--surface-card);
-    border: 1px solid var(--stroke-divider);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-md);
-  }
-}
 @media (max-width: 600px) {
   .app {
     padding-inline: 16px;
@@ -402,7 +227,13 @@
     justify-content: flex-start;
     margin-left: 0;
   }
-  .panelControls {
-    margin-left: 0;
-  }
+}
+
+.navLink:hover {
+  background: var(--surface-canvas);
+}
+.navLink:focus-visible,
+.ws:focus-within {
+  outline: 2px solid var(--accent-commit);
+  outline-offset: 2px;
 }

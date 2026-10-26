@@ -48,14 +48,16 @@ export function SchemaVisualSource({
   disabled,
   selected,
   onSelect,
+  defaultOpen = false,
 }: {
   projectId: string;
   candidate: StudioCandidate;
   disabled: boolean;
   selected?: SchemaSourceItem;
   onSelect: (item: SchemaSourceItem) => void;
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const preview = useStudioPreview(projectId, { candidateIds: open ? [candidate.id] : [] });
   return (
     <details className={styles.sourceGroup} open={open}>

@@ -5,6 +5,26 @@ import { describe, expect, it, vi } from 'vitest';
 import { SchemaDataEditor } from '@/components/schemas/SchemaDataEditor';
 import { schemaSourceKey } from '@/domain/schemas/schemaProvenance';
 
+vi.mock('@/hooks/schemas/useStudioPreview', () => ({
+  useStudioPreview: () => ({
+    data: {
+      schema: {
+        nodes: {
+          person: {
+            slots: { profile: { type: 'object', properties: { name: { type: 'string' } } } },
+            requiredSlots: ['profile'],
+            children: { address: { slots: { city: { type: 'string' } } } },
+          },
+        },
+      },
+      schemaHash: 'sha256:source',
+      report: { valid: true },
+      adoption: { allowed: true },
+    },
+    refresh: vi.fn(),
+  }),
+}));
+
 const definition = {
   yschema: '0.1',
   name: 'checklist',
@@ -25,6 +45,86 @@ const callbacks = () => ({
 });
 
 describe('Schema data editor', () => {
+  it.each([
+    ['node person', 'root', 'nodes.person.children.address.slots.city'],
+    ['object person/profile', '["nodes","project"]', 'nodes.project.slots.profile.properties.name'],
+  ])('copies a source %s from the visible source palette and preserves its origin', async (item, destination, path) => {
+    const handlers = callbacks();
+    render(
+      <SchemaDataEditor
+        projectId="p"
+        initialDefinition={{ nodes: { project: { slots: {} } } }}
+        revisionKey="source-copy"
+        sources={[
+          {
+            id: 'people',
+            projectId: 'p',
+            studioId: 'main',
+            createdAt: '',
+            title: 'People',
+            available: true,
+            source: null,
+            description: null,
+            kind: 'schema',
+            license: null,
+            reason: null,
+          },
+        ]}
+        {...handlers}
+      />
+    );
+    expect(screen.getByRole('complementary', { name: 'Available Schema sources' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: `Select source ${item}` }));
+    fireEvent.change(screen.getByLabelText('Destination node'), { target: { value: destination } });
+    fireEvent.click(screen.getByRole('button', { name: 'Import here' }));
+    expect(handlers.onPreview.mock.lastCall?.[0]).toHaveProperty(path, { type: 'string' });
+    const mappings = handlers.onPreview.mock.lastCall?.[1];
+    expect(mappings).toHaveLength(item.startsWith('node') ? 4 : 1);
+    for (const mapping of mappings) {
+      expect(mapping.source).toEqual({ candidateId: 'people', schemaHash: 'sha256:source' });
+    }
+    expect(screen.getByRole('button', { name: `Select source ${item}` })).toBeVisible();
+    if (item.startsWith('object'))
+      expect(screen.getByLabelText('Required project/profile')).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Save candidate' }));
+    await waitFor(() => expect(handlers.onSave).toHaveBeenCalledOnce());
+    expect(handlers.onSave.mock.lastCall?.[2]).toEqual(handlers.onPreview.mock.lastCall?.[1]);
+  });
+
+  it('moves a required field in Fields and can undo without losing its constraints', () => {
+    const handlers = callbacks();
+    render(<SchemaDataEditor initialDefinition={definition} revisionKey="move" {...handlers} />);
+    fireEvent.focus(screen.getByLabelText('Name checklist/title'));
+    fireEvent.click(screen.getByRole('button', { name: 'Move to…' }));
+    fireEvent.change(screen.getByLabelText('Destination node'), {
+      target: { value: '["nodes","checklist","children","items"]' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Move here' }));
+    expect(screen.getByLabelText('Required checklist/items/title')).toBeChecked();
+    expect(handlers.onPreview.mock.lastCall?.[0]).toHaveProperty(
+      'nodes.checklist.children.items.slots.title',
+      { type: 'string', maxLength: 100 }
+    );
+    expect(screen.queryByLabelText('Name checklist/title')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(screen.getByLabelText('Name checklist/title')).toBeVisible();
+    expect(screen.getByLabelText('Required checklist/title')).toBeChecked();
+  });
+
+  it('keeps node operations in the row menu and excludes invalid move destinations', () => {
+    render(<SchemaDataEditor initialDefinition={definition} revisionKey="menu" {...callbacks()} />);
+    expect(screen.queryByRole('menuitem', { name: 'Add field' })).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Actions for checklist' }), {
+      key: 'Enter',
+    });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add field', exact: true }));
+    expect(screen.getByLabelText('Name checklist/new_field')).toBeVisible();
+    fireEvent.focus(screen.getByLabelText('Name checklist'));
+    fireEvent.click(screen.getByRole('button', { name: 'Move to…' }));
+    expect(screen.queryByRole('option', { name: 'checklist' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'checklist/items' })).not.toBeInTheDocument();
+  });
+
   it('shows a failed preview and retry instead of an endless loading placeholder', () => {
     const onRetry = vi.fn();
     render(

@@ -2,6 +2,7 @@
 
 import type { SchemaPreparationTarget, StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
 import { dump } from 'js-yaml';
+import { ChevronDown } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
 import { getProjectIdWorkspacePath } from '@/domain/project/repoPath';
 import { schemaFieldRows } from '@/domain/schemas/schemaFieldEditing';
@@ -42,8 +49,9 @@ import { SchemaContentPreparationDialog } from './SchemaContentPreparationDialog
 import { SchemaDataEditor } from './SchemaDataEditor';
 import { SchemaDefinitionWorkbench } from './SchemaDefinitionWorkbench';
 import { SchemaSourceCompositionDialog } from './SchemaSourceCompositionDialog';
+import { SchemaSourceManager } from './SchemaSourceManager';
 import { SchemaStudioSurface } from './SchemaStudioSurface';
-import { StudioChanges, StudioImpactPreview } from './StudioDefinitionPreview';
+import { StudioChanges, StudioChecks, StudioImpactPreview } from './StudioDefinitionPreview';
 import { StudioPublishDialog } from './StudioPublishDialog';
 import type { SchemaEditorNavigation } from './useSchemaNavigationGuard';
 
@@ -205,6 +213,7 @@ export function SchemaStudioExperience({
   const query = params?.toString() ?? '';
   const legacyView = params?.get('schemaView') === 'active';
   const [definitionOpen, setDefinitionOpen] = useState(false);
+  const [sourceManagerOpen, setSourceManagerOpen] = useState(false);
   const [compositionRequest, setCompositionRequest] = useState<{
     ids: string[];
     revision: number;
@@ -686,7 +695,13 @@ export function SchemaStudioExperience({
   }
 
   function openReview() {
-    if (target && data?.workspace?.id === target.id) setReview(data);
+    if (!data) return;
+    const matchesWorkspace = target && data.workspace?.id === target.id;
+    setReview({
+      ...data,
+      workspace: matchesWorkspace ? data.workspace : null,
+      impact: matchesWorkspace ? data.impact : null,
+    });
   }
 
   function downloadDefinition() {
@@ -755,7 +770,8 @@ export function SchemaStudioExperience({
   }
 
   const currentBinding = persistedTarget?.schemaBindings?.[0];
-  const canReview = !!target && data?.workspace?.id === target.id && !applying && !dataDirty;
+  const canReview =
+    !!data && !applying && !dataDirty && !editorInvalid && !preview.loading && !definitionOpen;
   const browseHref = schemaBrowseHref(
     projectId,
     workspaceId,
@@ -770,6 +786,50 @@ export function SchemaStudioExperience({
   const workspaceLink = target
     ? `${getProjectIdWorkspacePath(projectId, { branch: target.targetBranch })}&workspace=${encodeURIComponent(target.id)}`
     : getProjectIdWorkspacePath(projectId);
+
+  const sourceManagement = (
+    <SchemaSourceManager
+      open={sourceManagerOpen}
+      onOpenChange={setSourceManagerOpen}
+      browseHref={browseHref}
+      modules={visibleSources.flatMap((source) => source.modules)}
+      composition={composition}
+      onChoose={(module) => {
+        const candidate = visibleSources
+          .flatMap((source) => source.modules)
+          .find((item) => item.id === module.id);
+        if (candidate) choose(candidate);
+      }}
+      onRemove={(id) => {
+        setSelection((current) => current.filter((value) => value !== id));
+        void candidates.remove(id).catch((cause) => setError(cause.message));
+      }}
+      locked={
+        dataDirty || definitionOpen ? new Set(candidates.items.map((item) => item.id)) : locked
+      }
+      pending={applying || preview.loading || candidates.pending}
+      contextLocked={dataDirty || definitionOpen}
+      loading={candidates.loading}
+      error={candidates.error || undefined}
+      data={data}
+      onAdd={persistedTarget ? () => composeSources() : undefined}
+      onClear={
+        dataDirty
+          ? undefined
+          : () => {
+              recoveredSelection.current = recoveryKey;
+              setRecoveredEditIdentity(editIdentity);
+              setUsingSavedCandidate(false);
+              setSourceMappings([]);
+              setSavedCandidateRef(undefined);
+              setEditorBase(undefined);
+              setSchemaDefinition(undefined);
+              setLocalContribution({});
+              setSelection([]);
+            }
+      }
+    />
+  );
 
   return (
     <section
@@ -797,16 +857,16 @@ export function SchemaStudioExperience({
         navigation={navigation}
         contextLocked={dataDirty || definitionOpen}
         editorInvalid={editorInvalid}
-        dataEditor={(view) => (
+        dataEditor={() => (
           <SchemaDataEditor
             navigationRef={navigationRef}
-            view={view}
             onValidationChange={setEditorInvalid}
             provenance={data}
             sourceIdentities={sourceIdentities}
             wholeSchemaSource={wholeSchemaSource}
             projectId={projectId}
             sources={candidates.items}
+            sourceManagement={sourceManagement}
             baseDefinition={
               editorBase?.schema ??
               activeCandidate?.baseDefinition ??
@@ -877,7 +937,6 @@ export function SchemaStudioExperience({
             }}
           />
         )}
-        browseHref={browseHref}
         sourceHref={sourceHref}
         workspaceHref={target ? workspaceLink : undefined}
         branch={target?.targetBranch}
@@ -895,33 +954,12 @@ export function SchemaStudioExperience({
         workspaceId={workspaceId}
         workspaces={draftWorkspaces}
         onWorkspace={changeWorkspace}
-        modules={visibleSources.flatMap((source) => source.modules)}
-        composition={composition}
-        onChoose={(module) => {
-          const candidate = visibleSources
-            .flatMap((source) => source.modules)
-            .find((item) => item.id === module.id);
-          if (candidate) choose(candidate);
-        }}
-        onRemove={(id) => {
-          setSelection((current) => current.filter((value) => value !== id));
-          void candidates.remove(id).catch((cause) => setError(cause.message));
-        }}
-        locked={
-          dataDirty || definitionOpen ? new Set(candidates.items.map((item) => item.id)) : locked
-        }
         pending={applying || preview.loading || candidates.pending}
         loading={candidates.loading}
         error={
           candidates.error || schemaEdit.error || preview.error || workspaces.error || undefined
         }
         data={data}
-        onCheck={() => {
-          preview.refresh();
-          pendingSchema.refresh();
-          void workspaces.refresh();
-        }}
-        onAdd={() => composeSources()}
         onEditDefinition={
           !dataDirty && persistedTarget && selection.length
             ? () => {
@@ -948,21 +986,6 @@ export function SchemaStudioExperience({
         onReview={openReview}
         canReview={canReview}
         onDownload={downloadDefinition}
-        onClear={
-          dataDirty
-            ? undefined
-            : () => {
-                recoveredSelection.current = recoveryKey;
-                setRecoveredEditIdentity(editIdentity);
-                setUsingSavedCandidate(false);
-                setSourceMappings([]);
-                setSavedCandidateRef(undefined);
-                setEditorBase(undefined);
-                setSchemaDefinition(undefined);
-                setLocalContribution({});
-                setSelection([]);
-              }
-        }
       />
       {compositionRequest ? (
         <SchemaSourceCompositionDialog
@@ -1028,6 +1051,7 @@ export function SchemaStudioExperience({
         />
       ) : null}
       <SchemaDefinitionWorkbench
+        initialMode="yaml"
         baseSchema={definitionOpen ? editorBase?.schema : basePreview.data?.schema}
         initialContribution={localContribution}
         initialDefinition={schemaDefinition ?? (definitionOpen ? editorBase?.initial : undefined)}
@@ -1064,7 +1088,9 @@ export function SchemaStudioExperience({
               {review?.workspace?.canBind ? 'Apply exact definition' : 'Review Schema changes'}
             </DialogTitle>
             <DialogDescription>
-              {review?.workspace?.canBind ? (
+              {!review?.workspace ? (
+                'Review the current definition checks. Select a Workspace to review content impact and apply this definition.'
+              ) : review.workspace.canBind ? (
                 `${target?.title} · revision ${review.workspace.revision}. Bind this exact Schema to the empty Workspace. Fill required content later; Review and Commit still validate it.`
               ) : (
                 <>
@@ -1086,16 +1112,19 @@ export function SchemaStudioExperience({
                     </p>
                   ))}
                 </div>
-                <div className="grid min-w-0 gap-6 sm:grid-cols-2">
-                  <section aria-label="Schema definition changes" className="min-w-0">
-                    <h3 className="text-sm font-medium">Definition changes</h3>
-                    <StudioChanges changes={review.workspace?.changes ?? []} />
-                  </section>
-                  <div className="min-w-0">
-                    <h3 className="mb-3 text-sm font-medium">Content impact</h3>
-                    <StudioImpactPreview impact={review.impact ?? null} />
+                <StudioChecks preview={review} />
+                {review.workspace ? (
+                  <div className="grid min-w-0 gap-6 sm:grid-cols-2">
+                    <section aria-label="Schema definition changes" className="min-w-0">
+                      <h3 className="text-sm font-medium">Definition changes</h3>
+                      <StudioChanges changes={review.workspace?.changes ?? []} />
+                    </section>
+                    <div className="min-w-0">
+                      <h3 className="mb-3 text-sm font-medium">Content impact</h3>
+                      <StudioImpactPreview impact={review.impact ?? null} />
+                    </div>
                   </div>
-                </div>
+                ) : null}
                 {hasSchemaEdit && !savedCandidateRef ? (
                   <p className="text-xs text-[var(--text-secondary)]">
                     Save the local candidate before adopting it.
@@ -1110,26 +1139,45 @@ export function SchemaStudioExperience({
                 <Button disabled={applying} onClick={() => setReview(undefined)} variant="outline">
                   Cancel
                 </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" aria-label="Review actions" disabled={applying}>
+                      More <ChevronDown size={14} aria-hidden="true" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        setReview(undefined);
+                        preview.refresh();
+                        pendingSchema.refresh();
+                        void workspaces.refresh();
+                      }}
+                    >
+                      Refresh checks
+                    </DropdownMenuItem>
+                    {review.workspace && !review.workspace.canBind ? (
+                      <DropdownMenuItem
+                        disabled={
+                          applying ||
+                          !savedCandidateRef ||
+                          !review.impact?.canPublish ||
+                          !review.report.valid ||
+                          !review.adoption.allowed ||
+                          review.reviewHash !== data?.reviewHash
+                        }
+                        onSelect={() => {
+                          setPublishReview(review);
+                          setReview(undefined);
+                        }}
+                      >
+                        Publish public Schema
+                      </DropdownMenuItem>
+                    ) : null}
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Button
-                  hidden={review.workspace?.canBind}
-                  variant="outline"
-                  disabled={
-                    applying ||
-                    !savedCandidateRef ||
-                    !review.impact?.canPublish ||
-                    !review.report.valid ||
-                    !review.adoption.allowed ||
-                    review.reviewHash !== data?.reviewHash
-                  }
-                  onClick={() => {
-                    setPublishReview(review);
-                    setReview(undefined);
-                  }}
-                >
-                  Publish public Schema
-                </Button>
-                <Button
-                  hidden={review.workspace?.canBind}
+                  hidden={!review.workspace || review.workspace.canBind}
                   variant="outline"
                   disabled={
                     applying ||
@@ -1158,8 +1206,10 @@ export function SchemaStudioExperience({
                   Prepare content & mappings
                 </Button>
                 <Button
+                  hidden={!review.workspace}
                   disabled={
                     applying ||
+                    !review.workspace ||
                     (hasSchemaEdit && !savedCandidateRef) ||
                     !review.impact?.canAdopt ||
                     !review.report.valid ||

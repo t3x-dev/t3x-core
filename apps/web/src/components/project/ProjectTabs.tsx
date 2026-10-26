@@ -66,7 +66,6 @@ export function ProjectTabs({
             className={cn(
               'relative inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--radius-md)] px-3.5 text-[14px] font-medium leading-5 transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50',
-              tab.id === 'settings' && 'ml-auto',
               selected
                 ? 'bg-[var(--accent-commit-soft)] font-semibold !text-[var(--accent-commit)]'
                 : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
