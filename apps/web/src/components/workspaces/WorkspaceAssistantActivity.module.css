@@ -2,52 +2,58 @@
   display: grid;
   gap: 12px;
   min-width: 0;
-  margin: 8px 0 12px;
+  margin: 0 0 12px;
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 13px;
 }
 .process {
   min-width: 0;
 }
 .processToggle {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   min-height: 24px;
+  border-radius: 6px;
+  color: var(--text-tertiary);
   list-style: none;
   cursor: pointer;
+  transition: color 120ms ease;
+}
+.processToggle:hover {
+  color: var(--text-primary);
 }
 .processToggle::-webkit-details-marker,
 .change summary::-webkit-details-marker {
   display: none;
 }
 .processToggle strong {
-  font-weight: 600;
+  order: 0;
+  font-weight: 400;
 }
-.chevron,
-.changeIcon {
+.chevron {
   display: grid;
   flex: none;
-  width: 20px;
-  height: 20px;
+  order: 1;
+  width: 14px;
+  height: 14px;
   place-items: center;
-  border: 1px solid var(--stroke-default);
-  border-radius: var(--radius-workbench-control);
-  background: var(--surface-panel);
 }
 .chevron svg,
 .changeIcon svg {
-  width: 12px;
-  height: 12px;
+  width: 13px;
+  height: 13px;
+  transition: transform 150ms ease;
 }
 .process:not([open]) .chevron svg,
 .change:not([open]) .changeIcon svg {
   transform: rotate(-90deg);
 }
 .spinner {
+  order: 2;
   width: 13px;
   height: 13px;
-  color: var(--accent-commit);
+  color: var(--text-tertiary);
   animation: activitySpin 900ms linear infinite;
 }
 @keyframes activitySpin {
@@ -57,10 +63,10 @@
 }
 .steps {
   display: grid;
-  gap: 9px;
-  margin: 8px 0 0 9px;
-  border-left: 1px solid var(--stroke-divider);
-  padding: 2px 0 2px 17px;
+  gap: 8px;
+  margin: 8px 0 0 5px;
+  border-left: 1px dashed var(--stroke-default);
+  padding: 2px 0 2px 14px;
 }
 .step {
   display: flex;
@@ -68,12 +74,13 @@
   align-items: center;
   gap: 8px;
   color: var(--text-secondary);
+  font-size: 12px;
 }
 .step svg {
   flex: none;
   width: 12px;
   height: 12px;
-  color: var(--status-success);
+  color: var(--text-tertiary);
 }
 .step[data-running="true"] svg {
   color: var(--accent-commit);
@@ -88,39 +95,54 @@
 }
 .changes {
   display: grid;
-  gap: 5px;
   min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--stroke-default);
+  border-radius: 14px;
+  background: var(--surface-card);
 }
 .changesTitle {
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin-bottom: 2px;
-  font-size: 12px;
-  font-weight: 600;
+  gap: 10px;
+  padding: 12px 14px;
+  font-size: 13px;
+  font-weight: 500;
 }
 .changesTitle svg {
-  width: 14px;
-  height: 14px;
-  color: var(--diff-modified-text);
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--stroke-default);
+  border-radius: 8px;
+  padding: 6px;
+  color: var(--text-secondary);
 }
 .change {
   min-width: 0;
-  border: 1px solid var(--stroke-divider);
-  border-radius: var(--radius-workbench-control);
+  border-top: 1px solid var(--stroke-divider);
 }
 .change summary {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  min-height: 32px;
-  padding: 4px 8px;
+  min-height: 40px;
+  padding: 8px 14px;
   list-style: none;
   cursor: pointer;
+  transition: background-color 120ms ease;
 }
 .change summary:hover {
   background: var(--surface-app);
+}
+.changeIcon {
+  display: grid;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  color: var(--text-tertiary);
 }
 .changeHeading {
   display: grid;
@@ -129,8 +151,8 @@
 }
 .changeHeading strong {
   overflow: hidden;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -146,12 +168,12 @@
 .changeDetail {
   display: grid;
   gap: 10px;
-  border-top: 1px solid var(--stroke-divider);
-  padding: 10px;
+  padding: 4px 14px 14px 38px;
 }
 .changeDetail > strong {
-  font-size: 10px;
-  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
 }
 .values {
   display: grid;
@@ -161,21 +183,20 @@
   display: grid;
   gap: 4px;
   color: var(--text-tertiary);
-  font-size: 10px;
+  font-size: 11px;
 }
 .values code,
 .change pre {
   display: block;
   max-height: 180px;
   overflow: auto;
-  border: 1px solid var(--stroke-divider);
-  border-radius: var(--radius-workbench-control);
-  background: var(--editor-bg);
-  padding: 7px 8px;
+  border-radius: 8px;
+  background: var(--surface-app);
+  padding: 8px 10px;
   color: var(--text-primary);
   font-family: var(--font-mono);
-  font-size: 10px;
-  line-height: 1.5;
+  font-size: 11px;
+  line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }

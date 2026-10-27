@@ -24,29 +24,39 @@ import {
   Layers,
   ListTree,
   MessageSquare,
-  MessageSquarePlus,
   Minus,
   MoreHorizontal,
   PanelLeftOpen,
   Pencil,
   Percent,
+  Pin,
   Play,
   Plus,
   Settings,
   Share2,
   Sparkles,
+  SquarePen,
+  Trash2,
   Type,
   X,
 } from 'lucide-react';
 import NextLink from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import type { ChangeEvent, CSSProperties } from 'react';
+import type { ChangeEvent, CSSProperties, FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { WorkspaceChecksRedirect } from '@/components/checks/WorkspaceChecksRedirect';
 import { DOCUMENT_SOURCE_ACCEPTED_TYPES } from '@/components/import/documentAcceptTypes';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -56,6 +66,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ComposeDraftChangeRow } from '@/components/workspaces/ComposeDraftChangeRow';
 import { OutputTargetsTab } from '@/components/workspaces/OutputTargetsTab';
@@ -1493,7 +1504,14 @@ function ComposeSurface({
 interface WorkspaceConversationFolder {
   id: string;
   name: string;
+  pinned?: boolean;
 }
+
+type WorkspaceFolderDialog =
+  | { mode: 'create' }
+  | { mode: 'rename'; folder: WorkspaceConversationFolder };
+
+const NEW_WORKSPACE_CONVERSATION_TITLE = 'New conversation';
 
 function conversationMetadataValue(conversation: Conversation, key: string): string | undefined {
   const value = conversation.metadata?.[key];
@@ -1513,7 +1531,7 @@ function WorkspaceConversationSidebar({
   canCreate: boolean;
   onCollapse: () => void;
   onCreate: () => Promise<string>;
-  onSelect: (conversationId: string) => void;
+  onSelect: (conversationId?: string) => void;
 }) {
   const conversationsQuery = useWorkspaceConversations(candidate.projectId);
   const storageKey = `t3x-workspace-chat-folders:${candidate.projectId}:${candidate.id}`;
@@ -1521,18 +1539,28 @@ function WorkspaceConversationSidebar({
     try {
       const stored = JSON.parse(localStorage.getItem(storageKey) ?? '[]');
       return Array.isArray(stored)
-        ? stored.filter(
-            (item): item is WorkspaceConversationFolder =>
-              Boolean(item) && typeof item.id === 'string' && typeof item.name === 'string'
-          )
+        ? stored
+            .filter(
+              (item): item is WorkspaceConversationFolder =>
+                Boolean(item) && typeof item.id === 'string' && typeof item.name === 'string'
+            )
+            .map((item) => ({ ...item, pinned: item.pinned === true }))
         : [];
     } catch {
       return [];
     }
   });
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
+  const [folderDialog, setFolderDialog] = useState<WorkspaceFolderDialog | null>(null);
+  const [folderName, setFolderName] = useState('');
+  const [folderBusy, setFolderBusy] = useState(false);
+  const [folderDialogError, setFolderDialogError] = useState<string | null>(null);
+  const [folderToRemove, setFolderToRemove] = useState<WorkspaceConversationFolder | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const createBusyRef = useRef(false);
+  const lastCreatedConversationRef = useRef<{ id: string; folderId?: string } | null>(null);
+  const removedFolderIdsRef = useRef(new Set<string>());
   const linkedConversationIds = useMemo(
     () =>
       new Set(
@@ -1553,6 +1581,13 @@ function WorkspaceConversationSidebar({
         .sort((left, right) => right.created_at.localeCompare(left.created_at)),
     [candidate.id, conversationsQuery.data?.conversations, linkedConversationIds]
   );
+  const orderedFolders = useMemo(
+    () =>
+      [...folders].sort(
+        (left, right) => Number(Boolean(right.pinned)) - Number(Boolean(left.pinned))
+      ),
+    [folders]
+  );
 
   useEffect(() => {
     try {
@@ -1565,7 +1600,7 @@ function WorkspaceConversationSidebar({
     const known = new Set(folders.map((folder) => folder.id));
     const inferred = conversations.flatMap((conversation) => {
       const id = conversationMetadataValue(conversation, 'workspace_folder_id');
-      if (!id || known.has(id)) return [];
+      if (!id || known.has(id) || removedFolderIdsRef.current.has(id)) return [];
       known.add(id);
       return [
         {
@@ -1578,17 +1613,33 @@ function WorkspaceConversationSidebar({
   }, [conversations, folders]);
 
   const createFolder = () => {
-    const name = window.prompt('Folder name', 'New folder')?.trim();
-    if (!name) return;
-    setFolders((current) => [...current, { id: `folder:${crypto.randomUUID()}`, name }]);
+    setFolderName('');
+    setFolderDialogError(null);
+    setFolderDialog({ mode: 'create' });
   };
-  const renameFolder = async (folder: WorkspaceConversationFolder) => {
-    const name = window.prompt('Rename folder', folder.name)?.trim();
-    if (!name || name === folder.name) return;
-    setFolders((current) =>
-      current.map((item) => (item.id === folder.id ? { ...item, name } : item))
-    );
-    setError(null);
+  const editFolder = (folder: WorkspaceConversationFolder) => {
+    setFolderName(folder.name);
+    setFolderDialogError(null);
+    setFolderDialog({ mode: 'rename', folder });
+  };
+  const submitFolder = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const name = folderName.trim();
+    if (!name || !folderDialog) return;
+    if (folderDialog.mode === 'create') {
+      setFolders((current) => [...current, { id: `folder:${crypto.randomUUID()}`, name }]);
+      setFolderName('');
+      setFolderDialog(null);
+      return;
+    }
+    const folder = folderDialog.folder;
+    if (name === folder.name) {
+      setFolderName('');
+      setFolderDialog(null);
+      return;
+    }
+    setFolderBusy(true);
+    setFolderDialogError(null);
     try {
       await Promise.all(
         conversations
@@ -1607,18 +1658,90 @@ function WorkspaceConversationSidebar({
             })
           )
       );
+      setFolders((current) =>
+        current.map((item) => (item.id === folder.id ? { ...item, name } : item))
+      );
+      setFolderName('');
+      setFolderDialog(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not rename the folder.');
+      setFolderDialogError(cause instanceof Error ? cause.message : 'Could not rename the folder.');
+    } finally {
+      setFolderBusy(false);
+    }
+  };
+  const toggleFolderPinned = (folder: WorkspaceConversationFolder) => {
+    setFolders((current) =>
+      current.map((item) => (item.id === folder.id ? { ...item, pinned: !item.pinned } : item))
+    );
+  };
+  const removeFolder = async () => {
+    if (!folderToRemove || folderBusy) return;
+    const folder = folderToRemove;
+    setFolderBusy(true);
+    setFolderDialogError(null);
+    removedFolderIdsRef.current.add(folder.id);
+    try {
+      await Promise.all(
+        conversations
+          .filter(
+            (conversation) =>
+              conversationMetadataValue(conversation, 'workspace_folder_id') === folder.id
+          )
+          .map((conversation) => {
+            const metadata: Record<string, unknown> = {
+              ...(conversation.metadata ?? {}),
+              workspace_id: candidate.id,
+            };
+            delete metadata.workspace_folder_id;
+            delete metadata.workspace_folder_name;
+            return conversationsQuery.update(conversation.conversation_id, { metadata });
+          })
+      );
+      setFolders((current) => current.filter((item) => item.id !== folder.id));
+      setCollapsedFolders((current) => {
+        const next = new Set(current);
+        next.delete(folder.id);
+        return next;
+      });
+      setFolderToRemove(null);
+    } catch (cause) {
+      removedFolderIdsRef.current.delete(folder.id);
+      setFolderDialogError(cause instanceof Error ? cause.message : 'Could not remove the folder.');
+    } finally {
+      setFolderBusy(false);
     }
   };
   const createChat = async (folder?: WorkspaceConversationFolder) => {
-    if (!canCreate || busy) return;
+    if (!canCreate || createBusyRef.current) return;
+    createBusyRef.current = true;
     setBusy(true);
     setError(null);
     try {
+      const folderId = folder?.id;
+      const reusableIds = new Set<string>();
+      const lastCreated = lastCreatedConversationRef.current;
+      if (lastCreated && lastCreated.folderId === folderId) reusableIds.add(lastCreated.id);
+      for (const conversation of conversations) {
+        if (
+          (conversation.title?.trim() || NEW_WORKSPACE_CONVERSATION_TITLE) !==
+          NEW_WORKSPACE_CONVERSATION_TITLE
+        )
+          continue;
+        if (conversationMetadataValue(conversation, 'workspace_folder_id') !== folderId) continue;
+        reusableIds.add(conversation.conversation_id);
+      }
+      for (const conversationId of reusableIds) {
+        const conversation = await conversationsQuery.get(conversationId);
+        if (conversation.turns_count !== 0) continue;
+        lastCreatedConversationRef.current = { id: conversationId, folderId };
+        onSelect(conversationId);
+        return;
+      }
+
       const conversationId = await onCreate();
+      lastCreatedConversationRef.current = { id: conversationId, folderId };
       await conversationsQuery.update(conversationId, {
-        title: 'New conversation',
+        title: NEW_WORKSPACE_CONVERSATION_TITLE,
         metadata: {
           workspace_id: candidate.id,
           ...(folder ? { workspace_folder_id: folder.id, workspace_folder_name: folder.name } : {}),
@@ -1628,6 +1751,7 @@ function WorkspaceConversationSidebar({
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not create the conversation.');
     } finally {
+      createBusyRef.current = false;
       setBusy(false);
     }
   };
@@ -1663,6 +1787,25 @@ function WorkspaceConversationSidebar({
       await conversationsQuery.update(conversation.conversation_id, { metadata });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not move the conversation.');
+    }
+  };
+  const deleteConversation = async (conversation: Conversation) => {
+    const title = conversation.title?.trim() || NEW_WORKSPACE_CONVERSATION_TITLE;
+    if (!window.confirm(`Delete “${title}”? This cannot be undone.`)) return;
+    setError(null);
+    try {
+      await conversationsQuery.remove(conversation.conversation_id);
+      if (lastCreatedConversationRef.current?.id === conversation.conversation_id) {
+        lastCreatedConversationRef.current = null;
+      }
+      if (conversation.conversation_id === activeConversationId) {
+        const nextConversation = conversations.find(
+          (item) => item.conversation_id !== conversation.conversation_id
+        );
+        onSelect(nextConversation?.conversation_id);
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not delete the conversation.');
     }
   };
   const renderConversation = (conversation: Conversation) => {
@@ -1702,6 +1845,14 @@ function WorkspaceConversationSidebar({
                 Move out of folder
               </DropdownMenuItem>
             ) : null}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-[var(--status-error)] focus:text-[var(--status-error)]"
+              onSelect={() => void deleteConversation(conversation)}
+            >
+              <Trash2 aria-hidden="true" className="mr-2 h-4 w-4" />
+              Delete
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -1714,35 +1865,34 @@ function WorkspaceConversationSidebar({
   return (
     <section className={composeStyles.conversationSidebar} aria-label="Workspace chat list">
       <header>
-        <div>
-          <MessageSquare aria-hidden="true" />
-          <h2>Chats</h2>
-        </div>
-        <span>
+        <button
+          type="button"
+          aria-label="New chat"
+          className={composeStyles.newChatButton}
+          disabled={!canCreate || busy}
+          onClick={() => void createChat()}
+        >
+          <SquarePen aria-hidden="true" />
+          <span>New chat</span>
+        </button>
+        <button
+          type="button"
+          aria-label="Collapse conversation panel"
+          title="Collapse conversations"
+          onClick={onCollapse}
+        >
+          <PanelLeftOpen aria-hidden="true" />
+        </button>
+      </header>
+      <div className={composeStyles.conversationList}>
+        <div className={composeStyles.conversationSectionLabel}>
+          <h2>Folders</h2>
           <button type="button" aria-label="New folder" title="New folder" onClick={createFolder}>
             <FolderPlus aria-hidden="true" />
           </button>
-          <button
-            type="button"
-            aria-label="New conversation"
-            title="New conversation"
-            disabled={!canCreate || busy}
-            onClick={() => void createChat()}
-          >
-            <MessageSquarePlus aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            aria-label="Collapse conversation panel"
-            title="Collapse conversations"
-            onClick={onCollapse}
-          >
-            <PanelLeftOpen aria-hidden="true" />
-          </button>
-        </span>
-      </header>
-      <div className={composeStyles.conversationList}>
-        {folders.map((folder) => {
+        </div>
+        {folders.length === 0 ? <p>No folders yet.</p> : null}
+        {orderedFolders.map((folder) => {
           const collapsed = collapsedFolders.has(folder.id);
           const folderConversations = conversations.filter(
             (conversation) =>
@@ -1780,19 +1930,44 @@ function WorkspaceConversationSidebar({
                 >
                   <Plus aria-hidden="true" />
                 </button>
-                <button
-                  type="button"
-                  aria-label={`Rename folder ${folder.name}`}
-                  title={`Rename ${folder.name}`}
-                  onClick={() => void renameFolder(folder)}
-                >
-                  <MoreHorizontal aria-hidden="true" />
-                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button type="button" aria-label={`Actions for folder ${folder.name}`}>
+                      <MoreHorizontal aria-hidden="true" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuItem onSelect={() => toggleFolderPinned(folder)}>
+                      <Pin aria-hidden="true" className="mr-2 h-4 w-4" />
+                      {folder.pinned ? 'Unpin' : 'Pin'}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => editFolder(folder)}>
+                      <Pencil aria-hidden="true" className="mr-2 h-4 w-4" />
+                      Rename
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-[var(--status-error)] focus:text-[var(--status-error)]"
+                      onSelect={() => {
+                        setFolderDialogError(null);
+                        setFolderToRemove(folder);
+                      }}
+                    >
+                      <Trash2 aria-hidden="true" className="mr-2 h-4 w-4" />
+                      Remove folder
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </header>
               {!collapsed ? folderConversations.map(renderConversation) : null}
             </section>
           );
         })}
+        {unfiled.length > 0 ? (
+          <div className={composeStyles.conversationSectionLabel}>
+            <h2>Recent</h2>
+          </div>
+        ) : null}
         {unfiled.map(renderConversation)}
         {!conversationsQuery.loading && conversations.length === 0 ? (
           <p>No conversations yet. Create one to start with a blank chat.</p>
@@ -1802,6 +1977,113 @@ function WorkspaceConversationSidebar({
           <p role="alert">{error ?? conversationsQuery.error?.message}</p>
         ) : null}
       </div>
+      <Dialog
+        open={folderDialog !== null}
+        onOpenChange={(open) => {
+          if (!open && !folderBusy) {
+            setFolderDialog(null);
+            setFolderDialogError(null);
+            setFolderName('');
+          }
+        }}
+      >
+        <DialogContent className="overflow-hidden rounded-2xl p-0 sm:max-w-[520px]">
+          <form className="p-6" onSubmit={submitFolder}>
+            <DialogHeader>
+              <DialogTitle className="text-xl">
+                {folderDialog?.mode === 'rename' ? 'Rename folder' : 'Create folder'}
+              </DialogTitle>
+              <DialogDescription className="sr-only">
+                {folderDialog?.mode === 'rename'
+                  ? 'Enter a new name for this folder.'
+                  : 'Enter a name for the new folder.'}
+              </DialogDescription>
+            </DialogHeader>
+            <label className="sr-only" htmlFor="workspace-folder-name">
+              Folder name
+            </label>
+            <div className="relative mt-5">
+              <Folder
+                aria-hidden="true"
+                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--text-secondary)]"
+              />
+              <Input
+                autoFocus
+                className="h-11 rounded-xl pl-10"
+                id="workspace-folder-name"
+                onChange={(event) => setFolderName(event.target.value)}
+                placeholder="Folder name"
+                value={folderName}
+              />
+            </div>
+            {folderDialogError ? (
+              <p className="mt-3 text-sm text-[var(--status-error)]" role="alert">
+                {folderDialogError}
+              </p>
+            ) : null}
+            <DialogFooter className="mt-8 flex-row justify-end">
+              <Button
+                disabled={folderBusy}
+                onClick={() => setFolderDialog(null)}
+                type="button"
+                variant="ghost"
+              >
+                Cancel
+              </Button>
+              <Button disabled={!folderName.trim() || folderBusy} type="submit">
+                {folderBusy
+                  ? 'Saving…'
+                  : folderDialog?.mode === 'rename'
+                    ? 'Save changes'
+                    : 'Create folder'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={folderToRemove !== null}
+        onOpenChange={(open) => {
+          if (!open && !folderBusy) {
+            setFolderToRemove(null);
+            setFolderDialogError(null);
+          }
+        }}
+      >
+        <DialogContent className="overflow-hidden rounded-2xl p-0 sm:max-w-[480px]">
+          <div className="p-6">
+            <DialogHeader>
+              <DialogTitle>Remove “{folderToRemove?.name}”?</DialogTitle>
+              <DialogDescription>
+                Conversations inside this folder will move to Recent. They will not be deleted.
+              </DialogDescription>
+            </DialogHeader>
+            {folderDialogError ? (
+              <p className="mt-3 text-sm text-[var(--status-error)]" role="alert">
+                {folderDialogError}
+              </p>
+            ) : null}
+            <DialogFooter className="mt-8 flex-row justify-end">
+              <Button
+                disabled={folderBusy}
+                onClick={() => setFolderToRemove(null)}
+                type="button"
+                variant="ghost"
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={folderBusy}
+                onClick={() => void removeFolder()}
+                type="button"
+                variant="destructive"
+              >
+                {folderBusy ? 'Removing…' : 'Remove folder'}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

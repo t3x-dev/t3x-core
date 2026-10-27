@@ -19,3 +19,7 @@ export function fetchConversations(
 export function fetchConversationForSourceRedirect(conversationId: string): Promise<Conversation> {
   return getConversation(conversationId);
 }
+
+export function fetchConversation(conversationId: string): Promise<Conversation> {
+  return getConversation(conversationId);
+}

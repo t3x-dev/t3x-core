@@ -787,7 +787,7 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
   const storedWorkspace = storedDraft?.workspace_state ?? {};
   const {
     backendCandidateId: _storedBackendCandidateId,
-    lastCommitHash: _storedLastCommitHash,
+    lastCommitHash: storedLastCommitHash,
     schemaEditCandidate: storedSchemaEditCandidate,
     assistantSchemaSettings: storedAssistantSchemaSettings,
     schemaPending: storedSchemaPending,
@@ -811,6 +811,8 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
   } = workspace;
   const storedBackendCandidateId = resolveStoredBackendCandidateId(storedWorkspace);
   const nextStatus = resolveReviewSaveStatus(status, storedStatus);
+  // Authoring-managed Drafts only accept metadata edits; commit state stays server-owned.
+  const authoringManaged = storedWorkspace.authoringLedger !== undefined;
   const savedAt = new Date().toISOString();
   const persistedWorkspace = {
     ...storedEditableWorkspace,
@@ -818,7 +820,14 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
     id: workspaceId,
     projectId,
     updatedAt: savedAt,
-    ...(typeof nextStatus === 'string' ? { status: nextStatus } : {}),
+    ...(authoringManaged
+      ? {
+          ...(storedStatus !== undefined ? { status: storedStatus } : {}),
+          ...(storedLastCommitHash !== undefined ? { lastCommitHash: storedLastCommitHash } : {}),
+        }
+      : typeof nextStatus === 'string'
+        ? { status: nextStatus }
+        : {}),
     ...(storedBackendCandidateId ? { backendCandidateId: storedBackendCandidateId } : {}),
     ...(storedSchemaEditCandidate !== undefined
       ? { schemaEditCandidate: storedSchemaEditCandidate }
