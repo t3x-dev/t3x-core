@@ -547,7 +547,9 @@ describe('ProjectStateTab', () => {
     expect(screen.queryByText('Loading state')).not.toBeInTheDocument();
     expect(screen.getByText('Loading change details…')).toBeVisible();
     expect(hookMocks.loadCommits).not.toHaveBeenCalled();
-    expect(hookMocks.loadCommit).toHaveBeenCalledWith(PARENT_COMMIT.hash, 'proj_test');
+    await waitFor(() =>
+      expect(hookMocks.loadCommit).toHaveBeenCalledWith(PARENT_COMMIT.hash, 'proj_test')
+    );
     expect(hookMocks.loadOperations).toHaveBeenCalledOnce();
 
     fireEvent.click(screen.getByRole('button', { name: 'Code', exact: true }));

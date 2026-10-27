@@ -1,5 +1,11 @@
 # @t3x-dev/yops
 
+## 1.2.1
+
+### Patch Changes
+
+- [#1661](https://github.com/t3x-dev/t3x-core/pull/1661) [`bfd2bca`](https://github.com/t3x-dev/t3x-core/commit/bfd2bcae688c0d4aa9d2e3a50ae58e936d2caf4f) Thanks [@kiraTheresa](https://github.com/kiraTheresa)! - Require the patched Zod 4.6.6 dependency while preserving the existing source timestamp normalization and exported schema types.
+
 ## 1.2.0
 
 ### Minor Changes
