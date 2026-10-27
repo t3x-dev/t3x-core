@@ -223,6 +223,7 @@ export function SchemaStudioExperience({
     choices?: Record<string, string>;
   }>();
   const [editorReset, setEditorReset] = useState(0);
+  const [blankWorkspace, setBlankWorkspace] = useState<string>();
   const [editorInvalid, setEditorInvalid] = useState(false);
   const [dataDirty, setDataDirty] = useState(false);
   const [dataCanSave, setDataCanSave] = useState(false);
@@ -369,6 +370,7 @@ export function SchemaStudioExperience({
     persistedTarget?.revision
   );
   const currentBinding = persistedTarget?.schemaBindings?.[0];
+  const creatingBlank = blankWorkspace === workspaceId;
   const draftView = useSchemaDraftStatus(
     projectId,
     persistedTarget?.id ?? '',
@@ -512,6 +514,7 @@ export function SchemaStudioExperience({
 
   useEffect(() => {
     setDefinitionOpen(false);
+    setBlankWorkspace(undefined);
     setEditorBase(undefined);
     setSchemaDefinition(undefined);
     setApplying(false);
@@ -521,7 +524,7 @@ export function SchemaStudioExperience({
   const previewInput = {
     ...(activeCandidate?.composition ? { composition: activeCandidate.composition } : {}),
     candidateIds: selection,
-    ...(persistedTarget && (selection.length || currentBinding)
+    ...(persistedTarget && (selection.length || currentBinding || creatingBlank || activeCandidate)
       ? { workspaceId: persistedTarget.id }
       : {}),
   };
@@ -655,6 +658,7 @@ export function SchemaStudioExperience({
     const candidate = module.candidate;
     setRecoveredEditIdentity(editIdentity);
     setUsingSavedCandidate(false);
+    setBlankWorkspace(undefined);
     setSourceMappings([]);
     setEditorBase(undefined);
     setLocalContribution({});
@@ -718,6 +722,7 @@ export function SchemaStudioExperience({
       }
       if (!fresh.workspace) throw new Error('The target Workspace is unavailable.');
       if (
+        fresh.workspace.binding === null ||
         fresh.workspace.changes.length ||
         fresh.workspace.canBind ||
         fresh.impact?.content.ready === false
@@ -782,7 +787,8 @@ export function SchemaStudioExperience({
   ) {
     if (!persistedTarget)
       throw new Error('Create or select a persisted Workspace before saving a Schema candidate.');
-    if (!selection.length && !currentBinding) throw new Error('Select a Schema or Module first.');
+    if (!selection.length && !currentBinding && !creatingBlank && !activeCandidate)
+      throw new Error('Create a blank Schema or choose a source first.');
     const saved = await schemaEdit.save({
       workspaceId: persistedTarget.id,
       candidateIds: [...selection],
@@ -939,9 +945,22 @@ export function SchemaStudioExperience({
             onComposeSources={persistedTarget ? composeSources : undefined}
             layoutKey={`${projectId}:${workspaceId}`}
             key={`${projectId}:${workspaceId}:${candidateSelectionKey}:${editorReset}`}
+            initiallyDirty={creatingBlank && !savedCandidateRef}
+            onCreateBlank={
+              persistedTarget &&
+              !currentBinding &&
+              !selection.length &&
+              !activeCandidate &&
+              !creatingBlank
+                ? () => setBlankWorkspace(workspaceId)
+                : undefined
+            }
+            onChooseSources={() => setSourceManagerOpen(true)}
             initialDefinition={
               editorBase?.initial ??
-              ((selection.length || currentBinding) && recoveredDefinitionReady && data
+              ((selection.length || currentBinding || creatingBlank || activeCandidate) &&
+              recoveredDefinitionReady &&
+              data
                 ? !hasSchemaEdit && basePreview.data?.workspace?.boundSchema
                   ? basePreview.data.workspace.boundSchema
                   : data.schema
@@ -949,16 +968,26 @@ export function SchemaStudioExperience({
             }
             revisionKey={`${workspaceId}:${recoveredCandidateKey}:${candidateSelectionKey}`}
             disabledReason={
-              !persistedTarget
-                ? 'Select a saved Workspace to edit its Schema.'
-                : !selection.length && !currentBinding
-                  ? 'Choose a Schema or Module in Sources to start editing.'
-                  : undefined
+              !persistedTarget ? 'Select a saved Workspace to edit its Schema.' : undefined
             }
             pending={schemaEdit.pending || applying}
-            loading={preview.loading || schemaEdit.loading || candidates.loading}
-            previewError={recoveryError || schemaEdit.error || candidates.error || preview.error}
+            loading={
+              workspaces.loading ||
+              projectBranches.loading ||
+              pendingSchema.loading ||
+              preview.loading ||
+              schemaEdit.loading ||
+              candidates.loading
+            }
+            previewError={
+              workspaces.error ||
+              recoveryError ||
+              schemaEdit.error ||
+              candidates.error ||
+              preview.error
+            }
             onRetry={() => {
+              void workspaces.refresh();
               void candidates.refresh();
               void schemaEdit.refresh();
               preview.refresh();
@@ -989,7 +1018,10 @@ export function SchemaStudioExperience({
             }}
             onDiscard={() => {
               updateDataDirty(false);
+              setBlankWorkspace(undefined);
+              setSchemaDefinition(undefined);
               setEditorBase(undefined);
+              setEditorReset((value) => value + 1);
               changeDefinitionOpen(false);
             }}
             onSave={async (definition, intent, mappings) => {
@@ -1030,7 +1062,9 @@ export function SchemaStudioExperience({
         }
         data={data}
         onEditDefinition={
-          !dataDirty && persistedTarget && (selection.length || currentBinding)
+          !dataDirty &&
+          persistedTarget &&
+          (selection.length || currentBinding || creatingBlank || activeCandidate)
             ? () => {
                 if (!basePreview.data || !data) return;
                 setEditorBase({

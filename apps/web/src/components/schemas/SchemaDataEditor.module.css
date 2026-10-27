@@ -410,3 +410,16 @@
 .editor [hidden] {
   display: none;
 }
+
+.emptyState {
+  padding: 20px 12px;
+  max-width: 560px;
+}
+.emptyState p {
+  margin: 8px 0 12px;
+}
+.emptyActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

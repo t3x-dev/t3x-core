@@ -353,3 +353,84 @@ it('adds fields through the shared Add menu with an explicit parent and opens co
   );
   expect(screen.getByRole('complementary', { name: 'Schema properties' })).toBeVisible();
 });
+
+describe('Schema editor lifecycle states', () => {
+  it('keeps the same tree and toolbar for loading, failure, unbound and empty definitions', async () => {
+    const handlers = callbacks();
+    const create = vi.fn();
+    const retry = vi.fn();
+    const props = {
+      ...handlers,
+      revisionKey: 'empty',
+      sources: [],
+      sourceManagement: <button type="button">Manage sources</button>,
+      onCreateBlank: create,
+      onRetry: retry,
+    };
+    const { rerender } = render(<SchemaDataEditor {...props} loading />);
+    const shell = screen.getByRole('region', { name: 'Schema data editor' });
+    expect(screen.getByText('Loading Schema definition…')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Add', exact: true })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Create blank Schema' })).not.toBeInTheDocument();
+    rerender(<SchemaDataEditor {...props} loading={false} previewError="Snapshot missing" />);
+    expect(screen.getByRole('region', { name: 'Schema data editor' })).toBe(shell);
+    expect(screen.getByRole('alert')).toHaveTextContent('Snapshot missing');
+    fireEvent.click(screen.getByRole('button', { name: 'Retry Schema' }));
+    expect(retry).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('button', { name: 'Create blank Schema' })).not.toBeInTheDocument();
+    rerender(<SchemaDataEditor {...props} loading={false} />);
+    expect(screen.getByRole('region', { name: 'Schema data editor' })).toBe(shell);
+    fireEvent.click(screen.getByRole('button', { name: 'Create blank Schema' }));
+    expect(create).toHaveBeenCalledOnce();
+    expect(handlers.onSave).not.toHaveBeenCalled();
+    rerender(
+      <SchemaDataEditor
+        {...props}
+        loading={false}
+        initiallyDirty
+        initialDefinition={{ yschema: '0.1', name: 'Blank', nodes: {} }}
+      />
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Add', exact: true })).toBeEnabled()
+    );
+    expect(screen.getByRole('region', { name: 'Schema data editor' })).toBe(shell);
+    expect(screen.getByText('No nodes yet. Add a node or drag one from Sources.')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
+    await waitFor(() =>
+      expect(handlers.onSave).toHaveBeenCalledWith(
+        { yschema: '0.1', name: 'Blank', nodes: {} },
+        expect.any(String),
+        []
+      )
+    );
+  });
+});
+
+it('keeps an edited Schema after deleting its last node', async () => {
+  const handlers = callbacks();
+  render(
+    <SchemaDataEditor
+      {...handlers}
+      loading={false}
+      revisionKey="delete-last"
+      initialDefinition={{ yschema: '0.1', name: 'Local', nodes: { note: { slots: {} } } }}
+    />
+  );
+  fireEvent.pointerDown(await screen.findByRole('button', { name: 'Actions for note' }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete', exact: true }));
+  expect(screen.getByText('No nodes yet. Add a node or drag one from Sources.')).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Create blank Schema' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Add', exact: true })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
+  await waitFor(() =>
+    expect(handlers.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ nodes: {} }),
+      expect.any(String),
+      []
+    )
+  );
+});

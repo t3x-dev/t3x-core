@@ -396,8 +396,13 @@ schemaStudioRoutes.openapi(saveSchemaEditCandidateRoute, async (c) => {
           },
         }
       : { channel: input.origin, actor: { kind: 'local', id: 'auth-disabled-local' } };
-    let guard: Parameters<typeof saveStudioEditCandidate>[5];
-    if (bound && input.baseSchemaHash === bound.basis.schemaHash)
+    let guard: Parameters<typeof saveStudioEditCandidate>[5] = boundDraft?.workspace_state
+      ? {
+          workspaceRevision: boundDraft.revision,
+          assistantSchemaSettings: boundDraft.workspace_state.assistantSchemaSettings,
+        }
+      : undefined;
+    if (bound?.basis && input.baseSchemaHash === bound.basis.schemaHash)
       guard = {
         workspaceRevision: boundDraft!.revision,
         assistantSchemaSettings: boundDraft!.workspace_state!.assistantSchemaSettings,

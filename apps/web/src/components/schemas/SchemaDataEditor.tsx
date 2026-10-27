@@ -63,6 +63,9 @@ export function SchemaDataEditor({
   onComposeSources,
   onValidationChange,
   initialDefinition,
+  initiallyDirty = false,
+  onCreateBlank,
+  onChooseSources,
   revisionKey,
   pending = false,
   loading = true,
@@ -90,6 +93,9 @@ export function SchemaDataEditor({
   wholeSchemaSource?: SchemaSourcePin;
   onComposeSources?: (sourceId?: string) => void;
   initialDefinition?: SchemaDefinition;
+  initiallyDirty?: boolean;
+  onCreateBlank?: () => void;
+  onChooseSources?: () => void;
   revisionKey: string;
   pending?: boolean;
   loading?: boolean;
@@ -138,16 +144,17 @@ export function SchemaDataEditor({
   const [conflictError, setConflictError] = useState('');
   const loaded = useRef<string | undefined>(undefined);
   const validationError = fieldError || rulesError;
-  const busy = pending || saving;
+  const busy = pending || saving || !definition;
   const stale = dirty && loaded.current !== revisionKey;
 
   useEffect(() => {
     if (!initialDefinition || dirty || loaded.current === revisionKey) return;
     loaded.current = revisionKey;
     setDefinition(structuredClone(initialDefinition));
+    setDirty(initiallyDirty);
     setSourceMappings(structuredClone(initialSourceMappings));
     setHistory([]);
-  }, [initialDefinition, revisionKey, dirty, initialSourceMappings]);
+  }, [initialDefinition, revisionKey, dirty, initialSourceMappings, initiallyDirty]);
   useEffect(() => {
     onValidationChange?.(!!validationError);
   }, [validationError, onValidationChange]);
@@ -373,32 +380,49 @@ export function SchemaDataEditor({
     };
   });
 
-  if (!definition)
-    return (
-      <div className={styles.feedback}>
-        {sourceManagement ? (
-          <div className={styles.sourceHeading}>
-            <strong>Sources</strong>
-            {sourceManagement}
-          </div>
-        ) : null}
-        {previewError ? (
+  const emptyContent = !definition ? (
+    <div className={styles.emptyState}>
+      {previewError ? (
+        <>
+          <strong>Could not load Schema</strong>
           <p role="alert">{previewError}</p>
-        ) : (
-          <output>
-            {disabledReason ??
-              (loading
-                ? 'Loading Schema definition…'
-                : 'Schema definition unavailable. Retry or choose a source in Sources.')}
-          </output>
-        )}
-        {onRetry && (previewError || (!loading && !disabledReason)) ? (
-          <Button variant="canvas-outline" size="sm" onClick={onRetry}>
-            Retry Schema
-          </Button>
-        ) : null}
-      </div>
-    );
+          {onRetry ? (
+            <Button size="sm" variant="canvas-outline" onClick={onRetry}>
+              Retry Schema
+            </Button>
+          ) : null}
+        </>
+      ) : loading ? (
+        <output>Loading Schema definition…</output>
+      ) : disabledReason ? (
+        <output>{disabledReason}</output>
+      ) : onCreateBlank ? (
+        <>
+          <strong>No Schema applied to this Workspace</strong>
+          <p>Create a blank Schema, or reuse a definition from Sources.</p>
+          <div className={styles.emptyActions}>
+            <Button size="sm" onClick={onCreateBlank}>
+              Create blank Schema
+            </Button>
+            {onChooseSources ? (
+              <Button size="sm" variant="canvas-outline" onClick={onChooseSources}>
+                Choose from Sources
+              </Button>
+            ) : null}
+          </div>
+        </>
+      ) : (
+        <>
+          <p>Schema definition unavailable.</p>
+          {onRetry ? (
+            <Button size="sm" variant="canvas-outline" onClick={onRetry}>
+              Retry Schema
+            </Button>
+          ) : null}
+        </>
+      )}
+    </div>
+  ) : undefined;
   return (
     <section
       aria-label="Schema data editor"
@@ -412,7 +436,7 @@ export function SchemaDataEditor({
             aria-label="Find a Schema field"
             placeholder="Find a field…"
             value={query}
-            disabled={Boolean(validationError)}
+            disabled={busy || Boolean(validationError)}
             onChange={(event) => setQuery(event.target.value)}
           />
         ) : null}
@@ -420,7 +444,7 @@ export function SchemaDataEditor({
         <Button
           variant="ghost"
           size="sm"
-          disabled={!!validationError}
+          disabled={busy || !!validationError}
           onClick={() => setPanel('rules')}
         >
           Relations & rules
@@ -490,7 +514,7 @@ export function SchemaDataEditor({
           </DropdownMenuContent>
         </DropdownMenu>
       </header>
-      {error || validationError || previewError || stale ? (
+      {error || validationError || (definition && previewError) || stale ? (
         <p role="alert" className={styles.error}>
           {stale
             ? 'The saved candidate changed elsewhere. Your edits are preserved. Discard them to reload the current candidate before saving.'
@@ -500,11 +524,12 @@ export function SchemaDataEditor({
       <fieldset
         className={styles.content}
         data-details={!active && panel !== 'rules' ? 'closed' : 'open'}
-        disabled={busy || !!disabledReason}
+        disabled={pending || saving}
       >
         <SchemaFieldValidation key={resetKey} onValidationChange={setFieldError}>
           <div className={styles.list} hidden={view !== 'data'}>
             <SchemaFieldTree
+              emptyContent={emptyContent}
               rows={rows}
               visible={visible}
               selected={selected}
@@ -686,7 +711,7 @@ export function SchemaDataEditor({
               )}
             />
           </div>
-          {view === 'visual' ? (
+          {view === 'visual' && definition ? (
             <SchemaVisualEditor
               parentLineMode={parentLineMode}
               onParentLineModeChange={setParentLineMode}
@@ -720,7 +745,7 @@ export function SchemaDataEditor({
               <button
                 type="button"
                 aria-pressed={panel === 'properties'}
-                disabled={!!validationError}
+                disabled={busy || !!validationError}
                 onClick={() => setPanel('properties')}
               >
                 Properties
@@ -728,7 +753,7 @@ export function SchemaDataEditor({
               <button
                 type="button"
                 aria-pressed={panel === 'rules'}
-                disabled={!!validationError}
+                disabled={busy || !!validationError}
                 onClick={() => setPanel('rules')}
               >
                 Relations & rules
@@ -737,7 +762,7 @@ export function SchemaDataEditor({
                 type="button"
                 className={styles.closeProperties}
                 aria-label="Close properties"
-                disabled={!!validationError}
+                disabled={busy || !!validationError}
                 onClick={() => {
                   setSelected(undefined);
                   setPanel('properties');
@@ -750,7 +775,7 @@ export function SchemaDataEditor({
               {active ? (
                 <div key={active.path} className={styles.settings}>
                   <h3>{active.semanticPath}</h3>
-                  {view === 'visual' ? (
+                  {view === 'visual' && definition ? (
                     <div className="mb-4 space-y-2">
                       <SchemaFieldName
                         label={`Visual name ${active.semanticPath}`}
@@ -820,12 +845,14 @@ export function SchemaDataEditor({
             </div>
             <div hidden={panel !== 'rules'}>
               <p className={styles.rulesScope}>Applies to the whole Schema.</p>
-              <SchemaDefinitionStructure
-                value={definition}
-                onChange={change}
-                onValidationChange={setRulesError}
-                showNodes={false}
-              />
+              {definition ? (
+                <SchemaDefinitionStructure
+                  value={definition}
+                  onChange={change}
+                  onValidationChange={setRulesError}
+                  showNodes={false}
+                />
+              ) : null}
             </div>
           </aside>
         </SchemaFieldValidation>

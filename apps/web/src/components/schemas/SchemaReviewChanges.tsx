@@ -57,6 +57,14 @@ export function SchemaReviewChanges({
             </p>
           ) : (
             <>
+              {review.base.status === 'unbound' && review.draft.status === 'bound' ? (
+                <p className="text-sm">
+                  {Object.keys((review.draft.definition?.nodes ?? {}) as Record<string, unknown>)
+                    .length
+                    ? 'Apply the first Schema to this Workspace.'
+                    : 'Apply an empty Schema to this Workspace. No nodes or fields are defined yet.'}
+                </p>
+              ) : null}
               {review.base.status === 'unknown' ? (
                 <p role="alert" className="p-3 text-sm">
                   The exact Base Schema is unavailable. Acceptance is blocked until it is recovered.

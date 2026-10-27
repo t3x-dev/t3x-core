@@ -43,6 +43,7 @@ export function SchemaFieldTree({
   projectId,
   sources = [],
   sourceManagement,
+  emptyContent,
   onMove,
   onImport,
   onSelect,
@@ -55,6 +56,7 @@ export function SchemaFieldTree({
   projectId?: string;
   sources?: StudioCandidate[];
   sourceManagement?: ReactNode;
+  emptyContent?: ReactNode;
   onMove: (path: string, target: SchemaFieldRow | null) => void;
   onImport: (item: SchemaSourceItem, target: SchemaFieldRow | null) => void;
   onSelect: (row: SchemaFieldRow) => void;
@@ -128,7 +130,7 @@ export function SchemaFieldTree({
             {sourceManagement}
             <p>Drag nodes or objects into the draft.</p>
             {!availableSources.length ? (
-              <p>Add a source through Manage sources to get started.</p>
+              <p>No sources added. Use Manage to browse reusable definitions.</p>
             ) : null}
             {availableSources.map((candidate) => (
               <SchemaVisualSource
@@ -201,7 +203,9 @@ export function SchemaFieldTree({
             </div>
           ) : (
             <div className={styles.moveToolbar}>
-              <span className={styles.selectionHint}>Select a field to edit</span>
+              <span className={styles.selectionHint}>
+                {rows.length ? 'Select a field to edit' : 'Schema structure'}
+              </span>
             </div>
           )}
           <div
@@ -231,11 +235,12 @@ export function SchemaFieldTree({
             importing={Boolean(dragging?.source)}
           />
           {!visible.length ? (
-            <p className={styles.feedback}>
-              {rows.length
-                ? 'No fields match this search.'
-                : 'No nodes yet. Add a node or drag one from Sources.'}
-            </p>
+            <div className={styles.feedback}>
+              {emptyContent ??
+                (rows.length
+                  ? 'No fields match this search.'
+                  : 'No nodes yet. Add a node or drag one from Sources.')}
+            </div>
           ) : null}
         </div>
       </div>

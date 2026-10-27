@@ -239,6 +239,10 @@ export async function compileStudioSelection(
     modules,
     ...(localContribution ? { localContribution } : {}),
   });
+  if (!entries.length) {
+    compiled.schema = normalizeYSchemaObject({ ...compiled.schema, name: 'Workspace Schema' });
+    compiled.compiledSchemaHash = await sha256CompositionValue(compiled.schema);
+  }
   // Whole-Schema bases retain root semantics; Modules alone do not carry strict/name metadata.
   if (whole.length) {
     const base = normalizeYSchemaObject(entries[resolved.metadataIndex!]!.view.manifest.schema);
@@ -310,7 +314,7 @@ export async function compileStudioSelection(
     adoption: { allowed: !adoptionReason, reason: adoptionReason },
   };
 }
-/** Continue the exact saved definition without reconstructing it from the Sources picker. */
+/** Resolve the exact bound definition, or a source-free editing Base for an unbound Workspace. */
 export async function workspaceStudioSelection(
   c: Context,
   db: AnyDB,
@@ -318,6 +322,11 @@ export async function workspaceStudioSelection(
   workspace: Record<string, unknown>
 ) {
   const resolved = await resolveWorkspaceYSchema(workspace, db, projectId);
+  if (
+    !resolved.schema &&
+    (!Array.isArray(workspace.schemaBindings) || !workspace.schemaBindings.length)
+  )
+    return { selection: await compileStudioSelection(c, db, projectId, []), basis: undefined };
   if (!resolved.schema)
     throw new StudioError(
       'CONFLICT',
@@ -382,7 +391,7 @@ export async function previewStudio(
       ? await readStudioComposition(db, projectId, editCandidate.authoringDraft.base)
       : undefined;
   if (!input.candidateIds.length && !draft?.workspace_state)
-    throw new StudioError('NOT_FOUND', 'A Workspace with a bound Schema is required.');
+    throw new StudioError('NOT_FOUND', 'A saved Workspace is required.');
   if (
     !input.candidateIds.length &&
     (input.composition ||

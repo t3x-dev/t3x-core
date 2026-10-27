@@ -1780,3 +1780,102 @@ it('does not turn deletion of existing required content into Schema initializati
   await expect(fullDecision(id, reviewed)).rejects.toThrow();
   expect((await getTransitionRefHead(db, { projectId, refName: id })).head).toBe(basis.refHead);
 });
+
+it.each([
+  false,
+  true,
+])('creates a source-free Schema, restores edits, and reaches full Review (with nodes: %s)', async (withNodes) => {
+  const id = withNodes ? 'local-schema-nodes' : 'local-schema-empty';
+  await insertBranch(db, { projectId, name: id });
+  const draft = await upsertWorkspaceDraft(db, {
+    project_id: projectId,
+    workspace_id: id,
+    target_branch: id,
+    title: id,
+    workspace_state: { title: id, targetBranch: id, schemaBindings: [] },
+  });
+  const baselineResponse = await studio('preview', { candidateIds: [], workspaceId: id });
+  expect(baselineResponse.status, await baselineResponse.clone().text()).toBe(200);
+  const baseline = (await baselineResponse.json()).data;
+  expect(baseline.sources).toEqual([]);
+  expect(baseline.schema.nodes).toEqual({});
+  expect(baseline.schema.name).toBe('Workspace Schema');
+  expect((await findWorkspaceDraft(db, projectId, id))!.revision).toBe(draft.revision);
+  const definition = {
+    ...baseline.schema,
+    nodes: withNodes ? { note: { slots: { title: { type: 'string' } } } } : {},
+  };
+  const saveInput = {
+    workspaceId: id,
+    candidateIds: [],
+    ifRevision: 0,
+    retryKey: id,
+    intent: 'Create blank Schema',
+    origin: 'studio',
+    localContribution: {},
+    schemaDefinition: definition,
+    baseSchemaHash: baseline.schemaHash,
+  };
+  const save = (body: unknown) =>
+    app.request(`/v1/projects/${projectId}/schema-studio/edit-candidates/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  const wrongBase = await save({ ...saveInput, baseSchemaHash: `sha256:${'f'.repeat(64)}` });
+  expect(wrongBase.status).toBe(409);
+  const savedResponse = await save(saveInput);
+  expect(savedResponse.status, await savedResponse.clone().text()).toBe(200);
+  const saved = (await savedResponse.json()).data.candidate;
+  expect(saved.baseSources).toEqual([]);
+  expect(saved.authoringDraft.base.kind).toBe('composition');
+  expect((await findWorkspaceDraft(db, projectId, id))!.workspace_state.schemaBindings).toEqual([]);
+  const read = await app.request(`/v1/projects/${projectId}/schema-studio/edit-candidates/${id}`);
+  expect(read.status, await read.clone().text()).toBe(200);
+  expect((await read.json()).data.baseDefinition.nodes).toEqual({});
+  const current = (await findWorkspaceDraft(db, projectId, id))!;
+  await initializeWorkspaceAuthoring(db, {
+    projectId,
+    workspaceId: id,
+    expectedWorkspaceRevision: current.revision,
+    expectedRefHead: null,
+    actionId: `init:${id}`,
+    actor: reviewer,
+    legacyDocument: {},
+  });
+  const reference = { candidateId: saved.candidateId, revision: saved.revision };
+  const previewResponse = await studio('preview', {
+    candidateIds: [],
+    workspaceId: id,
+    schemaEditCandidate: reference,
+  });
+  expect(previewResponse.status, await previewResponse.clone().text()).toBe(200);
+  const preview = (await previewResponse.json()).data;
+  expect(preview.schema.nodes).toEqual(definition.nodes);
+  const body = {
+    target: {
+      kind: 'studio',
+      candidateIds: [],
+      schemaEditCandidate: reference,
+      reviewHash: preview.reviewHash,
+    },
+    ifRevision: preview.workspace.revision,
+    commands: [],
+    confirmedChanges: [],
+  };
+  const checkResponse = await post(`${preparationPath(id)}/preview`, body);
+  expect(checkResponse.status, await checkResponse.clone().text()).toBe(200);
+  const check = (await checkResponse.json()).data;
+  expect(check.canPrepare, JSON.stringify(check)).toBe(true);
+  const prepared = await post(preparationPath(id), {
+    ...body,
+    previewHash: check.previewHash,
+    requestId: `prepare:${id}`,
+  });
+  expect(prepared.status, await prepared.clone().text()).toBe(200);
+  const reviewed = await fullReview(id);
+  expect(reviewed.view.transitionId).toBeTruthy();
+  const continued = await studio('preview', { candidateIds: [], workspaceId: id });
+  expect(continued.status, await continued.clone().text()).toBe(200);
+  expect((await continued.json()).data.schema.nodes).toEqual(definition.nodes);
+});

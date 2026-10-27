@@ -124,7 +124,16 @@ vi.mock('@/hooks/schemas/useStudioPreview', () => ({
   useStudioPreview: (_projectId: string, input: unknown) => {
     mocks.previewInputs.push(input);
     const data = mocks.previewResult ? mocks.previewResult(input) : mocks.data;
-    return { data, loading: !data, refresh: vi.fn() };
+    return {
+      data,
+      loading:
+        !data &&
+        !!(
+          (input as { workspaceId?: string; candidateIds?: string[] }).workspaceId ||
+          (input as { candidateIds?: string[] }).candidateIds?.length
+        ),
+      refresh: vi.fn(),
+    };
   },
 }));
 vi.mock('@/hooks/schemas/usePublishStudioSchema', () => ({
@@ -370,7 +379,7 @@ it('clears restored sources when switching to an unbound Workspace', async () =>
   await waitFor(() =>
     expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).not.toBeChecked()
   );
-  expect(screen.getByText('Choose a Schema or Module in Sources to start editing.')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Create blank Schema' })).toBeVisible();
   expect(mocks.apply).not.toHaveBeenCalled();
 });
 
@@ -1332,4 +1341,45 @@ it('keeps a failed Review on the editor without navigating to Workspace', async 
   fireEvent.click(screen.getByRole('button', { name: 'Review Schema changes' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('The branch moved. Review again.');
   expect(mocks.push).not.toHaveBeenCalled();
+});
+
+it('starts blank explicitly and saves the empty definition before Schema Review', async () => {
+  mocks.query = 'workspace=workspace_branch%3Amain';
+  const workspace = boundWorkspace();
+  workspace.schemaBindings = [];
+  mocks.workspaces = [workspace];
+  mocks.draftView = { hasChanges: false, basis: { refHead: null } };
+  mocks.data = {
+    ...(mocks.data as object),
+    report: { valid: true, issues: [] },
+    modules: [],
+    workspace: { id: workspace.id, revision: 2, binding: null, canBind: false, changes: [] },
+  };
+  mocks.previewResult = (input) =>
+    (input as { workspaceId?: string }).workspaceId ? mocks.data : undefined;
+  mocks.saveSchemaEdit.mockImplementation(async () => {
+    mocks.schemaEditCandidate = {
+      candidateId: 'blank-edit',
+      revision: 1,
+      baseSources: [],
+      localContribution: {},
+    } as StudioSchemaEditCandidate;
+    return { outcome: 'created', workspaceRevision: 2, candidate: mocks.schemaEditCandidate };
+  });
+  render(<SchemaStudioExperience projectId="p" />);
+  expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
+  fireEvent.click(await screen.findByRole('button', { name: 'Create blank Schema' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Save edits' })).toBeEnabled());
+  expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Review Schema changes' }));
+  await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+  expect(mocks.saveSchemaEdit).toHaveBeenCalledWith(
+    expect.objectContaining({
+      candidateIds: [],
+      schemaDefinition: expect.objectContaining({ nodes: {} }),
+      baseSchemaHash: 'definition-hash',
+    })
+  );
+  expect(mocks.contentPreview).toHaveBeenCalled();
+  expect(mocks.prepareContent).toHaveBeenCalled();
 });

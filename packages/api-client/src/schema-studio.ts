@@ -54,7 +54,7 @@ const ids = z
   .min(1)
   .max(32)
   .refine((values) => new Set(values).size === values.length, 'Duplicate candidates');
-/** Empty selection reads the Workspace's exact bound snapshot, never a default source. */
+/** Empty selection resolves the exact binding, or a local empty Base when unbound. */
 const workspaceIds = z
   .array(z.string().min(1))
   .max(32)
@@ -478,7 +478,7 @@ export const StudioSchemaEditCandidateSchema = z.object({
   candidateId: z.string().min(1),
   workspaceId: z.string().min(1),
   revision: z.number().int().positive(),
-  baseSources: z.array(StudioSourceSchema).min(1),
+  baseSources: z.array(StudioSourceSchema),
   localContribution: StudioSchemaEditLocalContributionSchema,
   /** Read-only exact editing Base, projected by the server; never persisted as client input. */
   baseDefinition: z.record(z.string(), z.unknown()).optional(),

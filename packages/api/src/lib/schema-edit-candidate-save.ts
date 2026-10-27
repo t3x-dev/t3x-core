@@ -113,7 +113,7 @@ export async function saveStudioEditCandidate(
       input.sourceMappings,
       resolveMappingSource
     );
-  if (applied && selection.modules.length) {
+  if (applied && (selection.modules.length || !selection.sources.length)) {
     await saveYSchemaCompositionSnapshot(db, {
       snapshot_id: `studio-authoring-base:${projectId}:${selection.selectionHash}`,
       project_id: projectId,
