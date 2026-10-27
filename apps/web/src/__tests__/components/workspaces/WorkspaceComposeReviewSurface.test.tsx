@@ -187,6 +187,7 @@ const modelSelectionMocks = vi.hoisted(() => ({
 const sourceGenerationMocks = vi.hoisted(() => ({
   options: null as null | {
     conversationId?: string;
+    title?: string;
     workspaceAssistant?: {
       allowProposal?: boolean;
       onCandidate?: (transitionId: string, turnId: string) => void;
@@ -205,6 +206,7 @@ vi.mock('@/hooks/shared/useChatModelSelection', () => ({
 vi.mock('@/hooks/sourceThreads/useSourceThreadGeneration', () => ({
   useSourceThreadGeneration: (options: {
     conversationId?: string;
+    title?: string;
     workspaceAssistant?: {
       allowProposal?: boolean;
       onCandidate?: (transitionId: string, turnId: string) => void;
@@ -442,6 +444,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Alpha plan' }));
     await waitFor(() => expect(sourceGenerationMocks.options?.conversationId).toBe('chat-alpha'));
+    expect(sourceGenerationMocks.options?.title).toBe('Alpha plan');
     expect(screen.getByRole('button', { name: 'Alpha plan' })).toHaveAttribute(
       'aria-current',
       'page'
@@ -452,6 +455,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New chat' }));
     await waitFor(() => expect(createAssistantConversation).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(sourceGenerationMocks.options?.conversationId).toBe('chat-new'));
+    expect(sourceGenerationMocks.options?.title).toBe('New conversation');
     expect(conversationMocks.value.update).toHaveBeenCalledWith('chat-new', {
       title: 'New conversation',
       metadata: { workspace_id: candidate.id },

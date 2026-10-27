@@ -15,8 +15,11 @@ describe('deriveConversationTitleFromMessage', () => {
     expect(title.length).toBe(25);
   });
 
-  it('treats temporary chat as a placeholder title', () => {
+  it('recognizes system-created placeholder titles', () => {
     expect(isPlaceholderConversationTitle('Temporary chat')).toBe(true);
+    expect(isPlaceholderConversationTitle('New conversation')).toBe(true);
+    expect(isPlaceholderConversationTitle('Compose assistant')).toBe(true);
+    expect(isPlaceholderConversationTitle('Release planning')).toBe(false);
   });
 
   it('cleans generated titles and keeps them within the max length', () => {

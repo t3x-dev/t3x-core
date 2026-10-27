@@ -142,6 +142,7 @@ import { useWorkspaceAuthoringBootstrap } from '@/hooks/workspaces/useWorkspaceA
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import { useWorkspaceConversations } from '@/hooks/workspaces/useWorkspaceConversations';
 import { validateWorkspaceCandidateYOps } from '@/hooks/workspaces/useWorkspaceYOps';
+import { useChatStore } from '@/store/chatStore';
 import type { ApiCommit, Conversation } from '@/types/api';
 import type {
   SourceBundleItem,
@@ -928,16 +929,21 @@ function ComposeSurface({
     },
     [activity.selectActionNode, selectActivity, setChangeScope]
   );
-  const sourceConversationId = candidate.sourceBundle.find(
+  const sourceConversation = candidate.sourceBundle.find(
     (source) =>
       source.type === 'chat' && source.title === 'Compose assistant' && source.conversationId
-  )?.conversationId;
+  );
+  const sourceConversationId = sourceConversation?.conversationId;
   const [activeConversationId, setActiveConversationId] = useState<string | undefined>(
     sourceConversationId
   );
+  const [activeConversationTitle, setActiveConversationTitle] = useState<string | undefined>(
+    sourceConversation?.title
+  );
   useEffect(() => {
     setActiveConversationId(sourceConversationId);
-  }, [candidate.id, sourceConversationId]);
+    setActiveConversationTitle(sourceConversation?.title);
+  }, [candidate.id, sourceConversation?.title, sourceConversationId]);
   const schemaSettings = useAssistantSchemaSettings(
     candidate.projectId,
     candidate.id,
@@ -964,6 +970,7 @@ function ComposeSurface({
   const createConversation = useCallback(async () => {
     const conversationId = await activity.createAssistantConversation();
     setActiveConversationId(conversationId);
+    setActiveConversationTitle('Compose assistant');
     setSchemaConversationId(undefined);
     setSidePanel('chat');
     return conversationId;
@@ -1153,8 +1160,9 @@ function ComposeSurface({
             canCreate={Boolean(activity.enabled && activity.view)}
             onCollapse={() => toggleDraft(true)}
             onCreate={createConversation}
-            onSelect={(conversationId) => {
+            onSelect={(conversationId, conversationTitle) => {
               setActiveConversationId(conversationId);
+              setActiveConversationTitle(conversationTitle);
               setSchemaConversationId(undefined);
               setSidePanel('chat');
             }}
@@ -1208,6 +1216,7 @@ function ComposeSurface({
                 selectedNodeId: selectedSchema ? undefined : activitySelection?.operation.id,
               }}
               conversationId={activeConversationId}
+              title={activeConversationTitle}
               initialPendingCandidate={
                 activity.view?.pendingCandidates?.find((item) => item.status === 'candidate')
                   ?.transitionId
@@ -1215,6 +1224,7 @@ function ComposeSurface({
               onCreateConversation={activity.createAssistantConversation}
               onConversationChange={(conversationId) => {
                 setActiveConversationId(conversationId);
+                setActiveConversationTitle(undefined);
                 setSchemaConversationId(undefined);
               }}
               onPublishCandidate={activity.publishCandidate}
@@ -1531,9 +1541,11 @@ function WorkspaceConversationSidebar({
   canCreate: boolean;
   onCollapse: () => void;
   onCreate: () => Promise<string>;
-  onSelect: (conversationId?: string) => void;
+  onSelect: (conversationId?: string, title?: string) => void;
 }) {
   const conversationsQuery = useWorkspaceConversations(candidate.projectId);
+  const conversationRefreshKey = useChatStore((state) => state.refreshKey);
+  const previousRefreshKeyRef = useRef(conversationRefreshKey);
   const storageKey = `t3x-workspace-chat-folders:${candidate.projectId}:${candidate.id}`;
   const [folders, setFolders] = useState<WorkspaceConversationFolder[]>(() => {
     try {
@@ -1596,6 +1608,11 @@ function WorkspaceConversationSidebar({
       /* Folder organization remains available for the current session. */
     }
   }, [folders, storageKey]);
+  useEffect(() => {
+    if (previousRefreshKeyRef.current === conversationRefreshKey) return;
+    previousRefreshKeyRef.current = conversationRefreshKey;
+    void conversationsQuery.refetch();
+  }, [conversationRefreshKey, conversationsQuery.refetch]);
   useEffect(() => {
     const known = new Set(folders.map((folder) => folder.id));
     const inferred = conversations.flatMap((conversation) => {
@@ -1734,7 +1751,7 @@ function WorkspaceConversationSidebar({
         const conversation = await conversationsQuery.get(conversationId);
         if (conversation.turns_count !== 0) continue;
         lastCreatedConversationRef.current = { id: conversationId, folderId };
-        onSelect(conversationId);
+        onSelect(conversationId, conversation.title ?? NEW_WORKSPACE_CONVERSATION_TITLE);
         return;
       }
 
@@ -1747,7 +1764,7 @@ function WorkspaceConversationSidebar({
           ...(folder ? { workspace_folder_id: folder.id, workspace_folder_name: folder.name } : {}),
         },
       });
-      onSelect(conversationId);
+      onSelect(conversationId, NEW_WORKSPACE_CONVERSATION_TITLE);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not create the conversation.');
     } finally {
@@ -1802,7 +1819,7 @@ function WorkspaceConversationSidebar({
         const nextConversation = conversations.find(
           (item) => item.conversation_id !== conversation.conversation_id
         );
-        onSelect(nextConversation?.conversation_id);
+        onSelect(nextConversation?.conversation_id, nextConversation?.title ?? undefined);
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not delete the conversation.');
@@ -1817,7 +1834,7 @@ function WorkspaceConversationSidebar({
           type="button"
           aria-current={selected ? 'page' : undefined}
           title={title}
-          onClick={() => onSelect(conversation.conversation_id)}
+          onClick={() => onSelect(conversation.conversation_id, title)}
         >
           <MessageSquare aria-hidden="true" />
           <span>{title}</span>
