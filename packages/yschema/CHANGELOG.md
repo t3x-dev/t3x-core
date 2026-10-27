@@ -1,5 +1,12 @@
 # @t3x-dev/yschema
 
+## 1.3.1
+
+### Patch Changes
+
+- Updated dependencies [[`bfd2bca`](https://github.com/t3x-dev/t3x-core/commit/bfd2bcae688c0d4aa9d2e3a50ae58e936d2caf4f)]
+  - @t3x-dev/yops@1.2.1
+
 ## 1.3.0
 
 ### Minor Changes

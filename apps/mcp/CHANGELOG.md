@@ -1,5 +1,12 @@
 # @t3x-dev/mcp
 
+## 1.6.1
+
+### Patch Changes
+
+- @t3x-dev/api@1.6.1
+- @t3x-dev/mcp-lib@1.6.1
+
 ## 1.5.1
 
 ### Patch Changes
