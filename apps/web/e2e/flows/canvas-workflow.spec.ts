@@ -37,8 +37,7 @@ test.describe('Canvas Workflow', () => {
     await canvas.waitForLoad();
 
     // At least one node should be visible
-    const nodeCount = await canvas.getNodesCount();
-    expect(nodeCount).toBeGreaterThan(0);
+    await expect.poll(() => canvas.getNodesCount(), { timeout: 15_000 }).toBeGreaterThan(0);
 
     // Commit node should be visible (by hash or message)
     const commitNode = page

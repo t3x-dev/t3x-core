@@ -10,7 +10,8 @@ test('State opens History and Commit with its inline parent Diff and a complete 
   page,
   request,
 }) => {
-  const { projectId } = await createTestProject(request, `Repository navigation ${Date.now()}`);
+  const projectName = `Repository-navigation-${Date.now()}`;
+  const { projectId } = await createTestProject(request, projectName);
 
   try {
     const baseHash = await createTestCommitFromTrees(request, projectId, PROMPT_DIFF_DEMO.base, {
@@ -42,18 +43,17 @@ test('State opens History and Commit with its inline parent Diff and a complete 
 
     await page.goto(`/project/${projectId}`);
     await expect(
-      page.getByRole('heading', { level: 1, name: /Repository navigation/ }).first()
+      page.getByRole('heading', { level: 1, name: projectName, exact: true }).first()
     ).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole('tab', { name: 'Overview', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Switch branches/tags, current branch main' })).toBeVisible();
     await expect(page.getByText('Repository navigation revision', { exact: true })).toBeVisible();
 
     await page.getByRole('link', { name: 'History', exact: true }).click();
-    await page.getByRole('button', { name: 'List View', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'History', exact: true })).toBeVisible();
     await expect(page).toHaveURL((url) => url.searchParams.get('branch') === 'main');
 
-    const targetRow = page.locator(`[data-commit-hash="${targetHash}"]`);
+    const targetRow = page.getByRole('button').filter({ hasText: 'Repository navigation revision' });
     await expect(targetRow).toContainText('Repository navigation revision');
     await targetRow.click();
 
@@ -68,7 +68,7 @@ test('State opens History and Commit with its inline parent Diff and a complete 
     await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('button', { name: 'History', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'History', exact: true })).toBeVisible();
     await expect(page).toHaveURL((url) => url.searchParams.get('branch') === 'main');
-    await page.getByRole('button', { name: 'Back to current State', exact: true }).click();
+    await page.getByRole('button', { name: 'Back to previous page', exact: true }).click();
     await expect(page.getByRole('tab', { name: 'Overview', exact: true })).toBeVisible();
 
     expect(browserErrors, browserErrors.join('\n')).toEqual([]);

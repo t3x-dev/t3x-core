@@ -122,10 +122,10 @@ test('repository source view fails visibly when project access is denied', async
   await expect(page.getByText('Source is available')).not.toBeVisible();
 });
 
-test('explicit legacy provenance links redirect with source identity', async ({ page }) => {
+test('canonical provenance links preserve source identity', async ({ page }) => {
   await fulfillEvidence(page, sourceEvidence);
   await page.goto(
-    '/chat/conv_source?view=source&projectId=proj_source&branch=main&commit=sha256%3Acommit-1&turn=sha256%3Aturn-1'
+    '/project/proj_source/sources/conversations/conv_source?branch=main&commit=sha256%3Acommit-1&turn=sha256%3Aturn-1'
   );
 
   await expect(page).toHaveURL(

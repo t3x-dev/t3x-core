@@ -252,7 +252,7 @@ test.describe('V4 WebUI UI Tests', () => {
     await expect(navigation).toBeVisible({ timeout: 10000 });
     await expect(navigation.getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
-      '/t3x-dev/settings'
+      '/settings/provider-credentials?owner=t3x-dev'
     );
   });
 });

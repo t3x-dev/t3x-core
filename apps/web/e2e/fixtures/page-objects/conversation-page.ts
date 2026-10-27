@@ -10,18 +10,18 @@ export class ConversationPage {
     this.contextPanel = page.locator('aside').filter({ hasText: 'Context' }).first();
   }
 
-  async goto(_projectId: string, conversationId: string): Promise<void> {
-    await this.page.goto(`/chat/${conversationId}`);
+  async goto(projectId: string, conversationId: string): Promise<void> {
+    await this.page.goto(`/project/${projectId}/sources/conversations/${conversationId}`);
   }
 
   async gotoWithHighlight(
-    _projectId: string,
+    projectId: string,
     conversationId: string,
     turnHash: string,
     startChar: number,
     endChar: number
   ): Promise<void> {
-    const url = `/chat/${conversationId}?turn=${turnHash}&highlight=${startChar}-${endChar}`;
+    const url = `/project/${projectId}/sources/conversations/${conversationId}?turn=${turnHash}&highlight=${startChar}-${endChar}`;
     await this.page.goto(url);
   }
 

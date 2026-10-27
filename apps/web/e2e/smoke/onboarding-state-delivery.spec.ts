@@ -2,8 +2,8 @@ import { expect, test } from '../fixtures/test';
 import { cleanupProject, createTestCommitFromTrees, createTestProject } from '../fixtures/api-helpers';
 
 for (const viewport of [{ width: 1480, height: 900 }, { width: 390, height: 844 }]) {
-  test(`legacy Leaf tour opens State delivery at ${viewport.width}px`, async ({ page, request }, testInfo) => {
-    const { projectId } = await createTestProject(request, 'Delivery onboarding');
+  test(`State delivery tour opens Snapshot at ${viewport.width}px`, async ({ page, request }, testInfo) => {
+    const { projectId } = await createTestProject(request, `Delivery-onboarding-${viewport.width}-${Date.now()}`);
     try {
       const hash = await createTestCommitFromTrees(request, projectId, [{ key: 'release', slots: { title: 'Reviewed release' }, children: [] }]);
       await page.setViewportSize(viewport);
@@ -14,7 +14,7 @@ for (const viewport of [{ width: 1480, height: 900 }, { width: 390, height: 844 
       await page.locator(`[data-id="${hash}"] [data-intro-target="canvas-commit-node"]`).click();
       await expect(page.getByText('Open State for delivery', { exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: /New Leaf|Create Leaf/ })).toHaveCount(0);
-      const target = page.locator('[data-intro-target="canvas-back-to-state"]:visible');
+      const target = page.locator('[data-intro-target="state-snapshot-mode"]:visible');
       await expect.poll(async () => {
         const spot = await page.getByTestId('project-tour-spotlight').boundingBox();
         const box = await target.boundingBox();
@@ -24,10 +24,9 @@ for (const viewport of [{ width: 1480, height: 900 }, { width: 390, height: 844 
       const box = (await target.boundingBox())!;
       expect(coach.x >= box.x + box.width || coach.x + coach.width <= box.x || coach.y >= box.y + box.height || coach.y + coach.height <= box.y).toBe(true);
       await page.screenshot({ animations: 'disabled', path: testInfo.outputPath(`delivery-${viewport.width}.png`) });
-      await page.locator('[data-intro-target="canvas-back-to-state"]:visible').click();
-      await expect(page.getByRole('tab', { name: /^Overview/ })).toBeVisible();
+      await page.locator('[data-intro-target="state-snapshot-mode"]:visible').click();
+      await expect(page.getByRole('tab', { name: 'Overview', exact: true })).toHaveAttribute('aria-selected', 'true');
       await expect(page.getByText('Open State for delivery', { exact: true })).toHaveCount(0);
-      await expect(page.getByRole('button', { name: 'Export', exact: true })).toBeVisible();
       expect(writes).toEqual([]);
     } finally { await cleanupProject(request, projectId); }
   });
