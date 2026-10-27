@@ -1,9 +1,9 @@
 'use client';
 
-import type { StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
+import type { StudioCandidate } from '@t3x-dev/api-client';
 import { Settings2 } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ReferenceIcon as Icon } from './DiscoverReference';
@@ -13,7 +13,6 @@ type SourceOption = {
   id: string;
   title: string;
   source: string;
-  checked: boolean;
   candidate?: StudioCandidate;
 };
 
@@ -22,38 +21,40 @@ export function SchemaSourceManager({
   onOpenChange,
   browseHref,
   modules,
-  composition,
-  onChoose,
   onRemove,
-  locked,
+  removalBlockers,
   pending,
-  contextLocked,
   loading,
   error,
-  data,
   onAdd,
-  onClear,
+  combineDisabledReason,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   browseHref: string;
   modules: SourceOption[];
-  composition: SourceOption[];
-  onChoose: (module: SourceOption) => void;
   onRemove: (id: string) => void;
-  locked: Set<string>;
+  removalBlockers: Record<string, string>;
   pending: boolean;
-  contextLocked: boolean;
   loading: boolean;
   error?: string;
-  data?: StudioPreview;
   onAdd?: () => void;
-  onClear?: () => void;
+  combineDisabledReason?: string;
 }) {
+  const id = useId();
   const [query, setQuery] = useState('');
   const visibleModules = modules.filter((module) =>
     `${module.title} ${module.source}`.toLowerCase().includes(query.toLowerCase())
   );
+  const combineReason =
+    combineDisabledReason ||
+    (!onAdd
+      ? 'Combining sources is unavailable.'
+      : pending
+        ? 'Wait for the current operation to finish before combining sources.'
+        : loading
+          ? 'Wait for sources to finish loading before combining them.'
+          : undefined);
   function moduleIcon(module: SourceOption) {
     return (
       <span className={s.mi}>
@@ -73,7 +74,10 @@ export function SchemaSourceManager({
         className="max-h-[65vh] w-[min(560px,calc(100vw-32px))] overflow-y-auto"
         aria-label="Manage Schema sources"
       >
-        <p className="mb-3 text-sm font-medium">Sources · {composition.length} selected</p>
+        <p className="mb-3 text-sm font-medium">Sources · {modules.length}</p>
+        <p className={s.feedback}>
+          Reusable definitions for importing nodes and objects into the draft.
+        </p>
         <div className={s.sourceToolbar}>
           <input
             aria-label="Filter sources"
@@ -88,7 +92,8 @@ export function SchemaSourceManager({
               onOpenChange(false);
               onAdd?.();
             }}
-            disabled={!onAdd || contextLocked || pending}
+            disabled={Boolean(combineReason)}
+            aria-describedby={combineReason ? `${id}-combine-reason` : undefined}
           >
             Combine sources…
           </Button>
@@ -96,29 +101,24 @@ export function SchemaSourceManager({
             Browse source releases
           </Link>
         </div>
+        {combineReason ? (
+          <p id={`${id}-combine-reason`} className={s.feedback}>
+            {combineReason}
+          </p>
+        ) : null}
+        {loading ? <output className={s.feedback}>Loading sources…</output> : null}
+        {error ? (
+          <p role="alert" className={s.feedback}>
+            {error}
+          </p>
+        ) : null}
         <ul className={s.sourceList}>
-          {visibleModules.map((module) => {
-            const dependencies =
-              data?.modules.find((item) => item.candidateId === module.id)?.requiredBy ?? [];
+          {visibleModules.map((module, index) => {
+            const removalReason = removalBlockers[module.id];
+            const removalReasonId = `${id}-remove-reason-${index}`;
             return (
               <li key={module.id} className={s.sourceRow}>
-                <label className={s.sourceIdentity}>
-                  <input
-                    type="checkbox"
-                    aria-label={
-                      module.candidate
-                        ? `Select ${module.title} ${module.candidate.source?.version ?? ''}`
-                        : module.title
-                    }
-                    checked={module.checked}
-                    disabled={
-                      !module.candidate?.available ||
-                      pending ||
-                      contextLocked ||
-                      locked.has(module.id)
-                    }
-                    onChange={() => onChoose?.(module)}
-                  />
+                <div className={s.sourceIdentity} style={{ cursor: 'default' }}>
                   {moduleIcon(module)}
                   <span>
                     <b>{module.title}</b>
@@ -127,21 +127,22 @@ export function SchemaSourceManager({
                       {module.candidate?.source?.version ?? 'Unavailable'}
                     </small>
                   </span>
-                </label>
+                </div>
                 <div className={s.sourceMetadata}>
                   <details>
                     <summary>Source details</summary>
                     <code>{module.candidate?.source?.hash ?? 'Hash unavailable'}</code>
                   </details>
-                  {dependencies.length ? <span>Required by {dependencies.join(', ')}</span> : null}
+                  {removalReason ? <span id={removalReasonId}>{removalReason}</span> : null}
                 </div>
                 {module.candidate ? (
                   <Button
                     variant="ghost"
                     size="sm"
                     aria-label={`Remove ${module.title}`}
-                    disabled={pending || contextLocked || locked.has(module.id)}
-                    onClick={() => onRemove?.(module.id)}
+                    disabled={pending || Boolean(removalReason)}
+                    aria-describedby={removalReason ? removalReasonId : undefined}
+                    onClick={() => onRemove(module.id)}
                   >
                     Remove
                   </Button>
@@ -156,11 +157,6 @@ export function SchemaSourceManager({
           </p>
         ) : modules.length && !visibleModules.length ? (
           <p className={s.feedback}>No sources match this search.</p>
-        ) : null}
-        {composition.length && onClear ? (
-          <Button variant="ghost" size="sm" disabled={pending || contextLocked} onClick={onClear}>
-            Clear selection
-          </Button>
         ) : null}
       </PopoverContent>
     </Popover>

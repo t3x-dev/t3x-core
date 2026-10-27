@@ -67,7 +67,6 @@ export function SchemaFieldTree({
   const [source, setSource] = useState<SchemaSourceItem>();
   const [destination, setDestination] = useState('');
   const [moveOpen, setMoveOpen] = useState(false);
-  const [sourcesOpen, setSourcesOpen] = useState(true);
   const availableSources = sources.filter((item) => item.available);
   const selectedRow = rows.find((row) => row.path === selected);
   const active: TransferItem | undefined = source
@@ -107,30 +106,20 @@ export function SchemaFieldTree({
         setDragging(undefined);
       }}
     >
-      <div
-        className={styles.fieldWorkarea}
-        data-sources={
-          Boolean(sourcesOpen && projectId && (availableSources.length || sourceManagement)) ||
-          undefined
-        }
-      >
-        {sourcesOpen && projectId && (availableSources.length > 0 || sourceManagement) ? (
+      <div className={styles.fieldWorkarea} data-sources={Boolean(projectId) || undefined}>
+        {projectId ? (
           <aside className={styles.importSources} aria-label="Available Schema sources">
             <div className={styles.sourceHeading}>
               <strong>Sources</strong>
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-label="Hide sources"
-                onClick={() => setSourcesOpen(false)}
-              >
-                Hide
-              </Button>
             </div>
             {sourceManagement}
             <p>Drag nodes or objects into the draft.</p>
             {!availableSources.length ? (
-              <p>No sources added. Use Manage to browse reusable definitions.</p>
+              <p>
+                {sourceManagement
+                  ? 'No sources added. Use Manage to browse reusable definitions.'
+                  : 'No sources added.'}
+              </p>
             ) : null}
             {availableSources.map((candidate) => (
               <SchemaVisualSource
@@ -151,14 +140,7 @@ export function SchemaFieldTree({
         ) : null}
         <div className={styles.fieldMain}>
           <div className={styles.columns}>
-            <span className="flex items-center gap-2">
-              {!sourcesOpen && projectId ? (
-                <Button variant="ghost" size="sm" onClick={() => setSourcesOpen(true)}>
-                  Sources
-                </Button>
-              ) : null}
-              Field
-            </span>
+            <span>Field</span>
             <span>Type · Required</span>
             <span className="sr-only">Actions</span>
           </div>

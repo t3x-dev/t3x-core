@@ -1784,7 +1784,7 @@ it('does not turn deletion of existing required content into Schema initializati
 it.each([
   false,
   true,
-])('creates a source-free Schema, restores edits, and reaches full Review (with nodes: %s)', async (withNodes) => {
+])('creates a source-free Schema and continues editing its exact Base before and after Commit (with nodes: %s)', async (withNodes) => {
   const id = withNodes ? 'local-schema-nodes' : 'local-schema-empty';
   await insertBranch(db, { projectId, name: id });
   const draft = await upsertWorkspaceDraft(db, {
@@ -1829,6 +1829,14 @@ it.each([
   const saved = (await savedResponse.json()).data.candidate;
   expect(saved.baseSources).toEqual([]);
   expect(saved.authoringDraft.base.kind).toBe('composition');
+  const initialBase = saved.authoringDraft.base;
+  const initialSnapshot = await findYSchemaCompositionSnapshot(db, {
+    project_id: projectId,
+    composition_id: initialBase.compositionId,
+    composition_revision: initialBase.compositionRevision,
+    compiled_schema_hash: initialBase.schemaHash,
+  });
+  expect(initialSnapshot?.schemaJson).toEqual(baseline.schema);
   expect((await findWorkspaceDraft(db, projectId, id))!.workspace_state.schemaBindings).toEqual([]);
   const read = await app.request(`/v1/projects/${projectId}/schema-studio/edit-candidates/${id}`);
   expect(read.status, await read.clone().text()).toBe(200);
@@ -1878,4 +1886,84 @@ it.each([
   const continued = await studio('preview', { candidateIds: [], workspaceId: id });
   expect(continued.status, await continued.clone().text()).toBe(200);
   expect((await continued.json()).data.schema.nodes).toEqual(definition.nodes);
+
+  let expected = definition;
+  let candidateRevision = saved.revision;
+  for (const name of ['before_commit', 'after_commit']) {
+    const boundDraft = (await findWorkspaceDraft(db, projectId, id))!;
+    const binding = boundDraft.workspace_state.schemaBindings[0];
+    const currentResponse = await studio('preview', { candidateIds: [], workspaceId: id });
+    expect(currentResponse.status, await currentResponse.clone().text()).toBe(200);
+    const current = (await currentResponse.json()).data;
+    expect(current.sources).toEqual([]);
+    expect(current.schema).toEqual(expected);
+    const baseDefinition = expected;
+    expected = { ...expected, nodes: { ...expected.nodes, [name]: { slots: {} } } };
+    const nextSave = {
+      ...saveInput,
+      ifRevision: candidateRevision,
+      retryKey: `${id}:${name}`,
+      schemaDefinition: expected,
+      baseSchemaHash: current.schemaHash,
+      rebase: true,
+    };
+    const response = await save(nextSave);
+    expect(response.status, await response.clone().text()).toBe(200);
+    const result = (await response.json()).data;
+    candidateRevision = result.candidate.revision;
+    expect(result.candidate.baseSources).toEqual([]);
+    expect(result.candidate.baseDefinition).toEqual(baseDefinition);
+    expect(result.candidate.authoringDraft.base).toEqual({
+      kind: 'composition',
+      compositionId: binding.compositionId,
+      compositionRevision: binding.compositionRevision,
+      compositionHash: binding.compositionHash,
+      schemaHash: binding.schemaHash,
+    });
+    expect((await findWorkspaceDraft(db, projectId, id))!.workspace_state.schemaBindings).toEqual(
+      boundDraft.workspace_state.schemaBindings
+    );
+    const retriedResponse = await save(nextSave);
+    expect(retriedResponse.status, await retriedResponse.clone().text()).toBe(200);
+    expect((await retriedResponse.json()).data).toMatchObject({
+      outcome: 'reused',
+      workspaceRevision: result.workspaceRevision,
+      candidate: { candidateId: saved.candidateId, revision: candidateRevision },
+    });
+    const nextReference = { candidateId: saved.candidateId, revision: candidateRevision };
+    const editedResponse = await studio('preview', {
+      candidateIds: [],
+      workspaceId: id,
+      schemaEditCandidate: nextReference,
+    });
+    expect(editedResponse.status, await editedResponse.clone().text()).toBe(200);
+    const edited = (await editedResponse.json()).data;
+    expect(edited.schema).toEqual(expected);
+    const nextPreparation = {
+      ...body,
+      target: { ...body.target, schemaEditCandidate: nextReference, reviewHash: edited.reviewHash },
+      ifRevision: edited.workspace.revision,
+    };
+    const checkedResponse = await post(`${preparationPath(id)}/preview`, nextPreparation);
+    expect(checkedResponse.status, await checkedResponse.clone().text()).toBe(200);
+    const checked = (await checkedResponse.json()).data;
+    expect(checked.canPrepare, JSON.stringify(checked)).toBe(true);
+    const preparedResponse = await post(preparationPath(id), {
+      ...nextPreparation,
+      previewHash: checked.previewHash,
+      requestId: `prepare:${id}:${name}`,
+    });
+    expect(preparedResponse.status, await preparedResponse.clone().text()).toBe(200);
+    const nextReview = await fullReview(id, `full-review:${id}:${name}`);
+    expect(nextReview.schemaReview.draft.definition).toEqual(expected);
+    expect((await fullDecision(id, nextReview)).commit).toBeDefined();
+    expect(
+      await findYSchemaCompositionSnapshot(db, {
+        project_id: projectId,
+        composition_id: initialBase.compositionId,
+        composition_revision: initialBase.compositionRevision,
+        compiled_schema_hash: initialBase.schemaHash,
+      })
+    ).toEqual(initialSnapshot);
+  }
 });

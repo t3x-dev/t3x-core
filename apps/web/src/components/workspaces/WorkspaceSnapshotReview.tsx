@@ -35,11 +35,8 @@ export function WorkspaceSnapshotReview({
 }) {
   const router = useRouter();
   const pane = useSearchParams().get('reviewPane');
-  const { decide, load, overrideReason, setOverrideReason, state } = useWorkspaceReviewSnapshot(
-    projectId,
-    workspaceId,
-    snapshotId
-  );
+  const { decide, load, retryDecision, overrideReason, setOverrideReason, state } =
+    useWorkspaceReviewSnapshot(projectId, workspaceId, snapshotId);
   const snapshot = state.data?.snapshot ?? null;
   const view = snapshot?.transition?.mode === 'transition' ? snapshot.transition : null;
   const schemaReview = state.data?.schema_review;
@@ -96,12 +93,13 @@ export function WorkspaceSnapshotReview({
           </span>
         ) : null}
         {context === 'schema' ? (
-          <nav aria-label="Schema workflow" className="flex items-center gap-3 text-sm">
-            <Link href={schemaHref}>Edit</Link>
-            <span aria-current="page" className="font-semibold">
-              Review
-            </span>
-          </nav>
+          <WorkspaceStageNavigation
+            label="Schema workflow"
+            mode="review"
+            onModeChange={(mode) => {
+              if (mode === 'compose') router.push(schemaHref);
+            }}
+          />
         ) : (
           <WorkspaceStageNavigation
             mode="review"
@@ -133,7 +131,7 @@ export function WorkspaceSnapshotReview({
               {commit
                 ? 'This revision is committed. Open State to inspect or export it.'
                 : view?.decision?.observation === 'supplied' && view.decision.outcome === 'rejected'
-                  ? 'This revision was rejected. The decision is recorded and the branch was not changed.'
+                  ? 'This revision was rejected. The Draft is retained for editing; the branch was not changed.'
                   : 'Review this fixed revision, then approve and commit or reject it here. Run contains the detailed evidence.'}
             </p>
           </div>
@@ -213,13 +211,33 @@ export function WorkspaceSnapshotReview({
               Change review unavailable
             </h2>
             <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">{state.error}</p>
-            <p className="mt-2 text-xs text-[var(--text-secondary)]">
-              If the Draft or branch has changed,{' '}
-              <Link className="underline" href={context === 'schema' ? schemaHref : workspaceHref}>
-                open the current draft and prepare a new review
-              </Link>
-              . This snapshot stays available in Run.
-            </p>
+            {state.recovery ? (
+              <div className="mt-2 space-y-2 text-sm">
+                <p>
+                  The original decision may already have been processed. Check its result or retry
+                  that same decision before taking another action.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={state.loading || state.deciding || !retryDecision}
+                  onClick={() => void retryDecision?.()}
+                >
+                  Retry original decision
+                </Button>
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-[var(--text-secondary)]">
+                If the Draft or branch has changed,{' '}
+                <Link
+                  className="underline"
+                  href={context === 'schema' ? schemaHref : workspaceHref}
+                >
+                  open the current draft and prepare a new review
+                </Link>
+                . This snapshot stays available in Run.
+              </p>
+            )}
           </section>
         ) : null}
 
@@ -254,7 +272,12 @@ export function WorkspaceSnapshotReview({
               <ChangeDecisionPanel
                 contentValidation={schemaReview?.contentValidation}
                 branch={branch ?? null}
-                busy={state.deciding || state.loading}
+                busy={
+                  state.deciding ||
+                  state.loading ||
+                  Boolean(state.recovery) ||
+                  Boolean(state.latestUnavailable)
+                }
                 onDecide={(outcome, reason) => void decide(outcome, reason)}
                 onOverrideReasonChange={setOverrideReason}
                 overrideReason={overrideReason}

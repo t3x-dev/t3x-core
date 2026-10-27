@@ -14,6 +14,76 @@ beforeEach(() => {
   mocks.save.mockReset();
 });
 
+const saveInput = {
+  workspaceId: 'workspace',
+  candidateIds: [],
+  ifRevision: 0,
+  retryKey: 'attempt-1',
+  intent: 'Edit Schema',
+  origin: 'studio' as const,
+  localContribution: {},
+  schemaDefinition: { nodes: { item: { slots: {} } } },
+  baseSchemaHash: 'base',
+};
+
+it('recovers a saved attempt after its response is lost by replaying the exact request', async () => {
+  mocks.read.mockResolvedValue(null);
+  const { result } = renderHook(() => useStudioSchemaEditCandidate('project', 'workspace', 7));
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  const saved = {
+    outcome: 'reused',
+    workspaceRevision: 8,
+    candidate: { candidateId: 'edit', revision: 1, retryKey: saveInput.retryKey },
+  };
+  mocks.read.mockResolvedValue(saved.candidate);
+  mocks.save.mockRejectedValueOnce(new Error('Response lost')).mockResolvedValueOnce(saved);
+  await act(async () => {
+    expect(await result.current.save(saveInput)).toEqual(saved);
+  });
+  expect(mocks.save).toHaveBeenCalledTimes(2);
+  expect(mocks.save.mock.calls[0]).toEqual(mocks.save.mock.calls[1]);
+  expect(result.current.candidate).toEqual(saved.candidate);
+});
+
+it('keeps the original request identity for an unchanged manual retry', async () => {
+  mocks.read.mockResolvedValue(null);
+  const { result } = renderHook(() => useStudioSchemaEditCandidate('project', 'workspace', 7));
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  mocks.save.mockRejectedValueOnce(new Error('Offline'));
+  await act(async () => {
+    await expect(result.current.save(saveInput)).rejects.toThrow('Offline');
+  });
+  mocks.save.mockResolvedValueOnce({
+    outcome: 'created',
+    workspaceRevision: 8,
+    candidate: { candidateId: 'edit', revision: 1 },
+  });
+  await act(async () => {
+    await result.current.save({ ...saveInput, retryKey: 'new-click' });
+  });
+  expect(mocks.save.mock.calls[1][2]).toEqual(saveInput);
+});
+
+it('does not reuse a failed request key after the user changes its content', async () => {
+  mocks.read.mockResolvedValue(null);
+  const { result } = renderHook(() => useStudioSchemaEditCandidate('project', 'workspace', 7));
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  mocks.save.mockRejectedValueOnce(new Error('Offline'));
+  await act(async () => {
+    await expect(result.current.save(saveInput)).rejects.toThrow('Offline');
+  });
+  const changed = { ...saveInput, retryKey: 'changed', schemaDefinition: { nodes: {} } };
+  mocks.save.mockResolvedValueOnce({
+    outcome: 'created',
+    workspaceRevision: 8,
+    candidate: { candidateId: 'edit', revision: 1 },
+  });
+  await act(async () => {
+    await result.current.save(changed);
+  });
+  expect(mocks.save.mock.calls[1][2]).toEqual(changed);
+});
+
 it('recovers and replaces the server-managed candidate for the selected Workspace', async () => {
   const recovered = {
     candidateId: 'schema-edit',

@@ -1,6 +1,7 @@
 'use client';
 
 import type { StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
+import { canonicalJson, type YValue } from '@t3x-dev/yops';
 import { Box, ChevronDown, FileText, MoreHorizontal, Plus, Trash2, X } from 'lucide-react';
 import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from 'react';
 import { StructureTreeRow, visibleTreeRows } from '@/components/structure/StructureTree';
@@ -48,6 +49,20 @@ import { SchemaSourceBadge } from './SchemaSourceBadge';
 import { type ParentLineMode, SchemaVisualEditor } from './SchemaVisualEditor';
 import type { SchemaSourceItem } from './SchemaVisualSources';
 import { type SchemaEditorNavigation, useSchemaNavigationGuard } from './useSchemaNavigationGuard';
+
+function schemaEditorValueKey(definition: SchemaDefinition, mappings: SchemaSourceMappings) {
+  const origins = mappings
+    .filter(
+      (entry) =>
+        entry.source ||
+        entry.path.length !== entry.from.length ||
+        entry.path.some((key, index) => key !== entry.from[index])
+    )
+    .map((entry) => canonicalJson(entry as YValue))
+    .sort();
+  // Mapping order and a local move back to its original path do not change the saved value.
+  return canonicalJson({ definition, origins } as YValue);
+}
 
 export function SchemaDataEditor({
   navigationRef,
@@ -143,6 +158,7 @@ export function SchemaDataEditor({
   const [conflictName, setConflictName] = useState('');
   const [conflictError, setConflictError] = useState('');
   const loaded = useRef<string | undefined>(undefined);
+  const savedValue = useRef<{ key: string; needsInitialSave: boolean } | undefined>(undefined);
   const validationError = fieldError || rulesError;
   const busy = pending || saving || !definition;
   const stale = dirty && loaded.current !== revisionKey;
@@ -150,6 +166,10 @@ export function SchemaDataEditor({
   useEffect(() => {
     if (!initialDefinition || dirty || loaded.current === revisionKey) return;
     loaded.current = revisionKey;
+    savedValue.current = {
+      key: schemaEditorValueKey(initialDefinition, initialSourceMappings),
+      needsInitialSave: initiallyDirty,
+    };
     setDefinition(structuredClone(initialDefinition));
     setDirty(initiallyDirty);
     setSourceMappings(structuredClone(initialSourceMappings));
@@ -267,7 +287,7 @@ export function SchemaDataEditor({
     const retained = pruneSchemaMappings(mappings, next);
     setSourceMappings(retained);
     setDefinition(next);
-    setDirty(true);
+    setDirty(hasUnsavedChanges(next, retained));
     setError(undefined);
     setNotice('');
     onPreview(next, retained);
@@ -279,11 +299,17 @@ export function SchemaDataEditor({
     setDefinition(previous.definition);
     setSourceMappings(previous.mappings);
     setSelected(previous.selected);
-    setDirty(true);
+    setDirty(hasUnsavedChanges(previous.definition, previous.mappings));
     setError(undefined);
     setNotice('Undid the last definition change.');
     setResetKey((value) => value + 1);
     onPreview(previous.definition, previous.mappings);
+  }
+  function hasUnsavedChanges(next: SchemaDefinition, mappings: SchemaSourceMappings) {
+    return (
+      savedValue.current?.needsInitialSave === true ||
+      schemaEditorValueKey(next, mappings) !== savedValue.current?.key
+    );
   }
   function update(
     row: SchemaFieldRow,
@@ -335,6 +361,10 @@ export function SchemaDataEditor({
     setError(undefined);
     try {
       await onSave(definition, intent.trim() || 'Edit Schema fields.', sourceMappings);
+      savedValue.current = {
+        key: schemaEditorValueKey(definition, sourceMappings),
+        needsInitialSave: false,
+      };
       setDirty(false);
       setHistory([]);
       setNotice('Schema changes saved. Not committed.');

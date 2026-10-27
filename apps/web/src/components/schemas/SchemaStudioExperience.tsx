@@ -19,10 +19,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { WorkspaceStageNavigation } from '@/components/workspaces/WorkspaceStageNavigation';
 import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
 import { schemaFieldRows } from '@/domain/schemas/schemaFieldEditing';
 import {
   schemaBrowseHref,
+  schemaReviewHref,
   schemaSourceHref,
   schemaWorkspaceHref,
 } from '@/domain/schemas/schemaNavigation';
@@ -31,6 +33,7 @@ import {
   pruneSchemaMappings,
   type SchemaSourceMappings,
 } from '@/domain/schemas/schemaSourceMappings';
+import { schemaWorkflowStatus } from '@/domain/schemas/schemaWorkflowStatus';
 import {
   listStudioDraftWorkspaces,
   listStudioWorkspacesForBranches,
@@ -38,6 +41,7 @@ import {
 } from '@/domain/workspaces/studioTargets';
 import { useSchemaDraftStatus } from '@/hooks/schemas/useSchemaDraftStatus';
 import { useSchemaReviewFlow } from '@/hooks/schemas/useSchemaReviewFlow';
+import { useSchemaReviewStatus } from '@/hooks/schemas/useSchemaReviewStatus';
 import { useSchemaSourceIdentities } from '@/hooks/schemas/useSchemaSourceIdentities';
 import { useStudioCandidates } from '@/hooks/schemas/useStudioCandidates';
 import { useStudioPreview } from '@/hooks/schemas/useStudioPreview';
@@ -65,7 +69,6 @@ type StudioModule = {
   sourceTone: ModuleTone | 'black';
   tone: ModuleTone;
   icon: string;
-  checked: boolean;
   candidate?: StudioCandidate;
 };
 
@@ -89,7 +92,6 @@ const demoSources: StudioSource[] = [
         sourceTone: 'black',
         tone: 'blue',
         icon: 'ri-box-3-fill',
-        checked: true,
       },
       {
         id: 'requirements',
@@ -98,7 +100,6 @@ const demoSources: StudioSource[] = [
         sourceTone: 'black',
         tone: 'purple',
         icon: 'ri-file-list-3-fill',
-        checked: true,
       },
       {
         id: 'milestones',
@@ -107,7 +108,6 @@ const demoSources: StudioSource[] = [
         sourceTone: 'black',
         tone: 'orange',
         icon: 'ri-flag-2-fill',
-        checked: false,
       },
     ],
   },
@@ -123,7 +123,6 @@ const demoSources: StudioSource[] = [
         sourceTone: 'blue',
         tone: 'green',
         icon: 'ri-rocket-2-fill',
-        checked: true,
       },
       {
         id: 'acceptance',
@@ -132,7 +131,6 @@ const demoSources: StudioSource[] = [
         sourceTone: 'blue',
         tone: 'rose',
         icon: 'ri-checkbox-circle-fill',
-        checked: true,
       },
       {
         id: 'audit',
@@ -141,7 +139,6 @@ const demoSources: StudioSource[] = [
         sourceTone: 'blue',
         tone: 'slate',
         icon: 'ri-database-2-fill',
-        checked: false,
       },
     ],
   },
@@ -157,7 +154,6 @@ const demoSources: StudioSource[] = [
         sourceTone: 'purple',
         tone: 'amber',
         icon: 'ri-alert-fill',
-        checked: true,
       },
       {
         id: 'controls',
@@ -166,15 +162,10 @@ const demoSources: StudioSource[] = [
         sourceTone: 'purple',
         tone: 'slate',
         icon: 'ri-shield-check-fill',
-        checked: false,
       },
     ],
   },
 ];
-
-const demoComposition = demoSources
-  .flatMap((source) => source.modules)
-  .filter((item) => item.checked);
 
 function candidateTone(index: number): ModuleTone {
   return (['blue', 'purple', 'green', 'rose', 'amber', 'slate'] as const)[index % 6];
@@ -215,6 +206,7 @@ export function SchemaStudioExperience({
   const legacyView = params?.get('schemaView') === 'active';
   const [definitionOpen, setDefinitionOpen] = useState(false);
   const [sourceManagerOpen, setSourceManagerOpen] = useState(false);
+  const [sourceError, setSourceError] = useState<string>();
   const [compositionRequest, setCompositionRequest] = useState<{
     ids: string[];
     revision: number;
@@ -371,7 +363,14 @@ export function SchemaStudioExperience({
   );
   const currentBinding = persistedTarget?.schemaBindings?.[0];
   const creatingBlank = blankWorkspace === workspaceId;
-  const draftView = useSchemaDraftStatus(
+  const draftState = useSchemaDraftStatus(
+    projectId,
+    persistedTarget?.id ?? '',
+    persistedTarget?.revision,
+    Boolean(persistedTarget?.authoringLedger)
+  );
+  const draftView = draftState.view;
+  const reviewStatus = useSchemaReviewStatus(
     projectId,
     persistedTarget?.id ?? '',
     persistedTarget?.revision
@@ -414,7 +413,7 @@ export function SchemaStudioExperience({
     !savedEditIsApplied &&
     !savedEditUsesBinding &&
     missingEditSources.length
-      ? `The saved Schema candidate needs missing sources: ${missingEditSources.map((source) => `${source.canonicalName} @ ${source.version}`).join(', ')}. Restore them in Sources, or select another source to start a new definition. The saved candidate is preserved until you save.`
+      ? `The saved Schema candidate needs missing sources: ${missingEditSources.map((source) => `${source.canonicalName} @ ${source.version}`).join(', ')}. Restore them in Sources, or use Combine sources to prepare a replacement. The saved candidate is preserved until you save.`
       : undefined;
   const recoveryKey = `${projectId}:${persistedTarget?.id ?? ''}`;
   useEffect(() => {
@@ -576,9 +575,6 @@ export function SchemaStudioExperience({
       : undefined;
   // Do not initialize Data with the base result while a saved edit is being recovered.
   const recoveredDefinitionReady = !schemaEdit.loading && recoveredEditIdentity === editIdentity;
-  const locked = new Set(
-    data?.modules.filter((item) => item.requiredBy.length).map((item) => item.candidateId)
-  );
   const candidateSelectionKey = JSON.stringify(selection);
 
   useEffect(() => {
@@ -614,24 +610,15 @@ export function SchemaStudioExperience({
         sourceTone: group.tone,
         tone: candidateTone(index),
         icon: candidateIcon(index),
-        checked: selection.includes(candidate.id),
         candidate,
       });
       bySource.set(displaySource, group);
     });
     return [...bySource.values()];
-  }, [candidates.items, selection]);
+  }, [candidates.items]);
 
   const showExplicitDemo = params?.get('demo') === '1';
   const visibleSources = liveSources.length ? liveSources : showExplicitDemo ? demoSources : [];
-  const liveComposition = liveSources
-    .flatMap((source) => source.modules)
-    .filter((item) => item.checked);
-  const composition = liveSources.length
-    ? liveComposition
-    : showExplicitDemo
-      ? demoComposition
-      : [];
   const selectedWorkspaceTitle =
     target?.title ??
     (workspaceId || requestedBranch ? 'Workspace unavailable' : 'No draft workspace');
@@ -651,33 +638,6 @@ export function SchemaStudioExperience({
     });
   }
 
-  function choose(module: StudioModule) {
-    if (dataDirtyRef.current) return;
-    recoveredSelection.current = recoveryKey;
-    if (!module.candidate) return;
-    const candidate = module.candidate;
-    setRecoveredEditIdentity(editIdentity);
-    setUsingSavedCandidate(false);
-    setBlankWorkspace(undefined);
-    setSourceMappings([]);
-    setEditorBase(undefined);
-    setLocalContribution({});
-    setSavedCandidateRef(undefined);
-    setSchemaDefinition(undefined);
-    setSelection((current) =>
-      current.includes(candidate.id)
-        ? current.filter((value) => value !== candidate.id)
-        : candidate.kind === 'schema'
-          ? [candidate.id]
-          : [
-              ...current.filter(
-                (value) => candidates.items.find((item) => item.id === value)?.kind !== 'schema'
-              ),
-              candidate.id,
-            ]
-    );
-  }
-
   function inspectDefinition() {
     if (!data) return;
     const matchesWorkspace = target && data.workspace?.id === target.id;
@@ -693,7 +653,7 @@ export function SchemaStudioExperience({
   activeReviewScope.current = reviewScope;
 
   async function openReview() {
-    if (applying || editorInvalid) return;
+    if (applying || editorInvalid || !canReview) return;
     if (!persistedTarget) return inspectDefinition();
     setApplying(true);
     setError(undefined);
@@ -833,13 +793,40 @@ export function SchemaStudioExperience({
     setDefinitionOpen(open);
   }
 
+  const workflow = schemaWorkflowStatus({
+    draft: draftView,
+    preview: data,
+    latest: reviewStatus.latest,
+    hasDefinition: Boolean(selection.length || currentBinding || creatingBlank || activeCandidate),
+  });
   const canReview =
     !!data &&
     !applying &&
     !editorInvalid &&
     !preview.loading &&
     !definitionOpen &&
-    (dataDirty || !!savedCandidateRef || selection.length > 0 || draftView?.hasChanges !== false);
+    recoveredDefinitionReady &&
+    !schemaEdit.error &&
+    !recoveryError &&
+    !draftState.loading &&
+    !draftState.error &&
+    !reviewStatus.loading &&
+    !reviewStatus.error &&
+    (persistedTarget ? workflow.hasNewChanges : selection.length > 0);
+  function showReview() {
+    if (!persistedTarget) return;
+    const navigate = () =>
+      router.push(
+        schemaReviewHref(
+          projectId,
+          persistedTarget.id,
+          reviewStatus.latest?.snapshot_id,
+          target?.targetBranch
+        )
+      );
+    if (navigationRef.current) navigationRef.current.requestNavigation(navigate);
+    else navigate();
+  }
   const browseHref = schemaBrowseHref(
     projectId,
     workspaceId,
@@ -852,46 +839,62 @@ export function SchemaStudioExperience({
     target?.targetBranch ?? requestedBranch ?? undefined
   );
 
+  const usedSourceIds = new Set([
+    ...selection,
+    ...sourceMappings.flatMap((mapping) => (mapping.source ? [mapping.source.candidateId] : [])),
+    ...candidates.items
+      .filter(
+        (candidate) =>
+          candidate.source &&
+          [...(data?.sources ?? []), ...(activeCandidate?.baseSources ?? [])].some(
+            (source) => schemaSourceKey(source) === schemaSourceKey(candidate.source!)
+          )
+      )
+      .map((candidate) => candidate.id),
+  ]);
   const sourceManagement = (
     <SchemaSourceManager
       open={sourceManagerOpen}
       onOpenChange={setSourceManagerOpen}
       browseHref={browseHref}
       modules={visibleSources.flatMap((source) => source.modules)}
-      composition={composition}
-      onChoose={(module) => {
-        const candidate = visibleSources
-          .flatMap((source) => source.modules)
-          .find((item) => item.id === module.id);
-        if (candidate) choose(candidate);
-      }}
       onRemove={(id) => {
-        setSelection((current) => current.filter((value) => value !== id));
-        void candidates.remove(id).catch((cause) => setError(cause.message));
+        setSourceError(undefined);
+        void candidates
+          .remove(id)
+          .catch((cause) =>
+            setSourceError(
+              cause instanceof Error ? cause.message : 'Could not remove the source. Try again.'
+            )
+          );
       }}
-      locked={
-        dataDirty || definitionOpen ? new Set(candidates.items.map((item) => item.id)) : locked
-      }
-      pending={applying || preview.loading || candidates.pending}
-      contextLocked={dataDirty || definitionOpen || applying}
+      removalBlockers={Object.fromEntries(
+        (schemaEdit.error
+          ? candidates.items.map((candidate) => candidate.id)
+          : [...usedSourceIds]
+        ).map((id) => [
+          id,
+          schemaEdit.error
+            ? 'Reload the saved Schema before removing sources.'
+            : 'Used by the current Schema draft. Keep this source available while editing.',
+        ])
+      )}
+      pending={applying || schemaEdit.pending || schemaEdit.loading || candidates.pending}
       loading={candidates.loading}
-      error={candidates.error || undefined}
-      data={data}
+      error={sourceError || candidates.error || undefined}
       onAdd={persistedTarget ? () => composeSources() : undefined}
-      onClear={
-        dataDirty
-          ? undefined
-          : () => {
-              recoveredSelection.current = recoveryKey;
-              setRecoveredEditIdentity(editIdentity);
-              setUsingSavedCandidate(false);
-              setSourceMappings([]);
-              setSavedCandidateRef(undefined);
-              setEditorBase(undefined);
-              setSchemaDefinition(undefined);
-              setLocalContribution({});
-              setSelection([]);
-            }
+      combineDisabledReason={
+        schemaEdit.loading
+          ? 'Wait for the saved Schema to finish loading.'
+          : schemaEdit.error
+            ? 'Reload the saved Schema before combining sources.'
+            : definitionOpen
+              ? 'Finish editing YAML before combining sources.'
+              : editorInvalid
+                ? 'Fix the field errors before combining sources.'
+                : preview.loading
+                  ? 'Wait for the current definition preview.'
+                  : undefined
       }
     />
   );
@@ -920,7 +923,21 @@ export function SchemaStudioExperience({
       ) : null}
       <SchemaStudioSurface
         hidden={!!preparation}
-        navigation={navigation}
+        navigation={
+          <>
+            <WorkspaceStageNavigation
+              label="Schema workflow"
+              mode="compose"
+              reviewDisabled={
+                !persistedTarget || applying || reviewStatus.loading || Boolean(reviewStatus.error)
+              }
+              onModeChange={(mode) => {
+                if (mode === 'review') showReview();
+              }}
+            />
+            {navigation}
+          </>
+        }
         contextLocked={dataDirty || definitionOpen || applying}
         editorInvalid={editorInvalid}
         dataEditor={() => (
@@ -990,6 +1007,8 @@ export function SchemaStudioExperience({
               void workspaces.refresh();
               void candidates.refresh();
               void schemaEdit.refresh();
+              void reviewStatus.refresh();
+              void draftState.refresh();
               preview.refresh();
             }}
             onDirtyChange={updateDataDirty}
@@ -1036,13 +1055,19 @@ export function SchemaStudioExperience({
         draftStatus={
           dataDirty
             ? 'Unsaved changes'
-            : savedCandidateRef
-              ? 'Changes saved · not committed'
-              : draftView?.hasChanges === false && draftView.basis.refHead
-                ? `Committed · ${draftView.basis.refHead.slice(7, 19)}`
-                : draftView?.hasChanges === true
-                  ? 'Saved to Draft · not committed'
-                  : undefined
+            : workflow.rejected
+              ? 'This revision was rejected · Draft retained'
+              : workflow.matchesReview && workflow.hasChanges
+                ? 'Review prepared · awaiting decision'
+                : (savedCandidateRef || activeCandidate) && workflow.hasChanges
+                  ? 'Changes saved · not committed'
+                  : draftView?.hasChanges === false && draftView.basis.refHead
+                    ? `Committed · ${draftView.basis.refHead.slice(7, 19)}`
+                    : draftView?.hasChanges === true
+                      ? 'Saved to Draft · not committed'
+                      : draftView?.hasChanges === false
+                        ? 'No pending changes'
+                        : undefined
         }
         bindingStatus={
           persistedTarget
@@ -1093,6 +1118,29 @@ export function SchemaStudioExperience({
         canReview={canReview}
         onDownload={downloadDefinition}
       />
+      {draftState.error ? (
+        <p role="alert" className="px-4 py-2 text-sm">
+          Could not determine Draft changes: {draftState.error}{' '}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              void workspaces.refresh();
+              void draftState.refresh();
+            }}
+          >
+            Retry Draft status
+          </Button>
+        </p>
+      ) : null}
+      {reviewStatus.error ? (
+        <p role="alert" className="px-4 py-2 text-sm">
+          Could not determine Review status: {reviewStatus.error}{' '}
+          <Button variant="ghost" size="sm" onClick={() => void reviewStatus.refresh()}>
+            Retry Review status
+          </Button>
+        </p>
+      ) : null}
       {compositionRequest ? (
         <SchemaSourceCompositionDialog
           projectId={projectId}

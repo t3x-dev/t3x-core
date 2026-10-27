@@ -113,7 +113,9 @@ export async function saveStudioEditCandidate(
       input.sourceMappings,
       resolveMappingSource
     );
-  if (applied && (selection.modules.length || !selection.sources.length)) {
+  // A recovered Base already has an exact immutable identity. Its current Schema
+  // must not be stored under the original source selection's snapshot identity.
+  if (applied && !base && (selection.modules.length || !selection.sources.length)) {
     await saveYSchemaCompositionSnapshot(db, {
       snapshot_id: `studio-authoring-base:${projectId}:${selection.selectionHash}`,
       project_id: projectId,

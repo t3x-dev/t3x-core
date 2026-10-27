@@ -2,6 +2,7 @@ import {
   decideProjectWorkspaceSourceRevert,
   decideProjectWorkspaceSourceTransition,
   decideProjectWorkspaceTransition,
+  getLatestWorkspaceTransitionReviewSnapshot,
   getWorkspaceTransitionReviewSnapshot,
   listProjectWorkspaces,
   listWorkspaceTransitionReviewSnapshots,
@@ -71,6 +72,14 @@ export function fetchWorkspaceTransitionReviewSnapshot(
 
 export function fetchWorkspaceTransitionReviewSnapshots(projectId: string, workspaceId: string) {
   return listWorkspaceTransitionReviewSnapshots(projectId, workspaceId);
+}
+
+export function fetchLatestWorkspaceTransitionReviewSnapshot(
+  projectId: string,
+  workspaceId: string,
+  transitionId?: string
+): Promise<WorkspaceTransitionReviewSnapshotResponse> {
+  return getLatestWorkspaceTransitionReviewSnapshot(projectId, workspaceId, transitionId);
 }
 
 export function reviewWorkspaceSourceTransition(

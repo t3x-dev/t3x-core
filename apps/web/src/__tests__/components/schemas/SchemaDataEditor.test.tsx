@@ -109,6 +109,167 @@ describe('Schema data editor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(screen.getByLabelText('Name checklist/title')).toBeVisible();
     expect(screen.getByLabelText('Required checklist/title')).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Save edits' })).toBeDisabled();
+    expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it('clears unsaved changes when a field is restored, regardless of object key order', () => {
+    const handlers = callbacks();
+    render(<SchemaDataEditor initialDefinition={definition} revisionKey="restore" {...handlers} />);
+    fireEvent.change(screen.getByLabelText('Type checklist/title'), { target: { value: '' } });
+    expect(screen.getByRole('button', { name: 'Save edits' })).toBeEnabled();
+    fireEvent.change(screen.getByLabelText('Type checklist/title'), {
+      target: { value: 'string' },
+    });
+    expect(handlers.onPreview.mock.lastCall?.[0]).toEqual(definition);
+    expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(screen.getByRole('button', { name: 'Save edits' })).toBeDisabled();
+  });
+
+  it('clears unsaved changes after a rename is reversed, including its local mapping', () => {
+    const handlers = callbacks();
+    render(<SchemaDataEditor initialDefinition={definition} revisionKey="rename" {...handlers} />);
+    fireEvent.change(screen.getByLabelText('Name checklist/title'), {
+      target: { value: 'heading' },
+    });
+    fireEvent.blur(screen.getByLabelText('Name checklist/title'));
+    expect(screen.getByRole('button', { name: 'Save edits' })).toBeEnabled();
+    fireEvent.change(screen.getByLabelText('Name checklist/heading'), {
+      target: { value: 'title' },
+    });
+    fireEvent.blur(screen.getByLabelText('Name checklist/heading'));
+    expect(handlers.onPreview.mock.lastCall?.[0]).toEqual(definition);
+    expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(screen.getByRole('button', { name: 'Save edits' })).toBeDisabled();
+  });
+
+  it('clears unsaved changes after adding and deleting a field', async () => {
+    const handlers = callbacks();
+    render(
+      <SchemaDataEditor initialDefinition={definition} revisionKey="add-delete" {...handlers} />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Add to checklist', exact: true }));
+    expect(screen.getByRole('button', { name: 'Save edits' })).toBeEnabled();
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Actions for checklist/new_field' }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete', exact: true }));
+    expect(handlers.onPreview.mock.lastCall?.[0]).toEqual(definition);
+    expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(screen.getByRole('button', { name: 'Save edits' })).toBeDisabled();
+  });
+
+  it('keeps a changed source origin dirty even when the imported definition is identical', async () => {
+    const handlers = callbacks();
+    const original = {
+      nodes: {
+        person: {
+          slots: { profile: { type: 'object', properties: { name: { type: 'string' } } } },
+          requiredSlots: ['profile'],
+          children: { address: { slots: { city: { type: 'string' } } } },
+        },
+      },
+    };
+    render(
+      <SchemaDataEditor
+        projectId="p"
+        initialDefinition={original}
+        revisionKey="origin-change"
+        sources={[
+          {
+            id: 'people',
+            projectId: 'p',
+            studioId: 'main',
+            createdAt: '',
+            title: 'People',
+            available: true,
+            source: null,
+            description: null,
+            kind: 'schema',
+            license: null,
+            reason: null,
+          },
+        ]}
+        {...handlers}
+      />
+    );
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Actions for person', exact: true }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select source node person', exact: true }));
+    fireEvent.change(screen.getByLabelText('Destination node'), { target: { value: 'root' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Import here' }));
+    expect(handlers.onPreview.mock.lastCall?.[0]).toEqual(original);
+    expect(handlers.onPreview.mock.lastCall?.[1]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: { candidateId: 'people', schemaHash: 'sha256:source' } }),
+      ])
+    );
+    expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(true);
+    expect(screen.getByRole('button', { name: 'Save edits' })).toBeEnabled();
+  });
+
+  it('compares later edits with the successful save rather than the original input', async () => {
+    const handlers = callbacks();
+    render(
+      <SchemaDataEditor initialDefinition={definition} revisionKey="save-baseline" {...handlers} />
+    );
+    fireEvent.change(screen.getByLabelText('Type checklist/title'), {
+      target: { value: 'number' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save edits' })).toBeDisabled());
+    fireEvent.change(screen.getByLabelText('Type checklist/title'), {
+      target: { value: 'string' },
+    });
+    expect(screen.getByRole('button', { name: 'Save edits' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(screen.getByLabelText('Type checklist/title')).toHaveValue('number');
+    expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(screen.getByRole('button', { name: 'Save edits' })).toBeDisabled();
+  });
+
+  it('preserves input and the previous saved baseline after a failed save', async () => {
+    const handlers = callbacks();
+    handlers.onSave.mockRejectedValueOnce(new Error('Save failed'));
+    render(
+      <SchemaDataEditor initialDefinition={definition} revisionKey="save-failure" {...handlers} />
+    );
+    fireEvent.change(screen.getByLabelText('Type checklist/title'), {
+      target: { value: 'number' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Save failed');
+    expect(screen.getByLabelText('Type checklist/title')).toHaveValue('number');
+    expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(true);
+    expect(screen.getByRole('button', { name: 'Save edits' })).toBeEnabled();
+    fireEvent.change(screen.getByLabelText('Type checklist/title'), {
+      target: { value: 'string' },
+    });
+    expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(screen.getByRole('button', { name: 'Save edits' })).toBeDisabled();
+  });
+
+  it('keeps an unsaved blank Schema dirty after undoing its first edit', async () => {
+    const handlers = callbacks();
+    render(
+      <SchemaDataEditor
+        initialDefinition={{ yschema: '0.1', name: 'Blank', nodes: {} }}
+        initiallyDirty
+        revisionKey="unsaved-blank"
+        {...handlers}
+      />
+    );
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Add', exact: true }), { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Root node' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(screen.getByRole('button', { name: 'Save edits' })).toBeEnabled();
+    expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
+    await waitFor(() => expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(false));
   });
 
   it('keeps node operations in the row menu and excludes invalid move destinations', () => {

@@ -4,6 +4,7 @@ import type {
   SaveStudioSchemaEditCandidateInput,
   StudioSchemaEditCandidate,
 } from '@t3x-dev/api-client';
+import { canonicalJson } from '@t3x-dev/yops';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   readStudioSchemaEditCandidate,
@@ -17,6 +18,14 @@ export function useStudioSchemaEditCandidate(
 ) {
   const key = `${projectId}:${workspaceId}:${workspaceRevision ?? 'unknown'}`;
   const epoch = useRef(0);
+  const saveAttempt = useRef<
+    | {
+        scope: string;
+        facts: string;
+        input: SaveStudioSchemaEditCandidateInput;
+      }
+    | undefined
+  >(undefined);
   const [result, setResult] = useState<{
     key: string;
     candidate: StudioSchemaEditCandidate | null;
@@ -85,9 +94,29 @@ export function useStudioSchemaEditCandidate(
     refresh,
     save: async (input: SaveStudioSchemaEditCandidateInput) => {
       const currentEpoch = epoch.current;
+      const scope = `${projectId}:${workspaceId}`;
+      const { retryKey: _retryKey, ...facts } = input;
+      const fingerprint = canonicalJson(JSON.parse(JSON.stringify(facts)));
+      if (saveAttempt.current?.scope !== scope || saveAttempt.current.facts !== fingerprint) {
+        saveAttempt.current = { scope, facts: fingerprint, input: structuredClone(input) };
+      }
+      const attempt = saveAttempt.current;
       setPending(true);
       try {
-        const saved = await saveStudioSchemaEditCandidate(projectId, workspaceId, input);
+        let saved: Awaited<ReturnType<typeof saveStudioSchemaEditCandidate>>;
+        try {
+          saved = await saveStudioSchemaEditCandidate(projectId, workspaceId, attempt.input);
+        } catch (error) {
+          // A lost response does not prove that the write failed. Only retry the
+          // exact request after the server identifies it as the saved attempt.
+          const recovered = await readStudioSchemaEditCandidate(projectId, workspaceId).catch(
+            () => null
+          );
+          if (currentEpoch !== epoch.current || recovered?.retryKey !== attempt.input.retryKey)
+            throw error;
+          saved = await saveStudioSchemaEditCandidate(projectId, workspaceId, attempt.input);
+        }
+        if (saveAttempt.current === attempt) saveAttempt.current = undefined;
         if (currentEpoch === epoch.current) setResult({ key, candidate: saved.candidate });
         return saved;
       } finally {

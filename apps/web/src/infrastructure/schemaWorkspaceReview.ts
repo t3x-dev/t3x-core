@@ -1,4 +1,4 @@
-import { schemaReviewHref } from '@/domain/schemas/schemaNavigation';
+import { T3xApiError, type WorkspaceAuthoringCapability } from '@t3x-dev/api-client';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { getSharedApiClient } from './sharedApiClient';
 
@@ -16,22 +16,36 @@ export async function ensureSchemaAuthoring(projectId: string, workspaceId: stri
   }
 }
 
-/** The same complete, immutable Review used by Workspace, including Schema-only changes. */
-export async function prepareSchemaWorkspaceReview(projectId: string, workspaceId: string) {
-  const api = getSharedApiClient().workspaces;
-  const draft = await api.authoring.read(projectId, workspaceId);
-  if (draft.hasChanges === false)
-    throw new Error('No changes to commit. Schema and content match the Base.');
-  const reviewed = await api.authoring.prepareReview(projectId, workspaceId, {
-    request_id: crypto.randomUUID(),
-    expected_workspace_revision: draft.workspaceRevision,
-    expected_revision: draft.compositionRevision,
-    expected_ref_head: draft.basis.refHead,
-    reason: 'Review Schema changes and the complete Workspace Draft.',
-  });
-  const saved = await api.getLatestReviewSnapshot(projectId, workspaceId, {
-    transition_id: reviewed.view.transition_id,
-  });
-  if (!saved?.snapshot) throw new Error('The saved Review is unavailable. Retry Review.');
-  return schemaReviewHref(projectId, workspaceId, saved.snapshot.snapshotId, draft.basis.refName);
+export type SchemaWorkspaceReviewInput = Parameters<
+  WorkspaceAuthoringCapability['prepareReview']
+>[2];
+
+export function readSchemaWorkspaceReviewDraft(projectId: string, workspaceId: string) {
+  return getSharedApiClient().workspaces.authoring.read(projectId, workspaceId);
+}
+
+export async function readLatestSchemaWorkspaceReview(
+  projectId: string,
+  workspaceId: string,
+  transitionId?: string
+) {
+  try {
+    return await getSharedApiClient().workspaces.getLatestReviewSnapshot(
+      projectId,
+      workspaceId,
+      transitionId ? { transition_id: transitionId } : undefined
+    );
+  } catch (error) {
+    if (error instanceof T3xApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+/** Request facts belong to the caller's exact Draft attempt and are reused on retry. */
+export function prepareSchemaWorkspaceReview(
+  projectId: string,
+  workspaceId: string,
+  input: SchemaWorkspaceReviewInput
+) {
+  return getSharedApiClient().workspaces.authoring.prepareReview(projectId, workspaceId, input);
 }

@@ -50,14 +50,14 @@ export function schemaWorkspaceHref(
 export function schemaReviewHref(
   projectId: string,
   workspaceId: string,
-  snapshotId: string,
+  snapshotId?: string,
   branch?: string
 ) {
   return `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({
     tab: 'schemas',
     schemaView: 'review',
     workspace: workspaceId,
-    reviewSnapshot: snapshotId,
+    ...(snapshotId ? { reviewSnapshot: snapshotId } : {}),
     ...(branch ? { branch } : {}),
   })}`;
 }
