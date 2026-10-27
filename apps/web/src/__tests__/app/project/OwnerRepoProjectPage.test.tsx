@@ -1,208 +1,367 @@
 // @vitest-environment jsdom
-
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
-import type React from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, expect, it, vi } from 'vitest';
 import OwnerRepoProjectPage from '@/app/[owner]/[[...repoPath]]/page';
-import { useProjectStore } from '@/store/projectStore';
+import { type ProjectSummary, useProjectStore } from '@/store/projectStore';
 
-let routeParamsValue: Record<string, string | string[]> = {
-  owner: 't3x-dev',
-  repoPath: ['mobile-click-audit'],
-};
-const fetchProjects = vi.fn();
-const replaceMock = vi.fn();
-
+const mocks = vi.hoisted(() => ({
+  resolve: vi.fn(),
+  replace: vi.fn(),
+  params: { owner: 'alice', repoPath: ['Repo'] } as { owner: string; repoPath: string[] },
+  pathname: null as string | null,
+  query: 'workspace=w&conversation=c&branch=main&pr=9',
+}));
 vi.mock('next/navigation', () => ({
-  useParams: () => routeParamsValue,
-  useRouter: () => ({ replace: replaceMock }),
+  notFound: () => {
+    throw new Error('NEXT_HTTP_ERROR_FALLBACK;404');
+  },
+  useParams: () => mocks.params,
+  usePathname: () => mocks.pathname ?? `/${mocks.params.owner}/${mocks.params.repoPath.join('/')}`,
+  useSearchParams: () => new URLSearchParams(mocks.query),
+  useRouter: () => ({ replace: mocks.replace }),
 }));
-
-vi.mock('@/hooks/projects/useProjectCrud', () => ({
-  useProjectCrud: () => ({ list: fetchProjects }),
+vi.mock('@/queries/projects', () => ({
+  resolveRepository: (...args: unknown[]) => mocks.resolve(...args),
 }));
-
 vi.mock('@/app/project/[projectId]/page', () => ({
   ProjectDetailPageContent: ({
-    initialTabOverride,
-    ownerSlugOverride,
     projectIdOverride,
+    ownerSlugOverride,
+    initialTabOverride,
   }: {
-    initialTabOverride?: string;
-    ownerSlugOverride?: string;
-    projectIdOverride?: string;
+    projectIdOverride: string;
+    ownerSlugOverride: string;
+    initialTabOverride: string;
   }) => (
-    <div
-      data-owner={ownerSlugOverride}
-      data-tab={initialTabOverride ?? 'state'}
-      data-testid="project-detail"
-    >
-      {projectIdOverride}
+    <div data-testid="detail">
+      {projectIdOverride} {ownerSlugOverride} {initialTabOverride}
     </div>
   ),
 }));
-
+vi.mock('@/components/project/RepositoryNestedPage', () => ({
+  RepositoryNestedPage: ({ projectId, segments }: { projectId: string; segments: string[] }) => (
+    <div data-testid="nested">
+      {projectId} {segments.join('/')}
+    </div>
+  ),
+}));
 vi.mock('@/components/project/ProjectDirectoryPage', () => ({
-  ProjectDirectoryPage: ({ ownerSlug }: { ownerSlug: string }) => (
-    <div data-testid="owner-directory">directory for {ownerSlug}</div>
-  ),
+  ProjectDirectoryPage: () => <div>Directory</div>,
 }));
-
 vi.mock('@/components/project/NewRepositoryPage', () => ({
-  NewRepositoryPage: () => <div data-testid="new-repository-page">new repository page</div>,
+  NewRepositoryPage: () => <div>New repository</div>,
 }));
-
 vi.mock('@/components/project/OrganizationSettingsPage', () => ({
-  OrganizationSettingsPage: ({ ownerSlug }: { ownerSlug: string }) => (
-    <div data-testid="org-settings">org settings for {ownerSlug}</div>
-  ),
+  OrganizationSettingsPage: () => <div>Organization settings</div>,
 }));
-
-vi.mock('next/link', () => ({
-  default: ({
-    children,
-    href,
-    ...props
-  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
-    <a href={href} {...props}>
-      {children}
-    </a>
-  ),
-}));
-
-describe('OwnerRepoProjectPage', () => {
-  beforeEach(() => {
-    fetchProjects.mockReset();
-    replaceMock.mockReset();
-    routeParamsValue = { owner: 't3x-dev', repoPath: ['mobile-click-audit'] };
-    useProjectStore.setState({
-      error: null,
-      initialized: true,
-      loading: false,
-      projectScope: 't3x-dev',
-      projects: [
-        {
-          branchesCount: 1,
-          commitsCount: 1,
-          defaultModel: null,
-          defaultProvider: null,
-          description: 'Click audit workflow',
-          drafts: 1,
-          id: 'proj_audit',
-          name: 'Mobile Click Audit 1780972749777',
-          nodes: 2,
-          owner: 'You',
-          status: 'active',
-          updatedAt: 'just now',
-        },
-      ],
-    });
+beforeEach(() => {
+  vi.clearAllMocks();
+  useProjectStore.setState({ projects: [], details: {} });
+  mocks.params = { owner: 'alice', repoPath: ['Repo'] };
+  mocks.pathname = null;
+  mocks.query = 'workspace=w&conversation=c&branch=main&pr=9';
+  window.location.hash = '';
+  mocks.resolve.mockResolvedValue({
+    project_id: 'proj_outside_list',
+    namespace: 'alice',
+    name: 'Repo',
+    canonical_path: '/alice/Repo',
+    path_status: 'ready',
+    redirect: false,
   });
+});
+it('resolves directly, without any list cache or pagination', async () => {
+  render(<OwnerRepoProjectPage />);
+  expect(await screen.findByTestId('detail')).toHaveTextContent('proj_outside_list alice state');
+  expect(mocks.resolve).toHaveBeenCalledWith('alice', 'Repo');
+  expect(mocks.replace).not.toHaveBeenCalled();
+});
+it('canonicalizes historical/case addresses preserving child and query context', async () => {
+  mocks.params = { owner: 'ALICE', repoPath: ['Old', 'pull-requests'] };
+  window.location.hash = '#discussion';
+  render(<OwnerRepoProjectPage />);
+  expect(await screen.findByTestId('detail')).toHaveTextContent('proj_outside_list alice reviews');
+  await waitFor(() =>
+    expect(mocks.replace).toHaveBeenCalledWith(
+      '/alice/Repo/pull-requests?workspace=w&conversation=c&branch=main&pr=9#discussion',
+      { scroll: false }
+    )
+  );
+});
+it('opens the pull requests route generated by repository navigation', async () => {
+  mocks.params.repoPath = ['Repo', 'pull-requests'];
+  render(<OwnerRepoProjectPage />);
+  expect(await screen.findByTestId('detail')).toHaveTextContent('proj_outside_list alice reviews');
+  expect(screen.queryByText('Repository view not found')).not.toBeInTheDocument();
+  expect(mocks.replace).not.toHaveBeenCalled();
+});
+it.each([
+  'schemas',
+  'discover',
+  'browse',
+])('opens the canonical %s route without a redirect', async (view) => {
+  mocks.params.repoPath = ['Repo', view];
+  mocks.query = 'branch=feature%2Frelease&workspace=workspace_branch%3Afeature%2Frelease';
+  render(<OwnerRepoProjectPage />);
+  expect(await screen.findByTestId('detail')).toHaveTextContent(`proj_outside_list alice ${view}`);
+  expect(screen.queryByText('Repository view not found')).not.toBeInTheDocument();
+  expect(mocks.replace).not.toHaveBeenCalled();
+});
+it.each([
+  { schemaView: 'discover', view: 'discover', retainedView: null },
+  { schemaView: 'browse', view: 'browse', retainedView: null },
+  { schemaView: 'active', view: 'schemas', retainedView: 'active' },
+  { schemaView: 'release', view: 'browse', retainedView: 'release' },
+])('migrates a historical Schemas $schemaView address and then settles', async ({
+  schemaView,
+  view,
+  retainedView,
+}) => {
+  mocks.params = { owner: 'ALICE', repoPath: ['Old', 'schemas'] };
+  const context =
+    'branch=feature%2Frelease&workspace=workspace_branch%3Afeature%2Frelease&q=dog+care&catalogName=team%2Fschema&catalogVersion=1.2.3&catalogHash=sha256%3Aabc';
+  mocks.query = `schemaView=${schemaView}&${context}`;
+  window.location.hash = '#definition';
+  const expectedQuery = `${retainedView ? `schemaView=${retainedView}&` : ''}${context}`;
+  const { rerender } = render(<OwnerRepoProjectPage />);
+  await waitFor(() =>
+    expect(mocks.replace).toHaveBeenCalledWith(`/alice/Repo/${view}?${expectedQuery}#definition`, {
+      scroll: false,
+    })
+  );
 
-  it('resolves owner/repo slugs to the internal project id', () => {
-    render(<OwnerRepoProjectPage />);
-
-    expect(screen.getByTestId('project-detail')).toHaveTextContent('proj_audit');
-    expect(screen.getByTestId('project-detail')).toHaveAttribute('data-tab', 'state');
-    expect(screen.getByTestId('project-detail')).toHaveAttribute('data-owner', 't3x-dev');
-    expect(fetchProjects).not.toHaveBeenCalled();
+  mocks.replace.mockClear();
+  mocks.params = { owner: 'alice', repoPath: ['Repo', view] };
+  mocks.query = expectedQuery;
+  rerender(<OwnerRepoProjectPage />);
+  expect(await screen.findByTestId('detail')).toHaveTextContent(`proj_outside_list alice ${view}`);
+  expect(mocks.replace).not.toHaveBeenCalled();
+});
+it('canonicalizes pull request query links while preserving the selected PR and branch', async () => {
+  mocks.query = 'tab=pull-requests&branch=feature%2Frelease&pr=9';
+  render(<OwnerRepoProjectPage />);
+  await waitFor(() =>
+    expect(mocks.replace).toHaveBeenCalledWith(
+      '/alice/Repo/pull-requests?branch=feature%2Frelease&pr=9',
+      { scroll: false }
+    )
+  );
+});
+it('uses the namespace returned by the backend after a transfer', async () => {
+  mocks.resolve.mockResolvedValue({
+    project_id: 'moved',
+    namespace: 'bob',
+    name: 'Repo',
+    canonical_path: '/bob/Repo',
+    path_status: 'ready',
+    redirect: true,
   });
-
-  it('resolves repository tab path segments', () => {
-    routeParamsValue = { owner: 't3x-dev', repoPath: ['mobile-click-audit', 'workspaces'] };
-
-    render(<OwnerRepoProjectPage />);
-
-    expect(screen.getByTestId('project-detail')).toHaveTextContent('proj_audit');
-    expect(screen.getByTestId('project-detail')).toHaveAttribute('data-tab', 'workspaces');
+  render(<OwnerRepoProjectPage />);
+  expect(await screen.findByTestId('detail')).toHaveTextContent('moved bob');
+  await waitFor(() =>
+    expect(mocks.replace).toHaveBeenCalledWith(
+      '/bob/Repo?workspace=w&conversation=c&branch=main&pr=9',
+      { scroll: false }
+    )
+  );
+});
+it('opens canonical settings and nested changes without bouncing to an ID URL', async () => {
+  mocks.params.repoPath = ['Repo', 'settings'];
+  render(<OwnerRepoProjectPage />);
+  expect(await screen.findByTestId('nested')).toHaveTextContent('proj_outside_list settings');
+  expect(mocks.replace).not.toHaveBeenCalled();
+});
+it.each([
+  'history',
+  'diff',
+])('keeps %s under State while loading and opens its nested route', async (view) => {
+  mocks.params.repoPath = ['Repo', view];
+  mocks.query = 'branch=feature%2Frelease&commit=sha256%3Aabc&view=list';
+  useProjectStore.setState({
+    projects: [
+      {
+        id: 'proj_outside_list',
+        name: 'Repo',
+        canonical_path: '/alice/Repo',
+        namespace: 'alice',
+        status: 'active',
+      } as ProjectSummary,
+    ],
   });
-
-  it('redirects the legacy repository settings path to the shared settings pages', () => {
-    routeParamsValue = { owner: 't3x-dev', repoPath: ['mobile-click-audit', 'settings'] };
-
-    render(<OwnerRepoProjectPage />);
-
-    expect(replaceMock).toHaveBeenCalledWith(
-      '/project/proj_audit/settings?returnTo=%2Ft3x-dev%2Fmobile-click-audit'
-    );
-    expect(screen.queryByTestId('project-detail')).not.toBeInTheDocument();
-    expect(fetchProjects).not.toHaveBeenCalled();
+  let resolveAddress!: (value: unknown) => void;
+  mocks.resolve.mockReturnValue(
+    new Promise((resolve) => {
+      resolveAddress = resolve;
+    })
+  );
+  render(<OwnerRepoProjectPage />);
+  expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
+  await act(async () =>
+    resolveAddress({
+      project_id: 'proj_outside_list',
+      namespace: 'alice',
+      name: 'Repo',
+      canonical_path: '/alice/Repo',
+      path_status: 'ready',
+      redirect: false,
+    })
+  );
+  expect(await screen.findByTestId('nested')).toHaveTextContent(`proj_outside_list ${view}`);
+  expect(mocks.replace).not.toHaveBeenCalled();
+});
+it('canonicalizes History bookmarks without losing filters or nested return context', async () => {
+  const context = new URLSearchParams({
+    branch: 'feature/100%',
+    commit: 'sha256:abc',
+    view: 'list',
+    q: 'retry payment',
+    author: 'Maya Chen',
+    returnTo: '/alice/Repo/community?branch=feature%2F100%25',
+  }).toString();
+  mocks.query = `tab=history&${context}`;
+  window.location.hash = '#changes';
+  render(<OwnerRepoProjectPage />);
+  await waitFor(() =>
+    expect(mocks.replace).toHaveBeenCalledWith(`/alice/Repo/history?${context}#changes`, {
+      scroll: false,
+    })
+  );
+});
+it.each([
+  'workspace_branch:main',
+  'workspace_branch%3Amain',
+])('keeps the canonical review URL stable when route params contain %s', async (workspaceId) => {
+  mocks.params.repoPath = ['Repo', 'changes', workspaceId, 'rvs_review'];
+  mocks.pathname = '/alice/Repo/changes/workspace_branch%3Amain/rvs_review';
+  const { rerender } = render(<OwnerRepoProjectPage />);
+  expect(await screen.findByTestId('nested')).toHaveTextContent(
+    `changes/${workspaceId}/rvs_review`
+  );
+  expect(mocks.replace).not.toHaveBeenCalled();
+  rerender(<OwnerRepoProjectPage />);
+  expect(mocks.replace).not.toHaveBeenCalled();
+});
+it('preserves encoded review identifiers across a repository rename and then stops redirecting', async () => {
+  const workspaceId = 'workspace_branch%3Afeature%2F100%25';
+  mocks.params = { owner: 'ALICE', repoPath: ['Old', 'changes', workspaceId, 'rvs_review'] };
+  mocks.pathname = `/ALICE/Old/changes/${workspaceId}/rvs_review`;
+  mocks.query = 'branch=feature%2F100%25&returnTo=%2Falice%2FOld';
+  window.location.hash = '#checks';
+  const { rerender } = render(<OwnerRepoProjectPage />);
+  await waitFor(() =>
+    expect(mocks.replace).toHaveBeenCalledWith(
+      `/alice/Repo/changes/${workspaceId}/rvs_review?${mocks.query}#checks`,
+      { scroll: false }
+    )
+  );
+  mocks.replace.mockClear();
+  mocks.params = { owner: 'alice', repoPath: ['Repo', 'changes', workspaceId, 'rvs_review'] };
+  mocks.pathname = `/alice/Repo/changes/${workspaceId}/rvs_review`;
+  rerender(<OwnerRepoProjectPage />);
+  expect(await screen.findByTestId('nested')).toHaveTextContent(
+    `changes/${workspaceId}/rvs_review`
+  );
+  expect(mocks.replace).not.toHaveBeenCalled();
+});
+it.each([
+  ['workspace_branch%3Amain', 'workspace_branch%3Amain'],
+  ['workspace_branch:main', 'workspace_branch%3Amain'],
+  ['workspace_branch:feature/owner', 'workspace_branch%3Afeature%2Fowner'],
+  ['workspace_branch:feature%2Fowner', 'workspace_branch%3Afeature%252Fowner'],
+  ['workspace_branch%3A100%25', 'workspace_branch%3A100%25'],
+  ['workspace_branch:计划', 'workspace_branch%3A%E8%AE%A1%E5%88%92'],
+  ['workspace_branch%2525253Amain', 'workspace_branch%2525253Amain'],
+])('keeps an encoded review URL stable with route param %s', async (workspaceId, pathSegment) => {
+  mocks.params.repoPath = ['Repo', 'changes', workspaceId, 'rvs_snapshot'];
+  mocks.pathname = `/alice/Repo/changes/${pathSegment}/rvs_snapshot`;
+  const view = render(<OwnerRepoProjectPage />);
+  expect(await screen.findByTestId('nested')).toHaveTextContent(
+    `proj_outside_list changes/${workspaceId}/rvs_snapshot`
+  );
+  view.rerender(<OwnerRepoProjectPage />);
+  expect(mocks.replace).not.toHaveBeenCalled();
+});
+it('redirects an encoded review URL only once when its repository address changes', async () => {
+  mocks.params = {
+    owner: 'ALICE',
+    repoPath: ['Old', 'changes', 'workspace_branch%3Afeature%252Fowner', 'rvs_snapshot'],
+  };
+  mocks.pathname = '/ALICE/Old/changes/workspace_branch%3Afeature%252Fowner/rvs_snapshot';
+  window.location.hash = '#diff';
+  const view = render(<OwnerRepoProjectPage />);
+  await waitFor(() =>
+    expect(mocks.replace).toHaveBeenCalledWith(
+      '/alice/Repo/changes/workspace_branch%3Afeature%252Fowner/rvs_snapshot?workspace=w&conversation=c&branch=main&pr=9#diff',
+      { scroll: false }
+    )
+  );
+  mocks.params = {
+    ...mocks.params,
+    owner: 'alice',
+    repoPath: ['Repo', ...mocks.params.repoPath.slice(1)],
+  };
+  mocks.pathname = '/alice/Repo/changes/workspace_branch%3Afeature%252Fowner/rvs_snapshot';
+  view.rerender(<OwnerRepoProjectPage />);
+  await waitFor(() => expect(mocks.resolve).toHaveBeenLastCalledWith('alice', 'Repo'));
+  expect(await screen.findByTestId('nested')).toBeInTheDocument();
+  expect(mocks.replace).toHaveBeenCalledTimes(1);
+});
+it('does not guess a page for unsupported suffixes', async () => {
+  mocks.params.repoPath = ['Repo', 'changes', 'missing-snapshot'];
+  render(<OwnerRepoProjectPage />);
+  expect(await screen.findByText('Repository view not found')).toBeInTheDocument();
+  expect(mocks.replace).not.toHaveBeenCalled();
+});
+it('shows authorization failures without rendering cached repository content', async () => {
+  mocks.resolve.mockRejectedValue(new Error('Access denied'));
+  render(<OwnerRepoProjectPage />);
+  expect(await screen.findByText('Access denied')).toBeInTheDocument();
+  expect(screen.queryByTestId('detail')).not.toBeInTheDocument();
+});
+it('keeps the known header while checking access without exposing the review early', async () => {
+  mocks.params.repoPath = ['Repo', 'changes', 'workspace_branch%3Amain', 'rvs_review'];
+  let rejectLookup!: (error: Error) => void;
+  mocks.resolve.mockReturnValue(
+    new Promise((_, reject) => {
+      rejectLookup = reject;
+    })
+  );
+  useProjectStore.setState({
+    details: {
+      proj_outside_list: {
+        id: 'proj_outside_list',
+        name: 'Repo',
+        namespace: 'alice',
+        canonical_path: '/alice/Repo',
+      } as ProjectSummary,
+    },
   });
+  render(<OwnerRepoProjectPage />);
+  expect(screen.getByRole('heading', { name: 'Repo', exact: true })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Workspace' })).toHaveAttribute('aria-current', 'page');
+  expect(screen.getByText('Loading repository...')).toBeInTheDocument();
+  expect(screen.queryByTestId('nested')).not.toBeInTheDocument();
+  await act(async () => rejectLookup(new Error('Access denied')));
+  expect(await screen.findByText('Access denied')).toBeInTheDocument();
+  expect(screen.queryByTestId('nested')).not.toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'Repo', exact: true })).not.toBeInTheDocument();
+});
+it('leaves namespace directory and new-repository routes out of repository resolution', () => {
+  mocks.params.repoPath = ['new'];
+  render(<OwnerRepoProjectPage />);
+  expect(screen.getByText('New repository')).toBeInTheDocument();
+  expect(mocks.resolve).not.toHaveBeenCalled();
+});
 
-  it('loads the owner-scoped project before redirecting a directly opened settings URL', () => {
-    routeParamsValue = { owner: 't3x-dev', repoPath: ['mobile-click-audit', 'settings'] };
-    useProjectStore.setState({ initialized: false, projectScope: null, projects: [] });
-
-    render(<OwnerRepoProjectPage />);
-
-    expect(fetchProjects).toHaveBeenCalledWith('t3x-dev');
-    expect(replaceMock).not.toHaveBeenCalled();
-  });
-
-  it('renders a not-found state for invalid repository tab segments', () => {
-    routeParamsValue = { owner: 't3x-dev', repoPath: ['mobile-click-audit', 'yschema'] };
-
-    render(<OwnerRepoProjectPage />);
-
-    expect(screen.getByText('Repository view not found')).toBeInTheDocument();
-    expect(screen.getByText('/t3x-dev/mobile-click-audit/yschema')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to mobile-click-audit' })).toHaveAttribute(
-      'href',
-      '/t3x-dev/mobile-click-audit'
-    );
-    expect(replaceMock).not.toHaveBeenCalled();
-  });
-
-  it('renders the organization directory for owner-only paths', () => {
-    routeParamsValue = { owner: 't3x-dev' };
-
-    render(<OwnerRepoProjectPage />);
-
-    expect(screen.getByTestId('owner-directory')).toHaveTextContent('directory for t3x-dev');
-  });
-
-  it('renders a personal directory for a personal namespace path', () => {
-    routeParamsValue = { owner: 'lqw905' };
-
-    render(<OwnerRepoProjectPage />);
-
-    expect(screen.getByTestId('owner-directory')).toHaveTextContent('directory for lqw905');
-    expect(fetchProjects).not.toHaveBeenCalled();
-  });
-
-  it('renders the organization repository creation page for /owner/new', () => {
-    routeParamsValue = { owner: 't3x-dev', repoPath: ['new'] };
-
-    render(<OwnerRepoProjectPage />);
-
-    expect(screen.getByTestId('new-repository-page')).toBeInTheDocument();
-  });
-
-  it('renders organization settings for /owner/settings without loading repositories', () => {
-    routeParamsValue = { owner: 't3x-dev', repoPath: ['settings'] };
-
-    render(<OwnerRepoProjectPage />);
-
-    expect(screen.getByTestId('org-settings')).toHaveTextContent('org settings for t3x-dev');
-    expect(fetchProjects).not.toHaveBeenCalled();
-  });
-
-  it('shows a repository-level not found state for unmatched slugs', () => {
-    routeParamsValue = { owner: 't3x-dev', repoPath: ['missing-repo'] };
-
-    render(<OwnerRepoProjectPage />);
-
-    expect(screen.getByText('Repository not found')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to t3x-dev' })).toHaveAttribute(
-      'href',
-      '/t3x-dev'
-    );
-  });
-  it('waits for the requested owner before redirecting repository settings', () => {
-    routeParamsValue = { owner: 'other-owner', repoPath: ['mobile-click-audit', 'settings'] };
-    render(<OwnerRepoProjectPage />);
-    expect(fetchProjects).toHaveBeenCalledWith('other-owner');
-    expect(replaceMock).not.toHaveBeenCalled();
-  });
+it.each([
+  { segments: ['outputs'], query: '' },
+  { segments: ['leaf', 'old'], query: '' },
+  { segments: [], query: 'tab=outputs&leaf=old' },
+])('returns not found for retired repository view $segments $query', ({ segments, query }) => {
+  mocks.params.repoPath = ['Repo', ...segments];
+  mocks.query = query;
+  expect(() => render(<OwnerRepoProjectPage />)).toThrow('NEXT_HTTP_ERROR_FALLBACK;404');
+  expect(mocks.replace).not.toHaveBeenCalled();
+  expect(mocks.resolve).not.toHaveBeenCalled();
 });

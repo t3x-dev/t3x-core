@@ -1,7 +1,15 @@
 import { LLMProviderError } from '@t3x-dev/core';
+import type { YSchema } from '@t3x-dev/yschema';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createInferenceRuntime, executeMeteredInference } from '../lib/inference';
+import {
+  GENERATION_MODEL_SPECIFICATION_VERSION,
+  type GenerationModel,
+} from '../lib/model-runtime-contract';
 import type { ProposalGenerationModelInput } from '../lib/proposal-generation';
 import { defaultProposalGenerationModel } from '../lib/proposal-generation-model';
+import { semanticSchemaLayout } from '../lib/semantic-schema-layout';
+import { createWorkspaceProposalModel } from '../lib/workspace-assistant/adapters/generation-model';
 
 const { generateStructured, resolveProviderAndModel } = vi.hoisted(() => ({
   generateStructured: vi.fn(),
@@ -9,13 +17,33 @@ const { generateStructured, resolveProviderAndModel } = vi.hoisted(() => ({
 }));
 vi.mock('../lib/provider-resolver', () => ({ resolveProviderAndModel }));
 
+const brief: YSchema = {
+  nodes: {
+    product: {
+      slots: { title: { type: 'string', minLength: 1 }, problem: { type: 'string', minLength: 1 } },
+      requiredSlots: ['title', 'problem'],
+    },
+    requirements: {
+      required: true,
+      repeated: true,
+      slots: {
+        title: { type: 'string', minLength: 1 },
+        acceptance: { type: 'string', minLength: 1 },
+        priority: { type: 'string', enum: ['must', 'should', 'could'] },
+      },
+      requiredSlots: ['title', 'acceptance'],
+    },
+  },
+};
+
 const input = {
   prompt: 'Edit only the current Draft. Return the required schema.',
   profile: {},
   context: {},
   base: {},
   authoring: { current: {} },
-  yschema: { value: {} },
+  yschema: { value: brief },
+  schemaLayout: semanticSchemaLayout(brief, 'prd'),
   sources: [],
   instruction: '生成一个新的卡片，天气为晴天',
 } as unknown as ProposalGenerationModelInput;
@@ -39,6 +67,89 @@ const draft = {
   ],
   warnings: [],
 };
+
+describe('managed Workspace Proposal binding', () => {
+  const evidence = {
+    provider: 'hosted-gateway',
+    model: 'actual-model',
+    usage: { inputTokens: 12, outputTokens: 8 },
+    finishReason: 'stop' as const,
+    providerRequestId: 'structured-request',
+    providerReportedCost: { amount: '0.002', currency: 'USD' },
+  };
+  function managed(generate: GenerationModel['generate']) {
+    return createWorkspaceProposalModel({
+      specificationVersion: GENERATION_MODEL_SPECIFICATION_VERSION,
+      provider: 'managed',
+      modelId: 'balanced',
+      capabilities: ['text', 'structured_output'],
+      generate,
+    });
+  }
+  async function invoke(generate: GenerationModel['generate']) {
+    const target = managed(generate);
+    return executeMeteredInference({
+      runtime: createInferenceRuntime({ createGenerationId: () => 'managed-proposal-attempt' }),
+      input: {
+        runId: 'proposal-run',
+        feature: 'transition.proposal-generation',
+        requestedModel: 'balanced',
+        scope: { actor: { kind: 'user', id: 'u' }, projectId: 'p' },
+      },
+      resolvedProvider: target.provider,
+      resolvedModel: target.model,
+      invoke: async (attempt) => {
+        const result = await target.generate(input, attempt);
+        return { ...result, value: result.draft };
+      },
+    });
+  }
+  it('uses the admitted identity and existing draft validation with actual upstream evidence', async () => {
+    const generate = vi.fn<GenerationModel['generate']>(async () => ({
+      output: [{ type: 'json', value: draft }],
+      evidence,
+    }));
+    const result = await invoke(generate);
+    expect(result.value).toEqual(draft);
+    expect(generate).toHaveBeenCalledOnce();
+    expect(generate.mock.calls[0][0]).toMatchObject({
+      generationId: 'managed-proposal-attempt',
+      runId: 'proposal-run',
+      attemptIndex: 0,
+      feature: 'transition.proposal-generation',
+      request: {
+        output: { type: 'json', name: 'ProposalGenerationDraft' },
+        maxOutputTokens: 16000,
+      },
+    });
+    expect(result.receipt).toMatchObject({
+      resolvedProvider: evidence.provider,
+      resolvedModel: evidence.model,
+      providerRequestId: evidence.providerRequestId,
+      providerReportedCost: evidence.providerReportedCost,
+      usage: evidence.usage,
+    });
+  });
+  it('rejects invalid drafts without a hidden second upstream call or local fallback', async () => {
+    const invalid = structuredClone(draft);
+    invalid.changes[0].operations = [
+      { append: { path: 'missing/children', value: 'invalid' } },
+    ] as never;
+    const generate = vi.fn<GenerationModel['generate']>(async () => ({
+      output: [{ type: 'json', value: invalid }],
+      evidence,
+    }));
+    await expect(invoke(generate)).rejects.toThrow('Generated operations cannot be applied');
+    expect(generate).toHaveBeenCalledOnce();
+  });
+  it('rejects unmanaged calls without an admitted attempt identity', async () => {
+    const generate = vi.fn();
+    await expect(managed(generate).generate(input)).rejects.toThrow(
+      'generation_capability_unsupported'
+    );
+    expect(generate).not.toHaveBeenCalled();
+  });
+});
 
 async function model() {
   return defaultProposalGenerationModel({ db: {}, projectId: 'test', request: {} } as Parameters<
@@ -161,12 +272,14 @@ describe('Proposal generation targeted repair', () => {
     expect(generateStructured).toHaveBeenCalledTimes(1);
   });
 
-  it('completes a new PRD requirement with the explicitly requested title and content', async () => {
+  it('completes a new collection item with the explicitly requested title and content', async () => {
     const requested = {
       ...input,
       instruction: '新建1个卡片标题为气温 内容为低于30度',
       authoring: {
         current: {
+          domain: 't3x.dev/semantic-content',
+          version: 1,
           content: {
             trees: [
               {
@@ -208,7 +321,7 @@ describe('Proposal generation targeted repair', () => {
                 path,
                 value: {
                   key: 'temperature',
-                  slots: { title: '气温', priority: 'should', acceptance: ['低于30度'] },
+                  slots: { title: '气温', acceptance: '低于30度' },
                   children: [],
                 },
               },
@@ -252,5 +365,146 @@ describe('Proposal generation targeted repair', () => {
     expect((await (await model()).generate(existing)).draft).toEqual(edit);
     expect(existing.authoring.current.sibling).toBe('unchanged');
     expect(generateStructured).toHaveBeenCalledTimes(1);
+  });
+
+  it('fills requested card content into whichever free-text slot the bound schema defines', async () => {
+    const backlog: YSchema = {
+      nodes: {
+        tasks: {
+          repeated: true,
+          slots: {
+            name: { type: 'string', minLength: 1 },
+            status: { type: 'string', enum: ['open', 'done'] },
+            notes: { type: 'array' },
+          },
+          requiredSlots: ['name', 'notes'],
+        },
+      },
+    };
+    const path = 'content/trees/[key=board]/children/[key=tasks]/children';
+    const requested = {
+      ...input,
+      instruction: '新建1个卡片标题为气温 内容为低于30度',
+      yschema: { value: backlog },
+      schemaLayout: semanticSchemaLayout(backlog, 'board'),
+      authoring: {
+        current: {
+          domain: 't3x.dev/semantic-content',
+          version: 1,
+          content: {
+            trees: [
+              {
+                key: 'board',
+                slots: {},
+                children: [{ key: 'tasks', slots: {}, children: [] }],
+              },
+            ],
+            relations: [],
+          },
+        },
+      },
+    };
+    const append = (slots: Record<string, unknown>) => ({
+      ...draft,
+      changes: [
+        {
+          ...draft.changes[0],
+          operations: [{ append: { path, value: { key: 'temperature', slots, children: [] } } }],
+        },
+      ],
+    });
+    generateStructured.mockResolvedValueOnce({ data: append({ name: '气温', status: 'open' }) });
+    expect((await (await model()).generate(requested)).draft).toEqual(
+      append({ name: '气温', status: 'open', notes: ['低于30度'] })
+    );
+    expect(generateStructured).toHaveBeenCalledTimes(1);
+  });
+
+  describe('schema layout check', () => {
+    const root = (children: unknown[], extraTrees: unknown[] = []) => ({
+      domain: 't3x.dev/semantic-content',
+      version: 1,
+      content: {
+        trees: [{ key: 'prd', slots: {}, children }, ...extraTrees],
+        relations: [],
+      },
+    });
+    const requirements = { key: 'requirements', slots: {}, children: [] };
+    const item = { key: 'export', slots: { title: 'Export', acceptance: 'Works' }, children: [] };
+    const withOps = (operations: unknown[]) => ({
+      ...draft,
+      changes: [{ ...draft.changes[0], operations }],
+    });
+    const correct = withOps([
+      {
+        append: {
+          path: 'content/trees/[key=prd]/children/[key=requirements]/children',
+          value: item,
+        },
+      },
+    ]);
+
+    it.each([
+      ['a top-level tree beside the root', 'content/trees', 'UNEXPECTED_ROOT_TREE'],
+      ['an item beside its collection', 'content/trees/[key=prd]/children', 'UNEXPECTED_NODE'],
+    ])('reasks when the model places %s', async (_label, parent, code) => {
+      const misplaced = withOps([{ append: { path: parent, value: item } }]);
+      generateStructured
+        .mockResolvedValueOnce({ data: misplaced })
+        .mockResolvedValueOnce({ data: correct });
+      const result = await (await model()).generate({
+        ...input,
+        authoring: { current: root([requirements]) },
+      } as never);
+      expect(result.draft).toEqual(correct);
+      expect(generateStructured).toHaveBeenCalledTimes(2);
+      expect(generateStructured.mock.calls[1][0].messages[2].content).toContain(code);
+    });
+
+    it('reasks on a slot value that violates the schema type', async () => {
+      const wrongType = withOps([
+        {
+          append: {
+            path: 'content/trees/[key=prd]/children/[key=requirements]/children',
+            value: { ...item, slots: { title: 'Export', acceptance: ['Works'] } },
+          },
+        },
+      ]);
+      generateStructured
+        .mockResolvedValueOnce({ data: wrongType })
+        .mockResolvedValueOnce({ data: correct });
+      await (await model()).generate({
+        ...input,
+        authoring: { current: root([requirements]) },
+      } as never);
+      expect(generateStructured.mock.calls[1][0].messages[2].content).toContain('INVALID_TYPE');
+    });
+
+    it('does not blame the model for misplaced content already in the Draft', async () => {
+      generateStructured.mockResolvedValue({ data: correct });
+      const result = await (await model()).generate({
+        ...input,
+        authoring: { current: root([requirements], [{ key: 'stray', slots: {}, children: [] }]) },
+      } as never);
+      expect(result.draft).toEqual(correct);
+      expect(generateStructured).toHaveBeenCalledTimes(1);
+    });
+
+    it('accepts a partial Draft with readiness gaps', async () => {
+      const partial = withOps([
+        {
+          append: {
+            path: 'content/trees/[key=prd]/children/[key=requirements]/children',
+            value: { key: 'export', slots: { title: 'Export' }, children: [] },
+          },
+        },
+      ]);
+      generateStructured.mockResolvedValue({ data: partial });
+      await (await model()).generate({
+        ...input,
+        authoring: { current: root([requirements]) },
+      } as never);
+      expect(generateStructured).toHaveBeenCalledTimes(1);
+    });
   });
 });

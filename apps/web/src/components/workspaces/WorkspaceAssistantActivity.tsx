@@ -3,7 +3,7 @@
 import type { WorkspaceAuthoringAction, WorkspaceAuthoringCard } from '@t3x-dev/api-client';
 import * as yaml from 'js-yaml';
 import { Check, ChevronDown, Circle, Loader2, Pencil, Search, Sparkles } from 'lucide-react';
-import { expandComposeActivityCards } from '@/domain/composeActivity';
+import { expandAuthoringCards } from '@/domain/composeActivity';
 import type { WorkspaceAssistantActivity as Activity } from '@/hooks/sourceThreads/useSourceThreadGeneration';
 import styles from './WorkspaceAssistantActivity.module.css';
 
@@ -28,6 +28,8 @@ const operationLabels: Record<string, string> = {
   readNodeHistory: 'Read node history',
   searchSources: 'Search selected sources',
   requestProposal: 'Generate proposed changes',
+  showSchemaChangeCard: 'Prepare Schema confirmation',
+  confirmSchemaChange: 'Confirm Schema change',
   applyUserEdit: 'Apply exact edit',
 };
 
@@ -103,7 +105,7 @@ export function WorkspaceAssistantActivity({
   const running =
     publishing || (!['complete', 'error'].includes(activity.phase) && !publication?.action);
   const action = publication?.action;
-  const cards = action ? expandComposeActivityCards(publication?.cards ?? []) : [];
+  const cards = action ? expandAuthoringCards(publication?.cards ?? []) : [];
   const paths = cards.length
     ? cards.map((card) => ({ path: card.path, before: card.before, after: card.after }))
     : (action?.operations ?? []).flatMap((operation) => {

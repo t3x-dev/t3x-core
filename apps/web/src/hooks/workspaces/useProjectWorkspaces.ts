@@ -59,6 +59,30 @@ export function useProjectWorkspaces(
   }, [refresh]);
 
   useEffect(() => {
+    if (!projectId || !enabled) return;
+    const updated = (event: Event) => {
+      if ((event as CustomEvent<{ projectId: string }>).detail?.projectId === projectId)
+        void load(false);
+    };
+    const storage = (event: StorageEvent) => {
+      if (event.key !== 't3x-schema-candidate-updated' || !event.newValue) return;
+      try {
+        updated(
+          new CustomEvent('t3x-schema-candidate-updated', { detail: JSON.parse(event.newValue) })
+        );
+      } catch {
+        /* Ignore malformed notifications. */
+      }
+    };
+    window.addEventListener('t3x-schema-candidate-updated', updated);
+    window.addEventListener('storage', storage);
+    return () => {
+      window.removeEventListener('t3x-schema-candidate-updated', updated);
+      window.removeEventListener('storage', storage);
+    };
+  }, [projectId, enabled, load]);
+
+  useEffect(() => {
     if (!projectId || !enabled || typeof WebSocket === 'undefined') return;
     let disposed = false;
     let socket: WebSocket | null = null;

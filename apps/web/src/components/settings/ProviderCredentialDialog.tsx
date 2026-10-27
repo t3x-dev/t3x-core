@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import palette from '@/styles/management-palette.module.css';
 
 interface ProviderCredentialDialogStatus {
   configured: boolean;
@@ -41,11 +42,12 @@ interface ProviderCredentialDialogProps {
 }
 
 function getStatusLabel(status: ProviderCredentialDialogStatus | null): string {
-  if (!status) return 'Loading local credential status...';
-  if (!status.configured) return 'No local credentials saved yet.';
+  if (!status) return 'Credential status is not available.';
+  if (!status.configured)
+    return 'No database credential saved. An environment credential may still be active.';
   if (status.lastTestStatus === 'ok') return 'Last connection test passed.';
   if (status.lastTestStatus === 'error') return 'Last connection test failed.';
-  return 'Local credentials saved.';
+  return 'Database credential saved. Connection not tested.';
 }
 
 export function ProviderCredentialDialog({
@@ -72,7 +74,7 @@ export function ProviderCredentialDialog({
     setApiKey('');
     setDefaultModel(status?.defaultModel ?? '');
     setValidationError(null);
-  }, [open, status?.defaultModel]);
+  }, [open, status?.defaultModel, providerId]);
 
   const handleSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -124,12 +126,12 @@ export function ProviderCredentialDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className={`${palette.scope} sm:max-w-md`}>
         <DialogHeader>
           <DialogTitle>{providerName} credentials</DialogTitle>
           <DialogDescription>
-            Save a local API key and optional default model for {providerName}. Stored keys are
-            never shown again after you submit them.
+            Save a deployment-wide API key and optional default model for {providerName}. Stored
+            keys are never shown again after you submit them.
           </DialogDescription>
         </DialogHeader>
 
@@ -152,7 +154,7 @@ export function ProviderCredentialDialog({
             <Label htmlFor={apiKeyInputId}>API Key</Label>
             <Input
               autoComplete="off"
-              disabled={busy || statusLoading}
+              disabled={busy || statusLoading || !status}
               id={apiKeyInputId}
               onChange={(event) => setApiKey(event.target.value)}
               placeholder={`Enter your ${providerName} API key`}
@@ -167,7 +169,7 @@ export function ProviderCredentialDialog({
           <div className="space-y-2">
             <Label htmlFor={defaultModelInputId}>Default model (optional)</Label>
             <Input
-              disabled={busy || statusLoading}
+              disabled={busy || statusLoading || !status}
               id={defaultModelInputId}
               list={availableModels.length > 0 ? modelsListId : undefined}
               onChange={(event) => setDefaultModel(event.target.value)}
@@ -189,7 +191,7 @@ export function ProviderCredentialDialog({
           </div>
 
           {displayedError && (
-            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            <div className="rounded-md border border-[var(--status-error)]/30 bg-[var(--status-error-muted)] px-3 py-2 text-sm text-[var(--status-error)]">
               {displayedError}
             </div>
           )}
@@ -198,13 +200,13 @@ export function ProviderCredentialDialog({
             <div>
               {status?.configured && (
                 <Button
-                  disabled={busy || statusLoading}
+                  disabled={busy || statusLoading || !status}
                   onClick={handleDelete}
                   type="button"
                   variant="destructive"
                 >
                   {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 />}
-                  Remove local provider
+                  Remove database credential
                 </Button>
               )}
             </div>
@@ -217,7 +219,7 @@ export function ProviderCredentialDialog({
               >
                 Cancel
               </Button>
-              <Button disabled={busy || statusLoading} type="submit">
+              <Button disabled={busy || statusLoading || !status} type="submit">
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 Save provider
               </Button>

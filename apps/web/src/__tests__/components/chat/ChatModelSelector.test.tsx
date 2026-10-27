@@ -4,12 +4,18 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatModelSelector } from '@/components/chat/ChatModelSelector';
 import { GenerationModelSelector } from '@/components/generation/GenerationModelSelector';
+import { useChatSessionStore } from '@/store/chatSessionStore';
 import { useSettingsModalStore } from '@/store/settingsModalStore';
 
 const useAvailableModelsMock = vi.fn();
+const useDeploymentCapabilitiesMock = vi.fn();
 
 vi.mock('@/hooks/shared/useAvailableModels', () => ({
   useAvailableModels: () => useAvailableModelsMock(),
+}));
+
+vi.mock('@/components/deployment/DeploymentCapabilitiesProvider', () => ({
+  useDeploymentCapabilities: () => useDeploymentCapabilitiesMock(),
 }));
 
 describe('ChatModelSelector', () => {
@@ -17,22 +23,35 @@ describe('ChatModelSelector', () => {
     vi.clearAllMocks();
     act(() => {
       useSettingsModalStore.setState(useSettingsModalStore.getInitialState());
+      useChatSessionStore.setState(useChatSessionStore.getInitialState());
     });
     useAvailableModelsMock.mockReturnValue({ providers: [] });
+    useDeploymentCapabilitiesMock.mockReturnValue({ canAdministerProviderCredentials: false });
   });
 
-  it('opens provider settings in the modal when no models are configured', async () => {
+  it('lets operators open model settings when no models are available', async () => {
+    useDeploymentCapabilitiesMock.mockReturnValue({ canAdministerProviderCredentials: true });
     render(<ChatModelSelector conversationId={null} selectedModel="" onModelChange={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /No models configured/i }));
+    fireEvent.click(screen.getByRole('button', { name: /No models available/i }));
     fireEvent.click(await screen.findByRole('button', { name: 'Open provider settings' }));
 
     expect(useSettingsModalStore.getState().isOpen).toBe(true);
     expect(useSettingsModalStore.getState().activeTab).toBe('providers');
   });
 
+  it('hides provider administration from non-operators', () => {
+    render(<ChatModelSelector conversationId={null} selectedModel="" onModelChange={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /No models available/i }));
+
+    expect(screen.queryByRole('button', { name: 'Open provider settings' })).toBeNull();
+    expect(useSettingsModalStore.getState().isOpen).toBe(false);
+  });
+
   it('uses the Cursor-style model pane with real configured options', async () => {
     const onModelChange = vi.fn();
+    useDeploymentCapabilitiesMock.mockReturnValue({ canAdministerProviderCredentials: true });
     useAvailableModelsMock.mockReturnValue({
       defaultModel: 'gpt-5.4',
       defaultProvider: 'openai',
@@ -77,6 +96,9 @@ describe('ChatModelSelector', () => {
       'Add Models'
     );
 
+    fireEvent.click(screen.getByRole('button', { name: /ProviderOpenAI/i }));
+    expect(screen.getByRole('region', { name: 'Providers' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'OpenAI' }));
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'GPT 5.4 Mini' }));
     expect(onModelChange).toHaveBeenCalledWith('openai', 'gpt-5.4-mini');
   });
@@ -114,14 +136,21 @@ describe('ChatModelSelector', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Select model: GPT 5.4/i }));
-    fireEvent.click(screen.getByRole('button', { name: /EffortLow/i }));
+    fireEvent.click(screen.getByRole('button', { name: /EffortMedium/i }));
     expect(await screen.findByRole('region', { name: 'Effort' })).toBeTruthy();
-    expect(screen.getByRole('menuitemradio', { name: 'Low' }).getAttribute('aria-checked')).toBe(
+    expect(screen.getByRole('menuitemradio', { name: 'Medium' }).getAttribute('aria-checked')).toBe(
       'true'
     );
     expect(screen.getByRole('menuitemradio', { name: 'High' })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'High' }));
     expect(onThinkingChange).toHaveBeenCalledWith(true);
+    expect(useChatSessionStore.getState().reasoningEffort).toBe('high');
+    fireEvent.click(screen.getByRole('button', { name: /Select model: GPT 5.4/i }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Fast responses' }));
+    expect(useChatSessionStore.getState().fastEnabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: /ContextAuto/i }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Compact' }));
+    expect(useChatSessionStore.getState().contextMode).toBe('compact');
   });
 });

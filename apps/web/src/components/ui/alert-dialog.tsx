@@ -20,6 +20,7 @@ interface AlertDialogProps {
   onConfirm: () => void;
   variant?: 'destructive' | 'default';
   loading?: boolean;
+  contentClassName?: string;
 }
 
 /**
@@ -36,10 +37,11 @@ export function AlertDialog({
   onConfirm,
   variant = 'default',
   loading = false,
+  contentClassName,
 }: AlertDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent showCloseButton={false}>
+      <DialogContent className={contentClassName} showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>

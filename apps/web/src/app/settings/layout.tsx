@@ -2,7 +2,6 @@
 
 import {
   Box,
-  ChevronUp,
   Circle,
   HelpCircle,
   KeyRound,
@@ -14,11 +13,15 @@ import {
   Zap,
 } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
-import { ProjectRouteShell } from '@/components/project/ProjectRouteShell';
+import { useDeploymentCapabilities } from '@/components/deployment/DeploymentCapabilitiesProvider';
+import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
+import { SettingsReturnLink } from '@/components/settings/SettingsReturnLink';
 import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
 import { useSession } from '@/hooks/shared/useSession';
+import palette from '@/styles/management-palette.module.css';
+import { safeInternalReturnTo } from '@/utils/navigationReturn';
 import styles from './SettingsLayout.module.css';
 
 interface SettingsNavItem {
@@ -94,25 +97,28 @@ const AUTOMATION_NAV: SettingsNavItem[] = [
   },
 ];
 
-function withProjectContext(href: string, projectId: string): string {
-  if (!projectId) return href;
-  return `${href}?${new URLSearchParams({ project: projectId }).toString()}`;
+function withSettingsContext(href: string, context: URLSearchParams): string {
+  const params = new URLSearchParams(context);
+  if (href !== '/settings/provider-credentials') params.delete('owner');
+  if (!AUTOMATION_NAV.some((item) => item.href === href)) params.delete('project');
+  return params.size ? `${href}?${params.toString()}` : href;
 }
 
 function SettingsNavLink({
   item,
   currentPath,
-  projectId,
+  context,
 }: {
   item: SettingsNavItem;
   currentPath: string;
-  projectId: string;
+  context: URLSearchParams;
 }) {
   const Icon = item.icon;
   const active = item.activePaths.includes(currentPath);
   return (
     <Link
-      href={withProjectContext(item.href, projectId)}
+      href={withSettingsContext(item.href, context)}
+      draggable={item.href === '/settings/providers' ? false : undefined}
       aria-current={active ? 'page' : undefined}
       className={active ? styles.navLinkActive : styles.navLink}
     >
@@ -124,44 +130,114 @@ function SettingsNavLink({
 
 function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
   const currentPath = usePathname() ?? '';
-  const projectId = useSearchParams().get('project')?.trim() ?? '';
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { canAdministerProviderCredentials } = useDeploymentCapabilities();
+  // Provider credentials accepts an owner as navigation context, not as an account selector.
+  // Namespace settings always use the account selected by useNamespaceAccounts.
+  const credentialOwner =
+    currentPath === '/settings/provider-credentials'
+      ? searchParams.get('owner')?.trim()
+      : undefined;
+  const context = new URLSearchParams();
+  if (credentialOwner) context.set('owner', credentialOwner);
+  const returnTo = safeInternalReturnTo(searchParams.get('returnTo'), '');
+  if (returnTo) context.set('returnTo', returnTo);
+  const projectId = searchParams.get('project')?.trim();
+  if (projectId && AUTOMATION_NAV.some((item) => item.href === currentPath)) {
+    context.set('project', projectId);
+  }
   const { clear, getKey } = useSession();
   const { activeAccount } = useNamespaceAccounts();
+  const headerOwner = credentialOwner || activeAccount?.namespace.slug;
   const [isAuthEnabled, setIsAuthEnabled] = useState(false);
+  const personalNav = PERSONAL_NAV.filter(
+    (item) => item.href !== '/settings/provider-credentials' || canAdministerProviderCredentials
+  );
+  const namespaceLabel = activeAccount
+    ? `${activeAccount.namespace.kind === 'organization' ? 'Organization' : 'Namespace'}: ${activeAccount.namespace.display_name}`
+    : 'No active namespace';
+  const mobileDestination = [...personalNav, ...ORGANIZATION_NAV, ...AUTOMATION_NAV].find((item) =>
+    item.activePaths.includes(currentPath)
+  )?.href;
 
   useEffect(() => setIsAuthEnabled(Boolean(getKey())), [getKey]);
 
   return (
-    <ProjectRouteShell fallbackProjectName="Project" projectId={projectId}>
+    <div className={`${palette.scope} ${styles.accountLayout}`}>
+      <DiscoverHeader
+        owner={headerOwner}
+        namespaceTab="settings"
+        settingsHref={withSettingsContext('/settings/provider-credentials', context)}
+        newProjectHref={headerOwner ? `/${encodeURIComponent(headerOwner)}/new` : '/'}
+        contextLabel="Account"
+      />
+      <div className={styles.mobileNavigation}>
+        <label htmlFor="settings-destination">Settings</label>
+        <select
+          id="settings-destination"
+          value={mobileDestination ?? currentPath}
+          onChange={(event) => router.push(withSettingsContext(event.target.value, context))}
+        >
+          {!mobileDestination && <option value={currentPath}>Current settings page</option>}
+          <optgroup label="Personal">
+            {personalNav.map((item) => (
+              <option key={item.href} value={item.href}>
+                {item.label}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label={namespaceLabel}>
+            {ORGANIZATION_NAV.map((item) => (
+              <option key={item.href} value={item.href}>
+                {item.label}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Automations">
+            {AUTOMATION_NAV.map((item) => (
+              <option key={item.href} value={item.href}>
+                {item.label}
+              </option>
+            ))}
+          </optgroup>
+        </select>
+        {isAuthEnabled && (
+          <button
+            type="button"
+            className={styles.mobileSignOut}
+            aria-label="Sign out"
+            onClick={() => clear()}
+          >
+            <LogOut aria-hidden="true" size={18} />
+          </button>
+        )}
+      </div>
       <div className={styles.shell}>
         <aside className={styles.sidebar} aria-label="Settings navigation">
           <section>
             <h2 className={styles.groupTitle}>Personal</h2>
             <nav className={styles.navList}>
-              {PERSONAL_NAV.map((item) => (
+              {personalNav.map((item) => (
                 <SettingsNavLink
                   key={item.label}
                   item={item}
                   currentPath={currentPath}
-                  projectId={projectId}
+                  context={context}
                 />
               ))}
             </nav>
           </section>
 
           <section>
-            <h2 className={styles.groupTitle}>
-              {activeAccount
-                ? `${activeAccount.namespace.kind === 'organization' ? 'Organization' : 'Namespace'}: ${activeAccount.namespace.display_name}`
-                : 'Organization: No active namespace'}
-            </h2>
+            <h2 className={styles.groupTitle}>{namespaceLabel}</h2>
             <nav className={styles.navList}>
               {ORGANIZATION_NAV.map((item) => (
                 <SettingsNavLink
                   key={item.label}
                   item={item}
                   currentPath={currentPath}
-                  projectId={projectId}
+                  context={context}
                 />
               ))}
             </nav>
@@ -169,7 +245,6 @@ function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
               <div className={styles.automationTitle}>
                 <Zap aria-hidden="true" size={18} strokeWidth={2} />
                 <span>Automations</span>
-                <ChevronUp aria-hidden="true" className={styles.automationChevron} size={15} />
               </div>
               <nav className={styles.automationNav} aria-label="Automations">
                 {AUTOMATION_NAV.map((item) => (
@@ -177,7 +252,7 @@ function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
                     key={item.label}
                     item={item}
                     currentPath={currentPath}
-                    projectId={projectId}
+                    context={context}
                   />
                 ))}
               </nav>
@@ -191,9 +266,12 @@ function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
             </button>
           ) : null}
         </aside>
-        <div className={styles.content}>{children}</div>
+        <div className={styles.content}>
+          <SettingsReturnLink />
+          {children}
+        </div>
       </div>
-    </ProjectRouteShell>
+    </div>
   );
 }
 

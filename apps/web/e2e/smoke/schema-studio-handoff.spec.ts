@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { AVATAR_PNG_BASE64 } from '../fixtures/avatar';
-import { getProjectRepoPath } from '../../src/domain/project/repoPath';
 import { expect, test } from '../fixtures/test';
-import { API_BASE, cleanupProject, createTestCommitFromTrees, createTestProject } from '../fixtures/api-helpers';
+import { API_BASE, cleanupProject, createTestCommitFromTrees, createTestMaterial, createTestProject } from '../fixtures/api-helpers';
+import { generatePrdSchemaCandidateFields } from '../fixtures/test-data-factory';
 
 test('add a pinned source from Overview to another project Studio without changing Workspaces', async ({ page, request }, testInfo) => {
   test.setTimeout(90000);
@@ -13,7 +13,6 @@ test('add a pinned source from Overview to another project Studio without changi
   try {
     const owned = (await (await request.get(`${API_BASE}/projects/${projectId}`)).json()).data;
     expect(owned.project_id).toBe(projectId);
-    const projectPath = getProjectRepoPath({ id: owned.project_id, name: owned.name });
     const commitDigest = await createTestCommitFromTrees(request, projectId, [{ key: 'service', slots: { image: 'app:v1' }, children: [] }]);
     const base64 = AVATAR_PNG_BASE64;
     const presentationResponse = await request.post(`${API_BASE}/projects/${projectId}/commits/${encodeURIComponent(commitDigest)}/presentation`, { data: {
@@ -22,8 +21,9 @@ test('add a pinned source from Overview to another project Studio without changi
     } });
     expect(presentationResponse.ok(), await presentationResponse.text()).toBeTruthy();
     const presentationDigest = (await presentationResponse.json()).data.presentation.digest;
+    const sourceEvidence = await createTestMaterial(request, projectId);
     const workspaceId = 'catalog-studio';
-    const workspace = { id: workspaceId, projectId, title: 'Catalog Studio', targetBranch: 'main', status: 'draft', summary: 'Schema publication', updatedAt: new Date().toISOString(), baseCommitHash: commitDigest, sourceBundle: [], schemaBindings: [], schemaCandidate: { summary: '', fields: [] }, schemaReview: { verdict: 'ready', summary: '', gaps: [] }, yopsDraft: { id: 'draft', operations: [] }, outputTargets: [] };
+    const workspace = { id: workspaceId, projectId, title: 'Catalog Studio', targetBranch: 'main', status: 'draft', summary: 'Schema publication', updatedAt: new Date().toISOString(), baseCommitHash: commitDigest, sourceBundle: [sourceEvidence], schemaBindings: [], schemaCandidate: { summary: '', fields: generatePrdSchemaCandidateFields() }, schemaReview: { verdict: 'ready', summary: '', gaps: [] }, yopsDraft: { id: 'draft', operations: [] }, outputTargets: [] };
     const saved = await request.patch(`${API_BASE}/projects/${projectId}/workspaces/${workspaceId}`, { data: { workspace } });
     expect(saved.ok(), await saved.text()).toBeTruthy();
     const revision = (await saved.json()).data.workspace.revision;
@@ -34,18 +34,17 @@ test('add a pinned source from Overview to another project Studio without changi
     const canonicalName = `catalog-${projectId.toLowerCase().replace(/[^a-z0-9]/g, '')}/release`;
     const published = await request.post(`${API_BASE}/projects/${projectId}/workspaces/${workspaceId}/schema-composition/publish`, { data: {
       composition_revision: compiled.composition.revision, composition_hash: compiled.preview.compositionHash,
-      canonical_name: canonicalName, version: '1.2.3', title: 'Team release definition', description: 'Review a service definition before delivery.', tags: ['infrastructure', 'ecosystem:t3x'],
+      canonical_name: canonicalName, version: '1.2.3', title: 'Team release definition', description: 'Review a service definition before delivery.', tags: ['infrastructure', 'ecosystem:t3x'], visibility: 'community', license: 'MIT',
       presentation_ref: { commitDigest, presentationDigest, coverPath: 'images/overview.png' },
     } });
     expect(published.ok(), await published.text()).toBeTruthy();
     await page.setViewportSize({ width: 1480, height: 900 });
-    await page.goto(`${projectPath}/schemas`, { waitUntil: 'networkidle' });
-    await page.getByRole('button', { name: 'Explore Team release definition 1.2.3' }).click();
-    await page.getByRole('link', { name: 'Project introduction' }).click();
-    await expect(page.getByTestId('state-overview')).toBeVisible();
-    await page.getByRole('button', { name: 'Add to Studio', exact: true }).click();
-    const drawer = page.getByRole('dialog', { name: 'Add to Studio' });
-    await drawer.getByLabel('Destination project').selectOption(destination.projectId);
+    await page.goto(`/explore?view=discover&type=schemas&studioTarget=${projectId}`, { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: 'Explore Team release definition' }).last().click();
+    await expect(page).toHaveURL(/catalogName=/);
+    await page.getByRole('button', { name: 'Use Schema', exact: true }).click();
+    const drawer = page.getByRole('dialog', { name: 'Use Schema' });
+    await drawer.getByLabel('Destination project', { exact: true }).selectOption(destination.projectId);
     await expect(drawer.getByRole('button', { name: 'Add & open Studio' })).toBeEnabled();
     await page.screenshot({ path: testInfo.outputPath('handoff-desktop.png'), animations: 'disabled' });
     await page.setViewportSize({ width: 390, height: 844 });
@@ -53,13 +52,18 @@ test('add a pinned source from Overview to another project Studio without changi
     await drawer.getByRole('button', { name: 'Add & keep browsing' }).click();
     await expect(drawer).not.toBeVisible();
     const candidates = (await (await request.get(`${API_BASE}/projects/${destination.projectId}/schema-studio/candidates`)).json()).data.items;
-    expect(candidates).toHaveLength(1); expect(candidates[0].source).toMatchObject({ projectId, version: '1.2.3' });
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].source).toMatchObject({ projectId: null, version: '1.2.3' });
     const before = (await (await request.get(`${API_BASE}/projects/${projectId}/workspaces/${workspaceId}`)).json()).data;
-    await page.getByRole('button', { name: 'Add to Studio', exact: true }).click();
-    await drawer.getByLabel('Destination project').selectOption(destination.projectId);
-    await expect(drawer.getByText('Saved as a candidate')).toBeVisible();
+    await page.getByRole('button', { name: 'Explore Team release definition' }).last().click();
+    await expect(page).toHaveURL(/catalogName=/);
+    await page.getByRole('button', { name: 'Use Schema', exact: true }).click();
+    await drawer.getByLabel('Destination project', { exact: true }).selectOption(destination.projectId);
+    await expect(
+      drawer.getByText('This exact release is already saved in this Studio.')
+    ).toBeVisible();
     await drawer.getByRole('button', { name: 'Open Studio', exact: true }).click();
-    await expect(page.getByRole('complementary', { name: 'Studio sources' })).toContainText('Team release definition');
+    await expect(page.getByRole('complementary', { name: 'Available Schema sources' })).toContainText('Team release definition');
     await page.setViewportSize({ width: 1480, height: 900 });
     await page.screenshot({ path: testInfo.outputPath('candidates-desktop.png'), animations: 'disabled' });
     expect((await (await request.get(`${API_BASE}/projects/${destination.projectId}/schema-studio/candidates`)).json()).data.items).toHaveLength(1);

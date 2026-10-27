@@ -1,15 +1,19 @@
-import { ChevronDown, Globe2, Plus } from 'lucide-react';
-import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { LogoIcon } from '@/components/chat/sidebar/LogoIcon';
-import { ProjectTabs } from '@/components/project/ProjectTabs';
-import { getProjectTabSegment, type ProjectTabId } from '@/components/project/projectTabModel';
-import { getProjectIdRepoPath, getProjectRepoPath } from '@/domain/project/repoPath';
+import {
+  getProjectTabSegment,
+  type ProjectTabId,
+  projectTabKeepsWorkspace,
+} from '@/components/project/projectTabModel';
+import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
+import { getProjectRepoPath } from '@/domain/project/repoPath';
 import type { YSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 
 export interface ProjectShellProject {
   id?: string;
   name: string;
+  namespace?: string | null;
+  canonical_path?: string | null;
+  path_status?: 'ready' | 'pending_migration';
   description?: string;
   status?: 'draft' | 'active' | 'paused';
   drafts?: number;
@@ -30,6 +34,7 @@ export interface ProjectShellProps {
   children: ReactNode;
   project: ProjectShellProject;
   workspaceId?: string | null;
+  settingsReturnTo?: string;
 }
 
 export function ProjectShell({
@@ -38,10 +43,10 @@ export function ProjectShell({
   children,
   immersive = false,
   project,
-  projectIdNavigation = false,
   ownerSlug,
   pullRequestNumber,
   workspaceId,
+  settingsReturnTo,
 }: ProjectShellProps) {
   const visibilityLabel =
     project.visibility === 'public'
@@ -49,111 +54,60 @@ export function ProjectShell({
       : project.visibility === 'unlisted'
         ? 'Unlisted'
         : 'Private';
-  const useProjectIdNavigation = Boolean(project.id && (projectIdNavigation || !ownerSlug));
-  const repoPath = useProjectIdNavigation
-    ? getProjectIdRepoPath(project.id!)
-    : getProjectRepoPath(project, ownerSlug);
+  const repoPath = getProjectRepoPath(project);
+  const idNavigation = !project.canonical_path;
   const returnParams = new URLSearchParams();
   if (activeTab !== 'state' && activeTab !== 'settings') {
     returnParams.set('tab', getProjectTabSegment(activeTab));
   }
   if (branch) returnParams.set('branch', branch);
-  if (workspaceId && (activeTab === 'workspaces' || activeTab === 'schemas')) {
+  if (workspaceId && projectTabKeepsWorkspace(activeTab)) {
     returnParams.set('workspace', workspaceId);
   }
   if (pullRequestNumber && activeTab === 'reviews') {
     returnParams.set('pr', String(pullRequestNumber));
   }
   const returnQuery = returnParams.toString();
-  const returnTo = returnQuery ? `${repoPath}?${returnQuery}` : repoPath;
-  const settingsHref = project.id
-    ? `/project/${encodeURIComponent(project.id)}/settings?returnTo=${encodeURIComponent(returnTo)}`
-    : '/settings';
-  const ownerLabel = ownerSlug || 'Projects';
-  const ownerMark = ownerSlug ? ownerSlug.slice(0, 2).toUpperCase() : 'P';
-  const newRepositoryHref = ownerSlug ? `/${encodeURIComponent(ownerSlug)}/new` : '/';
+  const returnTo = settingsReturnTo ?? (returnQuery ? `${repoPath}?${returnQuery}` : repoPath);
+  const settingsHref =
+    activeTab === 'settings' && settingsReturnTo
+      ? settingsReturnTo
+      : `${repoPath}/settings?returnTo=${encodeURIComponent(returnTo)}`;
+  const actualOwner = project.namespace ?? ownerSlug;
+  const newRepositoryHref = actualOwner ? `/${encodeURIComponent(actualOwner)}/new` : '/';
   return (
     <div className="flex h-dvh min-h-[680px] flex-col overflow-hidden bg-[var(--surface-app)] text-[var(--text-primary)] [--text-base:14px] [--text-lg:16px] [--text-sm:13px] [--text-xs:12px]">
-      <header className="flex h-24 shrink-0 flex-col border-b border-[var(--stroke-divider)] bg-[var(--surface-elevated)] px-3">
-        <div className="flex h-14 min-w-0 shrink-0 items-center justify-between gap-6 px-1">
-          <div className="flex min-w-0 items-center gap-3">
-            <Link
-              aria-label="Back to projects"
-              className="inline-flex h-8 shrink-0 items-center text-xl font-extrabold leading-none tracking-normal text-[var(--text-primary)] focus-visible:rounded-[var(--radius-md)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
-              href="/"
-            >
-              T3X
-            </Link>
-            <span aria-hidden="true" className="inline-flex size-8 shrink-0 [&_svg]:size-8">
-              <LogoIcon />
-            </span>
-            <div className="flex min-w-0 items-center gap-1 text-[13px] leading-5">
-              <span className="shrink-0 text-[var(--text-secondary)]">{ownerLabel}</span>
-              <span aria-hidden="true" className="text-[var(--text-tertiary)]">
-                /
-              </span>
-              <h1
-                title={project.name}
-                className="min-w-0 truncate font-semibold text-[var(--text-primary)]"
-              >
-                {project.name}
-              </h1>
-              <ChevronDown
-                aria-hidden="true"
-                className="size-3.5 shrink-0 text-[var(--accent-commit)]"
-              />
-            </div>
-            <span className="inline-flex h-6 shrink-0 items-center gap-1 rounded-[var(--radius-pill)] border border-[var(--accent-commit)]/15 bg-[var(--accent-commit-soft)] px-2 text-[11px] font-medium text-[var(--accent-commit)]">
-              <Globe2 aria-hidden="true" className="size-3" />
-              {visibilityLabel}
-            </span>
-            <p className="sr-only">{project.description || 'Structured state repository'}</p>
-          </div>
-
-          <nav aria-label="Global" className="hidden shrink-0 items-center gap-5 min-[760px]:flex">
-            <Link
-              className="text-xs font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] focus-visible:rounded-[var(--radius-control)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
-              href="/templates"
-            >
-              Explore
-            </Link>
-            <Link
-              className="text-xs font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] focus-visible:rounded-[var(--radius-control)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
-              href="/"
-            >
-              Your projects
-            </Link>
-            <Link
-              className="inline-flex h-[34px] items-center gap-1.5 rounded-[5px] border border-[var(--stroke-default)] bg-[var(--surface-card)] px-3 text-xs font-medium text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)] transition-colors hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
-              href={newRepositoryHref}
-            >
-              <Plus aria-hidden="true" className="size-3.5" />
-              {ownerSlug ? 'Create new' : 'Browse projects'}
-            </Link>
-            <span
-              aria-label={ownerSlug ? `Owner ${ownerSlug}` : 'Projects'}
-              className="inline-flex size-8 items-center justify-center rounded-full bg-[var(--hover-bg-strong)] text-xs font-semibold text-[var(--text-secondary)]"
-              role="img"
-            >
-              {ownerMark.charAt(0)}
-            </span>
-          </nav>
-        </div>
-        <ProjectTabs
-          activeTab={activeTab}
-          branch={branch}
-          repoPath={repoPath}
-          projectIdNavigation={useProjectIdNavigation}
-          settingsHref={settingsHref}
-          stacked
-          workspaceId={workspaceId}
-        />
-      </header>
+      <DiscoverHeader
+        activeTab={activeTab === 'history' ? 'state' : activeTab}
+        owner={actualOwner || undefined}
+        projectName={project.name}
+        newProjectHref={newRepositoryHref}
+        repoPath={repoPath}
+        settingsHref={settingsHref}
+        projectIdNavigation={idNavigation}
+        branch={branch}
+        workspaceId={workspaceId}
+        visibility={visibilityLabel}
+      />
+      {project.path_status === 'pending_migration' && (
+        <output className="px-4 py-2 text-sm text-[var(--status-warning)]">
+          This repository needs a name or namespace migration. Its Project ID address remains
+          available.
+        </output>
+      )}
       <main
         className={
-          immersive || activeTab === 'state' || activeTab === 'workspaces'
-            ? 'min-h-0 flex-1 overflow-hidden'
-            : 'min-h-0 flex-1 overflow-auto'
+          immersive ||
+          activeTab === 'state' ||
+          activeTab === 'workspaces' ||
+          activeTab === 'history'
+            ? 'relative min-h-0 flex-1 overflow-hidden'
+            : activeTab === 'reviews' ||
+                activeTab === 'checks' ||
+                activeTab === 'community' ||
+                activeTab === 'settings'
+              ? 'relative min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable_both-edges] bg-[var(--surface-card)]'
+              : 'relative min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable_both-edges]'
         }
       >
         {children}

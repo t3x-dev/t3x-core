@@ -7,7 +7,12 @@
  * Extracted from useConversationChat (PR23).
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect } from 'react';
+import {
+  type SourceThreadSession,
+  useSourceThreadSessionRef,
+  useSourceThreadSessionState,
+} from '@/hooks/sourceThreads/sourceThreadSession';
 
 export interface UseChatWarningsReturn {
   error: string | null;
@@ -17,22 +22,37 @@ export interface UseChatWarningsReturn {
   showWarning: (msg: string) => void;
 }
 
-export function useChatWarnings(): UseChatWarningsReturn {
-  const [error, setError] = useState<string | null>(null);
-  const [warning, setWarning] = useState<string | null>(null);
-  const warningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+export function useChatWarnings(session?: SourceThreadSession): UseChatWarningsReturn {
+  const [error, setError] = useSourceThreadSessionState<string | null>(
+    session,
+    'warnings.error',
+    null
+  );
+  const [warning, setWarning] = useSourceThreadSessionState<string | null>(
+    session,
+    'warnings.warning',
+    null
+  );
+  const warningTimerRef = useSourceThreadSessionRef<ReturnType<typeof setTimeout> | null>(
+    session,
+    'warnings.timer',
+    null
+  );
 
   useEffect(() => {
     return () => {
-      if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
+      if (!session && warningTimerRef.current) clearTimeout(warningTimerRef.current);
     };
-  }, []);
+  }, [session, warningTimerRef]);
 
-  const showWarning = useCallback((msg: string) => {
-    if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
-    setWarning(msg);
-    warningTimerRef.current = setTimeout(() => setWarning(null), 5000);
-  }, []);
+  const showWarning = useCallback(
+    (msg: string) => {
+      if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
+      setWarning(msg);
+      warningTimerRef.current = setTimeout(() => setWarning(null), 5000);
+    },
+    [setWarning, warningTimerRef]
+  );
 
   return { error, setError, warning, setWarning, showWarning };
 }

@@ -11,6 +11,8 @@ import {
   expandComposeActivityCards,
   groupComposeActivity,
 } from '@/domain/composeActivity';
+import { composeCardsAtPath } from '@/domain/workspaces/composeDraftChanges';
+import { composeObjectChangeCards } from '@/domain/workspaces/composeObjectChanges';
 import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
 import { saveProjectWorkspace } from '@/infrastructure/workspaces';
 import type { WorkspaceCandidate } from '@/types/workspaces';
@@ -32,6 +34,9 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
   const [nodeCursor, setNodeCursor] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [newActivity, setNewActivity] = useState<WorkspaceAuthoringView | null>(null);
+  const [reconciling, setReconciling] = useState(false);
+  const [reconciliationError, setReconciliationError] = useState<string | null>(null);
+  const reconciliationRequest = useRef<{ facts: string; id: string } | null>(null);
   const nodeRequestRef = useRef(0);
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -54,7 +59,12 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
       before = older.nextBeforeSequence;
     }
     const details: Record<string, WorkspaceAuthoringCard[]> = {};
-    if (first.selected) details[first.selected.action.actionId] = first.selected.cards;
+    if (first.selected)
+      details[first.selected.action.actionId] = composeObjectChangeCards(
+        first.selected.cards,
+        first.selected.before,
+        first.selected.after
+      );
     const missing = all.filter((a) => !details[a.actionId]);
     for (let i = 0; i < missing.length; i += 4) {
       await Promise.all(
@@ -64,18 +74,23 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
           });
           if (result.selected?.action.actionId !== action.actionId)
             throw new Error('Event details are unavailable. Refresh activity to retry.');
-          details[action.actionId] = result.selected.cards;
+          if (result.workspaceRevision !== first.workspaceRevision)
+            throw new Error('Draft changed. Refresh activity to load a consistent history.');
+          details[action.actionId] = composeObjectChangeCards(
+            result.selected.cards,
+            result.selected.before,
+            result.selected.after
+          );
         })
       );
     }
-    const projected = { ...first, netDiff: expandComposeActivityCards(first.netDiff) };
-    setView(projected);
+    setView(first);
     setActions(all);
     setCards(details);
     setCursor(before);
     setNewActivity(null);
     setError(null);
-    return projected;
+    return first;
   }, [candidate.id, candidate.projectId, enabled, pageCount]);
   useEffect(() => {
     // Only a different workspace invalidates the visible projection. Clearing it
@@ -115,7 +130,9 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
           if (
             active &&
             viewRef.current &&
-            next.compositionRevision !== viewRef.current.compositionRevision
+            (next.workspaceRevision !== viewRef.current.workspaceRevision ||
+              next.synchronization?.currentRefHead !==
+                viewRef.current.synchronization?.currentRefHead)
           )
             setNewActivity(next);
         })
@@ -128,6 +145,43 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
       window.clearInterval(timer);
     };
   }, [candidate.id, candidate.projectId, enabled]);
+
+  const reconcile = useCallback(async () => {
+    if (reconciling) return false;
+    setReconciling(true);
+    setReconciliationError(null);
+    try {
+      const api = getSharedApiClient().workspaces.authoring;
+      const latest = await api.read(candidate.projectId, candidate.id);
+      if (latest.synchronization?.required) {
+        const input = {
+          expected_workspace_revision: latest.workspaceRevision,
+          expected_ref_head: latest.synchronization.currentRefHead,
+        };
+        const facts = JSON.stringify([candidate.id, candidate.projectId, input]);
+        const request =
+          reconciliationRequest.current?.facts === facts
+            ? reconciliationRequest.current
+            : { facts, id: crypto.randomUUID() };
+        reconciliationRequest.current = request;
+        await api.reconcile(candidate.projectId, candidate.id, {
+          ...input,
+          request_id: request.id,
+        });
+      }
+      await load();
+      reconciliationRequest.current = null;
+      setNotice(
+        'Workspace synced with the branch. Existing edits and earlier history are preserved.'
+      );
+      return true;
+    } catch (cause) {
+      setReconciliationError(cause instanceof Error ? cause.message : 'Could not sync Workspace');
+      return false;
+    } finally {
+      setReconciling(false);
+    }
+  }, [candidate.id, candidate.projectId, load, reconciling]);
 
   const inspectNode = useCallback(
     async (nodeId: string, actionId?: string) => {
@@ -161,7 +215,11 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
   );
 
   const selectActionNode = useCallback(
-    async (actionId: string, nodeId: string): Promise<ComposeActivitySelection | null> => {
+    async (
+      actionId: string,
+      nodeId: string,
+      path?: string
+    ): Promise<ComposeActivitySelection | null> => {
       if (!enabled) return null;
       try {
         const result = await getSharedApiClient().workspaces.authoring.read(
@@ -170,9 +228,28 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
           { action_id: actionId, node_id: nodeId }
         );
         if (!result.selected) return null;
-        const card = result.selected.cards.find((item) => item.nodeId === nodeId);
+        const projectedCards = composeObjectChangeCards(
+          result.selected.cards,
+          result.selected.before,
+          result.selected.after
+        );
+        const nodeCards = expandComposeActivityCards(projectedCards).filter(
+          (item) => item.nodeId === nodeId
+        );
+        const card = path
+          ? (projectedCards.find(
+              (item) => item.path === path || item.beforePath === path || item.afterPath === path
+            ) ??
+            composeCardsAtPath(result.selected.cards, path).find(
+              (item) => item.nodeId === nodeId
+            ) ??
+            nodeCards.find(
+              (item) => item.path === path || item.beforePath === path || item.afterPath === path
+            ) ??
+            (nodeCards.length === 1 ? nodeCards[0] : undefined))
+          : projectedCards.find((item) => item.nodeId === nodeId);
         if (!card) return null;
-        setCards((current) => ({ ...current, [actionId]: result.selected!.cards }));
+        setCards((current) => ({ ...current, [actionId]: projectedCards }));
         setNode(result.node);
         setNodeCursor(
           result.node?.entries.length === 20 ? result.node.entries.at(-1)!.sequence : null
@@ -308,6 +385,22 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
 
   return {
     enabled,
+    confirmDeletion: async (actionId: string) => {
+      const current = viewRef.current;
+      if (!current) throw new Error('Refresh the Draft before confirming deletion.');
+      await getSharedApiClient().workspaces.authoring.confirmDeletion(
+        candidate.projectId,
+        candidate.id,
+        actionId,
+        {
+          expected_workspace_revision: current.workspaceRevision,
+          expected_revision: current.compositionRevision,
+          expected_ref_head: current.basis.refHead,
+        }
+      );
+      await load();
+      setNotice('Deletion confirmed by you. Prepare a new Review to include this authorization.');
+    },
     view,
     actions,
     cards,
@@ -320,6 +413,9 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
     nodeCursor,
     notice,
     newActivity,
+    reconciling,
+    reconciliationError,
+    reconcile,
     compositionRevision: view?.compositionRevision,
     workspaceRevision: view?.workspaceRevision,
     basis: view?.basis,

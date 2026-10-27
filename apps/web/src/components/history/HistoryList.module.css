@@ -68,7 +68,7 @@
 
 .controls {
   display: grid;
-  grid-template-columns: 112px 1px minmax(240px, 648px);
+  grid-template-columns: minmax(120px, 160px) minmax(112px, 160px) 1px minmax(160px, 648px);
   align-items: center;
   gap: 14px;
   padding: 16px 40px 17px;
@@ -448,6 +448,10 @@
   .controls {
     grid-template-columns: 112px minmax(0, 1fr);
     padding-top: 8px;
+  }
+
+  .searchControl {
+    grid-column: 1 / -1;
   }
 
   .controlDivider {

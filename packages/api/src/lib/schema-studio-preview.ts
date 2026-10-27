@@ -1,33 +1,57 @@
 import {
+  type AssistantSchemaSettingsInput,
   type StudioPreviewInput,
   type StudioSample,
   StudioSampleValueSchema,
 } from '@t3x-dev/api-client';
-import { type AnyDB, findSchemaStudioCandidate, findWorkspaceDraft } from '@t3x-dev/storage';
 import {
-  builtInYSchemaCores,
-  builtInYSchemaModules,
+  parseWorkspaceSchemaEditCandidate,
+  type WorkspaceSchemaEditCandidate,
+} from '@t3x-dev/application';
+import {
+  applyWorkspaceSchemaYOps,
+  compileWorkspaceSchemaDefinition,
+  WorkspaceSchemaYOpsError,
+} from '@t3x-dev/core';
+import {
+  type AnyDB,
+  findSchemaStudioCandidate,
+  findWorkspaceDraft,
+  findYSchemaCompositionSnapshot,
+} from '@t3x-dev/storage';
+import {
   compileYSchemaCompositionV2,
   diffYSchemas,
   normalizeYSchemaObject,
   sha256CompositionValue,
   validateTree,
   type YSchema,
+  type YSchemaLocalContributionV2,
 } from '@t3x-dev/yschema';
 import type { Context } from 'hono';
-import { assertProjectAccess } from './project-access';
-import { resolveStudioSource } from './schema-studio';
+import { assessWorkspaceSchemaImpact, workspaceContent } from './schema-evolution-impact';
+import {
+  accessibleNodeProvenance,
+  composeNodeProvenance,
+  readNodeProvenance,
+} from './schema-node-provenance';
+import { applySchemaSourceMappings } from './schema-source-mappings';
+import { resolveStudioSource, schemaSourceAdoptionReason } from './schema-studio';
+import { resolveStudioComposition, type StudioComposition } from './schema-studio-composition';
+import { workspaceAuthoringState } from './workspace-authoring';
+import { resolveWorkspaceSchemaEditBasis } from './workspace-schema-edit-basis';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
 import { artifactViewToOpenModule } from './yschema-artifact-registry';
+import { resolveBuiltInYSchema } from './yschema-registry';
 export class StudioError extends Error {
   constructor(
-    public code: 'NOT_FOUND' | 'INVALID_REQUEST' | 'CONFLICT' | 'FORBIDDEN',
-    message: string
+    public code: 'NOT_FOUND' | 'INVALID_REQUEST' | 'CONFLICT' | 'FORBIDDEN' | 'REVIEW_REQUIRED',
+    message: string,
+    public details?: Record<string, unknown>
   ) {
     super(message);
   }
 }
-const licenses = new Set(['MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC', 'CC0-1.0']);
 function samplePreview(
   value: unknown,
   schema: YSchema,
@@ -80,7 +104,10 @@ export async function compileStudioSelection(
   c: Context,
   db: AnyDB,
   projectId: string,
-  candidateIds: string[]
+  candidateIds: string[],
+  rawLocalContribution?: Record<string, unknown>,
+  localIdentity?: { id: string; revision: number },
+  composition?: StudioComposition
 ) {
   const entries = await Promise.all(
     candidateIds.map(async (id) => {
@@ -111,66 +138,92 @@ export async function compileStudioSelection(
     apiVersion: 't3x.dev/studio-selection/v1',
     projectId,
     sources,
+    ...(composition && Object.keys(composition).length ? { composition } : {}),
   });
+  const localContribution = studioLocalContribution(
+    rawLocalContribution,
+    selectionHash,
+    localIdentity
+  );
   let adoptionReason: string | null = null;
   for (const { view } of entries) {
-    if (view.ownerProjectId === projectId) continue;
-    if (view.visibility === 'private' || view.visibility === 'team') {
-      if (
-        !view.ownerProjectId ||
-        (await assertProjectAccess(c, db, view.ownerProjectId, 'project:edit')) instanceof Response
-      )
-        adoptionReason =
-          'Importing private structure requires edit authority on its source project.';
-    } else {
-      const builtIn = [...builtInYSchemaCores, ...builtInYSchemaModules].find(
-        (item) => item.canonicalName === view.canonicalName && item.version === view.version
-      );
-      const repositoryOwned =
-        builtIn && (await sha256CompositionValue(builtIn)) === view.artifactHash;
-      if (
-        !repositoryOwned &&
-        !(typeof view.manifest.license === 'string' && licenses.has(view.manifest.license))
-      )
-        adoptionReason =
-          'This release has no supported declared redistribution license. Ask its publisher before importing.';
-    }
+    adoptionReason = (await schemaSourceAdoptionReason(c, db, projectId, view)) ?? adoptionReason;
   }
   const whole = entries.filter(({ view }) => view.kind === 'schema');
-  if (whole.length && entries.length !== 1)
-    throw new StudioError(
-      'INVALID_REQUEST',
-      'A published Schema is adopted whole. Select it alone or compose declared Modules separately.'
-    );
-  if (whole.length) {
-    const view = whole[0]!.view;
+  for (const { view } of whole) {
     if (view.manifest.apiVersion !== 't3x.dev/yschema-blueprint/v1')
       throw new StudioError('INVALID_REQUEST', 'Unsupported published Schema definition.');
     const schema = normalizeYSchemaObject(view.manifest.schema);
     const schemaHash = await sha256CompositionValue(schema);
-    const registry = view.manifest.registry as Record<string, unknown> | undefined;
+    const registry = (view.manifest.registry ?? {}) as Record<string, unknown>;
+    // Default bindings predate the publication registry. Their entire versioned
+    // contract is built in: verify those exact bytes, never the latest Core.
+    const builtIn = resolveBuiltInYSchema(view.canonicalName, view.version);
+    const exactBuiltIn =
+      !registry.schemaHash &&
+      view.visibility === 'official' &&
+      builtIn &&
+      (await sha256CompositionValue(builtIn)) === schemaHash;
     // Publication assigns release name/version before recording registry.schemaHash.
     // compiledSchemaHash identifies the earlier compiler output (see publish route).
     // resolveStudioSource independently verifies the entire pinned manifest hash.
-    if (registry?.schemaHash !== schemaHash)
+    if (registry.schemaHash !== schemaHash && !exactBuiltIn)
       throw new StudioError(
         'CONFLICT',
         'Published Schema integrity does not match its compiled definition.'
       );
-    return {
-      schema,
-      samples: samplesFor(schema, true),
-      schemaHash,
-      selectionHash,
-      sources,
-      report: { valid: true, issues: [] },
-      renderPlan: (registry.renderPlan ?? []) as Record<string, unknown>[],
-      origins: (registry.originsByPath ?? {}) as Record<string, unknown>,
-      modules: [],
-      adoption: { allowed: !adoptionReason, reason: adoptionReason },
-    };
+    if (!localContribution && entries.length === 1 && Object.keys(composition ?? {}).length)
+      throw new StudioError(
+        'INVALID_REQUEST',
+        'Composition decisions no longer apply to this single source.'
+      );
+    if (!localContribution && entries.length === 1)
+      return {
+        compositionConflicts: [],
+        composition,
+        schema,
+        samples: samplesFor(schema, true),
+        schemaHash,
+        selectionHash,
+        sources,
+        report: { valid: true, issues: [] },
+        renderPlan: (registry.renderPlan ?? []) as Record<string, unknown>[],
+        origins: (registry.originsByPath ?? {}) as Record<string, unknown>,
+        nodeProvenance: composeNodeProvenance(
+          schema,
+          {},
+          [{ source: sources[0]!, manifest: view.manifest, whole: true }],
+          true
+        ),
+        modules: [],
+        adoption: { allowed: !adoptionReason, reason: adoptionReason },
+      };
   }
-  const modules = entries.map(({ view }) => artifactViewToOpenModule(view));
+  let resolved: ReturnType<typeof resolveStudioComposition>;
+  try {
+    resolved = resolveStudioComposition(
+      entries.map(({ row, view }) => ({
+        id: row.id,
+        whole: view.kind === 'schema',
+        module: artifactViewToOpenModule(view),
+        metadata:
+          view.kind === 'schema'
+            ? Object.fromEntries(
+                Object.entries(view.manifest.schema as Record<string, unknown>).filter(
+                  ([key]) => !['nodes', 'relationTypes', 'rules'].includes(key)
+                )
+              )
+            : undefined,
+      })),
+      composition
+    );
+  } catch (error) {
+    throw new StudioError(
+      'INVALID_REQUEST',
+      error instanceof Error ? error.message : 'Invalid composition decisions.'
+    );
+  }
+  const { modules, conflicts: compositionConflicts } = resolved;
   const compiled = await compileYSchemaCompositionV2({
     composition: {
       apiVersion: 't3x.dev/yschema-composition/v2',
@@ -184,8 +237,35 @@ export async function compileStudioSelection(
       })),
     },
     modules,
+    ...(localContribution ? { localContribution } : {}),
   });
+  // Whole-Schema bases retain root semantics; Modules alone do not carry strict/name metadata.
+  if (whole.length) {
+    const base = normalizeYSchemaObject(entries[resolved.metadataIndex!]!.view.manifest.schema);
+    const derived = {
+      ...base,
+      nodes: compiled.schema.nodes,
+      relationTypes: compiled.schema.relationTypes,
+      rules: compiled.schema.rules,
+    };
+    compiled.schema = compiled.report.valid ? normalizeYSchemaObject(derived) : derived;
+    compiled.compiledSchemaHash = await sha256CompositionValue(compiled.schema);
+  }
+  const unresolved = compositionConflicts.filter((conflict) => !conflict.selected);
+  if (unresolved.length) {
+    compiled.report.valid = false;
+    compiled.report.issues.push(
+      ...unresolved.map((conflict) => ({
+        code: 'PATH_OWNERSHIP_CONFLICT' as const,
+        path: conflict.path,
+        blocking: true,
+        message: `Choose the source definition for ${conflict.path}.`,
+      }))
+    );
+  }
   return {
+    composition,
+    compositionConflicts,
     samples: samplesFor(compiled.schema, compiled.report.valid),
     schema: compiled.schema,
     schemaHash: compiled.compiledSchemaHash,
@@ -194,6 +274,15 @@ export async function compileStudioSelection(
     report: compiled.report,
     renderPlan: compiled.renderPlan,
     origins: compiled.originsByPath,
+    nodeProvenance: composeNodeProvenance(
+      compiled.schema,
+      compiled.originsByPath,
+      entries.map(({ view }, index) => ({
+        source: sources[index]!,
+        manifest: view.manifest,
+        whole: view.kind === 'schema',
+      }))
+    ),
     // A presentation projection of declared required imports. The compiler remains
     // the authority for validity; only the last matching provider is locked.
     modules: modules.map((provider, index) => ({
@@ -225,13 +314,229 @@ export async function previewStudio(
   c: Context,
   db: AnyDB,
   projectId: string,
-  input: StudioPreviewInput
+  input: StudioPreviewInput,
+  confirmedChange?: AssistantSchemaSettingsInput
 ) {
-  const selected = await compileStudioSelection(c, db, projectId, input.candidateIds);
-  let workspace = null;
+  let draft = input.workspaceId ? await findWorkspaceDraft(db, projectId, input.workspaceId) : null;
+  let editCandidate: WorkspaceSchemaEditCandidate | null = null;
+  if (input.schemaEditCandidate) {
+    if (!input.workspaceId)
+      throw new StudioError(
+        'INVALID_REQUEST',
+        'A saved Schema edit candidate must be previewed in its Workspace.'
+      );
+    if (!draft?.workspace_state)
+      throw new StudioError('NOT_FOUND', 'Target Workspace is unavailable.');
+    const stored = draft.workspace_state.schemaEditCandidate;
+    if (!stored)
+      throw new StudioError('CONFLICT', 'The saved Schema edit candidate no longer exists.');
+    try {
+      editCandidate = parseWorkspaceSchemaEditCandidate(stored);
+    } catch {
+      throw new StudioError('CONFLICT', 'The saved Schema edit candidate is invalid.');
+    }
+    if (
+      editCandidate.candidateId !== input.schemaEditCandidate.candidateId ||
+      editCandidate.revision !== input.schemaEditCandidate.revision ||
+      editCandidate.workspaceId !== input.workspaceId
+    )
+      throw new StudioError(
+        'CONFLICT',
+        'The Schema edit candidate changed. Refresh it before checking again.'
+      );
+  }
+  const recoveredComposition =
+    editCandidate?.authoringDraft?.base.kind === 'composition'
+      ? await readStudioComposition(db, projectId, editCandidate.authoringDraft.base)
+      : undefined;
+  let selected = await compileStudioSelection(
+    c,
+    db,
+    projectId,
+    input.candidateIds,
+    (editCandidate?.localContribution ?? input.localContribution) as
+      | Record<string, unknown>
+      | undefined,
+    editCandidate ? { id: editCandidate.candidateId, revision: editCandidate.revision } : undefined,
+    recoveredComposition ?? input.composition
+  );
+  if (editCandidate && !sameStudioSources(editCandidate.baseSources, selected.sources))
+    throw new StudioError(
+      'CONFLICT',
+      'The selected base sources changed after this Schema edit candidate was saved.'
+    );
+  let boundSchema: Record<string, unknown> | undefined;
+  if (!editCandidate && !input.localContribution && draft?.workspace_state) {
+    const resolved = await resolveWorkspaceYSchema(draft.workspace_state, db, projectId);
+    if (resolved.schema) {
+      try {
+        const basis = await resolveWorkspaceSchemaEditBasis(
+          c,
+          db,
+          projectId,
+          draft.workspace_state,
+          resolved.schema
+        );
+        if (
+          !input.composition &&
+          basis.composition &&
+          sameStudioSources(basis.sources, selected.sources)
+        ) {
+          selected = await compileStudioSelection(
+            c,
+            db,
+            projectId,
+            input.candidateIds,
+            undefined,
+            undefined,
+            basis.composition
+          );
+        }
+        if (basis.selectionHash === selected.selectionHash) {
+          boundSchema = { ...basis.schema };
+          if (!input.schemaDefinition || input.baseSchemaHash === basis.schemaHash)
+            selected = {
+              ...selected,
+              schema: basis.schema,
+              schemaHash: basis.schemaHash,
+              renderPlan: basis.renderPlan,
+              origins: basis.origins,
+              nodeProvenance: basis.nodeProvenance,
+            } as typeof selected;
+        }
+      } catch (error) {
+        if (!(error instanceof StudioError) || input.schemaDefinition) throw error;
+        // An unrelated selection may still be reviewed; never substitute its bytes for the bound Base.
+      }
+    }
+  }
+  if (editCandidate?.authoringDraft || input.schemaDefinition) {
+    if (!selected.report.valid)
+      throw new StudioError(
+        'REVIEW_REQUIRED',
+        'Resolve the Base definition checks before editing it.'
+      );
+    try {
+      const authoring = editCandidate?.authoringDraft;
+      if (authoring?.base.kind === 'composition') {
+        const base = authoring.base;
+        const snapshot = await findYSchemaCompositionSnapshot(db, {
+          project_id: projectId,
+          composition_id: base.compositionId,
+          composition_revision: base.compositionRevision,
+          compiled_schema_hash: base.schemaHash,
+        });
+        if (
+          !snapshot ||
+          snapshot.compositionHash !== base.compositionHash ||
+          (await sha256CompositionValue(normalizeYSchemaObject(snapshot.schemaJson))) !==
+            base.schemaHash
+        )
+          throw new StudioError('CONFLICT', 'The exact Schema edit Base snapshot is unavailable.');
+        selected = {
+          ...selected,
+          schema: normalizeYSchemaObject(snapshot.schemaJson),
+          schemaHash: base.schemaHash,
+          renderPlan: snapshot.renderPlanJson as typeof selected.renderPlan,
+          origins: snapshot.originsJson as typeof selected.origins,
+          nodeProvenance: readNodeProvenance(snapshot.manifestJson.nodeProvenance),
+        } as typeof selected;
+      }
+      const expected = authoring?.base.schemaHash ?? input.baseSchemaHash;
+      if (!expected || expected !== selected.schemaHash)
+        throw new StudioError(
+          'CONFLICT',
+          'The exact Base Schema changed. Reload it before editing.'
+        );
+      const applied = authoring
+        ? await applyWorkspaceSchemaYOps(selected.schema, authoring.effect.operations)
+        : await compileWorkspaceSchemaDefinition(selected.schema, input.schemaDefinition);
+      if (authoring?.resultSchemaHash && authoring.resultSchemaHash !== applied.schemaHash)
+        throw new StudioError(
+          'CONFLICT',
+          'The saved Schema Effect does not replay to its frozen result.'
+        );
+      const localOrigin = {
+        kind: 'local' as const,
+        contributionId: editCandidate?.candidateId ?? 'studio-unsaved-effect',
+        revision: editCandidate?.revision ?? 0,
+      };
+      const origins: Record<string, unknown> = {};
+      const recordOrigins = (nodes: YSchema['nodes'], before: YSchema['nodes'], prefix = '') => {
+        for (const [key, node] of Object.entries(nodes)) {
+          const path = prefix ? `${prefix}/${key}` : key;
+          const previous = before[key];
+          const source = selected.origins[path as keyof typeof selected.origins];
+          origins[path] =
+            previous && JSON.stringify(previous) === JSON.stringify(node)
+              ? (source ?? localOrigin)
+              : source
+                ? {
+                    kind: 'derived',
+                    sources: [
+                      ...(typeof source === 'object' &&
+                      source !== null &&
+                      'kind' in source &&
+                      source.kind === 'derived' &&
+                      'sources' in source &&
+                      Array.isArray(source.sources)
+                        ? source.sources
+                        : [source]),
+                      localOrigin,
+                    ],
+                  }
+                : localOrigin;
+          for (const [slot, definition] of Object.entries(node.slots ?? {})) {
+            const slotPath = `${path}/${slot}`;
+            origins[slotPath] =
+              previous?.slots?.[slot] &&
+              JSON.stringify(previous.slots[slot]) === JSON.stringify(definition)
+                ? (selected.origins[slotPath as keyof typeof selected.origins] ?? localOrigin)
+                : localOrigin;
+          }
+          if (node.children && node.children !== 'any')
+            recordOrigins(
+              node.children,
+              previous?.children && previous.children !== 'any' ? previous.children : {},
+              path
+            );
+        }
+      };
+      recordOrigins(applied.schema.nodes, selected.schema.nodes);
+      const mapped = await applySchemaSourceMappings(
+        selected,
+        { ...applied.schema },
+        authoring?.sourceMappings ?? input.sourceMappings,
+        (id) => compileStudioSelection(c, db, projectId, [id])
+      );
+      selected = {
+        ...selected,
+        schema: applied.schema,
+        schemaHash: applied.schemaHash,
+        origins: { ...origins, ...mapped.origins },
+        nodeProvenance: {
+          version: 1,
+          byPath: { ...selected.nodeProvenance.byPath, ...mapped.nodeProvenance.byPath },
+        },
+      } as typeof selected;
+    } catch (error) {
+      if (error instanceof WorkspaceSchemaYOpsError)
+        throw new StudioError('INVALID_REQUEST', error.message);
+      throw error;
+    }
+  }
+  let workspace: {
+    id: string;
+    revision: number;
+    binding: Record<string, unknown> | null;
+    canBind: boolean;
+    changes: ReturnType<typeof diffYSchemas>;
+    boundSchema?: Record<string, unknown>;
+  } | null = null;
+  let impact: Awaited<ReturnType<typeof assessWorkspaceSchemaImpact>> | null = null;
   let baseSchemaHash: string | null = null;
   if (input.workspaceId) {
-    const draft = await findWorkspaceDraft(db, projectId, input.workspaceId);
+    draft ??= await findWorkspaceDraft(db, projectId, input.workspaceId);
     if (!draft?.workspace_state)
       throw new StudioError('NOT_FOUND', 'Target Workspace is unavailable.');
     const resolved = await resolveWorkspaceYSchema(draft.workspace_state, db, projectId);
@@ -252,12 +557,59 @@ export async function previewStudio(
     baseSchemaHash = await sha256CompositionValue(base);
     workspace = {
       id: input.workspaceId,
+      ...(boundSchema ? { boundSchema } : {}),
       revision: draft.revision,
+      canBind: (() => {
+        const state = draft.workspace_state!;
+        const operations = (state.yopsDraft as { operations?: unknown[] } | undefined)?.operations;
+        if (
+          (Array.isArray(bindings) && bindings.length) ||
+          state.schemaPending ||
+          state.baseCommitHash ||
+          state.lastCommitHash ||
+          draft.parent_commit_hash ||
+          operations?.length ||
+          state.extractionProposal ||
+          draft.nodes?.length ||
+          draft.semantic_points?.length
+        )
+          return false;
+        try {
+          const content = workspaceContent(state);
+          if (state.authoringLedger) {
+            const { ledger, basis } = workspaceAuthoringState(state);
+            if (ledger.actions.length || basis.refHead) return false;
+          }
+          return Object.keys(content.tree).length === 0 && content.relations.length === 0;
+        } catch {
+          return false;
+        }
+      })(),
       binding: Array.isArray(bindings)
         ? ((bindings[0] ?? null) as Record<string, unknown> | null)
         : null,
       changes: diffYSchemas(base, selected.schema),
     };
+    impact = await assessWorkspaceSchemaImpact(
+      db,
+      projectId,
+      draft.workspace_state,
+      selected.schema,
+      selected.report.valid,
+      confirmedChange
+    );
+    if (!selected.adoption.allowed) {
+      impact.status = 'blocked';
+      impact.canAdopt = false;
+      impact.canPublish = false;
+      impact.items.push({
+        kind: 'blocked',
+        code: 'SOURCE_ADOPTION_NOT_ALLOWED',
+        path: '$sources',
+        message: selected.adoption.reason ?? 'Source adoption is not authorized.',
+        affectedPaths: [],
+      });
+    }
   }
   let comparison = null;
   if (input.compareToCandidateIds) {
@@ -278,18 +630,243 @@ export async function previewStudio(
     workspaceId: input.workspaceId ?? null,
     workspaceRevision: workspace?.revision ?? null,
     baseSchemaHash,
+    contentHash: impact?.content.hash ?? null,
+    schemaEditCandidate: editCandidate
+      ? {
+          candidateId: editCandidate.candidateId,
+          revision: editCandidate.revision,
+          requestDigest: editCandidate.requestDigest,
+        }
+      : null,
   });
+  const report = studioLayeredReport(
+    selected.report,
+    selected.adoption,
+    workspace,
+    impact?.content.source !== 'unavailable' && impact?.content.valid != null,
+    impact?.content.issues.map((issue) => ({
+      ...issue,
+      code: `WORKSPACE_${issue.code}`,
+      blocking: !issue.code.startsWith('REQUIRED_'),
+    })) ?? [],
+    editCandidate
+  );
+  const inherited = readNodeProvenance(selected.nodeProvenance);
+  const paths = new Set(Object.keys(selected.origins));
+  // Deleted paths must not survive an edit or be resurrected by a later save.
+  if (editCandidate?.authoringDraft || input.schemaDefinition)
+    for (const path of Object.keys(inherited.byPath))
+      if (!paths.has(path)) delete inherited.byPath[path];
+  const nodeProvenance = await accessibleNodeProvenance(c, db, inherited);
   return {
     ...selected,
+    nodeProvenance,
     localSample:
       input.sample === undefined
         ? null
         : samplePreview(input.sample, selected.schema, selected.report.valid, 'local', null),
+    composition: selected.composition,
+    compositionConflicts: selected.compositionConflicts,
     schema: selected.schema as unknown as Record<string, unknown>,
     renderPlan: selected.renderPlan as unknown as Record<string, unknown>[],
     origins: selected.origins as unknown as Record<string, unknown>,
+    report,
+    impact,
     reviewHash,
     workspace,
     comparison,
+    freshness: {
+      candidateId: editCandidate?.candidateId ?? null,
+      candidateRevision: editCandidate?.revision ?? null,
+      candidateRequestDigest: editCandidate?.requestDigest ?? null,
+      workspaceRevision: workspace?.revision ?? null,
+      schemaHash: selected.schemaHash,
+    },
   };
+}
+
+function studioLocalContribution(
+  value: Record<string, unknown> | undefined,
+  selectionHash: string,
+  identity?: { id: string; revision: number }
+): YSchemaLocalContributionV2 | undefined {
+  if (!value || Object.keys(value).length === 0) return undefined;
+  const allowed = new Set(['nodes', 'relationTypes', 'rules']);
+  const unsupported = Object.keys(value).filter((key) => !allowed.has(key));
+  if (unsupported.length)
+    throw new StudioError(
+      'INVALID_REQUEST',
+      `Local Schema contribution contains unsupported fields: ${unsupported.join(', ')}.`
+    );
+  for (const key of ['nodes', 'relationTypes'] as const) {
+    const item = value[key];
+    if (item !== undefined && (!item || typeof item !== 'object' || Array.isArray(item)))
+      throw new StudioError('INVALID_REQUEST', `Local contribution ${key} must be a mapping.`);
+  }
+  if (value.rules !== undefined && !Array.isArray(value.rules))
+    throw new StudioError('INVALID_REQUEST', 'Local contribution rules must be a list.');
+  return {
+    apiVersion: 't3x.dev/yschema-local-contribution/v2',
+    id: identity?.id ?? `studio-local:${selectionHash}`,
+    revision: identity?.revision ?? 0,
+    contribution: value as YSchemaLocalContributionV2['contribution'],
+  };
+}
+
+type StudioIssue = {
+  code: string;
+  message: string;
+  blocking: boolean;
+  path?: string;
+};
+
+const DEFINITION_ISSUES = new Set([
+  'ARTIFACT_HASH_MISMATCH',
+  'INVALID_COMPILED_SCHEMA',
+  'INVALID_LOCAL_CONTRIBUTION',
+  'MODULE_NOT_FOUND',
+  'UNSUPPORTED_YSCHEMA_VERSION',
+]);
+
+function studioLayeredReport(
+  report: { valid: boolean; issues: StudioIssue[] },
+  adoption: { allowed: boolean; reason: string | null },
+  workspace: { changes: Array<{ kind: string }> } | null,
+  workspaceContentChecked: boolean,
+  workspaceContentIssues: StudioIssue[],
+  editCandidate: WorkspaceSchemaEditCandidate | null
+) {
+  const definitionIssues = report.issues.filter((issue) => DEFINITION_ISSUES.has(issue.code));
+  const compositionIssues = report.issues.filter((issue) => !DEFINITION_ISSUES.has(issue.code));
+  const provenanceIssues: StudioIssue[] = adoption.allowed
+    ? []
+    : [
+        {
+          code: 'SOURCE_ADOPTION_NOT_ALLOWED',
+          message: adoption.reason ?? 'A selected source cannot be adopted.',
+          blocking: true,
+        },
+      ];
+  const statusFor = (issues: StudioIssue[]) =>
+    issues.some((issue) => issue.blocking)
+      ? ('failed' as const)
+      : issues.length
+        ? ('warning' as const)
+        : ('passed' as const);
+  return {
+    ...report,
+    layers: [
+      {
+        id: 'definition' as const,
+        label: 'Definition validity',
+        status: statusFor(definitionIssues),
+        issues: definitionIssues,
+      },
+      {
+        id: 'composition' as const,
+        label: 'Composition dependencies',
+        status: statusFor(compositionIssues),
+        issues: compositionIssues,
+      },
+      {
+        id: 'provenance' as const,
+        label: 'Source authorization',
+        status: statusFor(provenanceIssues),
+        issues: provenanceIssues,
+      },
+      {
+        id: 'workspace' as const,
+        label: 'Workspace content compatibility',
+        status: workspaceContentChecked ? statusFor(workspaceContentIssues) : ('not_run' as const),
+        issues: workspaceContentIssues,
+        summary: workspace
+          ? `${workspace.changes.length} definition change${workspace.changes.length === 1 ? '' : 's'}${workspaceContentChecked ? ' checked against the current candidate' : '; no candidate content to validate'}`
+          : 'Select a Workspace to calculate impact',
+      },
+      {
+        id: 'freshness' as const,
+        label: 'Review freshness',
+        status: 'passed' as const,
+        issues: [],
+        summary: editCandidate
+          ? `Candidate revision ${editCandidate.revision} is current`
+          : 'Preview is bound to the current selection',
+      },
+    ],
+  };
+}
+
+function sameStudioSources(
+  expected: readonly {
+    projectId: string | null;
+    canonicalName: string;
+    version: string;
+    artifactVersionId: string;
+    hash: string;
+  }[],
+  actual: readonly {
+    projectId: string | null;
+    canonicalName: string;
+    version: string;
+    artifactVersionId: string;
+    hash: string;
+  }[]
+) {
+  return (
+    expected.length === actual.length &&
+    expected.every((source, index) => {
+      const value = actual[index];
+      return (
+        value?.projectId === source.projectId &&
+        value.canonicalName === source.canonicalName &&
+        value.version === source.version &&
+        value.artifactVersionId === source.artifactVersionId &&
+        value.hash === source.hash
+      );
+    })
+  );
+}
+
+/** Resolve only the exact frozen snapshot belonging to this candidate. */
+export async function readStudioComposition(
+  db: AnyDB,
+  projectId: string,
+  base: {
+    compositionId: string;
+    compositionRevision: number;
+    compositionHash: string;
+    schemaHash: string;
+  }
+) {
+  const snapshot = await findYSchemaCompositionSnapshot(db, {
+    project_id: projectId,
+    composition_id: base.compositionId,
+    composition_revision: base.compositionRevision,
+    compiled_schema_hash: base.schemaHash,
+  });
+  if (
+    !snapshot ||
+    snapshot.compositionHash !== base.compositionHash ||
+    (await sha256CompositionValue(normalizeYSchemaObject(snapshot.schemaJson))) !== base.schemaHash
+  )
+    throw new StudioError('CONFLICT', 'The exact Schema editing Base is unavailable.');
+  const manifest = snapshot.manifestJson as {
+    studioComposition?: StudioComposition;
+    sources?: unknown;
+    selectionHash?: string;
+  };
+  if (manifest.studioComposition && Object.keys(manifest.studioComposition).length) {
+    const hash = await sha256CompositionValue({
+      apiVersion: 't3x.dev/studio-selection/v1',
+      projectId,
+      sources: manifest.sources,
+      composition: manifest.studioComposition,
+    });
+    if (hash !== (manifest.selectionHash ?? base.compositionHash))
+      throw new StudioError(
+        'CONFLICT',
+        'The saved composition decisions failed integrity verification.'
+      );
+  }
+  return manifest.studioComposition;
 }

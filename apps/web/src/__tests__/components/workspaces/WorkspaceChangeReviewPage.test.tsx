@@ -1,176 +1,30 @@
 // @vitest-environment jsdom
-
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import { WorkspaceChangeReviewPage } from '@/components/workspaces/WorkspaceChangeReviewPage';
-import { useWorkspaceReviewSnapshot } from '@/hooks/workspaces/useWorkspaceReviewSnapshot';
 
 const replace = vi.hoisted(() => vi.fn());
-vi.mock('next/navigation', () => ({ useRouter: () => ({ replace }) }));
-
-vi.mock('@/hooks/workspaces/useWorkspaceReviewSnapshot', () => ({
-  useWorkspaceReviewSnapshot: vi.fn(),
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace }),
+  useSearchParams: () => new URLSearchParams('branch=feature%2Fx&reviewPane=yaml'),
 }));
 
-vi.mock('@/components/workspaces/TransitionReviewPanel', () => ({
-  TransitionReviewPanel: ({
-    changeProjection,
-    reviewSnapshot,
-  }: {
-    changeProjection: { title?: string } | null;
-    reviewSnapshot: { snapshotId?: string } | null;
-  }) => (
-    <section aria-label="Snapshot panel">
-      {reviewSnapshot?.snapshotId} · {changeProjection?.title}
-    </section>
-  ),
-}));
-
-vi.mock('@/components/workspaces/TransitionDecisionControls', () => ({
-  TransitionDecisionControls: ({
-    onDecide,
-  }: {
-    onDecide: (outcome: 'accepted' | 'overridden' | 'rejected') => void;
-  }) => (
-    <button onClick={() => onDecide('accepted')} type="button">
-      Approve and save
-    </button>
-  ),
-}));
-
-function snapshotResponse() {
-  return {
-    snapshot_id: 'rvs_88888888888888888888888888888888',
-    snapshot_digest: `sha256:${'8'.repeat(64)}`,
-    project_id: 'proj_1',
-    workspace_id: 'workspace_prd_handoff',
-    transition_id: `trn_${'1'.repeat(32)}`,
-    review_digest: `sha256:${'9'.repeat(64)}`,
-    supersedes_snapshot_id: null,
-    supersedes_snapshot_digest: null,
-    snapshot: {
-      schema: 't3x.application/review-snapshot/v1',
-      version: 1,
-      snapshotId: 'rvs_88888888888888888888888888888888',
-      snapshotDigest: `sha256:${'8'.repeat(64)}`,
-      createdAt: '2026-08-17T00:00:00.000Z',
-      projectId: 'proj_1',
-      workspaceId: 'workspace_prd_handoff',
-      transitionId: `trn_${'1'.repeat(32)}`,
-      review: { precondition: { refName: 'feature/release' } },
-      transition: { mode: 'transition' },
-    },
-    change_projection: {
-      schema: 't3x.application/change-projection/v1',
-      version: 1,
-      authoritative: false,
-      source: {
-        kind: 'review_snapshot',
-        snapshotId: 'rvs_88888888888888888888888888888888',
-        snapshotDigest: `sha256:${'8'.repeat(64)}`,
-        snapshotCreatedAt: '2026-08-17T00:00:00.000Z',
-      },
-      projectId: 'proj_1',
-      workspaceId: 'workspace_prd_handoff',
-      transitionId: `trn_${'1'.repeat(32)}`,
-      title: 'Reduce device log volume',
-      status: 'reviewing',
-    },
-    created_at: '2026-08-17T00:00:00.000Z',
-  };
-}
-
-describe('WorkspaceChangeReviewPage', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('loads a stored ReviewSnapshot into the Changes decision view', async () => {
-    const decide = vi.fn();
-    const load = vi.fn();
-    vi.mocked(useWorkspaceReviewSnapshot).mockReturnValue({
-      decide,
-      load,
-      overrideReason: '',
-      setOverrideReason: vi.fn(),
-      state: { data: snapshotResponse() as never, deciding: false, error: null, loading: false },
-    });
-
+describe('legacy Changes entry', () => {
+  it.each([
+    'workspace_branch%3Amain',
+    'workspace_branch:main',
+  ])('opens the exact snapshot in unified Review for %s', (workspaceId) => {
     render(
       <WorkspaceChangeReviewPage
         projectId="proj_1"
-        snapshotId="rvs_88888888888888888888888888888888"
-        workspaceId="workspace_prd_handoff"
+        workspaceId={workspaceId}
+        snapshotId="rvs_saved"
       />
     );
-
-    expect(screen.getByRole('link', { name: 'Workspace' })).toHaveAttribute(
-      'href',
-      '/project/proj_1?tab=workspaces&workspace=workspace_prd_handoff&workspaceMode=review&branch=feature%2Frelease'
-    );
-    expect(
-      await screen.findByRole('heading', { name: 'Review Workspace change' })
-    ).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Snapshot panel' })).toHaveTextContent(
-      'rvs_88888888888888888888888888888888'
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Approve and save' }));
-    expect(decide).toHaveBeenCalledWith('accepted', undefined);
-    expect(useWorkspaceReviewSnapshot).toHaveBeenCalledWith(
-      'proj_1',
-      'workspace_prd_handoff',
-      'rvs_88888888888888888888888888888888'
-    );
+    const href =
+      '/project/proj_1?tab=workspaces&workspace=workspace_branch%3Amain&workspaceMode=review&branch=feature%2Fx&reviewSnapshot=rvs_saved&reviewPane=yaml';
+    expect(replace).toHaveBeenCalledWith(href);
+    expect(screen.getByRole('link', { name: 'Continue to Review' })).toHaveAttribute('href', href);
   });
-
-  it('refreshes the same immutable snapshot explicitly', async () => {
-    const load = vi.fn();
-    vi.mocked(useWorkspaceReviewSnapshot).mockReturnValue({
-      decide: vi.fn(),
-      load,
-      overrideReason: '',
-      setOverrideReason: vi.fn(),
-      state: { data: snapshotResponse() as never, deciding: false, error: null, loading: false },
-    });
-
-    render(
-      <WorkspaceChangeReviewPage
-        projectId="proj_1"
-        snapshotId="rvs_88888888888888888888888888888888"
-        workspaceId="workspace_prd_handoff"
-      />
-    );
-
-    await screen.findByRole('heading', { name: 'Review Workspace change' });
-    fireEvent.click(screen.getByRole('button', { name: /Refresh/ }));
-    await waitFor(() => expect(load).toHaveBeenCalledOnce());
-  });
-});
-
-it('links the exact committed State and replaces the obsolete pre-decision snapshot URL', () => {
-  const data = snapshotResponse();
-  data.snapshot.snapshotId = 'rvs_committed';
-  Object.assign(data.snapshot, { objects: { commit: { digest: 'sha256:committed' } } });
-  vi.mocked(useWorkspaceReviewSnapshot).mockReturnValue({
-    decide: vi.fn(),
-    load: vi.fn(),
-    overrideReason: '',
-    setOverrideReason: vi.fn(),
-    state: { data: data as never, deciding: false, error: null, loading: false },
-  });
-  render(
-    <WorkspaceChangeReviewPage
-      projectId="proj_1"
-      workspaceId="workspace_prd_handoff"
-      snapshotId="rvs_old"
-    />
-  );
-  expect(screen.getByRole('link', { name: 'View State & export' })).toHaveAttribute(
-    'href',
-    '/project/proj_1?branch=feature%2Frelease&commit=sha256%3Acommitted&view=overview'
-  );
-  expect(replace).toHaveBeenCalledWith(
-    '/project/proj_1/changes/workspace_prd_handoff/rvs_committed'
-  );
 });

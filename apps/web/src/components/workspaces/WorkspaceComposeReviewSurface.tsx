@@ -1,65 +1,52 @@
-import type {
-  WorkspaceAuthoringView,
-  WorkspaceTransitionReviewSnapshotEnvelope,
-} from '@t3x-dev/api-client';
+import type { WorkspaceAuthoringCard } from '@t3x-dev/api-client';
 import type { SemanticContent } from '@t3x-dev/core';
 import type { LucideIcon } from 'lucide-react';
 import {
-  AlertTriangle,
   ArrowLeft,
-  ArrowRight,
-  ArrowUp,
-  Bot,
   Box as BoxIcon,
   Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   CircleDot,
-  CircleHelp,
-  ClipboardPaste,
-  Clock3,
   Code2,
   Copy,
-  Download,
   ExternalLink,
+  Eye,
   FileCode2,
   FileText,
   FileUp,
+  Folder,
+  FolderPlus,
   GitBranch,
   Globe2,
   Hash,
   Layers,
   ListTree,
   MessageSquare,
+  MessageSquarePlus,
   Minus,
-  PanelRightOpen,
+  MoreHorizontal,
+  PanelLeftOpen,
   Pencil,
   Percent,
   Play,
   Plus,
-  RefreshCw,
   Settings,
   Share2,
   Sparkles,
-  Square,
   Type,
-  UserRound,
   X,
 } from 'lucide-react';
-import NextImage from 'next/image';
 import NextLink from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import type { ChangeEvent, ClipboardEvent, KeyboardEvent, ReactNode } from 'react';
+import type { ChangeEvent, CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  clipboardImageFiles,
-  fileToAttachedImage,
-} from '@/components/generation/attachedImageFile';
-import { GenerationModelSelector } from '@/components/generation/GenerationModelSelector';
+import { WorkspaceChecksRedirect } from '@/components/checks/WorkspaceChecksRedirect';
 import { DOCUMENT_SOURCE_ACCEPTED_TYPES } from '@/components/import/documentAcceptTypes';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -69,27 +56,28 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ComposeDraftChangeRow } from '@/components/workspaces/ComposeDraftChangeRow';
 import { OutputTargetsTab } from '@/components/workspaces/OutputTargetsTab';
-import { SourceArtifactRoleEditor } from '@/components/workspaces/SourcesTab';
+import { SourceArtifactRoleEditor } from '@/components/workspaces/SourceArtifactRoleEditor';
 import { SourceTransitionTab } from '@/components/workspaces/SourceTransitionTab';
-import { WorkspaceComposeChat } from '@/components/workspaces/WorkspaceComposeChat';
 import { WorkspaceContentEditor } from '@/components/workspaces/WorkspaceContentEditor';
+import { WorkspaceNotice } from '@/components/workspaces/WorkspaceNotice';
+import { WorkspaceSchemaReviewPanel } from '@/components/workspaces/WorkspaceSchemaReviewPanel';
 import type { WorkspaceYOpsFlowView } from '@/components/workspaces/YOpsDraftTab';
+import { getSchemaRegistryPreview } from '@/data/schemaReleases';
 import {
-  activityChannelLabel,
   activityOperation,
   type ComposeActivityMeta,
   type ComposeActivitySelection,
   composeEventCards,
+  expandAuthoringCards,
   groupComposeActivity,
 } from '@/domain/composeActivity';
 import {
-  composeActorLabel,
-  composeNodeContent,
-  composeNodeTitle,
   composePathLabel,
-  composeTextChangeSegments,
   composeValueChangeLabels,
+  composeValueLabel,
 } from '@/domain/composePresentation';
 import { buildStateYamlReview } from '@/domain/diff/stateYamlReview';
 import {
@@ -97,6 +85,8 @@ import {
   type StructuredDiffChange,
   type StructuredDiffKind,
 } from '@/domain/diff/structuredStateDiff';
+import { checksHref, checksReturnTo } from '@/domain/project/checks';
+import { getProjectIdHistoryPath } from '@/domain/project/repoPath';
 import {
   buildCanonicalStateYaml,
   buildStatePointRows,
@@ -104,13 +94,44 @@ import {
   selectPrdRenderModel,
   workspaceDraftOperationsToStateOperations,
 } from '@/domain/project/stateViewModel';
+import { mergePublishedSchemaVersions } from '@/domain/schemas/publishedSchemaVersions';
 import { repositoryConversationSourceHref } from '@/domain/sourceEvidenceNavigation';
+import {
+  authoringVisibleCards,
+  buildAuthoringReviewProjection,
+} from '@/domain/workspaces/authoringReview';
+import { EMPTY_WORKSPACE_REVIEW } from '@/domain/workspaces/changeDecision';
+import { composeDraftChangeCards } from '@/domain/workspaces/composeDraftChanges';
+import { composeValuesEqual } from '@/domain/workspaces/composeObjectChanges';
+import { type DraftYOp, nextAuthoringRequestId } from '@/domain/workspaces/draftStructure';
+import {
+  assertStagedEditsCurrent,
+  MANUAL_STAGING_EVENT_ID,
+  type ManualStagingControls,
+  previewStagedCurrent,
+  remainingStagedItems,
+  type StagedManualCard,
+  selectedStagedItems,
+  stageDraftOps,
+  stagedManualReason,
+  stagedObjectGroups,
+  UNGROUPED_MANUAL_HINT,
+} from '@/domain/workspaces/manualStaging';
+import { workspaceReviewHref } from '@/domain/workspaces/reviewNavigation';
+import {
+  DEFAULT_WORKSPACE_SCHEMA_CHOICE_ID,
+  listWorkspaceSchemaChoices,
+  workspaceSchemaChoiceId,
+} from '@/domain/workspaces/schemaBindings';
+import { useAssistantSchemaSettings } from '@/hooks/schemas/useAssistantSchemaSettings';
+import { useProjectYSchemaVersions } from '@/hooks/schemas/useProjectYSchemaVersions';
+import { useViewPreference } from '@/hooks/shared/useViewPreference';
 import { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import { useWorkspaceAuthoringBootstrap } from '@/hooks/workspaces/useWorkspaceAuthoringBootstrap';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
-import { useWorkspaceReviewHistory } from '@/hooks/workspaces/useWorkspaceReviewHistory';
+import { useWorkspaceConversations } from '@/hooks/workspaces/useWorkspaceConversations';
 import { validateWorkspaceCandidateYOps } from '@/hooks/workspaces/useWorkspaceYOps';
-import type { AttachedImage } from '@/types/generation';
+import type { ApiCommit, Conversation } from '@/types/api';
 import type {
   SourceBundleItem,
   WorkspaceCandidate,
@@ -119,28 +140,48 @@ import type {
 } from '@/types/workspaces';
 import type { WorkspaceYOpsValue } from '@/types/workspaceYops';
 import { cn } from '@/utils/cn';
-import { ComposeActivityTimeline } from './ComposeActivityTimeline';
+import {
+  AssistantSchemaSettingsDetails,
+  AssistantSchemaSettingsTimeline,
+} from './AssistantSchemaSettingsCard';
+import { ComposeActivityChangeRow } from './ComposeActivityChangeRow';
+import {
+  ComposeActivityTimeline,
+  type ComposeSchemaTimelineEvent,
+} from './ComposeActivityTimeline';
 import { ComposeAuthoringAssistant } from './ComposeAuthoringAssistant';
+import { ComposeFieldDialog } from './ComposeFieldDialog';
 import { ComposeNodeHistoryPanel } from './ComposeNodeHistoryPanel';
+import {
+  type CommitChangeInspection,
+  WorkspaceCommitChangeDetails,
+} from './WorkspaceCommitChangeDetails';
+import { WorkspaceCommitGraph } from './WorkspaceCommitGraph';
+import { WorkspaceCommitHistoryPanel } from './WorkspaceCommitHistoryPanel';
 import composeStyles from './WorkspaceComposeSurface.module.css';
+import { WorkspaceCurrentDraft } from './WorkspaceCurrentDraft';
 import checksStyles from './WorkspaceReviewChecks.module.css';
 import { WorkspaceReviewCodeView } from './WorkspaceReviewCodeView';
 import diffStyles from './WorkspaceReviewDiff.module.css';
+import reviewStyles from './WorkspaceReviewReference.module.css';
+import stageHeaderStyles from './WorkspaceStageHeader.module.css';
+import { WorkspaceStageNavigation } from './WorkspaceStageNavigation';
 
 type WorkspaceSurfaceMode = 'compose' | 'review';
-type ReviewPane = 'rendered' | 'changes' | 'yaml' | 'checks' | 'source' | 'edit' | 'delivery';
+type ReviewPane = 'rendered' | 'changes' | 'yaml' | 'checks';
+type WorkspaceTool = 'source' | 'edit' | 'delivery';
 type ReviewCheckStatus = 'failed' | 'passed' | 'pending';
 type ComposeChangeFilter = 'all' | 'modified' | 'added' | 'attention';
+const WORKSPACE_MODES = ['compose', 'review'] as const;
+const REVIEW_VIEWS = ['changes', 'rendered', 'yaml'] as const;
+const CHANGE_SCOPES = ['latest', 'all'] as const;
 
 function parseReviewPane(value: string | null): ReviewPane {
-  return value === 'changes' ||
-    value === 'yaml' ||
-    value === 'checks' ||
-    value === 'source' ||
-    value === 'edit' ||
-    value === 'delivery'
-    ? value
-    : 'rendered';
+  return value === 'rendered' || value === 'yaml' || value === 'checks' ? value : 'changes';
+}
+
+function parseWorkspaceTool(value: string | null): WorkspaceTool | null {
+  return value === 'source' || value === 'edit' || value === 'delivery' ? value : null;
 }
 
 function parseWorkspaceSurfaceMode(
@@ -149,6 +190,7 @@ function parseWorkspaceSurfaceMode(
 ): WorkspaceSurfaceMode | null {
   if (modeValue === 'compose' || modeValue === 'review') return modeValue;
   if (
+    paneValue === 'rendered' ||
     paneValue === 'changes' ||
     paneValue === 'yaml' ||
     paneValue === 'checks' ||
@@ -162,8 +204,6 @@ function parseWorkspaceSurfaceMode(
 }
 
 interface WorkspaceComposeReviewSurfaceProps {
-  scenarioOptions?: WorkspaceCandidate[];
-  onScenarioSelect?: (workspaceId: string) => void;
   branchOptions?: string[];
   candidate: WorkspaceCandidate;
   controller: WorkspaceComposeReviewController;
@@ -174,8 +214,6 @@ interface WorkspaceComposeReviewSurfaceProps {
 
 export function WorkspaceComposeReviewSurface({
   branchOptions = [],
-  scenarioOptions = [],
-  onScenarioSelect,
   candidate,
   controller,
   mode,
@@ -186,27 +224,51 @@ export function WorkspaceComposeReviewSurface({
   const router = useRouter();
   const searchParams = useSearchParams();
   const routeQuery = searchParams.toString();
+  const routeParams = new URLSearchParams(routeQuery);
+  const preferenceKey = `t3x.workspace-view:${candidate.projectId}:${candidate.id}`;
+  const [preferredMode, rememberMode, modeReady] = useViewPreference(
+    `${preferenceKey}:mode`,
+    WORKSPACE_MODES,
+    'compose'
+  );
+  const [preferredReviewPane, rememberReviewPane, paneReady] = useViewPreference(
+    `${preferenceKey}:review`,
+    REVIEW_VIEWS,
+    'changes'
+  );
+  const workspaceTool =
+    parseWorkspaceTool(routeParams.get('workspaceTool')) ??
+    parseWorkspaceTool(routeParams.get('reviewPane'));
+  const toolReturnTo =
+    workspaceTool === 'delivery'
+      ? checksReturnTo(routeParams.get('returnTo'), candidate.projectId, pathname)
+      : null;
   const lastSyncedRouteQueryRef = useRef<string | null>(null);
   const [reviewPane, setReviewPaneState] = useState<ReviewPane>(() =>
     parseReviewPane(new URLSearchParams(routeQuery).get('reviewPane'))
   );
-  const activity = useComposeActivity(
+  const authoringBootstrap = useWorkspaceAuthoringBootstrap(
     controller.candidate,
-    Boolean(controller.candidate.authoringLedger)
+    controller.ensureSaved
   );
+  // Compose publication and Review must observe the same current Draft projection.
+  const activity = useComposeActivity(controller.candidate, authoringBootstrap.active);
+  const syncRequired = (activity.newActivity ?? activity.view)?.synchronization?.required;
 
   const writeWorkspaceSurfaceUrl = useCallback(
     (nextMode: WorkspaceSurfaceMode, nextPane?: ReviewPane) => {
       const params = new URLSearchParams(routeQuery);
+      params.delete('workspaceTool');
+      params.delete('returnTo');
       if (nextMode === 'review') {
         params.set('workspaceMode', 'review');
-        if (nextPane && nextPane !== 'rendered') {
+        if (nextPane && nextPane !== 'changes') {
           params.set('reviewPane', nextPane);
         } else {
           params.delete('reviewPane');
         }
       } else {
-        params.delete('workspaceMode');
+        params.set('workspaceMode', 'compose');
         params.delete('reviewPane');
       }
 
@@ -218,94 +280,187 @@ export function WorkspaceComposeReviewSurface({
 
   const setSurfaceMode = useCallback(
     (nextMode: WorkspaceSurfaceMode) => {
+      rememberMode(nextMode);
       writeWorkspaceSurfaceUrl(nextMode, reviewPane);
       onModeChange(nextMode);
     },
-    [onModeChange, reviewPane, writeWorkspaceSurfaceUrl]
+    [onModeChange, rememberMode, reviewPane, writeWorkspaceSurfaceUrl]
   );
 
   const setReviewPane = useCallback(
     (nextPane: ReviewPane) => {
+      if (nextPane === 'checks') {
+        const source = new URLSearchParams(routeQuery);
+        source.set('workspaceMode', 'review');
+        source.delete('workspaceTool');
+        if (reviewPane !== 'changes') source.set('reviewPane', reviewPane);
+        else source.delete('reviewPane');
+        const snapshotId = controller.review?.reviewSnapshot?.snapshotId;
+        router.push(
+          checksHref(candidate.projectId, {
+            recordId: snapshotId ? `review:${snapshotId}` : undefined,
+            workspace: snapshotId ? undefined : candidate.id,
+            returnTo: `${pathname}?${source}`,
+          })
+        );
+        return;
+      }
+      rememberReviewPane(nextPane);
       setReviewPaneState(nextPane);
       writeWorkspaceSurfaceUrl('review', nextPane);
     },
-    [writeWorkspaceSurfaceUrl]
+    [
+      writeWorkspaceSurfaceUrl,
+      routeQuery,
+      controller.review?.reviewSnapshot?.snapshotId,
+      router,
+      candidate.projectId,
+      candidate.id,
+      pathname,
+      reviewPane,
+      rememberReviewPane,
+    ]
   );
 
   useEffect(() => {
-    if (lastSyncedRouteQueryRef.current === routeQuery) return;
-    lastSyncedRouteQueryRef.current = routeQuery;
+    if (!modeReady || !paneReady) return;
+    const routeKey = `${preferenceKey}:${routeQuery}`;
+    if (lastSyncedRouteQueryRef.current === routeKey) return;
+    lastSyncedRouteQueryRef.current = routeKey;
     const params = new URLSearchParams(routeQuery);
     const rawPane = params.get('reviewPane');
-    setReviewPaneState(parseReviewPane(rawPane));
-    const routeMode = parseWorkspaceSurfaceMode(params.get('workspaceMode'), rawPane) ?? 'compose';
+    const legacyTool = parseWorkspaceTool(rawPane);
+    if (legacyTool) {
+      params.set('workspaceTool', legacyTool);
+      params.delete('reviewPane');
+      params.set('workspaceMode', legacyTool === 'delivery' ? 'review' : 'compose');
+      router.replace(`${pathname}?${params}`, { scroll: false });
+      if (legacyTool !== 'delivery' && mode !== 'compose') onModeChange('compose');
+      return;
+    }
+    setReviewPaneState(
+      rawPane || params.get('workspaceMode') === 'review'
+        ? parseReviewPane(rawPane)
+        : preferredReviewPane
+    );
+    const routeMode =
+      parseWorkspaceSurfaceMode(params.get('workspaceMode'), rawPane) ?? preferredMode;
     if (routeMode !== mode) onModeChange(routeMode);
     if (rawPane === 'validation') {
-      writeWorkspaceSurfaceUrl('review', 'rendered');
+      writeWorkspaceSurfaceUrl('review', 'changes');
     }
-  }, [mode, onModeChange, routeQuery, writeWorkspaceSurfaceUrl]);
+  }, [
+    mode,
+    onModeChange,
+    pathname,
+    routeQuery,
+    router,
+    writeWorkspaceSurfaceUrl,
+    modeReady,
+    paneReady,
+    preferenceKey,
+    preferredMode,
+    preferredReviewPane,
+  ]);
 
-  const workspaceControls = (
-    <>
-      {scenarioOptions.length > 1 ? (
-        <select
-          aria-label="Workspace scenario"
-          value={candidate.id}
-          className="min-w-0 max-w-40 rounded border border-[var(--stroke-default)] bg-[var(--surface-panel)] px-2 py-1 text-xs"
-          onChange={(event) => onScenarioSelect?.(event.target.value)}
-        >
-          {scenarioOptions.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.title}
-            </option>
-          ))}
-        </select>
-      ) : null}
-      {candidate.schemaBindings.length ? (
-        <span className="truncate text-xs text-[var(--text-secondary)]">
-          {_formatProposalSchemaLabel(candidate)}
-        </span>
-      ) : null}
-      {candidate.lastCommitHash ? (
-        <button type="button" className={composeStyles.reviewTool} onClick={controller.viewCommit}>
-          View in State
-        </button>
-      ) : (
-        <button
-          type="button"
-          className={composeStyles.reviewTool}
-          disabled={controller.isBusy}
-          onClick={() => void prepareAndOpenReview(controller, setSurfaceMode)}
-        >
-          Review full draft
-        </button>
-      )}
-    </>
-  );
   return (
     <div
       className={cn(
-        'flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-panel)] text-[var(--text-primary)]',
-        mode === 'review' && reviewPane === 'rendered' && 'workspace-rendered-review-theme'
+        'flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-card)] text-[var(--text-primary)]',
+        composeStyles.workspaceTheme
       )}
     >
+      {syncRequired ? (
+        <WorkspaceNotice
+          label="Workspace synchronization"
+          title="The branch has new commits"
+          actions={
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={activity.reconciling}
+              onClick={() => void activity.reconcile()}
+            >
+              {activity.reconciling ? 'Syncing…' : 'Sync latest branch'}
+            </Button>
+          }
+        >
+          <p>Sync this Workspace to continue editing. Saved edits and history will be preserved.</p>
+          {activity.reconciliationError ? <p role="alert">{activity.reconciliationError}</p> : null}
+        </WorkspaceNotice>
+      ) : null}
       <div className={composeStyles.workspaceBody}>
-        <div className={composeStyles.workspaceContent}>
-          {mode === 'review' ? (
+        <div
+          className={cn(
+            composeStyles.workspaceContent,
+            mode === 'review' && reviewStyles.workspace
+          )}
+        >
+          {workspaceTool ? (
             <>
               <WorkspaceStageHeader
-                workspaceControls={workspaceControls}
                 branchOptions={branchOptions}
                 candidate={controller.candidate ?? candidate}
+                controller={controller}
+                mode={workspaceTool === 'delivery' ? undefined : 'compose'}
+                onBranchChange={onBranchChange}
+                onModeChange={setSurfaceMode}
+              />
+              <div className={reviewStyles.toolHeading}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    toolReturnTo
+                      ? router.push(toolReturnTo)
+                      : setSurfaceMode(workspaceTool === 'delivery' ? mode : 'compose')
+                  }
+                >
+                  <ArrowLeft aria-hidden="true" /> Back to{' '}
+                  {toolReturnTo
+                    ? 'Review snapshot'
+                    : workspaceTool === 'delivery' && mode === 'review'
+                      ? 'Review'
+                      : 'Compose'}
+                </button>
+                <h1>
+                  {workspaceTool === 'delivery'
+                    ? 'Delivery'
+                    : workspaceTool === 'source'
+                      ? 'Source configuration'
+                      : 'Edit structured State'}
+                </h1>
+                <p>
+                  {workspaceTool === 'delivery'
+                    ? 'Download committed State and inspect delivery history.'
+                    : 'Prepare a change in Compose, then review its exact result before deciding.'}
+                </p>
+              </div>
+              {workspaceTool === 'edit' ? (
+                <WorkspaceContentEditor key={candidate.id} candidate={controller.candidate} />
+              ) : workspaceTool === 'source' ? (
+                <WorkspaceSourceTools key={candidate.id} controller={controller} />
+              ) : (
+                <div className={reviewStyles.toolBody}>
+                  <OutputTargetsTab candidate={controller.candidate} />
+                </div>
+              )}
+            </>
+          ) : mode === 'review' ? (
+            <>
+              <WorkspaceStageHeader
+                branchOptions={branchOptions}
+                candidate={controller.candidate ?? candidate}
+                controller={controller}
                 mode={mode}
                 onBranchChange={onBranchChange}
                 onModeChange={setSurfaceMode}
               />
               <WorkspaceReviewToolbar
-                controller={controller}
                 onPaneChange={setReviewPane}
                 pane={reviewPane}
+                onEdit={() => setSurfaceMode('compose')}
               />
+              <WorkspaceSchemaReviewPanel review={controller.review.schemaReview} />
               <ReviewSurface
                 activity={activity}
                 compareScenarioId=""
@@ -317,7 +472,8 @@ export function WorkspaceComposeReviewSurface({
             </>
           ) : (
             <ComposeSurface
-              workspaceControls={workspaceControls}
+              activity={activity}
+              authoringBootstrap={authoringBootstrap}
               branchOptions={branchOptions}
               candidate={controller.candidate ?? candidate}
               controller={controller}
@@ -331,24 +487,67 @@ export function WorkspaceComposeReviewSurface({
   );
 }
 
+function WorkspaceSchemaSelect({
+  candidate,
+  controller,
+}: {
+  candidate: WorkspaceCandidate;
+  controller: WorkspaceComposeReviewController;
+}) {
+  const published = useProjectYSchemaVersions(candidate.projectId);
+  const choices = useMemo(() => {
+    const registry = mergePublishedSchemaVersions(
+      getSchemaRegistryPreview(candidate.projectId),
+      published.versions,
+      candidate.projectId
+    );
+    return listWorkspaceSchemaChoices(
+      registry.families.flatMap((family) => family.releases),
+      candidate.schemaBindings[0]
+    );
+  }, [candidate.projectId, candidate.schemaBindings, published.versions]);
+  const selectedId = candidate.schemaBindings[0]
+    ? workspaceSchemaChoiceId(candidate.schemaBindings[0])
+    : DEFAULT_WORKSPACE_SCHEMA_CHOICE_ID;
+
+  return (
+    <select
+      aria-label="Workspace schema"
+      className="min-w-0 max-w-52 truncate rounded border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-1 text-xs text-[var(--text-secondary)]"
+      disabled={controller.isBusy || !controller.bindSchema}
+      onChange={(event) => {
+        const choice = choices.find((item) => item.id === event.target.value);
+        if (choice) void controller.bindSchema(choice.binding);
+      }}
+      value={selectedId}
+    >
+      {choices.map((choice) => (
+        <option key={choice.id} value={choice.id}>
+          {choice.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function WorkspaceStageHeader({
-  workspaceControls,
   branchOptions,
   candidate,
-  discussionOpen,
+  controller,
   mode,
   onBranchChange,
-  onDiscussionToggle,
   onModeChange,
+  onOpenChat,
+  chatOpen,
 }: {
-  workspaceControls?: ReactNode;
   branchOptions: string[];
   candidate: WorkspaceCandidate;
-  discussionOpen?: boolean;
-  mode: WorkspaceSurfaceMode;
+  controller?: WorkspaceComposeReviewController;
+  mode?: WorkspaceSurfaceMode;
   onBranchChange?: (branch: string) => Promise<void> | void;
-  onDiscussionToggle?: () => void;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
+  onOpenChat?: () => void;
+  chatOpen?: boolean;
 }) {
   const selectedBranch = candidate.targetBranch || 'main';
   const availableBranches = Array.from(
@@ -356,12 +555,17 @@ function WorkspaceStageHeader({
   );
 
   return (
-    <header className={composeStyles.composeHeader}>
-      <div className={composeStyles.workspaceBranchControl}>
+    <header className={stageHeaderStyles.header}>
+      {
+        <div className={stageHeaderStyles.identity}>
+          <BoxIcon aria-hidden="true" />
+          <span title={candidate.title}>{candidate.title}</span>
+        </div>
+      }
+      <div className={stageHeaderStyles.branch}>
         <StateBranchControls
           branch={selectedBranch}
           branchOptions={availableBranches}
-          canCreateFromSearch={false}
           disabled={!onBranchChange || availableBranches.length <= 1}
           headCommitHash={null}
           onBranchChange={(branch) => void onBranchChange?.(branch)}
@@ -369,33 +573,20 @@ function WorkspaceStageHeader({
           showCreate={false}
         />
       </div>
-      <div aria-label="Workspace stage" className={composeStyles.stageSwitch} role="tablist">
-        <button
-          aria-selected={mode === 'compose'}
-          onClick={() => onModeChange('compose')}
-          role="tab"
-          type="button"
-        >
-          Compose
-        </button>
-        <button
-          aria-selected={mode === 'review'}
-          onClick={() => onModeChange('review')}
-          role="tab"
-          type="button"
-        >
-          Review
-        </button>
-      </div>
-      <div className={composeStyles.composeHeaderMeta}>
-        {workspaceControls}
-        {onDiscussionToggle ? (
+      <WorkspaceStageNavigation mode={mode} onModeChange={onModeChange} />
+      <div className={stageHeaderStyles.meta}>
+        <WorkspaceToolsMenu candidate={candidate} />
+        {controller ? (
+          <WorkspaceSchemaSelect candidate={candidate} controller={controller} />
+        ) : null}
+        {onOpenChat ? (
           <button
-            aria-label={discussionOpen ? 'Hide discussion' : 'Show discussion'}
-            onClick={onDiscussionToggle}
+            className={stageHeaderStyles.chatToggle}
             type="button"
+            aria-pressed={chatOpen}
+            onClick={onOpenChat}
           >
-            <PanelRightOpen aria-hidden="true" />
+            <MessageSquare aria-hidden="true" /> Chat
           </button>
         ) : null}
       </div>
@@ -403,716 +594,1264 @@ function WorkspaceStageHeader({
   );
 }
 
+function WorkspaceToolsMenu({ candidate }: { candidate: WorkspaceCandidate }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const openTool = (tool: WorkspaceTool) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('workspaceTool', tool);
+    if (tool !== 'delivery') {
+      params.set('workspaceMode', 'compose');
+      params.delete('reviewPane');
+    }
+    router.push(`${pathname}?${params}`, { scroll: false });
+  };
+  const hasYamlSource = candidate.sourceBundle.some(
+    (source) =>
+      source.materialId && (source.format === 'yaml' || /\.ya?ml$/i.test(source.fileName ?? ''))
+  );
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className={stageHeaderStyles.chatToggle} type="button">
+          Workspace tools <ChevronDown aria-hidden="true" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel>Compose tools</DropdownMenuLabel>
+        <DropdownMenuItem onSelect={() => openTool('edit')}>
+          <Pencil aria-hidden="true" className="mr-2 size-4" /> Edit structured State
+        </DropdownMenuItem>
+        {hasYamlSource ? (
+          <DropdownMenuItem onSelect={() => openTool('source')}>
+            <FileCode2 aria-hidden="true" className="mr-2 size-4" /> Source configuration
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>Committed State</DropdownMenuLabel>
+        <DropdownMenuItem onSelect={() => openTool('delivery')}>
+          <Share2 aria-hidden="true" className="mr-2 size-4" /> Delivery
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function WorkspaceReviewToolbar({
-  controller,
   onPaneChange,
+  onEdit,
   pane,
 }: {
-  controller: WorkspaceComposeReviewController;
   onPaneChange: (pane: ReviewPane) => void;
+  onEdit: () => void;
   pane: ReviewPane;
 }) {
-  const toolClassName = (toolPane: ReviewPane) =>
-    cn(composeStyles.reviewTool, pane === toolPane && composeStyles.reviewToolActive);
-
+  const views: Array<{ id: ReviewPane; label: string; icon: LucideIcon }> = [
+    { id: 'changes', label: 'Changes', icon: GitBranch },
+    { id: 'rendered', label: 'Preview', icon: Eye },
+    { id: 'yaml', label: 'YAML', icon: Code2 },
+  ];
   return (
-    <nav aria-label="Review views" className={composeStyles.reviewToolbar}>
+    <nav aria-label="Review views" className={cn(composeStyles.reviewToolbar, reviewStyles.views)}>
       <div className={composeStyles.reviewToolbarGroup}>
-        <button
-          aria-current={pane === 'rendered' ? 'page' : undefined}
-          className={toolClassName('rendered')}
-          onClick={() => onPaneChange('rendered')}
-          type="button"
-        >
-          <PanelRightOpen aria-hidden="true" /> Render
-        </button>
-        <button
-          aria-current={pane === 'changes' ? 'page' : undefined}
-          className={toolClassName('changes')}
-          onClick={() => onPaneChange('changes')}
-          type="button"
-        >
-          <GitBranch aria-hidden="true" /> Structure diff
-        </button>
-        <button
-          aria-current={pane === 'yaml' ? 'page' : undefined}
-          className={toolClassName('yaml')}
-          onClick={() => onPaneChange('yaml')}
-          type="button"
-        >
-          <Code2 aria-hidden="true" /> Rendered YAML
-        </button>
-      </div>
-      <div className={composeStyles.reviewToolbarGroup}>
-        {controller.candidate.sourceBundle.some(
-          (source) =>
-            source.materialId &&
-            (source.format === 'yaml' || /\.ya?ml$/i.test(source.fileName ?? ''))
-        ) ? (
+        {views.map(({ id, label, icon: Icon }) => (
           <button
-            aria-current={pane === 'source' ? 'page' : undefined}
-            className={toolClassName('source')}
-            onClick={() => onPaneChange('source')}
+            key={id}
+            aria-current={pane === id ? 'page' : undefined}
+            className={cn(composeStyles.reviewTool, pane === id && composeStyles.reviewToolActive)}
+            onClick={() => onPaneChange(id)}
             type="button"
           >
-            <FileCode2 aria-hidden="true" /> Source configuration
+            <Icon aria-hidden="true" /> {label}
           </button>
-        ) : null}
-        <button
-          aria-current={pane === 'edit' ? 'page' : undefined}
-          className={toolClassName('edit')}
-          onClick={() => onPaneChange('edit')}
-          type="button"
-        >
-          <Pencil aria-hidden="true" /> Edit structured State
-        </button>
-        <button
-          aria-current={pane === 'delivery' ? 'page' : undefined}
-          className={toolClassName('delivery')}
-          onClick={() => onPaneChange('delivery')}
-          type="button"
-        >
-          <Download aria-hidden="true" /> Delivery
-        </button>
+        ))}
       </div>
+      <button className={composeStyles.reviewTool} onClick={onEdit} type="button">
+        <Pencil aria-hidden="true" /> Edit in Compose
+      </button>
     </nav>
   );
 }
 
 function ComposeSurface({
-  workspaceControls,
+  activity,
+  authoringBootstrap,
   branchOptions,
   candidate,
   controller,
   onBranchChange,
   onModeChange,
 }: {
-  workspaceControls?: ReactNode;
+  activity: ReturnType<typeof useComposeActivity>;
+  authoringBootstrap: ReturnType<typeof useWorkspaceAuthoringBootstrap>;
   branchOptions: string[];
   candidate: WorkspaceCandidate;
   controller: WorkspaceComposeReviewController;
   onBranchChange?: (branch: string) => Promise<void> | void;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
 }) {
-  const authoringBootstrap = useWorkspaceAuthoringBootstrap(candidate, controller.ensureSaved);
-  const activity = useComposeActivity(candidate, authoringBootstrap.active);
-  const [draftEditing, setDraftEditing] = useState(true);
-  const editingEnabled = activity.enabled && draftEditing;
-  const toggleEditing = async () => {
-    if (editingEnabled) {
-      setDraftEditing(false);
+  const enableActivity = async () => {
+    if (await authoringBootstrap.start()) {
       setSidePanel('chat');
+    }
+  };
+  const [fieldDialog, setFieldDialog] = useState<'structure' | 'yaml' | null>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const dragOrigin = useRef<{ x: number; width: number } | null>(null);
+  const draftDragOrigin = useRef<{ x: number; width: number } | null>(null);
+  const detailsDragOrigin = useRef<{ y: number; height: number } | null>(null);
+  const [draftWidth, setDraftWidth] = useState(260);
+  const [draftCollapsed, setDraftCollapsed] = useState(false);
+  const [discussionWidth, setDiscussionWidth] = useState(440);
+  const [generatedPanelHeight, setGeneratedPanelHeight] = useState(260);
+  const [resizing, setResizing] = useState(false);
+  const [detailsResizing, setDetailsResizing] = useState(false);
+  useEffect(() => {
+    try {
+      const stored = Number(localStorage.getItem('t3x-workspace-discussion-width'));
+      if (stored >= 320 && stored <= 680) setDiscussionWidth(stored);
+      const generatedHeight = Number(localStorage.getItem('t3x-workspace-generated-panel-height'));
+      if (generatedHeight >= 160 && generatedHeight <= 720)
+        setGeneratedPanelHeight(generatedHeight);
+      const draftStored = Number(localStorage.getItem('t3x-workspace-draft-width'));
+      if (draftStored >= 180 && draftStored <= 560) setDraftWidth(draftStored);
+      if (localStorage.getItem('t3x-workspace-draft-collapsed') === 'true') setDraftCollapsed(true);
+    } catch {
+      /* Storage can be unavailable in private browser contexts. */
+    }
+  }, []);
+  const toggleDraft = (collapsed: boolean) => {
+    setDraftCollapsed(collapsed);
+    try {
+      localStorage.setItem('t3x-workspace-draft-collapsed', String(collapsed));
+    } catch {
+      /* Collapsing still works without storage. */
+    }
+  };
+  const resizeDiscussion = (width: number) => {
+    const actualDraftWidth =
+      boardRef.current?.querySelector<HTMLElement>('[aria-label="Workspace conversations"]')
+        ?.offsetWidth || draftWidth;
+    const maximum = Math.min(
+      680,
+      Math.max(320, (boardRef.current?.clientWidth || 1680) - actualDraftWidth - 320)
+    );
+    const next = Math.round(Math.max(320, Math.min(maximum, width)));
+    setDiscussionWidth(next);
+    try {
+      localStorage.setItem('t3x-workspace-discussion-width', String(next));
+    } catch {
+      /* Resizing still works without storage. */
+    }
+  };
+  const resizeDraft = (width: number) => {
+    const measuredDiscussionWidth = boardRef.current
+      ?.querySelector('[data-compose-rail]')
+      ?.getBoundingClientRect().width;
+    const actualDiscussionWidth = measuredDiscussionWidth
+      ? measuredDiscussionWidth + 16
+      : discussionWidth;
+    const maximum = Math.min(
+      560,
+      Math.max(180, (boardRef.current?.clientWidth || 1680) - actualDiscussionWidth - 320)
+    );
+    const next = Math.round(Math.max(180, Math.min(maximum, width)));
+    setDraftWidth(next);
+    try {
+      localStorage.setItem('t3x-workspace-draft-width', String(next));
+    } catch {
+      /* Resizing still works without storage. */
+    }
+  };
+  const resizeGeneratedPanel = (height: number) => {
+    const railHeight =
+      boardRef.current?.querySelector<HTMLElement>('[data-compose-rail]')?.clientHeight || 720;
+    const maximum = Math.max(160, railHeight - 240);
+    const next = Math.round(Math.max(160, Math.min(maximum, height)));
+    setGeneratedPanelHeight(next);
+    try {
+      localStorage.setItem('t3x-workspace-generated-panel-height', String(next));
+    } catch {
+      /* Resizing still works without storage. */
+    }
+  };
+
+  const preferenceKey = `t3x.workspace-view:${candidate.projectId}:${candidate.id}`;
+  const [sidePanel, setSidePanel] = useState<'history' | 'chat'>('chat');
+  const [rightView, setRightView] = useState<'changes' | 'structure' | 'history'>('changes');
+  const [changeScope, setChangeScope] = useViewPreference(
+    `${preferenceKey}:scope`,
+    CHANGE_SCOPES,
+    'latest'
+  );
+  const [commitSelection, setCommitSelection] = useState<{
+    scope: string;
+    commit: ApiCommit;
+  } | null>(null);
+  const commitScope = JSON.stringify([candidate.projectId, candidate.id, candidate.targetBranch]);
+  const historicalCommit = commitSelection?.scope === commitScope ? commitSelection.commit : null;
+  const [commitInspection, setCommitInspection] = useState<{
+    scope: string;
+    value: CommitChangeInspection;
+  } | null>(null);
+  const historicalInspection =
+    commitInspection?.scope === commitScope &&
+    commitInspection.value.commitDigest === historicalCommit?.hash
+      ? commitInspection.value
+      : null;
+  useEffect(() => {
+    setCommitSelection(null);
+  }, [commitScope]);
+  const [activitySelection, setActivitySelection] = useState<ComposeActivitySelection | null>(null);
+  const [schemaSelection, setSchemaSelection] = useState<{
+    workspaceId: string;
+    settingsId: string;
+  } | null>(null);
+  const [structurePending, setStructurePending] = useState(false);
+  const [schemaCandidateEpoch, setSchemaCandidateEpoch] = useState(0);
+  const [schemaConversationId, setSchemaConversationId] = useState<string>();
+  const [structureError, setStructureError] = useState<string | null>(null);
+  const [staged, setStaged] = useState<StagedManualCard[]>([]);
+  const publishedCurrent = activity.view?.current;
+  const workingCurrent = useMemo(() => {
+    if (publishedCurrent === undefined) return undefined;
+    try {
+      return previewStagedCurrent(publishedCurrent, staged);
+    } catch {
+      return publishedCurrent;
+    }
+  }, [publishedCurrent, staged]);
+  const stageManualOps = useCallback(
+    async (operations: DraftYOp[], reason: string) => {
+      if (workingCurrent === undefined) {
+        setStructureError('Draft activity is not ready');
+        return false;
+      }
+      setStructureError(null);
+      try {
+        const next = stageDraftOps(workingCurrent, operations, reason);
+        setStaged((current) => [...current, ...next.items]);
+        return true;
+      } catch (cause) {
+        setStructureError(cause instanceof Error ? cause.message : 'Could not apply this change.');
+        return false;
+      }
+    },
+    [workingCurrent]
+  );
+  const toggleStaged = useCallback((id: string) => {
+    setStaged((current) =>
+      current.map((item) => (item.id === id ? { ...item, selected: !item.selected } : item))
+    );
+  }, []);
+  const saveSelectedAsP = useCallback(async () => {
+    const selected = selectedStagedItems(staged);
+    if (!selected.length) {
+      setStructureError('Select at least one ungrouped change to save as a P.');
       return;
     }
-    if (await authoringBootstrap.start()) {
-      setDraftEditing(true);
-      setSidePanel('chat');
-      setDiscussionOpen(true);
+    setStructurePending(true);
+    setStructureError(null);
+    try {
+      assertStagedEditsCurrent(publishedCurrent, selected);
+      await activity.publish({
+        request_id: nextAuthoringRequestId(),
+        operations: selected.map((item) => item.operation),
+        reason: stagedManualReason(selected),
+      });
+      setStaged(remainingStagedItems(staged));
+    } catch (cause) {
+      setStructureError(
+        cause instanceof Error ? cause.message : 'Could not save the selected cards as a P.'
+      );
+    } finally {
+      setStructurePending(false);
     }
-  };
-  const [currentStep, setCurrentStep] = useState(0);
-  const [discussionOpen, setDiscussionOpen] = useState(true);
-  const [sidePanel, setSidePanel] = useState<'history' | 'chat'>(
-    candidate.authoringLedger ? 'history' : 'chat'
+  }, [activity, staged, publishedCurrent]);
+  const stagingControls = useMemo(
+    () => ({
+      items: staged,
+      current: publishedCurrent,
+      pending: structurePending,
+      error: structureError,
+      onToggle: toggleStaged,
+      onSaveSelected: () => void saveSelectedAsP(),
+    }),
+    [staged, publishedCurrent, structurePending, structureError, toggleStaged, saveSelectedAsP]
   );
-  const [changeScope, setChangeScope] = useState<'latest' | 'all'>('latest');
-  const [activitySelection, setActivitySelection] = useState<ComposeActivitySelection | null>(null);
-  useEffect(() => {
-    if (activity.enabled) setSidePanel('history');
-  }, [activity.enabled, candidate.id]);
-  useEffect(() => {
-    setActivitySelection(null);
-    setDraftEditing(true);
-    setCurrentStep(0);
-  }, [candidate.id]);
-  const operation =
-    activitySelection?.operation ?? candidate.yopsDraft.operations[currentStep] ?? null;
-  const selectStep = (step: number) => {
-    setActivitySelection(null);
-    setCurrentStep(step);
-    setSidePanel('chat');
-    setDiscussionOpen(true);
+  const openStructure = async (view: 'structure' | 'yaml') => {
+    if (!activity.enabled) {
+      const started = await authoringBootstrap.start();
+      if (!started) return;
+    }
+    setStructureError(null);
+    setFieldDialog(view);
   };
+  useEffect(() => {
+    setActivitySelection(null);
+    setSchemaSelection(null);
+    setStaged([]);
+    setStructureError(null);
+    setFieldDialog(null);
+    setSidePanel('chat');
+    setSchemaConversationId(undefined);
+  }, [candidate.id]);
   const selectActivity = useCallback(
-    (selection: ComposeActivitySelection, panel: 'history' | 'chat' = 'history') => {
+    (selection: ComposeActivitySelection, panel: 'history' | 'chat' | 'preserve' = 'history') => {
       setActivitySelection(selection);
-      setSidePanel(panel);
-      setDiscussionOpen(true);
+      if (panel !== 'preserve') {
+        setSchemaSelection(null);
+        setSidePanel(panel);
+      }
     },
     []
   );
   const openHistoryAction = useCallback(
-    (actionId: string, nodeId: string) => {
-      void activity.selectActionNode(actionId, nodeId).then((selection) => {
+    (actionId: string, nodeId: string, path?: string) => {
+      void activity.selectActionNode(actionId, nodeId, path).then((selection) => {
         if (!selection) return;
         setChangeScope('latest');
         selectActivity(selection, 'history');
       });
     },
-    [activity.selectActionNode, selectActivity]
+    [activity.selectActionNode, selectActivity, setChangeScope]
   );
   const sourceConversationId = candidate.sourceBundle.find(
     (source) =>
       source.type === 'chat' && source.title === 'Compose assistant' && source.conversationId
   )?.conversationId;
-  const sourceMaterialIds = candidate.sourceBundle.flatMap((source) =>
-    source.materialId ? [source.materialId] : []
+  const [activeConversationId, setActiveConversationId] = useState<string | undefined>(
+    sourceConversationId
   );
+  useEffect(() => {
+    setActiveConversationId(sourceConversationId);
+  }, [candidate.id, sourceConversationId]);
+  const schemaSettings = useAssistantSchemaSettings(
+    candidate.projectId,
+    candidate.id,
+    schemaConversationId ?? activeConversationId,
+    String(activity.view?.workspaceRevision ?? candidate.revision) + ':' + schemaCandidateEpoch
+  );
+  const selectedSchema =
+    schemaSelection?.workspaceId === candidate.id
+      ? (
+          schemaSettings.record?.cards ?? (schemaSettings.record ? [schemaSettings.record] : [])
+        ).find(
+          (card) =>
+            card.settingsId === schemaSelection.settingsId &&
+            ['applied', 'generated'].includes(card.status)
+        )
+      : undefined;
+  const sourceMaterialIds = controller.materialSources
+    .filter((source) => source.included)
+    .map((source) => source.materialId);
+  const openChat = () => {
+    setSidePanel('chat');
+  };
+  const showingDetails = (activity.enabled || Boolean(selectedSchema)) && sidePanel === 'history';
+  const createConversation = useCallback(async () => {
+    const conversationId = await activity.createAssistantConversation();
+    setActiveConversationId(conversationId);
+    setSchemaConversationId(undefined);
+    setSidePanel('chat');
+    return conversationId;
+  }, [activity.createAssistantConversation]);
 
   return (
     <div
-      className={cn(composeStyles.composeBoard, !discussionOpen && composeStyles.discussionClosed)}
+      ref={boardRef}
+      style={
+        {
+          '--draft-width': `${draftWidth}px`,
+          '--discussion-width': `${discussionWidth}px`,
+          '--generated-panel-height': `${generatedPanelHeight}px`,
+        } as CSSProperties
+      }
+      data-details-open={showingDetails || undefined}
+      data-details-resizing={detailsResizing || undefined}
+      data-resizing={resizing || undefined}
+      data-draft-collapsed={draftCollapsed || undefined}
+      className={composeStyles.composeBoard}
     >
       <WorkspaceStageHeader
-        workspaceControls={workspaceControls}
         branchOptions={branchOptions}
         candidate={candidate}
-        discussionOpen={discussionOpen}
+        controller={historicalCommit ? undefined : controller}
         mode="compose"
         onBranchChange={onBranchChange}
-        onDiscussionToggle={() => setDiscussionOpen((open) => !open)}
-        onModeChange={onModeChange}
+        onModeChange={(mode) => {
+          setCommitSelection(null);
+          onModeChange(mode);
+        }}
+        onOpenChat={openChat}
+        chatOpen={!historicalCommit}
       />
-      <main className={composeStyles.composeMain}>
-        {activity.newActivity ? (
-          <output className={composeStyles.newActivity}>
-            <span>
-              New activity · Draft r{activity.newActivity.compositionRevision}. Your inspected node
-              remains open.
-            </span>
-            <button onClick={() => void activity.loadLatest()} type="button">
-              Load latest
-            </button>
-          </output>
-        ) : null}
+      <div style={{ display: historicalCommit ? 'none' : 'contents' }}>
         <SourceToolbar
-          authoringBootstrap={authoringBootstrap}
-          authoringEnabled={editingEnabled}
-          onToggleEditing={toggleEditing}
-          candidate={candidate}
+          proposedChangeCount={
+            activity.view
+              ? (changeScope === 'all'
+                  ? composeDraftChangeCards(
+                      activity.view.netDiff,
+                      activity.view.base,
+                      activity.view.current
+                    ).length
+                  : groupComposeActivity(activity.actions).reduce(
+                      (count, event) => count + composeEventCards(event, activity.cards).length,
+                      0
+                    )) + stagedObjectGroups(staged, publishedCurrent).length
+              : candidate.yopsDraft.operations.length
+          }
           changeScope={changeScope}
           controller={controller}
           onChangeScope={setChangeScope}
-          onDiscuss={() => {
-            setSidePanel('chat');
-            setDiscussionOpen(true);
+          publishError={structureError}
+          onDiscuss={openChat}
+          onEditStructure={(view) => void openStructure(view)}
+          canEdit={Boolean(activity.view?.current !== undefined)}
+        />
+      </div>
+      {historicalCommit ? (
+        <section className={composeStyles.sourcesSection}>
+          <span>Commit history · Read-only</span>
+        </section>
+      ) : null}
+
+      {/* biome-ignore lint/a11y/useSemanticElements: This is an interactive window splitter, not a thematic break. */}
+      <div
+        role="separator"
+        aria-label="Resize discussion panel"
+        aria-orientation="vertical"
+        aria-valuemin={320}
+        aria-valuemax={680}
+        aria-valuenow={discussionWidth}
+        tabIndex={0}
+        className={composeStyles.discussionResize}
+        onPointerDown={(event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          const sidebar = boardRef.current?.querySelector('[data-compose-rail]');
+          dragOrigin.current = {
+            x: event.clientX,
+            width: sidebar ? sidebar.getBoundingClientRect().width + 16 : discussionWidth,
+          };
+          event.currentTarget.setPointerCapture(event.pointerId);
+          setResizing(true);
+        }}
+        onPointerMove={(event) => {
+          if (dragOrigin.current)
+            resizeDiscussion(dragOrigin.current.width + dragOrigin.current.x - event.clientX);
+        }}
+        onPointerUp={(event) => {
+          dragOrigin.current = null;
+          setResizing(false);
+          if (event.currentTarget.hasPointerCapture(event.pointerId))
+            event.currentTarget.releasePointerCapture(event.pointerId);
+        }}
+        onLostPointerCapture={() => {
+          dragOrigin.current = null;
+          setResizing(false);
+        }}
+        onPointerCancel={() => {
+          dragOrigin.current = null;
+          setResizing(false);
+        }}
+        onDoubleClick={() => resizeDiscussion(440)}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+            event.preventDefault();
+            resizeDiscussion(discussionWidth + (event.key === 'ArrowLeft' ? 20 : -20));
+          }
+        }}
+      />
+      {draftCollapsed ? null : (
+        // biome-ignore lint/a11y/useSemanticElements: This is an interactive window splitter, not a thematic break.
+        <div
+          role="separator"
+          aria-label="Resize conversation panel"
+          aria-orientation="vertical"
+          aria-valuemin={180}
+          aria-valuemax={560}
+          aria-valuenow={draftWidth}
+          tabIndex={0}
+          className={`${composeStyles.discussionResize} ${composeStyles.draftResize}`}
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            const sidebar = boardRef.current?.querySelector(
+              '[aria-label="Workspace conversations"]'
+            );
+            draftDragOrigin.current = {
+              x: event.clientX,
+              width: sidebar?.getBoundingClientRect().width || draftWidth,
+            };
+            event.currentTarget.setPointerCapture(event.pointerId);
+            setResizing(true);
+          }}
+          onPointerMove={(event) => {
+            if (draftDragOrigin.current)
+              resizeDraft(
+                draftDragOrigin.current.width + event.clientX - draftDragOrigin.current.x
+              );
+          }}
+          onPointerUp={(event) => {
+            draftDragOrigin.current = null;
+            setResizing(false);
+            if (event.currentTarget.hasPointerCapture(event.pointerId))
+              event.currentTarget.releasePointerCapture(event.pointerId);
+          }}
+          onLostPointerCapture={() => {
+            draftDragOrigin.current = null;
+            setResizing(false);
+          }}
+          onPointerCancel={() => {
+            draftDragOrigin.current = null;
+            setResizing(false);
+          }}
+          onDoubleClick={() => resizeDraft(260)}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+              event.preventDefault();
+              resizeDraft(draftWidth + (event.key === 'ArrowRight' ? 20 : -20));
+            } else if (event.key === 'Home' || event.key === 'End') {
+              event.preventDefault();
+              resizeDraft(event.key === 'Home' ? 180 : 560);
+            }
           }}
         />
-
-        <ProposedDraftPanel
-          activity={activity}
-          activitySelection={activitySelection}
-          onActivitySelect={selectActivity}
-          candidate={candidate}
-          changeFilter="all"
-          changeScope={changeScope}
-          controller={controller}
-          currentStep={currentStep}
-          onStepChange={selectStep}
-        />
-      </main>
-
-      {discussionOpen ? (
-        <aside aria-label="Discuss change" className={composeStyles.discussionSidebar}>
+      )}
+      <aside aria-label="Workspace conversations" className={composeStyles.currentDraftSidebar}>
+        {draftCollapsed ? (
+          <button
+            type="button"
+            aria-label="Expand conversation panel"
+            title="Expand conversations"
+            className={composeStyles.currentDraftRail}
+            onClick={() => toggleDraft(false)}
+          >
+            <PanelLeftOpen aria-hidden="true" />
+            <MessageSquare aria-hidden="true" />
+            <span>Chats</span>
+          </button>
+        ) : (
+          <WorkspaceConversationSidebar
+            key={candidate.id}
+            candidate={candidate}
+            activeConversationId={activeConversationId}
+            canCreate={Boolean(activity.enabled && activity.view)}
+            onCollapse={() => toggleDraft(true)}
+            onCreate={createConversation}
+            onSelect={(conversationId) => {
+              setActiveConversationId(conversationId);
+              setSchemaConversationId(undefined);
+              setSidePanel('chat');
+            }}
+          />
+        )}
+      </aside>
+      <main className={composeStyles.composeMain}>
+        {historicalCommit ? (
+          <WorkspaceCommitHistoryPanel
+            key={`${commitScope}:${historicalCommit.hash}`}
+            projectId={candidate.projectId}
+            commit={historicalCommit}
+            onReturn={() => {
+              setCommitSelection(null);
+              setRightView('changes');
+            }}
+            selectedId={historicalInspection?.id}
+            onInspect={(value) => setCommitInspection({ scope: commitScope, value })}
+          />
+        ) : null}
+        <section
+          hidden={Boolean(historicalCommit)}
+          className={composeStyles.chatPanel}
+          aria-label="Workspace AI chat"
+        >
           <header className={composeStyles.discussionHeader}>
-            {editingEnabled ? (
-              <div
-                className={composeStyles.discussionTabs}
-                role="tablist"
-                aria-label="Change context"
-              >
-                <button
-                  aria-selected={sidePanel === 'history'}
-                  onClick={() => setSidePanel('history')}
-                  role="tab"
-                  type="button"
-                >
-                  <Clock3 aria-hidden="true" /> Node history
-                </button>
-                <button
-                  aria-selected={sidePanel === 'chat'}
-                  onClick={() => setSidePanel('chat')}
-                  role="tab"
-                  type="button"
-                >
-                  <MessageSquare aria-hidden="true" /> Chat
-                </button>
-              </div>
-            ) : (
-              <>
-                <MessageSquare aria-hidden="true" />
-                <h2>Discuss change</h2>
-              </>
-            )}
-            <button
-              aria-label="Close discussion"
-              className={composeStyles.discussionClose}
-              onClick={() => setDiscussionOpen(false)}
-              type="button"
-            >
-              <X aria-hidden="true" />
-            </button>
+            <MessageSquare aria-hidden="true" />
+            <h2>Chat</h2>
+            <span className={composeStyles.discussionWorkspace} title={candidate.title}>
+              {candidate.title}
+            </span>
           </header>
-          {editingEnabled && sidePanel === 'history' ? (
-            <ComposeNodeHistoryPanel
-              activity={activity}
-              selection={activitySelection}
-              onOpenAction={openHistoryAction}
-            />
+          {!activity.enabled || !activity.view ? (
+            <WorkspaceSourcesMenu candidate={candidate} controller={controller} />
           ) : null}
-          {editingEnabled && activity.view && sidePanel === 'chat' ? (
+          {!activity.enabled ? (
+            <ComposeDraftPreparation
+              key={candidate.id}
+              bootstrap={authoringBootstrap}
+              onPrepare={enableActivity}
+            />
+          ) : activity.view ? (
             <ComposeAuthoringAssistant
+              key={`${candidate.id}:${activeConversationId ?? 'new'}`}
+              allowProposal={staged.length === 0}
               context={{
                 workspaceId: candidate.id,
                 workspaceRevision: activity.view.workspaceRevision,
                 sourceMaterialIds,
-                selectedActionId: activitySelection?.meta.actionId,
-                selectedNodeId: activitySelection?.operation.id,
+                selectedActionId: selectedSchema ? undefined : activitySelection?.meta.actionId,
+                selectedNodeId: selectedSchema ? undefined : activitySelection?.operation.id,
               }}
-              conversationId={sourceConversationId}
+              conversationId={activeConversationId}
               initialPendingCandidate={
                 activity.view?.pendingCandidates?.find((item) => item.status === 'candidate')
                   ?.transitionId
               }
               onCreateConversation={activity.createAssistantConversation}
+              onConversationChange={(conversationId) => {
+                setActiveConversationId(conversationId);
+                setSchemaConversationId(undefined);
+              }}
               onPublishCandidate={activity.publishCandidate}
               activityActions={activity.actions}
               activityCards={activity.cards}
               projectId={candidate.projectId}
+              onSchemaCandidateChange={(id) => {
+                if (id) setSchemaConversationId(id);
+                setSchemaCandidateEpoch((value) => value + 1);
+              }}
+              prefill={controller.assistantPrefill}
+              onPrefillApplied={controller.clearAssistantPrefill}
+              proposalBlockedHint={staged.length ? UNGROUPED_MANUAL_HINT : undefined}
+              sourcesControl={
+                <WorkspaceSourcesMenu candidate={candidate} controller={controller} />
+              }
+              contextLabel={`${candidate.title} · Draft r${activity.compositionRevision ?? 0}`}
             />
-          ) : sidePanel === 'chat' ? (
-            <>
-              <WorkspaceComposeChat
-                chat={controller.chat}
-                variant="discussion"
-                discussionAction={
-                  operation ? (
-                    <button
-                      className={composeStyles.inspectDiscussion}
-                      disabled={controller.isBusy}
-                      onClick={() => void prepareAndOpenReview(controller, onModeChange)}
-                      type="button"
-                    >
-                      <ListTree aria-hidden="true" /> Inspect this change
-                    </button>
-                  ) : undefined
-                }
+          ) : (
+            <p className={composeStyles.activityStatus} role={activity.error ? 'alert' : 'status'}>
+              {activity.error ?? 'Loading Draft activity…'}
+            </p>
+          )}
+        </section>
+      </main>
+
+      <aside
+        aria-label={historicalCommit ? 'Discuss change' : 'Generated changes'}
+        className={composeStyles.discussionSidebar}
+        data-compose-rail
+        data-panel={historicalCommit ? 'details' : showingDetails ? 'split' : 'changes'}
+      >
+        {historicalCommit ? (
+          <>
+            <header className={composeStyles.discussionHeader}>
+              <Layers aria-hidden="true" />
+              <h2>Details</h2>
+              <span className={composeStyles.discussionWorkspace}>Commit · Read-only</span>
+            </header>
+            <WorkspaceCommitChangeDetails
+              key={`${commitScope}:${historicalCommit.hash}:${historicalInspection?.id ?? 'empty'}`}
+              inspection={historicalInspection}
+            />
+          </>
+        ) : null}
+        <div
+          hidden={Boolean(historicalCommit)}
+          style={historicalCommit ? undefined : { display: 'contents' }}
+        >
+          <section className={composeStyles.generatedChangesPanel} aria-label="Generated card list">
+            <nav className={composeStyles.workspaceToolTabs} aria-label="Workspace tools">
+              {(['changes', 'structure', 'history'] as const).map((view) => (
+                <button
+                  key={view}
+                  type="button"
+                  aria-pressed={rightView === view}
+                  onClick={() => {
+                    setRightView(view);
+                    setSidePanel('chat');
+                  }}
+                >
+                  {view === 'changes' ? (
+                    <Sparkles aria-hidden="true" />
+                  ) : view === 'structure' ? (
+                    <ListTree aria-hidden="true" />
+                  ) : (
+                    <GitBranch aria-hidden="true" />
+                  )}
+                  {view === 'changes' ? 'Changes' : view === 'structure' ? 'Structure' : 'History'}
+                </button>
+              ))}
+            </nav>
+            {rightView === 'structure' ? (
+              <WorkspaceCurrentDraft
+                key={candidate.id}
+                candidate={candidate}
+                current={workingCurrent}
+                revision={activity.compositionRevision}
+                loading={activity.loading}
+                error={activity.error}
+                enabled={activity.enabled}
+                stagedCount={staged.length}
+                authoring={activity.view}
               />
-              <ComposerBar controller={controller} variant="discussion" />
+            ) : rightView === 'history' ? (
+              <WorkspaceCommitGraph
+                key={`graph:${candidate.id}`}
+                projectId={candidate.projectId}
+                branch={candidate.targetBranch}
+                refreshKey={candidate.baseCommitHash ?? undefined}
+                selectedCommitHash={historicalCommit?.hash}
+                onSelectCommit={(commit) => {
+                  if (commit.project_id === candidate.projectId) {
+                    setCommitInspection(null);
+                    setCommitSelection({ scope: commitScope, commit });
+                  }
+                }}
+              />
+            ) : (
+              <>
+                {schemaSettings.error && !schemaSettings.record ? (
+                  <p role="alert">{schemaSettings.error}</p>
+                ) : null}
+                {activity.newActivity ? (
+                  <output className={composeStyles.newActivity}>
+                    <span>
+                      New activity · Draft r{activity.newActivity.compositionRevision}. Your
+                      inspected node remains open.
+                    </span>
+                    <button onClick={() => void activity.loadLatest()} type="button">
+                      Load latest
+                    </button>
+                  </output>
+                ) : null}
+                <ProposedDraftPanel
+                  activity={activity}
+                  activitySelection={activitySelection}
+                  schemaSelected={Boolean(showingDetails && selectedSchema)}
+                  onActivitySelect={selectActivity}
+                  candidate={candidate}
+                  changeFilter="all"
+                  changeScope={changeScope}
+                  staging={stagingControls}
+                  schemaEvent={
+                    schemaSettings.record
+                      ? {
+                          id:
+                            schemaSettings.record.cards?.[0]?.settingsId ??
+                            schemaSettings.record.settingsId,
+                          timestamp:
+                            schemaSettings.record.cards?.[0]?.createdAt ??
+                            schemaSettings.record.createdAt ??
+                            candidate.updatedAt,
+                          content: (
+                            <AssistantSchemaSettingsTimeline
+                              projectId={candidate.projectId}
+                              workspaceId={candidate.id}
+                              state={schemaSettings}
+                              selectedId={showingDetails ? selectedSchema?.settingsId : undefined}
+                              onInspect={(record) => {
+                                setActivitySelection(null);
+                                setSchemaSelection({
+                                  workspaceId: candidate.id,
+                                  settingsId: record.settingsId,
+                                });
+                                setSidePanel('history');
+                              }}
+                              disabled={staged.length > 0}
+                              onChanged={() => {
+                                setSchemaCandidateEpoch((value) => value + 1);
+                                activity.refresh();
+                              }}
+                            />
+                          ),
+                        }
+                      : undefined
+                  }
+                />
+              </>
+            )}
+          </section>
+          {showingDetails ? (
+            <>
+              {/* biome-ignore lint/a11y/useSemanticElements: This is an interactive window splitter, not a thematic break. */}
+              <div
+                role="separator"
+                aria-label="Resize generated cards and details"
+                aria-orientation="horizontal"
+                aria-valuemin={160}
+                aria-valuemax={720}
+                aria-valuenow={generatedPanelHeight}
+                tabIndex={0}
+                className={composeStyles.detailsResize}
+                onPointerDown={(event) => {
+                  if (event.button !== 0) return;
+                  event.preventDefault();
+                  const cards = boardRef.current?.querySelector<HTMLElement>(
+                    '[aria-label="Generated card list"]'
+                  );
+                  detailsDragOrigin.current = {
+                    y: event.clientY,
+                    height: cards?.getBoundingClientRect().height || generatedPanelHeight,
+                  };
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  setDetailsResizing(true);
+                }}
+                onPointerMove={(event) => {
+                  if (detailsDragOrigin.current)
+                    resizeGeneratedPanel(
+                      detailsDragOrigin.current.height + event.clientY - detailsDragOrigin.current.y
+                    );
+                }}
+                onPointerUp={(event) => {
+                  detailsDragOrigin.current = null;
+                  setDetailsResizing(false);
+                  if (event.currentTarget.hasPointerCapture(event.pointerId))
+                    event.currentTarget.releasePointerCapture(event.pointerId);
+                }}
+                onLostPointerCapture={() => {
+                  detailsDragOrigin.current = null;
+                  setDetailsResizing(false);
+                }}
+                onPointerCancel={() => {
+                  detailsDragOrigin.current = null;
+                  setDetailsResizing(false);
+                }}
+                onDoubleClick={() => resizeGeneratedPanel(260)}
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    resizeGeneratedPanel(
+                      generatedPanelHeight + (event.key === 'ArrowDown' ? 20 : -20)
+                    );
+                  } else if (event.key === 'Home') {
+                    event.preventDefault();
+                    resizeGeneratedPanel(160);
+                  } else if (event.key === 'End') {
+                    event.preventDefault();
+                    resizeGeneratedPanel(720);
+                  }
+                }}
+              />
+              <section
+                className={composeStyles.changeDetailsPanel}
+                aria-label="Selected change details"
+              >
+                <header className={composeStyles.discussionHeader}>
+                  <Layers aria-hidden="true" />
+                  <h2>Details</h2>
+                </header>
+                {selectedSchema ? (
+                  <AssistantSchemaSettingsDetails
+                    key={candidate.id + ':' + selectedSchema.settingsId}
+                    record={selectedSchema}
+                    projectId={candidate.projectId}
+                    workspaceId={candidate.id}
+                    onDiscuss={() => {
+                      const settings = selectedSchema.settings;
+                      const path = [
+                        settings.targetNodePath ?? settings.nodePath,
+                        settings.newName ?? settings.name,
+                      ]
+                        .filter(Boolean)
+                        .join('/');
+                      setActivitySelection(null);
+                      controller.prefillAssistant(`修改 Schema 结构 ${path}：`);
+                      openChat();
+                    }}
+                  />
+                ) : (
+                  <ComposeNodeHistoryPanel
+                    activity={activity}
+                    selection={activitySelection}
+                    onOpenAction={openHistoryAction}
+                    onDiscuss={openChat}
+                    onOpenStructure={setFieldDialog}
+                    onSubmit={stageManualOps}
+                    workingCurrent={workingCurrent}
+                  />
+                )}
+              </section>
             </>
           ) : null}
-        </aside>
+        </div>
+      </aside>
+      {fieldDialog && !historicalCommit ? (
+        <ComposeFieldDialog
+          key={`${candidate.id}:${fieldDialog}`}
+          activity={activity}
+          title={candidate.title}
+          initialView={fieldDialog}
+          current={workingCurrent}
+          error={structureError}
+          pending={structurePending || !activity.view}
+          onSubmit={stageManualOps}
+          onClose={() => setFieldDialog(null)}
+          onDiscuss={() => {
+            setFieldDialog(null);
+            openChat();
+          }}
+        />
       ) : null}
     </div>
   );
 }
 
-function ComposerBar({
-  controller,
-  variant = 'default',
+interface WorkspaceConversationFolder {
+  id: string;
+  name: string;
+}
+
+function conversationMetadataValue(conversation: Conversation, key: string): string | undefined {
+  const value = conversation.metadata?.[key];
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+function WorkspaceConversationSidebar({
+  activeConversationId,
+  candidate,
+  canCreate,
+  onCollapse,
+  onCreate,
+  onSelect,
 }: {
-  controller: WorkspaceComposeReviewController;
-  variant?: 'default' | 'discussion';
+  activeConversationId?: string;
+  candidate: WorkspaceCandidate;
+  canCreate: boolean;
+  onCollapse: () => void;
+  onCreate: () => Promise<string>;
+  onSelect: (conversationId: string) => void;
 }) {
-  const [sourceMenuOpen, setSourceMenuOpen] = useState(false);
-  const [sourceForm, setSourceForm] = useState<'paste' | 'url' | null>(null);
-  const [sourceTitle, setSourceTitle] = useState('');
-  const [sourceValue, setSourceValue] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
-  const sendDisabled =
-    controller.chat.isLoading ||
-    controller.model.loading ||
-    !controller.model.ready ||
-    (!controller.chat.input.trim() && attachedImages.length === 0);
+  const conversationsQuery = useWorkspaceConversations(candidate.projectId);
+  const storageKey = `t3x-workspace-chat-folders:${candidate.projectId}:${candidate.id}`;
+  const [folders, setFolders] = useState<WorkspaceConversationFolder[]>(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(storageKey) ?? '[]');
+      return Array.isArray(stored)
+        ? stored.filter(
+            (item): item is WorkspaceConversationFolder =>
+              Boolean(item) && typeof item.id === 'string' && typeof item.name === 'string'
+          )
+        : [];
+    } catch {
+      return [];
+    }
+  });
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const linkedConversationIds = useMemo(
+    () =>
+      new Set(
+        candidate.sourceBundle.flatMap((source) =>
+          source.type === 'chat' && source.conversationId ? [source.conversationId] : []
+        )
+      ),
+    [candidate.sourceBundle]
+  );
+  const conversations = useMemo(
+    () =>
+      (conversationsQuery.data?.conversations ?? [])
+        .filter(
+          (conversation) =>
+            linkedConversationIds.has(conversation.conversation_id) ||
+            conversationMetadataValue(conversation, 'workspace_id') === candidate.id
+        )
+        .sort((left, right) => right.created_at.localeCompare(left.created_at)),
+    [candidate.id, conversationsQuery.data?.conversations, linkedConversationIds]
+  );
 
   useEffect(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    textarea.style.height = 'auto';
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 128)}px`;
-  }, [controller.chat.input]);
-
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.[0];
-    event.currentTarget.value = '';
-    if (file) void controller.uploadFile(file);
-    setSourceMenuOpen(false);
-  };
-
-  const submitSourceForm = async () => {
-    const imported = await controller.addPaste(sourceTitle, sourceValue);
-    if (!imported) return;
-    setSourceForm(null);
-    setSourceMenuOpen(false);
-    setSourceTitle('');
-    setSourceValue('');
-  };
-
-  const removeImage = (id: string) => {
-    setAttachedImages((current) => {
-      const removed = current.find((image) => image.id === id);
-      if (removed) URL.revokeObjectURL(removed.preview);
-      return current.filter((image) => image.id !== id);
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(folders));
+    } catch {
+      /* Folder organization remains available for the current session. */
+    }
+  }, [folders, storageKey]);
+  useEffect(() => {
+    const known = new Set(folders.map((folder) => folder.id));
+    const inferred = conversations.flatMap((conversation) => {
+      const id = conversationMetadataValue(conversation, 'workspace_folder_id');
+      if (!id || known.has(id)) return [];
+      known.add(id);
+      return [
+        {
+          id,
+          name: conversationMetadataValue(conversation, 'workspace_folder_name') ?? 'Folder',
+        },
+      ];
     });
+    if (inferred.length) setFolders((current) => [...current, ...inferred]);
+  }, [conversations, folders]);
+
+  const createFolder = () => {
+    const name = window.prompt('Folder name', 'New folder')?.trim();
+    if (!name) return;
+    setFolders((current) => [...current, { id: `folder:${crypto.randomUUID()}`, name }]);
   };
-
-  const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
-    const files = clipboardImageFiles(event.clipboardData);
-    if (!files.length) return;
-    if (!event.clipboardData.getData('text/plain')) event.preventDefault();
-    void Promise.all(files.map(fileToAttachedImage)).then((images) => {
-      setAttachedImages((current) => [...current, ...images]);
-    });
+  const renameFolder = async (folder: WorkspaceConversationFolder) => {
+    const name = window.prompt('Rename folder', folder.name)?.trim();
+    if (!name || name === folder.name) return;
+    setFolders((current) =>
+      current.map((item) => (item.id === folder.id ? { ...item, name } : item))
+    );
+    setError(null);
+    try {
+      await Promise.all(
+        conversations
+          .filter(
+            (conversation) =>
+              conversationMetadataValue(conversation, 'workspace_folder_id') === folder.id
+          )
+          .map((conversation) =>
+            conversationsQuery.update(conversation.conversation_id, {
+              metadata: {
+                ...(conversation.metadata ?? {}),
+                workspace_id: candidate.id,
+                workspace_folder_id: folder.id,
+                workspace_folder_name: name,
+              },
+            })
+          )
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not rename the folder.');
+    }
   };
-
-  const sendComposer = () => {
-    if (controller.chat.isLoading || controller.chat.isStreaming || sendDisabled) return;
-    const images = attachedImages;
-    controller.chat.send(images.length ? images : undefined);
-    for (const image of images) URL.revokeObjectURL(image.preview);
-    setAttachedImages([]);
+  const createChat = async (folder?: WorkspaceConversationFolder) => {
+    if (!canCreate || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const conversationId = await onCreate();
+      await conversationsQuery.update(conversationId, {
+        title: 'New conversation',
+        metadata: {
+          workspace_id: candidate.id,
+          ...(folder ? { workspace_folder_id: folder.id, workspace_folder_name: folder.name } : {}),
+        },
+      });
+      onSelect(conversationId);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not create the conversation.');
+    } finally {
+      setBusy(false);
+    }
   };
-
-  const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
-    event.preventDefault();
-    sendComposer();
+  const renameConversation = async (conversation: Conversation) => {
+    const title = window
+      .prompt('Rename conversation', conversation.title ?? 'New conversation')
+      ?.trim();
+    if (!title || title === conversation.title) return;
+    setError(null);
+    try {
+      await conversationsQuery.update(conversation.conversation_id, { title });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not rename the conversation.');
+    }
   };
-
-  const imagePreview =
-    attachedImages.length > 0 ? (
-      <div className={composeStyles.imagePreview}>
-        {attachedImages.map((image) => (
-          <span className={composeStyles.imagePreviewItem} key={image.id}>
-            <NextImage alt="" height={48} src={image.preview} unoptimized width={48} />
-            <button aria-label="Remove image" onClick={() => removeImage(image.id)} type="button">
-              <X aria-hidden="true" />
-            </button>
-          </span>
-        ))}
-      </div>
-    ) : null;
-
-  if (variant === 'discussion') {
+  const moveConversation = async (
+    conversation: Conversation,
+    folder?: WorkspaceConversationFolder
+  ) => {
+    const metadata: Record<string, unknown> = {
+      ...(conversation.metadata ?? {}),
+      workspace_id: candidate.id,
+    };
+    if (folder) {
+      metadata.workspace_folder_id = folder.id;
+      metadata.workspace_folder_name = folder.name;
+    } else {
+      delete metadata.workspace_folder_id;
+      delete metadata.workspace_folder_name;
+    }
+    setError(null);
+    try {
+      await conversationsQuery.update(conversation.conversation_id, { metadata });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not move the conversation.');
+    }
+  };
+  const renderConversation = (conversation: Conversation) => {
+    const title = conversation.title?.trim() || 'New conversation';
+    const selected = conversation.conversation_id === activeConversationId;
     return (
-      <div className={composeStyles.discussionComposerWrap}>
-        {controller.error || controller.chat.warning || controller.notice ? (
-          <div
-            className={composeStyles.composerNotice}
-            role={controller.error ? 'alert' : 'status'}
-          >
-            {controller.error ?? controller.chat.warning ?? controller.notice}
-            {controller.hasCollaborationConflict ? (
-              <button
-                disabled={controller.isBusy}
-                onClick={() => void controller.resolveCollaborationConflict()}
-                type="button"
-              >
-                Refresh and apply mine
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-        <fieldset className={composeStyles.discussionComposer} aria-label="Message composer">
-          <textarea
-            aria-label="Workspace instruction"
-            disabled={controller.chat.isLoading}
-            onChange={(event) => controller.chat.setInput(event.target.value)}
-            onKeyDown={handleComposerKeyDown}
-            onPaste={handlePaste}
-            placeholder="Ask about this change…"
-            ref={textareaRef}
-            rows={3}
-            value={controller.chat.input}
-          />
-          {imagePreview}
-          <div className={composeStyles.discussionComposerFooter}>
-            <GenerationModelSelector
-              onModelChange={controller.model.change}
-              onThinkingChange={controller.model.setThinking}
-              selectedModel={controller.model.selectedModel}
-              selectedProvider={controller.model.selectedProvider}
-              supportsThinking={controller.model.supportsThinking}
-              thinkingEnabled={controller.model.thinkingEnabled}
-            />
-            <button
-              aria-label={controller.chat.isStreaming ? 'Stop generating' : 'Send message'}
-              className={composeStyles.send}
-              disabled={!controller.chat.isStreaming && sendDisabled}
-              onClick={controller.chat.isStreaming ? controller.chat.stop : sendComposer}
-              type="button"
-            >
-              {controller.chat.isStreaming ? (
-                <Square aria-hidden="true" className="size-4 fill-current text-current" />
-              ) : (
-                <ArrowUp aria-hidden="true" className="size-4" />
-              )}
+      <div className={composeStyles.conversationRow} key={conversation.conversation_id}>
+        <button
+          type="button"
+          aria-current={selected ? 'page' : undefined}
+          title={title}
+          onClick={() => onSelect(conversation.conversation_id)}
+        >
+          <MessageSquare aria-hidden="true" />
+          <span>{title}</span>
+        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" aria-label={`Actions for ${title}`}>
+              <MoreHorizontal aria-hidden="true" />
             </button>
-          </div>
-        </fieldset>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onSelect={() => void renameConversation(conversation)}>
+              Rename
+            </DropdownMenuItem>
+            {folders.map((folder) => (
+              <DropdownMenuItem
+                key={folder.id}
+                onSelect={() => void moveConversation(conversation, folder)}
+              >
+                Move to {folder.name}
+              </DropdownMenuItem>
+            ))}
+            {conversationMetadataValue(conversation, 'workspace_folder_id') ? (
+              <DropdownMenuItem onSelect={() => void moveConversation(conversation)}>
+                Move out of folder
+              </DropdownMenuItem>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     );
-  }
+  };
+  const unfiled = conversations.filter(
+    (conversation) => !conversationMetadataValue(conversation, 'workspace_folder_id')
+  );
 
   return (
-    <div className={composeStyles.composerWrap}>
-      <div>
-        {controller.error || controller.chat.warning || controller.notice ? (
-          <div
-            className={cn(
-              'mb-2 flex flex-wrap items-center gap-2 px-1 py-1 text-xs',
-              controller.error
-                ? 'border-[var(--status-error)]/30 bg-[var(--status-error-muted)] text-[var(--status-error)]'
-                : 'text-[var(--text-tertiary)]'
-            )}
-            role={controller.error ? 'alert' : 'status'}
+    <section className={composeStyles.conversationSidebar} aria-label="Workspace chat list">
+      <header>
+        <div>
+          <MessageSquare aria-hidden="true" />
+          <h2>Chats</h2>
+        </div>
+        <span>
+          <button type="button" aria-label="New folder" title="New folder" onClick={createFolder}>
+            <FolderPlus aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            aria-label="New conversation"
+            title="New conversation"
+            disabled={!canCreate || busy}
+            onClick={() => void createChat()}
           >
-            {controller.error ??
-              controller.chat.warning ??
-              (controller.notice === 'Immutable review prepared from the current draft.' ? (
-                <>
-                  <CheckCircle2 aria-hidden="true" className="size-3.5" />
-                  Review ready
-                </>
-              ) : (
-                controller.notice
-              ))}
-            {controller.hasCollaborationConflict ? (
-              <button
-                className="ml-3 rounded-md border border-current px-2 py-1 font-semibold"
-                disabled={controller.isBusy}
-                onClick={() => void controller.resolveCollaborationConflict()}
-                type="button"
-              >
-                Refresh and apply mine
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-        <div className={cn(composeStyles.composer, 'relative')}>
-          <input
-            accept={DOCUMENT_SOURCE_ACCEPTED_TYPES}
-            aria-label="Upload source material"
-            className="hidden"
-            onChange={handleFileChange}
-            ref={fileInputRef}
-            type="file"
-          />
-          <textarea
-            aria-label="Workspace instruction"
-            className=""
-            disabled={controller.chat.isLoading}
-            onChange={(event) => controller.chat.setInput(event.target.value)}
-            onKeyDown={handleComposerKeyDown}
-            onPaste={handlePaste}
-            placeholder="Ask T3X anything about your workspace…"
-            ref={textareaRef}
-            rows={1}
-            value={controller.chat.input}
-          />
-          {imagePreview}
-          <div className={composeStyles.composerTools}>
-            <div className="relative flex shrink-0 items-center gap-2 text-[var(--text-tertiary)]">
-              <button
-                aria-expanded={sourceMenuOpen}
-                aria-haspopup="menu"
-                aria-label="Add source"
-                title="Add source"
-                className={composeStyles.addButton}
-                onClick={() => setSourceMenuOpen((open) => !open)}
-                type="button"
-              >
-                <Plus aria-hidden="true" className="size-4" />
-                <span className="sr-only">Add source</span>
-              </button>
-              {controller.materialSources.find((source) => source.included) ? (
-                <span className={composeStyles.sourceChip}>
-                  <FileText aria-hidden="true" className="size-4" />
-                  <span>{controller.materialSources.find((source) => source.included)?.title}</span>
-                </span>
-              ) : null}
-              {sourceMenuOpen ? (
-                <div
-                  className="absolute bottom-[calc(100%+8px)] left-0 z-30 min-w-64 rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-elevated)] p-2 shadow-[var(--fx-shadow-lg)]"
-                  role="menu"
+            <MessageSquarePlus aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            aria-label="Collapse conversation panel"
+            title="Collapse conversations"
+            onClick={onCollapse}
+          >
+            <PanelLeftOpen aria-hidden="true" />
+          </button>
+        </span>
+      </header>
+      <div className={composeStyles.conversationList}>
+        {folders.map((folder) => {
+          const collapsed = collapsedFolders.has(folder.id);
+          const folderConversations = conversations.filter(
+            (conversation) =>
+              conversationMetadataValue(conversation, 'workspace_folder_id') === folder.id
+          );
+          return (
+            <section className={composeStyles.conversationFolder} key={folder.id}>
+              <header>
+                <button
+                  type="button"
+                  aria-expanded={!collapsed}
+                  onClick={() =>
+                    setCollapsedFolders((current) => {
+                      const next = new Set(current);
+                      if (next.has(folder.id)) next.delete(folder.id);
+                      else next.add(folder.id);
+                      return next;
+                    })
+                  }
                 >
-                  {sourceForm ? (
-                    <div className="grid gap-2">
-                      <input
-                        aria-label="Source title"
-                        className="h-8 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
-                        onChange={(event) => setSourceTitle(event.target.value)}
-                        placeholder="Optional title"
-                        value={sourceTitle}
-                      />
-                      {sourceForm === 'url' ? (
-                        <input
-                          aria-label="Source URL"
-                          className="h-8 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
-                          onChange={(event) => setSourceValue(event.target.value)}
-                          placeholder="https://example.com/source"
-                          type="url"
-                          value={sourceValue}
-                        />
-                      ) : (
-                        <textarea
-                          aria-label="Pasted source text"
-                          className="min-h-24 resize-y rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
-                          onChange={(event) => setSourceValue(event.target.value)}
-                          placeholder="Paste exact source text"
-                          value={sourceValue}
-                        />
-                      )}
-                      <div className="flex justify-end gap-2">
-                        <button
-                          className="h-8 rounded-md border border-[var(--stroke-default)] px-3 text-xs text-[var(--text-secondary)]"
-                          onClick={() => setSourceForm(null)}
-                          type="button"
-                        >
-                          Back
-                        </button>
-                        <button
-                          className="h-8 rounded-md bg-[var(--accent-commit)] px-3 text-xs font-semibold text-[var(--on-accent)]"
-                          disabled={!sourceValue.trim() || controller.sourceBusy}
-                          onClick={() => void submitSourceForm()}
-                          type="button"
-                        >
-                          {controller.sourceBusy ? 'Adding…' : 'Add source'}
-                        </button>
-                      </div>
-                    </div>
+                  {collapsed ? (
+                    <ChevronRight aria-hidden="true" />
                   ) : (
-                    <div className="grid gap-1">
-                      <SourceMenuButton
-                        icon={FileUp}
-                        label="Upload file"
-                        onClick={() => fileInputRef.current?.click()}
-                      />
-                      <SourceMenuButton
-                        icon={ClipboardPaste}
-                        label="Paste text"
-                        onClick={() => setSourceForm('paste')}
-                      />
-
-                      {controller.materialSources.length > 0 ? (
-                        <div className="mt-1 border-t border-[var(--stroke-divider)] pt-2">
-                          <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
-                            Project materials
-                          </p>
-                          {controller.materialSources.map((source) => (
-                            <button
-                              aria-pressed={source.included}
-                              className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-app)]"
-                              key={source.id}
-                              onClick={() =>
-                                void controller.toggleMaterialSource(source.materialId)
-                              }
-                              type="button"
-                            >
-                              <FileCode2 aria-hidden="true" className="size-4 shrink-0" />
-                              <span className="min-w-0 flex-1 truncate">{source.title}</span>
-                              <span className="text-[10px] font-semibold text-[var(--accent-commit)]">
-                                {source.included ? 'Included' : 'Include'}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
+                    <ChevronDown aria-hidden="true" />
                   )}
-                </div>
-              ) : null}
-            </div>
-            <div className={composeStyles.modelSend}>
-              <GenerationModelSelector
-                onModelChange={controller.model.change}
-                onThinkingChange={controller.model.setThinking}
-                selectedModel={controller.model.selectedModel}
-                selectedProvider={controller.model.selectedProvider}
-                supportsThinking={controller.model.supportsThinking}
-                thinkingEnabled={controller.model.thinkingEnabled}
-              />
-              <button
-                aria-label={controller.chat.isStreaming ? 'Stop generating' : 'Send message'}
-                className={composeStyles.send}
-                disabled={!controller.chat.isStreaming && sendDisabled}
-                onClick={controller.chat.isStreaming ? controller.chat.stop : sendComposer}
-                type="button"
-              >
-                {controller.chat.isStreaming ? (
-                  <Square aria-hidden="true" className="size-4 fill-current text-current" />
-                ) : (
-                  <ArrowUp aria-hidden="true" className="size-4" />
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-        <div className={composeStyles.composerHints}>
-          <span className="inline-flex min-w-0 items-center gap-1.5">
-            <GitBranch className="size-3" aria-hidden="true" />
-            <span className="truncate">{controller.candidate.targetBranch}</span>
-          </span>
-          <span>
-            <kbd className="font-sans">Enter</kbd> to send ·{' '}
-            <kbd className="font-sans">Shift Enter</kbd> for a new line
-          </span>
-        </div>
+                  <Folder aria-hidden="true" />
+                  <span>{folder.name}</span>
+                </button>
+                <button
+                  type="button"
+                  aria-label={`New conversation in ${folder.name}`}
+                  title={`New conversation in ${folder.name}`}
+                  disabled={!canCreate || busy}
+                  onClick={() => void createChat(folder)}
+                >
+                  <Plus aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Rename folder ${folder.name}`}
+                  title={`Rename ${folder.name}`}
+                  onClick={() => void renameFolder(folder)}
+                >
+                  <MoreHorizontal aria-hidden="true" />
+                </button>
+              </header>
+              {!collapsed ? folderConversations.map(renderConversation) : null}
+            </section>
+          );
+        })}
+        {unfiled.map(renderConversation)}
+        {!conversationsQuery.loading && conversations.length === 0 ? (
+          <p>No conversations yet. Create one to start with a blank chat.</p>
+        ) : null}
+        {conversationsQuery.loading ? <p>Loading conversations…</p> : null}
+        {error || conversationsQuery.error ? (
+          <p role="alert">{error ?? conversationsQuery.error?.message}</p>
+        ) : null}
       </div>
+    </section>
+  );
+}
+
+function ComposeDraftPreparation({
+  bootstrap,
+  onPrepare,
+}: {
+  bootstrap: ReturnType<typeof useWorkspaceAuthoringBootstrap>;
+  onPrepare: () => Promise<void>;
+}) {
+  const importing = bootstrap.importSnapshot !== undefined;
+  return (
+    <div className={composeStyles.activityBootstrap}>
+      <p>
+        {importing
+          ? 'Import the existing draft to continue in Chat. Your current changes will be preserved.'
+          : 'Enable Draft activity to chat with the Workspace assistant. It reads the Draft, schema and sources, and can propose changes.'}
+      </p>
+      <div>
+        <button disabled={bootstrap.busy} onClick={() => void onPrepare()} type="button">
+          <Play aria-hidden="true" />
+          {bootstrap.busy
+            ? 'Enabling Draft activity…'
+            : importing
+              ? 'Import draft and continue'
+              : 'Enable Draft activity'}
+        </button>
+        {importing ? (
+          <button disabled={bootstrap.busy} onClick={bootstrap.cancel} type="button">
+            Cancel import
+          </button>
+        ) : null}
+      </div>
+      {bootstrap.error ? <p role="alert">{bootstrap.error}</p> : null}
     </div>
   );
 }
 
-function SourceMenuButton({
-  icon: Icon,
-  label,
-  onClick,
-}: {
-  icon: LucideIcon;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-app)] hover:text-[var(--text-primary)]"
-      onClick={onClick}
-      role="menuitem"
-      type="button"
-    >
-      <Icon aria-hidden="true" className="size-4" />
-      {label}
-    </button>
-  );
-}
-
-function SourceToolbar({
-  authoringBootstrap,
-  onToggleEditing,
-  authoringEnabled,
+function WorkspaceSourcesMenu({
   candidate,
-  changeScope,
   controller,
-  onChangeScope,
-  onDiscuss,
 }: {
-  authoringBootstrap: ReturnType<typeof useWorkspaceAuthoringBootstrap>;
-  onToggleEditing: () => Promise<void>;
-  authoringEnabled: boolean;
   candidate: WorkspaceCandidate;
-  changeScope: 'latest' | 'all';
   controller: WorkspaceComposeReviewController;
-  onChangeScope: (scope: 'latest' | 'all') => void;
-  onDiscuss: () => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const primaryMaterial = controller.materialSources[0];
-  const primarySource = primaryMaterial
-    ? candidate.sourceBundle.find(
-        (item) => item.id === primaryMaterial.id || item.materialId === primaryMaterial.materialId
-      )
-    : undefined;
+  const included = controller.materialSources.filter((material) => material.included);
+  const tokenEstimate = (materialId: string) =>
+    candidate.sourceBundle.find((item) => item.materialId === materialId)?.tokenEstimate;
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -1120,126 +1859,100 @@ function SourceToolbar({
     if (file) void controller.uploadFile(file);
   };
 
-  const generateChanges = () => {
-    if (!authoringEnabled) {
-      void controller.generateChanges();
-      return;
-    }
-    onDiscuss();
-    requestAnimationFrame(() =>
-      document.querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')?.focus()
-    );
-  };
+  return (
+    <>
+      <input
+        accept={DOCUMENT_SOURCE_ACCEPTED_TYPES}
+        aria-label="Upload source material"
+        className="hidden"
+        onChange={handleFileChange}
+        ref={fileInputRef}
+        type="file"
+      />
+      <DropdownMenu>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <button
+                aria-label={`Workspace sources (${included.length} included)`}
+                className={composeStyles.sourcesButton}
+                disabled={controller.sourceBusy}
+                type="button"
+              >
+                <Plus aria-hidden="true" />
+                {controller.sourceBusy ? (
+                  <span>Updating sources…</span>
+                ) : included.length > 0 ? (
+                  <small>{included.length}</small>
+                ) : (
+                  <span>Add source</span>
+                )}
+              </button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={6}>
+            {included.length > 0 ? (
+              <ul className={composeStyles.sourcesTooltip}>
+                {included.map((material) => (
+                  <li key={material.id}>{material.title}</li>
+                ))}
+              </ul>
+            ) : (
+              'No sources included. Click to add one.'
+            )}
+          </TooltipContent>
+        </Tooltip>
+        <DropdownMenuContent align="start" className={composeStyles.sourceMaterialMenu} side="top">
+          <DropdownMenuLabel>Workspace sources</DropdownMenuLabel>
+          {controller.materialSources.map((material) => {
+            const tokens = tokenEstimate(material.materialId);
+            return (
+              <DropdownMenuCheckboxItem
+                checked={material.included}
+                disabled={controller.sourceBusy}
+                key={material.id}
+                onCheckedChange={() => void controller.toggleMaterialSource(material.materialId)}
+              >
+                <span className={composeStyles.sourceMaterialName}>{material.title}</span>
+                {tokens ? <small>{tokens} tokens</small> : null}
+              </DropdownMenuCheckboxItem>
+            );
+          })}
+          {controller.materialSources.length > 0 ? <DropdownMenuSeparator /> : null}
+          <DropdownMenuItem onSelect={() => fileInputRef.current?.click()}>
+            <FileUp aria-hidden="true" className="size-4" /> Add source
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
+  );
+}
 
-  const addManually = () => {
-    onDiscuss();
-    if (!authoringEnabled)
-      controller.chat.setInput(
-        'Add a structured change while preserving the selected source evidence.'
-      );
-    requestAnimationFrame(() =>
-      document.querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')?.focus()
-    );
-  };
-
+function SourceToolbar({
+  proposedChangeCount,
+  changeScope,
+  controller,
+  onChangeScope,
+  publishError,
+  onDiscuss,
+  onEditStructure,
+  canEdit,
+}: {
+  proposedChangeCount: number;
+  changeScope: 'latest' | 'all';
+  controller: WorkspaceComposeReviewController;
+  onChangeScope: (scope: 'latest' | 'all') => void;
+  publishError?: string | null;
+  onDiscuss: () => void;
+  onEditStructure: (view: 'structure' | 'yaml') => void;
+  canEdit: boolean;
+}) {
   return (
     <section className={composeStyles.sourcesSection}>
       <div className={composeStyles.sourcesHeading}>
-        <h2>Sources</h2>
-        <div className={composeStyles.sourceChips}>
-          {primaryMaterial ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  aria-label={`Open ${controller.materialSources.length} workspace source${controller.materialSources.length === 1 ? '' : 's'}`}
-                  className={composeStyles.materialChip}
-                  disabled={controller.sourceBusy}
-                  title={controller.materialSources.map((material) => material.title).join(', ')}
-                  type="button"
-                >
-                  <FileText aria-hidden="true" />
-                  <span>{primaryMaterial.title}</span>
-                  {controller.materialSources.length > 1 ? (
-                    <small>+{controller.materialSources.length - 1}</small>
-                  ) : primarySource?.tokenEstimate ? (
-                    <small>{primarySource.tokenEstimate} tokens</small>
-                  ) : null}
-                  <ChevronDown aria-hidden="true" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className={composeStyles.sourceMaterialMenu}>
-                <DropdownMenuLabel>Workspace sources</DropdownMenuLabel>
-                {controller.materialSources.map((material) => {
-                  const source = candidate.sourceBundle.find(
-                    (item) => item.id === material.id || item.materialId === material.materialId
-                  );
-                  return (
-                    <DropdownMenuCheckboxItem
-                      checked={material.included}
-                      disabled={controller.sourceBusy}
-                      key={material.id}
-                      onCheckedChange={() =>
-                        void controller.toggleMaterialSource(material.materialId)
-                      }
-                    >
-                      <span className={composeStyles.sourceMaterialName}>{material.title}</span>
-                      {source?.tokenEstimate ? <small>{source.tokenEstimate} tokens</small> : null}
-                    </DropdownMenuCheckboxItem>
-                  );
-                })}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => fileInputRef.current?.click()}>
-                  <FileUp aria-hidden="true" /> Add source
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
-          <input
-            accept={DOCUMENT_SOURCE_ACCEPTED_TYPES}
-            aria-label="Upload source material"
-            className="hidden"
-            onChange={handleFileChange}
-            ref={fileInputRef}
-            type="file"
-          />
-          {!primaryMaterial ? (
-            <button onClick={() => fileInputRef.current?.click()} type="button">
-              <FileUp aria-hidden="true" /> Add source
-            </button>
-          ) : null}
-        </div>
+        <h2>Proposed changes</h2>
+        <span className={composeStyles.changeCount}>{proposedChangeCount}</span>
         <div className={composeStyles.composeToolbarActions}>
-          <button
-            className={composeStyles.addManually}
-            disabled={authoringBootstrap.busy || controller.isBusy || controller.chat.isLoading}
-            onClick={() => void onToggleEditing()}
-            title="Switch between discussion only and Draft editing; existing history is preserved"
-            type="button"
-          >
-            <Play aria-hidden="true" />
-            {authoringEnabled
-              ? 'Draft editing · Switch to discuss'
-              : authoringBootstrap.busy
-                ? 'Enabling Draft activity…'
-                : authoringBootstrap.importSnapshot !== undefined
-                  ? 'Confirm import and enable'
-                  : 'Enable Draft activity'}
-          </button>
-          <button className={composeStyles.addManually} onClick={addManually} type="button">
-            <Plus aria-hidden="true" /> Add manually
-          </button>
-          <div className={composeStyles.generateControls}>
-            <span>
-              From sources <ChevronDown aria-hidden="true" />
-            </span>
-            <button
-              disabled={!authoringEnabled && controller.isBusy}
-              onClick={generateChanges}
-              type="button"
-            >
-              <Layers aria-hidden="true" /> Generate changes
-            </button>
-          </div>
           <div className={composeStyles.changeScope} role="tablist" aria-label="Change scope">
             <button
               aria-selected={changeScope === 'latest'}
@@ -1258,27 +1971,49 @@ function SourceToolbar({
               All changes
             </button>
           </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className={composeStyles.newChange} type="button">
+                <Plus aria-hidden="true" /> New change <ChevronDown aria-hidden="true" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem onSelect={() => onEditStructure('structure')}>
+                <ListTree aria-hidden="true" /> Edit structure
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={!canEdit} onSelect={() => onEditStructure('yaml')}>
+                <Code2 aria-hidden="true" /> Open YAML
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={onDiscuss}>
+                <MessageSquare aria-hidden="true" /> Describe it in Chat
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
-      {authoringBootstrap.importSnapshot !== undefined && !authoringEnabled ? (
+      {controller.error || controller.notice || publishError ? (
         <div
-          className="flex items-center gap-2 text-xs text-[var(--text-secondary)]"
-          aria-live="polite"
+          className={cn(
+            'flex items-center gap-2 text-xs',
+            controller.error || publishError
+              ? 'text-[var(--status-error)]'
+              : 'text-[var(--text-secondary)]'
+          )}
+          role={controller.error || publishError ? 'alert' : 'status'}
         >
-          Import the current Draft snapshot to enable activity. Existing changes will be preserved.
-          <button
-            className={composeStyles.addManually}
-            onClick={authoringBootstrap.cancel}
-            type="button"
-          >
-            Cancel import
-          </button>
+          {publishError ?? controller.error ?? controller.notice}
+          {controller.hasCollaborationConflict ? (
+            <button
+              className={composeStyles.addManually}
+              disabled={controller.isBusy}
+              onClick={() => void controller.resolveCollaborationConflict()}
+              type="button"
+            >
+              Refresh and apply mine
+            </button>
+          ) : null}
         </div>
-      ) : null}
-      {authoringBootstrap.error ? (
-        <p className="text-xs text-[var(--status-error)]" role="alert">
-          {authoringBootstrap.error}
-        </p>
       ) : null}
     </section>
   );
@@ -1287,44 +2022,104 @@ function SourceToolbar({
 function ProposedDraftPanel({
   activity,
   activitySelection,
+  schemaSelected,
   onActivitySelect,
   candidate,
   changeFilter,
   changeScope,
-  controller,
-  currentStep,
-  onStepChange,
+  staging,
+  schemaEvent,
 }: {
   activity: ReturnType<typeof useComposeActivity>;
   activitySelection: ComposeActivitySelection | null;
-  onActivitySelect: (selection: ComposeActivitySelection, panel?: 'history' | 'chat') => void;
+  schemaSelected: boolean;
+  onActivitySelect: (
+    selection: ComposeActivitySelection,
+    panel?: 'history' | 'chat' | 'preserve'
+  ) => void;
   candidate: WorkspaceCandidate;
   changeFilter: ComposeChangeFilter;
   changeScope: 'latest' | 'all';
-  controller: WorkspaceComposeReviewController;
-  currentStep: number;
-  onStepChange: (step: number) => void;
+  staging?: ManualStagingControls;
+  schemaEvent?: ComposeSchemaTimelineEvent;
 }) {
   const operations = candidate.yopsDraft.operations;
-  const proposedChangeCount = activity.view?.netDiff.length ?? operations.length;
+  const editRequest = useRef(0);
   useEffect(() => {
-    if (!activity.view) return;
+    if (!activity.view || schemaSelected) return;
     if (changeScope === 'all') {
       if (activitySelection?.meta.comparison === 'draft') return;
+      const changes = composeDraftChangeCards(
+        activity.view.netDiff,
+        activity.view.base,
+        activity.view.current
+      );
       const card =
-        activity.view.netDiff.find(
+        changes.find(
           (item) =>
             item.nodeId === activitySelection?.operation.id &&
             item.path === activitySelection.operation.path
-        ) ?? activity.view.netDiff[0];
+        ) ?? changes[0];
       if (card)
-        onActivitySelect({
-          operation: activityOperation(card),
-          meta: { eventId: 'all', comparison: 'draft' },
-        });
+        onActivitySelect(
+          {
+            operation: activityOperation(card),
+            meta: { eventId: 'all', comparison: 'draft' },
+          },
+          'preserve'
+        );
       return;
     }
-    if (activitySelection?.meta.comparison === 'event') return;
+    const stagingSelected =
+      activitySelection?.meta.eventId === MANUAL_STAGING_EVENT_ID &&
+      Boolean(
+        staging?.items.some(
+          (item) =>
+            (
+              activitySelection.operation.objectChange?.sources ??
+              activitySelection.operation.sourceCards
+            )?.includes(item.card) ||
+            (item.card.nodeId === activitySelection.operation.id &&
+              item.card.path === activitySelection.operation.path)
+        )
+      );
+    if (staging?.items.length) {
+      if (
+        activitySelection?.meta.comparison === 'event' &&
+        activitySelection.meta.eventId !== MANUAL_STAGING_EVENT_ID
+      )
+        return;
+      const groups = stagedObjectGroups(staging.items, staging.current);
+      const group =
+        (stagingSelected
+          ? groups.find((entry) => entry.card.path === activitySelection?.operation.path)
+          : undefined) ?? groups[0]!;
+      if (
+        stagingSelected &&
+        composeValuesEqual(activitySelection?.operation.beforeValue, group.card.before) &&
+        composeValuesEqual(activitySelection?.operation.afterValue, group.card.after) &&
+        activitySelection?.operation.objectChange?.sources.length ===
+          group.card.objectChange?.sources.length
+      )
+        return;
+      const item = group.items[0]!;
+      onActivitySelect({
+        operation: activityOperation(group.card, item.reason),
+        meta: {
+          eventId: MANUAL_STAGING_EVENT_ID,
+          actor: 'You',
+          channel: 'manual',
+          timestamp: item.createdAt,
+          comparison: 'event',
+        },
+      });
+      return;
+    }
+    if (
+      activitySelection?.meta.comparison === 'event' &&
+      activitySelection.meta.eventId !== MANUAL_STAGING_EVENT_ID
+    )
+      return;
     const event = groupComposeActivity(activity.actions)[0];
     if (!event) return;
     const card = composeEventCards(event, activity.cards)[0];
@@ -1332,237 +2127,90 @@ function ProposedDraftPanel({
     const action = event.actions.findLast((entry) =>
       activity.cards[entry.actionId]?.some((item) => item.nodeId === card.nodeId)
     )!;
-    onActivitySelect({
-      operation: activityOperation(card, action.reason),
-      meta: {
-        eventId: event.id,
-        actionId: action.actionId,
-        actor: action.actor.id === 'human:local-user' ? 'You' : action.actor.id,
-        channel: action.channel,
-        timestamp: action.publishedAt,
-        comparison: 'event',
+    onActivitySelect(
+      {
+        operation: activityOperation(card, action.reason),
+        meta: {
+          eventId: event.id,
+          actionId: action.actionId,
+          actor: action.actor.id === 'human:local-user' ? 'You' : action.actor.id,
+          channel: action.channel,
+          timestamp: action.publishedAt,
+          comparison: 'event',
+        },
       },
-    });
+      'preserve'
+    );
   }, [
     activity.view,
+    schemaSelected,
     activity.actions,
     activity.cards,
     activitySelection,
     onActivitySelect,
     changeScope,
+    staging?.items,
+    staging?.current,
   ]);
-  const renderChangeCard = (
-    operation: WorkspaceYOpsDraftOperation,
-    index: number,
-    meta?: ComposeActivityMeta
-  ) => {
-    const selected = meta
-      ? activitySelection?.meta.eventId === meta.eventId &&
+  const renderChangeRow = (operation: WorkspaceYOpsDraftOperation, meta?: ComposeActivityMeta) => {
+    const selected = Boolean(
+      !schemaSelected &&
+        meta &&
+        activitySelection?.meta.eventId === meta.eventId &&
         activitySelection.operation.id === operation.id &&
         activitySelection.operation.path === operation.path
-      : !activitySelection && currentStep === index;
-    const selectChange = (panel: 'history' | 'chat' = 'history') =>
-      meta ? onActivitySelect({ operation, meta }, panel) : onStepChange(index);
-    const stamp = meta?.timestamp ?? candidate.updatedAt;
-    const field = composeFieldPresentation(candidate, operation);
-    const FieldIcon = field.icon;
-    const operationSource =
-      meta && !operation.sourceRefs?.length
-        ? undefined
-        : findWorkspaceReviewSource(candidate.sourceBundle, operation.sourceRefs?.[0]);
-    const beforeValue = operation.beforeValue;
-    const afterValue = meta ? operation.afterValue : (operation.afterValue ?? operation.summary);
-    const addedRequirement =
-      field.label === 'Requirement' && beforeValue === undefined && afterValue !== undefined;
-    const valueLabels = addedRequirement
-      ? { before: 'Absent', after: composeNodeContent(afterValue) ?? 'No content recorded' }
-      : composeValueChangeLabels(
-          beforeValue,
-          afterValue,
-          meta ? 'Absent' : 'Current value',
-          meta ? 'Absent' : 'Updated'
-        );
-    const cardTitle =
-      composeNodeTitle(afterValue) ??
-      composeNodeTitle(beforeValue) ??
-      (meta?.comparison === 'draft' && field.label === 'Requirement' && afterValue !== undefined
-        ? valueLabels.after
-        : composePathLabel(operation.path, operation.id));
-    const cardReason = operation.reason ?? operation.summary;
-    const showReason =
-      cardReason !== `Change ${operation.path}` &&
-      cardReason.trim() !== '' &&
-      cardReason !== cardTitle &&
-      cardReason !== valueLabels.after;
-    const valueChange = composeTextChangeSegments(valueLabels.before, valueLabels.after);
+    );
+    const onSelect = () => {
+      if (meta) onActivitySelect({ operation, meta }, 'history');
+    };
+    if (meta?.comparison === 'draft') {
+      return (
+        <ComposeDraftChangeRow
+          key={`${operation.id}:${operation.path}`}
+          operation={operation}
+          Icon={composeFieldPresentation(candidate, operation).icon}
+          selected={selected}
+          onSelect={onSelect}
+          onEdit={() =>
+            onActivitySelect(
+              { operation, meta: { ...meta, editRequest: ++editRequest.current } },
+              'history'
+            )
+          }
+        />
+      );
+    }
     return (
-      <section
-        className={cn(composeStyles.actionCard, selected && composeStyles.current)}
-        data-history-available={Boolean(meta)}
+      <ComposeActivityChangeRow
         key={`${meta?.eventId ?? 'proposal'}:${operation.id}:${operation.path}`}
-        onClick={meta ? () => selectChange() : undefined}
-      >
-        <div className={composeStyles.actionTop}>
-          <span className={composeStyles.actionNumber}>
-            <FieldIcon aria-hidden="true" />
-          </span>
-          <button
-            className={composeStyles.actionHeading}
-            disabled={!meta}
-            onClick={(event) => {
-              event.stopPropagation();
-              if (meta) selectChange();
-            }}
-            title={cardTitle}
-            type="button"
-          >
-            <span className={composeStyles.actionTitle}>{cardTitle}</span>
-            <span className={composeStyles.fieldType}>
-              {field.label}
-              {addedRequirement ? ' · Added' : ''}
-            </span>
-          </button>
-          <button
-            aria-label={`Discuss ${cardTitle}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              selectChange('chat');
-              document
-                .querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')
-                ?.focus();
-            }}
-            type="button"
-          >
-            <MessageSquare aria-hidden="true" />
-          </button>
-          <button
-            aria-label={`Revise ${cardTitle}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              selectChange('chat');
-              if (!activity.enabled)
-                controller.chat.setInput(
-                  `Revise “${cardTitle}” while preserving its source evidence.`
-                );
-              document
-                .querySelector<HTMLTextAreaElement>('[aria-label="Workspace instruction"]')
-                ?.focus();
-            }}
-            type="button"
-          >
-            <Pencil aria-hidden="true" />
-          </button>
-        </div>
-        <div className={composeStyles.collapsedDetail}>
-          <div className={composeStyles.values}>
-            <div>
-              <span
-                className={`${composeStyles.value} ${composeStyles.before}`}
-                title={valueLabels.before}
-              >
-                {valueChange.prefix}
-                {valueChange.before ? <del>{valueChange.before}</del> : null}
-                {valueChange.suffix}
-              </span>
-              <span className={composeStyles.valueLabel}>
-                {meta?.comparison === 'event' ? 'Before event' : 'Current (base)'}
-              </span>
-            </div>
-            <ArrowRight aria-hidden="true" className={composeStyles.valueArrow} />
-            <div>
-              <span
-                className={`${composeStyles.value} ${composeStyles.after}`}
-                title={valueLabels.after}
-              >
-                {valueChange.prefix}
-                {valueChange.after ? <ins>{valueChange.after}</ins> : null}
-                {valueChange.suffix}
-              </span>
-              <span className={composeStyles.valueLabel}>
-                {meta?.comparison === 'event' ? 'After event' : 'Proposed (draft)'}
-              </span>
-            </div>
-          </div>
-          {operationSource ? (
-            <div className={composeStyles.sourceRow}>
-              <FileText aria-hidden="true" className="size-4" />
-              <span className="truncate">{operationSource.title}</span>
-            </div>
-          ) : null}
-          {showReason ? <p title={cardReason}>{cardReason}</p> : null}
-          <div className={composeStyles.actionMeta}>
-            <span className={composeStyles.actionAttribution}>
-              {(
-                meta
-                  ? meta.channel === 'assistant'
-                  : candidate.yopsDraft.proposalMode === 'llm'
-              ) ? (
-                <Bot aria-hidden="true" />
-              ) : (
-                <UserRound aria-hidden="true" />
-              )}
-              {meta?.actor ? (
-                <span title={composeActorLabel(meta.actor)} className="max-w-28 truncate">
-                  {composeActorLabel(meta.actor)}
-                </span>
-              ) : null}
-              <time className={composeStyles.updatedBadge} dateTime={stamp} title={stamp}>
-                {formatRelativeTime(stamp)}
-              </time>
-            </span>
-            <span
-              className={composeStyles.sourceBadge}
-              data-tone={operationSource ? 'source' : 'draft'}
-            >
-              {operationSource
-                ? 'Source-backed'
-                : meta
-                  ? activityChannelLabel(meta.channel)
-                  : 'Draft'}
-            </span>
-            <button
-              aria-label={`Inspect ${cardTitle}`}
-              disabled={controller.isBusy || !meta}
-              onClick={(event) => {
-                event.stopPropagation();
-                selectChange();
-              }}
-              title={meta ? 'View this node history' : 'Enable Draft activity to view node history'}
-              type="button"
-            >
-              <ListTree aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-      </section>
+        operation={operation}
+        selected={selected}
+        applied={Boolean(meta?.actionId)}
+        disabled={!meta}
+        onSelect={onSelect}
+      />
     );
   };
 
   return (
     <div className={composeStyles.panel} data-change-scope={changeScope}>
-      <header className={composeStyles.panelHeader}>
-        <div className={composeStyles.panelTitleRow}>
-          <h2>Proposed changes</h2>
-          <span>{proposedChangeCount}</span>
-        </div>
-      </header>
       <ComposeActivityTimeline
         key={candidate.id}
         activity={activity}
         filter={changeFilter}
         scope={changeScope}
+        staging={staging}
+        schemaEvent={schemaEvent}
         updatedAt={candidate.updatedAt}
-        renderCard={(operation, meta) => renderChangeCard(operation, -1, meta)}
+        renderRow={renderChangeRow}
         fallback={
-          <div className={composeStyles.actionList}>
+          <div className={composeStyles.changeList}>
             {operations.length ? (
-              operations.map((operation, index) => renderChangeCard(operation, index))
+              operations.map((operation) => renderChangeRow(operation))
             ) : (
-              <section className={composeStyles.actionCard}>
-                <p className="text-xs leading-5 text-[var(--text-secondary)]">
-                  Add source evidence, then generate structured actions.
-                </p>
-              </section>
+              <p className={composeStyles.activityStatus}>
+                Add context in Chat, then describe the change you want to make.
+              </p>
             )}
           </div>
         }
@@ -1657,9 +2305,41 @@ function ReviewSurface({
   setPane: (pane: ReviewPane) => void;
 }) {
   const authoringReview = useMemo(
-    () => buildAuthoringReviewProjection(controller.candidate, activity.view, controller.review),
+    () =>
+      buildAuthoringReviewProjection(
+        controller.candidate,
+        activity.view
+          ? {
+              ...activity.view,
+              selected: null,
+              base: controller.review.schemaReview?.baseContent ?? activity.view.base,
+              current: controller.review.schemaReview?.draftContent ?? activity.view.current,
+            }
+          : null,
+        controller.review
+      ),
     [activity.view, controller.candidate, controller.review]
   );
+  const router = useRouter();
+  const reviewMounted = useRef(true);
+  useEffect(() => {
+    reviewMounted.current = true;
+    return () => {
+      reviewMounted.current = false;
+    };
+  }, []);
+  const prepareReview = () =>
+    controller.prepareReview((snapshot) => {
+      if (!reviewMounted.current) return;
+      router.replace(
+        workspaceReviewHref(snapshot.projectId, snapshot.workspaceId, {
+          snapshotId: snapshot.snapshotId,
+          branch: snapshot.review.precondition.refName,
+          pane,
+        }),
+        { scroll: false }
+      );
+    });
   const candidate = authoringReview?.candidate ?? controller.candidate;
   const operations = candidate.yopsDraft.operations;
   const [comparison, setComparison] = useState<{
@@ -1704,12 +2384,17 @@ function ReviewSurface({
     [candidate, comparisonReview]
   );
   const [selectedStructureRowId, setSelectedStructureRowId] = useState<string | null>(null);
-  const projection = controller.review.changeProjection;
   const view = controller.review.view;
   const checks = getReviewChecks(controller);
   const preparing = controller.busyAction === 'review.prepare';
-  const currentness = preparing ? 'preparing' : projection && view ? 'ready' : 'drafting';
-  const snapshotCurrent = currentness === 'ready' && Boolean(view);
+  const authoring = activity.newActivity ?? activity.view;
+  const snapshotCurrent =
+    Boolean(controller.review.reviewSnapshot) &&
+    !preparing &&
+    (!authoring ||
+      (!authoring.synchronization?.required &&
+        controller.review.reviewSnapshot?.review?.precondition.workspaceRevision ===
+          authoring.workspaceRevision));
   const committedId =
     committedReviewId(view) ??
     (controller.candidate.status === 'committed'
@@ -1737,51 +2422,48 @@ function ReviewSurface({
     structureModel.rows[0] ??
     null;
 
-  if (pane === 'source') {
-    return <WorkspaceSourceTools key={controller.candidate.id} controller={controller} />;
-  }
-
-  if (pane === 'edit') {
-    return (
-      <WorkspaceContentEditor key={controller.candidate.id} candidate={controller.candidate} />
-    );
-  }
-
-  if (pane === 'delivery') {
-    return (
-      <div className="min-h-0 flex-1 overflow-y-auto bg-[var(--surface-app)] p-4 md:p-6">
-        <OutputTargetsTab candidate={controller.candidate} />
-      </div>
-    );
-  }
+  const summary = (
+    <WorkspaceReviewSummary
+      candidate={candidate}
+      controller={controller}
+      snapshotCurrent={snapshotCurrent}
+      hasChanges={authoring?.hasChanges}
+      historyHref={getProjectIdHistoryPath(candidate.projectId, {
+        branch: authoring?.basis?.refName ?? candidate.targetBranch,
+        returnTo: workspaceReviewHref(candidate.projectId, candidate.id, {
+          branch: authoring?.basis?.refName ?? candidate.targetBranch,
+          pane,
+        }),
+      })}
+      onOpenChecks={() => setPane('checks')}
+      onPrepare={() => void prepareReview()}
+    />
+  );
 
   if (pane === 'rendered') {
     return (
-      <WorkspaceRenderedReview
-        candidate={candidate}
-        review={comparisonReview}
-        controller={controller}
-        onModeChange={onModeChange}
-        onOpenChecks={() => setPane('checks')}
-        onStructureDiff={() => setPane('changes')}
-      />
+      <>
+        {summary}
+        <WorkspaceRenderedReview
+          authoringCards={authoringVisibleCards(expandAuthoringCards(activity.view?.netDiff ?? []))}
+          authoringPreview={Boolean(authoringReview)}
+          candidate={candidate}
+          review={comparisonReview}
+          controller={controller}
+          onModeChange={onModeChange}
+          onStructureDiff={() => setPane('changes')}
+        />
+      </>
     );
   }
 
   if (pane === 'checks') {
-    return (
-      <WorkspaceReviewChecksView
-        checks={checks}
-        controller={controller}
-        onBack={() => setPane('rendered')}
-        onOpenCompose={() => onModeChange('compose')}
-        onOpenStructure={() => setPane('changes')}
-      />
-    );
+    return <WorkspaceChecksRedirect projectId={candidate.projectId} workspaceId={candidate.id} />;
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-panel)] text-[var(--text-primary)]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-card)] text-[var(--text-primary)]">
+      {summary}
       {comparisonScenario ? (
         <div className="shrink-0 border-b border-[var(--stroke-divider)] bg-[var(--status-info-muted)] px-4 py-2 text-[11px] text-[var(--text-secondary)] md:px-6">
           Compared with {comparisonScenario.label}: {comparisonScenario.operationCount} operations ·{' '}
@@ -1803,7 +2485,7 @@ function ReviewSurface({
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <div className="flex min-h-0 flex-1 overflow-hidden">
-            <main className="min-w-0 flex-1 overflow-hidden bg-[var(--surface-panel)]">
+            <main className="min-w-0 flex-1 overflow-hidden bg-[var(--surface-card)]">
               {operations.length > 0 && !structureModel.hasReplayContent ? (
                 <div className="p-5 text-[13px] text-[var(--text-secondary)]">
                   <output>
@@ -1815,13 +2497,15 @@ function ReviewSurface({
                     <button
                       type="button"
                       className="mt-3 text-[var(--accent-commit)]"
-                      onClick={() => void controller.prepareReview()}
+                      disabled={controller.isBusy || authoring?.hasChanges === false}
+                      onClick={() => void prepareReview()}
                     >
                       Prepare exact review
                     </button>
                   )}
                 </div>
-              ) : structureModel.rows.length > 0 && operations.length > 0 ? (
+              ) : structureModel.rows.length > 0 &&
+                (operations.length > 0 || structureModel.hasReplayContent) ? (
                 <WorkspaceReviewStructureView
                   activeRowId={activeStructureRow?.id ?? null}
                   candidate={candidate}
@@ -1865,6 +2549,75 @@ function ReviewSurface({
         </div>
       </div>
     </div>
+  );
+}
+
+function WorkspaceReviewSummary({
+  candidate,
+  controller,
+  snapshotCurrent,
+  hasChanges,
+  historyHref,
+  onOpenChecks,
+  onPrepare,
+}: {
+  candidate: WorkspaceCandidate;
+  controller: WorkspaceComposeReviewController;
+  snapshotCurrent: boolean;
+  hasChanges: boolean | undefined;
+  historyHref: string;
+  onOpenChecks: () => void;
+  onPrepare: () => void;
+}) {
+  const snapshot = controller.review.reviewSnapshot;
+  const checks = getReviewChecks(controller);
+  const preparing = controller.busyAction === 'review.prepare';
+  const status = preparing
+    ? 'Preparing review…'
+    : hasChanges === false
+      ? EMPTY_WORKSPACE_REVIEW
+      : snapshot && !snapshotCurrent
+        ? 'The branch or Draft changed. Prepare review again.'
+        : snapshot
+          ? 'Review snapshot ready for decision.'
+          : 'Prepare a fixed snapshot to approve and commit here.';
+  return (
+    <section aria-label="Review readiness" className={reviewStyles.readiness}>
+      <div className={reviewStyles.readinessSummary}>
+        <strong>
+          Draft r{candidate.revision ?? 1} → {candidate.targetBranch || 'main'}
+        </strong>
+        <span aria-live="polite">{status}</span>
+        <details>
+          <summary>
+            Check summary · {checks.filter((check) => check.status === 'passed').length}/
+            {checks.length} passed
+          </summary>
+          <ul>
+            {checks.map((check) => (
+              <li key={check.label}>
+                <CheckStatusMark status={check.status} />
+                <span>{check.label}</span>
+                <CheckStatusBadge status={check.status} />
+              </li>
+            ))}
+          </ul>
+        </details>
+      </div>
+      <div className={reviewStyles.readinessActions}>
+        <button
+          disabled={controller.isBusy || hasChanges === false}
+          onClick={onPrepare}
+          type="button"
+        >
+          {preparing ? 'Preparing…' : 'Prepare review'}
+        </button>
+        <button onClick={onOpenChecks} type="button">
+          Open Run <ExternalLink aria-hidden="true" />
+        </button>
+        <NextLink href={historyHref}>View History</NextLink>
+      </div>
+    </section>
   );
 }
 
@@ -1933,6 +2686,7 @@ function WorkspaceSourceTools({ controller }: { controller: WorkspaceComposeRevi
 
 function ResultYamlPane({
   model,
+  changeCounts,
   branch,
   selectedRow,
   onSelectRow,
@@ -1941,6 +2695,7 @@ function ResultYamlPane({
   validationReady,
 }: {
   model: WorkspaceReviewStructureModel;
+  changeCounts: { added: number; modified: number; removed: number };
   branch: string;
   selectedRow: WorkspaceReviewStructureRow | null;
   onSelectRow: (id: string) => void;
@@ -1973,6 +2728,7 @@ function ResultYamlPane({
 
   return (
     <WorkspaceReviewCodeView
+      changeCounts={changeCounts}
       branch={branch}
       rootKey={model.rootKey}
       validationReady={validationReady}
@@ -2014,22 +2770,22 @@ interface WorkspaceReviewDiffMeta {
 type WorkspaceReviewDiffChange = StructuredDiffChange & { path: string };
 
 function WorkspaceRenderedReview({
+  authoringCards = [],
+  authoringPreview = false,
   candidate,
   review,
   controller,
   onModeChange,
-  onOpenChecks,
   onStructureDiff,
 }: {
+  authoringCards?: WorkspaceAuthoringCard[];
+  authoringPreview?: boolean;
   candidate: WorkspaceCandidate;
   review: WorkspaceComposeReviewController['review'];
   controller: WorkspaceComposeReviewController;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
-  onOpenChecks: () => void;
   onStructureDiff: () => void;
 }) {
-  const router = useRouter();
-  const reviewSnapshot = controller.review.reviewSnapshot;
   const structure = useMemo(
     () => buildWorkspaceReviewStructureModel(candidate, review),
     [candidate, review]
@@ -2047,660 +2803,201 @@ function WorkspaceRenderedReview({
     () => structure.rows.filter((row) => row.diff?.exact),
     [structure.rows]
   );
-  const selectedRow = changedRows[0] ?? structure.rows[0] ?? null;
+  const proposedChanges = authoringPreview ? authoringVisibleCards(authoringCards) : [];
+  const authoringTitle =
+    rendered.requirements[0]?.title?.trim() ||
+    (proposedChanges[0]
+      ? composeValueLabel(proposedChanges[0].after, composePathLabel(proposedChanges[0].path))
+      : '');
+  const renderTitle = authoringPreview
+    ? authoringTitle || rendered.title || candidate.title
+    : rendered.title || candidate.title;
+  const priorTitle = authoringPreview
+    ? selectPrdRenderModel(structure.baseline).requirements.find(
+        (entry) => entry.key === rendered.requirements[0]?.key
+      )?.title
+    : selectPrdRenderModel(structure.baseline).title;
+  const renderLede = authoringPreview
+    ? rendered.audience || rendered.problem || rendered.lede
+    : rendered.audience || rendered.problem || candidate.summary;
+  const showPrdBoilerplate = !authoringPreview;
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const selectedRow =
+    structure.rows.find((row) => row.path === selectedPath) ??
+    changedRows[0] ??
+    structure.rows[0] ??
+    null;
+  const selectPath = (path: string) => {
+    const exact = structure.rows.find((row) => row.path === path);
+    const child = changedRows.find((row) => row.path.startsWith(`${path}/`));
+    setSelectedPath((exact ?? child)?.path ?? path);
+  };
   const selectedKind = selectedRow?.diff?.kind;
-  const selectedSource = selectedRow
-    ? workspaceReviewSourceDisplay(candidate, selectedRow, selectedRow.path)
-    : null;
-  const reviewChecks = getReviewChecks(controller);
   const copyPath = () => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       void navigator.clipboard.writeText(selectedRow?.path ?? 'prd');
     }
   };
   const revise = () => {
-    controller.chat.setInput(`Revise ${selectedRow?.path ?? 'prd'}: `);
+    controller.prefillAssistant(`Revise ${selectedRow?.path ?? 'prd'}: `);
     onModeChange('compose');
   };
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-panel)]">
-      {controller.error ? (
-        <div
-          role="alert"
-          className="border-b border-[var(--status-error)]/30 bg-[var(--status-error-muted)] px-7 py-2 text-xs text-[var(--status-error)]"
-        >
-          {controller.error}
-        </div>
-      ) : null}
-      <main className="flex min-h-0 w-full flex-1 overflow-hidden bg-[var(--surface-panel)] max-lg:flex-col max-lg:overflow-y-auto">
-        <section
-          aria-label="Rendered result"
-          className="flex min-h-0 w-[60%] shrink-0 flex-col overflow-hidden border-r border-[var(--stroke-default)] bg-[var(--surface-panel)] max-lg:min-h-[680px] max-lg:w-full max-lg:border-b max-lg:border-r-0"
-        >
-          <div className="flex shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-6 py-3">
-            <div>
-              <h2 className="text-[14px] font-semibold leading-tight text-[var(--text-primary)]">
-                Rendered result · {_formatProposalSchemaLabel(candidate)}
-              </h2>
-              <p className="mt-0.5 text-[12px] text-[var(--text-secondary)]">
-                Preview generated from draft r{candidate.revision ?? 1}
-              </p>
-            </div>
-            <button
-              className="flex items-center gap-1.5 text-[13px] font-medium text-[var(--color-brand)] transition-colors hover:text-[var(--color-brand-hover)]"
-              onClick={onStructureDiff}
-              type="button"
-            >
-              <ExternalLink aria-hidden="true" className="size-4" /> Open structure diff
+    <div className={reviewStyles.renderSurface}>
+      {controller.error ? <p role="alert">{controller.error}</p> : null}
+      <main className={reviewStyles.columns}>
+        <section aria-label="Rendered result" className={reviewStyles.document}>
+          <h1>{renderTitle}</h1>
+          {priorTitle && priorTitle !== renderTitle ? (
+            <p className={reviewStyles.lead}>
+              Replaces <span className={reviewStyles.previousTitle}>{priorTitle}</span>
+            </p>
+          ) : renderLede ? (
+            <p className={reviewStyles.lead}>{renderLede}</p>
+          ) : null}
+          <div className={reviewStyles.documentMeta}>
+            Preview generated from draft r{candidate.revision ?? 1}
+            <button onClick={onStructureDiff} type="button">
+              Open structure diff <ExternalLink aria-hidden="true" />
             </button>
           </div>
-
-          <div className="flex-1 overflow-y-auto bg-[var(--surface-panel)] px-6 py-3">
-            <h1 className="text-[28px] font-bold leading-tight tracking-tight text-[var(--text-primary)]">
-              {rendered.title || candidate.title}
-            </h1>
-            <p className="mb-2 mt-0.5 text-[16px] text-[var(--text-secondary)]">
-              {rendered.audience || rendered.problem || candidate.summary}
-            </p>
-
-            <section className="relative mb-2 pl-4">
-              <div className="absolute bottom-0 left-0 top-0 w-[3px] rounded-full bg-[var(--status-info)]" />
-              <div className="mb-1 flex items-center gap-2">
-                <h3 className="text-[14px] font-bold text-[var(--text-primary)]">Summary</h3>
-                {changedRows.some((row) => /\/summary\/outcome$/.test(row.path)) ? (
-                  <span className="rounded-full bg-[var(--status-info-muted)] px-2 py-0.5 text-[11px] font-semibold text-[var(--status-info)]">
-                    Updated
-                  </span>
-                ) : null}
-              </div>
-              <div className="rounded-md bg-[var(--color-brand-muted)]/60 px-3 py-1.5 text-[13px] leading-5 text-[var(--color-brand-hover)]">
-                {rendered.outcome || 'No outcome has been recorded.'}
-              </div>
-            </section>
-
-            <section className="mb-2 pl-4">
-              <h3 className="mb-1 text-[14px] font-bold text-[var(--text-primary)]">Purpose</h3>
-              <p className="text-[13px] leading-5 text-[var(--text-secondary)]">
-                {rendered.problem || candidate.summary}
-              </p>
-            </section>
-
-            <section className="mb-2 pl-4">
-              <h3 className="mb-1 text-[14px] font-bold text-[var(--text-primary)]">
-                Rollout plan
-              </h3>
-              <div className="flex flex-col overflow-hidden rounded-md border border-[var(--stroke-default)]">
-                {(rolloutRows.length ? rolloutRows : [['Status', 'No rollout plan recorded.']]).map(
-                  ([label, value], index, rows) => (
-                    <div
-                      className={cn(
-                        'flex',
-                        index < rows.length - 1 && 'border-b border-[var(--stroke-default)]'
-                      )}
-                      key={`${label}:${index}`}
-                    >
-                      <div className="w-1/3 border-r border-[var(--stroke-default)] bg-[var(--surface-hover)]/50 px-3 py-0.5 text-[12px] font-medium leading-5 text-[var(--text-secondary)]">
-                        {label}
-                      </div>
-                      <div className="w-2/3 bg-[var(--surface-panel)] px-3 py-0.5 text-[12px] leading-5 text-[var(--text-secondary)]">
-                        {value}
-                      </div>
-                    </div>
-                  )
-                )}
-              </div>
-            </section>
-
-            <section className="relative mb-2 pl-4">
-              <div className="absolute bottom-0 left-0 top-0 w-[3px] rounded-full bg-[var(--status-info)]" />
-              <div className="mb-1 flex items-center gap-2">
-                <h3 className="text-[14px] font-bold text-[var(--text-primary)]">
-                  Rollback readiness
-                </h3>
-                {changedRows.some((row) => /rollback/i.test(row.path)) ? (
-                  <span className="rounded-full bg-[var(--status-info-muted)] px-2 py-0.5 text-[11px] font-semibold text-[var(--status-info)]">
-                    Updated
-                  </span>
-                ) : null}
-              </div>
-              <div className="mb-0.5 flex items-center gap-2">
-                <CircleDot aria-hidden="true" className="size-4 text-[var(--text-secondary)]" />
-                <span className="text-[13px] font-bold text-[var(--text-secondary)]">
-                  {rollback ? 'Recorded' : 'Not recorded'}
-                </span>
-              </div>
-              <p className="max-w-[95%] text-[12px] leading-[1.4] text-[var(--text-secondary)]">
-                {rollback ?? 'No rollback detail is present in the current draft.'}
-              </p>
-            </section>
-
-            {rendered.requirements.length > 0 ? (
-              <section className="mb-2 pl-4">
-                <h3 className="mb-1 text-[14px] font-bold text-[var(--text-primary)]">
-                  Requirements
-                </h3>
-                <div className="grid gap-1.5 sm:grid-cols-2">
-                  {rendered.requirements.map((requirement) => (
-                    <div className="flex items-start gap-2" key={requirement.key}>
-                      <span className="inline-flex size-4 items-center justify-center rounded-full bg-[var(--status-success)] text-[var(--on-accent)]">
-                        <Check aria-hidden="true" className="size-3" />
-                      </span>
-                      <span className="text-[12px] text-[var(--text-secondary)]">
-                        {requirement.title}
-                      </span>
+          {showPrdBoilerplate ? (
+            <>
+              <h3>Summary</h3>
+              <p>{rendered.outcome || 'No outcome has been recorded.'}</p>
+              <h3>Purpose</h3>
+              <p>{rendered.problem || candidate.summary}</p>
+              <h3>Rollout plan</h3>
+              {rolloutRows.length ? (
+                <dl>
+                  {rolloutRows.map(([label, value]) => (
+                    <div key={label}>
+                      <dt>{label}</dt>
+                      <dd>{value}</dd>
                     </div>
                   ))}
-                </div>
-              </section>
-            ) : null}
-
-            <section className="pl-4">
-              <h3 className="mb-1 text-[14px] font-bold text-[var(--text-primary)]">Notes</h3>
-              <p className="text-[13px] leading-5 text-[var(--text-secondary)]">
-                {notes ? formatOperationValue(notes.value) : 'No notes recorded.'}
-              </p>
-            </section>
-          </div>
-
-          <footer className="flex shrink-0 items-center gap-4 border-t border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 py-3">
-            <button
-              className="flex items-center gap-2 rounded-md bg-[var(--surface-card)] px-3 py-1.5 text-[12px] font-semibold text-[var(--text-tertiary)] disabled:cursor-not-allowed"
-              disabled={!reviewSnapshot}
-              onClick={() => {
-                if (!reviewSnapshot) return;
-                router.push(
-                  `/project/${encodeURIComponent(reviewSnapshot.projectId)}/changes/${encodeURIComponent(reviewSnapshot.workspaceId)}/${encodeURIComponent(reviewSnapshot.snapshotId)}`
-                );
-              }}
-              type="button"
-            >
-              <Share2 aria-hidden="true" className="size-4" /> Commit changes
-            </button>
-            <div className="flex items-center gap-3">
-              <div className="h-5 w-px bg-[var(--surface-card)]" />
-              <span className="text-[12px] text-[var(--text-tertiary)]">
-                {reviewSnapshot
-                  ? 'Review snapshot ready for decision.'
-                  : 'Review snapshot not prepared.'}
-              </span>
-            </div>
-          </footer>
-        </section>
-
-        <aside
-          aria-label="Review details"
-          className="flex min-h-0 min-w-[340px] w-[40%] flex-col overflow-y-auto bg-[var(--surface-panel)] max-lg:w-full"
-        >
-          <section aria-label="Selected section" className="shrink-0 p-3">
-            <h2 className="mb-2 text-[15px] font-bold text-[var(--text-primary)]">
-              Selected section
-            </h2>
-            <div className="mb-1 flex items-center justify-between">
-              <h3 className="text-[14px] font-bold text-[var(--text-primary)]">
-                {selectedRow?.path ?? 'Current draft'}
+                </dl>
+              ) : (
+                <p>No rollout plan recorded.</p>
+              )}
+              <h3>Rollback readiness</h3>
+              <p>{rollback || 'No rollback detail is present in the current draft.'}</p>
+            </>
+          ) : null}
+          {proposedChanges.length > 0 ? (
+            <section>
+              <h3>
+                Proposed changes <span>{proposedChanges.length}</span>
               </h3>
-              <button
-                className="flex items-center gap-1.5 text-[12px] font-medium text-[var(--color-brand)] transition-colors hover:text-[var(--color-brand-hover)]"
-                onClick={copyPath}
-                type="button"
-              >
-                <Copy aria-hidden="true" className="size-3.5" /> Copy path
-              </button>
-            </div>
-            <div className="mb-2 flex items-center gap-2">
-              <code className="inline-block rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-hover)] px-2.5 py-1 text-[11px] leading-4 text-[var(--text-secondary)]">
-                {selectedRow?.path ?? 'prd'}
-              </code>
-              <span
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold',
-                  selectedKind === 'added'
-                    ? 'border-[var(--diff-added-border)] bg-[var(--diff-added-bg)] text-[var(--diff-added-text)]'
-                    : selectedKind === 'removed'
-                      ? 'border-[var(--diff-removed-border)] bg-[var(--diff-removed-bg)] text-[var(--diff-removed-text)]'
-                      : selectedKind === 'modified'
-                        ? 'border-[var(--diff-modified-border)] bg-[var(--diff-modified-bg)] text-[var(--diff-modified-text)]'
-                        : 'border-[var(--stroke-divider)] bg-[var(--surface-app)] text-[var(--text-secondary)]'
-                )}
-              >
-                <CircleDot aria-hidden="true" className="size-3" />{' '}
-                {selectedRow ? workspaceReviewKindLabel(selectedRow) : 'Unchanged'}
-              </span>
-            </div>
-            <div className="mt-2">
-              <div className="mb-1 text-[11px] text-[var(--text-secondary)]">Source</div>
-              <div className="flex items-center justify-between rounded-md border border-[var(--color-brand-muted)]/50 bg-[var(--color-brand-muted)]/40 px-3 py-1.5">
-                <div className="flex items-center gap-2 text-[12px] text-[var(--text-secondary)]">
-                  <FileText aria-hidden="true" className="size-4 text-[var(--color-brand)]" />{' '}
-                  {selectedSource?.label ?? 'No source material linked'}
-                </div>
+              <div className={reviewStyles.tableScroll}>
+                <table className={reviewStyles.changes}>
+                  <thead>
+                    <tr>
+                      <th>Field</th>
+                      <th>Before</th>
+                      <th>After</th>
+                      <th aria-label="Change type" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {proposedChanges.map((card) => {
+                      const values = composeValueChangeLabels(card.before, card.after);
+                      const kind =
+                        card.before === undefined
+                          ? 'added'
+                          : card.after === undefined
+                            ? 'removed'
+                            : 'modified';
+                      return (
+                        <tr
+                          key={`${card.nodeId}:${card.path}`}
+                          data-selected={selectedPath === card.path}
+                        >
+                          <th>
+                            <button
+                              onClick={() => selectPath(card.path ?? card.nodeId)}
+                              type="button"
+                            >
+                              {composePathLabel(card.path)}
+                            </button>
+                          </th>
+                          <td>{card.before === undefined ? '—' : <del>{values.before}</del>}</td>
+                          <td>{card.after === undefined ? '—' : <ins>{values.after}</ins>}</td>
+                          <td>
+                            <span className={reviewStyles.kind} data-kind={kind}>
+                              {kind === 'added'
+                                ? 'Added'
+                                : kind === 'removed'
+                                  ? 'Removed'
+                                  : 'Modified'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-            </div>
-            <div className="mt-2">
-              <h4 className="mb-1 text-[13px] font-bold text-[var(--text-primary)]">
-                {selectedRow?.diff?.summary ?? 'Current draft value'}
-              </h4>
-              <p className="mb-2 text-[12px] leading-4 text-[var(--text-secondary)]">
-                {selectedRow?.diff?.reason ?? candidate.summary}
-              </p>
-              <button
-                className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-[var(--color-brand)] transition-colors hover:text-[var(--color-brand-hover)]"
-                onClick={onStructureDiff}
-                type="button"
-              >
-                <Share2 aria-hidden="true" className="size-4" /> Show in structure diff
-              </button>
-              <button
-                className="flex w-full items-center justify-center gap-2 rounded-md bg-[var(--color-brand)] py-1.5 text-[12px] font-medium text-[var(--on-accent)] transition-colors hover:bg-[var(--color-brand-hover)]"
-                onClick={revise}
-                type="button"
-              >
-                <Sparkles aria-hidden="true" className="size-4" /> Ask AI to revise
-              </button>
-            </div>
-          </section>
-          <section
-            aria-label={`Checks for draft r${candidate.revision ?? 1}`}
-            className="border-t border-[var(--stroke-default)] p-3"
-          >
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-[15px] font-bold text-[var(--text-primary)]">
-                Checks for draft r{candidate.revision ?? 1}
-              </h2>
-              <span className="text-[11px] font-medium text-[var(--text-secondary)]">
-                Review evidence
-              </span>
-            </div>
-            <div className="flex flex-col">
-              {reviewChecks.map((check, index) => (
-                <div
-                  className={cn(
-                    'flex items-start gap-3 border-b border-[var(--stroke-divider)]',
-                    index === 0 ? 'pb-2' : 'py-2'
-                  )}
-                  key={check.label}
-                >
-                  <CheckStatusMark status={check.status} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <h4 className="truncate text-[12px] font-bold text-[var(--text-primary)]">
-                        {check.label}
-                      </h4>
-                      <CheckStatusBadge status={check.status} />
-                    </div>
-                    <p className="mt-0.5 text-[11px] leading-4 text-[var(--text-secondary)]">
-                      {check.detail}
-                    </p>
-                  </div>
-                </div>
-              ))}
-
-              <div className="flex items-start gap-3 pt-2">
-                <CircleDot
-                  aria-hidden="true"
-                  className="mt-0.5 size-4 shrink-0 text-[var(--text-tertiary)]"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <h4 className="truncate text-[12px] font-bold text-[var(--text-primary)]">
-                      Review snapshot
-                    </h4>
-                    <span className="shrink-0 rounded border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-secondary)]">
-                      {reviewSnapshot ? 'Prepared' : 'Not prepared'}
-                    </span>
-                  </div>
-                  <p className="mb-1 mt-0.5 text-[11px] leading-4 text-[var(--text-secondary)]">
-                    Prepare an immutable review from the current draft.
-                  </p>
-                  <div className="flex justify-end">
+            </section>
+          ) : null}
+          {rendered.requirements.length > 0 ? (
+            <section>
+              <h3>
+                Requirements <span>{rendered.requirements.length}</span>
+              </h3>
+              <div className={reviewStyles.requirements}>
+                {rendered.requirements.map((requirement) => {
+                  const row = structure.rows.find(
+                    (entry) =>
+                      entry.path.split('/').includes(requirement.key) && entry.key === 'title'
+                  );
+                  return (
                     <button
-                      className="flex items-center gap-1.5 rounded border border-[var(--color-brand-muted)] px-3 py-1 text-[11px] font-semibold text-[var(--color-brand)] transition-colors hover:bg-[var(--color-brand-muted)] disabled:opacity-50"
-                      disabled={controller.isBusy}
-                      onClick={() => void controller.prepareReview()}
+                      key={requirement.key}
                       type="button"
+                      data-selected={Boolean(row && selectedRow?.path === row.path)}
+                      disabled={!row}
+                      onClick={() => row && setSelectedPath(row.path)}
                     >
-                      <Play aria-hidden="true" className="size-3.5 fill-current" />
-                      {controller.isBusy ? 'Preparing…' : 'Prepare review'}
+                      <CheckCircle2 aria-hidden="true" />
+                      <span>{requirement.title}</span>
                     </button>
-                  </div>
-                </div>
+                  );
+                })}
               </div>
-            </div>
-            <div className="mt-2 flex items-center gap-2 rounded-md border border-[var(--color-brand-muted)]/50 bg-[var(--color-brand-muted)]/50 px-3 py-1.5">
-              <CircleHelp
-                aria-hidden="true"
-                className="size-4 shrink-0 text-[var(--color-brand)]"
-              />
-              <p className="text-[12px] text-[var(--color-brand-hover)]">
-                Results tied to this draft; edits require recheck.
-              </p>
-            </div>
-            <button
-              className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-4 py-2.5 text-[13px] font-semibold text-[var(--on-accent)] shadow-sm transition-colors hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2"
-              onClick={onOpenChecks}
-              type="button"
-            >
-              <CheckCircle2 aria-hidden="true" className="size-[18px]" />
-              Open checks
-              <ArrowRight aria-hidden="true" className="ml-1 size-4" />
+            </section>
+          ) : null}
+          {showPrdBoilerplate || notes ? (
+            <section>
+              <h3>Notes</h3>
+              <p>{notes ? formatOperationValue(notes.value) : 'No notes recorded.'}</p>
+            </section>
+          ) : null}
+        </section>
+        <aside aria-label="Review details" className={reviewStyles.rail}>
+          <section aria-label="Selected section" className={reviewStyles.panel}>
+            <header>
+              <h2>
+                <Pencil aria-hidden="true" /> Selected change
+              </h2>
+              <button onClick={copyPath} type="button">
+                <Copy aria-hidden="true" /> Copy path
+              </button>
+            </header>
+            <code className={reviewStyles.path}>
+              {selectedRow?.path.split('/').join(' / ') ?? 'Current draft'}
+            </code>
+            <span className={reviewStyles.kind} data-kind={selectedKind}>
+              {selectedRow ? workspaceReviewKindLabel(selectedRow) : 'Unchanged'}
+            </span>
+            <button className={reviewStyles.primary} onClick={revise} type="button">
+              <Sparkles aria-hidden="true" /> Ask AI to revise
             </button>
           </section>
         </aside>
       </main>
     </div>
-  );
-}
-
-function WorkspaceReviewChecksView({
-  checks,
-  controller,
-  onBack,
-  onOpenCompose,
-  onOpenStructure,
-}: {
-  checks: ReviewCheckView[];
-  controller: WorkspaceComposeReviewController;
-  onBack: () => void;
-  onOpenCompose: () => void;
-  onOpenStructure: () => void;
-}) {
-  const candidate = controller.candidate;
-  const projectId = candidate.projectId;
-  const workspaceId = candidate.id;
-  const currentSnapshotId = controller.review.reviewSnapshot?.snapshotId ?? null;
-  const {
-    history,
-    historyError,
-    historyLoading,
-    selectedSnapshotId,
-    setSelectedSnapshotId,
-    selectedSnapshot,
-    snapshotError,
-    snapshotLoading,
-  } = useWorkspaceReviewHistory(projectId, workspaceId, currentSnapshotId);
-
-  const activeSnapshot = selectedSnapshotId ? selectedSnapshot : null;
-  const activeChecks = selectedSnapshotId
-    ? activeSnapshot
-      ? checksFromSnapshot(activeSnapshot)
-      : []
-    : checks;
-  const initialIndex = Math.max(
-    0,
-    activeChecks.findIndex((check) => check.status === 'failed')
-  );
-  const [selectedIndex, setSelectedIndex] = useState(initialIndex);
-  useEffect(() => {
-    setSelectedIndex(initialIndex);
-  }, [selectedSnapshotId, initialIndex]);
-  const selected = activeChecks[selectedIndex] ?? activeChecks[0];
-  const passedCount = activeChecks.filter((check) => check.status === 'passed').length;
-  const failedCount = activeChecks.filter((check) => check.status === 'failed').length;
-  const pendingCount = activeChecks.length - passedCount - failedCount;
-  const candidateLabel = candidate.id || `draft-v${String(candidate.revision ?? 1)}`;
-  const compactCandidate =
-    candidateLabel.length > 18 ? `${candidateLabel.slice(0, 15)}…` : candidateLabel;
-  const schemaLabel = activeSnapshot
-    ? 'Snapshot projection'
-    : _formatProposalSchemaLabel(candidate);
-  const selectedStatus = selected?.status ?? 'pending';
-  const gap = selectedSnapshotId ? null : candidate.schemaReview.gaps[0];
-  const selectedReady = selectedStatus === 'passed';
-
-  return (
-    <section aria-label="Workspace review checks" className={checksStyles.surface}>
-      <header className={checksStyles.breadcrumbBar}>
-        <div>
-          <button onClick={onBack} type="button">
-            <ArrowLeft aria-hidden="true" /> Back to Review
-          </button>
-          <i />
-          <nav aria-label="Checks breadcrumb">
-            <span>Workspaces</span>
-            <b>/</b>
-            <span>Review</span>
-            <b>/</b>
-            <strong>Checks</strong>
-          </nav>
-        </div>
-        <div className={checksStyles.draftBadge}>
-          <BoxIcon aria-hidden="true" />
-          <span>Draft v{candidate.revision ?? 1}</span>
-          <b>·</b>
-          <code>candidate {compactCandidate}</code>
-        </div>
-      </header>
-
-      <div className={checksStyles.titleBar}>
-        <div>
-          <h1>Checks</h1>
-          <span className={checksStyles.passedSummary}>
-            <Check aria-hidden="true" />
-            {passedCount} passed
-          </span>
-          {failedCount > 0 ? (
-            <>
-              <i />
-              <span className={checksStyles.failedSummary}>
-                <X aria-hidden="true" />
-                {failedCount} failed
-              </span>
-            </>
-          ) : null}
-          {pendingCount > 0 ? (
-            <>
-              <i />
-              <span className={checksStyles.pendingSummary}>
-                <CircleDot aria-hidden="true" />
-                {pendingCount} pending
-              </span>
-            </>
-          ) : null}
-        </div>
-        <button onClick={onOpenCompose} type="button">
-          <Settings aria-hidden="true" />
-          Configure checks
-        </button>
-      </div>
-
-      <div className={checksStyles.checksBody}>
-        <aside className={checksStyles.projectChecks}>
-          <h2>Project checks</h2>
-          <div>
-            {activeChecks.map((check, index) => (
-              <button
-                className={index === selectedIndex ? checksStyles.selectedItem : undefined}
-                key={check.label}
-                onClick={() => setSelectedIndex(index)}
-                type="button"
-              >
-                <CheckStatusMark status={check.status} />
-                <span>
-                  <b>{check.label}</b>
-                  <small>
-                    {check.requirement === 'system'
-                      ? 'T3X system check'
-                      : `${schemaLabel} · required`}
-                  </small>
-                </span>
-                <CheckStatusBadge status={check.status} />
-              </button>
-            ))}
-          </div>
-        </aside>
-
-        <aside className={checksStyles.runHistory}>
-          <h2>Run history</h2>
-          {historyLoading ? <output>Loading review snapshots…</output> : null}
-          {historyError ? <p role="alert">{historyError}</p> : null}
-          <button
-            className={!selectedSnapshotId ? checksStyles.selectedItem : undefined}
-            onClick={() => setSelectedSnapshotId(null)}
-            type="button"
-          >
-            <CheckStatusMark
-              status={
-                checks.some((check) => check.status === 'failed')
-                  ? 'failed'
-                  : currentSnapshotId && checks.every((check) => check.status === 'passed')
-                    ? 'passed'
-                    : 'pending'
-              }
-            />
-            <span>
-              <b>Current candidate</b>
-              <small>{currentSnapshotId ?? 'Not reviewed yet'}</small>
-            </span>
-          </button>
-          {history.map((snapshot) => (
-            <button
-              className={
-                selectedSnapshotId === snapshot.snapshot_id ? checksStyles.selectedItem : undefined
-              }
-              key={snapshot.snapshot_id}
-              onClick={() => setSelectedSnapshotId(snapshot.snapshot_id)}
-              type="button"
-            >
-              <CheckStatusMark status={snapshotCheckStatus(snapshot)} />
-              <span>
-                <b>Revision {snapshot.snapshot.review.precondition.workspaceRevision}</b>
-                <small>
-                  {new Date(snapshot.created_at).toLocaleString()} · {snapshot.snapshot_id}
-                </small>
-              </span>
-              <CheckStatusBadge status={snapshotCheckStatus(snapshot)} />
-            </button>
-          ))}
-          {!historyLoading && !historyError && history.length === 0 ? (
-            <div className={checksStyles.noHistory}>No review snapshots recorded.</div>
-          ) : null}
-        </aside>
-
-        <main className={checksStyles.checkDetail}>
-          <div className={checksStyles.detailHeading}>
-            <div>
-              <CheckStatusMark status={selectedStatus} large />
-              <h2>
-                {selected?.label ?? 'Check'} ·{' '}
-                {selectedSnapshotId ? 'Saved review' : 'Current candidate'}
-              </h2>
-              <CheckStatusBadge status={selectedStatus} ready />
-            </div>
-            <button
-              disabled={controller.isBusy}
-              onClick={() => void controller.prepareReview()}
-              type="button"
-            >
-              <RefreshCw aria-hidden="true" />
-              {controller.isBusy ? 'Preparing…' : 'Prepare current review'}
-            </button>
-          </div>
-
-          <section className={checksStyles.metadataCard}>
-            {[
-              [
-                'Candidate',
-                activeSnapshot
-                  ? activeSnapshot.snapshot.request.id
-                  : selectedSnapshotId
-                    ? 'Loading saved review'
-                    : compactCandidate,
-              ],
-              ['Schema', selectedSnapshotId ? 'Snapshot projection' : schemaLabel],
-              ['Profile', selected?.requirement ?? 'required'],
-              ['Snapshot', selectedSnapshotId ?? currentSnapshotId ?? 'Not prepared'],
-            ].map(([label, value]) => (
-              <div key={label}>
-                <span>{label}</span>
-                <p>
-                  <b>{value}</b>
-                  <Copy aria-hidden="true" />
-                </p>
-              </div>
-            ))}
-          </section>
-
-          {snapshotLoading ? <output>Loading selected review…</output> : null}
-          {snapshotError ? <p role="alert">{snapshotError}</p> : null}
-
-          {!selectedSnapshotId || activeSnapshot ? (
-            <section className={checksStyles.detailCard}>
-              <h3>Validation result</h3>
-              <div className={checksStyles.validationResult}>
-                <span
-                  className={
-                    selectedStatus === 'passed'
-                      ? checksStyles.validResult
-                      : checksStyles.invalidResult
-                  }
-                >
-                  <Check aria-hidden="true" />
-                  <b>Status:</b> {selectedStatus}
-                </span>
-                <span
-                  className={selectedReady ? checksStyles.validResult : checksStyles.invalidResult}
-                >
-                  {selectedReady ? <Check aria-hidden="true" /> : <X aria-hidden="true" />}
-                  <b>Ready:</b> {selectedReady ? 'Yes' : 'No'}
-                </span>
-                <p>
-                  {failedCount} failed · {pendingCount} pending · {passedCount} passed
-                </p>
-              </div>
-            </section>
-          ) : null}
-
-          {gap ? (
-            <section className={checksStyles.detailCard}>
-              <h3>Gap (1)</h3>
-              <div className={checksStyles.gapCard}>
-                <AlertTriangle aria-hidden="true" />
-                <div>
-                  <strong>REQUIRED_SLOT_MISSING</strong>
-                  <code>{gap}</code>
-                  <p>{gap} is required before this state is ready.</p>
-                </div>
-                <button onClick={onOpenStructure} type="button">
-                  <ExternalLink aria-hidden="true" />
-                  View in structure
-                </button>
-              </div>
-            </section>
-          ) : null}
-
-          {!selectedSnapshotId || activeSnapshot ? (
-            <section className={checksStyles.detailCard}>
-              <div className={checksStyles.cardTitle}>
-                <h3>Check detail</h3>
-                <button onClick={onOpenCompose} type="button">
-                  <ExternalLink aria-hidden="true" />
-                  Open current Compose
-                </button>
-              </div>
-              <p className={checksStyles.suggestion}>
-                {gap
-                  ? 'Add the required field with a valid value.'
-                  : (selected?.detail ?? 'No check detail is available.')}
-              </p>
-            </section>
-          ) : null}
-
-          {gap ? (
-            <section className={checksStyles.detailCard}>
-              <h3>Definition</h3>
-              <div className={checksStyles.definition}>
-                <code>{gap}</code>
-                <b>·</b>
-                <span>value</span>
-                <b>·</b>
-                <em>required</em>
-              </div>
-            </section>
-          ) : null}
-        </main>
-      </div>
-    </section>
   );
 }
 
@@ -2794,54 +3091,69 @@ function WorkspaceReviewStructureView({
   for (const row of changedRows) changeCounts[row.diff!.kind] += 1;
 
   return (
-    <section aria-label="Workspace review structure" className={diffStyles.surface}>
-      <header className={diffStyles.toolbar}>
-        <div className={diffStyles.counts}>
-          <span className={diffStyles.added}>
-            <Plus aria-hidden="true" />
-            {changeCounts.added} added
-          </span>
-          <span className={diffStyles.modified}>
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M4 12c4-4 4 4 8 0s4 4 8 0" />
-            </svg>
-            {changeCounts.modified} modified
-          </span>
-          <span className={diffStyles.removed}>
-            <Minus aria-hidden="true" />
-            {changeCounts.removed} removed
-          </span>
-        </div>
-      </header>
+    <section
+      aria-label="Workspace review structure"
+      className={cn(diffStyles.surface, diffStyles.reference)}
+    >
       <div className={diffStyles.body}>
-        {yamlModel ? (
-          <ResultYamlPane
-            branch={candidate.targetBranch}
-            model={yamlModel}
-            onSelectRow={onSelectRow}
-            preparing={preparing}
-            selectedRow={selectedRow}
-            snapshotCurrent={snapshotCurrent}
-            validationReady={
-              snapshotCurrent &&
-              checks.some(
-                (check) => check.label === 'Schema validation' && check.status === 'passed'
-              )
-            }
-          />
-        ) : (
-          <WorkspaceReviewStructureTree
-            activeRowId={selectedRow?.id ?? null}
-            modifiedLabel={modifiedLabel}
-            modifiedOnly={modifiedOnly}
-            onSelectRow={onSelectRow}
-            query={query}
-            rows={rows}
-          />
-        )}
+        <div className={diffStyles.mainColumn}>
+          {!yamlModel ? (
+            <header className={diffStyles.toolbar}>
+              <div className={diffStyles.diffHeading}>
+                <h1>Structure diff</h1>
+                <p>
+                  Base <code>{candidate.baseCommitHash?.slice(0, 7) || 'State'}</code> compared with
+                  draft <code>r{candidate.revision ?? 1}</code>
+                </p>
+              </div>
+              <div className={diffStyles.counts}>
+                <span className={diffStyles.added}>
+                  <Plus aria-hidden="true" />
+                  {changeCounts.added} added
+                </span>
+                <span className={diffStyles.modified}>
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M4 12c4-4 4 4 8 0s4 4 8 0" />
+                  </svg>
+                  {changeCounts.modified} modified
+                </span>
+                <span className={diffStyles.removed}>
+                  <Minus aria-hidden="true" />
+                  {changeCounts.removed} removed
+                </span>
+              </div>
+            </header>
+          ) : null}
+          {yamlModel ? (
+            <ResultYamlPane
+              changeCounts={changeCounts}
+              branch={candidate.targetBranch}
+              model={yamlModel}
+              onSelectRow={onSelectRow}
+              preparing={preparing}
+              selectedRow={selectedRow}
+              snapshotCurrent={snapshotCurrent}
+              validationReady={
+                snapshotCurrent &&
+                checks.some(
+                  (check) => check.label === 'Schema validation' && check.status === 'passed'
+                )
+              }
+            />
+          ) : (
+            <WorkspaceReviewStructureTree
+              reference
+              activeRowId={selectedRow?.id ?? null}
+              modifiedLabel={modifiedLabel}
+              modifiedOnly={modifiedOnly}
+              onSelectRow={onSelectRow}
+              query={query}
+              rows={rows}
+            />
+          )}
+        </div>
         <WorkspaceReviewNodeInspector
           candidate={candidate}
-          checks={checks}
           controller={controller}
           onEditInCompose={onEditInCompose}
           selectedRow={selectedRow}
@@ -2853,6 +3165,7 @@ function WorkspaceReviewStructureView({
 }
 
 export function WorkspaceReviewStructureTree({
+  reference = false,
   activeRowId,
   expansionRequest,
   modifiedLabel,
@@ -2861,6 +3174,7 @@ export function WorkspaceReviewStructureTree({
   query = '',
   rows,
 }: {
+  reference?: boolean;
   activeRowId: string | null;
   expansionRequest?: { id: number; mode: 'all' | 'none' } | null;
   modifiedLabel: string;
@@ -2894,16 +3208,34 @@ export function WorkspaceReviewStructureTree({
 
   return (
     <StateScrollArea className={diffStyles.treePane} label="Workspace structure rows">
-      <table className={diffStyles.tree}>
-        <colgroup>
-          <col className="w-[29%]" />
-          <col className="w-[34%]" />
-          <col className="w-[25%]" />
-          <col className="w-[12%]" />
-        </colgroup>
+      <table className={cn(diffStyles.tree, reference && diffStyles.referenceTree)}>
+        {reference ? (
+          <>
+            <colgroup>
+              <col style={{ width: '40%' }} />
+              <col style={{ width: '30%' }} />
+              <col style={{ width: '30%' }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Before</th>
+                <th>After</th>
+              </tr>
+            </thead>
+          </>
+        ) : (
+          <colgroup>
+            <col className="w-[29%]" />
+            <col className="w-[34%]" />
+            <col className="w-[25%]" />
+            <col className="w-[12%]" />
+          </colgroup>
+        )}
         <tbody>
           {visibleRows.map((row) => (
             <WorkspaceReviewStructureTableRow
+              reference={reference}
               expanded={filtering || isWorkspaceReviewRowExpanded(row, expansionOverrides)}
               key={row.id}
               modifiedLabel={modifiedLabel}
@@ -2920,6 +3252,7 @@ export function WorkspaceReviewStructureTree({
 }
 
 function WorkspaceReviewStructureTableRow({
+  reference,
   expanded,
   modifiedLabel,
   onSelect,
@@ -2927,6 +3260,7 @@ function WorkspaceReviewStructureTableRow({
   row,
   selected,
 }: {
+  reference?: boolean;
   expanded: boolean;
   modifiedLabel: string;
   onSelect: () => void;
@@ -2965,19 +3299,19 @@ function WorkspaceReviewStructureTableRow({
           className={diffStyles.fieldCell}
           style={{
             backgroundImage:
-              row.depth > 0
+              row.depth > 0 && !reference
                 ? 'repeating-linear-gradient(to right, transparent 0 9px, var(--stroke-default) 9px 10px, transparent 10px 28px)'
                 : undefined,
             backgroundRepeat: 'no-repeat',
-            backgroundSize: `${String(row.depth * 28)}px 100%`,
-            paddingLeft: row.depth * 28,
+            backgroundSize: `${String(row.depth * (reference ? 20 : 28))}px 100%`,
+            paddingLeft: row.depth * (reference ? 20 : 28),
           }}
         >
           {row.depth > 0 ? (
             <span
               aria-hidden="true"
               className={diffStyles.treeElbow}
-              style={{ left: row.depth * 28 - 18 }}
+              style={{ left: row.depth * (reference ? 20 : 28) - 18 }}
             />
           ) : null}
           {row.expandable ? (
@@ -2999,6 +3333,9 @@ function WorkspaceReviewStructureTableRow({
               )}
             </button>
           ) : null}
+          {reference && !row.expandable ? (
+            <FileText aria-hidden="true" className={diffStyles.scalarIcon} />
+          ) : null}
           {row.expandable ? (
             <BoxIcon
               aria-hidden="true"
@@ -3018,13 +3355,46 @@ function WorkspaceReviewStructureTableRow({
           </span>
         </span>
       </td>
-      <td className={diffStyles.valueCell}>
-        <WorkspaceReviewValueCell row={row} />
-      </td>
-      <td className={diffStyles.whyCell}>
-        <WorkspaceReviewWhyCell row={row} />
-      </td>
-      <td className={diffStyles.changedCell}>{row.diff?.exact ? modifiedLabel : '—'}</td>
+      {reference ? (
+        <>
+          <td className={diffStyles.referenceValue}>
+            {row.diff?.exact && row.diff.kind === 'added' ? (
+              <span className={diffStyles.empty}>—</span>
+            ) : row.expandable && !row.diff?.exact ? (
+              ''
+            ) : row.diff?.exact ? (
+              <del>{row.diff.beforeValue}</del>
+            ) : row.value === '-' ? (
+              <span className={diffStyles.empty}>empty</span>
+            ) : (
+              row.value
+            )}
+          </td>
+          <td className={diffStyles.referenceValue}>
+            {row.diff?.exact && row.diff.kind === 'removed' ? (
+              <span className={diffStyles.empty}>—</span>
+            ) : row.expandable && !row.diff?.exact ? (
+              ''
+            ) : row.diff?.exact ? (
+              <ins>{row.diff.afterValue}</ins>
+            ) : row.value === '-' ? (
+              <span className={diffStyles.empty}>empty</span>
+            ) : (
+              row.value
+            )}
+          </td>
+        </>
+      ) : (
+        <>
+          <td className={diffStyles.valueCell}>
+            <WorkspaceReviewValueCell row={row} />
+          </td>
+          <td className={diffStyles.whyCell}>
+            <WorkspaceReviewWhyCell row={row} />
+          </td>
+          <td className={diffStyles.changedCell}>{row.diff?.exact ? modifiedLabel : '—'}</td>
+        </>
+      )}
     </tr>
   );
 }
@@ -3094,14 +3464,12 @@ function WorkspaceReviewDiffMarker({ kind }: { kind: StructuredDiffKind }) {
 
 function WorkspaceReviewNodeInspector({
   candidate,
-  checks,
   controller,
   onEditInCompose,
   selectedRow,
   sourceLabel,
 }: {
   candidate: WorkspaceCandidate;
-  checks: ReviewCheckView[];
   controller: WorkspaceComposeReviewController;
   onEditInCompose: () => void;
   selectedRow: WorkspaceReviewStructureRow | null;
@@ -3113,8 +3481,6 @@ function WorkspaceReviewNodeInspector({
   return (
     <aside aria-label="Workspace selected change" className={diffStyles.inspector}>
       <WorkspaceReviewChangeReviewPanel
-        candidate={candidate}
-        checks={checks}
         controller={controller}
         onEditInCompose={onEditInCompose}
         row={selectedRow}
@@ -3125,15 +3491,11 @@ function WorkspaceReviewNodeInspector({
 }
 
 function WorkspaceReviewChangeReviewPanel({
-  candidate,
-  checks,
   controller,
   onEditInCompose,
   row,
   source,
 }: {
-  candidate: WorkspaceCandidate;
-  checks: ReviewCheckView[];
   controller: WorkspaceComposeReviewController;
   onEditInCompose: () => void;
   row: WorkspaceReviewStructureRow | null;
@@ -3145,7 +3507,7 @@ function WorkspaceReviewChangeReviewPanel({
   const beforeValue = workspaceReviewBeforeValue(row);
   const resultValue = workspaceReviewResultValue(row);
   const revise = () => {
-    controller.chat.setInput(`Revise ${row.path}: `);
+    controller.prefillAssistant(`Revise ${row.path}: `);
     onEditInCompose();
   };
   const copyPath = () => {
@@ -3153,115 +3515,54 @@ function WorkspaceReviewChangeReviewPanel({
   };
 
   return (
-    <>
-      <section className={diffStyles.card} aria-label="Selected change">
-        <header className={diffStyles.cardHeader}>
-          <h2>Selected change</h2>
-          <button className={diffStyles.copyButton} onClick={copyPath} type="button">
-            <Copy aria-hidden="true" className="size-3.5" /> Copy path
-          </button>
-        </header>
-        <div className={diffStyles.changeContent}>
-          <code className={diffStyles.path} title={row.path}>
-            {row.path.split('/').filter(Boolean).join('.')}
-          </code>
-          <span
-            className={cn(
-              diffStyles.badge,
-              workspaceReviewDiffBadgeClass(row.diff?.kind ?? 'modified')
-            )}
-          >
-            {workspaceReviewDiffSymbol(row.diff?.kind ?? 'modified')}{' '}
-            {workspaceReviewKindLabel(row)}
-          </span>
-          <div className={diffStyles.field}>
-            <span className={diffStyles.fieldLabel}>Before</span>
-            <div className={cn(diffStyles.fieldValue, diffStyles.before)}>{beforeValue}</div>
-          </div>
-          <div className={diffStyles.field}>
-            <span className={diffStyles.fieldLabel}>After</span>
-            <div className={cn(diffStyles.fieldValue, diffStyles.after)}>{resultValue}</div>
-          </div>
-          <p className={diffStyles.why}>
-            <strong>Why</strong>
-            {workspaceReviewEffectText(row)}
-          </p>
-          <span className={diffStyles.fieldLabel}>Source</span>
-          {source.href ? (
-            <NextLink className={diffStyles.source} href={source.href}>
-              <FileText aria-hidden="true" className="size-4 shrink-0 text-[var(--source)]" />
-              <span>{source.label}</span>
-            </NextLink>
-          ) : (
-            <div className={diffStyles.source}>
-              <FileText aria-hidden="true" className="size-4 shrink-0 text-[var(--source)]" />
-              <span>{source.label}</span>
-            </div>
+    <section className={diffStyles.card} aria-label="Selected change">
+      <header className={diffStyles.cardHeader}>
+        <h2>Selected change</h2>
+        <button className={diffStyles.copyButton} onClick={copyPath} type="button">
+          <Copy aria-hidden="true" className="size-3.5" /> Copy path
+        </button>
+      </header>
+      <div className={diffStyles.changeContent}>
+        <code className={diffStyles.path} title={row.path}>
+          {row.path.split('/').filter(Boolean).join('.')}
+        </code>
+        <span
+          className={cn(
+            diffStyles.badge,
+            workspaceReviewDiffBadgeClass(row.diff?.kind ?? 'modified')
           )}
-          <button className={diffStyles.revise} onClick={revise} type="button">
-            <Sparkles aria-hidden="true" className="size-4" /> Ask AI to revise
-          </button>
+        >
+          {workspaceReviewDiffSymbol(row.diff?.kind ?? 'modified')} {workspaceReviewKindLabel(row)}
+        </span>
+        <div className={diffStyles.field}>
+          <span className={diffStyles.fieldLabel}>Before</span>
+          <div className={cn(diffStyles.fieldValue, diffStyles.before)}>{beforeValue}</div>
         </div>
-      </section>
-      <section
-        className={diffStyles.card}
-        aria-label={`Checks for draft v${candidate.revision ?? 1}`}
-      >
-        <header className={diffStyles.cardHeader}>
-          <h2>Checks for draft v{candidate.revision ?? 1}</h2>
-        </header>
-        <div className={diffStyles.checkList}>
-          {checks.map((check) => (
-            <div className={diffStyles.checkRow} key={check.label}>
-              <span
-                className={diffStyles.checkIcon}
-                style={{
-                  background:
-                    check.status === 'passed' ? 'var(--status-success)' : 'var(--surface-app)',
-                  color: check.status === 'passed' ? 'var(--on-status)' : 'var(--text-tertiary)',
-                }}
-              >
-                {check.status === 'passed' ? (
-                  <Check aria-hidden="true" className="size-3" />
-                ) : (
-                  <CircleDot aria-hidden="true" className="size-3" />
-                )}
-              </span>
-              <span className={diffStyles.checkCopy}>
-                <strong>{check.label}</strong>
-                <span title={check.detail}>{check.detail}</span>
-              </span>
-              <span
-                className={diffStyles.checkStatus}
-                style={{
-                  background:
-                    check.status === 'passed'
-                      ? 'var(--status-success-muted)'
-                      : 'var(--surface-app)',
-                  color:
-                    check.status === 'passed' ? 'var(--status-success)' : 'var(--text-secondary)',
-                }}
-              >
-                {check.status === 'passed'
-                  ? 'Passed'
-                  : check.status === 'failed'
-                    ? 'Failed'
-                    : 'Not run'}
-              </span>
-            </div>
-          ))}
-          {checks.some((check) => check.status === 'pending') ? (
-            <button
-              className={diffStyles.runChecks}
-              onClick={() => void controller.prepareReview()}
-              type="button"
-            >
-              Run checks
-            </button>
-          ) : null}
+        <div className={diffStyles.field}>
+          <span className={diffStyles.fieldLabel}>After</span>
+          <div className={cn(diffStyles.fieldValue, diffStyles.after)}>{resultValue}</div>
         </div>
-      </section>
-    </>
+        <p className={diffStyles.why}>
+          <strong>Why</strong>
+          {workspaceReviewEffectText(row)}
+        </p>
+        <span className={diffStyles.fieldLabel}>Source</span>
+        {source.href ? (
+          <NextLink className={diffStyles.source} href={source.href}>
+            <FileText aria-hidden="true" className="size-4 shrink-0 text-[var(--source)]" />
+            <span>{source.label}</span>
+          </NextLink>
+        ) : (
+          <div className={diffStyles.source}>
+            <FileText aria-hidden="true" className="size-4 shrink-0 text-[var(--source)]" />
+            <span>{source.label}</span>
+          </div>
+        )}
+        <button className={diffStyles.revise} onClick={revise} type="button">
+          <Sparkles aria-hidden="true" className="size-4" /> Ask AI to revise
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -3270,80 +3571,6 @@ interface ReviewCheckView {
   label: string;
   requirement: 'required' | 'system';
   status: ReviewCheckStatus;
-}
-
-function buildAuthoringReviewProjection(
-  candidate: WorkspaceCandidate,
-  view: WorkspaceAuthoringView | null,
-  review: WorkspaceComposeReviewController['review']
-): {
-  candidate: WorkspaceCandidate;
-  review: WorkspaceComposeReviewController['review'];
-} | null {
-  const baseline = authoringSemanticContent(view?.base);
-  const current = authoringSemanticContent(view?.current);
-  if (!view || !baseline || !current) return null;
-
-  const operations = view.netDiff.flatMap((card, index): WorkspaceYOpsDraftOperation[] => {
-    const path = authoringSemanticPath(card.path);
-    if (!path) return [];
-    return [
-      {
-        id: card.nodeId || `authoring-change-${String(index + 1)}`,
-        op: card.after === undefined ? 'unset' : 'set',
-        path,
-        beforeValue: card.before as WorkspaceYOpsValue | undefined,
-        afterValue: card.after as WorkspaceYOpsValue | undefined,
-        summary: `Change ${path}`,
-      },
-    ];
-  });
-  const projectedCandidate: WorkspaceCandidate = {
-    ...candidate,
-    revision: view.workspaceRevision,
-    yopsDraft: {
-      ...candidate.yopsDraft,
-      id: `${candidate.yopsDraft.id}:authoring:${String(view.compositionRevision)}`,
-      operations,
-    },
-  };
-  return {
-    candidate: projectedCandidate,
-    review: {
-      ...review,
-      content: current,
-      deterministicValidation: {
-        ok: true,
-        applied: operations.length,
-        yops: [],
-        baselineTrees: baseline.trees,
-        baselineRelations: baseline.relations,
-        previewTrees: current.trees,
-        previewRelations: current.relations,
-      },
-    },
-  };
-}
-
-function authoringSemanticContent(value: unknown): SemanticContent | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const document = value as Record<string, unknown>;
-  if (document.domain !== 't3x.dev/semantic-content') return null;
-  const content = document.content;
-  if (!content || typeof content !== 'object' || Array.isArray(content)) return null;
-  const semantic = content as Record<string, unknown>;
-  if (!Array.isArray(semantic.trees) || !Array.isArray(semantic.relations)) return null;
-  return { trees: semantic.trees, relations: semantic.relations } as SemanticContent;
-}
-
-function authoringSemanticPath(path: string): string | null {
-  if (!path.startsWith('content/trees/')) return null;
-  const keys = [...path.matchAll(/\[key=(?:"([^"]+)"|([^\]]+))\]/g)].map(
-    (match) => match[1] ?? match[2]
-  );
-  const slot = path.match(/\/slots\/(.+)$/)?.[1];
-  if (slot) keys.push(slot.replace(/^"|"$/g, ''));
-  return keys.length ? keys.join('/') : null;
 }
 
 function buildWorkspaceReviewStructureModel(
@@ -4001,14 +4228,6 @@ function aggregateWorkspaceReviewValue(values: Array<string | undefined>): strin
   return unique.length === 1 ? unique[0] : undefined;
 }
 
-async function prepareAndOpenReview(
-  controller: WorkspaceComposeReviewController,
-  onModeChange: (mode: WorkspaceSurfaceMode) => void
-) {
-  onModeChange('review');
-  await controller.prepareReview();
-}
-
 function reviewSectionRows(value: unknown): Array<[string, string]> {
   if (value === undefined || value === null) return [];
   if (typeof value !== 'object' || Array.isArray(value)) {
@@ -4113,33 +4332,6 @@ function getReviewChecks(controller: WorkspaceComposeReviewController): ReviewCh
         : 'Protocol object integrity will be checked when the review snapshot is prepared.',
   });
   return checks;
-}
-
-function checksFromSnapshot(
-  snapshot: WorkspaceTransitionReviewSnapshotEnvelope
-): ReviewCheckView[] {
-  const checks = snapshot.snapshot.transition.checks;
-  return [
-    statementCheck('Deterministic replay', checks.replay, 'required', 'Replay not observed.'),
-    statementCheck('Schema validation', checks.validation, 'required', 'Validation not observed.'),
-    {
-      label: 'Object integrity',
-      requirement: 'system',
-      status: checks.objectIntegrity === 'verified' ? 'passed' : 'pending',
-      detail:
-        checks.objectIntegrity === 'verified'
-          ? 'Protocol object integrity verified.'
-          : 'Object integrity was not verified in this snapshot.',
-    },
-  ];
-}
-
-function snapshotCheckStatus(
-  snapshot: WorkspaceTransitionReviewSnapshotEnvelope
-): ReviewCheckStatus {
-  const checks = checksFromSnapshot(snapshot);
-  if (checks.some((check) => check.status === 'failed')) return 'failed';
-  return checks.every((check) => check.status === 'passed') ? 'passed' : 'pending';
 }
 
 function statementCheck(

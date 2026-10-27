@@ -54,11 +54,11 @@ test.describe('Conversation Flow', () => {
     await conv.expectTurnContent(userContent);
     await conv.expectTurnContent(assistantContent);
 
-    // Semantic role markers on ChatMessage root (data-turn-role="user|assistant")
-    await expect(page.locator('[data-turn-role="user"]').first()).toBeVisible({ timeout: 5000 });
-    await expect(page.locator('[data-turn-role="assistant"]').first()).toBeVisible({
-      timeout: 5000,
-    });
+    // Immutable source evidence exposes role labels inside one article per turn.
+    await expect(page.getByRole('article').filter({ hasText: userContent })).toContainText('user');
+    await expect(page.getByRole('article').filter({ hasText: assistantContent })).toContainText(
+      'assistant'
+    );
   });
 
   // CF-02: Turn content and extraction panel

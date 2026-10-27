@@ -40,7 +40,7 @@
     "postpack": "node ../../tools/restore-package-json.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "@t3x-dev/api": "workspace:*",
     "@t3x-dev/mcp-lib": "workspace:*",
     "drizzle-orm": "^0.45.2",
@@ -50,7 +50,7 @@
     "nanoid": "^5.1.16",
     "pg": "^8.21.0",
     "postgres": "^3.4.9",
-    "zod": "^4.2.1"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

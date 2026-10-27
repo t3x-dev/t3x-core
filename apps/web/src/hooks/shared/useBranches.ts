@@ -32,7 +32,7 @@ export interface UseBranchesResult {
 export function useBranches(projectId: string | null, enabled: boolean): UseBranchesResult {
   const [branches, setBranches] = useState<string[]>([]);
   const [branchHeads, setBranchHeads] = useState<Record<string, string | null>>({});
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(Boolean(enabled && projectId));
 
   const refresh = useCallback(async () => {
     if (!projectId) return;

@@ -4,6 +4,10 @@ import type {
   WorkspaceAuthoringCard,
 } from '@t3x-dev/api-client';
 import type { WorkspaceYOpsDraftOperation } from '@/types/workspaces';
+import {
+  type ComposeObjectCard,
+  composeObjectChangeCards,
+} from './workspaces/composeObjectChanges';
 
 export interface ComposeActivityEvent {
   id: string;
@@ -19,83 +23,73 @@ export interface ComposeActivityMeta {
   channel?: WorkspaceAuthoringAction['channel'];
   timestamp?: string;
   comparison: 'event' | 'draft';
+  editRequest?: number;
 }
 export interface ComposeActivitySelection {
   operation: WorkspaceYOpsDraftOperation;
   meta: ComposeActivityMeta;
 }
 
-/** Presentation grouping, not a new persisted session or a rewrite of the action ledger. */
+/** One published action is one P. Ungrouped manual cards stay in the Latest tray. */
 export function groupComposeActivity(actions: readonly WorkspaceAuthoringAction[]) {
   const ordered = [...new Map(actions.map((a) => [a.actionId, a])).values()].sort(
     (a, b) => a.sequence - b.sequence
   );
-  const events: ComposeActivityEvent[] = [];
-  for (const action of ordered) {
-    const event = events.at(-1);
-    const previous = event?.actions.at(-1);
-    const gap = previous ? Date.parse(action.publishedAt) - Date.parse(previous.publishedAt) : 0;
-    const contiguous =
-      previous &&
-      action.sequence === previous.sequence + 1 &&
-      action.beforeRevision === previous.afterRevision;
-    const sameActor =
-      previous &&
-      action.actor.id === previous.actor.id &&
-      action.actor.kind === previous.actor.kind &&
-      action.actor.delegator?.id === previous.actor.delegator?.id &&
-      action.actor.delegator?.kind === previous.actor.delegator?.kind;
-    if (
-      event &&
-      contiguous &&
-      sameActor &&
-      previous?.channel === 'manual' &&
-      action.channel === 'manual' &&
-      Number.isFinite(gap) &&
-      gap >= 0 &&
-      gap < 30 * 60000
-    ) {
-      event.actions.push(action);
-      event.endedAt = action.publishedAt;
-    } else {
-      events.push({
-        id: action.actionId,
-        actions: [action],
-        startedAt: action.publishedAt,
-        endedAt: action.publishedAt,
-        idleBeforeMs: contiguous && Number.isFinite(gap) && gap >= 30 * 60000 ? gap : 0,
-      });
-    }
-  }
-  return events.reverse();
+  return ordered
+    .map((action) => ({
+      id: action.actionId,
+      actions: [action],
+      startedAt: action.publishedAt,
+      endedAt: action.publishedAt,
+      idleBeforeMs: 0,
+    }))
+    .reverse();
 }
 
 export function composeEventCards(
   event: ComposeActivityEvent,
   cards: Record<string, WorkspaceAuthoringCard[]>
 ) {
-  const merged = new Map<string, WorkspaceAuthoringCard>();
-  for (const action of event.actions)
-    for (const card of cards[action.actionId] ?? []) {
-      const first = merged.get(card.nodeId);
-      merged.set(
-        card.nodeId,
-        first
-          ? { ...card, before: first.before, beforePath: first.beforePath ?? first.path }
-          : { ...card }
-      );
+  const merged: WorkspaceAuthoringCard[] = [];
+  for (const action of event.actions) {
+    // Expand bootstrap containers first so later edits match their actual nodes.
+    const expanded = expandComposeActivityCards(cards[action.actionId] ?? []);
+    for (const card of expanded) {
+      let index = merged.findIndex((item) => item.path === card.path);
+      if (index < 0 && card.beforePath)
+        index = merged.findIndex((item) => item.path === card.beforePath);
+      if (index < 0) {
+        const identities = merged.flatMap((item, i) => (item.nodeId === card.nodeId ? [i] : []));
+        if (
+          identities.length === 1 &&
+          expanded.filter((item) => item.nodeId === card.nodeId).length === 1
+        )
+          index = identities[0];
+      }
+      const first = merged[index];
+      const combined = first
+        ? { ...card, before: first.before, beforePath: first.beforePath ?? first.path }
+        : { ...card };
+      if (index < 0) merged.push(combined);
+      else merged[index] = combined;
     }
-  return expandComposeActivityCards([...merged.values()]);
+  }
+  return merged;
 }
 
 export function expandComposeActivityCards(cards: readonly WorkspaceAuthoringCard[]) {
+  return composeObjectChangeCards(cards).flatMap((card) =>
+    card.objectChange || card.sourceCards ? [card] : expandComposeActivityCard(card)
+  );
+}
+
+/** Preserve the existing operation projection used by Review and assistant receipts. */
+export function expandAuthoringCards(cards: readonly WorkspaceAuthoringCard[]) {
   return cards.flatMap(expandComposeActivityCard);
 }
 
 function expandComposeActivityCard(card: WorkspaceAuthoringCard): WorkspaceAuthoringCard[] {
-  if (JSON.stringify(card.before) === JSON.stringify(card.after)) {
-    return card.beforePath && card.beforePath !== card.path ? [card] : [];
-  }
+  if (JSON.stringify(card.before) === JSON.stringify(card.after)) return [];
   if (
     (Array.isArray(card.before) || card.before === undefined) &&
     (Array.isArray(card.after) || card.after === undefined)
@@ -140,15 +134,25 @@ function expandComposeActivityCard(card: WorkspaceAuthoringCard): WorkspaceAutho
     addedOrRemoved &&
     Array.isArray(addedOrRemoved.children) &&
     addedOrRemoved.children.length > 0 &&
-    Object.keys(addedOrRemoved).every((key) => ['key', 'slots', 'children'].includes(key)) &&
-    Object.keys(recordValue(addedOrRemoved.slots) ?? {}).length === 0
+    Object.keys(addedOrRemoved).every((key) => ['key', 'slots', 'children'].includes(key))
   ) {
-    return expandComposeActivityCard({
+    // A container can have its own slots as well as children. Neither may hide
+    // the other when the entire subtree is introduced in a single operation.
+    const slots = Object.keys(recordValue(addedOrRemoved.slots) ?? {}).map((key) => ({
       ...card,
-      path: `${card.path}/children`,
-      before: before?.children as TransitionProtocolValue | undefined,
-      after: after?.children as TransitionProtocolValue | undefined,
-    });
+      path: `${card.path}/slots/${key}`,
+      before: recordValue(before?.slots)?.[key] as TransitionProtocolValue | undefined,
+      after: recordValue(after?.slots)?.[key] as TransitionProtocolValue | undefined,
+    }));
+    return [
+      ...slots,
+      ...expandComposeActivityCard({
+        ...card,
+        path: `${card.path}/children`,
+        before: before?.children as TransitionProtocolValue | undefined,
+        after: after?.children as TransitionProtocolValue | undefined,
+      }),
+    ];
   }
   if (before && after && Array.isArray(before.children) && Array.isArray(after.children)) {
     const beforeRest = { ...before, children: undefined };
@@ -191,6 +195,8 @@ export function activityOperation(
     op: card.after === undefined ? 'unset' : 'set',
     beforeValue: card.before,
     afterValue: card.after,
+    objectChange: (card as ComposeObjectCard).objectChange,
+    sourceCards: (card as ComposeObjectCard).sourceCards,
     reason,
     summary: reason ?? `Change ${card.path}`,
   };

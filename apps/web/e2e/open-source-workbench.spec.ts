@@ -87,7 +87,6 @@ test.describe('Open-source workbench visual smoke', () => {
   let promptBaseHash: string;
   let promptTargetHash: string;
   let mergeId: string;
-  let leafId: string;
 
   test.beforeAll(async ({ request }) => {
     const { projectId: id } = await createTestProject(
@@ -110,7 +109,7 @@ test.describe('Open-source workbench visual smoke', () => {
         parents: [promptBaseHash],
       }
     );
-    leafId = await createTestLeaf(request, promptTargetHash, projectId);
+    await createTestLeaf(request, promptTargetHash, projectId);
 
     const mergeBaseHash = await createTestCommitFromTrees(
       request,
@@ -186,16 +185,6 @@ test.describe('Open-source workbench visual smoke', () => {
             await expect(p.getByText('SELECTION', { exact: true })).toBeVisible({ timeout: 15000 });
             await expect(p.getByRole('button', { name: 'Details', exact: true })).toHaveCount(0);
             await expect(p.getByText('Commit Audit', { exact: true })).toHaveCount(0);
-          },
-        },
-        {
-          name: 'leaf-output',
-          path: () => `/project/${projectId}/leaf/${leafId}`,
-          ready: async (p) => {
-            await expect(p.getByText('Output').first()).toBeVisible({ timeout: 15000 });
-            await expect(p.getByRole('region', { name: 'Legacy Leaf archive' })).toBeVisible();
-            await expect(p.getByRole('button', { name: 'Generate & Verify' })).toHaveCount(0);
-            await expect(p.getByRole('button', { name: 'Export record' })).toBeVisible();
           },
         },
         {

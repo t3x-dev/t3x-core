@@ -9,7 +9,12 @@
  * Extracted from useConversationChat (PR23).
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect } from 'react';
+import {
+  type SourceThreadSession,
+  useSourceThreadSessionRef,
+  useSourceThreadSessionState,
+} from '@/hooks/sourceThreads/sourceThreadSession';
 import type { Citation } from '@/infrastructure/chat';
 
 export interface UseChatStreamStateReturn {
@@ -31,31 +36,60 @@ export interface UseChatStreamStateReturn {
   stopGenerating: () => void;
 }
 
-export function useChatStreamState(): UseChatStreamStateReturn {
-  const [streamingContent, setStreamingContent] = useState('');
-  const [isChatStreaming, setIsChatStreaming] = useState(false);
-  const [citations, setCitations] = useState<Citation[]>([]);
-  const [searchQuery, setSearchQuery] = useState<string | null>(null);
-  const [thinkingContent, setThinkingContent] = useState('');
-  const [isThinking, setIsThinking] = useState(false);
+export function useChatStreamState(session?: SourceThreadSession): UseChatStreamStateReturn {
+  const [streamingContent, setStreamingContent] = useSourceThreadSessionState(
+    session,
+    'stream.content',
+    ''
+  );
+  const [isChatStreaming, setIsChatStreaming] = useSourceThreadSessionState(
+    session,
+    'stream.running',
+    false
+  );
+  const [citations, setCitations] = useSourceThreadSessionState<Citation[]>(
+    session,
+    'stream.citations',
+    []
+  );
+  const [searchQuery, setSearchQuery] = useSourceThreadSessionState<string | null>(
+    session,
+    'stream.search',
+    null
+  );
+  const [thinkingContent, setThinkingContent] = useSourceThreadSessionState(
+    session,
+    'stream.thinkingContent',
+    ''
+  );
+  const [isThinking, setIsThinking] = useSourceThreadSessionState(
+    session,
+    'stream.thinking',
+    false
+  );
 
-  const tokenBufferRef = useRef('');
-  const rafIdRef = useRef<number | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const tokenBufferRef = useSourceThreadSessionRef(session, 'stream.buffer', '');
+  const rafIdRef = useSourceThreadSessionRef<number | null>(session, 'stream.raf', null);
+  const abortControllerRef = useSourceThreadSessionRef<AbortController | null>(
+    session,
+    'stream.controller',
+    null
+  );
 
   // Cancel any pending RAF on unmount.
   useEffect(() => {
     return () => {
-      if (rafIdRef.current !== null) {
+      if (!session && rafIdRef.current !== null) {
         cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
       }
     };
-  }, []);
+  }, [session, rafIdRef]);
 
   const stopGenerating = useCallback(() => {
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
-  }, []);
+  }, [abortControllerRef]);
 
   return {
     streamingContent,

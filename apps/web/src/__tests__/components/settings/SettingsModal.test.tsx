@@ -154,16 +154,8 @@ vi.mock('@/components/ui/tabs', async () => {
   };
 });
 
-vi.mock('@/components/layout/CommandPalette', () => ({
-  CommandPalette: () => null,
-}));
-
 vi.mock('@/components/layout/ErrorBoundary', () => ({
   ErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
-
-vi.mock('@/components/layout/KeyboardShortcutsDialog', () => ({
-  KeyboardShortcutsDialog: () => null,
 }));
 
 vi.mock('@/components/settings/ProfileSettingsPanel', () => ({
@@ -201,8 +193,13 @@ vi.mock('@/store/pinsStore', () => ({
 }));
 
 vi.mock('@/store/projectStore', () => ({
-  useProjectStore: (selector: (state: { setNotifyCallback: typeof setProjectNotify }) => unknown) =>
-    selector({ setNotifyCallback: setProjectNotify }),
+  useProjectStore: (
+    selector: (state: {
+      setNotifyCallback: typeof setProjectNotify;
+      projects: [];
+      details: Record<string, never>;
+    }) => unknown
+  ) => selector({ setNotifyCallback: setProjectNotify, projects: [], details: {} }),
 }));
 
 vi.mock('@/store/sessionStore', () => ({

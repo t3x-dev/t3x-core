@@ -113,8 +113,6 @@
   border: 1px solid rgba(226, 232, 240, 0.8);
   border-radius: 24px;
   background-color: #fff;
-  background-image: radial-gradient(circle at 1.5px 1.5px, #cbd5e1 1px, transparent 0);
-  background-size: 24px 24px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
 }
 
@@ -231,55 +229,86 @@
   text-align: center;
 }
 
-.canvasPan {
+.canvasPan :global(.react-flow__pane) {
   cursor: grab;
-  touch-action: none;
-  user-select: none;
 }
-.canvasPanning {
+.canvasPan :global(.react-flow__pane.dragging) {
   cursor: grabbing;
 }
-.canvasPan .node {
+.canvasPan .node,
+.canvasPan .compactNode {
   pointer-events: none;
 }
-.viewport {
+.flowCanvas {
+  width: 100%;
+  height: 100%;
+}
+.flowCanvas :global(.react-flow__node) {
+  cursor: default;
+}
+.flowHandle {
+  visibility: hidden;
+  width: 1px;
+  height: 1px;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+}
+.laneBand {
   position: relative;
   width: 100%;
   height: 100%;
-  min-width: 0;
-  transform-origin: center;
-  transition: transform 180ms ease;
-}
-.viewportPanning {
-  transition: none;
-}
-.edges {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
+  border-top: 1px solid color-mix(in srgb, var(--lane-color) 18%, transparent);
+  background: color-mix(in srgb, var(--lane-color) 4%, transparent);
   pointer-events: none;
 }
-.edgeMain {
-  fill: none;
-  stroke: #6366f1;
-  stroke-width: 3;
-  stroke-opacity: 0.8;
+.laneLabel {
+  position: absolute;
+  top: 14px;
+  left: 20px;
+  display: flex;
+  max-width: 104px;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  color: var(--lane-color);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
-.edgeFeature {
-  fill: none;
-  stroke: #ec4899;
-  stroke-width: 3;
-  stroke-opacity: 0.8;
-  stroke-dasharray: 6 4;
+.minimap {
+  overflow: hidden;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
 }
-.markerMain {
-  fill: #6366f1;
+.compactNode {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 0;
+  background: transparent;
 }
-.markerFeature {
-  fill: #ec4899;
+.compactDot {
+  width: 36px;
+  height: 36px;
+  border: 4px solid #fff;
+  border-radius: 999px;
+  background: var(--lane-color);
+  box-shadow: 0 0 0 2px var(--lane-color);
+}
+.compactHash {
+  color: #334155;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 22px;
+  font-weight: 700;
 }
 .mutedIcon {
   color: #94a3b8;
@@ -292,8 +321,7 @@
 }
 
 .node {
-  position: absolute;
-  z-index: 10;
+  --lane-color: #6366f1;
   display: flex;
   width: 240px;
   flex-direction: column;
@@ -311,13 +339,14 @@
 .node:hover {
   transform: translateY(-4px);
 }
+.flowNode {
+  width: 100%;
+  min-height: 100%;
+}
 .nodeTop {
   height: 6px;
   flex: none;
-  background: #6366f1;
-}
-.nodeFeature .nodeTop {
-  background: #ec4899;
+  background: var(--lane-color);
 }
 .nodeRoot .nodeTop {
   background: #cbd5e1;
@@ -338,15 +367,10 @@
   height: 32px;
   flex: none;
   place-items: center;
-  border: 1px solid #e0e7ff;
+  border: 1px solid color-mix(in srgb, var(--lane-color) 18%, #fff);
   border-radius: 8px;
-  background: #eef2ff;
-  color: #4f46e5;
-}
-.nodeFeature .nodeIcon {
-  border-color: #fce7f3;
-  background: #fdf2f8;
-  color: #db2777;
+  background: color-mix(in srgb, var(--lane-color) 8%, #fff);
+  color: var(--lane-color);
 }
 .nodeRoot .nodeIcon {
   width: 28px;
@@ -385,17 +409,11 @@
 }
 .branchBadge {
   gap: 6px;
-  color: #4f46e5;
+  color: var(--lane-color);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-}
-.branchBadgeFeature {
-  color: #db2777;
-}
-.branchBadgeRoot {
-  color: #64748b;
 }
 .miniDot {
   width: 8px;
@@ -405,7 +423,6 @@
 }
 
 .selectedNode {
-  width: 280px;
   border: 2px solid #6366f1;
   border-radius: 16px;
   background: rgba(238, 242, 255, 0.88);

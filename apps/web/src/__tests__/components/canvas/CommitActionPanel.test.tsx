@@ -2,9 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildCommitActions } from '@/components/canvas/CommitActionPanel';
 
 describe('buildCommitActions', () => {
-  const baseOpts = {
-    onCreateLeaf: vi.fn(),
-  };
+  const baseOpts = {};
 
   it('returns neutral canvas actions without duplicating commit detail navigation', () => {
     const actions = buildCommitActions(baseOpts);
@@ -17,14 +15,6 @@ describe('buildCommitActions', () => {
     expect(actions.map((a) => a.label)).toEqual(['View Diff']);
     actions[0].onClick();
     expect(onViewDiff).toHaveBeenCalledTimes(1);
-  });
-
-  it('keeps existing leaves one click away while still allowing a new leaf', () => {
-    const onOpenLeaf = vi.fn();
-    const actions = buildCommitActions({ ...baseOpts, onOpenLeaf });
-    expect(actions.map((a) => a.label)).toEqual(['Open Leaf']);
-    actions[0].onClick();
-    expect(onOpenLeaf).toHaveBeenCalledTimes(1);
   });
 
   it('appends a Merge action when onMerge is provided', () => {

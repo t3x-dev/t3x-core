@@ -50,6 +50,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+.pnpm-store/
 lerna-debug.log*
 
 # Python (legacy)
@@ -110,6 +111,10 @@ packages/yops/src/specData.ts
 demo/
 
 # Internal working material stays outside the repository.
+.codex-ppt*/
+/.aochuang_build/
+/.chart-data-*/
+/outputs/
 /docs/plans/
 /docs/verification/
 /docs/history/

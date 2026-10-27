@@ -26,6 +26,7 @@ import {
   authoringGenerationChecks,
   authoringPreparationResource,
 } from './workspace-authoring-generation';
+import { pureDeletionPaths } from './workspace-deletion-authorization';
 
 export { PROPOSAL_GENERATION_POSTURE_PROVIDER_SOURCE } from './transition-control-plane/applicable-policy';
 
@@ -113,12 +114,32 @@ function quotesSupportClaim(quotes: readonly string[], value: string): boolean {
   );
 }
 
-function deterministicSupport(operations: readonly ProtocolValue[], quotes: readonly string[]) {
+function deterministicSupport(
+  operations: readonly ProtocolValue[],
+  quotes: readonly string[],
+  base: ProtocolValue
+) {
   const names = operations.map(operationName);
   if (names.every((name) => name !== null && DETERMINISTIC_STRUCTURAL_OPERATIONS.has(name))) {
     return true;
   }
+  // The fixed semantic envelope is transport structure, not a source claim. Only
+  // recognize the complete canonical bootstrap against an actually empty Base;
+  // arbitrary metadata, existing documents and every business value still need support.
+  const bootstrap = [
+    { set: { path: 'domain', value: 't3x.dev/semantic-content' } },
+    { set: { path: 'version', value: 1 } },
+    { set: { path: 'content', value: { trees: [], relations: [] } } },
+  ].map((operation) => canonicalizeProtocolValue(operation));
+  const isEmptyDocument = isRecord(base) && Object.keys(base).length === 0;
+  const hasCanonicalBootstrap =
+    isEmptyDocument &&
+    bootstrap.every((expected) =>
+      operations.some((operation) => canonicalizeProtocolValue(operation) === expected)
+    );
   const values = operations.flatMap((operation) => {
+    if (hasCanonicalBootstrap && bootstrap.includes(canonicalizeProtocolValue(operation)))
+      return [];
     let supportOperation = operation;
     if (operationName(operation) === 'append' && isRecord(operation)) {
       const payload = operation.append;
@@ -182,7 +203,10 @@ function proposalClaim(
 }
 
 type PostureContext = Parameters<TransitionNativeStatementProvider['verify']>[0];
-type GenerationAssessmentContext = Omit<PostureContext, 'effect'> & { operations: ProtocolValue[] };
+type GenerationAssessmentContext = Omit<PostureContext, 'effect'> & {
+  operations: ProtocolValue[];
+  authorizedDeletionPaths?: string[];
+};
 async function assessGeneration(
   context: GenerationAssessmentContext,
   options?: { supportVerifier?: ProposalGenerationSupportVerifier }
@@ -190,11 +214,25 @@ async function assessGeneration(
   const preparation = parseProposalGenerationPreparation(context.preparationFacts);
   const verifier = independentVerifier(options?.supportVerifier, preparation);
   const support: SourceSupportAssessment[] = [];
+  const authorizedGroup = (indexes: number[]) => {
+    const paths = pureDeletionPaths(indexes.map((index) => context.operations[index]));
+    return (
+      paths.length > 0 && paths.every((path) => context.authorizedDeletionPaths?.includes(path))
+    );
+  };
   for (const binding of preparation.bindings) {
     if (binding.origin !== 'source_backed') continue;
     const operations = binding.operationIndexes.map((index) => context.operations[index]!);
     const quotes = evidenceQuotes(binding);
-    if (deterministicSupport(operations, quotes)) {
+    if (authorizedGroup(binding.operationIndexes)) {
+      support.push({
+        groupId: binding.groupId,
+        outcome: 'supported',
+        method: 'human_confirmation',
+      });
+      continue;
+    }
+    if (deterministicSupport(operations, quotes, context.base.value)) {
       support.push({
         groupId: binding.groupId,
         outcome: 'supported',
@@ -304,7 +342,14 @@ async function assessGeneration(
     preparation,
     sourceSupport: support,
     conflicts: baseChanges
-      .filter((conflict) => !conflict.structural)
+      .filter(
+        (conflict) =>
+          !conflict.structural &&
+          !preparation.bindings.some(
+            (binding) =>
+              binding.groupId === conflict.groupId && authorizedGroup(binding.operationIndexes)
+          )
+      )
       .map((conflict) => ({
         groupId: conflict.groupId,
         path: conflict.path,
@@ -369,6 +414,17 @@ async function assessGeneration(
         ];
   });
   const findings = [
+    ...(context.authorizedDeletionPaths?.length
+      ? [
+          {
+            severity: 'warning' as const,
+            code: 'HUMAN_CONFIRMED_DELETION',
+            message:
+              'A human confirmed this exact deletion and version; this does not authorize new values or other changes.',
+            path: context.authorizedDeletionPaths[0],
+          },
+        ]
+      : []),
     ...report.issues.map((issue) => ({
       severity: issue.severity,
       code: issue.code,

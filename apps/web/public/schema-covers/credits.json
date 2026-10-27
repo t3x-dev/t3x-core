@@ -1,0 +1,20 @@
+{
+  "license": "https://unsplash.com/license",
+  "assets": [
+    {
+      "file": "release-editorial.jpg",
+      "author": "MARIOLA GROBELSKA",
+      "source": "https://unsplash.com/photos/abstract-background-with-orange-and-pink-hues-FBeNN4PQTo0"
+    },
+    {
+      "file": "circuit-editorial.jpg",
+      "author": "Harrison Broadbent",
+      "source": "https://unsplash.com/photos/green-circuit-board-close-up-photography-ING1Uf1Fc30"
+    },
+    {
+      "file": "agent-editorial.jpg",
+      "author": "Logan Voss",
+      "source": "https://unsplash.com/photos/abstract-purple-and-black-geometric-pattern-9GgsQzUOQ6I"
+    }
+  ]
+}

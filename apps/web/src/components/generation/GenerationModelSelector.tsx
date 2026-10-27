@@ -1,9 +1,11 @@
 'use client';
 
 import { Check, ChevronDown, ChevronRight, Search } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useDeploymentCapabilities } from '@/components/deployment/DeploymentCapabilitiesProvider';
 import { useAvailableModels } from '@/hooks/shared/useAvailableModels';
+import { useChatSessionStore } from '@/store/chatSessionStore';
 import { useSettingsModalStore } from '@/store/settingsModalStore';
 import styles from './GenerationModelSelector.module.css';
 
@@ -17,21 +19,24 @@ interface GenerationModelSelectorProps {
   onModelChange: (provider: string, model: string) => void;
 }
 
-type SelectorPane = 'effort' | 'model';
+type SelectorPane = 'effort' | 'model' | 'provider' | 'context';
 
 export function GenerationModelSelector({
   onThinkingChange,
   selectedProvider,
   selectedModel,
   supportsThinking = false,
-  thinkingEnabled = false,
   showReasoningInTrigger = true,
   onModelChange,
 }: GenerationModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const [activePane, setActivePane] = useState<SelectorPane>('model');
   const [query, setQuery] = useState('');
-  const { defaultModel, defaultProvider, providers } = useAvailableModels();
+  const preferences = useChatSessionStore();
+  const [popoverHeight, setPopoverHeight] = useState(320);
+  const { defaultModel, defaultProvider, providers, loading, availabilityError } =
+    useAvailableModels();
+  const { canAdministerProviderCredentials } = useDeploymentCapabilities();
   const openSettingsModal = useSettingsModalStore((state) => state.openSettingsModal);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -53,23 +58,40 @@ export function GenerationModelSelector({
   const currentLabel =
     currentModel?.label ||
     selectedModel ||
-    (modelOptions.length > 0 ? 'Select model' : 'No models configured');
+    (loading
+      ? 'Loading models…'
+      : availabilityError
+        ? 'Models unavailable'
+        : modelOptions.length > 0
+          ? 'Select model'
+          : 'No models available');
   const modelValueLabel =
     selectedModel === 'gpt-5.4' ? 'gpt5.4' : compactModelLabel(currentLabel, 'control');
-  const effortValueLabel = thinkingEnabled ? 'High' : 'Low';
-  const triggerLabel = showReasoningInTrigger
-    ? `${modelValueLabel} ${effortValueLabel}`
-    : modelValueLabel;
-  const canSelectEffort = Boolean(onThinkingChange && supportsThinking);
+  const selectedVendor =
+    currentModel?.provider || selectedProvider || defaultProvider || providers[0]?.name;
+  const vendorLabel =
+    providers.find((provider) => provider.name === selectedVendor)?.label ||
+    selectedVendor ||
+    'Select provider';
+  const reasoningSupported =
+    supportsThinking &&
+    Boolean(currentModel?.id.match(/^(gpt-5|o[134]|claude-|gemini-(?:2\.|3\.[01]))/));
+  const effort = preferences.fastEnabled ? 'low' : preferences.reasoningEffort;
+  const effortValueLabel = reasoningSupported ? effort[0].toUpperCase() + effort.slice(1) : 'Auto';
+  const triggerLabel =
+    showReasoningInTrigger && reasoningSupported
+      ? `${modelValueLabel} ${effortValueLabel}`
+      : modelValueLabel;
+  const canSelectEffort = reasoningSupported;
   const normalizedQuery = query.trim().toLowerCase();
   const filteredModels = useMemo(
     () =>
-      normalizedQuery
-        ? modelOptions.filter((model) =>
-            `${model.label} ${model.provider}`.toLowerCase().includes(normalizedQuery)
-          )
-        : modelOptions,
-    [modelOptions, normalizedQuery]
+      modelOptions.filter(
+        (model) =>
+          model.provider === selectedVendor &&
+          (!normalizedQuery || model.label.toLowerCase().includes(normalizedQuery))
+      ),
+    [modelOptions, normalizedQuery, selectedVendor]
   );
 
   useEffect(() => {
@@ -87,7 +109,17 @@ export function GenerationModelSelector({
     if (!open) setQuery('');
   }, [open]);
 
-  const popoverLayout = getPopoverLayout(buttonRef.current);
+  useLayoutEffect(() => {
+    if (!open || !dropdownRef.current) return;
+    const measure = () =>
+      setPopoverHeight(dropdownRef.current?.getBoundingClientRect().height || 320);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(dropdownRef.current);
+    return () => observer.disconnect();
+  }, [open]);
+
+  const popoverLayout = getPopoverLayout(buttonRef.current, popoverHeight);
 
   return (
     <>
@@ -121,22 +153,33 @@ export function GenerationModelSelector({
                 <div className={styles.settingsRow}>
                   <span>Fast</span>
                   <button
-                    aria-checked={false}
+                    aria-checked={preferences.fastEnabled}
                     aria-label="Fast responses"
                     className={styles.switch}
-                    data-checked={false}
-                    disabled
+                    data-checked={preferences.fastEnabled}
+                    onClick={() => preferences.setFast(!preferences.fastEnabled)}
+                    disabled={!reasoningSupported}
                     role="switch"
-                    title="Fast mode is not available for this runtime"
+                    title="Use lower reasoning effort for faster responses"
                     type="button"
                   >
                     <span />
                   </button>
                 </div>
-                <div className={styles.settingsRow}>
-                  <span>Context</span>
-                  <span className={styles.rowValue}>Auto</span>
-                </div>
+                <SelectorRow
+                  active={activePane === 'context'}
+                  label="Context"
+                  onClick={() => setActivePane('context')}
+                  value={
+                    preferences.contextMode[0].toUpperCase() + preferences.contextMode.slice(1)
+                  }
+                />
+                <SelectorRow
+                  active={activePane === 'provider'}
+                  label="Provider"
+                  onClick={() => setActivePane('provider')}
+                  value={vendorLabel}
+                />
                 <SelectorRow
                   active={activePane === 'effort'}
                   disabled={!canSelectEffort}
@@ -164,7 +207,7 @@ export function GenerationModelSelector({
                     />
                   </label>
                   <div className={styles.modelList}>
-                    {defaultProvider && defaultModel ? (
+                    {defaultProvider === selectedVendor && defaultModel ? (
                       <button
                         className={styles.option}
                         onClick={() => {
@@ -203,37 +246,90 @@ export function GenerationModelSelector({
                       <p className={styles.empty}>No matching models</p>
                     ) : null}
                   </div>
-                  <button
-                    aria-label="Open provider settings"
-                    className={styles.addModels}
-                    onClick={() => {
-                      setOpen(false);
-                      openSettingsModal('providers');
-                    }}
-                    type="button"
-                  >
-                    Add Models
-                  </button>
+                  {canAdministerProviderCredentials ? (
+                    <button
+                      aria-label="Open provider settings"
+                      className={styles.addModels}
+                      onClick={() => {
+                        setOpen(false);
+                        openSettingsModal('providers');
+                      }}
+                      type="button"
+                    >
+                      Add Models
+                    </button>
+                  ) : null}
+                </section>
+              ) : activePane === 'provider' ? (
+                <section className={styles.effortPanel} aria-label="Providers">
+                  {providers.map((provider) => (
+                    <button
+                      key={provider.name}
+                      className={styles.option}
+                      role="menuitemradio"
+                      aria-checked={provider.name === selectedVendor}
+                      type="button"
+                      onClick={() => {
+                        const nextModel =
+                          provider.models.find((entry) => entry.id === selectedModel) ??
+                          provider.models[0];
+                        if (nextModel) onModelChange(provider.name, nextModel.id);
+                        setQuery('');
+                        setActivePane('model');
+                      }}
+                    >
+                      <span>{provider.label || provider.name}</span>
+                      {provider.name === selectedVendor ? <Check aria-hidden="true" /> : null}
+                    </button>
+                  ))}
+                </section>
+              ) : activePane === 'context' ? (
+                <section className={styles.effortPanel} aria-label="Context">
+                  {(['auto', 'compact', 'expanded'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      className={styles.option}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={preferences.contextMode === mode}
+                      title={
+                        mode === 'auto'
+                          ? 'Automatic context budget'
+                          : mode === 'compact'
+                            ? 'Smaller context; exact details remain retrievable'
+                            : 'Include more draft, source and conversation context'
+                      }
+                      onClick={() => {
+                        preferences.setContextMode(mode);
+                        setOpen(false);
+                      }}
+                    >
+                      <span>{mode[0].toUpperCase() + mode.slice(1)}</span>
+                      {preferences.contextMode === mode ? <Check aria-hidden="true" /> : null}
+                    </button>
+                  ))}
                 </section>
               ) : (
                 <section className={styles.effortPanel} aria-label="Effort">
                   {[
-                    { enabled: false, label: 'Low' },
-                    { enabled: true, label: 'High' },
+                    { effort: 'low' as const, label: 'Low' },
+                    { effort: 'medium' as const, label: 'Medium' },
+                    { effort: 'high' as const, label: 'High' },
                   ].map((option) => (
                     <button
-                      aria-checked={option.enabled === thinkingEnabled}
+                      aria-checked={option.effort === effort}
                       className={styles.option}
                       key={option.label}
                       onClick={() => {
-                        onThinkingChange?.(option.enabled);
+                        preferences.setReasoningEffort(option.effort);
+                        onThinkingChange?.(option.effort !== 'low');
                         setOpen(false);
                       }}
                       role="menuitemradio"
                       type="button"
                     >
                       <span>{option.label}</span>
-                      {option.enabled === thinkingEnabled ? <Check aria-hidden="true" /> : null}
+                      {option.effort === effort ? <Check aria-hidden="true" /> : null}
                     </button>
                   ))}
                 </section>
@@ -276,7 +372,10 @@ function SelectorRow({
   );
 }
 
-function getPopoverLayout(button: HTMLButtonElement | null): {
+function getPopoverLayout(
+  button: HTMLButtonElement | null,
+  detailHeight: number
+): {
   openLeft: boolean;
   style: React.CSSProperties;
 } {
@@ -286,7 +385,6 @@ function getPopoverLayout(button: HTMLButtonElement | null): {
   const detailWidth = 230;
   const gap = 4;
   const totalWidth = panelWidth + detailWidth + gap;
-  const detailHeight = 320;
   const openLeft = rect.right + detailWidth + gap > window.innerWidth - 8;
   const left = openLeft ? rect.right - totalWidth : rect.right - panelWidth;
   return {

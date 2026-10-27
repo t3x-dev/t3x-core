@@ -5,6 +5,7 @@ import {
   StatePresentationResultSchema,
 } from '@t3x-dev/api-client';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
+import { fetchExploreRelease } from './explore';
 
 export async function fetchSchemaCatalog(projectId: string | null, query: string) {
   const path = projectId
@@ -51,7 +52,7 @@ export type SchemaReleaseReading = {
 
 /** Resolve release reading lazily; discovery lists never download entire manifests. */
 export async function fetchSchemaReleaseReading(
-  projectId: string,
+  projectId: string | null,
   canonicalName: string,
   version: string,
   hash: string,
@@ -63,6 +64,7 @@ export async function fetchSchemaReleaseReading(
     expectedHash: hash,
     ...(sourceProjectId ? { sourceProjectId } : {}),
   });
+  if (!projectId) return fetchExploreRelease(query.toString());
   const result = await handleResponse<SchemaReleaseReading>(
     await fetchWithTimeout(
       `${API_V1}/projects/${encodeURIComponent(projectId)}/schema-studio/source?${query}`

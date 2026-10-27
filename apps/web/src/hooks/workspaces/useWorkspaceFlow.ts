@@ -1,7 +1,5 @@
 import { useCallback } from 'react';
-import { createConversation } from '@/commands/conversations';
 import { createBranch } from '@/infrastructure/branches';
-import { extractWorkspaceCandidate, sendWorkspaceYOpsDraft } from '@/infrastructure/workspaceFlow';
 import { fetchProjectWorkspaces, saveWorkspaceDraft } from '@/queries/workspaces';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
@@ -13,7 +11,6 @@ interface StartWorkspaceIterationOptions {
 }
 
 interface StartWorkspaceIterationResult {
-  conversationId?: string;
   workspace: WorkspaceCandidate;
 }
 
@@ -22,14 +19,6 @@ export function useWorkspaceFlow() {
     (projectId: string) => fetchProjectWorkspaces(projectId),
     []
   );
-  const extractCandidate = useCallback((candidate: WorkspaceCandidate) => {
-    return extractWorkspaceCandidate(candidate);
-  }, []);
-
-  const sendToYOps = useCallback((candidate: WorkspaceCandidate) => {
-    return sendWorkspaceYOpsDraft(candidate);
-  }, []);
-
   const saveDraft = useCallback((candidate: WorkspaceCandidate) => {
     return saveWorkspaceDraft(candidate.projectId, candidate.id, candidate);
   }, []);
@@ -41,6 +30,19 @@ export function useWorkspaceFlow() {
       parentCommitHash,
       targetBranch,
     }: StartWorkspaceIterationOptions): Promise<StartWorkspaceIterationResult> => {
+      if (createBranchFrom) {
+        await createBranch(candidate.projectId, targetBranch, createBranchFrom);
+        const workspaceId = `workspace_branch:${encodeURIComponent(targetBranch)}`;
+        const workspaces = await fetchProjectWorkspaces(candidate.projectId);
+        const workspace = workspaces.find(
+          (item) => item.id === workspaceId && item.targetBranch === targetBranch
+        );
+        if (!workspace)
+          throw new Error(
+            'The branch was created, but its inherited Workspace could not be loaded. Refresh before continuing.'
+          );
+        return { workspace };
+      }
       const workspaceId =
         targetBranch === candidate.targetBranch ? candidate.id : `workspace_${crypto.randomUUID()}`;
       const nextWorkspace = buildNextWorkspaceIteration(
@@ -50,33 +52,13 @@ export function useWorkspaceFlow() {
         targetBranch
       );
 
-      if (createBranchFrom) {
-        await createBranch(candidate.projectId, targetBranch, createBranchFrom);
-      }
-
       const saved = await saveWorkspaceDraft(candidate.projectId, workspaceId, nextWorkspace);
-
-      try {
-        const conversation = await createConversation(
-          candidate.projectId,
-          `${candidate.title} source chat`,
-          parentCommitHash,
-          undefined,
-          {
-            target_branch: targetBranch,
-            workspace_id: workspaceId,
-          }
-        );
-        return { conversationId: conversation.conversation_id, workspace: saved.workspace };
-      } catch {
-        // The Source chat can lazily create this conversation on the first message.
-        return { workspace: saved.workspace };
-      }
+      return { workspace: saved.workspace };
     },
     []
   );
 
-  return { extractCandidate, refreshWorkspaces, saveDraft, sendToYOps, startNextIteration };
+  return { refreshWorkspaces, saveDraft, startNextIteration };
 }
 
 function buildNextWorkspaceIteration(
@@ -99,13 +81,13 @@ function buildNextWorkspaceIteration(
     updatedAt: new Date().toISOString(),
     sourceBundle: candidate.sourceBundle.filter((source) => source.type !== 'chat'),
     schemaCandidate: {
-      summary: 'Collect new source evidence, then generate the next candidate proposal.',
+      summary: 'Collect new source evidence, then ask the Workspace assistant to propose changes.',
       fields: [],
     },
     schemaReview: {
       verdict: 'needs_review',
       summary: 'This iteration starts from the committed baseline and needs new evidence.',
-      gaps: ['Generate a candidate proposal for this iteration.'],
+      gaps: ['Propose changes for this iteration.'],
     },
     yopsDraft: {
       ...candidate.yopsDraft,

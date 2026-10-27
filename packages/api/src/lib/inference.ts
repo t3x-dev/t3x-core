@@ -250,6 +250,8 @@ export interface InferenceRuntime {
 export interface MeteredInferenceResult<T> {
   value: T;
   usage: InferenceUsage;
+  resolvedProvider?: string;
+  resolvedModel?: string;
   finishStatus?: InferenceFinishStatus;
   providerRequestId?: string;
   providerReportedCost?: InferenceProviderCost;
@@ -260,7 +262,7 @@ export interface MeteredInferenceCall<T> {
   input: InferenceExecutionInput;
   resolvedProvider: string;
   resolvedModel: string;
-  invoke(): Promise<MeteredInferenceResult<T>>;
+  invoke(attempt: InferenceAttempt): Promise<MeteredInferenceResult<T>>;
   now?: () => Date;
 }
 
@@ -334,7 +336,7 @@ export function executeMeteredInference<T>(
   return call.runtime.execute(call.input, async (attempt) => {
     const startedAt = now().toISOString();
     try {
-      const result = await call.invoke();
+      const result = await call.invoke(attempt);
       return {
         ok: true,
         value: result.value,
@@ -345,8 +347,8 @@ export function executeMeteredInference<T>(
             generationId: attempt.generationId,
             runId: attempt.runId,
             requestedModel: attempt.requestedModel,
-            resolvedModel: call.resolvedModel,
-            resolvedProvider: call.resolvedProvider,
+            resolvedModel: result.resolvedModel ?? call.resolvedModel,
+            resolvedProvider: result.resolvedProvider ?? call.resolvedProvider,
             ...(result.providerRequestId ? { providerRequestId: result.providerRequestId } : {}),
             usage: result.usage,
             ...(result.providerReportedCost

@@ -5,20 +5,36 @@
  * POST /v1/branches         - Create branch
  * GET  /v1/branches/current - Get current branch
  * POST /v1/branches/switch  - Switch current branch
+ * PUT  /v1/branches/rules   - Update a branch's rules
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import type { ApiKey } from '@t3x-dev/core';
 import {
+  type AnyDB,
+  bindTransitionPolicy,
+  DraftAuthoringConflictError,
   ensureMainBranch,
   findBranchByName,
   findBranchesByProject,
   findCurrentBranch,
-  insertBranch,
+  getTransitionPolicyBinding,
+  listTransitionPolicyBindings,
+  NotFoundError,
   switchBranch,
+  type TransitionPolicyBinding,
+  unbindTransitionPolicy,
 } from '@t3x-dev/storage';
+import type { Context } from 'hono';
+import { createBranchWorkspace } from '../lib/branch-workspace';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
+import { deriveTrustedTransitionPrincipal } from '../lib/transition-authority';
+import {
+  branchRulesFromBinding,
+  planBranchRuleChange,
+} from '../lib/transition-control-plane/applicable-policy';
 import {
   CursorPageResponseSchema,
   ErrorResponseSchema,
@@ -31,6 +47,15 @@ export const branchRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 // Shared schema
 // ============================================================
 
+const BranchRulesResponse = z
+  .object({
+    commit: z.object({
+      require_independent_review: z.boolean(),
+      source: z.enum(['default', 'preset', 'custom']),
+    }),
+  })
+  .openapi('BranchRules');
+
 const BranchResponse = z.object({
   branch_id: z.string(),
   project_id: z.string(),
@@ -39,11 +64,12 @@ const BranchResponse = z.object({
   head_commit_hash: z.string().nullable(),
   description: z.string().nullable(),
   is_current: z.boolean(),
+  rules: BranchRulesResponse,
   created_at: z.string(),
   updated_at: z.string(),
 });
 
-const toApiBranch = (b: {
+type BranchRow = {
   branchId: string;
   projectId: string;
   name: string;
@@ -53,17 +79,39 @@ const toApiBranch = (b: {
   isCurrent: number;
   createdAt: Date;
   updatedAt: Date;
-}) => ({
-  branch_id: b.branchId,
-  project_id: b.projectId,
-  name: b.name,
-  parent_branch: b.parentBranch,
-  head_commit_hash: b.headCommitHash,
-  description: b.description,
-  is_current: b.isCurrent === 1,
-  created_at: b.createdAt.toISOString(),
-  updated_at: b.updatedAt.toISOString(),
-});
+};
+
+const toApiBranch = (b: BranchRow, binding: TransitionPolicyBinding | null) => {
+  const rules = branchRulesFromBinding(binding);
+  return {
+    branch_id: b.branchId,
+    project_id: b.projectId,
+    name: b.name,
+    parent_branch: b.parentBranch,
+    head_commit_hash: b.headCommitHash,
+    description: b.description,
+    is_current: b.isCurrent === 1,
+    rules: {
+      commit: {
+        require_independent_review: rules.commit.requireIndependentReview,
+        source: rules.commit.source,
+      },
+    },
+    created_at: b.createdAt.toISOString(),
+    updated_at: b.updatedAt.toISOString(),
+  };
+};
+
+async function withRules(db: AnyDB, branch: BranchRow) {
+  return toApiBranch(branch, await getTransitionPolicyBinding(db, branch.projectId, branch.name));
+}
+
+async function listWithRules(db: AnyDB, projectId: string, branchList: BranchRow[]) {
+  const bindings = new Map(
+    (await listTransitionPolicyBindings(db, projectId)).map((binding) => [binding.refName, binding])
+  );
+  return branchList.map((branch) => toApiBranch(branch, bindings.get(branch.name) ?? null));
+}
 
 // ============================================================
 // Route Definitions
@@ -277,7 +325,7 @@ branchRoutes.openapi(listBranchesRoute, async (c) => {
         {
           success: true as const,
           data: {
-            items: result.items.map(toApiBranch),
+            items: await listWithRules(db, projectId, result.items),
             next_cursor: result.next_cursor,
             has_more: result.has_more,
           },
@@ -292,7 +340,7 @@ branchRoutes.openapi(listBranchesRoute, async (c) => {
       {
         success: true as const,
         data: {
-          branches: branchList.map(toApiBranch),
+          branches: await listWithRules(db, projectId, branchList),
           project_id: projectId,
           limit,
           offset,
@@ -319,7 +367,7 @@ branchRoutes.openapi(createBranchRoute, async (c) => {
     const existing = await findBranchByName(db, body.project_id, body.name);
     if (existing) {
       if (branchMatchesCreateIntent(existing, body.parent_branch ?? null)) {
-        return c.json({ success: true as const, data: toApiBranch(existing) }, 200);
+        return c.json({ success: true as const, data: await withRules(db, existing) }, 200);
       }
       return errorResponse(
         c,
@@ -329,19 +377,19 @@ branchRoutes.openapi(createBranchRoute, async (c) => {
     }
 
     try {
-      const branch = await insertBranch(db, {
+      const branch = await createBranchWorkspace(db, {
         projectId: body.project_id,
         name: body.name,
         parentBranch: body.parent_branch,
         description: body.description,
       });
 
-      return c.json({ success: true as const, data: toApiBranch(branch) }, 201);
+      return c.json({ success: true as const, data: await withRules(db, branch) }, 201);
     } catch (err) {
       const concurrent = await findBranchByName(db, body.project_id, body.name);
       if (concurrent) {
         if (branchMatchesCreateIntent(concurrent, body.parent_branch ?? null)) {
-          return c.json({ success: true as const, data: toApiBranch(concurrent) }, 200);
+          return c.json({ success: true as const, data: await withRules(db, concurrent) }, 200);
         }
         return errorResponse(
           c,
@@ -353,6 +401,8 @@ branchRoutes.openapi(createBranchRoute, async (c) => {
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
+    if (err instanceof NotFoundError) return errorResponse(c, 'NOT_FOUND', message);
+    if (err instanceof DraftAuthoringConflictError) return errorResponse(c, 'CONFLICT', message);
     return errorResponse(c, 'CREATE_FAILED', message);
   }
 });
@@ -385,7 +435,7 @@ branchRoutes.openapi(getCurrentBranchRoute, async (c) => {
       return errorResponse(c, 'NOT_FOUND', 'No current branch set');
     }
 
-    return c.json({ success: true as const, data: toApiBranch(branch) }, 200);
+    return c.json({ success: true as const, data: await withRules(db, branch) }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'GET_FAILED', message);
@@ -411,7 +461,7 @@ branchRoutes.openapi(switchBranchRoute, async (c) => {
 
     if (!branch) {
       if (body.create_if_missing) {
-        branch = await insertBranch(db, {
+        branch = await createBranchWorkspace(db, {
           projectId: body.project_id,
           name: body.branch_name,
           parentBranch: body.parent_branch,
@@ -426,7 +476,110 @@ branchRoutes.openapi(switchBranchRoute, async (c) => {
       return errorResponse(c, 'UPDATE_FAILED', 'Failed to switch branch');
     }
 
-    return c.json({ success: true as const, data: toApiBranch(switched) }, 200);
+    return c.json({ success: true as const, data: await withRules(db, switched) }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    if (err instanceof NotFoundError) return errorResponse(c, 'NOT_FOUND', message);
+    if (err instanceof DraftAuthoringConflictError) return errorResponse(c, 'CONFLICT', message);
+    return errorResponse(c, 'UPDATE_FAILED', message);
+  }
+});
+
+// PUT /v1/branches/rules - Update a branch's rules
+const updateBranchRulesRoute = createRoute({
+  method: 'put',
+  path: '/v1/branches/rules',
+  tags: ['Branches'],
+  summary: 'Update branch rules',
+  description:
+    'Updates the rules of an existing branch. Omitted rule kinds are left unchanged. Requires a human principal.',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z
+            .object({
+              project_id: z.string().min(1),
+              branch_name: z.string().min(1),
+              rules: z
+                .object({
+                  commit: z.object({ require_independent_review: z.boolean() }).strict().optional(),
+                })
+                .strict(),
+            })
+            .strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Branch with updated rules',
+      content: { 'application/json': { schema: SuccessResponseSchema(BranchResponse) } },
+    },
+    400: {
+      description: 'Invalid request',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    403: {
+      description: 'Forbidden',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Branch not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+function authenticatedApiKey(c: Context): ApiKey | undefined {
+  return c.get('apiKey') as ApiKey | undefined;
+}
+
+branchRoutes.openapi(updateBranchRulesRoute, async (c) => {
+  const apiKey = authenticatedApiKey(c);
+  if (apiKey !== undefined && apiKey.principal_kind !== 'human') {
+    return errorResponse(c, 'FORBIDDEN', 'Branch rules require a human principal');
+  }
+  const body = c.req.valid('json');
+
+  try {
+    const db = await getDB();
+
+    const accessResult = await assertProjectAccess(c, db, body.project_id);
+    if (accessResult instanceof Response) return accessResult;
+
+    const branch = await findBranchByName(db, body.project_id, body.branch_name);
+    if (!branch) {
+      return errorResponse(c, 'NOT_FOUND', `Branch ${body.branch_name} not found`);
+    }
+
+    let binding = await getTransitionPolicyBinding(db, body.project_id, body.branch_name);
+    if (body.rules.commit !== undefined) {
+      const change = planBranchRuleChange({
+        refName: body.branch_name,
+        binding,
+        requireIndependentReview: body.rules.commit.require_independent_review,
+      });
+      if (change.action === 'unbind') {
+        await unbindTransitionPolicy(db, body.project_id, body.branch_name);
+        binding = null;
+      } else if (change.action === 'bind') {
+        binding = await bindTransitionPolicy(db, {
+          projectId: body.project_id,
+          refName: body.branch_name,
+          uri: change.uri,
+          policy: change.policy,
+          actor: deriveTrustedTransitionPrincipal(apiKey).actor,
+        });
+      }
+    }
+
+    return c.json({ success: true as const, data: toApiBranch(branch, binding) }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'UPDATE_FAILED', message);

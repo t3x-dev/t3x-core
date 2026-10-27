@@ -11,10 +11,9 @@ import {
 import type { WorkspaceCandidate, WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 
 const mocks = vi.hoisted(() => ({
-  extractCandidate: vi.fn(),
+  readAuthoring: vi.fn(),
   refreshWorkspaces: vi.fn(),
   saveDraft: vi.fn(),
-  sendToYOps: vi.fn(),
   startNextIteration: vi.fn(),
   onSelectedWorkspaceChange: vi.fn(),
   onViewCommitInState: vi.fn(),
@@ -27,9 +26,33 @@ const mocks = vi.hoisted(() => ({
   }>,
   validateComparison: vi.fn(),
 }));
+vi.mock('@/components/workspaces/WorkspaceSchemaPendingNotice', () => ({
+  WorkspaceSchemaPendingNotice: ({ onPrepared }: { onPrepared: () => Promise<void> }) => (
+    <button type="button" onClick={() => void onPrepared()}>
+      Complete Schema preparation
+    </button>
+  ),
+}));
+
+vi.mock('@/infrastructure/sharedApiClient', () => ({
+  getSharedApiClient: () => ({
+    workspaces: { authoring: { read: mocks.readAuthoring } },
+  }),
+}));
 
 vi.mock('@/hooks/workspaces/useWorkspaceYOps', () => ({
   validateWorkspaceCandidateYOps: mocks.validateComparison,
+}));
+
+vi.mock('@/hooks/workspaces/useWorkspaceAuthoringBootstrap', () => ({
+  useWorkspaceAuthoringBootstrap: () => ({
+    active: false,
+    busy: false,
+    error: null,
+    importSnapshot: undefined,
+    start: vi.fn(),
+    cancel: vi.fn(),
+  }),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -38,12 +61,26 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams('tab=workspaces'),
 }));
 
+vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
+  useStudioCandidates: () => ({
+    items: [{ available: true, id: 'product-brief', kind: 'module' }],
+    loading: false,
+  }),
+}));
+
+vi.mock('@/hooks/schemas/useProjectYSchemaVersions', () => ({
+  useProjectYSchemaVersions: () => ({
+    error: undefined,
+    pending: false,
+    refresh: vi.fn().mockResolvedValue([]),
+    versions: [],
+  }),
+}));
+
 vi.mock('@/hooks/workspaces/useWorkspaceFlow', () => ({
   useWorkspaceFlow: () => ({
-    extractCandidate: mocks.extractCandidate,
     refreshWorkspaces: mocks.refreshWorkspaces,
     saveDraft: mocks.saveDraft,
-    sendToYOps: mocks.sendToYOps,
     startNextIteration: mocks.startNextIteration,
   }),
 }));
@@ -52,6 +89,16 @@ vi.mock('@/hooks/workspaces/useWorkspaceProposalGeneration', () => ({
   useWorkspaceProposalGeneration: () => ({
     generate: vi.fn(),
     verify: vi.fn(),
+  }),
+}));
+
+vi.mock('@/hooks/workspaces/useWorkspaceConversations', () => ({
+  useWorkspaceConversations: () => ({
+    data: { conversations: [] },
+    loading: false,
+    error: null,
+    refetch: vi.fn(),
+    update: vi.fn(),
   }),
 }));
 
@@ -178,20 +225,13 @@ function mockComparison(summary: Record<string, string>, title?: string) {
 
 describe('WorkspaceWorkbench Compose/Review integration', () => {
   beforeEach(() => {
+    localStorage.clear();
     vi.clearAllMocks();
+    mocks.readAuthoring.mockRejectedValue(new Error('This draft has no authoring ledger.'));
     mocks.validateComparison.mockReset();
     mockComparison({});
     mocks.chatMessages.length = 0;
     mocks.refreshWorkspaces.mockResolvedValue([]);
-    mocks.extractCandidate.mockImplementation(async (candidate: WorkspaceCandidate) => ({
-      candidate_id: `candidate:${candidate.id}`,
-      workspace: candidate,
-    }));
-    mocks.sendToYOps.mockImplementation(async (candidate: WorkspaceCandidate) => ({
-      candidate_id: `candidate:${candidate.id}`,
-      workspace: candidate,
-      yops_draft_id: candidate.yopsDraft.id,
-    }));
     mocks.saveDraft.mockImplementation(async (candidate: WorkspaceCandidate, command?: string) => ({
       candidate_id: `candidate:${candidate.id}`,
       command,
@@ -199,6 +239,32 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
       workspace: { ...candidate, revision: (candidate.revision ?? 0) + 1 },
       yops_draft_id: candidate.yopsDraft.id,
     }));
+  });
+
+  it('hydrates the exact prepared Workspace revision instead of discarding the refresh result', async () => {
+    const original = workspace('workspace_main', 'Main workspace');
+    const remote = {
+      ...original,
+      revision: (original.revision ?? 0) + 1,
+      title: 'Prepared workspace',
+    };
+    const onRefresh = vi.fn();
+    mocks.refreshWorkspaces.mockResolvedValue([remote]);
+    render(
+      <WorkspaceWorkbench
+        candidates={[original]}
+        projectId="proj_1"
+        onWorkspacesRefresh={onRefresh}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Complete Schema preparation' }));
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Workspace detail' })).toHaveAccessibleDescription(
+        remote.title
+      )
+    );
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+    expect(mocks.saveDraft).not.toHaveBeenCalled();
   });
 
   it('exposes only the current Compose and Review workflow surfaces', () => {
@@ -227,33 +293,15 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
       />
     );
 
-    expect(screen.getByRole('combobox', { name: 'Workspace scenario' })).toHaveValue(release.id);
+    expect(screen.getByRole('region', { name: 'Workspace detail' })).toHaveAccessibleDescription(
+      release.title
+    );
+    expect(
+      within(screen.getByRole('region', { name: 'Workspace AI chat' })).getByTitle(release.title)
+    ).toBeVisible();
   });
 
-  it('keeps Compose chat on the regular generation lane and renders stored replies verbatim', () => {
-    const storedReply = [
-      'Source draft',
-      '',
-      'Summary: 1 captured item, 0 boundaries, 1 confirmation item.',
-      '',
-      'Needs confirmation',
-      '- Confirm the target environment.',
-    ].join('\n');
-    mocks.chatMessages.push({
-      content: storedReply,
-      id: 'sha256:assistant_turn',
-      rings: {
-        source_chat_draft: {
-          display: {
-            captured: ['Target environment: production'],
-            excluded: [],
-            needs_confirmation: ['Confirm the target environment.'],
-          },
-        },
-      },
-      role: 'assistant',
-    });
-
+  it('waits for the user to enable Draft activity before preparing Chat', () => {
     render(
       <WorkspaceWorkbench
         candidates={[workspace('workspace_main', 'Main workspace')]}
@@ -261,13 +309,11 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
       />
     );
 
-    expect(mocks.sourceThreadGenerationOptions).toHaveBeenCalledWith(
-      expect.not.objectContaining({ sourceDraftReply: expect.anything() })
-    );
-    expect(mocks.saveDraft).not.toHaveBeenCalled();
-    expect(screen.getByRole('log')).toHaveTextContent('Source draft');
-    expect(screen.getByRole('log')).toHaveTextContent('Confirm the target environment.');
-    expect(screen.queryByText(/I saved this as proposal source/)).not.toBeInTheDocument();
+    expect(mocks.sourceThreadGenerationOptions).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /Enable Draft activity/ })).toBeEnabled();
+    expect(screen.queryByText('Preparing your draft…')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Generate changes/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Switch to discuss/ })).not.toBeInTheDocument();
   });
 
   it('renders structured changes in Compose and lets Review nodes select their evidence', async () => {
@@ -278,12 +324,18 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     ]);
     render(<WorkspaceWorkbench candidates={[candidate]} projectId="proj_1" />);
 
-    expect(screen.getByRole('button', { name: 'Inspect Outcome' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Inspect Title' })).toBeInTheDocument();
+    const outcome = screen.getByRole('button', { name: 'Inspect Outcome: prd/summary/outcome' });
+    const title = screen.getByRole('button', {
+      name: 'Inspect Title: prd/requirements/canary/title',
+    });
+    expect(within(outcome).getByText('Auditable rollouts')).toBeVisible();
+    expect(within(title).getByText('Canary rollout')).toBeVisible();
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
 
+    expect(screen.getByRole('button', { name: 'Changes' })).toHaveAttribute('aria-current', 'page');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     expect(screen.getByLabelText('Rendered result')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Structure diff' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
 
     expect(screen.getByText('Loading the exact before and after values…')).toBeInTheDocument();
     expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
@@ -300,7 +352,7 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     expect(screen.getAllByText('material:brief').length).toBeGreaterThan(0);
   });
 
-  it('switches scenarios through the new sidebar selector and updates the URL owner', () => {
+  it('updates the Compose context when the navigation owner selects another workspace', () => {
     const baseline = workspace('workspace_main', 'Main workspace', [
       operation('op_outcome', 'prd/summary/outcome', 'Baseline'),
     ]);
@@ -324,11 +376,11 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
       />
     );
 
-    fireEvent.change(screen.getByRole('combobox', { name: 'Workspace scenario' }), {
-      target: { value: scenario.id },
-    });
-
-    expect(mocks.onSelectedWorkspaceChange).toHaveBeenCalledWith(scenario.id);
+    expect(screen.getByRole('region', { name: 'Workspace detail' })).toHaveAccessibleDescription(
+      baseline.title
+    );
+    expect(screen.getByText('Baseline')).toBeVisible();
+    expect(screen.queryByText('Reduced risk')).not.toBeInTheDocument();
     rerender(
       <WorkspaceWorkbench
         candidates={[baseline, scenario]}
@@ -337,7 +389,12 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
         selectedWorkspaceId={scenario.id}
       />
     );
-    expect(screen.getByRole('combobox', { name: 'Workspace scenario' })).toHaveValue(scenario.id);
+    expect(screen.getByRole('region', { name: 'Workspace detail' })).toHaveAccessibleDescription(
+      scenario.title
+    );
+    expect(screen.getByText('Reduced risk')).toBeVisible();
+    expect(screen.queryByText('Baseline')).not.toBeInTheDocument();
+    expect(mocks.onSelectedWorkspaceChange).not.toHaveBeenCalled();
   });
 
   it('renders the selected workspace changes in Review without the retired compare control', async () => {
@@ -366,11 +423,13 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
       />
     );
 
-    expect(screen.getByRole('combobox', { name: 'Workspace scenario' })).toHaveValue(baseline.id);
+    expect(screen.getByRole('region', { name: 'Workspace detail' })).toHaveAccessibleDescription(
+      baseline.title
+    );
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
 
     expect(screen.queryByRole('combobox', { name: 'Compare scenario' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Structure diff' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
     expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
     expect(within(screen.getByRole('table')).getByTitle('prd/summary/outcome')).toBeInTheDocument();
     expect(
@@ -394,12 +453,8 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     );
 
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
-    fireEvent.click(
-      within(screen.getByRole('complementary', { name: 'Post-commit actions' })).getByRole(
-        'button',
-        { name: 'View in State' }
-      )
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View in State' }));
 
     expect(mocks.onViewCommitInState).toHaveBeenCalledWith(
       'sha256:committed-workspace',
@@ -415,12 +470,15 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Review full draft' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare review' }));
 
-    await waitFor(() => expect(mocks.extractCandidate).toHaveBeenCalledOnce());
-    await waitFor(() => expect(mocks.sendToYOps).toHaveBeenCalledOnce());
-    expect(await screen.findByRole('alert')).toHaveTextContent('No YOps operations were generated');
-    expect(screen.getByRole('button', { name: 'Render' })).toHaveAttribute('aria-current', 'page');
+    expect(await screen.findByRole('alert')).toHaveTextContent('No structured changes yet');
+    expect(screen.getByRole('button', { name: 'Changes' })).toHaveAttribute('aria-current', 'page');
+    expect(
+      screen.queryByRole('button', { name: /Commit changes|Approve and commit/i })
+    ).not.toBeInTheDocument();
+    expect(mocks.saveDraft).not.toHaveBeenCalled();
   });
 
   it('renders loading, error, and no-candidate states explicitly', () => {

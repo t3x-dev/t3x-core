@@ -1,22 +1,7 @@
 'use client';
 
-/**
- * ProvidersSettingsPanel — 3 cards, one API key each, with explicit source.
- *
- * Answers the four questions the local-shared-access plan says the team
- * should never have to ask again:
- *
- *   1. "Where's the current config?"          → source chip per card
- *   2. "Where do I change it?"                 → `Manage` button per card
- *   3. "How do I confirm it took effect?"     → `Test` button + source + preview
- *   4. "If .env overrides me, can I tell?"    → amber override banner per card
- *
- * Key lifecycle (create / list / revoke) is intentionally not here — this
- * panel is the usage-path surface, not a key-management console.
- */
-
-import { AlertTriangle, CheckCircle2, Circle, Loader2, RefreshCw, Zap } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { CheckCircle2, Circle, Loader2, RefreshCw, Zap } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ProviderCredentialDialog } from '@/components/settings/ProviderCredentialDialog';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { useProviderCommands } from '@/hooks/providers/useProviderCommands';
@@ -34,15 +19,9 @@ import {
 import { cn } from '@/utils/cn';
 
 const SOURCE_LABEL: Record<LocalProviderKeySource, string> = {
-  env: 'from .env',
-  file: 'Stored locally',
+  environment: 'Environment',
+  database: 'Database',
   none: 'Not configured',
-};
-
-const SOURCE_CHIP_CLASS: Record<LocalProviderKeySource, string> = {
-  env: 'bg-[var(--accent-pending)]/10 text-[var(--accent-pending)] border-[var(--accent-pending)]/30',
-  file: 'bg-[var(--status-success)]/10 text-[var(--status-success)] border-[var(--status-success)]/30',
-  none: 'bg-[var(--surface-secondary)] text-[var(--text-tertiary)] border-[var(--stroke-divider)]',
 };
 
 function displayName(provider: ProviderInfo): string {
@@ -61,11 +40,8 @@ function SourceChip({
   const label = SOURCE_LABEL[source];
   return (
     <span
-      className={cn(
-        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium',
-        SOURCE_CHIP_CLASS[source]
-      )}
-      title={source === 'env' ? 'Loaded from an environment variable' : undefined}
+      className="inline-flex items-center gap-1 rounded-full border border-[var(--stroke-divider)] bg-[var(--management-control-bg)] px-2 py-0.5 text-xs font-medium text-[var(--text-secondary)]"
+      title={source === 'environment' ? 'Loaded from an environment variable' : undefined}
     >
       {label}
       {preview && <span className="font-mono opacity-80">· {preview}</span>}
@@ -92,16 +68,15 @@ function ProviderCard({
   // provider live". It already folds env + stored into one answer.
   const source: LocalProviderKeySource = status?.api_key_source ?? 'none';
   const configured = source !== 'none';
-  const envOverridesStored = status?.env_overrides_stored === true;
 
   return (
     <div
       className={cn(
         'rounded-lg border border-[var(--stroke-divider)]',
-        configured ? 'bg-[var(--surface-primary)]' : 'bg-[var(--surface-secondary)] opacity-80'
+        configured ? 'bg-[var(--surface-card)]' : 'bg-[var(--surface-app)]'
       )}
     >
-      <div className="flex items-center justify-between gap-3 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
         <div className="flex min-w-0 items-center gap-3">
           {configured ? (
             <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--status-success)]" />
@@ -109,7 +84,7 @@ function ProviderCard({
             <Circle className="h-4 w-4 shrink-0 text-[var(--text-tertiary)]" />
           )}
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-medium text-[var(--text-primary)]">
                 {displayName(provider)}
               </span>
@@ -136,8 +111,8 @@ function ProviderCard({
             type="button"
             onClick={() => onManageCredentials(provider)}
             className={cn(
-              'flex items-center gap-1.5 rounded-md border border-[var(--stroke-divider)] px-2.5 py-1.5 text-xs font-medium',
-              'text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+              'flex items-center gap-1.5 rounded-md border border-[var(--stroke-default)] px-2.5 py-1.5 text-xs font-medium',
+              'bg-[var(--management-control-bg)] text-[var(--text-primary)] transition-colors hover:bg-[var(--management-control-hover)]'
             )}
           >
             {source === 'none' ? 'Connect' : 'Manage'}
@@ -148,8 +123,8 @@ function ProviderCard({
               onClick={() => onTest(provider.id)}
               disabled={isTesting}
               className={cn(
-                'flex items-center gap-1.5 rounded-md border border-[var(--stroke-divider)] px-2.5 py-1.5 text-xs font-medium',
-                'text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]',
+                'flex items-center gap-1.5 rounded-md border border-[var(--stroke-default)] px-2.5 py-1.5 text-xs font-medium',
+                'bg-[var(--management-control-bg)] text-[var(--text-primary)] transition-colors hover:bg-[var(--management-control-hover)]',
                 'disabled:cursor-not-allowed disabled:opacity-50'
               )}
             >
@@ -163,21 +138,6 @@ function ProviderCard({
           )}
         </div>
       </div>
-
-      {envOverridesStored && (
-        <div
-          className={cn(
-            'flex items-start gap-2 border-t border-[var(--accent-pending)]/30 px-4 py-2 text-xs',
-            'bg-[var(--accent-pending)]/5 text-[var(--accent-pending)]'
-          )}
-        >
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>
-            An environment variable is overriding your stored key. The Manage dialog still edits the
-            stored value, but it won&apos;t take effect until the env var is unset.
-          </span>
-        </div>
-      )}
     </div>
   );
 }
@@ -201,6 +161,8 @@ export function ProvidersSettingsPanel() {
   const [dialogStatusLoading, setDialogStatusLoading] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState<string | null>(null);
+  const testRevision = useRef(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, TestConnectionResult | 'loading'>>(
     {}
@@ -209,9 +171,9 @@ export function ProvidersSettingsPanel() {
   const loadAll = useCallback(async () => {
     const [[data], anthropicStatus, openaiStatus, googleStatus] = await Promise.all([
       fetchProvidersWithRoles(),
-      fetchProviderStatus('anthropic').catch(() => null),
-      fetchProviderStatus('openai').catch(() => null),
-      fetchProviderStatus('google').catch(() => null),
+      fetchProviderStatus('anthropic'),
+      fetchProviderStatus('openai'),
+      fetchProviderStatus('google'),
     ]);
     const generationOnly = GENERATION_PROVIDER_ORDER.map((id) =>
       data.find((p) => p.id === id && p.role === 'generation')
@@ -230,6 +192,7 @@ export function ProvidersSettingsPanel() {
     try {
       setLoading(true);
       setLoadError(null);
+      testRevision.current += 1;
       setTestResults({});
 
       const { providers: nextProviders, statuses: nextStatuses } = await loadAll();
@@ -238,7 +201,7 @@ export function ProvidersSettingsPanel() {
     } catch (err) {
       const message = formatUserFacingError(err, 'Failed to load providers.');
       setLoadError(message);
-      console.error('Failed to load providers:', err);
+      setProviders([]);
     } finally {
       setLoading(false);
     }
@@ -287,11 +250,14 @@ export function ProvidersSettingsPanel() {
   }, [dialogProvider, fetchProviderStatus]);
 
   const handleTest = async (providerId: string) => {
+    const revision = testRevision.current;
     setTestResults((prev) => ({ ...prev, [providerId]: 'loading' }));
     try {
       const result = await runProviderConnectionTest(providerId);
+      if (revision !== testRevision.current) return;
       setTestResults((prev) => ({ ...prev, [providerId]: result }));
     } catch (err) {
+      if (revision !== testRevision.current) return;
       setTestResults((prev) => ({
         ...prev,
         [providerId]: { ok: false, error: formatUserFacingError(err, 'Connection test failed.') },
@@ -320,6 +286,13 @@ export function ProvidersSettingsPanel() {
     try {
       const status = await saveLocalProviderCredential(dialogProvider.id, input);
       setDialogStatus(status);
+      testRevision.current += 1;
+      window.dispatchEvent(new Event('t3x:provider-configuration-changed'));
+      setNotice(
+        status.stored
+          ? 'Credentials saved. Run Test to verify the active connection.'
+          : 'Database credential removed. Environment configuration still applies when present.'
+      );
       setTestResults((prev) => {
         const next = { ...prev };
         for (const key of Object.keys(next)) {
@@ -329,8 +302,11 @@ export function ProvidersSettingsPanel() {
       });
       try {
         await refreshProvidersSilently();
-      } catch (refreshError) {
-        console.error('Failed to refresh providers after credential save:', refreshError);
+      } catch {
+        setLoadError(
+          'Credentials were saved, but status refresh failed. Refresh to check the active configuration.'
+        );
+        setProviders([]);
       }
     } catch (err) {
       const message = formatUserFacingError(err, 'Failed to save provider credentials.');
@@ -347,6 +323,13 @@ export function ProvidersSettingsPanel() {
     try {
       const status = await removeLocalProviderCredential(dialogProvider.id);
       setDialogStatus(status);
+      testRevision.current += 1;
+      window.dispatchEvent(new Event('t3x:provider-configuration-changed'));
+      setNotice(
+        status.stored
+          ? 'Credentials saved. Run Test to verify the active connection.'
+          : 'Database credential removed. Environment configuration still applies when present.'
+      );
       setTestResults((prev) => {
         const next = { ...prev };
         for (const key of Object.keys(next)) {
@@ -356,8 +339,11 @@ export function ProvidersSettingsPanel() {
       });
       try {
         await refreshProvidersSilently();
-      } catch (refreshError) {
-        console.error('Failed to refresh providers after credential removal:', refreshError);
+      } catch {
+        setLoadError(
+          'Credential was removed, but status refresh failed. Refresh to check the active configuration.'
+        );
+        setProviders([]);
       }
     } catch (err) {
       const message = formatUserFacingError(err, 'Failed to remove provider credentials.');
@@ -377,17 +363,19 @@ export function ProvidersSettingsPanel() {
   return (
     <>
       {loadError && (
-        <div className="mb-6 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+        <div className="mb-6 rounded-lg border border-[var(--status-error)]/30 bg-[var(--status-error-muted)] p-4 text-sm text-[var(--status-error)]">
           {loadError}
         </div>
       )}
 
+      {notice ? <output className="mb-4 block text-sm">{notice}</output> : null}
       <section>
         <div className="mb-3">
           <h2 className="text-sm font-semibold text-[var(--text-primary)]">Providers</h2>
           <p className="text-xs text-[var(--text-tertiary)]">
-            One API key per provider. Resolved as <strong>.env &gt; stored &gt; none</strong>. Model
-            selection happens in the chat.
+            One deployment-wide API key per provider.{' '}
+            <strong>Database &gt; environment &gt; none</strong>. Saving replaces that provider’s
+            database credential; it does not change .env.
           </p>
         </div>
 
@@ -414,8 +402,8 @@ export function ProvidersSettingsPanel() {
           type="button"
           onClick={loadProviders}
           className={cn(
-            'flex items-center gap-1.5 rounded-md border border-[var(--stroke-divider)] px-3 py-2 text-xs font-medium',
-            'text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+            'flex items-center gap-1.5 rounded-md border border-[var(--stroke-default)] px-3 py-2 text-xs font-medium',
+            'bg-[var(--management-control-bg)] text-[var(--text-primary)] transition-colors hover:bg-[var(--management-control-hover)]'
           )}
         >
           <RefreshCw className="h-3 w-3" />
@@ -440,7 +428,7 @@ export function ProvidersSettingsPanel() {
           status={
             dialogStatus
               ? {
-                  configured: dialogStatus.configured,
+                  configured: dialogStatus.stored,
                   defaultModel: dialogStatus.default_model,
                   lastTestStatus: dialogStatus.last_test_status,
                   lastTestError: dialogStatus.last_test_error,

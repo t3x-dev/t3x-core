@@ -10,7 +10,15 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { attachmentsFromContentBlocks } from '@/domain/conversations/turnAttachments';
+import {
+  type SourceThreadSession,
+  sessionValue,
+  useSourceThreadSessionRef,
+  useSourceThreadSessionState,
+} from '@/hooks/sourceThreads/sourceThreadSession';
 import { isSourceThreadRequestAborted, sourceThreadApi } from '@/infrastructure/sourceThreads';
+import type { Turn } from '@/infrastructure/types';
 import { getTemporaryChat, isTemporaryChatId } from '@/store/temporaryChatsStore';
 
 const CHAT_PAGE_SIZE = 100;
@@ -22,6 +30,57 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   rings?: Record<string, unknown> | null;
+  images?: ChatMessageImage[];
+  files?: ChatMessageFile[];
+}
+
+/** `src` is a session preview; saved attachments carry their material and load on demand. */
+export interface ChatMessageImage {
+  id: string;
+  src?: string;
+  material?: { projectId: string; materialId: string };
+}
+
+export interface ChatMessageFile {
+  id: string;
+  name: string;
+  mimeType: string;
+}
+
+export function attachmentMessageParts(
+  projectId: string,
+  contentBlocks: unknown[] | null | undefined
+): Pick<ChatMessage, 'images' | 'files'> {
+  const attachments = attachmentsFromContentBlocks(projectId, contentBlocks);
+  const images = attachments
+    .filter((attachment) => attachment.kind === 'image')
+    .map((attachment) => ({
+      id: attachment.materialId,
+      material: { projectId, materialId: attachment.materialId },
+    }));
+  const files = attachments
+    .filter((attachment) => attachment.kind === 'file')
+    .map((attachment) => ({
+      id: attachment.materialId,
+      name: attachment.title,
+      mimeType: attachment.mimeType,
+    }));
+  return {
+    ...(images.length ? { images } : {}),
+    ...(files.length ? { files } : {}),
+  };
+}
+
+function turnMessage(projectId: string, turn: Turn): ChatMessage {
+  return {
+    id: turn.turn_hash,
+    projectId: turn.project_id,
+    conversationId: turn.conversation_id,
+    role: turn.role as 'user' | 'assistant',
+    content: turn.content,
+    rings: turn.rings,
+    ...(turn.role === 'user' ? attachmentMessageParts(projectId, turn.content_blocks) : {}),
+  };
 }
 
 export interface UseChatHistoryReturn {
@@ -39,22 +98,37 @@ export interface UseChatHistoryReturn {
 
 export function useChatHistory(
   projectId: string,
-  conversationId: string | undefined
+  conversationId: string | undefined,
+  session?: SourceThreadSession
 ): UseChatHistoryReturn {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState('');
-  const [offset, setOffset] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
+  const [messages, updateMessages] = useSourceThreadSessionState<ChatMessage[]>(
+    session,
+    'history.messages',
+    []
+  );
+  const [input, setInput] = useSourceThreadSessionState(session, 'history.input', '');
+  const [offset, setOffset] = useSourceThreadSessionState(session, 'history.offset', 0);
+  const [hasMore, setHasMore] = useSourceThreadSessionState(session, 'history.hasMore', false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isChatLoading, setIsChatLoading] = useState(false);
 
-  const messagesRef = useRef(messages);
-  const prevConversationIdRef = useRef<string | undefined>(undefined);
+  const messagesRef = useSourceThreadSessionRef(session, 'history.messagesRef', messages);
+  const prevConversationIdRef = useSourceThreadSessionRef<string | undefined>(
+    session,
+    'history.previousConversation',
+    undefined
+  );
   const loadMoreAbortRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
+  const setMessages = useCallback<React.Dispatch<React.SetStateAction<ChatMessage[]>>>(
+    (next) =>
+      updateMessages((previous) => {
+        const updated = typeof next === 'function' ? next(previous) : next;
+        messagesRef.current = updated;
+        return updated;
+      }),
+    [messagesRef, updateMessages]
+  );
 
   // Initial load on conversation switch. If conversationId flipped
   // from undefined -> value while messages exist, we just created the
@@ -66,6 +140,9 @@ export function useChatHistory(
     prevConversationIdRef.current = currentConversationId;
 
     const load = async () => {
+      // The running request owns this history until it finishes. A remount must
+      // not replace its user turn or partial reply with a database snapshot.
+      if (sessionValue<boolean>(session, 'stream.running')) return;
       if (!currentConversationId) {
         setMessages([]);
         setOffset(0);
@@ -99,7 +176,7 @@ export function useChatHistory(
       loadMoreAbortRef.current?.abort();
       loadMoreAbortRef.current = null;
 
-      setMessages([]);
+      if (!session || prevConversationId !== currentConversationId) setMessages([]);
       setOffset(0);
       setHasMore(false);
       setIsChatLoading(true);
@@ -117,14 +194,7 @@ export function useChatHistory(
         if (abortController.signal.aborted) return;
         const loaded = response.turns
           .filter((turn) => turn.role === 'user' || turn.role === 'assistant')
-          .map((turn) => ({
-            id: turn.turn_hash,
-            projectId: turn.project_id,
-            conversationId: turn.conversation_id,
-            role: turn.role as 'user' | 'assistant',
-            content: turn.content,
-            rings: turn.rings,
-          }))
+          .map((turn) => turnMessage(projectId, turn))
           .reverse();
         setMessages(loaded);
         setHasMore(response.turns.length >= CHAT_PAGE_SIZE);
@@ -146,7 +216,16 @@ export function useChatHistory(
       abortController.abort();
       loadMoreAbortRef.current?.abort();
     };
-  }, [conversationId, projectId]);
+  }, [
+    conversationId,
+    projectId,
+    session,
+    prevConversationIdRef,
+    messagesRef,
+    setMessages,
+    setOffset,
+    setHasMore,
+  ]);
 
   const loadMore = useCallback(async () => {
     if (!projectId || !conversationId || isLoadingMore || !hasMore) return;
@@ -174,14 +253,7 @@ export function useChatHistory(
       }
       const olderMessages = response.turns
         .filter((turn) => turn.role === 'user' || turn.role === 'assistant')
-        .map((turn) => ({
-          id: turn.turn_hash,
-          projectId: turn.project_id,
-          conversationId: turn.conversation_id,
-          role: turn.role as 'user' | 'assistant',
-          content: turn.content,
-          rings: turn.rings,
-        }))
+        .map((turn) => turnMessage(projectId, turn))
         .reverse();
       setMessages((prev) => [...olderMessages, ...prev]);
       setOffset((prev) => prev + response.turns.length);

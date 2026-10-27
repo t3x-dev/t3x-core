@@ -1,3 +1,4 @@
+import { AssistantSchemaSettingsViewSchema } from '@t3x-dev/api-client';
 import {
   compileDraftComposition,
   createDraftActionLedger,
@@ -15,6 +16,7 @@ import {
   type PublishDraftActionResult,
   parseDraftActionLedger,
   publishDraftAction,
+  replayToRevision,
   selectedActionView,
 } from '@t3x-dev/application';
 import { createYOpsEffect, createYOpsState, describeTransitionObject } from '@t3x-dev/core';
@@ -30,6 +32,17 @@ import {
   transactWorkspaceAuthoring,
 } from '@t3x-dev/storage';
 import { canonicalizeProtocolValue } from '@t3x-dev/transition';
+import {
+  DELETION_AUTHORIZATIONS,
+  deletionAuthorizations,
+  deletionSubject,
+  matchingDeletionAuthorization,
+} from './workspace-deletion-authorization';
+import {
+  buildWorkspaceSchemaReview,
+  captureWorkspaceSchema,
+  workspaceSchemaReviewHasChanges,
+} from './workspace-schema-review';
 
 export interface WorkspaceAuthoringBasis {
   schema: 't3x.application/workspace-authoring-basis/v1';
@@ -135,21 +148,9 @@ export async function initializeWorkspaceAuthoring(
     if (head.head !== input.expectedRefHead)
       throw new DraftAuthoringConflictError('Ref head changed');
     const base = head.format === 'empty' ? createYOpsState({}) : head.state;
-    // Exact-source workspaces use a different codec and review lifecycle. A YOps
-    // ledger must not hide their editor or silently replace their document basis.
-    if (workspace.sourceArtifact)
-      throw new DraftAuthoringConflictError(
-        'Exact-source Workspaces must continue through source Review; Draft activity does not support this format'
-      );
     const operations = (workspace.yopsDraft as { operations?: unknown[] } | undefined)?.operations;
-    const extractionOperations = (
-      workspace.extractionProposal as { operations?: unknown[] } | undefined
-    )?.operations;
     const hasLegacyEdits = Boolean(
-      operations?.length ||
-        extractionOperations?.length ||
-        draft.nodes?.length ||
-        draft.semantic_points?.length
+      operations?.length || draft.nodes?.length || draft.semantic_points?.length
     );
     const oldBase = workspace.baseCommitHash ?? draft.parent_commit_hash;
     if (oldBase != null && oldBase !== head.head && input.legacyDocument === undefined)
@@ -273,6 +274,71 @@ export function buildAuthoringEffect(ledger: DraftActionLedger) {
   return { ...built, bindings: compiled.bindings };
 }
 
+/** Explicit human button, never an assistant tool. Authorization changes no content or history. */
+export async function confirmWorkspaceDeletion(
+  db: AnyDB,
+  input: {
+    projectId: string;
+    workspaceId: string;
+    actionId: string;
+    actor: DraftActionActor;
+    expectedWorkspaceRevision: number;
+    expectedRevision: number;
+    expectedRefHead: string | null;
+  }
+) {
+  if (input.actor.kind !== 'human')
+    throw new DraftAuthoringConflictError('Deletion confirmation requires a human principal');
+  const initial = await requireWorkspace(db, input.projectId, input.workspaceId);
+  const { basis } = workspaceAuthoringState(initial.workspace_state!);
+  return transactWorkspaceAuthoring(db, { ...input, refName: basis.refName }, async (tx, draft) => {
+    const workspace = draft.workspace_state!;
+    const current = workspaceAuthoringState(workspace);
+    const action = current.ledger.actions.find((entry) => entry.actionId === input.actionId);
+    if (!action) throw new NotFoundError(input.actionId);
+    const subject = deletionSubject(
+      input.projectId,
+      input.workspaceId,
+      current.basis,
+      current.ledger,
+      action
+    );
+    if (!subject)
+      throw new DraftAuthoringConflictError(
+        'Only an exact generated deletion can be confirmed here'
+      );
+    const receipts = deletionAuthorizations(workspace);
+    const previous = matchingDeletionAuthorization(receipts, subject);
+    if (previous) return { workspace: null, value: previous };
+    const head = await getTransitionRefHead(tx, {
+      projectId: input.projectId,
+      refName: current.basis.refName,
+    });
+    if (
+      draft.revision !== input.expectedWorkspaceRevision ||
+      current.ledger.compositionRevision !== input.expectedRevision ||
+      current.basis.refHead !== input.expectedRefHead ||
+      head.head !== input.expectedRefHead ||
+      draft.target_branch !== current.basis.refName
+    )
+      throw new DraftAuthoringConflictError(
+        'Draft or branch changed; refresh before confirming deletion'
+      );
+    const receipt = {
+      schema: 't3x.application/deletion-authorization/v1' as const,
+      subjectDigest: subject.digest,
+      actionId: action.actionId,
+      paths: subject.paths,
+      actor: input.actor,
+      confirmedAt: new Date().toISOString(),
+    };
+    return {
+      workspace: { ...workspace, [DELETION_AUTHORIZATIONS]: [...receipts, receipt] },
+      value: receipt,
+    };
+  });
+}
+
 export async function readWorkspaceAuthoring(
   db: AnyDB,
   input: {
@@ -286,6 +352,10 @@ export async function readWorkspaceAuthoring(
 ) {
   const draft = await requireWorkspace(db, input.projectId, input.workspaceId);
   const { ledger, basis } = workspaceAuthoringState(draft.workspace_state!);
+  const head = await getTransitionRefHead(db, {
+    projectId: input.projectId,
+    refName: basis.refName,
+  });
   const limit = Math.min(100, Math.max(1, input.limit ?? 20));
   const actions = listDraftActions(ledger)
     .filter((a) => input.beforeSequence === undefined || a.sequence < input.beforeSequence)
@@ -297,12 +367,31 @@ export async function readWorkspaceAuthoring(
     { ...input, ledger, workspaceRevision: draft.revision }
   );
   const history = input.nodeId ? nodeHistory(ledger, input.nodeId, input.actionId) : null;
+  // Resolve from the same Workspace revision as current content, including
+  // immutable prepared snapshots. A missing contract must not hide Draft activity.
+  const schemaReview = await buildWorkspaceSchemaReview(
+    db,
+    input.projectId,
+    draft.workspace_state!
+  ).catch((error: unknown) => {
+    if (!(error instanceof DraftAuthoringConflictError)) throw error;
+    return null;
+  });
+  const currentSchema =
+    schemaReview?.draft ??
+    (await captureWorkspaceSchema(db, input.projectId, draft.workspace_state!).catch(
+      (error: unknown) => {
+        if (!(error instanceof DraftAuthoringConflictError)) throw error;
+        return { status: 'unknown' as const, schemaHash: null, definition: null, bindings: [] };
+      }
+    ));
   return {
     schema: 't3x.application/workspace-authoring-view/v1' as const,
     projectionVersion: 1,
     workspaceRevision: draft.revision,
     compositionRevision: ledger.compositionRevision,
     basis: { refName: basis.refName, refHead: basis.refHead, baseDigest: basis.baseDigest },
+    synchronization: { currentRefHead: head.head, required: head.head !== basis.refHead },
     sources: (Array.isArray(draft.workspace_state?.sourceBundle)
       ? draft.workspace_state.sourceBundle
       : []
@@ -317,16 +406,38 @@ export async function readWorkspaceAuthoring(
     candidateWindowTruncated,
     actions: actions.map((action) => {
       const cards = selectedActionView(ledger, action.actionId)!.cards;
+      const subject = deletionSubject(input.projectId, input.workspaceId, basis, ledger, action);
       return {
         ...action,
+        ...(subject
+          ? {
+              deletionConfirmation: {
+                status: matchingDeletionAuthorization(
+                  deletionAuthorizations(draft.workspace_state!),
+                  subject
+                )
+                  ? ('confirmed' as const)
+                  : ('required' as const),
+                paths: subject.paths,
+              },
+            }
+          : {}),
         affectedNodeCount: cards.length,
         affectedNodeIds: cards.map((card) => card.nodeId),
       };
     }),
     nextBeforeSequence: actions.length === limit ? actions.at(-1)!.sequence : null,
-    selected,
+    selected: selected
+      ? {
+          ...selected,
+          before: replayToRevision(ledger, selected.action.beforeRevision),
+          after: replayToRevision(ledger, selected.action.afterRevision),
+        }
+      : null,
     base: ledger.base,
     current: currentComposition(ledger),
+    currentSchema,
+    hasChanges: schemaReview ? workspaceSchemaReviewHasChanges(schemaReview) : undefined,
     netDiff: netDiffCards(ledger),
     node: history
       ? {
@@ -380,12 +491,121 @@ export async function readWorkspaceAuthoringCandidates(
 /** Application audit linkage; no authoring fields are added to protocol envelopes. */
 export function buildAuthoringPreparation(workspace: Record<string, unknown>) {
   const { ledger, basis } = workspaceAuthoringState(workspace);
+  const schemaCards = (
+    Array.isArray(workspace.schemaPreparations) ? workspace.schemaPreparations : []
+  ).flatMap((entry) => {
+    const parsed = AssistantSchemaSettingsViewSchema.safeParse(entry.schemaCard);
+    return parsed.success &&
+      parsed.data.status === 'applied' &&
+      entry.requestId === `assistant-schema:${parsed.data.settingsId}` &&
+      parsed.data.snapshot?.schemaHash === entry.schemaHash
+      ? [parsed.data]
+      : [];
+  });
   return {
     schema: 't3x.application/workspace-authoring-preparation/v1' as const,
     version: 1 as const,
     ledger,
     basis,
     bindings: buildAuthoringEffect(ledger).bindings,
+    ...(Array.isArray(workspace.authoringReconciliations)
+      ? { reconciliations: workspace.authoringReconciliations }
+      : {}),
+    schemaBindings: workspace.schemaBindings ?? [],
+    deletionAuthorizations: deletionAuthorizations(workspace),
+    workspaceSchemaBase: workspace.workspaceSchemaBase ?? null,
+    ...(schemaCards.length ? { schemaCards } : {}),
+  };
+}
+
+export interface WorkspaceAuthoringHistoryEntry {
+  schema: 't3x.application/workspace-authoring-history-entry/v1';
+  commitDigest: string;
+  committedAt: string;
+  transitionId: string;
+  preparationDigest: string | null;
+  compositionRevision: number;
+  basis: WorkspaceAuthoringBasis;
+  schemaHash?: string | null;
+}
+
+/** Recover the frozen ledger of a committed round whose basis matches, from its Commit preparation. */
+export async function findRetiredAuthoringLedger(
+  db: AnyDB,
+  workspace: Record<string, unknown>,
+  basis: unknown
+): Promise<DraftActionLedger | null> {
+  const history = Array.isArray(workspace.authoringHistory)
+    ? (workspace.authoringHistory as WorkspaceAuthoringHistoryEntry[])
+    : [];
+  const canonicalBasis = canonicalizeProtocolValue(JSON.parse(JSON.stringify(basis ?? null)));
+  const reconciliations = (workspace.authoringReconciliations ?? []) as Array<{
+    basis: unknown;
+    ledger: unknown;
+  }>;
+  const archived = reconciliations.find(
+    (entry) => canonicalizeProtocolValue(JSON.parse(JSON.stringify(entry.basis))) === canonicalBasis
+  );
+  if (archived) return parseDraftActionLedger(archived.ledger);
+  const entry = history.find(
+    (item) => canonicalizeProtocolValue(JSON.parse(JSON.stringify(item.basis))) === canonicalBasis
+  );
+  if (!entry) return null;
+  const preparation = await getTransitionProposalPreparation(db, entry.transitionId);
+  if (!preparation || preparation.digest !== entry.preparationDigest)
+    throw new DraftAuthoringConflictError('Committed authoring manifest is unavailable');
+  return parseDraftActionLedger(JSON.parse(preparation.canonicalJson).ledger);
+}
+
+/** Retire the committed ledger by reference and pin a fresh one at the new Commit result. */
+export function renewWorkspaceAuthoringState(
+  workspace: Record<string, unknown>,
+  input: {
+    commitDigest: string;
+    committedAt: string;
+    transitionId: string;
+    preparationDigest: string | null;
+    result: ReturnType<typeof createYOpsState>;
+    schemaBase?: import('@t3x-dev/api-client').WorkspaceSchemaDefinitionSnapshot;
+  }
+): Record<string, unknown> {
+  const { ledger, basis } = workspaceAuthoringState(workspace);
+  const history = Array.isArray(workspace.authoringHistory) ? workspace.authoringHistory : [];
+  const entry: WorkspaceAuthoringHistoryEntry = {
+    schema: 't3x.application/workspace-authoring-history-entry/v1',
+    commitDigest: input.commitDigest,
+    committedAt: input.committedAt,
+    transitionId: input.transitionId,
+    preparationDigest: input.preparationDigest,
+    compositionRevision: ledger.compositionRevision,
+    basis,
+    ...(input.schemaBase ? { schemaHash: input.schemaBase.schemaHash } : {}),
+  };
+  const nextBasis: WorkspaceAuthoringBasis = {
+    schema: 't3x.application/workspace-authoring-basis/v1',
+    refName: basis.refName,
+    refHead: input.commitDigest,
+    baseDigest: describeTransitionObject(input.result).digest,
+    initialization: {
+      requestId: `commit:${input.commitDigest}`,
+      facts: canonicalizeProtocolValue({ renewedFrom: input.commitDigest }),
+    },
+  };
+  const {
+    assistantSchemaSettings: _settings,
+    schemaPreparations: _preparations,
+    schemaPending: _pending,
+    ...nextWorkspace
+  } = workspace;
+  return {
+    ...nextWorkspace,
+    authoringHistory: [...history, entry],
+    authoringLedger: createDraftActionLedger(input.result.value as DraftDocument),
+    authoringBasis: nextBasis,
+    baseCommitHash: input.commitDigest,
+    ...(input.schemaBase
+      ? { workspaceSchemaBase: { refHead: input.commitDigest, snapshot: input.schemaBase } }
+      : {}),
   };
 }
 
@@ -397,9 +617,10 @@ export function assertWorkspaceAuthoringReview(
   const frozen = buildAuthoringPreparation(workspace);
   const built = buildAuthoringEffect(frozen.ledger);
   const preparation = graph.preparation ? JSON.parse(graph.preparation.canonicalJson) : null;
+  const { schemaReview: _schemaReview, ...manifest } = preparation ?? {};
   if (
     !preparation ||
-    canonicalizeProtocolValue(preparation) !==
+    canonicalizeProtocolValue(manifest) !==
       canonicalizeProtocolValue(JSON.parse(JSON.stringify(frozen))) ||
     describeTransitionObject(graph.effect).digest !== describeTransitionObject(built.effect).digest
   )

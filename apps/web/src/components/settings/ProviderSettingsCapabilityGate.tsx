@@ -5,13 +5,14 @@ import { useDeploymentCapabilities } from '@/components/deployment/DeploymentCap
 import { ProvidersSettingsPanel } from '@/components/settings/ProvidersSettingsPanel';
 
 export function ProviderSettingsCapabilityGate() {
-  const { capabilities, canAdministerProviderCredentials, status } = useDeploymentCapabilities();
+  const { capabilities, canAdministerProviderCredentials, status, administrationStatus, refresh } =
+    useDeploymentCapabilities();
 
-  if (status === 'loading') {
+  if (status === 'loading' || administrationStatus === 'loading') {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-secondary)] px-4 py-3 text-sm text-[var(--text-secondary)]">
         <Loader2 className="h-4 w-4 animate-spin" />
-        Checking deployment capabilities…
+        Checking deployment and operator permissions…
       </div>
     );
   }
@@ -43,9 +44,15 @@ export function ProviderSettingsCapabilityGate() {
         Provider settings unavailable
       </div>
       <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-        T3X could not verify whether this deployment permits local provider credentials. No provider
-        administration actions are enabled.
+        {status === 'ready' &&
+        administrationStatus === 'ready' &&
+        capabilities.deployment_mode !== 'unavailable'
+          ? 'Provider credentials require deployment operator access. Contact your deployment administrator.'
+          : 'T3X could not verify deployment or operator permissions. Retry to check access.'}
       </p>
+      <button type="button" onClick={refresh} className="mt-3 text-sm underline">
+        Retry access check
+      </button>
     </div>
   );
 }

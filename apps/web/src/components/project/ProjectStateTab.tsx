@@ -1,20 +1,24 @@
 'use client';
 
 import {
+  Box,
   ChevronDown,
   ChevronRight,
   CircleHelp,
   Code2,
   Copy,
   ExternalLink,
+  Eye,
   FileText,
-  GitBranch,
   GitCommit,
   History,
   Link2,
+  List,
   type LucideIcon,
+  Maximize2,
+  Minus,
   Network,
-  Play,
+  Pencil,
   Search,
   ShieldCheck,
   TableProperties,
@@ -35,21 +39,20 @@ import { StatePrdReader } from '@/components/project/StatePrdReader';
 import { StatePromptReader } from '@/components/project/StatePromptReader';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { StateSkillReader } from '@/components/project/StateSkillReader';
-import { StateExportButton } from '@/components/shared/StateExportButton';
 import { Button } from '@/components/ui/button';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import {
-  type WorkspaceReviewStructureRow,
-  WorkspaceReviewStructureTree,
-} from '@/components/workspaces/WorkspaceComposeReviewSurface';
 import {
   buildStructuredStateDiff,
   type StructuredDiffChange,
   type StructuredDiffKind,
 } from '@/domain/diff/structuredStateDiff';
 import { shortHash } from '@/domain/format/formatters';
-import { getProjectIdRepoPath, getProjectIdWorkspacePath } from '@/domain/project/repoPath';
+import {
+  getProjectIdHistoryPath,
+  getProjectIdRepoPath,
+  getProjectIdWorkspacePath,
+} from '@/domain/project/repoPath';
 import {
   buildCanonicalStateYaml,
   buildStatePointRows,
@@ -64,23 +67,24 @@ import {
 } from '@/domain/project/stateViewModel';
 import type { YSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 import { repositoryConversationSourceHref } from '@/domain/sourceEvidenceNavigation';
-import { selectWorkspaceForBranch } from '@/domain/workspaces/navigation';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitOperations } from '@/hooks/commits/useCommitOperations';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
+import { useRepositoryProfile } from '@/hooks/projects/useRepositoryProfile';
 import { useSkillArtifact } from '@/hooks/projects/useSkillArtifact';
 import { useSchemaArtifactRegistry } from '@/hooks/schemas/useSchemaArtifactRegistry';
 import { useBranches } from '@/hooks/shared/useBranches';
 import { useStateViewPreference } from '@/hooks/shared/useStateViewPreference';
 import { useCommitTransitionView } from '@/hooks/workspaces/useCommitTransitionView';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
-import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { ApiCommit } from '@/types/api';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
-import { buildReturnTo, withReturnTo } from '@/utils/navigationReturn';
+import { buildReturnTo, safeInternalReturnTo } from '@/utils/navigationReturn';
+import inspectionStyles from './StateInspection.module.css';
+import overviewStyles from './StateOverviewView.module.css';
 
 export type ProjectSnapshotView = 'overview' | 'structure' | 'code';
 export type ProjectStateView = ProjectSnapshotView | 'canvas';
@@ -88,6 +92,8 @@ type ProjectStateMode = 'snapshot' | 'canvas';
 type BranchFocus = string;
 
 interface ProjectStateTabProps {
+  repositoryProfile?: import('@t3x-dev/api-client').RepositoryProfile;
+  canEditRepository?: boolean;
   initialView?: ProjectStateView;
   onRunValidation?: (commitHash: string, schemaName: string) => Promise<void> | void;
   projectId: string;
@@ -102,13 +108,27 @@ interface ProjectStateTabProps {
 }
 
 interface StateSnapshot {
-  auxiliaryError: string | null;
   commits: ApiCommit[];
   headCommit: ApiCommit | null;
   loading: boolean;
+  primaryError: string | null;
+  scope: string;
+}
+
+const EMPTY_SNAPSHOT: StateSnapshot = {
+  commits: [],
+  headCommit: null,
+  loading: true,
+  primaryError: null,
+  scope: '',
+};
+
+interface StateSnapshotContext {
+  commit: ApiCommit;
+  error: string | null;
+  loading: boolean;
   operations: StateOperationEntry[];
   parentCommit: ApiCommit | null;
-  primaryError: string | null;
 }
 
 const SNAPSHOT_VIEWS: Array<{
@@ -126,7 +146,7 @@ const EMPTY_BRANCH_HEADS: Readonly<Record<string, string | null>> = {};
 function parseStateView(value: string | null, fallback: ProjectStateView): ProjectStateView {
   if (value === 'render') return 'overview';
   if (value === 'canvas') return 'canvas';
-  if (value === 'points') return 'structure';
+  if (value === 'points' || value === 'data') return 'structure';
   return SNAPSHOT_VIEWS.some((view) => view.id === value)
     ? (value as ProjectSnapshotView)
     : fallback;
@@ -140,10 +160,13 @@ export function ProjectStateTab({
   projectDescription,
   projectOwner,
   projectVisibility,
+  repositoryProfile,
+  canEditRepository = false,
   validation,
   validationError,
   validationRunning = false,
 }: ProjectStateTabProps) {
+  const saveRepositoryProfile = useRepositoryProfile(projectId);
   const pathname = usePathname();
   const { push: pushRoute, replace: replaceRoute } = useRouter();
   const searchParams = useSearchParams();
@@ -177,19 +200,20 @@ export function ProjectStateTab({
     refresh,
   } = useBranches(projectId, true);
   const projectWorkspaces = useProjectWorkspaces(projectId, true);
-  const { saveDraft } = useWorkspaceFlow();
   const { loadCommit } = useCommitByHash();
   const { loadCommits } = useCommitsList();
   const { loadOperations } = useCommitOperations();
-  const [snapshot, setSnapshot] = useState<StateSnapshot>({
-    auxiliaryError: null,
-    commits: [],
-    headCommit: null,
-    loading: true,
-    operations: [],
-    parentCommit: null,
-    primaryError: null,
-  });
+  const selectionScope = JSON.stringify([
+    projectId,
+    branchFocus,
+    focusedCommitHash,
+    snapshotRefreshVersion,
+  ]);
+  const branchScope = JSON.stringify([projectId, branchFocus]);
+  const [loadedSnapshot, setSnapshot] = useState<StateSnapshot>(EMPTY_SNAPSHOT);
+  // Never render the previous branch/project while its replacement effect is starting.
+  const snapshot = loadedSnapshot.scope === selectionScope ? loadedSnapshot : EMPTY_SNAPSHOT;
+  const [loadedContext, setLoadedContext] = useState<StateSnapshotContext | null>(null);
 
   useEffect(() => {
     setActiveView(routeView);
@@ -234,101 +258,77 @@ export function ProjectStateTab({
 
   const snapshotTargetHead = focusedCommitHash ?? branchHeads[branchFocus];
   const loadedSnapshotScope = useRef('');
+  const waitingForBranch =
+    snapshotTargetHead === undefined &&
+    !inspectedHeadByBranchRef.current[branchScope] &&
+    branchesLoading;
 
   useEffect(() => {
     if (!snapshotEnabled) return;
 
     const selectedHead =
-      focusedCommitHash ?? inspectedHeadByBranchRef.current[branchFocus] ?? snapshotTargetHead;
-    const scopePrefix = `${projectId}:${branchFocus}:${snapshotRefreshVersion}:`;
-    if (selectedHead && loadedSnapshotScope.current === `${scopePrefix}${selectedHead}`) return;
+      focusedCommitHash ?? inspectedHeadByBranchRef.current[branchScope] ?? snapshotTargetHead;
+    const scopePrefix = `${selectionScope}:`;
+    if (loadedSnapshotScope.current === `${scopePrefix}${selectedHead ?? ''}`) return;
+    // The registered pointer is authoritative. Wait for it before falling back to history.
+    if (waitingForBranch) return;
     let cancelled = false;
     const load = async () => {
-      setSnapshot({
-        auxiliaryError: null,
-        commits: [],
-        headCommit: null,
-        loading: true,
-        operations: [],
-        parentCommit: null,
-        primaryError: null,
-      });
+      setSnapshot({ ...EMPTY_SNAPSHOT, scope: selectionScope });
       try {
         const requestedBranch = branchFocus || 'main';
         const branchHeadHash = selectedHead;
-        let commits = await loadCommits(projectId, requestedBranch, 100);
-        let headCommit = selectVisibleBranchHead(commits);
+        let commits: ApiCommit[] = [];
+        let headCommit: ApiCommit | null = null;
         if (branchHeadHash) {
           headCommit = await loadCommit(branchHeadHash, projectId);
           if (headCommit.hash !== branchHeadHash) {
             throw new Error('Branch HEAD response does not match the registered branch pointer.');
           }
-          commits = [headCommit, ...commits.filter((commit) => commit.hash !== headCommit?.hash)];
+          commits = [headCommit];
+        } else if (branchHeadHash !== null) {
+          // Compatibility fallback when branch metadata is unavailable, not an empty branch.
+          commits = await loadCommits(projectId, requestedBranch, 100);
+          headCommit = selectVisibleBranchHead(commits);
         }
         if (commits.some((commit) => commit.project_id !== projectId)) {
           throw new Error('Commit response does not match the selected project.');
         }
-        if (
-          commits.some(
-            (commit) => commit.hash !== branchHeadHash && commit.branch !== requestedBranch
-          )
-        ) {
+        // Origin branch is not reachability: merged ancestors retain their own branch.
+        const byHash = new Map(commits.map((commit) => [commit.hash, commit]));
+        const reachable = new Set<string>();
+        const pending = commits
+          .filter((commit) => commit.branch === requestedBranch || commit.hash === branchHeadHash)
+          .map((commit) => commit.hash);
+        while (pending.length) {
+          const hash = pending.pop()!;
+          if (reachable.has(hash)) continue;
+          reachable.add(hash);
+          pending.push(...(byHash.get(hash)?.parents ?? []));
+        }
+        if (commits.some((commit) => !reachable.has(commit.hash))) {
           throw new Error('Commit response does not match the selected project and branch.');
         }
-        let operations: StateOperationEntry[] = [];
-        let parentCommit: ApiCommit | null = null;
-        const auxiliaryErrors: string[] = [];
-
-        if (headCommit) {
-          try {
-            operations = (await loadOperations(headCommit.hash, projectId)).operations;
-          } catch {
-            auxiliaryErrors.push('YOps log unavailable.');
-          }
-
-          const parentHash = headCommit.parents[0];
-          if (parentHash) {
-            try {
-              parentCommit = commits.find((commit) => commit.hash === parentHash) ?? null;
-              if (!parentCommit) parentCommit = await loadCommit(parentHash, projectId);
-              if (parentCommit.project_id !== projectId || parentCommit.hash !== parentHash) {
-                throw new Error('Parent commit response does not match the selected project.');
-              }
-            } catch {
-              auxiliaryErrors.push('Parent commit unavailable.');
-            }
-          }
-        }
-
         if (!cancelled) {
-          if (
-            headCommit &&
-            !focusedCommitHash &&
-            !inspectedHeadByBranchRef.current[requestedBranch]
-          ) {
-            inspectedHeadByBranchRef.current[requestedBranch] = headCommit.hash;
+          if (headCommit && !focusedCommitHash && !inspectedHeadByBranchRef.current[branchScope]) {
+            inspectedHeadByBranchRef.current[branchScope] = headCommit.hash;
           }
           loadedSnapshotScope.current = `${scopePrefix}${headCommit?.hash ?? ''}`;
           setSnapshot({
-            auxiliaryError: auxiliaryErrors.join(' ') || null,
             commits,
             headCommit,
             loading: false,
-            operations,
-            parentCommit,
             primaryError: null,
+            scope: selectionScope,
           });
         }
       } catch (error) {
         if (!cancelled) {
           setSnapshot({
-            auxiliaryError: null,
-            commits: [],
-            headCommit: null,
+            ...EMPTY_SNAPSHOT,
             loading: false,
-            operations: [],
-            parentCommit: null,
             primaryError: formatError(error, 'Committed state is unavailable.'),
+            scope: selectionScope,
           });
         }
       }
@@ -340,17 +340,62 @@ export function ProjectStateTab({
     };
   }, [
     branchFocus,
+    branchScope,
+    waitingForBranch,
+    selectionScope,
     snapshotTargetHead,
     focusedCommitHash,
     loadCommit,
     loadCommits,
-    loadOperations,
     projectId,
     snapshotEnabled,
     snapshotRefreshVersion,
   ]);
 
   const headCommit = snapshot.headCommit;
+  const context = loadedContext?.commit === headCommit ? loadedContext : null;
+  const contextLoading = Boolean(headCommit) && (!context || context.loading);
+  useEffect(() => {
+    if (!headCommit) return;
+    let cancelled = false;
+    setLoadedContext({
+      commit: headCommit,
+      error: null,
+      loading: true,
+      operations: [],
+      parentCommit: null,
+    });
+    const loadParent = async () => {
+      const parentHash = headCommit.parents[0];
+      if (!parentHash) return null;
+      const parent =
+        snapshot.commits.find((commit) => commit.hash === parentHash) ??
+        (await loadCommit(parentHash, projectId));
+      if (parent.project_id !== projectId || parent.hash !== parentHash) {
+        throw new Error('Parent commit response does not match the selected project.');
+      }
+      return parent;
+    };
+    // Change evidence is useful, but neither request is required to read committed content.
+    void Promise.allSettled([loadOperations(headCommit.hash, projectId), loadParent()]).then(
+      ([operations, parent]) => {
+        if (cancelled) return;
+        setLoadedContext({
+          commit: headCommit,
+          error: joinWarnings(
+            operations.status === 'rejected' ? 'YOps log unavailable.' : null,
+            parent.status === 'rejected' ? 'Parent commit unavailable.' : null
+          ),
+          loading: false,
+          operations: operations.status === 'fulfilled' ? operations.value.operations : [],
+          parentCommit: parent.status === 'fulfilled' ? parent.value : null,
+        });
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [headCommit, snapshot.commits, loadCommit, loadOperations, projectId]);
   const committedWorkspace = useMemo(
     () => findCommittedWorkspaceForCommit(projectWorkspaces.workspaces, headCommit),
     [headCommit, projectWorkspaces.workspaces]
@@ -368,8 +413,7 @@ export function ProjectStateTab({
     () => workspaceDraftOperationsToStateOperations(committedWorkspace?.yopsDraft.operations ?? []),
     [committedWorkspace]
   );
-  const effectiveOperations =
-    snapshot.operations.length > 0 ? snapshot.operations : workspaceOperations;
+  const effectiveOperations = context?.operations.length ? context.operations : workspaceOperations;
   const workspaceGaps = useMemo(
     () => workspaceValidationGaps(committedWorkspace),
     [committedWorkspace]
@@ -448,28 +492,24 @@ export function ProjectStateTab({
   const validationIssueCount = currentValidation
     ? currentValidation.errorCount + currentValidation.gapCount
     : validationGaps.length;
-  const rootKey = headCommit?.content.trees?.[0]?.key ?? 'state';
   const committedDiffChanges = useMemo(
     () =>
-      headCommit && snapshot.parentCommit
+      headCommit && context?.parentCommit
         ? buildStructuredStateDiff({
-            baseline: snapshot.parentCommit.content,
+            baseline: context.parentCommit.content,
             head: headCommit.content,
             workspace: committedWorkspace,
           })
         : [],
-    [committedWorkspace, headCommit, snapshot.parentCommit]
+    [committedWorkspace, headCommit, context?.parentCommit]
   );
-  const stateWarning = joinWarnings(
-    snapshot.auxiliaryError,
-    projectWorkspaces.error,
-    validationError
-  );
+  const stateWarning = joinWarnings(projectWorkspaces.error, validationError);
   const currentStateReturnTo = buildReturnTo(pathname, routeQuery);
-  const historyHref = withReturnTo(
-    `/project/${encodeURIComponent(projectId)}/history?branch=${encodeURIComponent(branchFocus)}`,
-    currentStateReturnTo
-  );
+  const historyHref = getProjectIdHistoryPath(projectId, {
+    branch: branchFocus,
+    returnTo: currentStateReturnTo,
+  });
+  const historicalReturnHref = safeInternalReturnTo(searchParams.get('returnTo'), '');
   const schemaHref = `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ tab: 'schemas', branch: branchFocus }).toString()}`;
   const workspaceHref = getProjectIdWorkspacePath(projectId, { branch: branchFocus });
   const mainHeadCommitHash = branchHeads.main ?? null;
@@ -481,40 +521,12 @@ export function ProjectStateTab({
     latestBranchHeadHash !== dismissedHeadHash
       ? latestBranchHeadHash
       : null;
-  const mainSchemaBindings = resolveMainSchemaBindings(
-    projectWorkspaces.workspaces,
-    mainHeadCommitHash
-  );
   const handleCreateBranch = useCallback(
     async (name: string, fromBranch = branchFocus) => {
-      const createdBranch = await createBranch(name, fromBranch);
-      const workspaceId = `workspace_branch:${encodeURIComponent(name)}`;
-      await saveDraft({
-        id: workspaceId,
-        projectId,
-        title: `Branch workspace: ${name}`,
-        summary: `Workspace for collecting source evidence on ${name}.`,
-        status: 'draft',
-        updatedAt: new Date().toISOString(),
-        baseCommitHash: createdBranch.head_commit_hash ?? null,
-        targetBranch: name,
-        sourceBundle: [],
-        schemaBindings: mainSchemaBindings,
-        schemaCandidate: {
-          summary: 'Collect source evidence, then generate a candidate proposal.',
-          fields: [],
-        },
-        schemaReview: {
-          verdict: 'needs_review',
-          summary: 'This workspace needs source evidence.',
-          gaps: ['Add source evidence for this branch.'],
-        },
-        yopsDraft: { id: `draft:${workspaceId}`, operations: [] },
-        outputTargets: [],
-      });
+      await createBranch(name, fromBranch);
       pushRoute(getProjectIdWorkspacePath(projectId, { branch: name }));
     },
-    [branchFocus, createBranch, mainSchemaBindings, projectId, pushRoute, saveDraft]
+    [branchFocus, createBranch, projectId, pushRoute]
   );
   const checkCurrentBranchForUpdates = useCallback(async () => {
     setFreshnessChecking(true);
@@ -548,8 +560,10 @@ export function ProjectStateTab({
   }, [branchFocus, checkCurrentBranchForUpdates]);
 
   const handleViewLatest = useCallback(() => {
-    if (!availableHeadHash) return;
-    inspectedHeadByBranchRef.current[branchFocus] = availableHeadHash;
+    const latestHash = availableHeadHash ?? latestBranchHeadHash;
+    if (!latestHash && !focusedCommitHash) return;
+    if (latestHash) inspectedHeadByBranchRef.current[branchScope] = latestHash;
+    else delete inspectedHeadByBranchRef.current[branchScope];
     setDismissedHeadHash(null);
     if (focusedCommitHash) {
       const params = new URLSearchParams(routeQueryRef.current);
@@ -558,7 +572,14 @@ export function ProjectStateTab({
       replaceRoute(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
     }
     setSnapshotRefreshVersion((version) => version + 1);
-  }, [availableHeadHash, branchFocus, focusedCommitHash, pathname, replaceRoute]);
+  }, [
+    availableHeadHash,
+    latestBranchHeadHash,
+    branchScope,
+    focusedCommitHash,
+    pathname,
+    replaceRoute,
+  ]);
 
   const readinessLabel = snapshot.loading
     ? 'Loading State'
@@ -582,37 +603,50 @@ export function ProjectStateTab({
       : 'Not checked';
   return (
     <section
-      className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--surface-panel)]"
+      className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--surface-card)]"
       data-state-view={activeView}
     >
-      {activeView === 'canvas' ? (
-        <div className="flex min-h-10 shrink-0 flex-wrap items-center border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-1">
-          <StateModeTabs
-            activeMode={activeView === 'canvas' ? 'canvas' : 'snapshot'}
-            onModeChange={(mode) =>
-              updateActiveView(mode === 'canvas' ? 'canvas' : lastSnapshotView)
-            }
-          />
-        </div>
-      ) : null}
+      <div className="flex min-h-10 shrink-0 flex-wrap items-center border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-1">
+        <StateModeTabs
+          activeMode={activeView === 'canvas' ? 'canvas' : 'snapshot'}
+          onModeChange={(mode) => updateActiveView(mode === 'canvas' ? 'canvas' : lastSnapshotView)}
+        />
+      </div>
 
       <div className="grid min-h-0 flex-1 overflow-auto min-[1121px]:overflow-hidden">
-        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--surface-panel)]">
+        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--surface-card)]">
           {activeView !== 'canvas' ? (
             <>
               <StateInspectionToolbar
-                projectId={projectId}
                 activeView={activeView}
                 branch={branchFocus || 'main'}
                 branchOptions={branchOptions}
                 headCommit={headCommit}
                 headCommitHash={mainHeadCommitHash}
                 historyHref={historyHref}
+                historical={Boolean(focusedCommitHash)}
                 onBranchChange={updateBranchFocus}
                 onCreateBranch={handleCreateBranch}
                 onViewChange={updateActiveView}
                 workspaceHref={workspaceHref}
               />
+              {focusedCommitHash ? (
+                <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-[var(--stroke-divider)] px-4 py-2 text-xs text-[var(--text-secondary)]">
+                  <button
+                    type="button"
+                    onClick={handleViewLatest}
+                    className="text-[var(--accent-commit)]"
+                  >
+                    View latest
+                  </button>
+                  {historicalReturnHref ? (
+                    <Link href={historicalReturnHref} className="text-[var(--accent-commit)]">
+                      Back to previous page
+                    </Link>
+                  ) : null}
+                </div>
+              ) : null}
+
               {activeView === 'structure' ? (
                 <div className="sr-only">
                   <span>{readinessLabel}</span>
@@ -638,7 +672,7 @@ export function ProjectStateTab({
                   ) : null}
                 </div>
               ) : null}
-              {availableHeadHash ? (
+              {availableHeadHash && !focusedCommitHash ? (
                 <StateUpdateBanner
                   branch={branchFocus}
                   hash={availableHeadHash}
@@ -646,122 +680,132 @@ export function ProjectStateTab({
                   onViewLatest={handleViewLatest}
                 />
               ) : null}
-              {snapshot.primaryError ? (
+              {snapshot.primaryError && activeView !== 'overview' ? (
                 <StateEmpty message={snapshot.primaryError} title="No committed state loaded" />
               ) : null}
-              {!snapshot.primaryError && !snapshot.loading && !headCommit ? (
+              {!snapshot.primaryError &&
+              !snapshot.loading &&
+              !headCommit &&
+              activeView !== 'overview' ? (
                 <StateEmpty
                   message="Start in a Workspace, review your changes, and create the first commit."
-                  workspaceHref={workspaceHref}
                   title="No commit on this branch"
                 />
               ) : null}
-              {!snapshot.primaryError && snapshot.loading ? (
-                <StateEmpty
-                  message="Loading commit, YOps, and validation context."
-                  title="Loading state"
+              {!snapshot.primaryError && snapshot.loading && activeView !== 'overview' ? (
+                <StateEmpty message="Reading this version’s content." title="Loading state" />
+              ) : null}
+              {activeView === 'overview' ? (
+                <StateOverviewView
+                  hideHeader
+                  navigation={null}
+                  historyHref={historyHref}
+                  historyReturnTo={currentStateReturnTo}
+                  workspaceHref={workspaceHref}
+                  commits={snapshot.commits}
+                  commit={headCommit}
+                  projectId={projectId}
+                  commitDigest={
+                    snapshot.loading || snapshot.primaryError ? null : (headCommit?.hash ?? null)
+                  }
+                  stateLoading={snapshot.loading}
+                  stateError={snapshot.primaryError}
+                  projectName={projectName}
+                  projectDescription={projectDescription}
+                  projectOwner={projectOwner}
+                  projectVisibility={projectVisibility}
+                  repositoryProfile={repositoryProfile}
+                  canEditRepository={canEditRepository}
+                  onSaveRepositoryProfile={saveRepositoryProfile}
+                  introductionSource={focusedCommitHash ? 'version' : 'repository'}
+                  schemaName={schemaName}
+                  schemaHref={schemaHref}
+                  onViewStructure={(path) => {
+                    setPathQuery(path ?? '');
+                    updateActiveView('structure');
+                  }}
+                  validationLabel={readinessLabel}
+                  refName={branchFocus}
+                  onAuthorRevision={(digest) => {
+                    void refresh();
+                    const params = new URLSearchParams(routeQueryRef.current);
+                    params.set('commit', digest);
+                    params.set('view', 'overview');
+                    replaceRoute(`${pathname}?${params.toString()}`, { scroll: false });
+                  }}
+                  reader={
+                    skillRenderModel || prdRenderModel || promptRenderModel
+                      ? (expanded, expand) => (
+                          <>
+                            {skillRenderModel ? (
+                              <StateSkillReader
+                                artifact={skillArtifact.artifact}
+                                artifactError={skillArtifact.error?.message ?? null}
+                                artifactLoading={skillArtifact.loading}
+                                model={skillRenderModel}
+                                schemaName={schemaName}
+                                validationGapCount={validationGapCount}
+                                validationReady={validationReady}
+                                yamlText={yamlText}
+                              />
+                            ) : null}
+                            {prdRenderModel ? (
+                              <StatePrdReader
+                                compact={!expanded}
+                                onRequestExpand={expand}
+                                model={prdRenderModel}
+                                schemaArtifacts={prdSchemaRegistry.artifacts}
+                                schemaComposition={schemaCompositionWorkspace?.schemaComposition}
+                                schemaCompositionSource={
+                                  schemaCompositionWorkspace === committedWorkspace
+                                    ? 'committed'
+                                    : 'workspace'
+                                }
+                                schemaName={schemaName}
+                                schemaRegistryHref={schemaHref}
+                                validationGapCount={validationGapCount}
+                                validationReady={validationReady}
+                                yamlText={yamlText}
+                              />
+                            ) : null}
+                            {promptRenderModel ? (
+                              <StatePromptReader
+                                model={promptRenderModel}
+                                schemaName={schemaName}
+                                validationGapCount={validationIssueCount}
+                                validationReady={validationReady}
+                                yamlText={yamlText}
+                              />
+                            ) : null}
+                          </>
+                        )
+                      : undefined
+                  }
                 />
               ) : null}
-              {!snapshot.primaryError && !snapshot.loading && headCommit ? (
-                <>
-                  {activeView === 'overview' ? (
-                    <StateOverviewView
-                      key={headCommit.hash}
-                      projectId={projectId}
-                      commitDigest={headCommit.hash}
-                      projectName={projectName}
-                      projectDescription={projectDescription}
-                      projectOwner={projectOwner}
-                      projectVisibility={projectVisibility}
-                      schemaName={schemaName}
-                      schemaHref={schemaHref}
-                      onViewStructure={() => updateActiveView('structure')}
-                      validationLabel={readinessLabel}
-                      refName={branchFocus}
-                      onAuthorRevision={(digest) => {
-                        void refresh();
-                        const params = new URLSearchParams(routeQueryRef.current);
-                        params.set('commit', digest);
-                        params.set('view', 'overview');
-                        replaceRoute(`${pathname}?${params.toString()}`, { scroll: false });
-                      }}
-                      reader={
-                        skillRenderModel || prdRenderModel || promptRenderModel
-                          ? (expanded, expand) => (
-                              <>
-                                {skillRenderModel ? (
-                                  <StateSkillReader
-                                    artifact={skillArtifact.artifact}
-                                    artifactError={skillArtifact.error?.message ?? null}
-                                    artifactLoading={skillArtifact.loading}
-                                    model={skillRenderModel}
-                                    schemaName={schemaName}
-                                    validationGapCount={validationGapCount}
-                                    validationReady={validationReady}
-                                    yamlText={yamlText}
-                                  />
-                                ) : null}
-                                {prdRenderModel ? (
-                                  <StatePrdReader
-                                    compact={!expanded}
-                                    onRequestExpand={expand}
-                                    model={prdRenderModel}
-                                    schemaArtifacts={prdSchemaRegistry.artifacts}
-                                    schemaComposition={
-                                      schemaCompositionWorkspace?.schemaComposition
-                                    }
-                                    schemaCompositionSource={
-                                      schemaCompositionWorkspace === committedWorkspace
-                                        ? 'committed'
-                                        : 'workspace'
-                                    }
-                                    schemaName={schemaName}
-                                    schemaRegistryHref={schemaHref}
-                                    validationGapCount={validationGapCount}
-                                    validationReady={validationReady}
-                                    yamlText={yamlText}
-                                  />
-                                ) : null}
-                                {promptRenderModel ? (
-                                  <StatePromptReader
-                                    model={promptRenderModel}
-                                    schemaName={schemaName}
-                                    validationGapCount={validationIssueCount}
-                                    validationReady={validationReady}
-                                    yamlText={yamlText}
-                                  />
-                                ) : null}
-                              </>
-                            )
-                          : undefined
-                      }
-                    />
-                  ) : null}
-                  {activeView === 'structure' ? (
-                    <StateStructureView
-                      branch={branchFocus || 'main'}
-                      changeReason={headCommit.message?.trim() ?? ''}
-                      diffChanges={committedDiffChanges}
-                      headCommit={headCommit}
-                      modifiedLabel={formatRelativeTime(headCommit.committed_at)}
-                      pathQuery={pathQuery}
-                      onPathQueryChange={setPathQuery}
-                      rows={pointRows}
-                      schemaName={schemaName}
-                      validationIssues={currentValidation?.issues ?? validationGaps}
-                      validationReady={validationReady}
-                      readOnly
-                    />
-                  ) : null}
-                  {activeView === 'code' ? (
-                    <StateCodeView
-                      yamlText={yamlText}
-                      branch={branchFocus}
-                      rootKey={rootKey}
-                      commitHash={headCommit.hash}
-                    />
-                  ) : null}
-                </>
+              {!snapshot.primaryError &&
+              !snapshot.loading &&
+              headCommit &&
+              (activeView === 'structure' || activeView === 'code') ? (
+                <StateStructureView
+                  dataMode={activeView}
+                  onDataModeChange={updateActiveView}
+                  yamlText={yamlText}
+                  branch={branchFocus || 'main'}
+                  changeReason={headCommit.message?.trim() ?? ''}
+                  diffChanges={committedDiffChanges}
+                  contextLoading={contextLoading}
+                  contextError={context?.error}
+                  headCommit={headCommit}
+                  modifiedLabel={formatRelativeTime(headCommit.committed_at)}
+                  pathQuery={pathQuery}
+                  onPathQueryChange={setPathQuery}
+                  rows={pointRows}
+                  schemaName={schemaName}
+                  validationIssues={currentValidation?.issues ?? validationGaps}
+                  validationReady={validationReady}
+                  readOnly
+                />
               ) : null}
             </>
           ) : (
@@ -772,7 +816,6 @@ export function ProjectStateTab({
               projectId={projectId}
               projectName={projectName}
               snapshotLoading={branchesLoading}
-              stateHref={`${pathname}?branch=${encodeURIComponent(branchFocus || 'main')}`}
             />
           )}
         </main>
@@ -782,7 +825,6 @@ export function ProjectStateTab({
 }
 
 function StateInspectionToolbar({
-  projectId,
   activeView,
   branch,
   branchOptions,
@@ -793,8 +835,9 @@ function StateInspectionToolbar({
   onCreateBranch,
   onViewChange,
   workspaceHref,
+  historical,
 }: {
-  projectId: string;
+  historical: boolean;
   activeView: ProjectSnapshotView;
   branch: string;
   branchOptions: string[];
@@ -803,65 +846,81 @@ function StateInspectionToolbar({
   historyHref: string;
   onBranchChange: (branch: string) => void;
   onCreateBranch: (name: string, fromBranch: string) => Promise<void>;
-  onViewChange: (view: ProjectStateView) => void;
+  onViewChange: (view: ProjectSnapshotView) => void;
   workspaceHref: string;
 }) {
   return (
-    <div className="flex min-h-[45px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-8 py-1">
-      <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-        <StateBranchControls
-          branch={branch}
-          branchOptions={branchOptions}
-          headCommitHash={headCommitHash}
-          onBranchChange={onBranchChange}
-          onCreateBranch={onCreateBranch}
-          showCreate={false}
-        />
-        <SegmentedControl
-          ariaLabel="State views"
-          className="h-[34px]"
-          itemClassName="min-w-[104px]"
-          items={SNAPSHOT_VIEWS.map((view) => ({
-            icon: view.icon,
-            label: view.label,
-            value: view.id,
-          }))}
-          onValueChange={onViewChange}
-          value={activeView}
-        />
-        {headCommit ? <h2 className="sr-only">{headCommit.message || 'Committed state'}</h2> : null}
-      </div>
-
-      <div className="flex shrink-0 items-center gap-2">
-        <Button size="sm" variant="canvas-outline" onClick={() => onViewChange('canvas')}>
-          Canvas
-        </Button>
-        {headCommit ? (
-          <StateExportButton projectId={projectId} commitDigest={headCommit.hash} />
-        ) : null}
-        <Button
-          asChild
-          className="h-[34px] rounded-[5px] px-3 text-xs text-[var(--text-primary)]"
-          size="sm"
-          variant="canvas-outline"
-        >
+    <div className={`${inspectionStyles.surface} ${inspectionStyles.toolbar}`}>
+      <div className={inspectionStyles.sub2}>
+        <div className={overviewStyles.toolbar} style={{ margin: 0, minHeight: 32 }}>
+          <div className={overviewStyles.viewTabs} role="tablist" aria-label="State views">
+            {(
+              [
+                { id: 'overview', label: 'Overview', icon: Eye },
+                { id: 'structure', label: 'Structure', icon: TableProperties },
+              ] as const
+            ).map((view) => {
+              const Icon = view.icon;
+              return (
+                <button
+                  key={view.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={
+                    view.id === 'overview' ? activeView === 'overview' : activeView !== 'overview'
+                  }
+                  onClick={() => onViewChange(view.id)}
+                >
+                  <Icon aria-hidden="true" />
+                  {view.label}
+                </button>
+              );
+            })}
+          </div>
+          <StateBranchControls
+            branch={branch}
+            branchOptions={branchOptions}
+            headCommitHash={headCommitHash}
+            onBranchChange={onBranchChange}
+            onCreateBranch={onCreateBranch}
+            showCreate={false}
+          />
+          {headCommit ? (
+            <span className={inspectionStyles.revisionContext}>
+              <GitCommit aria-hidden="true" />
+              <code>{shortHash(headCommit.hash)}</code>
+              <span>{historical ? 'Historical version' : 'Committed'} · Read-only</span>
+            </span>
+          ) : null}
+        </div>
+        <div className={overviewStyles.actions}>
           <Link href={historyHref}>
-            <History aria-hidden="true" className="size-4" />
+            <History />
             History
           </Link>
-        </Button>
-        <Button
-          asChild
-          className="h-[34px] rounded-[5px] bg-[var(--accent-commit)] px-3 text-xs !text-[var(--on-accent)]"
-          size="sm"
-          variant="commit"
-        >
-          <Link href={workspaceHref}>
-            <Play aria-hidden="true" className="size-4" />
+          <Link href={workspaceHref} className={overviewStyles.primary}>
+            <Pencil />
             Propose change
           </Link>
-        </Button>
+        </div>
       </div>
+      {headCommit ? (
+        <div className={inspectionStyles.commitSummary}>
+          <GitCommit aria-hidden="true" />
+          <Link href={`${historyHref}&commit=${encodeURIComponent(headCommit.hash)}`}>
+            {headCommit.message || 'Committed state'}
+          </Link>
+          <span>
+            {headCommit.author?.name ||
+              headCommit.author?.id ||
+              headCommit.author?.type ||
+              'Author not recorded'}
+          </span>
+          <time dateTime={headCommit.committed_at}>
+            {formatRelativeTime(headCommit.committed_at)}
+          </time>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -944,7 +1003,12 @@ function StateModeTabs({
     <SegmentedControl
       ariaLabel="State modes"
       itemClassName="min-w-[110px] text-xs"
-      items={modes.map((mode) => ({ icon: mode.icon, label: mode.label, value: mode.id }))}
+      items={modes.map((mode) => ({
+        dataIntroTarget: mode.id === 'snapshot' ? 'state-snapshot-mode' : undefined,
+        icon: mode.icon,
+        label: mode.label,
+        value: mode.id,
+      }))}
       onValueChange={onModeChange}
       value={activeMode}
     />
@@ -958,7 +1022,6 @@ function StateCanvasView({
   projectId,
   projectName,
   snapshotLoading,
-  stateHref,
 }: {
   branch: string;
   branchHeadHash: string | null;
@@ -966,7 +1029,6 @@ function StateCanvasView({
   projectId: string;
   projectName: string;
   snapshotLoading: boolean;
-  stateHref: string;
 }) {
   const canvasProjectId = useCanvasStore((state) => state.projectId);
   const canvasLoading = useCanvasStore((state) => state.loading);
@@ -1010,7 +1072,6 @@ function StateCanvasView({
       <div className="min-h-0 flex-1">
         <CanvasWorkspace
           embedded
-          stateHref={stateHref}
           focusedBranch={branch}
           focusedCommitHash={focusedCommitHash}
           projectName={projectName}
@@ -1038,7 +1099,17 @@ export function StateStructureView({
   historyPresentation = false,
   historyToolbar,
   onHistoryReveal,
+  dataMode = 'structure',
+  onDataModeChange,
+  yamlText,
+  contextLoading = false,
+  contextError,
 }: {
+  contextLoading?: boolean;
+  contextError?: string | null;
+  dataMode?: 'structure' | 'code';
+  onDataModeChange?: (mode: 'structure' | 'code') => void;
+  yamlText?: string;
   branch: string;
   changeReason: string;
   diffChanges: StructuredDiffChange[];
@@ -1062,11 +1133,7 @@ export function StateStructureView({
   const [nodeHistoryOpen, setNodeHistoryOpen] = useState(false);
   const [walkthroughStep, setWalkthroughStep] = useState<number | null>(null);
   const [walkthroughPlaying, setWalkthroughPlaying] = useState(false);
-  const [detailsVisible, setDetailsVisible] = useState(true);
-  const [structureExpansionRequest, setStructureExpansionRequest] = useState<{
-    id: number;
-    mode: 'all' | 'none';
-  } | null>(null);
+  const [detailsVisible, setDetailsVisible] = useState(false);
   const historyTreeRef = useRef<HTMLDivElement>(null);
   const historyClearingSearch = useRef(false);
   const structureRows = useMemo(
@@ -1234,128 +1301,202 @@ export function StateStructureView({
   );
 
   if (!historyPresentation) {
-    return (
+    const renderWorkspace = (content: ReactNode, details: ReactNode) => (
       <section
-        aria-label="Structured state tree"
-        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-[var(--surface-card)] min-[1000px]:overflow-hidden"
+        aria-label="State structure"
+        className={`${inspectionStyles.surface} ${inspectionStyles.page}`}
       >
-        <header className="flex shrink-0 items-start justify-between gap-6 px-6 pb-3 pt-4">
-          <div>
-            <h1 className="text-[24px] font-semibold leading-7 text-[var(--text-primary)]">
-              Structure
-            </h1>
-            <p className="mt-0.5 text-[13px] leading-5 text-[var(--text-secondary)]">
-              Current committed state
-            </p>
+        <header className={inspectionStyles.dataHeader}>
+          <h2>Structure</h2>
+          <fieldset aria-label="Structure format" className={inspectionStyles.dataModes}>
+            {(['structure', 'code'] as const).map((mode) => (
+              <button
+                type="button"
+                key={mode}
+                aria-pressed={dataMode === mode}
+                onClick={() => onDataModeChange?.(mode)}
+              >
+                {mode === 'structure' ? 'Tree' : 'Code'}
+              </button>
+            ))}
+          </fieldset>
+          <div className={inspectionStyles.stats}>
+            <span>{structureRows.length} fields</span>
+            <span>{structureRows.filter((row) => row.type === 'object').length} objects</span>
+            {contextLoading ? <output>Loading change details…</output> : null}
+            {contextError ? <output>{contextError}</output> : null}
           </div>
-          <div className="flex h-8 items-center gap-2 text-xs text-[var(--text-secondary)]">
-            <span>Revision</span>
-            <code className="font-mono font-semibold text-[var(--text-primary)]">
-              {shortHash(headCommit.hash)}
-            </code>
-            <button
-              aria-label="Copy revision"
-              className="inline-flex size-7 items-center justify-center rounded-[5px] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-              onClick={() => void navigator.clipboard?.writeText(headCommit.hash)}
-              type="button"
-            >
-              <Copy aria-hidden="true" className="size-3.5" />
-            </button>
-            <span className="ml-1 inline-flex h-7 items-center rounded-full bg-[var(--surface-app)] px-3 font-medium text-[var(--text-secondary)]">
-              Read-only
-            </span>
-          </div>
-        </header>
-
-        <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 px-6 pb-2">
-          <label className="relative block h-9 min-w-[220px] flex-1 basis-full min-[720px]:max-w-[506px] min-[720px]:basis-auto">
-            <Search
-              aria-hidden="true"
-              className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--text-secondary)]"
-            />
+          <label className={inspectionStyles.detailsControl}>
             <input
-              className="h-full w-full rounded-[5px] border border-[var(--stroke-default)] bg-[var(--surface-card)] pl-9 pr-3 text-[13px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-commit)] focus:ring-2 focus:ring-[var(--accent-commit)]/15"
-              onChange={(event) => onPathQueryChange?.(event.target.value)}
+              type="checkbox"
+              checked={detailsVisible}
+              onChange={(event) => setDetailsVisible(event.target.checked)}
+            />
+            Details
+          </label>
+        </header>
+        <div className={cn(inspectionStyles.cols2, !detailsVisible && inspectionStyles.single)}>
+          {content}
+          {detailsVisible ? details : null}
+        </div>
+      </section>
+    );
+    if (dataMode === 'code')
+      return (
+        <StateCodeView
+          yamlText={yamlText ?? buildCanonicalStateYaml(headCommit.content)}
+          branch={branch}
+          rootKey={headCommit.content.trees?.[0]?.key ?? 'state'}
+          commitHash={headCommit.hash}
+          schemaName={schemaName}
+          renderLayout={renderWorkspace}
+        />
+      );
+    return renderWorkspace(
+      <div className={inspectionStyles.dataTable}>
+        <div className={inspectionStyles.tb}>
+          <label className={inspectionStyles.find}>
+            <Search />
+            <input
+              aria-label="Find a field or value"
               placeholder="Find a field or value..."
               value={pathQuery}
+              onChange={(event) => onPathQueryChange?.(event.target.value)}
             />
           </label>
           <button
-            className="h-8 px-1 text-xs font-medium text-[var(--accent-commit)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-            onClick={() =>
-              setStructureExpansionRequest((current) => ({
-                id: (current?.id ?? 0) + 1,
-                mode: 'all',
-              }))
-            }
+            className={inspectionStyles.gb}
             type="button"
+            onClick={() =>
+              setExpansionOverrides(
+                Object.fromEntries(
+                  structureRows.filter((row) => row.expandable).map((row) => [row.id, true])
+                )
+              )
+            }
           >
+            <Maximize2 />
             Expand all
           </button>
           <button
-            className="h-8 px-1 text-xs font-medium text-[var(--accent-commit)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-            onClick={() =>
-              setStructureExpansionRequest((current) => ({
-                id: (current?.id ?? 0) + 1,
-                mode: 'none',
-              }))
-            }
+            className={inspectionStyles.gb}
             type="button"
+            onClick={() =>
+              setExpansionOverrides(
+                Object.fromEntries(
+                  structureRows.filter((row) => row.expandable).map((row) => [row.id, false])
+                )
+              )
+            }
           >
+            <Minus />
             Collapse all
           </button>
-          <label className="ml-1 flex cursor-pointer items-center gap-2 text-xs font-medium text-[var(--text-primary)]">
-            <input
-              checked={detailsVisible}
-              className="peer sr-only"
-              onChange={(event) => setDetailsVisible(event.target.checked)}
-              type="checkbox"
-            />
-            <span className="relative h-6 w-10 rounded-full bg-[var(--stroke-strong)] transition-colors peer-checked:bg-[var(--accent-commit)] peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--ring)]">
-              <span className="absolute left-1 top-1 size-4 rounded-full bg-[var(--surface-card)] transition-transform peer-checked:translate-x-4" />
-            </span>
-            Details
-          </label>
         </div>
-
-        <div
-          className={cn(
-            'grid min-w-0 gap-5 px-6',
-            detailsVisible
-              ? 'min-h-[720px] flex-none grid-cols-1 grid-rows-[320px_380px] min-[1000px]:min-h-0 min-[1000px]:flex-1 min-[1000px]:grid-cols-[minmax(0,1fr)_374px] min-[1000px]:grid-rows-1'
-              : 'min-h-0 flex-1 grid-cols-1'
-          )}
+        <section
+          className={inspectionStyles.treeScroll}
+          aria-label="State structure rows"
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users must be able to scroll this region.
+          tabIndex={0}
         >
-          <div className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[5px] border border-[var(--stroke-divider)] bg-[var(--surface-card)]">
-            <WorkspaceReviewStructureTree
-              activeRowId={selectedRow?.id ?? null}
-              expansionRequest={structureExpansionRequest}
-              modifiedLabel={modifiedLabel}
-              onSelectRow={setSelectedRowId}
-              query={pathQuery}
-              rows={structureRows as WorkspaceReviewStructureRow[]}
-            />
-          </div>
-
-          {detailsVisible ? (
-            <StateFieldTracePanel
-              branch={branch}
-              changeReason={changeReason}
-              childCount={selectedRow ? structureChildCounts.get(selectedRow.path) : undefined}
-              headCommit={headCommit}
-              modifiedLabel={modifiedLabel}
-              onClose={() => setDetailsVisible(false)}
-              row={selectedRow}
-              schemaName={schemaName}
-            />
+          <table className={inspectionStyles.tree}>
+            <thead>
+              <tr className={inspectionStyles.th2}>
+                <th>Field</th>
+                <th>Value</th>
+                <th>Type</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleRows.map((row) => {
+                const expanded =
+                  searching ||
+                  isStateStructureRowExpanded(row, expansionOverrides, expandedChanges.has(row.id));
+                const select = () => {
+                  setSelectedRowId(row.id);
+                  setDetailsVisible(true);
+                  if (row.expandable) toggleRow(row);
+                };
+                return (
+                  <tr
+                    key={row.id}
+                    className={inspectionStyles.rw}
+                    aria-selected={selectedRow?.id === row.id}
+                    tabIndex={0}
+                    onClick={select}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        select();
+                      }
+                    }}
+                  >
+                    <td className={inspectionStyles.k} style={{ paddingLeft: row.depth * 24 }}>
+                      <span className={inspectionStyles.chev}>
+                        {row.expandable ? (
+                          <button
+                            type="button"
+                            aria-label={`${expanded ? 'Collapse' : 'Expand'} ${row.key}`}
+                            aria-expanded={expanded}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              select();
+                            }}
+                          >
+                            {expanded ? <ChevronDown /> : <ChevronRight />}
+                          </button>
+                        ) : null}
+                      </span>
+                      <span
+                        className={cn(
+                          inspectionStyles.ti,
+                          row.type === 'array'
+                            ? inspectionStyles.arr
+                            : row.expandable
+                              ? inspectionStyles.obj
+                              : inspectionStyles.str
+                        )}
+                      >
+                        {row.type === 'array' ? <List /> : row.expandable ? <Box /> : <FileText />}
+                      </span>
+                      <span className={inspectionStyles.nm} title={row.path}>
+                        {row.key}
+                      </span>
+                    </td>
+                    <td
+                      className={cn(
+                        inspectionStyles.val,
+                        (row.value === '' || row.value === 'empty') && inspectionStyles.em
+                      )}
+                      title={row.value}
+                    >
+                      <StateValueCell row={row} />
+                    </td>
+                    <td className={inspectionStyles.ty}>{row.type}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {!visibleRows.length ? (
+            <p className="p-4 text-sm text-[var(--text-tertiary)]">No matching fields.</p>
           ) : null}
-        </div>
-
-        <footer className="flex h-10 shrink-0 items-center justify-between px-6 text-[11px] text-[var(--text-tertiary)]">
-          <span>Values are shown as stored. Schema details explain their meaning.</span>
-          <span>State Structure · committed data</span>
+        </section>
+        <footer className={inspectionStyles.tnote}>
+          <Eye />
+          Values are shown as stored. Schema details explain their meaning.
         </footer>
-      </section>
+      </div>,
+      <StateFieldTracePanel
+        branch={branch}
+        changeReason={changeReason}
+        childCount={selectedRow ? structureChildCounts.get(selectedRow.path) : undefined}
+        headCommit={headCommit}
+        modifiedLabel={modifiedLabel}
+        onClose={() => setDetailsVisible(false)}
+        row={selectedRow}
+        schemaName={schemaName}
+      />
     );
   }
 
@@ -1567,9 +1708,11 @@ function StateFieldTracePanel({
   row: StateStructureRow | null;
   schemaName: string;
 }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   if (!row) {
     return (
-      <aside className="rounded-[5px] border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4">
+      <aside className={inspectionStyles.trace}>
         <p className="text-[13px] text-[var(--text-secondary)]">Select a field to inspect it.</p>
       </aside>
     );
@@ -1589,122 +1732,79 @@ function StateFieldTracePanel({
   const pathParts = row.path.split('/').filter(Boolean);
 
   return (
-    <aside
-      aria-label="Field trace"
-      className="flex min-h-0 flex-col overflow-hidden rounded-[5px] border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3"
-    >
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-[17px] font-semibold leading-6 text-[var(--text-primary)]">
-          Field trace
-        </h2>
+    <aside aria-label="Field trace" className={inspectionStyles.trace}>
+      <header className={inspectionStyles.traceHeader}>
+        <GitCommit />
+        <h2>Field trace</h2>
+        <button aria-label="Hide details" onClick={onClose} type="button">
+          <X />
+        </button>
+      </header>
+      <div className={inspectionStyles.crumb}>
+        <span title={row.path}>root {pathParts.map((part) => ` / ${part}`).join('')}</span>
         <button
-          aria-label="Hide details"
-          className="inline-flex size-7 items-center justify-center rounded-[5px] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-          onClick={onClose}
+          aria-label="Copy field path"
+          onClick={() => void navigator.clipboard?.writeText(row.path)}
           type="button"
         >
-          <X aria-hidden="true" className="size-4" />
+          <Copy />
         </button>
       </div>
-
-      <div className="min-h-0 flex-1 overflow-auto pr-1">
-        <section className="mt-3">
-          <h3 className="text-xs font-semibold text-[var(--text-secondary)]">Path</h3>
-          <div className="mt-1.5 flex min-w-0 items-center gap-2 font-mono text-[13px] text-[var(--text-primary)]">
-            <GitBranch aria-hidden="true" className="size-4 shrink-0 text-[var(--accent-commit)]" />
-            <span className="min-w-0 truncate" title={row.path}>
-              root {pathParts.map((part) => ` / ${part}`).join('')}
-            </span>
-            <button
-              aria-label="Copy field path"
-              className="inline-flex size-6 shrink-0 items-center justify-center rounded-[4px] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]"
-              onClick={() => void navigator.clipboard?.writeText(row.path)}
-              type="button"
-            >
-              <Copy aria-hidden="true" className="size-3.5" />
-            </button>
-          </div>
-        </section>
-
-        <section className="mt-3">
-          <h3 className="text-xs font-semibold text-[var(--text-secondary)]">Current value</h3>
-          <p className="mt-1 break-words text-[18px] font-semibold leading-6 text-[var(--text-primary)]">
-            {currentValue}
-          </p>
-        </section>
-
-        <section className="mt-3">
-          <h3 className="text-xs font-semibold text-[var(--text-secondary)]">Schema contract</h3>
-          <p className="mt-1.5 inline-flex max-w-full rounded-[5px] bg-[var(--accent-commit-soft)] px-2 py-1 font-mono text-xs text-[var(--accent-commit)]">
-            <span className="truncate">
-              {schemaName || 'Unbound schema'} · {row.type}
-            </span>
-          </p>
-        </section>
-
-        <div className="my-3 h-px bg-[var(--stroke-divider)]" />
-
-        <section>
-          <h3 className="text-xs font-semibold text-[var(--text-secondary)]">Last change</h3>
-          <div className="mt-2 grid grid-cols-[32px_minmax(0,1fr)] gap-2">
-            <span
-              aria-hidden="true"
-              className="inline-flex size-7 items-center justify-center rounded-[5px] bg-[var(--diff-modified-word-bg)] font-mono font-semibold text-[var(--diff-modified-text)]"
-            >
-              ~
-            </span>
-            <div className="min-w-0">
-              <p className="break-all font-mono text-[13px] leading-5 text-[var(--text-primary)]">
-                {lastChangeLabel}
-              </p>
+      <section className={inspectionStyles.big}>
+        <h3 className={inspectionStyles.l}>Current value</h3>
+        <p className={inspectionStyles.v}>{currentValue}</p>
+      </section>
+      <section className={inspectionStyles.sc}>
+        <h3 className={inspectionStyles.l}>Schema contract</h3>
+        <p className={inspectionStyles.ctr}>
+          {schemaName || 'Unbound schema'} · {row.type}
+        </p>
+      </section>
+      <section className={inspectionStyles.lc}>
+        <h3 className={inspectionStyles.l}>Activity</h3>
+        <div>
+          <div className={inspectionStyles.ev}>
+            <div>
+              <h3>Last change</h3>
+              <p>{lastChangeLabel}</p>
               {row.diff?.exact && beforeValue !== currentValue ? (
-                <p className="mt-0.5 font-mono text-xs text-[var(--text-secondary)]">
+                <p>
                   {beforeValue} → {currentValue}
                 </p>
               ) : null}
             </div>
           </div>
-        </section>
-
-        <section className="mt-3">
-          <h3 className="text-xs font-semibold text-[var(--text-secondary)]">Reason</h3>
-          <p className="mt-1 text-[13px] leading-5 text-[var(--text-secondary)]">
-            {stateInspectorWhyText(row, changeReason)}
-          </p>
-          <p className="mt-1 font-mono text-xs text-[var(--text-tertiary)]">
-            {shortHash(headCommit.hash)} · {modifiedLabel}
-          </p>
-        </section>
-
-        <section className="mt-3 flex items-center gap-3">
-          <h3 className="text-xs font-semibold text-[var(--text-secondary)]">Source</h3>
+          <div className={inspectionStyles.ev}>
+            <div>
+              <h3>Reason</h3>
+              <p>{stateInspectorWhyText(row, changeReason)}</p>
+              <p>
+                {shortHash(headCommit.hash)} · {modifiedLabel}
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+      {sourceHref || sourceLabel ? (
+        <div className={inspectionStyles.hint}>
+          <span>Source</span>
           {sourceHref ? (
-            <Link
-              className="min-w-0 truncate text-[13px] font-medium text-[var(--accent-commit)] hover:underline"
-              href={sourceHref}
-            >
-              {sourceLabel || 'Linked source'}
-            </Link>
+            <Link href={sourceHref}>{sourceLabel || 'Linked source'}</Link>
           ) : (
-            <span className="min-w-0 truncate text-[13px] italic text-[var(--text-tertiary)]">
-              {sourceLabel || 'No linked source'}
-            </span>
+            <span>{sourceLabel}</span>
           )}
-        </section>
-      </div>
-
-      <Button
-        asChild
-        className="mt-1 h-8 shrink-0 justify-start px-0 text-[13px] font-medium"
-        size="sm"
-        variant="link"
+        </div>
+      ) : null}
+      <Link
+        className={inspectionStyles.lnk}
+        href={getProjectIdHistoryPath(headCommit.project_id, {
+          branch,
+          commit: headCommit.hash,
+          returnTo: buildReturnTo(pathname, searchParams),
+        })}
       >
-        <Link
-          href={`/project/${encodeURIComponent(headCommit.project_id)}/history?branch=${encodeURIComponent(branch)}`}
-        >
-          View in history <ExternalLink aria-hidden="true" className="size-3.5" />
-        </Link>
-      </Button>
+        View in history <ExternalLink />
+      </Link>
     </aside>
   );
 }
@@ -3164,8 +3264,8 @@ function StateEmpty({
 
 function selectVisibleBranchHead(commits: ApiCommit[]): ApiCommit | null {
   if (commits.length === 0) return null;
-  const firstParentHashes = new Set(commits.map((commit) => commit.parents[0]).filter(Boolean));
-  const tips = commits.filter((commit) => !firstParentHashes.has(commit.hash));
+  const parentHashes = new Set(commits.flatMap((commit) => commit.parents));
+  const tips = commits.filter((commit) => !parentHashes.has(commit.hash));
   return [...(tips.length > 0 ? tips : commits)].sort(
     (a, b) =>
       Date.parse(b.committed_at) - Date.parse(a.committed_at) || b.hash.localeCompare(a.hash)
@@ -3653,14 +3753,6 @@ export function inferSchemaName(commit: ApiCommit | null): string {
     return 't3x/skill';
   }
   return rootKeys.has('prd') ? 't3x/prd' : 't3x/state';
-}
-
-function resolveMainSchemaBindings(
-  workspaces: WorkspaceCandidate[],
-  mainHeadCommitHash: string | null
-) {
-  const mainWorkspace = selectWorkspaceForBranch(workspaces, 'main', mainHeadCommitHash);
-  return mainWorkspace?.schemaBindings.map((binding) => ({ ...binding })) ?? [];
 }
 
 function formatRelativeTime(value: string | undefined): string {

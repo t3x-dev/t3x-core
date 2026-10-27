@@ -4,15 +4,19 @@ import {
   createHumanProposalDraft,
   createYSchemaContextDescriptor,
   createYSchemaResourceDescriptor,
+  repositorySemanticYSchemaTree,
   runRepositorySemanticYSchemaStatementProvider,
   runYSchemaRootStatementProvider,
   YSCHEMA_VALIDATION_PREDICATE_TYPE,
+  yopsStateCodec,
 } from '@t3x-dev/core';
 import {
   type AnyDB,
   DraftAuthoringConflictError,
   getTransitionProposalPreparation,
 } from '@t3x-dev/storage';
+import type { ProtocolValue, State } from '@t3x-dev/transition';
+import { normalizeYSchemaObject } from '@t3x-dev/yschema';
 import { createProposalGenerationPostureProvider } from './proposal-generation-posture-provider';
 import { verifyTransition } from './transition-control-plane';
 import { materializeTransitionProposal } from './transition-control-plane/materialize';
@@ -21,9 +25,28 @@ import {
   buildAuthoringPreparation,
   workspaceAuthoringState,
 } from './workspace-authoring';
-import { resolveWorkspaceTransitionContext } from './workspace-transition';
+import {
+  buildWorkspaceReviewArtifacts,
+  persistWorkspaceReviewArtifacts,
+  reviewSnapshotCreatedAt,
+} from './workspace-review-artifacts';
+import {
+  assertWorkspaceReviewHasChanges,
+  buildWorkspaceSchemaReview,
+} from './workspace-schema-review';
+import { resolveWorkspaceTransitionContext, workspaceProvenance } from './workspace-transition';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
 import { schemaRootKeyFromBinding } from './yschema-registry';
+
+function validationTree(state: State, rootKey: string, semantic: boolean): ProtocolValue {
+  if (semantic) return repositorySemanticYSchemaTree(state, rootKey) as ProtocolValue;
+  const decoded = yopsStateCodec.decode(state.value);
+  if (decoded === null || typeof decoded !== 'object' || Array.isArray(decoded)) return {};
+  const root = Object.getOwnPropertyDescriptor(decoded, rootKey)?.value;
+  return root !== null && typeof root === 'object' && !Array.isArray(root)
+    ? (root as ProtocolValue)
+    : {};
+}
 
 /** Freeze the complete authoring manifest; inspected action/card is deliberately not an input. */
 export async function prepareWorkspaceAuthoringReview(input: {
@@ -58,7 +81,13 @@ export async function prepareWorkspaceAuthoringReview(input: {
   const schema = await resolveWorkspaceYSchema(context.workspace, input.db, input.projectId);
   if (!schema.schema || !schema.canonicalName)
     throw new TypeError('A resolved Workspace schema is required for Review');
-  const frozen = buildAuthoringPreparation(context.workspace);
+  const schemaReview = await buildWorkspaceSchemaReview(
+    input.db,
+    input.projectId,
+    context.workspace
+  );
+  assertWorkspaceReviewHasChanges(context.base, built.result, schemaReview);
+  const frozen = { ...buildAuthoringPreparation(context.workspace), schemaReview };
   const membership = await materializeTransitionProposal({
     db: input.db,
     projectId: input.projectId,
@@ -91,7 +120,7 @@ export async function prepareWorkspaceAuthoringReview(input: {
       ? context.workspace.schemaBindings[0]
       : undefined
   );
-  const schemaValue = schema.schema;
+  const schemaValue = normalizeYSchemaObject(schemaReview.draft.definition);
   const issuer = { kind: 'service' as const, id: 'service:t3x-workspace-yschema' };
   const result = await verifyTransition({
     db: input.db,
@@ -107,6 +136,18 @@ export async function prepareWorkspaceAuthoringReview(input: {
           issuer,
           predicateTypes: [YSCHEMA_VALIDATION_PREDICATE_TYPE],
           async verify(verification) {
+            const value = verification.result.value;
+            const semantic =
+              value !== null &&
+              typeof value === 'object' &&
+              !Array.isArray(value) &&
+              value.domain === 't3x.dev/semantic-content';
+            const provenanceByPath = await workspaceProvenance(
+              input.db,
+              input.projectId,
+              context.workspace,
+              validationTree(verification.result, rootKey, semantic)
+            );
             const options = {
               state: verification.result,
               schema: schemaValue,
@@ -118,21 +159,16 @@ export async function prepareWorkspaceAuthoringReview(input: {
                 mode: 'bound' as const,
                 resource: createYSchemaContextDescriptor(
                   `t3x://workspaces/${encodeURIComponent(input.workspaceId)}/revisions/${context.workspaceRevision}/validation`,
-                  { rootKey }
+                  { provenanceByPath, rootKey }
                 ),
               },
               environment: { mode: 'unspecified' as const },
+              provenanceByPath,
               rootKey,
               actor: issuer,
               tool: { name: '@t3x-dev/yschema', version: '1' },
               run: verification.run,
             };
-            const value = verification.result.value;
-            const semantic =
-              value !== null &&
-              typeof value === 'object' &&
-              !Array.isArray(value) &&
-              value.domain === 't3x.dev/semantic-content';
             return {
               outcome: 'statement',
               statement: semantic
@@ -144,6 +180,13 @@ export async function prepareWorkspaceAuthoringReview(input: {
       ],
     },
   });
+  if (result.view.precondition.policyDigest !== null) {
+    const artifacts = buildWorkspaceReviewArtifacts({
+      inspection: result.view,
+      createdAt: reviewSnapshotCreatedAt(result.view),
+    });
+    await persistWorkspaceReviewArtifacts(input.db, artifacts);
+  }
   return {
     view: result.view,
     authoring: {
@@ -156,5 +199,6 @@ export async function prepareWorkspaceAuthoringReview(input: {
       ))!.digest,
     },
     reused: membership.reused,
+    schemaReview,
   };
 }

@@ -17,9 +17,177 @@ afterEach(async () => {
 });
 
 describe('PostgreSQL schema migrations', () => {
+  it.each([
+    76, 77,
+  ])('upgrades v%s with independent public publisher ownership without publishing historical private data', async (version) => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+    await setup.sql.unsafe(`
+      ALTER TABLE yschema_artifacts DROP COLUMN publisher_namespace_id;
+      INSERT INTO projects(project_id, name, namespace_id, created_at)
+        VALUES ('legacy-schema-owner', 'Legacy-schema-owner', 'ns_t3x_dev', NOW());
+      INSERT INTO yschema_artifacts(artifact_id, canonical_name, family, kind, owner_project_id, visibility)
+        VALUES ('legacy-private', 'legacy/private', 'open', 'schema', 'legacy-schema-owner', 'private');
+      UPDATE _schema_version SET version = ${version};
+    `);
+    await closePostgresStorage();
+    await createPostgresBootstrapStorage({ connectionString: setup.connectionString });
+    expect(
+      await setup.sql.unsafe(
+        "SELECT owner_project_id, publisher_namespace_id, visibility FROM yschema_artifacts WHERE artifact_id = 'legacy-private'"
+      )
+    ).toMatchObject([
+      {
+        owner_project_id: 'legacy-schema-owner',
+        publisher_namespace_id: null,
+        visibility: 'private',
+      },
+    ]);
+    expect(
+      await setup.sql.unsafe('SELECT version FROM _schema_version WHERE singleton = TRUE')
+    ).toMatchObject([{ version: POSTGRES_SCHEMA_VERSION }]);
+  });
+  it('repairs an early v76 path table without changing names or releasing blocked claims', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+    await setup.sql.unsafe(`
+      INSERT INTO projects(project_id, name, namespace_id, created_at) VALUES
+        ('v76-clean', 'Confirmed-Name', 'ns_t3x_dev', NOW());
+      DROP TRIGGER projects_repository_path ON projects;
+      ALTER TABLE repository_paths DROP COLUMN resolvable;
+      INSERT INTO projects(project_id, name, namespace_id, created_at) VALUES
+        ('v76-abnormal', 'Needs Confirmation', 'ns_t3x_dev', NOW());
+      INSERT INTO repository_paths(namespace_id, name_key, project_id) VALUES
+        ('ns_t3x_dev', 'needs-confirmation', 'v76-abnormal'),
+        ('ns_t3x_dev', 'uncertain-history', 'v76-clean'),
+        ('ns_t3x_dev', 'blocked-name', NULL);
+      UPDATE _schema_version SET version = 76;
+    `);
+    await closePostgresStorage();
+    await createPostgresBootstrapStorage({ connectionString: setup.connectionString });
+    expect(
+      await setup.sql.unsafe(
+        'SELECT name_key, project_id, resolvable FROM repository_paths ORDER BY name_key'
+      )
+    ).toMatchObject([
+      { name_key: 'blocked-name', project_id: null, resolvable: false },
+      { name_key: 'confirmed-name', project_id: 'v76-clean', resolvable: true },
+      { name_key: 'needs-confirmation', project_id: 'v76-abnormal', resolvable: false },
+      { name_key: 'uncertain-history', project_id: 'v76-clean', resolvable: false },
+    ]);
+    expect(
+      await setup.sql.unsafe("SELECT name FROM projects WHERE project_id = 'v76-abnormal'")
+    ).toMatchObject([{ name: 'Needs Confirmation' }]);
+    await setup.sql.unsafe("UPDATE projects SET name = 'Renamed' WHERE project_id = 'v76-clean'");
+    await closePostgresStorage();
+    await createPostgresBootstrapStorage({ connectionString: setup.connectionString });
+    expect(
+      await setup.sql.unsafe(
+        "SELECT resolvable FROM repository_paths WHERE name_key = 'confirmed-name'"
+      )
+    ).toMatchObject([{ resolvable: true }]);
+    await expect(
+      setup.sql.unsafe("UPDATE projects SET name = 'Blocked-Name' WHERE project_id = 'v76-clean'")
+    ).rejects.toThrow();
+  });
+
+  it.each([
+    76, 77,
+  ])('upgrades v%s deletion policy without releasing unattributed legacy records', async (version) => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+    await setup.sql.unsafe(`
+      ALTER TABLE repository_paths DROP CONSTRAINT repository_paths_project_id_fkey;
+      ALTER TABLE repository_paths ADD CONSTRAINT legacy_path_owner_fk
+        FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE SET NULL;
+      INSERT INTO projects(project_id, name, namespace_id, created_at) VALUES
+        ('v76-deleted', 'Before-Rename', 'ns_t3x_dev', NOW()),
+        ('v76-purged', 'Legacy-Tombstone', 'ns_t3x_dev', NOW());
+      UPDATE projects SET name = 'After-Rename', deleted_at = NOW() WHERE project_id = 'v76-deleted';
+      DELETE FROM projects WHERE project_id = 'v76-purged';
+      INSERT INTO repository_paths(namespace_id, name_key, project_id, resolvable)
+        VALUES ('ns_t3x_dev', 'legacy-collision', NULL, FALSE);
+      UPDATE _schema_version SET version = ${version};
+    `);
+    await closePostgresStorage();
+    await createPostgresBootstrapStorage({ connectionString: setup.connectionString });
+    expect(await setup.sql.unsafe('SELECT version FROM _schema_version')).toMatchObject([
+      { version: POSTGRES_SCHEMA_VERSION },
+    ]);
+    expect(
+      await setup.sql.unsafe(
+        'SELECT name_key FROM repository_paths WHERE project_id IS NULL ORDER BY name_key'
+      )
+    ).toEqual([{ name_key: 'legacy-collision' }, { name_key: 'legacy-tombstone' }]);
+    expect(
+      await setup.sql.unsafe(
+        "SELECT name_key FROM repository_paths WHERE project_id = 'v76-deleted' ORDER BY name_key"
+      )
+    ).toEqual([{ name_key: 'after-rename' }, { name_key: 'before-rename' }]);
+    await setup.sql.unsafe(
+      "UPDATE projects SET deleted_at = NULL WHERE project_id = 'v76-deleted'"
+    );
+    await setup.sql.unsafe("DELETE FROM projects WHERE project_id = 'v76-deleted'");
+    expect(
+      await setup.sql.unsafe(
+        "SELECT name_key FROM repository_paths WHERE name_key IN ('before-rename', 'after-rename')"
+      )
+    ).toEqual([]);
+    await closePostgresStorage();
+    await createPostgresBootstrapStorage({ connectionString: setup.connectionString });
+    expect(
+      await setup.sql.unsafe(
+        'SELECT name_key FROM repository_paths WHERE project_id IS NULL ORDER BY name_key'
+      )
+    ).toEqual([{ name_key: 'legacy-collision' }, { name_key: 'legacy-tombstone' }]);
+    await expect(
+      setup.sql.unsafe(
+        "INSERT INTO projects(project_id, name, namespace_id, created_at) VALUES ('blocked-reuse', 'Legacy-Tombstone', 'ns_t3x_dev', NOW())"
+      )
+    ).rejects.toThrow();
+  });
+
+  it('upgrades v75 without changing abnormal names or assigning missing namespaces', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+    await setup.sql.unsafe(`
+      DROP TRIGGER projects_repository_path ON projects;
+      DROP FUNCTION enforce_repository_path();
+      DROP TABLE repository_paths;
+      INSERT INTO projects(project_id, name, namespace_id, created_at) VALUES
+        ('v75-anomaly', 'Project Name', 'ns_t3x_dev', NOW()),
+        ('v75-ownerless', 'Ownerless', NULL, NOW()),
+        ('v75-clean', 'HoloCure_fishing_auto', 'ns_t3x_dev', NOW());
+      UPDATE _schema_version SET version = 75;
+    `);
+    await closePostgresStorage();
+    await createPostgresBootstrapStorage({ connectionString: setup.connectionString });
+    expect(
+      await setup.sql.unsafe(
+        "SELECT name, namespace_id FROM projects WHERE project_id = 'v75-ownerless'"
+      )
+    ).toMatchObject([{ name: 'Ownerless', namespace_id: null }]);
+    expect(
+      await setup.sql.unsafe("SELECT name FROM projects WHERE project_id = 'v75-anomaly'")
+    ).toMatchObject([{ name: 'Project Name' }]);
+    expect(
+      await setup.sql.unsafe(
+        "SELECT name_key, resolvable FROM repository_paths WHERE project_id = 'v75-anomaly'"
+      )
+    ).toMatchObject([{ name_key: 'project-name', resolvable: false }]);
+    expect(
+      await setup.sql.unsafe(
+        "SELECT name_key, resolvable FROM repository_paths WHERE project_id = 'v75-clean'"
+      )
+    ).toMatchObject([{ name_key: 'holocure_fishing_auto', resolvable: true }]);
+  });
+
   it('upgrades v74 with reference-only Studio candidates', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;
+    await setup.sql.unsafe(
+      'DROP TRIGGER projects_repository_path ON projects; DROP FUNCTION enforce_repository_path(); DROP TABLE repository_paths;'
+    );
     await setup.sql.unsafe(
       "INSERT INTO projects (project_id, name, created_at) VALUES ('studio-target', 'Keep me', NOW())"
     );
@@ -47,6 +215,9 @@ describe('PostgreSQL schema migrations', () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;
     await setup.sql.unsafe(
+      'DROP TRIGGER projects_repository_path ON projects; DROP FUNCTION enforce_repository_path(); DROP TABLE repository_paths;'
+    );
+    await setup.sql.unsafe(
       "INSERT INTO projects (project_id, name, created_at) VALUES ('presentation-project', 'Keep me', NOW())"
     );
     await setup.sql.unsafe(
@@ -72,6 +243,9 @@ describe('PostgreSQL schema migrations', () => {
   it('upgrades v72 with delivery evidence and preserves existing projects', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;
+    await setup.sql.unsafe(
+      'DROP TRIGGER projects_repository_path ON projects; DROP FUNCTION enforce_repository_path(); DROP TABLE repository_paths;'
+    );
     await setup.sql.unsafe(
       "INSERT INTO projects (project_id, name, created_at) VALUES ('migration-delivery', 'Keep me', NOW())"
     );
@@ -140,6 +314,9 @@ describe('PostgreSQL schema migrations', () => {
   it('rolls back the complete schema transaction when an upgrade step fails', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;
+    await setup.sql.unsafe(
+      'DROP TRIGGER projects_repository_path ON projects; DROP FUNCTION enforce_repository_path(); DROP TABLE repository_paths;'
+    );
 
     await closePostgresStorage();
     await setup.sql.unsafe(`
@@ -149,6 +326,7 @@ describe('PostgreSQL schema migrations', () => {
       DROP TABLE namespace_memberships;
       ALTER TABLE projects DROP CONSTRAINT IF EXISTS uq_projects_id_namespace;
       ALTER TABLE projects DROP CONSTRAINT IF EXISTS fk_projects_namespace;
+      ALTER TABLE yschema_artifacts DROP COLUMN publisher_namespace_id;
       DROP TABLE namespaces;
       CREATE TABLE namespaces (incompatible INTEGER);
       DROP TABLE rate_limit_buckets;
@@ -176,6 +354,9 @@ describe('PostgreSQL schema migrations', () => {
   it('upgrades a v60 database with the complete v61 Transition storage', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;
+    await setup.sql.unsafe(
+      'DROP TRIGGER projects_repository_path ON projects; DROP FUNCTION enforce_repository_path(); DROP TABLE repository_paths;'
+    );
 
     await closePostgresStorage();
     await setup.sql.unsafe('DROP TABLE transition_verification_receipts');
@@ -215,6 +396,9 @@ describe('PostgreSQL schema migrations', () => {
   it('upgrades a v61 database with the complete v62 YSchema registry', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;
+    await setup.sql.unsafe(
+      'DROP TRIGGER projects_repository_path ON projects; DROP FUNCTION enforce_repository_path(); DROP TABLE repository_paths;'
+    );
 
     await closePostgresStorage();
     await setup.sql.unsafe(`
@@ -261,6 +445,9 @@ describe('PostgreSQL schema migrations', () => {
   it('upgrades v62 templates with provenance and a retained audit ledger', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;
+    await setup.sql.unsafe(
+      'DROP TRIGGER projects_repository_path ON projects; DROP FUNCTION enforce_repository_path(); DROP TABLE repository_paths;'
+    );
 
     await closePostgresStorage();
     await setup.sql.unsafe(`
@@ -310,6 +497,9 @@ describe('PostgreSQL schema migrations', () => {
   it('upgrades v64 merge drafts with a separate decision revision', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;
+    await setup.sql.unsafe(
+      'DROP TRIGGER projects_repository_path ON projects; DROP FUNCTION enforce_repository_path(); DROP TABLE repository_paths;'
+    );
 
     await closePostgresStorage();
     await setup.sql.unsafe(`
@@ -345,6 +535,9 @@ describe('PostgreSQL schema migrations', () => {
   it('upgrades a v65 database with immutable Transition review snapshots', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;
+    await setup.sql.unsafe(
+      'DROP TRIGGER projects_repository_path ON projects; DROP FUNCTION enforce_repository_path(); DROP TABLE repository_paths;'
+    );
 
     await closePostgresStorage();
     await setup.sql.unsafe(`
@@ -372,6 +565,9 @@ describe('PostgreSQL schema migrations', () => {
   it('upgrades a v66 database with persistent rate-limit buckets', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;
+    await setup.sql.unsafe(
+      'DROP TRIGGER projects_repository_path ON projects; DROP FUNCTION enforce_repository_path(); DROP TABLE repository_paths;'
+    );
 
     await closePostgresStorage();
     await setup.sql.unsafe(`
@@ -399,6 +595,9 @@ describe('PostgreSQL schema migrations', () => {
   it('upgrades a v67 database with namespaces and backfills legacy projects', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;
+    await setup.sql.unsafe(
+      'DROP TRIGGER projects_repository_path ON projects; DROP FUNCTION enforce_repository_path(); DROP TABLE repository_paths;'
+    );
 
     await closePostgresStorage();
     await setup.sql.unsafe(`
@@ -411,6 +610,7 @@ describe('PostgreSQL schema migrations', () => {
       ALTER TABLE projects DROP CONSTRAINT IF EXISTS uq_projects_id_namespace;
       ALTER TABLE projects DROP CONSTRAINT IF EXISTS fk_projects_namespace;
       ALTER TABLE projects DROP COLUMN namespace_id;
+      ALTER TABLE yschema_artifacts DROP COLUMN publisher_namespace_id;
       DROP TABLE namespaces;
       UPDATE _schema_version SET version = 67 WHERE singleton = TRUE;
     `);
@@ -439,6 +639,9 @@ describe('PostgreSQL schema migrations', () => {
   it('upgrades a v68 database with fail-closed memberships and tenant-bound grants', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;
+    await setup.sql.unsafe(
+      'DROP TRIGGER projects_repository_path ON projects; DROP FUNCTION enforce_repository_path(); DROP TABLE repository_paths;'
+    );
 
     await closePostgresStorage();
     await setup.sql.unsafe(`
@@ -529,6 +732,9 @@ describe('PostgreSQL schema migrations', () => {
   it('upgrades a v69 database with expiring grants and recipient-bound invitations', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;
+    await setup.sql.unsafe(
+      'DROP TRIGGER projects_repository_path ON projects; DROP FUNCTION enforce_repository_path(); DROP TABLE repository_paths;'
+    );
 
     await closePostgresStorage();
     await setup.sql.unsafe(`
@@ -582,6 +788,9 @@ describe('PostgreSQL schema migrations', () => {
   it('upgrades a v70 database with fail-closed project visibility', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;
+    await setup.sql.unsafe(
+      'DROP TRIGGER projects_repository_path ON projects; DROP FUNCTION enforce_repository_path(); DROP TABLE repository_paths;'
+    );
 
     await closePostgresStorage();
     await setup.sql.unsafe(`
@@ -627,6 +836,9 @@ describe('PostgreSQL schema migrations', () => {
   it('upgrades a v71 database with constrained visibility audit evidence', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;
+    await setup.sql.unsafe(
+      'DROP TRIGGER projects_repository_path ON projects; DROP FUNCTION enforce_repository_path(); DROP TABLE repository_paths;'
+    );
 
     await closePostgresStorage();
     await setup.sql.unsafe(`
@@ -651,7 +863,7 @@ describe('PostgreSQL schema migrations', () => {
 
     await setup.sql.unsafe(`
       INSERT INTO projects (project_id, name, namespace_id, visibility, created_at)
-      VALUES ('project_visibility_audit', 'Audit project', 'ns_t3x_dev', 'private', NOW())
+      VALUES ('project_visibility_audit', 'Audit-project', 'ns_t3x_dev', 'private', NOW())
     `);
     await expect(
       setup.sql.unsafe(`

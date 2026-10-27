@@ -1,0 +1,13 @@
+.header {
+  width: 100%;
+  max-width: var(--project-page-max-width, 1264px);
+  margin: 0 auto;
+  padding: 10px 16px;
+  min-height: 52px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--stroke-divider);
+  background: var(--surface-panel);
+}
+.slot {
+  min-width: 0;
+}

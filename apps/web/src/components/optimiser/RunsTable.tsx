@@ -173,14 +173,13 @@ export function RunsTable({
     return matched?.name || webhookId;
   };
 
-  /** Render Source cell content: "Project → Leaf" with clickable links */
+  /** Keep the source project linked and archived Leaf names informational. */
   const renderSource = (run: EngineRun) => {
     const projectId = run.project_id;
     const project = projectId ? getProject(projectId) : undefined;
     const projectName = project?.name;
     const leafId = run.leaf?.id;
     const leafTitle = run.leaf?.title || leafId;
-    const isActualLeaf = leafId?.startsWith('leaf_');
     const hasProject = !!projectId;
     const hasLeaf = !!leafId;
 
@@ -202,23 +201,12 @@ export function RunsTable({
         ) : null}
         {hasProject && hasLeaf && <span className="text-muted-foreground/60">→</span>}
         {hasLeaf ? (
-          isActualLeaf && hasProject ? (
-            <Link
-              href={`/project/${projectId}/leaf/${leafId}`}
-              className="max-w-[120px] truncate text-primary hover:underline"
-              onClick={(e) => e.stopPropagation()}
-              title={leafTitle || undefined}
-            >
-              {leafTitle}
-            </Link>
-          ) : (
-            <span
-              className="max-w-[120px] truncate text-muted-foreground"
-              title={leafTitle || undefined}
-            >
-              {leafTitle}
-            </span>
-          )
+          <span
+            className="max-w-[120px] truncate text-muted-foreground"
+            title={leafTitle || undefined}
+          >
+            {leafTitle}
+          </span>
         ) : null}
       </div>
     );

@@ -1,0 +1,330 @@
+.page {
+  --field-internal-gap: 6px;
+  --field-gap: 20px;
+  width: 100%;
+  max-width: 800px;
+  min-width: 0;
+  margin-inline: auto;
+  padding: 24px 32px 48px;
+}
+
+.page .requiredNote {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.section {
+  min-width: 0;
+}
+
+.section + .section {
+  margin-top: 28px;
+}
+
+.sectionHeading {
+  min-width: 0;
+  margin-bottom: 16px;
+}
+
+.sectionHeading h2 {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.sectionHeading p {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.sectionBody {
+  display: grid;
+  gap: var(--field-gap);
+  min-width: 0;
+}
+
+.configuration {
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+}
+
+.configuration > div {
+  padding: 16px;
+}
+
+.configuration > div + div {
+  border-top: 1px solid var(--stroke-divider);
+}
+
+.nameRow {
+  display: grid;
+  grid-template-columns: minmax(140px, 180px) 12px minmax(0, 1fr);
+  align-items: end;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--field-internal-gap);
+}
+
+.field label,
+.optionCopy label {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.optional {
+  margin-left: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.field input,
+.tagsField input,
+.selectControl select {
+  height: 36px;
+  min-height: 36px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-size: 14px;
+  box-shadow: none;
+}
+
+.field input {
+  padding: 6px 12px;
+}
+
+.field input:hover:not(:disabled),
+.tagsField input:hover:not(:disabled) {
+  border-color: var(--stroke-strong);
+}
+
+.field input:focus-visible,
+.tagsField input:focus-visible {
+  border-color: var(--accent-commit);
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+.tagsField input[aria-invalid="true"] {
+  border-color: var(--status-error);
+}
+
+.field input[aria-invalid="true"] {
+  border-color: var(--status-error);
+}
+
+.selectControl {
+  position: relative;
+  min-width: 0;
+}
+
+.selectControl select {
+  width: 100%;
+  min-width: 0;
+  appearance: none;
+  padding: 6px 32px 6px 36px;
+  background: var(--management-control-bg);
+  cursor: pointer;
+}
+
+.selectControl select:hover:not(:disabled) {
+  background: var(--management-control-hover);
+}
+
+.selectControl select:focus-visible {
+  border-color: var(--accent-commit);
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+.selectControl select:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.selectIcon,
+.selectChevron {
+  position: absolute;
+  top: 50%;
+  color: var(--text-secondary);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.selectIcon {
+  left: 12px;
+}
+
+.selectChevron {
+  right: 12px;
+}
+
+.pathSeparator {
+  padding-bottom: 6px;
+  color: var(--text-secondary);
+  font-size: 20px;
+  line-height: 24px;
+}
+
+.nameHelp {
+  min-height: 20px;
+  margin-top: var(--field-internal-gap);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.nameHelp > div > div {
+  margin-top: 0;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.visibilityRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.visibilityRow .selectControl {
+  flex: 0 0 140px;
+}
+
+.optionCopy {
+  min-width: 0;
+}
+
+.optionCopy p {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.readmeOption {
+  display: grid;
+  gap: 4px;
+}
+
+.readmeOption label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.readmeOption input {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  accent-color: var(--accent-commit);
+}
+
+.readmeOption input:focus-visible {
+  outline: 2px solid var(--accent-commit);
+  outline-offset: 3px;
+}
+
+.readmeOption > p {
+  padding-left: 24px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.readmeOption > p[role="alert"] {
+  color: var(--status-error);
+}
+
+.tagsField > div {
+  display: grid;
+  gap: var(--field-internal-gap);
+}
+
+.tagsField > div > * {
+  margin-block: 0;
+}
+
+.tagsField :global([data-slot="button"]) {
+  height: 36px;
+}
+
+.tagsField > div > p {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.footer button {
+  min-width: 168px;
+}
+
+.progress {
+  max-width: 420px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.error {
+  margin-top: 20px;
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 20px 20px 32px;
+  }
+
+  .nameRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--field-gap);
+  }
+
+  .pathSeparator {
+    display: none;
+  }
+
+  .visibilityRow {
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--field-internal-gap);
+  }
+
+  .visibilityRow .selectControl {
+    flex-basis: auto;
+    width: 100%;
+  }
+
+  .footer {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .footer button {
+    width: 100%;
+  }
+}

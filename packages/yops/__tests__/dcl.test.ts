@@ -10,6 +10,49 @@ import { resolvePath } from '../src/paths';
 import type { YValue } from '../src/types';
 
 describe('assert', () => {
+  it('compares nested mappings by value regardless of field insertion order', () => {
+    const doc: YValue = {
+      trees: [{ key: 'prd', slots: { title: 'Draft', audience: 'Team' }, children: [] }],
+    };
+    const before = JSON.stringify(doc);
+    const result = applyYOps(doc, [
+      {
+        assert: {
+          path: 'trees',
+          equals: [{ children: [], slots: { audience: 'Team', title: 'Draft' }, key: 'prd' }],
+        },
+      },
+    ]);
+    expect(result.ok).toBe(true);
+    expect(JSON.stringify(result.doc)).toBe(before);
+    expect(JSON.stringify(doc)).toBe(before);
+  });
+
+  it.each([
+    {
+      label: 'array order',
+      actual: [{ key: 'a' }, { key: 'b' }],
+      expected: [{ key: 'b' }, { key: 'a' }],
+    },
+    {
+      label: 'nested value',
+      actual: { slots: { title: 'Old' } },
+      expected: { slots: { title: 'New' } },
+    },
+    { label: 'value type', actual: { value: 1 }, expected: { value: '1' } },
+    { label: 'missing field', actual: { value: null }, expected: {} },
+  ])('still rejects a changed $label atomically', ({ actual, expected }) => {
+    const doc = { value: actual, saved: false } as YValue;
+    const result = applyYOps(doc, [
+      { set: { path: 'saved', value: true } },
+      { assert: { path: 'value', equals: expected as YValue } },
+    ]);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('ASSERTION_FAILED');
+    expect(result.error?.op_index).toBe(1);
+    expect(result.doc).toEqual(doc);
+  });
+
   it('passes when value equals expected', () => {
     const doc: YValue = { name: 'alice', age: 30 };
     const result = applyYOps(doc, [{ assert: { path: 'name', equals: 'alice' } }]);

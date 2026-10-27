@@ -20,6 +20,7 @@ vi.mock('@/commands/projects', () => ({
 
 import { createProject as createProjectCommand } from '@/commands/projects';
 import { useProjects } from '@/hooks/projects/useProjects';
+import { dispatchProjectRestored } from '@/hooks/shared/deleteEvents';
 import { listProjects } from '@/infrastructure/projects';
 
 beforeEach(() => {
@@ -32,6 +33,19 @@ afterEach(() => {
 });
 
 describe('useProjects.create', () => {
+  it('reloads the active list after a repository is restored', async () => {
+    const { result } = renderHook(() => useProjects(50, 'alice'));
+    await waitForHook();
+    (listProjects as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      projects: [{ project_id: 'restored-id', name: 'test' }],
+    });
+    await act(async () => {
+      dispatchProjectRestored({ projectId: 'restored-id' });
+    });
+    await waitForHook();
+    expect(listProjects).toHaveBeenLastCalledWith(50, 0, 'alice');
+    expect(result.current.projects[0].project_id).toBe('restored-id');
+  });
   it('keeps refresh failures in hook state instead of throwing to the page', async () => {
     const { result } = renderHook(() => useProjects());
     await waitForHook();

@@ -25,15 +25,21 @@ export function StateAuthorReadme({
   author,
   compact = false,
   embedded = false,
+  label = 'Author README',
+  emptyMessage = 'No README published for this revision.',
+  showUnavailableImages = false,
 }: {
   compact?: boolean;
   embedded?: boolean;
+  label?: string;
+  emptyMessage?: string;
+  showUnavailableImages?: boolean;
   author?: Pick<NonNullable<StateOverview['author']>['document'], 'readme' | 'resources'>;
 }) {
   const resources = author?.resources ?? [];
   return (
     <section
-      aria-label="Author README"
+      aria-label={label}
       className={
         embedded
           ? ''
@@ -54,7 +60,7 @@ export function StateAuthorReadme({
           README <span className="text-[11px] font-normal text-[var(--text-tertiary)]">Author</span>
         </h3>
       )}
-      {author?.readme ? (
+      {author?.readme.trim() ? (
         <div
           className={
             compact
@@ -76,16 +82,19 @@ export function StateAuthorReadme({
                   <span>{children}</span>
                 ),
               img: ({ src, alt }) =>
-                src ? <img src={src} alt={alt ?? ''} loading="lazy" /> : null,
+                src ? (
+                  // biome-ignore lint/performance/noImgElement: README images are remote URLs with unknown size
+                  <img src={src} alt={alt ?? ''} loading="lazy" />
+                ) : showUnavailableImages ? (
+                  <span>[Image unavailable{alt ? `: ${alt}` : ''}]</span>
+                ) : null,
             }}
           >
             {author.readme}
           </ReactMarkdown>
         </div>
       ) : (
-        <p className="text-sm text-[var(--text-tertiary)]">
-          No README published for this revision.
-        </p>
+        <p className="text-sm text-[var(--text-tertiary)]">{emptyMessage}</p>
       )}
     </section>
   );

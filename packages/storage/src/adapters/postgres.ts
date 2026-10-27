@@ -9,6 +9,7 @@ import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from '../schema';
 import { seedBuiltinTemplates } from '../seed/templates';
+import { ensureRepositoryPaths } from './repository-paths';
 
 export type PostgresDB = PostgresJsDatabase<typeof schema>;
 
@@ -187,7 +188,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-export const POSTGRES_SCHEMA_VERSION = 75;
+export const POSTGRES_SCHEMA_VERSION = 78;
 
 function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
   if (!tableExists) return 'missing';
@@ -295,7 +296,9 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
     return;
   }
 
-  // First run or version bump — execute full schema init
+  // First run or version bump — execute full schema init. v78 combines both v77
+  // branches: public publisher ownership and permanent-deletion path cleanup.
+  // It also repairs early v76 tables missing resolvable through ensureRepositoryPaths.
   await sql.unsafe(`
     -- Projects table
     CREATE TABLE IF NOT EXISTS projects (
@@ -2264,7 +2267,10 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
     ON CONFLICT (namespace_id) DO NOTHING;
 
     ALTER TABLE projects ADD COLUMN IF NOT EXISTS namespace_id TEXT;
-    UPDATE projects SET namespace_id = 'ns_t3x_dev' WHERE namespace_id IS NULL;
+    -- Only the original v68 upgrade owns this historical backfill. Later schema
+    -- upgrades must not silently assign namespaces to anomalous imported rows.
+    UPDATE projects SET namespace_id = 'ns_t3x_dev' WHERE namespace_id IS NULL
+      AND ${(rows[0]?.version ?? 0) < 68 ? 'TRUE' : 'FALSE'};
     CREATE INDEX IF NOT EXISTS idx_projects_namespace_created
       ON projects(namespace_id, created_at);
 
@@ -2603,6 +2609,17 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS schema_studio_candidates_project
       ON schema_studio_candidates(project_id, created_at, id);
   `);
+
+  // Public releases retain namespace ownership independently of their source repository.
+  // Existing project-owned/private releases are deliberately not made public.
+  await sql.unsafe(`
+    ALTER TABLE yschema_artifacts ADD COLUMN IF NOT EXISTS publisher_namespace_id TEXT
+      REFERENCES namespaces(namespace_id) ON DELETE RESTRICT;
+  `);
+
+  // v76 reserves addresses; v77 releases linked claims on permanent deletion.
+  // Abnormal names and unattributed legacy claims stay untouched.
+  await ensureRepositoryPaths(sql as postgres.TransactionSql);
 
   // Record schema version so subsequent startups skip the init SQL.
   await sql.unsafe(`

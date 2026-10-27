@@ -87,10 +87,6 @@ vi.mock('@/hooks/conversations/useConversationContext', () => ({
   useConversationContext: () => ({ contextConfig: null }),
 }));
 
-vi.mock('@/hooks/shared/useContextMenu', () => ({
-  leafContextMenuHandlerRef: { current: null },
-}));
-
 vi.mock('@/hooks/shared/useReducedMotion', () => ({
   useReducedMotion: () => true,
 }));
@@ -311,8 +307,8 @@ describe('Canvas node semantic markers', () => {
   it('keeps expanded legacy output readable without create or delete controls', () => {
     renderUnitNode(makeNodeData());
 
-    const leafLink = screen.getByRole('link', { name: /Open leaf Launch brief/i });
-    expect(leafLink).toHaveAttribute('href', '/t3x-dev/canvas-project/outputs?leaf=leaf_canvas');
+    expect(screen.queryByRole('link', { name: /Launch brief/i })).not.toBeInTheDocument();
+    expect(screen.getByText('Launch brief')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Expand leaf list/i }));
 
@@ -320,14 +316,12 @@ describe('Canvas node semantic markers', () => {
     expect(openLeafPanelMock).not.toHaveBeenCalled();
   });
 
-  it('uses the canvas project id for leaf detail links when the route has no projectId param', () => {
+  it('keeps archived Leaf names informational on canonical repository routes', () => {
     navigationMocks.params = {};
     renderUnitNode(makeNodeData());
 
-    expect(screen.getByRole('link', { name: /Open leaf Launch brief/i })).toHaveAttribute(
-      'href',
-      '/t3x-dev/canvas-project/outputs?leaf=leaf_canvas'
-    );
+    expect(screen.getByText('Launch brief')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Launch brief/i })).not.toBeInTheDocument();
   });
 
   it('keeps the empty leaf state informational without a local new leaf action', () => {

@@ -1,7 +1,17 @@
 'use client';
 
+import styles from './StateValueReader.module.css';
+
 /** A deterministic reading layout for JSON values; never infers a domain or executes content. */
-export function StateValueReader({ value, depth = 0 }: { value: unknown; depth?: number }) {
+export function StateValueReader({
+  value,
+  depth = 0,
+  compact = false,
+}: {
+  value: unknown;
+  depth?: number;
+  compact?: boolean;
+}) {
   if (value === null || typeof value !== 'object') {
     return (
       <span className="whitespace-pre-wrap break-words text-sm leading-6 text-[var(--text-primary)]">
@@ -35,7 +45,13 @@ export function StateValueReader({ value, depth = 0 }: { value: unknown; depth?:
     const columns = [...new Set(value.flatMap((item) => Object.keys(item)))];
     if (columns.length > 0 && columns.length <= 8)
       return (
-        <div className="overflow-x-auto rounded-md border border-[var(--stroke-divider)]">
+        <div
+          className={
+            compact
+              ? styles.table
+              : 'overflow-x-auto rounded-md border border-[var(--stroke-divider)]'
+          }
+        >
           <table className="w-full text-left text-sm">
             <thead className="bg-[var(--surface-panel)]">
               <tr>
@@ -52,7 +68,7 @@ export function StateValueReader({ value, depth = 0 }: { value: unknown; depth?:
                   {columns.map((key) => (
                     <td className="min-w-24 px-3 py-2 align-top" key={key}>
                       {Object.hasOwn(row, key) ? (
-                        <StateValueReader value={row[key]} depth={depth + 1} />
+                        <StateValueReader value={row[key]} depth={depth + 1} compact={compact} />
                       ) : (
                         <span title="Absent">—</span>
                       )}
@@ -70,26 +86,36 @@ export function StateValueReader({ value, depth = 0 }: { value: unknown; depth?:
       {entries.map(([key, child]) => {
         const composite = child !== null && typeof child === 'object';
         return composite ? (
-          <details key={key} open={depth < 2} className="py-2.5">
+          <details key={key} open={depth < 2} className={compact ? styles.disclosure : 'py-2.5'}>
             <summary className="cursor-pointer text-sm font-medium text-[var(--text-primary)]">
               {Array.isArray(value) ? `Item ${Number(key) + 1}` : key}
-              <span className="ml-2 font-mono text-[10px] font-normal text-[var(--text-tertiary)]">
+              <span
+                className={
+                  compact
+                    ? styles.type
+                    : 'ml-2 font-mono text-[10px] font-normal text-[var(--text-tertiary)]'
+                }
+              >
                 {Array.isArray(child) ? 'list' : 'object'} · {Object.keys(child).length}
               </span>
             </summary>
             <div className="mt-2 border-l border-[var(--stroke-divider)] pl-3">
-              <StateValueReader value={child} depth={depth + 1} />
+              <StateValueReader value={child} depth={depth + 1} compact={compact} />
             </div>
           </details>
         ) : (
           <div
             key={key}
-            className="grid grid-cols-[minmax(80px,0.7fr)_minmax(0,1.3fr)] gap-3 py-2.5"
+            className={
+              compact
+                ? styles.field
+                : 'grid grid-cols-[minmax(80px,0.7fr)_minmax(0,1.3fr)] gap-3 py-2.5'
+            }
           >
             <span className="break-words text-xs text-[var(--text-secondary)]">
               {Array.isArray(value) ? Number(key) + 1 : key}
             </span>
-            <StateValueReader value={child} depth={depth + 1} />
+            <StateValueReader value={child} depth={depth + 1} compact={compact} />
           </div>
         );
       })}
@@ -99,23 +125,91 @@ export function StateValueReader({ value, depth = 0 }: { value: unknown; depth?:
 
 export function StateSemanticReader({
   trees,
+  compact = false,
 }: {
   trees: Array<{ key: string; slots: Record<string, unknown>; children: unknown[] }>;
+  compact?: boolean;
 }) {
+  const columns = [...new Set(trees.flatMap((tree) => Object.keys(tree.slots)))];
+  if (
+    compact &&
+    trees.length > 1 &&
+    columns.length > 0 &&
+    columns.length <= 8 &&
+    trees.every(
+      (tree) =>
+        tree.children.length === 0 &&
+        Object.values(tree.slots).every((value) => value === null || typeof value !== 'object')
+    )
+  ) {
+    return (
+      <div className={styles.table}>
+        <table className="w-full text-left text-sm">
+          <thead className="bg-[var(--surface-panel)]">
+            <tr>
+              <th className="px-3 py-2 font-medium">Item</th>
+              {columns.map((column) => (
+                <th key={column} className="px-3 py-2 font-medium">
+                  {column}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {trees.map((tree, index) => (
+              <tr key={`${index}:${tree.key}`} className="border-t border-[var(--stroke-divider)]">
+                <th scope="row" className="px-3 py-2 align-top font-medium">
+                  {tree.key}
+                </th>
+                {columns.map((column) => (
+                  <td key={column} className="px-3 py-2 align-top">
+                    {Object.hasOwn(tree.slots, column) ? (
+                      <StateValueReader value={tree.slots[column]} compact />
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+  if (
+    compact &&
+    trees.length === 1 &&
+    Object.keys(trees[0].slots).length === 0 &&
+    trees[0].children.length === 1
+  ) {
+    const child = trees[0].children[0] as (typeof trees)[number];
+    return (
+      <StateSemanticReader compact trees={[{ ...child, key: `${trees[0].key} / ${child.key}` }]} />
+    );
+  }
   return (
-    <div className="space-y-4">
+    <div className={compact ? styles.groups : 'space-y-4'}>
       {trees.map((tree, index) => (
         <article
           key={`${index}:${tree.key}`}
-          className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4"
+          className={
+            compact
+              ? styles.group
+              : 'rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4'
+          }
         >
-          <h4 className="mb-2 text-base font-semibold">{tree.key}</h4>
+          <h4 className={compact ? styles.heading : 'mb-2 text-base font-semibold'}>{tree.key}</h4>
           {Object.keys(tree.slots).length || tree.children.length === 0 ? (
-            <StateValueReader value={tree.slots} />
+            <StateValueReader value={tree.slots} compact={compact} />
           ) : null}
           {tree.children.length > 0 ? (
-            <div className="mt-3 border-t border-[var(--stroke-divider)] pt-3">
-              <StateSemanticReader trees={tree.children as typeof trees} />
+            <div
+              className={
+                compact ? styles.children : 'mt-3 border-t border-[var(--stroke-divider)] pt-3'
+              }
+            >
+              <StateSemanticReader compact={compact} trees={tree.children as typeof trees} />
             </div>
           ) : null}
         </article>

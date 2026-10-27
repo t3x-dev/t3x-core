@@ -139,6 +139,7 @@ export {
 // Drafts (Workbench)
 export {
   abandonDraft,
+  advanceCleanWorkspaceAfterMerge,
   ConflictError,
   commitDraft,
   DraftAuthoringConflictError,
@@ -154,8 +155,11 @@ export {
   listWorkspaceDrafts,
   NotFoundError,
   promoteDraft,
+  renewWorkspaceAuthoring,
+  saveWorkspaceSchemaPreparation,
   sealWorkspaceAuthoring,
   transactWorkspaceAuthoring,
+  transactWorkspaceReconciliation,
   type UpdateDraftInput,
   updateDraft,
   updateDraftPreview,
@@ -324,6 +328,7 @@ export {
   type ListPinsOptions,
   updatePinAssertions,
 } from './pins';
+export * from './project-check-records';
 export {
   type ChangeProjectVisibilityInput,
   type ChangeProjectVisibilityResult,
@@ -403,6 +408,7 @@ export {
   type UpdateRecipeInput,
   updateRecipe,
 } from './recipes';
+export * from './repository-paths';
 // Runs (Engine → Runner → n8n flow)
 export {
   type ConfigurationStats,
@@ -557,6 +563,7 @@ export {
   type BindTransitionPolicyInput,
   bindTransitionPolicy,
   getTransitionPolicyBinding,
+  listTransitionPolicyBindings,
   type TransitionPolicyBinding,
   TransitionPolicyBindingIntegrityError,
   TransitionPolicyResourceConflictError,

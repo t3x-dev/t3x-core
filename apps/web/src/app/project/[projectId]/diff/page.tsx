@@ -1,4 +1,5 @@
 'use client';
+import { useRepositoryRouteParams as useParams } from '@/hooks/projects/repositoryRouteContext';
 
 /**
  * Diff Page Route
@@ -7,10 +8,10 @@
  * Query params: ?base={baseHash}&target={targetHash}
  */
 
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { DiffPage } from '@/components/diff/DiffPage';
-import { getProjectIdCanvasPath } from '@/domain/project/repoPath';
+import { getProjectIdHistoryPath } from '@/domain/project/repoPath';
 import { safeInternalReturnTo } from '@/utils/navigationReturn';
 
 function DiffPageContent() {
@@ -23,7 +24,7 @@ function DiffPageContent() {
   const targetHash = searchParams.get('target');
   const returnHref = safeInternalReturnTo(
     searchParams.get('returnTo'),
-    getProjectIdCanvasPath(projectId)
+    getProjectIdHistoryPath(projectId)
   );
 
   if (!baseHash || !targetHash) {

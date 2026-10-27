@@ -1,250 +1,283 @@
 'use client';
 
-import { Database, FileText, Lock, Plus, Sparkles } from 'lucide-react';
+import {
+  initialRepositoryReadme,
+  RepositoryReadmeSchema,
+  RepositoryTagsSchema,
+} from '@t3x-dev/api-client';
+import {
+  ArrowLeft,
+  ArrowRight,
+  ChevronDown,
+  Globe,
+  Link2,
+  Loader2,
+  LockKeyhole,
+  UserRound,
+} from 'lucide-react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
-import { type FormEvent, type ReactNode, useState } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { type FormEvent, useState } from 'react';
+import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { DEFAULT_OWNER_SLUG, getProjectRepoPath, toRepoSlug } from '@/domain/project/repoPath';
-import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
+import { safeExploreReturn } from '@/domain/project/exploreLocation';
+import { getProjectRepoPath } from '@/domain/project/repoPath';
+import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
+import { useRepositoryName } from '@/hooks/projects/useRepositoryName';
+import { useRepositorySetup } from '@/hooks/projects/useRepositorySetup';
+import palette from '@/styles/management-palette.module.css';
 import { cn } from '@/utils/cn';
-
-type SetupMode = 'blank' | 'source';
-
-function firstParam(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? (value[0] ?? '') : (value ?? '');
-}
-
-function SetupChoice({
-  checked,
-  description,
-  icon,
-  label,
-  onChange,
-  value,
-}: {
-  checked: boolean;
-  description: string;
-  icon: ReactNode;
-  label: string;
-  onChange: (value: SetupMode) => void;
-  value: SetupMode;
-}) {
-  return (
-    <label
-      className={cn(
-        'flex cursor-pointer items-start gap-3 rounded-[var(--radius-card)] border bg-[var(--surface-card)] p-4 transition-colors',
-        checked
-          ? 'border-[var(--accent-commit)] bg-[var(--accent-commit-soft)]'
-          : 'border-[var(--stroke-default)] hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)]'
-      )}
-    >
-      <input
-        checked={checked}
-        className="mt-1 size-4 accent-[var(--accent-commit)]"
-        name="repository-setup"
-        onChange={() => onChange(value)}
-        type="radio"
-      />
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[var(--stroke-default)] bg-[var(--surface-panel)] text-[var(--text-secondary)]">
-        {icon}
-      </span>
-      <span className="min-w-0">
-        <span className="block text-sm font-bold text-[var(--text-primary)]">{label}</span>
-        <span className="mt-1 block text-sm leading-snug text-[var(--text-secondary)]">
-          {description}
-        </span>
-      </span>
-    </label>
-  );
-}
+import styles from './NewRepositoryPage.module.css';
+import management from './RepositoryManagement.module.css';
+import { RepositoryNameFeedback } from './RepositoryNameFeedback';
+import { type RepositoryTagsDraft, RepositoryTagsInput } from './RepositoryTagsInput';
 
 export function NewRepositoryPage() {
   const params = useParams<{ owner?: string | string[] }>();
-  const ownerSlug = firstParam(params.owner).toLowerCase() || DEFAULT_OWNER_SLUG;
+  const routeOwner = (Array.isArray(params.owner) ? params.owner[0] : params.owner) || '';
+  const [owner, setOwner] = useState(routeOwner);
+  const { accounts } = useNamespaceAccounts();
+  const setup = useRepositorySetup();
   const router = useRouter();
-  const { add: createRepository } = useProjectCrud();
-  const [repoName, setRepoName] = useState('');
+  const search = useSearchParams();
+  const returnTo = safeExploreReturn(search?.get('returnTo'));
+  const [name, setName] = useState('');
+  const nameCheck = useRepositoryName(owner, name);
   const [description, setDescription] = useState('');
-  const [setupMode, setSetupMode] = useState<SetupMode>('blank');
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
+  const [initializeReadme, setInitializeReadme] = useState(false);
+  const [tags, setTags] = useState<RepositoryTagsDraft>({ tags: [], input: '' });
+  const parsedTags = RepositoryTagsSchema.safeParse([...tags.tags, tags.input]);
+  const parsedReadme = RepositoryReadmeSchema.safeParse(
+    initializeReadme ? initialRepositoryReadme(nameCheck.result?.name ?? name, description) : ''
+  );
+  const [visibility, setVisibility] = useState<'private' | 'unlisted' | 'public'>('private');
+  const locked = setup.pending || setup.started;
+  const ready =
+    setup.started || (nameCheck.canSubmit && parsedTags.success && parsedReadme.success);
+  const owners = Array.from(new Set([routeOwner, ...accounts.map((item) => item.namespace.slug)]));
+  const VisibilityIcon =
+    visibility === 'private' ? LockKeyhole : visibility === 'public' ? Globe : Link2;
+  const visibilityDescription = {
+    private: 'Only people with permission can access this repository.',
+    unlisted: 'Anyone with the repository address can access it.',
+    public: 'Anyone can discover and access this repository.',
+  }[visibility];
 
-  const normalizedName = repoName.trim();
-  const previewSlug = toRepoSlug(normalizedName || 'New repository');
-  const previewPath = `/${ownerSlug}/${previewSlug}`;
-
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!normalizedName || creating) return;
-
-    setCreating(true);
-    setCreateError(null);
-    try {
-      const project = await createRepository(normalizedName, {
-        description: description.trim() || 'Structured state repository.',
-        namespace: ownerSlug,
-      });
-      const repoPath = getProjectRepoPath(project, ownerSlug);
-      router.push(setupMode === 'source' ? `${repoPath}/workspaces` : repoPath);
-    } catch {
-      setCreateError('Failed to create repository');
-    } finally {
-      setCreating(false);
-    }
-  };
+    if (!ready || setup.pending) return;
+    const result = await setup.create({
+      name: nameCheck.result?.name ?? name,
+      description,
+      owner,
+      visibility,
+      initializeReadme,
+      tags: parsedTags.success ? parsedTags.data : [],
+    });
+    if (result && returnTo) {
+      const target = new URL(returnTo, 'http://local');
+      target.searchParams.set('studioTarget', result.project.project_id);
+      target.searchParams.set('workspace', result.workspaceId);
+      target.searchParams.set('branch', 'main');
+      router.push(`${target.pathname}?${target.searchParams}`);
+    } else if (result)
+      router.push(
+        `${getProjectRepoPath(result.project, owner)}/workspaces?workspace=${encodeURIComponent(result.workspaceId)}&conversation=${encodeURIComponent(result.conversationId)}`
+      );
+  }
 
   return (
-    <div className="min-h-screen bg-[var(--surface-app)] text-[var(--text-primary)]">
-      <header className="border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)]">
-        <div className="flex h-16 items-center gap-3 px-6">
-          <Link
-            aria-label={`Back to ${ownerSlug}`}
-            className="flex items-center gap-3 rounded-[var(--radius-control)] pr-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
-            href={`/${ownerSlug}`}
-          >
-            <span className="flex size-9 items-center justify-center rounded-[var(--radius-control)] bg-[var(--text-primary)] text-sm font-bold text-[var(--surface-card)]">
-              T3
-            </span>
-            <span className="text-base font-bold text-[var(--text-primary)]">{ownerSlug}</span>
+    <div className={cn(palette.scope, management.shell)}>
+      <DiscoverHeader
+        owner={owner}
+        namespaceTab="repositories"
+        settingsHref={`/settings/provider-credentials?owner=${encodeURIComponent(owner)}`}
+      />
+      <div className={management.content}>
+        <main className={cn(management.scope, styles.page)}>
+          <Link href={returnTo ?? `/${routeOwner}`} className={management.backLink}>
+            <ArrowLeft aria-hidden="true" className="size-4" />{' '}
+            {returnTo ? 'Back to Explore' : 'Back to repositories'}
           </Link>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-[980px] px-6 py-10">
-        <div className="border-b border-[var(--stroke-divider)] pb-6">
-          <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-[var(--text-secondary)]">
-            <Link className="text-[var(--accent-commit)] hover:underline" href={`/${ownerSlug}`}>
-              {ownerSlug}
-            </Link>
-            <span>/</span>
-            <span>New repository</span>
-          </div>
-          <h1 className="mt-4 text-3xl font-bold tracking-normal text-[var(--text-primary)]">
-            Create a new repository
-          </h1>
-        </div>
-
-        <form className="grid gap-8 py-8" onSubmit={handleSubmit}>
-          <section className="grid gap-4 border-b border-[var(--stroke-divider)] pb-8">
-            <div className="grid gap-4 md:grid-cols-[minmax(180px,240px)_minmax(0,1fr)]">
-              <div className="grid gap-2">
-                <label
-                  className="text-sm font-bold text-[var(--text-primary)]"
-                  htmlFor="new-repository-owner"
-                >
-                  Owner
-                </label>
-                <Input id="new-repository-owner" readOnly value={ownerSlug} />
+          <header className={management.heading}>
+            <h1>Create a new repository</h1>
+            <p>Keep your structured state and its history together.</p>
+            <p className={styles.requiredNote}>Required fields are marked *</p>
+          </header>
+          <form onSubmit={submit} aria-busy={setup.pending}>
+            <section className={styles.section} aria-labelledby="repository-general-heading">
+              <div className={styles.sectionHeading}>
+                <h2 id="repository-general-heading">General</h2>
               </div>
-              <div className="grid gap-2">
-                <label
-                  className="text-sm font-bold text-[var(--text-primary)]"
-                  htmlFor="new-repository-name"
-                >
-                  Repository name
-                </label>
-                <Input
-                  autoFocus
-                  disabled={creating}
-                  id="new-repository-name"
-                  onChange={(event) => {
-                    setRepoName(event.target.value);
-                    if (createError) setCreateError(null);
-                  }}
-                  placeholder="new-repository"
-                  value={repoName}
-                />
-              </div>
-            </div>
-
-            <div className="rounded-[var(--radius-card)] border border-[var(--stroke-default)] bg-[var(--surface-card)] p-4">
-              <div className="text-xs font-bold uppercase text-[var(--text-tertiary)]">
-                Path preview
-              </div>
-              <div className="mt-2 break-all font-mono text-sm font-semibold text-[var(--text-primary)]">
-                {previewPath}
-              </div>
-            </div>
-
-            <div className="grid gap-2">
-              <label
-                className="text-sm font-bold text-[var(--text-primary)]"
-                htmlFor="new-repository-description"
-              >
-                Description
-              </label>
-              <Textarea
-                disabled={creating}
-                id="new-repository-description"
-                onChange={(event) => setDescription(event.target.value)}
-                placeholder="Structured state workflow."
-                value={description}
-              />
-            </div>
-          </section>
-
-          <section className="grid gap-3 border-b border-[var(--stroke-divider)] pb-8">
-            <h2 className="text-base font-bold text-[var(--text-primary)]">Repository setup</h2>
-            <div className="grid gap-3 md:grid-cols-2">
-              <SetupChoice
-                checked={setupMode === 'blank'}
-                description="Create the repository shell and start on the State tab."
-                icon={<Database className="size-4" />}
-                label="Blank repository"
-                onChange={setSetupMode}
-                value="blank"
-              />
-              <SetupChoice
-                checked={setupMode === 'source'}
-                description="Create the repository and open the source-evidence workspace."
-                icon={<FileText className="size-4" />}
-                label="Start from source evidence"
-                onChange={setSetupMode}
-                value="source"
-              />
-            </div>
-          </section>
-
-          <section className="grid gap-3 border-b border-[var(--stroke-divider)] pb-8">
-            <h2 className="text-base font-bold text-[var(--text-primary)]">Visibility</h2>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-[var(--radius-card)] border border-[var(--stroke-default)] bg-[var(--surface-card)] p-4">
-                <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-primary)]">
-                  <Lock className="size-4 text-[var(--text-secondary)]" />
-                  Local repository
+              <div className={styles.sectionBody}>
+                <div>
+                  <div className={styles.nameRow}>
+                    <div className={styles.field}>
+                      <label htmlFor="repo-owner">
+                        Owner <span aria-hidden="true">*</span>
+                      </label>
+                      <div className={styles.selectControl}>
+                        <UserRound className={styles.selectIcon} size={16} aria-hidden="true" />
+                        <select
+                          id="repo-owner"
+                          aria-label="Owner"
+                          required
+                          disabled={locked}
+                          value={owner}
+                          onChange={(event) => setOwner(event.target.value)}
+                        >
+                          {owners.map((value) => (
+                            <option key={value}>{value}</option>
+                          ))}
+                        </select>
+                        <ChevronDown
+                          className={styles.selectChevron}
+                          size={14}
+                          aria-hidden="true"
+                        />
+                      </div>
+                    </div>
+                    <span className={styles.pathSeparator} aria-hidden="true">
+                      /
+                    </span>
+                    <div className={styles.field}>
+                      <label htmlFor="repo-name">
+                        Repository name <span aria-hidden="true">*</span>
+                      </label>
+                      <Input
+                        id="repo-name"
+                        aria-label="Repository name"
+                        required
+                        autoFocus
+                        autoComplete="off"
+                        aria-describedby="repository-name-help repository-name-feedback"
+                        aria-invalid={
+                          name.length > 0 &&
+                          Boolean(nameCheck.result && !nameCheck.result.available)
+                        }
+                        disabled={locked}
+                        value={name}
+                        onChange={(event) => setName(event.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className={styles.nameHelp}>
+                    <p
+                      id="repository-name-help"
+                      hidden={name.length > 0 || Boolean(nameCheck.error)}
+                    >
+                      Choose a short, descriptive name for your repository.
+                    </p>
+                    <div id="repository-name-feedback">
+                      {(name.length > 0 || nameCheck.error) && (
+                        <RepositoryNameFeedback check={nameCheck} />
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <p className="mt-2 text-sm leading-snug text-[var(--text-secondary)]">
-                  Private by default
-                </p>
-              </div>
-              <div className="rounded-[var(--radius-card)] border border-dashed border-[var(--stroke-default)] bg-[var(--surface-panel)] p-4 text-sm text-[var(--text-secondary)]">
-                <div className="flex items-center gap-2 font-bold text-[var(--text-primary)]">
-                  <Sparkles className="size-4 text-[var(--accent-pending)]" />
-                  Organization policy
+                <div className={styles.field}>
+                  <label htmlFor="repo-description">
+                    Description{' '}
+                    <span className={styles.optional} aria-hidden="true">
+                      Optional
+                    </span>
+                  </label>
+                  <Input
+                    id="repo-description"
+                    aria-label="Description"
+                    disabled={locked}
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                  />
                 </div>
-                <p className="mt-2 leading-snug">Managed by {ownerSlug} settings.</p>
               </div>
-            </div>
-          </section>
-
-          {createError && (
-            <p className="text-sm font-semibold text-[var(--status-error)]">{createError}</p>
-          )}
-
-          <div className="flex flex-wrap justify-end gap-3">
-            <Button asChild variant="outline">
-              <Link href={`/${ownerSlug}`}>Cancel</Link>
-            </Button>
-            <Button disabled={!normalizedName || creating} type="submit" variant="commit">
-              <Plus className="size-4" />
-              {creating ? 'Creating...' : 'Create repository'}
-            </Button>
-          </div>
-        </form>
-      </main>
+            </section>
+            <section className={styles.section} aria-labelledby="repository-configuration-heading">
+              <div className={styles.sectionHeading}>
+                <h2 id="repository-configuration-heading">Configuration</h2>
+                <p>README and tags are optional. You can add or edit them later.</p>
+              </div>
+              <div className={styles.configuration}>
+                <div className={styles.visibilityRow}>
+                  <div className={styles.optionCopy}>
+                    <label htmlFor="repo-visibility">
+                      Visibility <span aria-hidden="true">*</span>
+                    </label>
+                    <p id="repository-visibility-help">{visibilityDescription}</p>
+                  </div>
+                  <div className={styles.selectControl}>
+                    <VisibilityIcon className={styles.selectIcon} size={16} aria-hidden="true" />
+                    <select
+                      id="repo-visibility"
+                      aria-label="Visibility"
+                      aria-describedby="repository-visibility-help"
+                      disabled={locked}
+                      value={visibility}
+                      onChange={(event) => setVisibility(event.target.value as typeof visibility)}
+                    >
+                      <option value="private">Private</option>
+                      <option value="unlisted">Unlisted</option>
+                      <option value="public">Public</option>
+                    </select>
+                    <ChevronDown className={styles.selectChevron} size={14} aria-hidden="true" />
+                  </div>
+                </div>
+                <div className={styles.readmeOption}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={initializeReadme}
+                      disabled={locked}
+                      aria-describedby="repository-readme-help"
+                      onChange={(event) => setInitializeReadme(event.target.checked)}
+                    />
+                    Initialize README
+                  </label>
+                  <p id="repository-readme-help">
+                    Start with your repository name and description. Leave unchecked to begin
+                    without a README.
+                  </p>
+                  {!parsedReadme.success ? (
+                    <p role="alert" className="text-sm text-[var(--status-error)]">
+                      {parsedReadme.error.issues[0]?.message}
+                    </p>
+                  ) : null}
+                </div>
+                <div className={styles.tagsField}>
+                  <RepositoryTagsInput value={tags} onChange={setTags} disabled={locked} />
+                </div>
+              </div>
+            </section>
+            {setup.error && (
+              <p role="alert" className={cn(management.notice, management.error, styles.error)}>
+                {setup.error}
+              </p>
+            )}
+            <footer className={styles.footer}>
+              <output className={styles.progress} aria-live="polite">
+                {setup.pending
+                  ? setup.started
+                    ? 'Repository created. Finishing setup…'
+                    : 'Creating your repository…'
+                  : setup.started
+                    ? 'Your repository is created. Retry to finish setup and open its Workspace.'
+                    : 'A Workspace will be prepared for your source material after creation.'}
+              </output>
+              <Button type="submit" disabled={!ready || setup.pending}>
+                {setup.pending && (
+                  <Loader2
+                    aria-hidden="true"
+                    className="size-4 animate-spin motion-reduce:animate-none"
+                  />
+                )}
+                {setup.pending ? 'Creating…' : setup.started ? 'Retry setup' : 'Create repository'}
+                {!setup.pending && <ArrowRight aria-hidden="true" className="size-4" />}
+              </Button>
+            </footer>
+          </form>
+        </main>
+      </div>
     </div>
   );
 }

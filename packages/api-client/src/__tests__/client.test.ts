@@ -349,6 +349,31 @@ describe('T3xClient', () => {
   // Projects
   // =========================================================================
   describe('projects', () => {
+    it('lists deleted repositories with management capabilities and namespace filtering', async () => {
+      const data = {
+        status: 'deleted',
+        projects: [
+          {
+            project_id: 'deleted',
+            name: 'Test',
+            deleted_at: '2026-10-19T00:00:00Z',
+            can_restore: true,
+            can_permanently_delete: true,
+          },
+        ],
+        limit: 10,
+        offset: 0,
+      };
+      const fn = mockFetch(successResponse(data));
+      const client = createTestClient(fn);
+      expect(
+        await client.listProjects({ namespace: 'team', status: 'deleted', limit: 10 })
+      ).toEqual(data);
+      const url = new URL((fn.mock.calls[0] as unknown[])[0] as string);
+      expect(url.searchParams.get('status')).toBe('deleted');
+      expect(url.searchParams.get('namespace')).toBe('team');
+    });
+
     it('listProjects sends GET with pagination', async () => {
       const data = { projects: [], limit: 10, offset: 0 };
       const fn = mockFetch(successResponse(data));
@@ -390,14 +415,14 @@ describe('T3xClient', () => {
       );
     });
 
-    it('updateProject sends PATCH', async () => {
+    it('updateProject sends PUT', async () => {
       const fn = mockFetch(successResponse({ project_id: 'proj_1', name: 'Updated' }));
       const client = createTestClient(fn);
 
       await client.updateProject('proj_1', { name: 'Updated' });
       expect(fn).toHaveBeenCalledWith(
         expect.stringContaining('/v1/projects/proj_1'),
-        expect.objectContaining({ method: 'PATCH' })
+        expect.objectContaining({ method: 'PUT' })
       );
     });
 
@@ -452,6 +477,15 @@ describe('T3xClient', () => {
         expect.any(String),
         expect.objectContaining({ method: 'DELETE' })
       );
+    });
+
+    it('passes the deleted-state precondition for a permanent delete from a deleted list', async () => {
+      const fn = mockFetch(successResponse(null));
+      const client = createTestClient(fn);
+      await client.deleteProject('proj_1', { permanent: true, onlyIfDeleted: true });
+      const url = new URL((fn.mock.calls[0] as unknown[])[0] as string);
+      expect(url.searchParams.get('permanent')).toBe('true');
+      expect(url.searchParams.get('only_if_deleted')).toBe('true');
     });
 
     it('restoreProject sends POST to restore endpoint', async () => {
@@ -1213,38 +1247,6 @@ describe('T3xClient', () => {
       expect(await client.generation.providers()).toEqual(catalog);
       expect(await client.listChatProviders()).toEqual(catalog);
     });
-
-    it('streams typed Generation events without exposing the legacy Chat UI', async () => {
-      const encoder = new TextEncoder();
-      const body = new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(encoder.encode('data: {"type":"token","content":"Hi"}\n\n'));
-          controller.enqueue(encoder.encode('data: {"type":"done","model":"gpt-5"}\n\n'));
-          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-          controller.close();
-        },
-      });
-      const fn = vi.fn(() =>
-        Promise.resolve(new Response(body, { status: 200, statusText: 'OK' }))
-      ) as unknown as typeof fetch;
-      const client = createTestClient(fn);
-
-      const events = [];
-      for await (const event of client.generation.stream({
-        messages: [{ role: 'user', content: 'Hello' }],
-      })) {
-        events.push(event);
-      }
-
-      expect(events).toEqual([
-        { type: 'token', content: 'Hi' },
-        { type: 'done', model: 'gpt-5' },
-      ]);
-      expect(fn).toHaveBeenCalledWith(
-        'http://localhost:8000/v1/chat/stream',
-        expect.objectContaining({ method: 'POST' })
-      );
-    });
   });
 
   // =========================================================================
@@ -1629,6 +1631,7 @@ describe('T3xClient', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({
+            visibility: 'community',
             composition_revision: 2,
             composition_hash: 'sha256:composition',
             canonical_name: 'projects/project-a/prd',

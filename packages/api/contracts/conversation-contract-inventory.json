@@ -23,11 +23,6 @@
           "source": "packages/api/src/routes/chat.openapi.ts"
         },
         {
-          "method": "POST",
-          "path": "/v1/chat/stream",
-          "source": "packages/api/src/routes/chat.openapi.ts"
-        },
-        {
           "method": "GET",
           "path": "/v1/chat/providers",
           "source": "packages/api/src/routes/chat.openapi.ts"
@@ -38,11 +33,6 @@
           "kind": "application",
           "file": "apps/web/src/hooks/sourceThreads/useSourceThreadGeneration.ts",
           "token": "generationApi.complete("
-        },
-        {
-          "kind": "application",
-          "file": "apps/web/src/hooks/sourceThreads/useSourceThreadGeneration.ts",
-          "token": "generationApi.stream("
         },
         {
           "kind": "compatibility_adapter",
@@ -101,8 +91,8 @@
         },
         {
           "kind": "application",
-          "file": "apps/web/src/hooks/conversations/useProjectConversations.ts",
-          "token": "listConversations"
+          "file": "apps/web/src/queries/conversations.ts",
+          "token": "listConversations("
         },
         {
           "kind": "typed_client",
@@ -146,11 +136,6 @@
       "consumers": [
         {
           "kind": "application",
-          "file": "apps/web/src/hooks/sourceThreads/useSourceThreadGeneration.ts",
-          "token": "sourceThreadApi.memory("
-        },
-        {
-          "kind": "application",
           "file": "apps/web/src/commands/conversations/updateConversationContextPins.ts",
           "token": "updateConversationContext("
         },
@@ -158,11 +143,6 @@
           "kind": "compatibility_adapter",
           "file": "apps/web/src/infrastructure/pins.ts",
           "token": "getConversationContext("
-        },
-        {
-          "kind": "application",
-          "file": "apps/web/src/components/chat/ChatWorkspace.tsx",
-          "token": "useContextManifest("
         }
       ]
     },
@@ -263,13 +243,7 @@
           "source": "packages/api/src/routes/source-text-revisions.openapi.ts"
         }
       ],
-      "consumers": [
-        {
-          "kind": "application",
-          "file": "apps/web/src/hooks/conversations/hydrateConversationToStore.ts",
-          "token": "listSourceTextRevisions("
-        }
-      ]
+      "consumers": []
     },
     {
       "id": "repository-source-evidence",

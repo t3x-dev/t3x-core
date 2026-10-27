@@ -321,6 +321,37 @@ describe('Pull request routes', () => {
     ]);
   });
 
+  it('measures a diverged branch from the merge base so target-only work is not removed', async () => {
+    const fixture = await createBranchFixture();
+    const movedTarget = await createRepositoryCommit({
+      projectId: fixture.projectId,
+      branch: 'main',
+      content: {
+        trees: [
+          { key: 'product', slots: { version: 1 }, children: [] },
+          { key: 'pricing', slots: { tier: 'pro' }, children: [] },
+        ],
+        relations: [],
+      },
+      message: 'main-only update',
+    });
+    const response = await app.request(
+      `/v1/projects/${fixture.projectId}/pull-requests/compare?base=main`
+    );
+    const data = (await response.json()) as ApiResponse;
+    expect(data.data.compare_branches).toEqual([
+      expect.objectContaining({
+        head_commit_id: fixture.source.hash,
+        base_commit_id: movedTarget.hash,
+        merge_base_commit_id: fixture.target.hash,
+        ahead_by: 1,
+        behind_by: 1,
+        changed_nodes: 1,
+        status: 'ready',
+      }),
+    ]);
+  });
+
   it('keeps the main branch head before listing pull request comparisons', async () => {
     const project = await insertProject(mockDB, testData.project({ name: 'Main PR project' }));
     await insertBranch(mockDB, { projectId: project.projectId, name: 'main' });
@@ -617,12 +648,13 @@ describe('Pull request routes', () => {
       number: 1,
       source_commit_id: fixture.source.hash,
       target_base_commit_id: fixture.target.hash,
-      status: 'open',
+      status: 'ready',
     });
+    expect(data.data.merge_draft_id).toMatch(/^mdraft_/);
     expect(data.data.checks).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ kind: 'source_commit', status: 'passed' }),
-        expect.objectContaining({ kind: 'merge_simulation', status: 'pending' }),
+        expect.objectContaining({ kind: 'merge_simulation', status: 'passed' }),
       ])
     );
 
@@ -796,6 +828,81 @@ describe('Pull request routes', () => {
         expect.objectContaining({ key: 'product', slots: { version: 2 } }),
         expect.objectContaining({ key: 'release', slots: { ready: true } }),
       ])
+    );
+  });
+
+  it('detects conflicts when the pull request opens and explains them per slot', async () => {
+    const fixture = await createBranchFixture({ conflict: true });
+    const opened = await openPullRequest(fixture.projectId);
+    expect(opened.response.status).toBe(201);
+    expect(opened.data.data.status).toBe('blocked');
+    expect(opened.data.data.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'conflict_resolution', status: 'blocked' }),
+      ])
+    );
+
+    const review = await app.request(
+      `/v1/projects/${fixture.projectId}/pull-requests/${opened.data.data.number}/merge-review`
+    );
+    expect(review.status).toBe(200);
+    const reviewData = (await review.json()) as ApiResponse;
+    expect(reviewData.data.draft_id).toBe(opened.data.data.merge_draft_id);
+    expect(reviewData.data.merge_base_commit_id).toMatch(/^sha256:/);
+    expect(reviewData.data.nodes).toEqual([
+      {
+        path: 'product',
+        status: 'conflict',
+        presence: { base: true, source: true, target: true },
+        slots: [{ key: 'version', base: 1, source: 2, target: 3, conflict: true }],
+      },
+      {
+        path: 'release',
+        status: 'source_only',
+        presence: { base: false, source: true, target: false },
+        slots: [{ key: 'ready', source: true, merged: true, conflict: false }],
+      },
+    ]);
+  });
+
+  it('refuses to merge while a conflict has no decision and accepts a custom value', async () => {
+    const fixture = await createBranchFixture({ conflict: true });
+    const opened = await openPullRequest(fixture.projectId);
+    const number = opened.data.data.number;
+    const merge = (conflictResolutions: Record<string, unknown>) =>
+      app.request(`/v1/projects/${fixture.projectId}/pull-requests/${number}/merge`, {
+        body: JSON.stringify({
+          expected_source_commit_id: fixture.source.hash,
+          expected_target_commit_id: fixture.target.hash,
+          strategy: 'deterministic_merge',
+          decisions: {
+            conflictResolutions,
+            keepFromSource: ['release'],
+            keepFromTarget: [],
+            keepRelationsFromSource: true,
+            keepRelationsFromTarget: true,
+          },
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      });
+
+    const unresolved = await merge({});
+    expect(unresolved.status).toBe(409);
+    expect(((await unresolved.json()) as ApiResponse).error.code).toBe('UNRESOLVED_CONFLICTS');
+
+    const custom = await merge({
+      product: { edit: { key: 'product', slots: { version: 7 }, children: [] } },
+    });
+    expect(custom.status).toBe(200);
+    const merged = (await custom.json()) as ApiResponse;
+    const mergeCommit = await getRepositorySemanticCommit(
+      mockDB,
+      merged.data.merge_commit_id,
+      fixture.projectId
+    );
+    expect(mergeCommit?.semanticContent.trees).toEqual(
+      expect.arrayContaining([expect.objectContaining({ key: 'product', slots: { version: 7 } })])
     );
   });
 

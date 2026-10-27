@@ -18,6 +18,7 @@ import {
   findBranchesByProject,
   findConversationById,
   getCommitHistoryEntry,
+  getRepositoryDecisionAuditByDigest,
   getTransitionRefHead,
   getTransitionViewForCommit,
   getVerifiedTransitionCommitGraph,
@@ -28,6 +29,7 @@ import {
   TransitionProjectionAuthorizationInvalidError,
   TransitionRefHeadIntegrityError,
 } from '@t3x-dev/storage';
+import { readCommitChanges } from '../lib/commit-changes';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
@@ -42,6 +44,7 @@ import {
   TransitionReviewStaleError,
 } from '../lib/repository-state-transition';
 import {
+  requireTransitionAuthority,
   resolveCompatibilityTransitionWriteAuthority,
   TransitionPolicyBindingRequiredError,
   TransitionProjectScopeDeniedError,
@@ -63,6 +66,76 @@ export const commitRoutes = new OpenAPIHono({
 });
 commitRoutes.route('/', statePresentationRoutes);
 commitRoutes.route('/', stateOverviewRoutes);
+
+const getCommitChangesRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/commits/{hash}/changes',
+  tags: ['Commits'],
+  summary: 'Read immutable committed authoring cards and Schema changes',
+  request: {
+    params: z.object({
+      projectId: z.string().min(1),
+      hash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+    }),
+    query: z.object({ before_sequence: z.coerce.number().int().positive().optional() }),
+  },
+  responses: {
+    200: {
+      description: 'Read-only Commit changes projection',
+      content: { 'application/json': { schema: SuccessResponseSchema(z.unknown()) } },
+    },
+    404: {
+      description: 'Commit unavailable',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    403: {
+      description: 'Project or Transition inspection denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Immutable evidence failed verification',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+commitRoutes.openapi(getCommitChangesRoute, async (c) => {
+  const { projectId, hash } = c.req.valid('param');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+  try {
+    requireTransitionAuthority({
+      apiKey: transitionApiKey(c),
+      projectId,
+      scope: 'transition:inspect',
+    });
+  } catch {
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'FORBIDDEN', message: 'Transition inspection is not authorized.' },
+      },
+      403
+    );
+  }
+  c.header('Cache-Control', 'private, no-store');
+  try {
+    const data = await readCommitChanges(db, projectId, hash, c.req.valid('query').before_sequence);
+    if (!data) return errorResponse(c, 'COMMIT_NOT_FOUND', 'Commit not found in this project');
+    return c.json({ success: true as const, data }, 200);
+  } catch {
+    return c.json(
+      {
+        success: false as const,
+        error: {
+          code: 'COMMIT_CHANGES_INVALID',
+          message: 'Committed change evidence could not be verified.',
+        },
+      },
+      409
+    );
+  }
+});
 
 const exportStateRoute = createRoute({
   method: 'get',
@@ -231,6 +304,8 @@ const CommitHistoryProjectionSchema = z.object({
   schema: z.literal('t3x/commit/v2'),
   parents: z.array(z.string()),
   recordedAt: z.string(),
+  /** Origin ref recorded when this Commit was created, not the ref used to walk history. */
+  branch: z.string().optional(),
   result: z.object({
     mode: z.literal('state_descriptor'),
     descriptor: DescriptorBaseSchema.extend({
@@ -543,7 +618,7 @@ commitRoutes.openapi(getCommitRoute, async (c) => {
             content,
             project_id: projectId,
             message: semanticCommit?.intent ?? proposalMessage(graph),
-            branch: 'main',
+            branch: await commitOriginBranch(db, projectId, graph.commit.decision.digest),
             sources: null,
             provenance: { method: 'transition_v2' },
           },
@@ -557,10 +632,15 @@ commitRoutes.openapi(getCommitRoute, async (c) => {
   }
 });
 
+async function commitOriginBranch(db: RepositoryDB, projectId: string, decisionDigest: string) {
+  const audit = await getRepositoryDecisionAuditByDigest(db, projectId, decisionDigest);
+  // Never attribute an imported/unattributed Commit to the currently viewed branch.
+  return audit?.refName ?? 'unknown';
+}
+
 async function withSemanticCommitFields(
   db: RepositoryDB,
   projectId: string,
-  branch: string,
   entry: CommitHistoryEntry
 ) {
   const semanticCommit = await getRepositorySemanticCommitIfSupported(db, entry.id, projectId);
@@ -569,7 +649,7 @@ async function withSemanticCommitFields(
     : await getVerifiedTransitionCommitGraph(db, projectId, entry.id);
   return {
     ...entry,
-    branch,
+    branch: await commitOriginBranch(db, projectId, entry.assurance.decision.digest),
     content:
       semanticCommit?.semanticContent ??
       (graph ? semanticContentFromTransitionState(graph.state) : undefined),
@@ -595,7 +675,7 @@ async function listCommitHistoryForRef(
     seen.add(digest);
     const entry = await getCommitHistoryEntry(db, projectId, digest);
     if (!entry) continue;
-    commits.push(await withSemanticCommitFields(db, projectId, refName, entry));
+    commits.push(await withSemanticCommitFields(db, projectId, entry));
     stack.push(...entry.parents);
   }
   return commits.slice(options.offset, options.offset + options.limit);

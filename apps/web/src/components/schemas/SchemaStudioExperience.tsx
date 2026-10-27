@@ -1,10 +1,10 @@
 'use client';
 
-import type { StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
-import { ArrowRight } from 'lucide-react';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import type { SchemaPreparationTarget, StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
+import { dump } from 'js-yaml';
+import { ChevronDown } from 'lucide-react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -13,22 +13,47 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { SegmentedControl } from '@/components/ui/segmented-control';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
-import { getProjectIdRepoPath, getProjectIdWorkspacePath } from '@/domain/project/repoPath';
+import { getProjectIdWorkspacePath } from '@/domain/project/repoPath';
+import { schemaFieldRows } from '@/domain/schemas/schemaFieldEditing';
+import {
+  schemaBrowseHref,
+  schemaSourceHref,
+  schemaWorkspaceHref,
+} from '@/domain/schemas/schemaNavigation';
+import { type SchemaSourcePin, schemaSourceKey } from '@/domain/schemas/schemaProvenance';
+import {
+  pruneSchemaMappings,
+  type SchemaSourceMappings,
+} from '@/domain/schemas/schemaSourceMappings';
 import {
   listStudioDraftWorkspaces,
   listStudioWorkspacesForBranches,
   resolveStudioWorkspaceId,
 } from '@/domain/workspaces/studioTargets';
+import { useSchemaSourceIdentities } from '@/hooks/schemas/useSchemaSourceIdentities';
 import { useStudioCandidates } from '@/hooks/schemas/useStudioCandidates';
 import { useApplyStudioSelection, useStudioPreview } from '@/hooks/schemas/useStudioPreview';
+import { useStudioSchemaEditCandidate } from '@/hooks/schemas/useStudioSchemaEditCandidate';
+import { useWorkspaceSchemaPending } from '@/hooks/schemas/useWorkspaceSchemaPending';
 import { useBranches } from '@/hooks/shared/useBranches';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
-import styles from './SchemaStudioExperience.module.css';
-import { StudioChanges } from './StudioDefinitionPreview';
-import { StudioSamplePreview } from './StudioSamplePreview';
+import { SchemaContentPreparationDialog } from './SchemaContentPreparationDialog';
+import { SchemaDataEditor } from './SchemaDataEditor';
+import { SchemaDefinitionWorkbench } from './SchemaDefinitionWorkbench';
+import { SchemaSourceCompositionDialog } from './SchemaSourceCompositionDialog';
+import { SchemaSourceManager } from './SchemaSourceManager';
+import { SchemaStudioSurface } from './SchemaStudioSurface';
+import { StudioChanges, StudioChecks, StudioImpactPreview } from './StudioDefinitionPreview';
+import { StudioPublishDialog } from './StudioPublishDialog';
+import type { SchemaEditorNavigation } from './useSchemaNavigationGuard';
 
 type ModuleTone = 'blue' | 'purple' | 'orange' | 'green' | 'rose' | 'slate' | 'amber';
 
@@ -150,17 +175,6 @@ const demoComposition = demoSources
   .flatMap((source) => source.modules)
   .filter((item) => item.checked);
 
-const toneClasses: Record<ModuleTone | 'black', string> = {
-  black: 'bg-[var(--text-primary)] text-[var(--status-warning)]',
-  blue: 'bg-[var(--color-brand)] text-[var(--on-accent)]',
-  purple: 'bg-[var(--status-info)] text-[var(--on-accent)]',
-  orange: 'bg-[var(--status-warning)] text-[var(--on-accent)]',
-  green: 'bg-[var(--status-success)] text-[var(--on-accent)]',
-  rose: 'bg-[var(--status-error)] text-[var(--on-accent)]',
-  slate: 'bg-[var(--text-tertiary)] text-[var(--on-accent)]',
-  amber: 'bg-[var(--status-warning)] text-[var(--on-accent)]',
-};
-
 function candidateTone(index: number): ModuleTone {
   return (['blue', 'purple', 'green', 'rose', 'amber', 'slate'] as const)[index % 6];
 }
@@ -177,32 +191,65 @@ function candidateIcon(index: number) {
 
 export function SchemaStudioExperience({
   projectId,
-  children,
+  navigation,
 }: {
   projectId: string;
   children?: ReactNode;
+  navigation?: ReactNode;
 }) {
   const params = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const candidates = useStudioCandidates(projectId);
   const workspaces = useProjectWorkspaces(projectId);
-  const workspaceFlow = useWorkspaceFlow();
   const projectBranches = useBranches(projectId, true);
+  const { saveDraft } = useWorkspaceFlow();
   const ensuringBranches = useRef(new Map<string, Promise<void>>());
   const applySelection = useApplyStudioSelection(projectId);
   const [selection, setSelection] = useState<string[]>([]);
-  const [workspaceId, setWorkspaceId] = useState(params?.get('workspace') ?? '');
+  const navigationRef = useRef<SchemaEditorNavigation | null>(null);
   const requestedWorkspaceId = params?.get('workspace') ?? '';
-  const [mode, setMode] = useState<'structure' | 'yaml' | 'sample'>('structure');
-  const [compareId, setCompareId] = useState('');
-  const [xray, setXray] = useState(false);
-  const [activeModuleId, setActiveModuleId] = useState('requirements');
-  const [collapsedSources, setCollapsedSources] = useState<Set<string>>(new Set());
-  const [advanced, setAdvanced] = useState(false);
+  const requestedBranch = params?.get('branch');
+  const query = params?.toString() ?? '';
+  const legacyView = params?.get('schemaView') === 'active';
+  const [definitionOpen, setDefinitionOpen] = useState(false);
+  const [sourceManagerOpen, setSourceManagerOpen] = useState(false);
+  const [compositionRequest, setCompositionRequest] = useState<{
+    ids: string[];
+    revision: number;
+    base?: Record<string, unknown>;
+    current?: Record<string, unknown>;
+    choices?: Record<string, string>;
+  }>();
+  const [editorReset, setEditorReset] = useState(0);
+  const [editorInvalid, setEditorInvalid] = useState(false);
+  const [dataDirty, setDataDirty] = useState(false);
+  const dataDirtyRef = useRef(false);
+  const updateDataDirty = useCallback((dirty: boolean) => {
+    dataDirtyRef.current = dirty;
+    setDataDirty(dirty);
+  }, []);
+  const [editorBase, setEditorBase] = useState<{
+    schema: Record<string, unknown>;
+    hash: string;
+    initial: Record<string, unknown>;
+  }>();
+  const [localContribution, setLocalContribution] = useState<Record<string, unknown>>({});
+  const [schemaDefinition, setSchemaDefinition] = useState<Record<string, unknown>>();
+  const [sourceMappings, setSourceMappings] = useState<SchemaSourceMappings>([]);
+  const [savedCandidateRef, setSavedCandidateRef] = useState<{
+    candidateId: string;
+    revision: number;
+  }>();
   const [review, setReview] = useState<StudioPreview>();
+  const [publishReview, setPublishReview] = useState<StudioPreview>();
+  const [preparation, setPreparation] = useState<{
+    workspaceId: string;
+    revision: number;
+    target: SchemaPreparationTarget;
+  }>();
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string>();
-  const [applied, setApplied] = useState(false);
-  const [zoom, setZoom] = useState(1);
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -229,48 +276,41 @@ export function SchemaStudioExperience({
       ),
     [projectBranches.branchHeads, projectBranches.branches, projectId, workspaces.workspaces]
   );
-
   useEffect(() => {
-    if (projectBranches.loading) return;
+    if (!projectId || projectBranches.loading) return;
     const persistedBranches = new Set(
       listStudioDraftWorkspaces(workspaces.workspaces).map((workspace) => workspace.targetBranch)
     );
-    const missingBranches = projectBranches.branches.filter(
-      (branch) => !persistedBranches.has(branch)
-    );
-    if (missingBranches.length === 0) return;
-
+    const missing = projectBranches.branches.filter((branch) => !persistedBranches.has(branch));
+    if (missing.length === 0) return;
     let cancelled = false;
-    void Promise.all(
-      missingBranches.map((branch) => {
-        const pending = ensuringBranches.current.get(branch);
-        if (pending) return pending;
-        const task = (async () => {
-          try {
-            const starter = getProjectWorkspaceStarterCandidate(
-              projectId,
-              [],
-              branch,
-              projectBranches.branchHeads[branch] ?? null
-            );
-            await workspaceFlow.saveDraft(starter);
-          } finally {
-            ensuringBranches.current.delete(branch);
-          }
-        })();
-        ensuringBranches.current.set(branch, task);
-        return task;
-      })
-    )
-      .then(async () => {
-        if (!cancelled) await workspaces.refresh();
-      })
-      .catch((cause) => {
-        if (!cancelled && mounted.current) {
-          setError(cause instanceof Error ? cause.message : 'Failed to prepare branch workspace');
-        }
-      });
-
+    void (async () => {
+      await Promise.all(
+        missing.map((branch) => {
+          const current = ensuringBranches.current.get(branch);
+          if (current) return current;
+          const task = (async () => {
+            try {
+              const starter = getProjectWorkspaceStarterCandidate(
+                projectId,
+                [],
+                branch,
+                projectBranches.branchHeads[branch] ?? null
+              );
+              await saveDraft(starter);
+            } catch (error) {
+              // Another surface created this branch's workspace first; the refresh below picks it up.
+              if ((error as { code?: unknown } | null)?.code !== 'CONFLICT') throw error;
+            } finally {
+              ensuringBranches.current.delete(branch);
+            }
+          })();
+          ensuringBranches.current.set(branch, task);
+          return task;
+        })
+      );
+      if (!cancelled) await workspaces.refresh();
+    })();
     return () => {
       cancelled = true;
     };
@@ -279,41 +319,245 @@ export function SchemaStudioExperience({
     projectBranches.branches,
     projectBranches.loading,
     projectId,
-    workspaceFlow.saveDraft,
+    saveDraft,
     workspaces.refresh,
     workspaces.workspaces,
   ]);
-
-  useEffect(() => {
-    if (requestedWorkspaceId) {
-      setWorkspaceId(requestedWorkspaceId);
-      return;
-    }
-    const resolved = resolveStudioWorkspaceId(draftWorkspaces, workspaceId);
-    if (resolved !== workspaceId) setWorkspaceId(resolved);
-  }, [draftWorkspaces, requestedWorkspaceId, workspaceId]);
-
+  const workspaceId = resolveStudioWorkspaceId(
+    draftWorkspaces,
+    requestedWorkspaceId,
+    requestedBranch
+  );
   const target = draftWorkspaces.find((item) => item.id === workspaceId);
+  useEffect(() => {
+    if (!target || workspaces.loading || projectBranches.loading) return;
+    if (
+      !legacyView &&
+      requestedWorkspaceId === target.id &&
+      requestedBranch === target.targetBranch
+    )
+      return;
+    router.replace(schemaWorkspaceHref(pathname, query, target), { scroll: false });
+  }, [
+    legacyView,
+    pathname,
+    query,
+    requestedBranch,
+    requestedWorkspaceId,
+    router,
+    target,
+    workspaces.loading,
+    projectBranches.loading,
+  ]);
+
+  function changeWorkspace(id: string) {
+    const next = draftWorkspaces.find((item) => item.id === id);
+    if (!next || next.id === workspaceId) return;
+    const navigate = () =>
+      router.push(schemaWorkspaceHref(pathname, query, next, true), { scroll: false });
+    if (navigationRef.current) navigationRef.current.requestNavigation(navigate);
+    else navigate();
+  }
   const persistedTarget = listStudioDraftWorkspaces(workspaces.workspaces).find(
     (item) => item.id === workspaceId
   );
-  const preview = useStudioPreview(
+  const schemaEdit = useStudioSchemaEditCandidate(
     projectId,
-    {
-      candidateIds: selection,
-      ...(persistedTarget ? { workspaceId: persistedTarget.id } : {}),
-      ...(compareId ? { compareToCandidateIds: [compareId] } : {}),
-    },
+    persistedTarget?.id ?? '',
     persistedTarget?.revision
   );
-  const data = preview.data;
+  const recoveredCandidateKey = schemaEdit.candidate
+    ? `${schemaEdit.candidate.candidateId}:${schemaEdit.candidate.revision}`
+    : schemaEdit.loading
+      ? 'loading'
+      : 'none';
+  const pendingSchema = useWorkspaceSchemaPending(
+    projectId,
+    persistedTarget?.id ?? '',
+    persistedTarget?.revision
+  );
+  const recoveredSelection = useRef('');
+  const [recoveredEditIdentity, setRecoveredEditIdentity] = useState('');
+  const [usingSavedCandidate, setUsingSavedCandidate] = useState(false);
+  const activeCandidate = usingSavedCandidate ? schemaEdit.candidate : null;
+  const editIdentity = `${projectId}:${workspaceId}:${recoveredCandidateKey}`;
+  const missingEditSources = (schemaEdit.candidate?.baseSources ?? []).filter(
+    (base) =>
+      !candidates.items.some(
+        (candidate) =>
+          candidate.available &&
+          candidate.source &&
+          schemaSourceKey(candidate.source) === schemaSourceKey(base)
+      )
+  );
+  const recoveryError =
+    !schemaEdit.loading &&
+    !candidates.loading &&
+    recoveredEditIdentity !== editIdentity &&
+    missingEditSources.length
+      ? `The saved Schema candidate needs missing sources: ${missingEditSources.map((source) => `${source.canonicalName} @ ${source.version}`).join(', ')}. Restore them in Sources, or select another source to start a new definition. The saved candidate is preserved until you save.`
+      : undefined;
+  const recoveryKey = `${projectId}:${persistedTarget?.id ?? ''}`;
   useEffect(() => {
     if (
-      selection.includes(compareId) ||
-      !candidates.items.some((item) => item.id === compareId && item.available)
+      !persistedTarget ||
+      candidates.loading ||
+      schemaEdit.loading ||
+      pendingSchema.loading ||
+      recoveredSelection.current === recoveryKey
     )
-      setCompareId('');
-  }, [selection, compareId, candidates.items]);
+      return;
+    recoveredSelection.current = recoveryKey;
+    if (requested) return;
+    const source = pendingSchema.data?.pending?.source;
+    if (source?.kind === 'studio') {
+      setSelection([...source.candidateIds]);
+    } else if (schemaEdit.candidate) {
+      const ids = (schemaEdit.candidate.baseSources ?? [])
+        .map(
+          (base) =>
+            candidates.items.find(
+              (candidate) => candidate.source?.artifactVersionId === base.artifactVersionId
+            )?.id
+        )
+        .filter((id): id is string => !!id);
+      setSelection(ids);
+    } else {
+      const ids = (persistedTarget.schemaBindings ?? [])
+        .flatMap((binding) => binding.studioSources ?? [])
+        .map(
+          (source) =>
+            candidates.items.find(
+              (candidate) =>
+                candidate.source?.artifactVersionId === source.artifactVersionId &&
+                candidate.source.hash === source.hash &&
+                candidate.source.projectId === source.projectId &&
+                candidate.source.canonicalName === source.canonicalName &&
+                candidate.source.version === source.version
+            )?.id
+        )
+        .filter((id): id is string => !!id);
+      setSelection([...new Set(ids)]);
+    }
+  }, [
+    candidates.items,
+    candidates.loading,
+    schemaEdit.candidate,
+    schemaEdit.loading,
+    pendingSchema.data,
+    pendingSchema.loading,
+    persistedTarget,
+    recoveryKey,
+    requested,
+  ]);
+  useEffect(() => {
+    if (schemaEdit.loading || candidates.loading || dataDirtyRef.current) return;
+    if (recoveredEditIdentity === editIdentity) return;
+    if (schemaEdit.candidate?.baseSources?.length) {
+      const ids = schemaEdit.candidate.baseSources.map(
+        (base) =>
+          candidates.items.find(
+            (candidate) =>
+              candidate.available &&
+              candidate.source?.artifactVersionId === base.artifactVersionId &&
+              candidate.source.hash === base.hash &&
+              candidate.source.projectId === base.projectId &&
+              candidate.source.canonicalName === base.canonicalName &&
+              candidate.source.version === base.version
+          )?.id
+      );
+      if (ids.some((id) => !id)) return;
+      setSelection(ids as string[]);
+    }
+    setRecoveredEditIdentity(editIdentity);
+    setUsingSavedCandidate(!!schemaEdit.candidate);
+    setSourceMappings(structuredClone(schemaEdit.candidate?.authoringDraft?.sourceMappings ?? []));
+    setReview(undefined);
+    setPublishReview(undefined);
+    setDefinitionOpen(false);
+    setEditorBase(undefined);
+    setLocalContribution(structuredClone(schemaEdit.candidate?.localContribution ?? {}));
+    setSchemaDefinition(undefined);
+    setSavedCandidateRef(
+      schemaEdit.candidate
+        ? {
+            candidateId: schemaEdit.candidate.candidateId,
+            revision: schemaEdit.candidate.revision,
+          }
+        : undefined
+    );
+  }, [
+    candidates.items,
+    candidates.loading,
+    editIdentity,
+    projectId,
+    recoveredCandidateKey,
+    recoveredEditIdentity,
+    dataDirty,
+    schemaEdit.candidate,
+    schemaEdit.loading,
+    workspaceId,
+  ]);
+
+  useEffect(() => {
+    setDefinitionOpen(false);
+    setEditorBase(undefined);
+    setSchemaDefinition(undefined);
+  }, [workspaceId]);
+
+  const previewInput = {
+    ...(activeCandidate?.composition ? { composition: activeCandidate.composition } : {}),
+    candidateIds: selection,
+    ...(persistedTarget ? { workspaceId: persistedTarget.id } : {}),
+  };
+  const basePreview = useStudioPreview(projectId, previewInput, persistedTarget?.revision);
+  const hasLocalContribution = contributionHasContent(localContribution);
+  const hasSchemaEdit = hasLocalContribution || !!savedCandidateRef || !!schemaDefinition;
+  const localPreview = useStudioPreview(
+    projectId,
+    hasSchemaEdit
+      ? {
+          ...previewInput,
+          ...(savedCandidateRef
+            ? { schemaEditCandidate: savedCandidateRef }
+            : schemaDefinition
+              ? {
+                  schemaDefinition,
+                  sourceMappings,
+                  baseSchemaHash: editorBase?.hash ?? basePreview.data?.schemaHash,
+                }
+              : { localContribution }),
+        }
+      : { candidateIds: [] },
+    persistedTarget?.revision
+  );
+  const preview = hasSchemaEdit ? localPreview : basePreview;
+  const data = preview.data;
+  const sourcePins = useMemo(
+    () => [
+      ...candidates.items
+        .filter((candidate) => candidate.available)
+        .map((candidate) => candidate.source)
+        .filter((source): source is SchemaSourcePin => !!source),
+      ...Object.values(data?.nodeProvenance?.byPath ?? {}).flatMap((refs) =>
+        refs.flatMap((ref) => (ref.source ? [ref.source] : []))
+      ),
+    ],
+    [candidates.items, selection, data?.nodeProvenance]
+  );
+  const sourceIdentities = useSchemaSourceIdentities(sourcePins);
+  const wholeSchemaSource =
+    data?.sources.length === 1 &&
+    candidates.items.some(
+      (candidate) =>
+        candidate.kind === 'schema' &&
+        candidate.source &&
+        schemaSourceKey(candidate.source) === schemaSourceKey(data.sources[0])
+    )
+      ? data.sources[0]
+      : undefined;
+  // Do not initialize Data with the base result while a saved edit is being recovered.
+  const recoveredDefinitionReady = !schemaEdit.loading && recoveredEditIdentity === editIdentity;
   const locked = new Set(
     data?.modules.filter((item) => item.requiredBy.length).map((item) => item.candidateId)
   );
@@ -322,8 +566,11 @@ export function SchemaStudioExperience({
   useEffect(() => {
     setReview(undefined);
     setError(undefined);
-    setApplied(false);
-  }, [candidateSelectionKey, workspaceId, compareId]);
+  }, [candidateSelectionKey, workspaceId, data?.reviewHash]);
+
+  useEffect(() => {
+    setPublishReview(undefined);
+  }, [candidateSelectionKey, workspaceId]);
 
   const liveSources = useMemo<StudioSource[]>(() => {
     if (!candidates.items.length) return [];
@@ -365,20 +612,37 @@ export function SchemaStudioExperience({
     : showExplicitDemo
       ? demoComposition
       : [];
-  const activeModule =
-    visibleSources.flatMap((source) => source.modules).find((item) => item.id === activeModuleId) ??
-    composition[1] ??
-    composition[0];
   const selectedWorkspaceTitle =
     target?.title ??
-    (workspaceId
-      ? 'Workspace unavailable'
-      : (workspaces.workspaces[0]?.title ?? 'Select a workspace'));
+    (workspaceId || requestedBranch ? 'Workspace unavailable' : 'No draft workspace');
+
+  function composeSources(sourceId?: string) {
+    setCompositionRequest({
+      ids: sourceId ? [...new Set([...selection, sourceId])] : [...selection],
+      revision: schemaEdit.candidate?.revision ?? 0,
+      base: structuredClone(
+        editorBase?.schema ??
+          activeCandidate?.baseDefinition ??
+          basePreview.data?.workspace?.boundSchema ??
+          basePreview.data?.schema
+      ),
+      current: structuredClone(schemaDefinition ?? data?.schema),
+      choices: sourceId && !selection.includes(sourceId) ? {} : activeCandidate?.composition,
+    });
+  }
 
   function choose(module: StudioModule) {
-    setActiveModuleId(module.id);
+    if (dataDirtyRef.current) return;
+    recoveredSelection.current = recoveryKey;
     if (!module.candidate) return;
     const candidate = module.candidate;
+    setRecoveredEditIdentity(editIdentity);
+    setUsingSavedCandidate(false);
+    setSourceMappings([]);
+    setEditorBase(undefined);
+    setLocalContribution({});
+    setSavedCandidateRef(undefined);
+    setSchemaDefinition(undefined);
     setSelection((current) =>
       current.includes(candidate.id)
         ? current.filter((value) => value !== candidate.id)
@@ -394,11 +658,13 @@ export function SchemaStudioExperience({
   }
 
   async function apply() {
+    const reviewWorkspace = review?.workspace;
+    if (!review || !reviewWorkspace || !target || reviewWorkspace.id !== target.id || applying)
+      return;
     if (
-      !review?.workspace ||
-      !persistedTarget ||
-      review.workspace.id !== persistedTarget.id ||
-      applying
+      (hasSchemaEdit && !savedCandidateRef) ||
+      review.reviewHash !== data?.reviewHash ||
+      !review.impact?.canAdopt
     )
       return;
     setApplying(true);
@@ -406,18 +672,20 @@ export function SchemaStudioExperience({
     try {
       await applySelection({
         candidateIds: [...selection],
-        workspaceId: review.workspace.id,
-        ifRevision: review.workspace.revision,
+        workspaceId: reviewWorkspace.id,
+        ifRevision: reviewWorkspace.revision,
         reviewHash: review.reviewHash,
+        ...(savedCandidateRef ? { schemaEditCandidate: savedCandidateRef } : {}),
       });
       if (!mounted.current) return;
-      setReview(undefined);
-      setApplied(true);
-      await workspaces.refresh();
-      if (mounted.current) preview.refresh();
+      const applied = draftWorkspaces.find((item) => item.id === reviewWorkspace.id) ?? target;
+      const href = applied
+        ? `${getProjectIdWorkspacePath(projectId, { branch: applied.targetBranch })}&workspace=${encodeURIComponent(applied.id)}`
+        : getProjectIdWorkspacePath(projectId);
+      router.push(href);
     } catch (cause) {
       if (mounted.current) {
-        setError(cause instanceof Error ? cause.message : 'Apply failed');
+        setError(cause instanceof Error ? cause.message : 'Adoption failed');
         setReview(undefined);
         preview.refresh();
       }
@@ -427,749 +695,579 @@ export function SchemaStudioExperience({
   }
 
   function openReview() {
-    if (
-      persistedTarget &&
-      data?.workspace?.id === persistedTarget.id &&
-      data?.report.valid &&
-      data?.adoption.allowed
-    )
-      setReview(data);
+    if (!data) return;
+    const matchesWorkspace = target && data.workspace?.id === target.id;
+    setReview({
+      ...data,
+      workspace: matchesWorkspace ? data.workspace : null,
+      impact: matchesWorkspace ? data.impact : null,
+    });
   }
 
   function downloadDefinition() {
     if (!data?.schema) return;
-    const blob = new Blob([JSON.stringify(data.schema, null, 2)], {
-      type: 'application/json',
+    const blob = new Blob([dump(data.schema, { noRefs: true, lineWidth: 100 })], {
+      type: 'application/yaml',
     });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = 'schema-studio-definition.json';
+    anchor.download = 'schema-studio-definition.yaml';
     anchor.click();
     URL.revokeObjectURL(url);
   }
 
+  async function saveDefinition(
+    contribution: Record<string, unknown>,
+    intent: string,
+    mappings = sourceMappings
+  ) {
+    if (!persistedTarget)
+      throw new Error('Create or select a persisted Workspace before saving a Schema candidate.');
+    if (!selection.length) throw new Error('Select at least one base Schema or Module.');
+    const saved = await schemaEdit.save({
+      workspaceId: persistedTarget.id,
+      candidateIds: [...selection],
+      ifRevision: schemaEdit.candidate?.revision ?? 0,
+      retryKey: `studio:${persistedTarget.id}:${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+      intent,
+      origin: 'studio',
+      localContribution: contribution.yschema === '0.1' ? {} : contribution,
+      ...(contribution.yschema === '0.1'
+        ? {
+            schemaDefinition: contribution,
+            sourceMappings: pruneSchemaMappings(mappings, contribution),
+            baseSchemaHash: editorBase?.hash ?? basePreview.data?.schemaHash,
+            ...(!usingSavedCandidate && schemaEdit.candidate ? { rebase: true } : {}),
+          }
+        : {}),
+    });
+    setLocalContribution(structuredClone(saved.candidate.localContribution));
+    setSchemaDefinition(undefined);
+    setSavedCandidateRef({
+      candidateId: saved.candidate.candidateId,
+      revision: saved.candidate.revision,
+    });
+    setDefinitionOpen(false);
+    await workspaces.refresh();
+  }
+
+  function changeDefinitionOpen(open: boolean) {
+    if (!open) {
+      setSchemaDefinition(undefined);
+      setLocalContribution(structuredClone(activeCandidate?.localContribution ?? {}));
+      setSourceMappings(structuredClone(activeCandidate?.authoringDraft?.sourceMappings ?? []));
+      setSavedCandidateRef(
+        activeCandidate
+          ? {
+              candidateId: activeCandidate.candidateId,
+              revision: activeCandidate.revision,
+            }
+          : undefined
+      );
+    }
+    setDefinitionOpen(open);
+  }
+
+  const currentBinding = persistedTarget?.schemaBindings?.[0];
   const canReview =
-    !!persistedTarget &&
-    data?.workspace?.id === persistedTarget.id &&
-    !!data?.report.valid &&
-    !!data?.adoption.allowed &&
-    !applying;
-  const repoPath = getProjectIdRepoPath(projectId);
-  const browseParams = new URLSearchParams({ tab: 'schemas', schemaView: 'browse' });
-  const routeBranch = params?.get('branch');
-  if (routeBranch) browseParams.set('branch', routeBranch);
-  if (workspaceId) browseParams.set('workspace', workspaceId);
-  const browseHref = `${repoPath}?${browseParams.toString()}`;
+    !!data && !applying && !dataDirty && !editorInvalid && !preview.loading && !definitionOpen;
+  const browseHref = schemaBrowseHref(
+    projectId,
+    workspaceId,
+    target?.targetBranch ?? requestedBranch ?? undefined
+  );
+  const sourceHref = schemaSourceHref(
+    params?.get('returnTo') ?? null,
+    projectId,
+    workspaceId,
+    target?.targetBranch ?? requestedBranch ?? undefined
+  );
   const workspaceLink = target
     ? `${getProjectIdWorkspacePath(projectId, { branch: target.targetBranch })}&workspace=${encodeURIComponent(target.id)}`
     : getProjectIdWorkspacePath(projectId);
 
+  const sourceManagement = (
+    <SchemaSourceManager
+      open={sourceManagerOpen}
+      onOpenChange={setSourceManagerOpen}
+      browseHref={browseHref}
+      modules={visibleSources.flatMap((source) => source.modules)}
+      composition={composition}
+      onChoose={(module) => {
+        const candidate = visibleSources
+          .flatMap((source) => source.modules)
+          .find((item) => item.id === module.id);
+        if (candidate) choose(candidate);
+      }}
+      onRemove={(id) => {
+        setSelection((current) => current.filter((value) => value !== id));
+        void candidates.remove(id).catch((cause) => setError(cause.message));
+      }}
+      locked={
+        dataDirty || definitionOpen ? new Set(candidates.items.map((item) => item.id)) : locked
+      }
+      pending={applying || preview.loading || candidates.pending}
+      contextLocked={dataDirty || definitionOpen}
+      loading={candidates.loading}
+      error={candidates.error || undefined}
+      data={data}
+      onAdd={persistedTarget ? () => composeSources() : undefined}
+      onClear={
+        dataDirty
+          ? undefined
+          : () => {
+              recoveredSelection.current = recoveryKey;
+              setRecoveredEditIdentity(editIdentity);
+              setUsingSavedCandidate(false);
+              setSourceMappings([]);
+              setSavedCandidateRef(undefined);
+              setEditorBase(undefined);
+              setSchemaDefinition(undefined);
+              setLocalContribution({});
+              setSelection([]);
+            }
+      }
+    />
+  );
+
   return (
     <section
       aria-label="Schema Studio"
-      className={`${styles.root} flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-[var(--surface-card)] text-[var(--text-primary)]`}
+      className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-card)]"
     >
-      <link
-        href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css"
-        rel="stylesheet"
-      />
-      <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-        rel="stylesheet"
-      />
-
       {!workspaces.loading && !workspaces.error && workspaceId && !target ? (
-        <p
-          className="mx-4 mt-3 rounded-lg border border-[var(--status-error)]/30 bg-[var(--status-error-muted)] p-2 text-sm text-[var(--status-error)]"
-          role="alert"
-        >
+        <p className="px-6 py-2 text-sm text-[var(--status-error)]" role="alert">
           Workspace {workspaceId} was not found in this project. Select a valid Workspace before
           applying.
         </p>
       ) : null}
-
-      {preview.error || (data?.adoption.allowed === false && data.adoption.reason) ? (
-        <p
-          className="mx-4 mt-3 rounded-lg border border-[var(--status-error-muted)] bg-[var(--status-error-muted)] p-2 text-sm text-[var(--status-error)]"
-          role="alert"
-        >
-          {preview.error || data?.adoption.reason}
+      {!workspaces.loading && !workspaces.error && !workspaceId && requestedBranch && !target ? (
+        <p className="px-6 py-2 text-sm text-[var(--status-error)]" role="alert">
+          No Workspace is available for branch {requestedBranch}. Select a valid Workspace before
+          editing.
         </p>
       ) : null}
-
-      {applied ? <output className="mx-4 mt-3 text-sm">Exact definition applied.</output> : null}
-
       {error ? (
-        <p
-          className="mx-4 mt-3 rounded-lg border border-[var(--status-error-muted)] bg-[var(--status-error-muted)] p-2 text-sm text-[var(--status-error)]"
-          role="alert"
-        >
+        <p className="px-6 py-2 text-sm text-[var(--status-error)]" role="alert">
           {error} Review the refreshed selection before trying again.
         </p>
       ) : null}
-
-      <main
-        aria-label="Studio composition"
-        className="relative flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-auto p-3 xl:grid xl:grid-cols-[280px_minmax(0,1fr)_320px] xl:grid-rows-[auto_minmax(0,1fr)] xl:overflow-hidden"
-      >
-        <aside
-          aria-label="Studio sources"
-          className="col-start-1 row-span-2 row-start-1 flex min-h-0 shrink-0 flex-col xl:shrink rounded-[12px] border border-[var(--color-brand-muted)] bg-[var(--surface-panel)] shadow-sm"
-        >
-          <div className="shrink-0 px-4 pb-1.5 pt-3">
-            <h2 className="text-base font-bold text-[var(--color-brand-hover)]">Sources</h2>
-          </div>
-          <div className="flex-1 overflow-y-auto pb-2">
-            {candidates.loading ? (
-              <output className="block px-5 py-3 text-sm text-[var(--color-brand-hover)]">
-                Loading candidates…
-              </output>
-            ) : null}
-            {candidates.error ? (
-              <p className="px-5 py-3 text-sm text-[var(--status-error)]" role="alert">
-                {candidates.error}
-              </p>
-            ) : null}
-            {!candidates.loading && !candidates.error && visibleSources.length === 0 ? (
-              <div className="px-5 py-4 text-sm text-[var(--color-brand-hover)]">
-                <p>No Studio candidates in this project.</p>
-                <Link className="mt-2 inline-block font-semibold underline" href={browseHref}>
-                  Browse schemas to add one
-                </Link>
-              </div>
-            ) : null}
-            {visibleSources.map((source) => {
-              const collapsed = collapsedSources.has(source.name);
-              return (
-                <div className="mb-1" key={source.name}>
-                  <button
-                    className="group flex w-full items-center justify-between px-4 py-1.5 text-left hover:bg-[var(--surface-hover)]"
-                    onClick={() =>
-                      setCollapsedSources((current) => {
-                        const next = new Set(current);
-                        if (next.has(source.name)) next.delete(source.name);
-                        else next.add(source.name);
-                        return next;
-                      })
-                    }
-                    type="button"
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <SourceIcon icon={source.icon} tone={source.tone} />
-                      <span className="truncate font-semibold text-[var(--color-brand-hover)]">
-                        {source.name}
-                      </span>
-                      <span className="shrink-0 rounded-full border border-[var(--color-brand-muted)] bg-[var(--color-brand-muted)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-brand)]">
-                        Pinned source
-                      </span>
-                    </span>
-                    <i
-                      className={`${collapsed ? 'ri-arrow-down-s-line' : 'ri-arrow-up-s-line'} text-xl text-[var(--color-brand)] group-hover:text-[var(--color-brand-hover)]`}
-                    />
-                  </button>
-                  {!collapsed ? (
-                    <div className="flex flex-col px-4 py-0.5">
-                      {source.modules.map((module) => {
-                        const isLocked = module.candidate ? locked.has(module.candidate.id) : false;
-                        const disabled =
-                          !!module.candidate &&
-                          (!module.candidate.available || applying || preview.loading || isLocked);
-                        return (
-                          <div className="contents" key={module.id}>
-                            <label
-                              className="group relative flex items-center gap-2 py-1 text-left"
-                              onClick={() => setActiveModuleId(module.id)}
-                            >
-                              <input
-                                aria-label={
-                                  module.candidate
-                                    ? `Select ${module.title} ${module.candidate.source?.version ?? ''}`
-                                    : module.title
-                                }
-                                checked={module.checked}
-                                className="absolute left-0 h-4 w-4 cursor-pointer opacity-0"
-                                disabled={disabled}
-                                onChange={() => choose(module)}
-                                readOnly={!module.candidate}
-                                type="checkbox"
-                              />
-                              <span
-                                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded ${module.checked ? 'bg-[var(--color-brand)]' : 'border border-[var(--stroke-default)] bg-[var(--surface-panel)]'}`}
-                              >
-                                {module.checked ? (
-                                  <i className="ri-check-line text-[11px] font-bold text-[var(--on-accent)]" />
-                                ) : null}
-                              </span>
-                              <ModuleIcon icon={module.icon} tone={module.tone} />
-                              <span
-                                className={`text-[13px] ${module.checked ? 'font-semibold text-[var(--color-brand-hover)]' : 'font-medium text-[var(--text-secondary)]'} group-hover:text-[var(--color-brand-hover)]`}
-                              >
-                                {module.title}
-                              </span>
-                            </label>
-                            {module.candidate ? (
-                              <button
-                                aria-label={`Remove ${module.title}`}
-                                className="sr-only"
-                                disabled={
-                                  candidates.pending || applying || preview.loading || isLocked
-                                }
-                                onClick={() => {
-                                  setSelection((current) =>
-                                    current.filter((id) => id !== module.id)
-                                  );
-                                  void candidates
-                                    .remove(module.id)
-                                    .catch((cause) => setError(cause.message));
-                                }}
-                                type="button"
-                              >
-                                Remove {module.title}
-                              </button>
-                            ) : null}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-          <label className="block p-3 text-sm">
-            Compare with
-            <select
-              className="mt-2 w-full rounded border p-2"
-              value={compareId}
-              disabled={applying}
-              onChange={(event) => setCompareId(event.target.value)}
-            >
-              <option value="">No comparison</option>
-              {candidates.items
-                .filter((item) => item.available && !selection.includes(item.id))
-                .map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.title} · {item.source?.version}
-                  </option>
-                ))}
-            </select>
-          </label>
-        </aside>
-
-        <div
-          aria-label="Studio controls"
-          className="col-span-2 col-start-2 row-start-1 flex min-w-0 flex-wrap items-center justify-between gap-4 rounded-[12px] border border-[var(--color-brand-muted)] bg-[var(--surface-panel)] px-3 shadow-sm"
-          role="toolbar"
-        >
-          <div className="flex min-w-0 flex-wrap items-center gap-2 xl:gap-5">
-            <SegmentedControl
-              ariaLabel="Studio view"
-              items={[
-                { label: 'Structure', value: 'structure' },
-                { label: 'YAML', value: 'yaml' },
-                { label: 'Sample', value: 'sample' },
-              ]}
-              onValueChange={setMode}
-              value={mode}
-            />
-            <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-[var(--color-brand-hover)]">
-              <span className="truncate">{selectedWorkspaceTitle.toLowerCase()}</span>
-              <span className="text-[var(--color-brand)]">•</span>
-              <span>{applied ? 'Applied' : 'Draft'}</span>
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <label className="flex items-center gap-1 text-xs">
-              <input
-                type="checkbox"
-                checked={xray}
-                onChange={(event) => setXray(event.target.checked)}
-              />
-              X-ray
-            </label>
-            <button
-              aria-label="Advanced definition workbench"
-              className="flex h-[34px] items-center gap-1.5 rounded-[5px] border border-[var(--stroke-default)] bg-[var(--surface-card)] px-3 text-xs font-semibold text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)] transition-colors hover:bg-[var(--hover-bg)]"
-              onClick={() => setAdvanced(true)}
-              type="button"
-            >
-              <i className="ri-add-line text-lg" />
-              Add modules
-            </button>
-            <button
-              aria-disabled={!canReview}
-              className="h-[34px] rounded-[5px] bg-[var(--accent-commit)] px-3 text-xs font-semibold text-[var(--on-accent)] shadow-[var(--fx-shadow-sm)] transition-colors hover:bg-[var(--accent-commit)]/90"
-              onClick={openReview}
-              type="button"
-            >
-              Review changes
-            </button>
-          </div>
-        </div>
-
-        <section
-          aria-label="Composed structure"
-          className="col-start-2 row-start-2 flex min-h-[300px] min-w-0 shrink-0 flex-col xl:min-h-0 xl:shrink overflow-hidden rounded-[12px] border border-[var(--color-brand-muted)] bg-[var(--surface-panel)] shadow-sm"
-        >
-          <div className="flex shrink-0 items-center gap-3 border-b border-[var(--color-brand-muted)] px-4 py-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-brand)] text-[var(--on-accent)] shadow-sm">
-              <i className="ri-box-3-fill text-lg" />
-            </div>
-            <h2 className="text-lg font-bold text-[var(--color-brand-hover)]">
-              Composed structure
-            </h2>
-          </div>
-          <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-3">
-            {mode === 'sample' && data ? (
-              <StudioSamplePreview
-                key={`${data.selectionHash}:${data.schemaHash}`}
-                projectId={projectId}
-                candidateIds={selection}
-                title={candidates.items
-                  .filter((item) => selection.includes(item.id))
-                  .map((item) => item.title)
-                  .join(' + ')}
-                preview={data}
-                xray={xray}
-              />
-            ) : mode === 'yaml' ? (
-              <pre className="min-h-full whitespace-pre-wrap rounded-[12px] bg-[var(--text-primary)] p-5 font-mono text-xs leading-6 text-[var(--color-brand-muted)]">
-                {data?.schema
-                  ? JSON.stringify(data.schema, null, 2)
-                  : 'No preview for this selection.'}
-              </pre>
-            ) : composition.length ? (
-              <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}>
-                <div className="flex flex-col gap-2">
-                  {composition.map((module, index) => (
-                    <CompositionModule
-                      active={module.id === activeModule?.id}
-                      index={index}
-                      key={module.id}
-                      module={module}
-                      onOpen={() => setActiveModuleId(module.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="flex min-h-64 flex-col items-center justify-center gap-3 text-center text-[var(--color-brand-hover)]">
-                <i className="ri-box-3-line text-3xl text-[var(--color-brand)]" />
-                <h3 className="text-lg font-semibold">Shape your next piece of work</h3>
-                <p className="text-sm text-[var(--color-brand)]">
-                  Add a release from Browse, then select it to compose its exact definition.
-                </p>
-              </div>
-            )}
-            {data?.comparison ? (
-              <details open className="mt-4 border-t p-3">
-                <summary>Comparison · {data.comparison.changes.length} changes</summary>
-                <StudioChanges changes={data.comparison.changes} />
-              </details>
-            ) : null}
-          </div>
-        </section>
-
-        <aside
-          aria-label="Module details"
-          className="col-start-3 row-start-2 flex min-h-0 w-full shrink-0 flex-col xl:w-[320px] xl:shrink overflow-y-auto rounded-[12px] border border-[var(--color-brand-muted)] bg-[var(--surface-panel)] p-4 shadow-sm"
-        >
-          <div className="mb-5 flex items-center gap-3">
-            <ModuleIcon
-              icon={activeModule?.icon ?? 'ri-file-list-3-fill'}
-              large
-              tone={activeModule?.tone ?? 'purple'}
-            />
-            <h2 className="text-lg font-bold text-[var(--color-brand-hover)]">
-              {activeModule?.title ?? 'No module selected'}
-            </h2>
-          </div>
-          <div className="mb-5">
-            <h3 className="mb-3 text-[15px] font-bold text-[var(--color-brand-hover)]">Source</h3>
-            <InfoRow label="Source project">
-              <span className="flex items-center gap-2">
-                <SourceIcon
-                  icon={
-                    activeModule?.sourceTone === 'black'
-                      ? 'ri-checkbox-blank-circle-line'
-                      : (activeModule?.icon ?? 'ri-box-3-fill')
-                  }
-                  small
-                  tone={activeModule?.sourceTone ?? 'black'}
-                />
-                <b className="text-sm text-[var(--color-brand-hover)]">
-                  {activeModule?.source ?? '—'}
-                </b>
-              </span>
-            </InfoRow>
-            <InfoRow label="Module path">
-              <span className="rounded-full border border-[var(--color-brand-muted)] bg-[var(--color-brand-muted)]/50 px-3 py-1 text-sm font-semibold text-[var(--color-brand)]">
-                {activeModule?.title ?? '—'}
-              </span>
-            </InfoRow>
-            <InfoRow label="Pinned commit">
-              <span className="rounded-full border border-[var(--color-brand-muted)] bg-[var(--color-brand-muted)] px-3 py-1 text-[13px] font-semibold text-[var(--color-brand)]">
-                {activeModule?.candidate?.source?.hash ?? 'No source selected'}
-              </span>
-            </InfoRow>
-            <Link
-              className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--color-brand)] hover:text-[var(--color-brand-hover)]"
-              href={browseHref}
-              style={{ color: 'var(--color-brand)' }}
-            >
-              <i className="ri-external-link-line text-lg" />
-              Browse source releases
-            </Link>
-          </div>
-          <hr className="mb-5 border-t border-[var(--color-brand-muted)]" />
-          <div className="mb-5">
-            <h3 className="mb-3 text-[15px] font-bold text-[var(--color-brand-hover)]">
-              Module settings
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              <span className="text-xs text-[var(--color-brand)]">
-                Select a candidate to inspect its definition.
-              </span>
-            </div>
-          </div>
-          <hr className="mb-5 border-t border-[var(--color-brand-muted)]" />
-          <div>
-            <h3 className="mb-1.5 text-[15px] font-bold text-[var(--color-brand-hover)]">
-              Dependencies
-            </h3>
-            <p className="text-xs font-medium text-[var(--color-brand)]">
-              See the exact selection preview for dependencies.
-            </p>
-          </div>
-          {!workspaces.loading && !workspaces.error && draftWorkspaces.length === 0 ? (
-            <div className="mt-6 border-t border-[var(--color-brand-muted)] pt-4 text-xs text-[var(--color-brand-hover)]">
-              Create a Workspace to review and apply this definition.
-            </div>
-          ) : null}
-        </aside>
-      </main>
-
-      <footer className="z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[var(--color-brand-muted)] bg-[var(--surface-panel)] px-6 py-3 shadow-[var(--fx-shadow-sm)]">
-        <div className="flex min-w-0 flex-wrap items-center gap-2 text-[var(--color-brand-hover)]">
-          <label className="relative flex h-[34px] items-center gap-2 rounded-[5px] border border-[var(--stroke-default)] bg-[var(--surface-card)] px-3 text-xs font-medium text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)] transition-colors hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)]">
-            <i className="ri-focus-3-line text-lg" />
-            <span>{selectedWorkspaceTitle}</span>
-            <i className="ri-arrow-down-s-line" />
-            <select
-              aria-label="Target Workspace"
-              className="absolute inset-0 cursor-pointer opacity-0"
-              onChange={(event) => setWorkspaceId(event.target.value)}
-              value={workspaceId}
-            >
-              {draftWorkspaces.length === 0 ? (
-                <option value="">No draft workspace</option>
-              ) : (
-                draftWorkspaces.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.title}
-                  </option>
-                ))
-              )}
-            </select>
-          </label>
-          <div className="h-4 w-px bg-[var(--color-brand-muted)]" />
-          <div className="flex items-center gap-2 text-sm font-medium text-[var(--color-brand-hover)]">
-            <i className="ri-node-tree text-lg text-[var(--color-brand)]" />
-            <span>{composition.length} modules</span>
-            <span className="text-[var(--color-brand)]">•</span>
-            <span>{visibleSources.length} source projects</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-6">
-          <button
-            className="flex h-[34px] items-center gap-2 rounded-[5px] border border-[var(--stroke-default)] bg-[var(--surface-card)] px-3 text-xs font-medium text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)] transition-colors hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)]"
-            onClick={() => {
+      <SchemaStudioSurface
+        navigation={navigation}
+        contextLocked={dataDirty || definitionOpen}
+        editorInvalid={editorInvalid}
+        dataEditor={() => (
+          <SchemaDataEditor
+            navigationRef={navigationRef}
+            onValidationChange={setEditorInvalid}
+            provenance={data}
+            sourceIdentities={sourceIdentities}
+            wholeSchemaSource={wholeSchemaSource}
+            projectId={projectId}
+            sources={candidates.items}
+            sourceManagement={sourceManagement}
+            baseDefinition={
+              editorBase?.schema ??
+              activeCandidate?.baseDefinition ??
+              basePreview.data?.workspace?.boundSchema ??
+              basePreview.data?.schema
+            }
+            initialSourceMappings={activeCandidate?.authoringDraft?.sourceMappings}
+            onComposeSources={persistedTarget ? composeSources : undefined}
+            layoutKey={`${projectId}:${workspaceId}`}
+            key={`${projectId}:${workspaceId}:${candidateSelectionKey}:${editorReset}`}
+            initialDefinition={
+              editorBase?.initial ??
+              (selection.length && recoveredDefinitionReady && data
+                ? !hasSchemaEdit && basePreview.data?.workspace?.boundSchema
+                  ? basePreview.data.workspace.boundSchema
+                  : data.schema
+                : undefined)
+            }
+            revisionKey={`${workspaceId}:${recoveredCandidateKey}:${candidateSelectionKey}`}
+            disabledReason={
+              !persistedTarget
+                ? 'Select a saved Workspace to edit its Schema.'
+                : !selection.length
+                  ? 'Choose a Schema or Module in Sources to start editing.'
+                  : undefined
+            }
+            pending={schemaEdit.pending}
+            loading={preview.loading || schemaEdit.loading || candidates.loading}
+            previewError={recoveryError || schemaEdit.error || candidates.error || preview.error}
+            onRetry={() => {
+              void candidates.refresh();
+              void schemaEdit.refresh();
               preview.refresh();
-              void workspaces.refresh();
             }}
-            type="button"
-          >
-            <span
-              className={`h-5 w-5 rounded-full ${data?.report.valid ? 'bg-[var(--status-success)]' : 'bg-[var(--text-tertiary)]'}`}
-            />
-            Check schema
-          </button>
-          <button
-            aria-label="Review & apply"
-            className="h-[34px] rounded-[5px] bg-[var(--accent-commit)] px-3 text-xs font-semibold text-[var(--on-accent)] shadow-[var(--fx-shadow-sm)] transition-colors hover:bg-[var(--accent-commit)]/90"
-            disabled={!canReview}
-            onClick={openReview}
-            type="button"
-          >
-            Review changes
-          </button>
-        </div>
-      </footer>
-
-      <div className="mx-auto mb-2 flex h-[34px] shrink-0 items-center xl:fixed xl:bottom-4 xl:left-1/2 xl:z-20 xl:mb-0 xl:-translate-x-1/2 gap-1 rounded-[5px] border border-[var(--stroke-default)] bg-[var(--surface-card)] px-1 shadow-[var(--fx-shadow-sm)]">
-        <ToolButton
-          icon="ri-subtract-line"
-          label="Zoom out"
-          onClick={() => setZoom((value) => Math.max(0.8, value - 0.05))}
+            onDirtyChange={updateDataDirty}
+            onPreview={(definition, mappings) => {
+              setSourceMappings(mappings ?? []);
+              if (!editorBase && basePreview.data && data) {
+                setEditorBase({
+                  schema: structuredClone(
+                    activeCandidate?.baseDefinition ??
+                      basePreview.data.workspace?.boundSchema ??
+                      basePreview.data.schema
+                  ),
+                  hash: activeCandidate?.baseDefinition
+                    ? String(activeCandidate.authoringDraft?.base.schemaHash)
+                    : basePreview.data.schemaHash,
+                  initial: structuredClone(
+                    !hasSchemaEdit && basePreview.data.workspace?.boundSchema
+                      ? basePreview.data.workspace.boundSchema
+                      : data.schema
+                  ),
+                });
+              }
+              setSchemaDefinition(definition);
+              setSavedCandidateRef(undefined);
+              setReview(undefined);
+            }}
+            onDiscard={() => {
+              updateDataDirty(false);
+              setEditorBase(undefined);
+              changeDefinitionOpen(false);
+            }}
+            onSave={async (definition, intent, mappings) => {
+              await saveDefinition(definition, intent, mappings);
+              setEditorBase(undefined);
+              updateDataDirty(false);
+            }}
+          />
+        )}
+        sourceHref={sourceHref}
+        workspaceHref={target ? workspaceLink : undefined}
+        branch={target?.targetBranch}
+        draftStatus={
+          dataDirty ? 'Unsaved changes' : savedCandidateRef ? 'Candidate saved' : undefined
+        }
+        bindingStatus={
+          persistedTarget
+            ? currentBinding
+              ? `In use: ${currentBinding.schemaName ?? currentBinding.canonicalName} · ${currentBinding.version}`
+              : 'No Schema applied to this Workspace.'
+            : undefined
+        }
+        workspaceTitle={selectedWorkspaceTitle}
+        workspaceId={workspaceId}
+        workspaces={draftWorkspaces}
+        onWorkspace={changeWorkspace}
+        pending={applying || preview.loading || candidates.pending}
+        loading={candidates.loading}
+        error={
+          candidates.error || schemaEdit.error || preview.error || workspaces.error || undefined
+        }
+        data={data}
+        onEditDefinition={
+          !dataDirty && persistedTarget && selection.length
+            ? () => {
+                if (!basePreview.data || !data) return;
+                setEditorBase({
+                  schema: structuredClone(
+                    activeCandidate?.baseDefinition ??
+                      basePreview.data.workspace?.boundSchema ??
+                      basePreview.data.schema
+                  ),
+                  hash: activeCandidate?.baseDefinition
+                    ? String(activeCandidate.authoringDraft?.base.schemaHash)
+                    : basePreview.data.schemaHash,
+                  initial: structuredClone(
+                    !hasSchemaEdit && basePreview.data.workspace?.boundSchema
+                      ? basePreview.data.workspace.boundSchema
+                      : data.schema
+                  ),
+                });
+                setDefinitionOpen(true);
+              }
+            : undefined
+        }
+        onReview={openReview}
+        canReview={canReview}
+        onDownload={downloadDefinition}
+      />
+      {compositionRequest ? (
+        <SchemaSourceCompositionDialog
+          projectId={projectId}
+          workspaceId={persistedTarget?.id ?? ''}
+          candidates={candidates.items}
+          selection={compositionRequest.ids}
+          initialComposition={compositionRequest.choices}
+          baseDefinition={compositionRequest.base}
+          currentDefinition={compositionRequest.current}
+          onClose={() => setCompositionRequest(undefined)}
+          onSave={async (ids, composition, combined, definition) => {
+            if (!persistedTarget) throw new Error('Select a saved Workspace.');
+            const retainedMappings = pruneSchemaMappings(sourceMappings, definition);
+            const previousRows = new Map(
+              schemaFieldRows(compositionRequest.base ?? {}).map((row) => [row.path, row])
+            );
+            const nextRows = new Map(
+              schemaFieldRows(combined.schema).map((row) => [row.path, row])
+            );
+            for (const mapping of retainedMappings.filter((entry) => !entry.source)) {
+              const key = JSON.stringify(mapping.from),
+                previous = previousRows.get(key),
+                next = nextRows.get(key);
+              if (
+                !previous ||
+                !next ||
+                JSON.stringify(previous.definition) !== JSON.stringify(next.definition) ||
+                JSON.stringify(basePreview.data?.origins[previous.semanticPath]) !==
+                  JSON.stringify(combined.origins[next.semanticPath])
+              )
+                throw new Error(
+                  'This combination changes the source of a moved item. Undo that move before changing its source selection. Your draft is preserved.'
+                );
+            }
+            const saved = await schemaEdit.save({
+              workspaceId: persistedTarget.id,
+              candidateIds: ids,
+              ifRevision: compositionRequest.revision,
+              retryKey: `studio-rebase:${crypto.randomUUID()}`,
+              origin: 'studio',
+              intent: 'Combine pinned Schema sources and preserve local edits.',
+              localContribution: {},
+              schemaDefinition: definition,
+              sourceMappings: retainedMappings,
+              baseSchemaHash: combined.schemaHash,
+              composition,
+              rebase: true,
+            });
+            setEditorReset((value) => value + 1);
+            setSelection(ids);
+            setEditorBase(undefined);
+            setSchemaDefinition(undefined);
+            setLocalContribution({});
+            setSavedCandidateRef({
+              candidateId: saved.candidate.candidateId,
+              revision: saved.candidate.revision,
+            });
+            setReview(undefined);
+            updateDataDirty(false);
+            await workspaces.refresh();
+          }}
         />
-        <ToolButton
-          icon="ri-add-line"
-          label="Zoom in"
-          onClick={() => setZoom((value) => Math.min(1.2, value + 0.05))}
-        />
-        <span className="mx-1 h-5 w-px bg-[var(--surface-card)]" />
-        <ToolButton icon="ri-aspect-ratio-line" label="Fit view" onClick={() => setZoom(1)} />
-        <span className="mx-1 h-5 w-px bg-[var(--surface-card)]" />
-        <ToolButton
-          icon="ri-download-2-line"
-          label="Download definition"
-          onClick={downloadDefinition}
-          disabled={!data?.schema}
-        />
-      </div>
-
-      <Dialog open={advanced} onOpenChange={setAdvanced}>
-        <DialogContent className="flex max-h-[90dvh] flex-col overflow-hidden sm:max-w-[min(1100px,calc(100%-2rem))]">
-          <DialogHeader className="shrink-0 pr-6">
-            <DialogTitle>Add modules</DialogTitle>
-            <DialogDescription>
-              Browse and manage the existing Studio definition sources.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="min-h-0 min-w-0 overflow-auto">{children}</div>
-        </DialogContent>
-      </Dialog>
-
+      ) : null}
+      <SchemaDefinitionWorkbench
+        initialMode="yaml"
+        baseSchema={definitionOpen ? editorBase?.schema : basePreview.data?.schema}
+        initialContribution={localContribution}
+        initialDefinition={schemaDefinition ?? (definitionOpen ? editorBase?.initial : undefined)}
+        onOpenChange={changeDefinitionOpen}
+        onPreview={(contribution) => {
+          if (contribution.yschema === '0.1') {
+            setSchemaDefinition(contribution);
+            setSourceMappings((current) => pruneSchemaMappings(current, contribution));
+          } else setLocalContribution(contribution);
+          setSavedCandidateRef(undefined);
+        }}
+        onSave={saveDefinition}
+        open={definitionOpen}
+        pending={schemaEdit.pending}
+        previewError={preview.error}
+        recoveryLabel={
+          activeCandidate
+            ? `Recovered candidate revision ${activeCandidate.revision} · ${activeCandidate.origin.channel}`
+            : schemaEdit.loading
+              ? 'Recovering the Workspace candidate…'
+              : 'New Workspace-local candidate'
+        }
+        resultSchema={data?.schema}
+      />
       <Dialog
         open={!!review}
         onOpenChange={(open) => {
           if (!open && !applying) setReview(undefined);
         }}
       >
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Apply exact definition</DialogTitle>
+        <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden sm:max-w-4xl">
+          <DialogHeader className="shrink-0">
+            <DialogTitle>
+              {review?.workspace?.canBind ? 'Apply exact definition' : 'Review Schema changes'}
+            </DialogTitle>
             <DialogDescription>
-              {target?.title} · revision {review?.workspace?.revision}. Previous checks and proposed
-              operations will be invalidated.
+              {!review?.workspace ? (
+                'Review the current definition checks. Select a Workspace to review content impact and apply this definition.'
+              ) : review.workspace.canBind ? (
+                `${target?.title} · revision ${review.workspace.revision}. Bind this exact Schema to the empty Workspace. Fill required content later; Review and Commit still validate it.`
+              ) : (
+                <>
+                  {target?.title} · revision {review?.workspace?.revision}. Review definition
+                  changes and their effect on current Workspace content. Adopt saves a pending
+                  preparation task and returns to this Workspace. Your current Schema, content and
+                  proposals remain unchanged.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           {review ? (
             <>
-              <div className="space-y-1 text-xs">
-                {review.sources.map((source) => (
-                  <p className="font-mono" key={source.artifactVersionId}>
-                    {source.canonicalName} · {source.version}
-                  </p>
-                ))}
-              </div>
-              <StudioChanges changes={review.workspace?.changes ?? []} />
-              <details className="text-xs">
-                <summary className="cursor-pointer">Reviewed definition hash</summary>
-                <p className="mt-2 break-all font-mono">{review.schemaHash}</p>
-              </details>
-              {review.reviewHash !== data?.reviewHash ? (
-                <div role="alert" className="rounded bg-[var(--status-warning-muted)] p-3 text-sm">
-                  The Workspace or selection changed. Review the updated changes before applying.
-                  <Button
-                    disabled={!data || preview.loading || applying}
-                    onClick={() => setReview(data)}
-                    variant="outline"
-                  >
-                    Refresh review
-                  </Button>
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-2">
+                <div className="space-y-1 text-xs">
+                  {review.sources.map((source) => (
+                    <p className="font-mono" key={source.artifactVersionId}>
+                      {source.canonicalName} · {source.version}
+                    </p>
+                  ))}
                 </div>
-              ) : null}
-              <div className="flex justify-end gap-3">
+                <StudioChecks preview={review} />
+                {review.workspace ? (
+                  <div className="grid min-w-0 gap-6 sm:grid-cols-2">
+                    <section aria-label="Schema definition changes" className="min-w-0">
+                      <h3 className="text-sm font-medium">Definition changes</h3>
+                      <StudioChanges changes={review.workspace?.changes ?? []} />
+                    </section>
+                    <div className="min-w-0">
+                      <h3 className="mb-3 text-sm font-medium">Content impact</h3>
+                      <StudioImpactPreview impact={review.impact ?? null} />
+                    </div>
+                  </div>
+                ) : null}
+                {hasSchemaEdit && !savedCandidateRef ? (
+                  <p className="text-xs text-[var(--text-secondary)]">
+                    Save the local candidate before adopting it.
+                  </p>
+                ) : null}
+                <details className="text-xs">
+                  <summary className="cursor-pointer">Reviewed definition hash</summary>
+                  <p className="mt-2 break-all font-mono">{review.schemaHash}</p>
+                </details>
+              </div>
+              <div className="flex shrink-0 flex-wrap justify-end gap-3 border-t border-[var(--stroke-divider)] pt-3">
                 <Button disabled={applying} onClick={() => setReview(undefined)} variant="outline">
                   Cancel
                 </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" aria-label="Review actions" disabled={applying}>
+                      More <ChevronDown size={14} aria-hidden="true" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        setReview(undefined);
+                        preview.refresh();
+                        pendingSchema.refresh();
+                        void workspaces.refresh();
+                      }}
+                    >
+                      Refresh checks
+                    </DropdownMenuItem>
+                    {review.workspace && !review.workspace.canBind ? (
+                      <DropdownMenuItem
+                        disabled={
+                          applying ||
+                          !savedCandidateRef ||
+                          !review.impact?.canPublish ||
+                          !review.report.valid ||
+                          !review.adoption.allowed ||
+                          review.reviewHash !== data?.reviewHash
+                        }
+                        onSelect={() => {
+                          setPublishReview(review);
+                          setReview(undefined);
+                        }}
+                      >
+                        Publish public Schema
+                      </DropdownMenuItem>
+                    ) : null}
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Button
-                  disabled={applying || review.reviewHash !== data?.reviewHash}
+                  hidden={!review.workspace || review.workspace.canBind}
+                  variant="outline"
+                  disabled={
+                    applying ||
+                    !review.report.valid ||
+                    !review.adoption.allowed ||
+                    review.impact?.status === 'blocked' ||
+                    (hasSchemaEdit && !savedCandidateRef) ||
+                    review.reviewHash !== data?.reviewHash ||
+                    !review.workspace
+                  }
+                  onClick={() => {
+                    if (!review.workspace) return;
+                    setPreparation({
+                      workspaceId: review.workspace.id,
+                      revision: review.workspace.revision,
+                      target: {
+                        kind: 'studio',
+                        candidateIds: [...selection],
+                        reviewHash: review.reviewHash,
+                        ...(savedCandidateRef ? { schemaEditCandidate: savedCandidateRef } : {}),
+                      },
+                    });
+                    setReview(undefined);
+                  }}
+                >
+                  Prepare content & mappings
+                </Button>
+                <Button
+                  hidden={!review.workspace}
+                  disabled={
+                    applying ||
+                    !review.workspace ||
+                    (hasSchemaEdit && !savedCandidateRef) ||
+                    !review.impact?.canAdopt ||
+                    !review.report.valid ||
+                    !review.adoption.allowed ||
+                    review.reviewHash !== data?.reviewHash
+                  }
                   onClick={() => void apply()}
                 >
-                  {applying ? 'Applying…' : 'Confirm & apply'}
+                  {applying
+                    ? 'Saving…'
+                    : review.workspace?.canBind
+                      ? 'Confirm & apply'
+                      : 'Adopt & return to Workspace'}
                 </Button>
               </div>
             </>
           ) : null}
         </DialogContent>
       </Dialog>
-      {target ? (
-        <Link className="sr-only" href={workspaceLink}>
-          Review in Workspace <ArrowRight />
-        </Link>
+      {preparation ? (
+        <SchemaContentPreparationDialog
+          projectId={projectId}
+          workspaceId={preparation.workspaceId}
+          revision={preparation.revision}
+          target={preparation.target}
+          open
+          onOpenChange={(open) => {
+            if (!open) setPreparation(undefined);
+          }}
+          onPrepared={async () => {
+            await workspaces.refresh();
+            router.push(workspaceLink);
+          }}
+        />
       ) : null}
-      <button
-        className="sr-only"
-        disabled={!selection.length}
-        onClick={() => setSelection([])}
-        type="button"
-      >
-        Clear selection
-      </button>
-      <span className="sr-only">Not run</span>
-      {data?.report.issues.map((issue) => (
-        <span className="sr-only" key={issue.code}>
-          {issue.message}
-        </span>
-      ))}
+      {publishReview && publishReview.workspace?.id === workspaceId ? (
+        <StudioPublishDialog
+          key={`${workspaceId}:${publishReview.reviewHash}`}
+          projectId={projectId}
+          workspaceId={workspaceId}
+          candidateIds={[...selection]}
+          preview={publishReview}
+          currentReviewHash={data?.reviewHash}
+          onOpenChange={(open) => {
+            if (!open) setPublishReview(undefined);
+          }}
+        />
+      ) : null}
     </section>
   );
 }
 
-function SourceIcon({
-  icon,
-  tone,
-  small = false,
-}: {
-  icon: string;
-  tone: ModuleTone | 'black';
-  small?: boolean;
-}) {
+function contributionHasContent(contribution: Record<string, unknown>): boolean {
   return (
-    <span
-      className={`flex shrink-0 items-center justify-center shadow-sm ${small ? 'h-6 w-6 rounded' : 'h-7 w-7 rounded-lg'} ${toneClasses[tone]}`}
-    >
-      <i className={`${icon} ${small ? 'text-sm' : 'text-sm'}`} />
-    </span>
-  );
-}
-
-function ModuleIcon({
-  icon,
-  tone,
-  large = false,
-}: {
-  icon: string;
-  tone: ModuleTone;
-  large?: boolean;
-}) {
-  return (
-    <span
-      className={`flex shrink-0 items-center justify-center text-[var(--on-accent)] shadow-sm ${large ? 'h-8 w-8 rounded-lg' : 'h-7 w-7 rounded'} ${toneClasses[tone]}`}
-    >
-      <i className={`${icon} ${large ? 'text-lg' : 'text-sm'}`} />
-    </span>
-  );
-}
-
-function InfoRow({ children, label }: { children: ReactNode; label: string }) {
-  return (
-    <div className="mb-3 flex items-center justify-between">
-      <span className="text-[13px] font-medium text-[var(--color-brand-hover)]">{label}</span>
-      {children}
-    </div>
-  );
-}
-
-function CompositionModule({
-  active,
-  index,
-  module,
-  onOpen,
-}: {
-  active: boolean;
-  index: number;
-  module: StudioModule;
-  onOpen: () => void;
-}) {
-  return (
-    <article
-      className={`group rounded-[12px] border bg-[var(--surface-panel)] p-2 ${active ? 'border-[var(--color-brand)] shadow-[var(--fx-shadow-sm)]' : 'border-[var(--color-brand-muted)] transition-colors hover:border-[var(--color-brand)]'}`}
-    >
-      <button
-        className="flex w-full cursor-pointer items-center text-left"
-        onClick={onOpen}
-        type="button"
-      >
-        <i
-          className={`ri-draggable mr-2 cursor-grab text-xl text-[var(--color-brand)] ${active ? 'opacity-100' : 'opacity-50 group-hover:opacity-100'}`}
-        />
-        <span className="mr-2 w-5 text-center font-mono text-xs font-semibold text-[var(--color-brand)]">
-          {index + 1}
-        </span>
-        <span
-          className={`mr-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--on-accent)] shadow-sm ${toneClasses[module.tone]}`}
-        >
-          <i className={`${module.icon} text-base`} />
-        </span>
-        <span className="flex-1 text-sm font-bold text-[var(--color-brand-hover)]">
-          {module.title}
-        </span>
-        <span className="mr-3 flex items-center gap-2 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-hover)]/50 px-2 py-1">
-          <SourceIcon
-            icon={module.sourceTone === 'black' ? 'ri-checkbox-blank-circle-line' : module.icon}
-            small
-            tone={module.sourceTone}
-          />
-          <span className="text-xs font-semibold text-[var(--color-brand-hover)]">
-            {module.source}
-          </span>
-        </span>
-        <i
-          className={`${active ? 'ri-arrow-up-s-line' : 'ri-arrow-down-s-line'} mr-1 text-xl text-[var(--color-brand)]`}
-        />
-      </button>
-      {active ? <ItemShape /> : null}
-    </article>
-  );
-}
-
-function ItemShape() {
-  const rows = [
-    ['Title', 'String', 'Required', 'Max 24 words'],
-    ['Priority', 'Enum', 'Must / should / could', 'Default: should'],
-    ['Acceptance', 'Array', 'Required', 'Provenance required'],
-  ];
-  return (
-    <div className="mr-1 mb-1 ml-12 mt-2">
-      <h4 className="mb-1 ml-1 text-[11px] font-semibold text-[var(--color-brand)]">Item shape</h4>
-      <div className="overflow-hidden rounded-[12px] border border-dashed border-[var(--color-brand-muted)] bg-[var(--color-brand-muted)]">
-        {rows.map((row, index) => (
-          <div
-            className={`flex items-center px-3 py-1.5 ${index < rows.length - 1 ? 'border-b border-dashed border-[var(--color-brand-muted)]/60' : ''}`}
-            key={row[0]}
-          >
-            <b className="w-28 text-xs text-[var(--color-brand-hover)]">{row[0]}</b>
-            <div className="flex flex-1 items-center gap-2">
-              {row.slice(1).map((value, chipIndex) => (
-                <span
-                  className={`rounded-full border border-[var(--color-brand-muted)] bg-[var(--surface-panel)] px-2.5 py-0.5 text-center text-[11px] shadow-sm ${chipIndex < 2 ? 'font-semibold text-[var(--color-brand)]' : 'font-medium text-[var(--color-brand)]'} ${chipIndex === 0 ? 'w-16' : ''} ${value === 'Required' ? 'w-20' : ''}`}
-                  key={value}
-                >
-                  {value}
-                </span>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ToolButton({
-  icon,
-  label,
-  onClick,
-  disabled,
-}: {
-  icon: string;
-  label: string;
-  onClick?: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      aria-label={label}
-      className="flex h-7 w-7 items-center justify-center rounded-[5px] text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-bg)]"
-      disabled={disabled}
-      onClick={onClick}
-      type="button"
-    >
-      <i className={`${icon} text-lg`} />
-    </button>
+    ['nodes', 'relationTypes'].some((key) => {
+      const value = contribution[key];
+      return Boolean(value && typeof value === 'object' && Object.keys(value).length);
+    }) ||
+    (Array.isArray(contribution.rules) && contribution.rules.length > 0)
   );
 }

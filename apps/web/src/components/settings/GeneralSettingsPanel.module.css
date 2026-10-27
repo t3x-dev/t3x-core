@@ -1,12 +1,10 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
-
 .page {
   min-height: 100%;
-  padding: 20px 40px 48px;
+  padding: 32px clamp(20px, 4vw, 48px) 56px;
   overflow-x: hidden;
-  background: #fff;
-  color: #1e293b;
-  font-family: "Inter", sans-serif;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-family: inherit;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -16,8 +14,10 @@
 }
 
 .inner {
+  margin-inline: auto;
+  min-width: 0;
   width: 100%;
-  max-width: 1200px;
+  max-width: 1120px;
 }
 
 .breadcrumbs {
@@ -25,7 +25,7 @@
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 13px;
   line-height: 20px;
 }
@@ -36,16 +36,17 @@
 }
 
 .breadcrumbs a:hover {
-  color: #1e293b;
+  color: var(--text-primary);
 }
 
 .breadcrumbs strong {
-  color: #0f172a;
+  color: var(--text-primary);
   font-weight: 600;
 }
 
 .titleRow {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 16px;
   margin-bottom: 14px;
@@ -53,11 +54,11 @@
 
 .titleRow h1 {
   margin: 0;
-  color: #0f172a;
-  font-size: 30px;
+  color: var(--text-primary);
+  font-size: 24px;
   font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 42px;
+  letter-spacing: normal;
+  line-height: 32px;
 }
 
 .organizationBadge {
@@ -66,8 +67,8 @@
   gap: 7px;
   padding: 5px 13px;
   border-radius: 9999px;
-  background: #ebf3ff;
-  color: #0d52ff;
+  background: var(--management-control-bg);
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 600;
   line-height: 18px;
@@ -76,26 +77,26 @@
 
 .settingsCard,
 .urlsCard {
-  border: 1px solid #dbe7f7;
+  border: 1px solid var(--stroke-default);
   border-radius: 8px;
-  background: #fff;
+  background: var(--surface-card);
 }
 
 .settingsCard {
-  min-height: 457px;
-  margin-bottom: 13px;
-  padding: 16px 18px 18px;
+  min-height: 0;
+  margin-bottom: 24px;
+  padding: 24px;
 }
 
 .formRows {
   display: flex;
   flex-direction: column;
-  gap: 17px;
+  gap: 24px;
 }
 
 .formRow {
   display: grid;
-  grid-template-columns: 208px minmax(0, 1fr);
+  grid-template-columns: 180px minmax(0, 1fr);
   gap: 20px;
   align-items: start;
 }
@@ -103,7 +104,7 @@
 .formRow > label,
 .fieldLabel {
   padding-top: 7px;
-  color: #172554;
+  color: var(--text-primary);
   font-size: 13px;
   font-weight: 600;
   line-height: 20px;
@@ -117,13 +118,13 @@
 .controlGroup > select,
 .copyField {
   width: 100%;
-  height: 33px;
-  border: 1px solid #cad9ef;
+  min-height: 40px;
+  border: 1px solid var(--stroke-strong);
   border-radius: 7px;
-  background: #fff;
-  color: #172554;
+  background: var(--surface-card);
+  color: var(--text-primary);
   font:
-    500 13px / 20px "Inter",
+    500 14px / 20px var(--font-geist-sans),
     sans-serif;
   box-shadow: 0 1px 2px rgb(15 23 42 / 3%);
 }
@@ -141,16 +142,16 @@
 .controlGroup > input:focus,
 .controlGroup > select:focus-visible,
 .copyField:focus-within {
-  border-color: #3b82f6;
-  outline: 1px solid #3b82f6;
+  border-color: var(--accent-commit);
+  outline: 1px solid var(--accent-commit);
   outline-offset: 1px;
 }
 
 .controlGroup p,
 .logoControl > p {
   margin: 4px 0 0;
-  color: #6479a9;
-  font-size: 11px;
+  color: var(--text-secondary);
+  font-size: 12px;
   line-height: 16px;
 }
 
@@ -175,8 +176,8 @@
   height: 74px;
   overflow: hidden;
   border-radius: 12px;
-  background: #101f49;
-  color: #fff;
+  background: var(--management-control-bg);
+  color: var(--text-primary);
 }
 
 .logoPreview img {
@@ -195,16 +196,16 @@
   padding: 7px 14px;
   border: 0;
   border-radius: 9999px;
-  background: #eaf3ff;
-  color: #0d52ff;
+  background: var(--management-control-bg);
+  color: var(--text-primary);
   font:
-    600 13px / 20px "Inter",
+    600 13px / 20px var(--font-geist-sans),
     sans-serif;
   cursor: pointer;
 }
 
 .changeLogoButton:hover {
-  background: #dbeafe;
+  background: var(--management-control-hover);
 }
 
 .logoControl > p {
@@ -227,24 +228,24 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   border: 0;
   border-radius: 4px;
-  background: #f8fafc;
+  background: var(--surface-panel);
 }
 
 .segmented button {
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
-  color: #64748b;
+  color: var(--text-secondary);
   font:
-    500 13px / 20px "Inter",
+    500 14px / 20px var(--font-geist-sans),
     sans-serif;
   cursor: pointer;
 }
 
 .segmented .segmentActive {
-  border-color: #e2e8f0;
-  background: #fff;
-  color: #0f172a;
+  border-color: var(--stroke-default);
+  background: var(--surface-card);
+  color: var(--text-primary);
   box-shadow: 0 1px 2px rgb(15 23 42 / 6%);
 }
 
@@ -259,17 +260,17 @@
   padding: 7px 15px;
   border: 0;
   border-radius: 7px;
-  background: #0d52ff;
-  color: #fff;
+  background: var(--color-brand);
+  color: var(--primary-foreground);
   font:
-    600 13px / 20px "Inter",
+    600 13px / 20px var(--font-geist-sans),
     sans-serif;
   box-shadow: 0 1px 2px rgb(13 82 255 / 16%);
   cursor: pointer;
 }
 
 .actions button:hover:not(:disabled) {
-  background: #1d4ed8;
+  background: var(--color-brand-hover);
 }
 
 .actions button:disabled {
@@ -278,12 +279,12 @@
 
 .urlsCard {
   min-height: 115px;
-  padding: 14px 18px 16px;
+  padding: 24px;
 }
 
 .urlsCard h2 {
-  margin: 0 0 7px;
-  color: #172554;
+  margin: 0 0 20px;
+  color: var(--text-primary);
   font-size: 15px;
   font-weight: 700;
   line-height: 22px;
@@ -293,7 +294,7 @@
   display: flex;
   align-items: center;
   overflow: hidden;
-  background: #f5f7fb;
+  background: var(--surface-panel);
 }
 
 .copyField input {
@@ -303,9 +304,9 @@
   outline: 0;
   background: transparent;
   padding: 6px 13px;
-  color: #6479a9;
+  color: var(--text-secondary);
   font:
-    400 13px / 20px "Inter",
+    400 13px / 20px var(--font-geist-sans),
     sans-serif;
 }
 
@@ -317,7 +318,7 @@
   justify-content: center;
   border: 0;
   background: transparent;
-  color: #172554;
+  color: var(--text-primary);
   cursor: pointer;
 }
 
@@ -325,7 +326,7 @@
 .segmented button:focus-visible,
 .actions button:focus-visible,
 .copyField button:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid var(--accent-commit);
   outline-offset: -2px;
 }
 
@@ -341,7 +342,7 @@
 
 @media (max-width: 660px) {
   .page {
-    padding: 20px 16px 40px;
+    padding: 24px 20px 40px;
   }
 
   .formRow {
@@ -357,4 +358,11 @@
   .segmented {
     width: 100%;
   }
+}
+
+.inner > p {
+  margin: 0 0 24px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 22px;
 }

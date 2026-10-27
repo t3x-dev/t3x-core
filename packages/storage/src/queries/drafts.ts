@@ -450,6 +450,57 @@ export async function upsertWorkspaceDraft(
   );
 }
 
+/** Server-only Schema preparation metadata. Never changes bindings, content, or authoring facts. */
+export async function saveWorkspaceSchemaPreparation(
+  db: AnyDB,
+  input: {
+    projectId: string;
+    workspaceId: string;
+    expectedRevision: number;
+    schemaEditCandidate?: unknown;
+    schemaPending?: unknown;
+    schemaComposition?: unknown;
+    assistantSchemaSettings?: unknown;
+  }
+): Promise<Draft> {
+  const current = await findWorkspaceDraft(db, input.projectId, input.workspaceId);
+  if (!current?.workspace_state) throw new NotFoundError(input.workspaceId);
+  if (current.revision !== input.expectedRevision || current.status !== 'editing')
+    throw new ConflictError(current.id, input.expectedRevision);
+  const state = {
+    ...current.workspace_state,
+    ...(input.assistantSchemaSettings !== undefined
+      ? { assistantSchemaSettings: input.assistantSchemaSettings }
+      : {}),
+    ...(input.schemaEditCandidate !== undefined
+      ? { schemaEditCandidate: input.schemaEditCandidate }
+      : {}),
+    ...(input.schemaPending !== undefined ? { schemaPending: input.schemaPending } : {}),
+    ...(input.schemaComposition !== undefined
+      ? { schemaComposition: input.schemaComposition }
+      : {}),
+    updatedAt: new Date().toISOString(),
+  };
+  const [saved] = await db
+    .update(drafts)
+    .set({
+      workspaceStateJson: state,
+      revision: current.revision + 1,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(drafts.id, current.id),
+        eq(drafts.projectId, input.projectId),
+        eq(drafts.revision, input.expectedRevision),
+        eq(drafts.status, 'editing')
+      )
+    )
+    .returning();
+  if (!saved) throw new ConflictError(current.id, input.expectedRevision);
+  return rowToDraft(saved);
+}
+
 /**
  * Delete a Draft
  */
@@ -646,6 +697,8 @@ function assertAppendOnlyWorkspace(
   if (!before) return;
   if (
     !isDeepStrictEqual(previous.authoringBasis, next.authoringBasis) ||
+    !isDeepStrictEqual(previous.authoringHistory, next.authoringHistory) ||
+    !isDeepStrictEqual(previous.authoringReconciliations, next.authoringReconciliations) ||
     !isDeepStrictEqual(before.base, after.base) ||
     before.schema !== after.schema ||
     before.version !== after.version ||
@@ -671,6 +724,57 @@ export async function transactWorkspaceAuthoring<T>(
     draft: Draft
   ) => Promise<{ workspace: Record<string, unknown> | null; value: T }>
 ): Promise<{ draft: Draft; value: T }> {
+  return transactAuthoring(db, input, command, false);
+}
+
+/** Explicit basis changes must retain the exact retired ledger and all other Workspace data. */
+export async function transactWorkspaceReconciliation<T>(
+  db: AnyDB,
+  input: { projectId: string; workspaceId: string; refName: string },
+  command: (
+    tx: AnyDB,
+    draft: Draft
+  ) => Promise<{ workspace: Record<string, unknown> | null; value: T }>
+): Promise<{ draft: Draft; value: T }> {
+  return transactAuthoring(db, input, command, true);
+}
+
+function assertReconciledWorkspace(
+  previous: Record<string, unknown>,
+  next: Record<string, unknown>
+) {
+  const before = (previous.authoringReconciliations ?? []) as unknown[];
+  const after = next.authoringReconciliations as Array<{ ledger: unknown; basis: unknown }>;
+  const changed = new Set([
+    'authoringLedger',
+    'authoringBasis',
+    'authoringReconciliations',
+    'baseCommitHash',
+  ]);
+  const retained = (value: Record<string, unknown>) =>
+    Object.fromEntries(Object.entries(value).filter(([key]) => !changed.has(key)));
+  if (
+    !previous.authoringLedger ||
+    !Array.isArray(after) ||
+    after.length !== before.length + 1 ||
+    !isDeepStrictEqual(before, after.slice(0, -1)) ||
+    !isDeepStrictEqual(after.at(-1)?.ledger, previous.authoringLedger) ||
+    !isDeepStrictEqual(after.at(-1)?.basis, previous.authoringBasis) ||
+    !isDeepStrictEqual(retained(previous), retained(next))
+  )
+    throw new DraftAuthoringConflictError('Reconciliation must preserve the previous Workspace');
+  assertAppendOnlyWorkspace({}, next);
+}
+
+async function transactAuthoring<T>(
+  db: AnyDB,
+  input: { projectId: string; workspaceId: string; refName: string },
+  command: (
+    tx: AnyDB,
+    draft: Draft
+  ) => Promise<{ workspace: Record<string, unknown> | null; value: T }>,
+  reconciliation: boolean
+): Promise<{ draft: Draft; value: T }> {
   type TxRunner = { transaction<R>(fn: (tx: unknown) => Promise<R>): Promise<R> };
   return (db as unknown as TxRunner).transaction(async (rawTx) => {
     const tx = rawTx as AnyDB;
@@ -690,11 +794,15 @@ export async function transactWorkspaceAuthoring<T>(
     const result = await command(tx, draft);
     if (!result.workspace) return { draft, value: result.value };
     if (draft.status !== 'editing') throw new DraftAuthoringConflictError('Draft is not editable');
-    assertAppendOnlyWorkspace(draft.workspace_state ?? {}, result.workspace);
+    if (reconciliation) assertReconciledWorkspace(draft.workspace_state ?? {}, result.workspace);
+    else assertAppendOnlyWorkspace(draft.workspace_state ?? {}, result.workspace);
     const [saved] = await tx
       .update(drafts)
       .set({
         workspaceStateJson: result.workspace,
+        ...(reconciliation
+          ? { parentCommitHash: result.workspace.baseCommitHash as string | null }
+          : {}),
         revision: draft.revision + 1,
         updatedAt: new Date(),
       })
@@ -732,6 +840,123 @@ export async function sealWorkspaceAuthoring(
       and(
         eq(drafts.id, input.draft.id),
         eq(drafts.projectId, input.draft.project_id),
+        eq(drafts.revision, input.draft.revision),
+        eq(drafts.status, 'editing')
+      )
+    )
+    .returning();
+  if (!saved) throw new ConflictError(input.draft.id, input.draft.revision);
+  return rowToDraft(saved);
+}
+
+/** Used only inside the authorized canonical Commit transaction, after graph persistence.
+ * The retired ledger stays frozen in the Commit preparation; the Workspace keeps a reference to it
+ * and continues on a fresh ledger pinned at the new head.
+ */
+export async function renewWorkspaceAuthoring(
+  db: AnyDB,
+  input: { draft: Draft; commitDigest: string; workspace: Record<string, unknown> }
+): Promise<Draft> {
+  const previous = input.draft.workspace_state ?? {};
+  const before = Array.isArray(previous.authoringHistory) ? previous.authoringHistory : [];
+  const after = Array.isArray(input.workspace.authoringHistory)
+    ? input.workspace.authoringHistory
+    : [];
+  const ledger = input.workspace.authoringLedger as AuthoringLedgerStorage | undefined;
+  const basis = input.workspace.authoringBasis as { refHead?: unknown } | undefined;
+  const retired = after.at(-1) as { commitDigest?: unknown; basis?: unknown } | undefined;
+  if (
+    !previous.authoringLedger ||
+    after.length !== before.length + 1 ||
+    !isDeepStrictEqual(before, after.slice(0, before.length)) ||
+    retired?.commitDigest !== input.commitDigest ||
+    !isDeepStrictEqual(retired.basis, previous.authoringBasis) ||
+    !ledger ||
+    !Array.isArray(ledger.actions) ||
+    ledger.actions.length !== 0 ||
+    ledger.compositionRevision !== 0 ||
+    basis?.refHead !== input.commitDigest
+  )
+    throw new DraftAuthoringConflictError('Commit must retire the frozen authoring manifest');
+  const [saved] = await db
+    .update(drafts)
+    .set({
+      workspaceStateJson: input.workspace,
+      parentCommitHash: input.commitDigest,
+      committedAs: input.commitDigest,
+      revision: input.draft.revision + 1,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(drafts.id, input.draft.id),
+        eq(drafts.projectId, input.draft.project_id),
+        eq(drafts.revision, input.draft.revision),
+        eq(drafts.status, 'editing')
+      )
+    )
+    .returning();
+  if (!saved) throw new ConflictError(input.draft.id, input.draft.revision);
+  return rowToDraft(saved);
+}
+
+/** Internal post-merge projection only. Never rebase unpublished actions or fabricate a retired manifest. */
+export async function advanceCleanWorkspaceAfterMerge(
+  db: AnyDB,
+  input: {
+    draft: Draft;
+    expectedHead: string;
+    commitDigest: string;
+    result: unknown;
+    workspace: Record<string, unknown>;
+  }
+): Promise<Draft> {
+  const previous = input.draft.workspace_state ?? {};
+  const before = previous.authoringLedger as AuthoringLedgerStorage | undefined;
+  const after = input.workspace.authoringLedger as AuthoringLedgerStorage | undefined;
+  const basis = previous.authoringBasis as { refHead?: unknown; refName?: unknown } | undefined;
+  const nextBasis = input.workspace.authoringBasis as
+    | { refHead?: unknown; refName?: unknown }
+    | undefined;
+  if (
+    !before ||
+    before.actions.length ||
+    before.compositionRevision !== 0 ||
+    !after ||
+    after.actions.length ||
+    after.compositionRevision !== 0 ||
+    basis?.refHead !== input.expectedHead ||
+    nextBasis?.refHead !== input.commitDigest ||
+    basis.refName !== nextBasis.refName ||
+    !isDeepStrictEqual(after.base, input.result) ||
+    !isDeepStrictEqual(previous.authoringHistory, input.workspace.authoringHistory)
+  )
+    throw new DraftAuthoringConflictError(
+      'Only a clean Workspace can follow an external merge Commit'
+    );
+  const [branch] = await db
+    .select()
+    .from(branches)
+    .where(
+      and(
+        eq(branches.projectId, input.draft.project_id),
+        eq(branches.name, input.draft.target_branch!)
+      )
+    )
+    .for('update');
+  if (branch?.headCommitHash !== input.commitDigest)
+    throw new DraftAuthoringConflictError('Merge head changed before Workspace refresh');
+  const [saved] = await db
+    .update(drafts)
+    .set({
+      workspaceStateJson: input.workspace,
+      parentCommitHash: input.commitDigest,
+      revision: input.draft.revision + 1,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(drafts.id, input.draft.id),
         eq(drafts.revision, input.draft.revision),
         eq(drafts.status, 'editing')
       )

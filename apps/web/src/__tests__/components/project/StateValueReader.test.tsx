@@ -32,3 +32,33 @@ it('reads actual named content sections without codec envelope fields', () => {
   expect(screen.getByText('false')).toBeVisible();
   expect(screen.queryByText('slots')).toBeNull();
 });
+
+it('compacts homogeneous semantic items without losing keys or false and null values', () => {
+  render(
+    <StateSemanticReader
+      compact
+      trees={[
+        {
+          key: 'root',
+          slots: {},
+          children: [
+            {
+              key: 'items',
+              slots: {},
+              children: [
+                { key: 'first', slots: { done: false, note: null }, children: [] },
+                { key: 'second', slots: { done: true }, children: [] },
+              ],
+            },
+          ],
+        },
+      ]}
+    />
+  );
+  expect(screen.getByRole('heading', { name: 'root / items' })).toBeVisible();
+  expect(screen.getByRole('table')).toBeVisible();
+  expect(screen.getByRole('rowheader', { name: 'first' })).toBeVisible();
+  expect(screen.getByText('false')).toBeVisible();
+  expect(screen.getByText('null')).toBeVisible();
+  expect(screen.getByText('—')).toBeVisible();
+});

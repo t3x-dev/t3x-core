@@ -1,8 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, ChevronRight, Circle, Clock, Loader2, X } from 'lucide-react';
-import Link from 'next/link';
 import { memo } from 'react';
-import { getProjectOutputsPath } from '@/domain/project/repoPath';
 import type { EmbeddedLeaf } from '@/types/nodes';
 import { cn } from '@/utils/cn';
 import { getLeafIcon } from './CanvasNodeUtils';
@@ -21,8 +19,6 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
   setLeavesExpanded,
   isDetail,
   prefersReducedMotion,
-  projectId,
-  projectName,
 }: {
   leaves: EmbeddedLeaf[];
   totalPassed: number;
@@ -31,68 +27,35 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
   setLeavesExpanded: React.Dispatch<React.SetStateAction<boolean>>;
   isDetail: boolean;
   prefersReducedMotion: boolean;
-  projectId?: string;
-  projectName?: string;
-  nodeId: string;
-  leafContextMenuHandler:
-    | ((e: React.MouseEvent, leafId: string, nodeId: string) => void)
-    | null
-    | undefined;
 }) {
   const firstLeaf = leaves[0];
-  const firstLeafLabel = firstLeaf?.title || firstLeaf?.id || 'leaf';
   const collapsedStatus =
     firstLeaf?.status && firstLeaf.status !== 'idle'
       ? firstLeaf.status.replace('_', ' ')
       : 'not run';
 
-  const getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
-    if (!projectId || !projectName || !leaf.id) return undefined;
-    return getProjectOutputsPath({ id: projectId, name: projectName }, leaf.id);
-  };
-  const firstLeafHref = firstLeaf ? getLeafHref(firstLeaf) : undefined;
-
   return (
     <div className="border-t border-[var(--stroke-divider)]">
       {firstLeaf && !leavesExpanded && !isDetail ? (
         <div className="flex items-center justify-between px-3 py-2 transition-colors hover:bg-[var(--hover-bg)]">
-          {firstLeafHref ? (
-            <Link
-              aria-label={`Open leaf ${firstLeafLabel}`}
-              className="nodrag flex min-w-0 flex-1 items-center gap-2 text-left"
-              href={firstLeafHref}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <NodeKindIcon compact kind="leaf" label="Leaf" />
-              <span className="min-w-0">
-                <span className="block truncate text-xs font-semibold text-[var(--text-primary)]">
-                  {firstLeaf.title}
-                </span>
-                <span className="block truncate text-[10px] text-[var(--text-tertiary)]">
-                  leaf output
-                </span>
+          <button
+            className="nodrag flex min-w-0 flex-1 items-center gap-2 text-left"
+            onClick={(e) => {
+              e.stopPropagation();
+              setLeavesExpanded((prev) => !prev);
+            }}
+            type="button"
+          >
+            <NodeKindIcon compact kind="leaf" label="Leaf" />
+            <span className="min-w-0">
+              <span className="block truncate text-xs font-semibold text-[var(--text-primary)]">
+                {firstLeaf.title}
               </span>
-            </Link>
-          ) : (
-            <button
-              className="flex min-w-0 flex-1 items-center gap-2 text-left"
-              onClick={(e) => {
-                e.stopPropagation();
-                setLeavesExpanded((prev) => !prev);
-              }}
-              type="button"
-            >
-              <NodeKindIcon compact kind="leaf" label="Leaf" />
-              <span className="min-w-0">
-                <span className="block truncate text-xs font-semibold text-[var(--text-primary)]">
-                  {firstLeaf.title}
-                </span>
-                <span className="block truncate text-[10px] text-[var(--text-tertiary)]">
-                  leaf output
-                </span>
+              <span className="block truncate text-[10px] text-[var(--text-tertiary)]">
+                leaf output
               </span>
-            </button>
-          )}
+            </span>
+          </button>
           <button
             aria-label="Expand leaf list"
             className="nodrag ml-2 flex shrink-0 items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-[var(--hover-bg)]"
@@ -157,7 +120,6 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
             <div className="px-3 pb-2 space-y-1 nodrag">
               {leaves.map((leaf) => {
                 const LeafIcon = getLeafIcon(leaf.type);
-                const leafHref = getLeafHref(leaf);
                 const leafContent = (
                   <>
                     <div
@@ -206,19 +168,9 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
                     className="group/leaf flex items-center gap-1"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {leafHref ? (
-                      <Link
-                        href={leafHref}
-                        onClick={(e) => e.stopPropagation()}
-                        className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[var(--hover-bg)] transition-colors cursor-pointer flex-1 min-w-0"
-                      >
-                        {leafContent}
-                      </Link>
-                    ) : (
-                      <div className="flex items-center gap-2 px-2 py-1.5 rounded-md flex-1 min-w-0">
-                        {leafContent}
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2 px-2 py-1.5 rounded-md flex-1 min-w-0">
+                      {leafContent}
+                    </div>
                   </div>
                 );
               })}

@@ -9,15 +9,15 @@
   "transitionControlPlane": [
     {
       "path": "packages/api/src/lib/transition-control-plane/applicable-policy.ts",
-      "lines": 210
+      "lines": 407
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/index.ts",
-      "lines": 327
+      "lines": 330
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/lifecycle.ts",
-      "lines": 807
+      "lines": 849
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/materialize.ts",
@@ -29,10 +29,10 @@
     }
   ],
   "apiRouteAuthorization": {
-    "routeFiles": 75,
-    "filesUsingGetDB": 65,
-    "filesUsingAssertProjectAccess": 51,
-    "filesUsingRequireTransitionAuthority": 4,
+    "routeFiles": 80,
+    "filesUsingGetDB": 71,
+    "filesUsingAssertProjectAccess": 56,
+    "filesUsingRequireTransitionAuthority": 6,
     "getDBWithoutProjectAccess": [
       "packages/api/src/routes/auth-local.openapi.ts",
       "packages/api/src/routes/auth-me.openapi.ts",
@@ -40,6 +40,7 @@
       "packages/api/src/routes/deploy-agents.openapi.ts",
       "packages/api/src/routes/diff.openapi.ts",
       "packages/api/src/routes/health.openapi.ts",
+      "packages/api/src/routes/llm.openapi.ts",
       "packages/api/src/routes/namespaces.openapi.ts",
       "packages/api/src/routes/notifications.openapi.ts",
       "packages/api/src/routes/providers.openapi.ts",
@@ -200,14 +201,17 @@
     ]
   },
   "reviewSnapshotReferences": [
+    "apps/web/e2e/flows/workspace-complex-flow.spec.ts",
+    "apps/web/src/components/checks/WorkspaceChecksRedirect.tsx",
+    "apps/web/src/components/project/ProjectWorkspacesTab.tsx",
     "apps/web/src/components/workspaces/ChangeDecisionHandoff.tsx",
     "apps/web/src/components/workspaces/ProposalGenerationReviewView.tsx",
     "apps/web/src/components/workspaces/SourceTransitionTab.tsx",
     "apps/web/src/components/workspaces/TransitionReviewPanel.tsx",
-    "apps/web/src/components/workspaces/WorkspaceChangeReviewPage.tsx",
     "apps/web/src/components/workspaces/WorkspaceComposeReviewSurface.tsx",
     "apps/web/src/components/workspaces/WorkspaceContentEditor.tsx",
     "apps/web/src/components/workspaces/YOpsDraftTab.tsx",
+    "apps/web/src/domain/workspaces/reviewNavigation.ts",
     "apps/web/src/hooks/workspaces/useWorkspaceComposeReviewController.ts",
     "apps/web/src/hooks/workspaces/useWorkspaceReviewSnapshot.ts",
     "apps/web/src/hooks/workspaces/useWorkspaceSourceTransition.ts",

@@ -1,5 +1,5 @@
 import type { YSchemaArtifactSource, YSchemaArtifactStatus } from '../composition/types';
-import type { NodeSchema, RelationTypeSchema, ReservedRuleSchema, YSchema } from '../p0/types';
+import type { NodeSchema, RelationTypeSchema, YSchema, YSchemaRuleSchema } from '../p0/types';
 
 export interface YSchemaCapabilityBindingV2 {
   capability: string;
@@ -52,10 +52,22 @@ export interface YSchemaModuleArtifactV2 {
   contribution: {
     nodes?: Record<string, NodeSchema>;
     relationTypes?: Record<string, RelationTypeSchema>;
-    rules?: ReservedRuleSchema[];
+    rules?: YSchemaRuleSchema[];
     policies?: YSchemaCompositionPolicyV2[];
   };
   registry?: Record<string, unknown>;
+}
+
+/** A single Workspace/project-owned contribution compiled after immutable Modules. */
+export interface YSchemaLocalContributionV2 {
+  apiVersion: 't3x.dev/yschema-local-contribution/v2';
+  id: string;
+  revision: number;
+  contribution: {
+    nodes?: Record<string, NodeSchema>;
+    relationTypes?: Record<string, RelationTypeSchema>;
+    rules?: YSchemaRuleSchema[];
+  };
 }
 
 export interface YSchemaCompositionModuleReferenceV2 {
@@ -78,6 +90,7 @@ export type YSchemaCompositionIssueCodeV2 =
   | 'DUPLICATE_MODULE'
   | 'DUPLICATE_PRESENTATION_ORDER'
   | 'INVALID_COMPILED_SCHEMA'
+  | 'INVALID_LOCAL_CONTRIBUTION'
   | 'INVALID_PRESENTATION_ORDER'
   | 'MODULE_NOT_FOUND'
   | 'PATH_OWNERSHIP_CONFLICT'
@@ -104,11 +117,40 @@ export interface YSchemaCompositionIssueV2 {
   details?: Record<string, unknown>;
 }
 
-export interface YSchemaCompositionOriginV2 {
+export interface YSchemaCompositionModuleOriginV2 {
   artifact: string;
   version: string;
   kind: 'module';
+  contributionId?: never;
+  revision?: never;
+  sources?: never;
 }
+
+export interface YSchemaCompositionLocalOriginV2 {
+  kind: 'local';
+  contributionId: string;
+  revision: number;
+  artifact?: never;
+  version?: never;
+  sources?: never;
+}
+
+export type YSchemaCompositionSourceOriginV2 =
+  | YSchemaCompositionModuleOriginV2
+  | YSchemaCompositionLocalOriginV2;
+
+export interface YSchemaCompositionDerivedOriginV2 {
+  kind: 'derived';
+  sources: YSchemaCompositionSourceOriginV2[];
+  artifact?: never;
+  version?: never;
+  contributionId?: never;
+  revision?: never;
+}
+
+export type YSchemaCompositionOriginV2 =
+  | YSchemaCompositionSourceOriginV2
+  | YSchemaCompositionDerivedOriginV2;
 
 export interface YSchemaCompositionRenderEntryV2 {
   artifact: string;
@@ -138,6 +180,7 @@ export interface CompiledYSchemaCompositionV2 {
 export interface CompileYSchemaCompositionV2Input {
   composition: YSchemaCompositionDraftV2;
   modules: YSchemaModuleArtifactV2[];
+  localContribution?: YSchemaLocalContributionV2;
 }
 
 export interface PublishedYSchemaBlueprintV1 {
@@ -147,7 +190,8 @@ export interface PublishedYSchemaBlueprintV1 {
   title: string;
   description: string;
   status: 'published' | 'deprecated';
-  source: 'team';
+  source: 'team' | 'community';
+  license?: string;
   tags: string[];
   blueprint: {
     compositionApiVersion: 't3x.dev/yschema-composition/v2';
@@ -158,6 +202,8 @@ export interface PublishedYSchemaBlueprintV1 {
   schema: YSchema;
   registry: {
     origin: 'composition';
+    publisherNamespaceId?: string;
+    sourceProjectId?: string;
     /** Exact author introduction; not the schema content identity. */
     presentationRef?: {
       projectId: string;

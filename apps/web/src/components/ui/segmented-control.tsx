@@ -2,6 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
 export interface SegmentedControlItem<T extends string> {
+  dataIntroTarget?: string;
   icon?: LucideIcon;
   label: string;
   value: T;
@@ -49,6 +50,7 @@ export function SegmentedControl<T extends string>({
                 : 'border-transparent bg-transparent text-[var(--text-secondary)] hover:bg-[var(--surface-panel)] hover:text-[var(--text-primary)]',
               itemClassName
             )}
+            data-intro-target={item.dataIntroTarget}
             key={item.value}
             id={idPrefix ? `${idPrefix}${item.value}` : undefined}
             onClick={() => onValueChange(item.value)}

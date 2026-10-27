@@ -1,14 +1,11 @@
 import type { MergeDecision } from '@t3x-dev/core';
-import {
-  buildPullRequestConflictDecision,
-  type PullRequestConflictSide,
-} from '@/domain/project/pullRequestConflictDecision';
-import { getMergeDraft, saveMergeDraft } from '@/infrastructure/mergeApi';
+import { saveMergeDraft } from '@/infrastructure/mergeApi';
 import {
   type CreateProjectPullRequestInput,
   closeProjectPullRequest,
   createProjectPullRequest,
   getProjectPullRequest,
+  getProjectPullRequestMergeReview,
   listProjectPullRequestComparisons,
   listProjectPullRequests,
   type MergeProjectPullRequestInput,
@@ -21,6 +18,7 @@ export type {
   ApiProjectPullRequestActivity,
   ApiProjectPullRequestCheck,
   ApiProjectPullRequestDetail,
+  ApiPullRequestMergeReview,
 } from '@/infrastructure/pullRequests';
 
 export function fetchProjectPullRequests(
@@ -61,18 +59,19 @@ export function fetchProjectPullRequestComparisons(
   return listProjectPullRequestComparisons(projectId, options);
 }
 
-export async function applyPullRequestConflictDecision(
+export function fetchProjectPullRequestMergeReview(projectId: string, number: number) {
+  return getProjectPullRequestMergeReview(projectId, number);
+}
+
+/** Persist the decision on the merge draft; returns the draft's next decision revision. */
+export async function savePullRequestMergeDecision(
   draftId: string,
-  side: PullRequestConflictSide
-): Promise<MergeDecision> {
-  const draft = await getMergeDraft(draftId);
-  if (!draft.prepared) {
-    throw new Error('Merge draft has no prepared comparison.');
-  }
-  const decisions = buildPullRequestConflictDecision(draft.prepared, side);
-  await saveMergeDraft(draftId, {
+  decisions: MergeDecision,
+  expectedRevision: number
+): Promise<number> {
+  const draft = await saveMergeDraft(draftId, {
     decisions,
-    expected_decision_revision: draft.decisionRevision,
+    expected_decision_revision: expectedRevision,
   });
-  return decisions;
+  return draft.decisionRevision;
 }

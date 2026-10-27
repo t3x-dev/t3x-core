@@ -1,19 +1,28 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectCommunityTab } from '@/components/project/ProjectCommunityTab';
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/team/repo/community',
+  useSearchParams: () => new URLSearchParams('branch=feature%2Frelease'),
+}));
 
 const mocks = vi.hoisted(() => ({
   guests: { data: undefined as unknown, error: null as Error | null, isLoading: false },
   members: { data: undefined as unknown, error: null as Error | null, isLoading: false },
+  canManageGuests: false,
   prs: vi.fn(),
   workspaces: vi.fn(),
 }));
 
 vi.mock('@/hooks/accounts/useProjectCollaboration', () => ({
-  useProjectCollaboration: () => ({ guestsQuery: mocks.guests }),
+  useProjectCollaboration: () => ({
+    guestsQuery: mocks.guests,
+    canManageGuests: mocks.canManageGuests,
+  }),
 }));
 vi.mock('@/hooks/accounts/useNamespaceCollaboration', () => ({
   useNamespaceCollaboration: () => ({ membersQuery: mocks.members }),
@@ -28,17 +37,22 @@ beforeEach(() => {
   mocks.guests.error = null;
   mocks.members.data = undefined;
   mocks.members.error = null;
+  mocks.guests.isLoading = false;
+  mocks.members.isLoading = false;
+  mocks.canManageGuests = false;
 });
 
 describe('ProjectCommunityTab', () => {
   it('shows real empty states without inventing handoff notes', async () => {
     render(<ProjectCommunityTab projectId="project one" />);
 
-    expect(screen.getByRole('heading', { name: 'Project community' })).toBeInTheDocument();
-    expect(await screen.findByText('No recent objects available.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Community' })).toBeInTheDocument();
+    expect(await screen.findByText(/No pull requests or workspaces yet/)).toBeInTheDocument();
     expect(screen.getByText('No collaborators visible.')).toBeInTheDocument();
-    expect(screen.getByText(/Handoff notes are not supported yet/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Open workspaces/i })).toHaveAttribute(
+    expect(
+      screen.getByText(/Handoff notes and shared references are not available yet/)
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Workspaces' })).toHaveAttribute(
       'href',
       '/project/project%20one?tab=workspaces'
     );
@@ -53,7 +67,7 @@ describe('ProjectCommunityTab', () => {
     );
     expect(screen.getByRole('link', { name: 'Commit history' })).toHaveAttribute(
       'href',
-      '/project/project%20one/history?branch=feature%2Frelease&view=list'
+      '/project/project%20one/history?branch=feature%2Frelease&view=list&returnTo=%2Fteam%2Frepo%2Fcommunity%3Fbranch%3Dfeature%252Frelease'
     );
   });
 
@@ -72,13 +86,52 @@ describe('ProjectCommunityTab', () => {
 
     render(<ProjectCommunityTab projectId="project one" />);
 
-    expect(await screen.findByText(/Pull request #7: Update/)).toBeInTheDocument();
+    expect(await screen.findByText('Update', { exact: false })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open pull request' })).toHaveAttribute(
       'href',
       '/project/project%20one?tab=pull-requests&pr=7'
     );
     expect(screen.getAllByText('Jordan')).toHaveLength(1);
     expect(screen.getByText('Namespace · viewer · Project guest · editor')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Manage access' })).not.toBeInTheDocument();
+  });
+
+  it('links authorized collaborators to repository access settings', () => {
+    mocks.canManageGuests = true;
+    render(<ProjectCommunityTab projectId="project one" />);
+
+    expect(screen.getByRole('link', { name: 'Manage access' })).toHaveAttribute(
+      'href',
+      '/project/project%20one/settings#access'
+    );
+  });
+
+  it('keeps destinations and available records visible when a source fails', async () => {
+    mocks.prs.mockRejectedValue(new Error('Unavailable'));
+    mocks.guests.error = new Error('Access denied');
+    mocks.workspaces.mockResolvedValue([
+      {
+        id: 'workspace_7',
+        title: 'Release draft',
+        targetBranch: 'feature/release',
+        updatedAt: '2026-09-01T00:00:00Z',
+      },
+    ]);
+    render(<ProjectCommunityTab projectId="project one" />);
+
+    expect(
+      await screen.findByText('Some project objects could not be loaded.')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Project collaborators unavailable or access denied.')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Pull requests' })).toHaveAttribute(
+      'href',
+      '/project/project%20one?tab=pull-requests'
+    );
+    expect(screen.queryByText(/No pull requests or workspaces yet/)).not.toBeInTheDocument();
+    expect(screen.queryByText('No collaborators visible.')).not.toBeInTheDocument();
   });
 
   it('opens a recent Workspace on its actual branch', async () => {
@@ -96,5 +149,32 @@ describe('ProjectCommunityTab', () => {
       'href',
       '/project/project%20one?tab=workspaces&branch=feature%2Frelease&workspace=workspace_7'
     );
+  });
+  it('filters all records with real counts, including beyond the sixth workspace', async () => {
+    mocks.prs.mockResolvedValue({
+      pull_requests: [
+        { id: 'pr-1', number: 7, title: 'Release change', updated_at: '2026-09-01T00:00:00Z' },
+      ],
+    });
+    mocks.workspaces.mockResolvedValue(
+      Array.from({ length: 7 }, (_, index) => ({
+        id: `ws-${index}`,
+        title: `Draft ${index + 1}`,
+        targetBranch: 'main',
+        updatedAt: '2026-09-01T00:00:00Z',
+      }))
+    );
+    render(<ProjectCommunityTab projectId="project one" />);
+    expect(await screen.findByText('Draft 3')).toBeInTheDocument();
+    expect(screen.queryByText('Draft 7')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show more (4)' }));
+    expect(screen.getByText('Draft 7')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'All 8' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Pull requests 1' }));
+    expect(screen.queryByText('Draft 7')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open pull request' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Workspaces 7' }));
+    expect(screen.getAllByRole('link', { name: 'Open workspace' })).toHaveLength(7);
+    expect(screen.queryByRole('link', { name: 'Open pull request' })).not.toBeInTheDocument();
   });
 });

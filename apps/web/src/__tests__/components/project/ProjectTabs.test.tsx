@@ -35,7 +35,7 @@ describe('ProjectTabs', () => {
     expect(screen.getByRole('link', { name: 'State' })).toHaveClass(
       'bg-[var(--accent-commit-soft)]'
     );
-    expect(screen.getByRole('link', { name: 'Workspaces' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: 'Workspace' })).not.toHaveAttribute('aria-current');
     expect(screen.queryByRole('link', { name: 'YSchema' })).not.toBeInTheDocument();
   });
 
@@ -48,7 +48,7 @@ describe('ProjectTabs', () => {
     for (const tab of PROJECT_TABS) {
       expect(screen.getByRole('link', { name: tab.label })).toHaveClass('h-8', 'text-[14px]');
     }
-    expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Schema' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('uses public tab segments for project-id query navigation', () => {
@@ -64,7 +64,7 @@ describe('ProjectTabs', () => {
     );
   });
 
-  it('keeps branch and Workspace context between State, Schemas, and Workspaces', () => {
+  it('keeps branch and Workspace context across schema and catalog project views', () => {
     render(
       <ProjectTabs
         activeTab="workspaces"
@@ -79,11 +79,12 @@ describe('ProjectTabs', () => {
       'href',
       '/project/proj_123?branch=feature%2Frelease'
     );
-    expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Schema' })).toHaveAttribute(
       'href',
       '/project/proj_123?tab=schemas&branch=feature%2Frelease&workspace=workspace_42'
     );
-    expect(screen.getByRole('link', { name: 'Workspaces' })).toHaveAttribute(
+    expect(screen.queryByRole('link', { name: 'Browse' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Workspace' })).toHaveAttribute(
       'href',
       '/project/proj_123?tab=workspaces&branch=feature%2Frelease&workspace=workspace_42'
     );
@@ -97,11 +98,12 @@ describe('ProjectTabs', () => {
     );
   });
 
-  it('keeps tab labels stable for shared A0/W1/S1 ownership', () => {
+  it('keeps the current primary navigation and legacy catalog routes', () => {
     expect(PROJECT_TABS.map((tab) => tab.id)).toEqual([
       'state',
       'schemas',
       'workspaces',
+      'checks',
       'reviews',
       'community',
       'settings',
@@ -112,8 +114,26 @@ describe('ProjectTabs', () => {
     expect(isProjectTabSegment('reviews')).toBe(false);
     expect(parseProjectTab('pull-requests')).toBe('reviews');
     expect(parseProjectTab('reviews')).toBe('state');
-    expect(parseProjectTab('outputs')).toBe('outputs');
-    expect(isProjectTabSegment('outputs')).toBe(true);
-    expect(getProjectTabSegment('outputs')).toBe('outputs');
+    expect(parseProjectTab('outputs')).toBe('state');
+    expect(isProjectTabSegment('outputs')).toBe(false);
+    expect(parseProjectTab('discover')).toBe('discover');
+    expect(parseProjectTab('browse')).toBe('browse');
+  });
+
+  it('owns legacy History routes under State and preserves branch context', () => {
+    render(
+      <ProjectTabs
+        activeTab="history"
+        branch="feature/release"
+        workspaceId="workspace_42"
+        projectIdNavigation
+        repoPath="/project/proj_123"
+      />
+    );
+    expect(screen.queryByRole('link', { name: 'History' })).toBeNull();
+    const state = screen.getByRole('link', { name: 'State' });
+    expect(state).toHaveAttribute('aria-current', 'page');
+    expect(state).toHaveAttribute('href', '/project/proj_123?branch=feature%2Frelease');
+    expect(parseProjectTab('history')).toBe('history');
   });
 });

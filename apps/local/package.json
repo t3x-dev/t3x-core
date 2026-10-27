@@ -42,7 +42,7 @@
     "@hono/node-server": "^2.0.5",
     "@hono/zod-openapi": "^1.2.0",
     "@hono/zod-validator": "^0.7.6",
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "@mozilla/readability": "^0.6.0",
     "@scalar/hono-api-reference": "^0.9.30",
     "bcryptjs": "^3.0.3",
@@ -66,10 +66,10 @@
     "table": "^6.9.0",
     "turndown": "^7.2.2",
     "turndown-plugin-gfm": "^1.0.2",
-    "undici": "^7.29.0",
+    "undici": "^7.30.1",
     "ws": "^8.21.0",
     "yaml": "^2.8.3",
-    "zod": "^4.2.1"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

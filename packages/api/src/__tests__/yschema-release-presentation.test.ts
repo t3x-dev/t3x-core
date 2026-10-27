@@ -2,22 +2,26 @@ import { createStatePresentation } from '@t3x-dev/application';
 import { createYOpsState } from '@t3x-dev/core';
 import {
   type AnyDB,
+  createMaterial,
   ensureMainBranch,
   findProjectById,
+  findWorkspaceDraft,
   insertProject,
   insertStatePresentation,
   listProjectYSchemaVersionHistory,
+  updateProject,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
 import {
   builtInPrdCoreArtifact,
   compileYSchemaComposition,
   sha256CompositionValue,
+  t3xPrdP0Fixtures,
 } from '@t3x-dev/yschema';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
-import { yschemaArtifacts } from '../../../storage/src/schema';
+import { projects, yschemaArtifacts } from '../../../storage/src/schema';
 import { statePresentations } from '../../../storage/src/schema-presentations';
 import { projectGrants } from '../../../storage/src/schema-trees';
 import { commitRepositoryYOpsState } from '../lib/repository-state-transition';
@@ -70,6 +74,7 @@ beforeAll(async () => {
       ownerId: 'release-editor',
     })
   ).projectId;
+  await db.update(projects).set({ visibility: 'public' }).where(eq(projects.projectId, projectId));
   const foreign = (await insertProject(db, testData.project({ name: 'Foreign' }))).projectId;
   for (const id of [projectId, foreign]) {
     await ensureMainBranch(db, id);
@@ -92,11 +97,26 @@ beforeAll(async () => {
     document: presentation.document,
     createdBy: 'fixture',
   });
+  const material = await createMaterial(db, {
+    project_id: projectId,
+    source_type: 'paste',
+    content_text: JSON.stringify(t3xPrdP0Fixtures.validCandidateTree),
+    content_hash: await sha256CompositionValue(t3xPrdP0Fixtures.validCandidateTree),
+  });
   await upsertWorkspaceDraft(db, {
     project_id: projectId,
     workspace_id: 'studio',
     title: 'Studio',
-    workspace_state: { schemaComposition: composition },
+    workspace_state: {
+      schemaComposition: composition,
+      schemaCandidate: {
+        fields: Object.entries(t3xPrdP0Fixtures.validCandidateTree).map(([path, value]) => ({
+          path,
+          value,
+        })),
+      },
+      sourceBundle: [{ materialId: material.id, contentHash: material.content_hash }],
+    },
   });
   compositionHash = (
     await compileYSchemaComposition({ composition, core: builtInPrdCoreArtifact, modules: [] })
@@ -109,6 +129,7 @@ const reference = () => ({
   coverPath: image.path,
 });
 const input = (version = '1.0.0') => ({
+  visibility: 'community',
   composition_revision: 1,
   composition_hash: compositionHash,
   canonical_name: 'release/demo',
@@ -125,7 +146,7 @@ const publish = (body: unknown, target = app) =>
   });
 it('pins a verified introduction in the immutable release hash and catalog reference', async () => {
   const response = await publish(input());
-  expect(response.status).toBe(200);
+  expect(response.status, await response.clone().text()).toBe(200);
   const manifest = (await response.json()).data;
   expect(manifest.registry.presentationRef).toEqual({ projectId, ...reference() });
   const versions = await listProjectYSchemaVersionHistory(db, { project_id: projectId });
@@ -147,6 +168,18 @@ it('pins a verified introduction in the immutable release hash and catalog refer
   });
   const again = await app.request(`/v1/projects/${projectId}/yschema/catalog?publisher=release`);
   expect((await again.json()).data.items[0].presentationRef.commitDigest).toBe(commitDigest);
+});
+it('keeps release hashes and exact presentation references when repository information changes', async () => {
+  const before = await listProjectYSchemaVersionHistory(db, { project_id: projectId });
+  await updateProject(db, projectId, {
+    repositoryProfile: { readme: '# Current repository', tags: ['current'] },
+  });
+  expect(await listProjectYSchemaVersionHistory(db, { project_id: projectId })).toEqual(before);
+  const catalog = await app.request(`/v1/projects/${projectId}/yschema/catalog?publisher=release`);
+  expect((await catalog.json()).data.items[0].presentationRef).toEqual({
+    projectId,
+    ...reference(),
+  });
 });
 it('rejects foreign commits, mismatched digests and unbundled covers before publishing', async () => {
   const before = await listProjectYSchemaVersionHistory(db, { project_id: projectId });
@@ -284,6 +317,7 @@ it('allows viewers to read but denies schema publish, identity edits and archive
 });
 
 it('does not expose a private introduction reference through public or another project catalog', async () => {
+  await db.update(projects).set({ visibility: 'private' }).where(eq(projects.projectId, projectId));
   const versions = await listProjectYSchemaVersionHistory(db, { project_id: projectId });
   const artifactId = versions[0].artifactId;
   await db
@@ -316,19 +350,51 @@ it('does not expose a private introduction reference through public or another p
     ).toBe(true);
   } finally {
     await db
+      .update(projects)
+      .set({ visibility: 'public' })
+      .where(eq(projects.projectId, projectId));
+    await db
       .update(yschemaArtifacts)
-      .set({ visibility: 'private' })
+      .set({ visibility: 'community' })
       .where(eq(yschemaArtifacts.artifactId, artifactId));
   }
 });
 
+it('omits private project and introduction references from newly published manifests', async () => {
+  await db.update(projects).set({ visibility: 'private' }).where(eq(projects.projectId, projectId));
+  try {
+    const response = await publish(input('5.0.0'));
+    expect(response.status, await response.clone().text()).toBe(200);
+    const manifest = (await response.json()).data;
+    expect(manifest.registry.sourceProjectId).toBeUndefined();
+    expect(manifest.registry.presentationRef).toBeUndefined();
+    expect(JSON.stringify(manifest)).not.toContain(projectId);
+    expect(
+      (await listProjectYSchemaVersionHistory(db, { project_id: projectId })).some(
+        (release) => release.version === '5.0.0'
+      )
+    ).toBe(true);
+  } finally {
+    await db
+      .update(projects)
+      .set({ visibility: 'public' })
+      .where(eq(projects.projectId, projectId));
+  }
+});
+
 it('also pins the introduction in an open v2 Blueprint release', async () => {
+  const prepared = await findWorkspaceDraft(db, projectId, 'studio');
   await upsertWorkspaceDraft(db, {
     project_id: projectId,
     workspace_id: 'studio-v2',
     target_branch: 'studio-v2',
     title: 'Open Studio',
-    workspace_state: { targetBranch: 'studio-v2', title: 'Open Studio' },
+    workspace_state: {
+      targetBranch: 'studio-v2',
+      title: 'Open Studio',
+      schemaCandidate: prepared!.workspace_state!.schemaCandidate,
+      sourceBundle: prepared!.workspace_state!.sourceBundle,
+    },
   });
   const base = `/v1/projects/${projectId}/workspaces/studio-v2/schema-composition`;
   const saved = await app.request(base, {

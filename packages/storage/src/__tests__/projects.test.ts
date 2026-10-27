@@ -46,7 +46,7 @@ describe('Projects Storage', () => {
       // Verify return value
       expect(result).toBeDefined();
       expect(result.projectId).toMatch(/^proj_[a-f0-9]+$/);
-      expect(result.name).toBe('My Project');
+      expect(result.name).toBe('My-Project');
       expect(result.visibility).toBe('private');
       expect(result.createdAt).toBeInstanceOf(Date);
     });
@@ -60,7 +60,7 @@ describe('Projects Storage', () => {
       const rows = await db.select().from(projects).where(eq(projects.projectId, result.projectId));
 
       expect(rows).toHaveLength(1);
-      expect(rows[0].name).toBe('DB Test Project');
+      expect(rows[0].name).toBe('DB-Test-Project');
       expect(rows[0].projectId).toBe(result.projectId);
     });
 
@@ -73,7 +73,7 @@ describe('Projects Storage', () => {
       expect(result.projectId).toBe('proj_reserved_capacity_slot');
       expect(await findProjectById(db, result.projectId)).toMatchObject({
         projectId: 'proj_reserved_capacity_slot',
-        name: 'Reserved project',
+        name: 'Reserved-project',
       });
     });
 
@@ -114,7 +114,7 @@ describe('Projects Storage', () => {
 
       expect(found).toBeDefined();
       expect(found!.projectId).toBe(created.projectId);
-      expect(found!.name).toBe('Find Me');
+      expect(found!.name).toBe('Find-Me');
     });
 
     it('returns null when project does not exist', async () => {
@@ -156,7 +156,7 @@ describe('Projects Storage', () => {
       const updated = await updateProject(db, created.projectId, { name: 'Updated Name' });
 
       expect(updated).toBeDefined();
-      expect(updated!.name).toBe('Updated Name');
+      expect(updated!.name).toBe('Updated-Name');
 
       // Verify database effect
       const rows = await db
@@ -164,7 +164,7 @@ describe('Projects Storage', () => {
         .from(projects)
         .where(eq(projects.projectId, created.projectId));
 
-      expect(rows[0].name).toBe('Updated Name');
+      expect(rows[0].name).toBe('Updated-Name');
     });
 
     it('returns null when project does not exist', async () => {
@@ -221,7 +221,7 @@ describe('Projects Storage', () => {
       // findProjectById should find it again
       const found = await findProjectById(db, created.projectId);
       expect(found).toBeDefined();
-      expect(found!.name).toBe('To Restore');
+      expect(found!.name).toBe('To-Restore');
     });
 
     it('returns null for non-existent project', async () => {
@@ -316,7 +316,7 @@ describe('Projects Storage', () => {
 
       expect(result).toBeDefined();
       expect(result!.projectId).toBe(project.projectId);
-      expect(result!.name).toBe('Empty Stats');
+      expect(result!.name).toBe('Empty-Stats');
       expect(result!.stats).toEqual({
         conversationsCount: 0,
         turnsCount: 0,

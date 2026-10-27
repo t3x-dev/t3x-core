@@ -5,23 +5,45 @@ import type {
   WorkspaceAuthoringCard,
   WorkspaceAuthoringOutcome,
 } from '@t3x-dev/api-client';
-import { AlertTriangle, ArrowUp, Square, X } from 'lucide-react';
+import { AlertTriangle, ArrowUp, FileText, Layers, Square, X } from 'lucide-react';
 import NextImage from 'next/image';
-import { type ClipboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  type ClipboardEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import {
+  clipboardDocumentFiles,
   clipboardImageFiles,
   fileToAttachedImage,
 } from '@/components/generation/attachedImageFile';
 import { GenerationModelSelector } from '@/components/generation/GenerationModelSelector';
+import { InferenceAvailabilityNotice } from '@/components/generation/InferenceAvailabilityNotice';
+import { unsupportedChatMaterialSourceMessage } from '@/components/import/documentAcceptTypes';
 import { providerSupports } from '@/domain/providerCapabilities';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
+import {
+  useSourceThreadSessionRef,
+  useSourceThreadSessionState,
+  useWorkspaceAssistantSession,
+} from '@/hooks/sourceThreads/sourceThreadSession';
 import { useSourceThreadGeneration } from '@/hooks/sourceThreads/useSourceThreadGeneration';
+import { useComposeProposalPosture } from '@/hooks/workspaces/useComposeProposalPosture';
 import type { WorkspaceAssistantContext } from '@/hooks/workspaces/useWorkspaceAuthoring';
-import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import { useChatSessionStore } from '@/store/chatSessionStore';
 import type { AttachedImage } from '@/types/generation';
+import type { WorkspaceProposalPosture } from '@/types/workspaces';
+import { PROPOSAL_POSTURE_OPTIONS, proposalPostureOption } from './ProposalPostureSelector';
 import type { AssistantActivityRecord, AssistantPublication } from './WorkspaceAssistantActivity';
-import { WorkspaceComposeChat } from './WorkspaceComposeChat';
+import {
+  WorkspaceComposeChat,
+  type WorkspaceComposeChatState,
+  type WorkspaceComposeMessage,
+} from './WorkspaceComposeChat';
 import styles from './WorkspaceComposeSurface.module.css';
 
 export function ComposeAuthoringAssistant({
@@ -33,8 +55,20 @@ export function ComposeAuthoringAssistant({
   initialPendingCandidate,
   activityActions,
   activityCards,
+  prefill,
+  onPrefillApplied,
+  sourcesControl,
+  allowProposal = true,
+  proposalBlockedHint,
+  contextLabel,
+  onSchemaCandidateChange,
+  onConversationChange,
+  beforeComposer,
 }: {
   projectId: string;
+  onSchemaCandidateChange?: (conversationId?: string) => void;
+  onConversationChange?: (conversationId: string) => void;
+  beforeComposer?: ReactNode;
   conversationId?: string;
   context: WorkspaceAssistantContext;
   onCreateConversation: () => Promise<string>;
@@ -45,24 +79,53 @@ export function ComposeAuthoringAssistant({
   initialPendingCandidate?: string;
   activityActions?: WorkspaceAuthoringAction[];
   activityCards?: Record<string, WorkspaceAuthoringCard[]>;
+  prefill?: string | null;
+  onPrefillApplied?: () => void;
+  sourcesControl?: ReactNode;
+  allowProposal?: boolean;
+  proposalBlockedHint?: string;
+  contextLabel?: string;
 }) {
-  const [conversationId, setConversationId] = useState(initialConversationId);
-  const [pendingCandidate, setPendingCandidate] = useState<string | null>(
+  const session = useWorkspaceAssistantSession(projectId, context.workspaceId);
+  const [conversationId, setConversationId] = useSourceThreadSessionState(
+    session,
+    'compose.conversation',
+    initialConversationId
+  );
+  const [pendingCandidate, setPendingCandidate] = useSourceThreadSessionState<string | null>(
+    session,
+    'compose.pendingCandidate',
     initialPendingCandidate ?? null
   );
-  const [publishing, setPublishing] = useState(false);
-  const [publicationError, setPublicationError] = useState<string | null>(null);
-  const [localError, setLocalError] = useState<string | null>(null);
-  const [published, setPublished] = useState<AssistantPublication | null>(null);
-  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
-  const publication = useRef<{ transitionId: string; requestId: string; turnId?: string } | null>(
+  const [publishing, setPublishing] = useSourceThreadSessionState(
+    session,
+    'compose.publishing',
+    false
+  );
+  const [publicationError, setPublicationError] = useSourceThreadSessionState<string | null>(
+    session,
+    'compose.publicationError',
     null
   );
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [published, setPublished] = useSourceThreadSessionState<AssistantPublication | null>(
+    session,
+    'compose.published',
+    null
+  );
+  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const publication = useSourceThreadSessionRef<{
+    transitionId: string;
+    requestId: string;
+    turnId?: string;
+  } | null>(session, 'compose.publication', null);
   const composeDefaultApplied = useRef(false);
   const model = useChatModelSelection({});
   const thinkingEnabled = useChatSessionStore((state) => state.thinkingEnabled);
   const setThinking = useChatSessionStore((state) => state.setThinking);
   const supportsThinking = providerSupports(model.selectedProvider ?? '', 'thinking');
+  const { posture, setPosture } = useComposeProposalPosture(context.workspaceId);
 
   useEffect(() => {
     if (composeDefaultApplied.current || model.loading || !model.isSelectionReady) return;
@@ -76,7 +139,10 @@ export function ComposeAuthoringAssistant({
 
   useEffect(() => {
     if (initialPendingCandidate) setPendingCandidate(initialPendingCandidate);
-  }, [initialPendingCandidate]);
+  }, [initialPendingCandidate, setPendingCandidate]);
+  useEffect(() => {
+    setConversationId(initialConversationId);
+  }, [initialConversationId, setConversationId]);
   const publishTransition = useCallback(
     async (transitionId: string, turnId?: string) => {
       const identity =
@@ -101,7 +167,14 @@ export function ComposeAuthoringAssistant({
         setPublishing(false);
       }
     },
-    [onPublishCandidate]
+    [
+      onPublishCandidate,
+      publication,
+      setPublished,
+      setPublishing,
+      setPendingCandidate,
+      setPublicationError,
+    ]
   );
   const chat = useSourceThreadGeneration({
     projectId,
@@ -110,22 +183,36 @@ export function ComposeAuthoringAssistant({
     model: model.selectedModel ?? undefined,
     workspaceAssistant: {
       ...context,
-      allowProposal: true,
+      allowProposal,
+      posture,
+      onSchemaSettings: (id) => onSchemaCandidateChange?.(id ?? conversationId),
       onCandidate: (transitionId, turnId) => {
+        if (!allowProposal) return;
         setPublicationError(null);
         setPendingCandidate(transitionId);
         void publishTransition(transitionId, turnId);
       },
     },
-    onConversationCreated: setConversationId,
+    onConversationCreated: (nextConversationId) => {
+      setConversationId(nextConversationId);
+      onConversationChange?.(nextConversationId);
+    },
     createConversation: onCreateConversation,
   });
+  const { setInput } = chat;
+  useEffect(() => {
+    if (!prefill) return;
+    setInput(prefill);
+    onPrefillApplied?.();
+  }, [prefill, onPrefillApplied, setInput]);
   const messages = useMemo(() => {
-    const persisted = chat.messages.map((message) => ({
+    const persisted: WorkspaceComposeMessage[] = chat.messages.map((message) => ({
       author: message.role === 'user' ? 'You' : 'Assistant',
       content: message.content,
       id: message.id,
       role: message.role,
+      ...(message.images?.length ? { images: message.images } : {}),
+      ...(message.files?.length ? { files: message.files } : {}),
     }));
     if (chat.streamingContent.trim())
       persisted.push({
@@ -136,7 +223,7 @@ export function ComposeAuthoringAssistant({
       });
     return persisted;
   }, [chat.messages, chat.streamingContent, conversationId, projectId]);
-  const chatView: WorkspaceComposeReviewController['chat'] = {
+  const chatView: WorkspaceComposeChatState = {
     error: chat.error,
     input: chat.input,
     isLoading: chat.isLoading,
@@ -145,11 +232,7 @@ export function ComposeAuthoringAssistant({
     isThinking: chat.isThinking,
     messages,
     searchQuery: chat.searchQuery,
-    send: (images?: AttachedImage[]) => {
-      const text = chat.input.trim();
-      if (!text && !images?.length) return;
-      chat.sendMessage(text || 'Attached image', images?.length ? { images } : undefined);
-    },
+    send: () => chat.sendMessage(),
     setInput: chat.setInput,
     stop: chat.stopGenerating,
     thinkingContent: chat.thinkingContent,
@@ -203,7 +286,7 @@ export function ComposeAuthoringAssistant({
     chat.isLoading ||
     model.loading ||
     !model.isSelectionReady ||
-    (!chat.input.trim() && attachedImages.length === 0);
+    (!chat.input.trim() && attachedImages.length === 0 && attachedFiles.length === 0);
 
   const publish = async () => {
     if (!pendingCandidate) return;
@@ -219,22 +302,35 @@ export function ComposeAuthoringAssistant({
   };
 
   const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
-    const files = clipboardImageFiles(event.clipboardData);
-    if (!files.length) return;
+    const imageFiles = clipboardImageFiles(event.clipboardData);
+    const documentFiles = clipboardDocumentFiles(event.clipboardData);
+    if (!imageFiles.length && !documentFiles.length) return;
     if (!event.clipboardData.getData('text/plain')) event.preventDefault();
-    void Promise.all(files.map(fileToAttachedImage)).then((images) => {
+    const rejected = documentFiles
+      .map((file) => unsupportedChatMaterialSourceMessage(file))
+      .find(Boolean);
+    setLocalError(rejected ?? null);
+    const accepted = documentFiles.filter((file) => !unsupportedChatMaterialSourceMessage(file));
+    if (accepted.length) setAttachedFiles((current) => [...current, ...accepted]);
+    void Promise.all(imageFiles.map(fileToAttachedImage)).then((images) => {
       setAttachedImages((current) => [...current, ...images]);
     });
   };
 
   const sendComposer = () => {
-    if (chat.isLoading || chat.isStreaming || model.loading || !model.isSelectionReady) return;
+    if (chat.isStreaming || sendDisabled) return;
     const text = chat.input.trim();
     const images = attachedImages;
-    if (!text && images.length === 0) return;
-    chat.sendMessage(text || 'Attached image', images.length ? { images } : undefined);
+    const files = attachedFiles;
+    chat.sendMessage(
+      text || (images.length ? 'Attached image' : 'Attached file'),
+      images.length || files.length
+        ? { ...(images.length ? { images } : {}), ...(files.length ? { files } : {}) }
+        : undefined
+    );
     for (const image of images) URL.revokeObjectURL(image.preview);
     setAttachedImages([]);
+    setAttachedFiles([]);
   };
 
   return (
@@ -263,6 +359,9 @@ export function ComposeAuthoringAssistant({
           </button>
         </section>
       ) : null}
+      {!allowProposal && proposalBlockedHint ? (
+        <output className={styles.authoringAssistantHint}>{proposalBlockedHint}</output>
+      ) : null}
       {publicationError || localError || chat.error || chat.warning ? (
         <p
           className={styles.authoringAssistantNotice}
@@ -271,7 +370,22 @@ export function ComposeAuthoringAssistant({
           {publicationError ?? localError ?? chat.error ?? chat.warning}
         </p>
       ) : null}
+      {!model.isSelectionReady ? (
+        <InferenceAvailabilityNotice
+          loading={model.loading}
+          ready={model.isSelectionReady}
+          error={model.availabilityError}
+          onRetry={model.refresh}
+        />
+      ) : null}
+      {beforeComposer}
       <fieldset className={styles.discussionComposer} aria-label="Message composer">
+        {contextLabel ? (
+          <div className={styles.chatContext}>
+            <Layers aria-hidden="true" /> <span title={contextLabel}>{contextLabel}</span>
+            {context.selectedNodeId ? <small>Selected field</small> : null}
+          </div>
+        ) : null}
         <textarea
           aria-label="Workspace instruction"
           disabled={chat.isLoading}
@@ -302,7 +416,27 @@ export function ComposeAuthoringAssistant({
             ))}
           </div>
         ) : null}
+        {attachedFiles.length > 0 ? (
+          <div className={styles.imagePreview}>
+            {attachedFiles.map((file, index) => (
+              <span className={styles.filePreviewItem} key={`${file.name}-${index}`}>
+                <FileText aria-hidden="true" />
+                <span>{file.name}</span>
+                <button
+                  aria-label={`Remove ${file.name}`}
+                  onClick={() =>
+                    setAttachedFiles((current) => current.filter((_, at) => at !== index))
+                  }
+                  type="button"
+                >
+                  <X aria-hidden="true" />
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : null}
         <div className={styles.discussionComposerFooter}>
+          {sourcesControl}
           <div className={styles.composerSubmit}>
             <GenerationModelSelector
               onModelChange={model.handleModelChange}
@@ -312,6 +446,22 @@ export function ComposeAuthoringAssistant({
               supportsThinking={supportsThinking}
               thinkingEnabled={thinkingEnabled}
             />
+            <select
+              aria-label="Proposal mode"
+              className={styles.postureSelect}
+              disabled={chat.isLoading}
+              onChange={(event) =>
+                setPosture(event.currentTarget.value as WorkspaceProposalPosture)
+              }
+              title={proposalPostureOption(posture).title}
+              value={posture}
+            >
+              {PROPOSAL_POSTURE_OPTIONS.map((option) => (
+                <option key={option.value} title={option.description} value={option.value}>
+                  {option.shortLabel}
+                </option>
+              ))}
+            </select>
             <button
               aria-label={chat.isStreaming ? 'Stop generating' : 'Send message'}
               className={styles.send}

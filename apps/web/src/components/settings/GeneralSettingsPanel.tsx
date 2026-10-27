@@ -37,10 +37,12 @@ export function GeneralSettingsPanel() {
         </nav>
         <header className={styles.titleRow}>
           <h1>General</h1>
-          <span className={styles.organizationBadge}>
-            <Building2 aria-hidden="true" size={16} strokeWidth={2.25} />
-            {namespace?.kind === 'personal' ? 'Personal namespace' : 'Organization'}
-          </span>
+          {namespace && (
+            <span className={styles.organizationBadge}>
+              <Building2 aria-hidden="true" size={16} strokeWidth={2.25} />
+              {namespace.kind === 'personal' ? 'Personal namespace' : 'Organization'}
+            </span>
+          )}
         </header>
 
         {error ? <p role="alert">Could not load namespace details.</p> : null}

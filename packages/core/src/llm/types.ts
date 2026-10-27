@@ -123,6 +123,7 @@ export interface LLMPrompt {
 
 export interface LLMGenerateOptions {
   model: string;
+  reasoningEffort?: 'low' | 'medium' | 'high';
   temperature?: number;
   maxTokens?: number;
   stopSequences?: string[];

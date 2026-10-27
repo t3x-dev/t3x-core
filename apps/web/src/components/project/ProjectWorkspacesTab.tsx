@@ -2,6 +2,8 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo } from 'react';
+import { WorkspaceChecksRedirect } from '@/components/checks/WorkspaceChecksRedirect';
+import { WorkspaceSnapshotReview } from '@/components/workspaces/WorkspaceSnapshotReview';
 import { WorkspaceWorkbench } from '@/components/workspaces/WorkspaceWorkbench';
 import {
   getProjectWorkspaceStarterCandidate,
@@ -23,6 +25,31 @@ interface ProjectWorkspacesTabProps {
 }
 
 export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorkspacesTabProps) {
+  const params = useSearchParams();
+  if (params.get('reviewPane') === 'checks')
+    return <WorkspaceChecksRedirect projectId={projectId} />;
+  const snapshotId = params.get('reviewSnapshot');
+  const workspaceId = params.get('workspace');
+  if (snapshotId) {
+    if (!workspaceId)
+      return (
+        <p role="alert" className="p-6 text-sm">
+          A Workspace ID is required to open this review snapshot.
+        </p>
+      );
+    return (
+      <WorkspaceSnapshotReview
+        key={`${projectId}:${workspaceId}:${snapshotId}`}
+        projectId={projectId}
+        workspaceId={workspaceId}
+        snapshotId={snapshotId}
+      />
+    );
+  }
+  return <ProjectWorkspacesContent projectId={projectId} schemaBindings={schemaBindings} />;
+}
+
+function ProjectWorkspacesContent({ projectId, schemaBindings }: ProjectWorkspacesTabProps) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -58,7 +85,6 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
     [workspaceCandidates, schemaBindings]
   );
   const requestedWorkspaceId = searchParams.get('workspace')?.trim() || null;
-  const sourceConversationId = searchParams.get('sourceConversation')?.trim() || undefined;
   const branchWorkspace = branch ? selectWorkspaceForBranch(candidates, branch, branchHead) : null;
   const requestedCandidate = candidates.find((candidate) => candidate.id === requestedWorkspaceId);
   const selectedCandidate = requestedWorkspaceId
@@ -119,9 +145,9 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
       errorMessage={navigationError ?? undefined}
       projectId={projectId}
       selectedWorkspaceId={selectedWorkspaceId}
-      sourceConversationId={sourceConversationId}
       viewState={
-        projectWorkspaces.loading || (Boolean(branch) && branchesLoading)
+        (projectWorkspaces.loading && projectWorkspaces.workspaces.length === 0) ||
+        (Boolean(branch) && branchesLoading && branches.length === 0)
           ? 'loading'
           : navigationError
             ? 'error'

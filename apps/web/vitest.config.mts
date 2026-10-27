@@ -32,8 +32,10 @@ export default defineConfig({
     // this switch. Cost: small worker-startup overhead;
     // benefit: CI stability.
     isolate: true,
-    // Longer timeout for database operations
-    testTimeout: 10000,
+    // The full UI suite runs four isolated workers in CI. Complex interaction
+    // tests can exceed 10 seconds under shared-runner contention even though
+    // their assertions complete normally when run alone.
+    testTimeout: 30000,
     // Setup file for test utilities
     setupFiles: ['./src/__tests__/setup.ts'],
     // Limit parallel workers
@@ -44,6 +46,7 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, './src'),
       '@t3x-dev/core': resolve(__dirname, '../../packages/core/src/index.ts'),
+      '@t3x-dev/yops': resolve(__dirname, '../../packages/yops/src/index.ts'),
     },
   },
 });

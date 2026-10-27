@@ -33,7 +33,7 @@ test.describe('API-WebUI Sync', () => {
     await expect(navigation).toBeVisible({ timeout: 15000 });
 
     // Create a project via API while page is open
-    const projectName = `Sync Create ${Date.now()}`;
+    const projectName = `Sync-Create-${Date.now()}`;
     const { projectId } = await createTestProject(request, projectName);
     projectIdsToCleanup.push(projectId);
 
@@ -45,7 +45,7 @@ test.describe('API-WebUI Sync', () => {
 
   // AS-02: API delete reflects in UI
   test('AS-02: Delete reflects in UI', async ({ page, request }) => {
-    const projectName = `Sync Delete ${Date.now()}`;
+    const projectName = `Sync-Delete-${Date.now()}`;
     const { projectId } = await createTestProject(request, projectName);
 
     // Load page and verify project is visible
@@ -66,7 +66,7 @@ test.describe('API-WebUI Sync', () => {
   // AS-03: Concurrent API operations remain consistent
   test('AS-03: Concurrent operations', async ({ page, request }) => {
     // Create multiple projects concurrently
-    const names = Array.from({ length: 3 }, (_, i) => `Sync Concurrent ${i + 1} ${Date.now()}`);
+    const names = Array.from({ length: 3 }, (_, i) => `Sync-Concurrent-${i + 1}-${Date.now()}`);
     const results = await Promise.all(names.map((name) => createTestProject(request, name)));
     for (const r of results) {
       projectIdsToCleanup.push(r.projectId);

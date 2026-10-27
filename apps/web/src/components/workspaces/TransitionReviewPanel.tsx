@@ -7,6 +7,7 @@ import type {
 } from '@t3x-dev/core';
 import { AlertTriangle, CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { workspaceReviewHref } from '@/domain/workspaces/reviewNavigation';
 
 export function TransitionReviewPanel({
   changeProjection,
@@ -156,51 +157,72 @@ function VerifiedTransitionReview({
         <CapabilityNote capability={view.capabilities.revert} />
       ) : null}
 
-      <details className="mt-4 border-t border-[var(--stroke-divider)] pt-3 text-xs">
-        <summary className="cursor-pointer font-semibold text-[var(--text-secondary)]">
-          Advanced audit
-        </summary>
-        {reviewSnapshot || changeProjection ? (
-          <ReviewSnapshotSummary
-            changeProjection={changeProjection}
-            reviewSnapshot={reviewSnapshot}
-          />
-        ) : null}
-
-        <dl className="mt-3 grid gap-2 text-[var(--text-secondary)]">
-          <AuditRow label="Effect" value={view.audit.effect.digest} />
-          <AuditRow label="Proposal" value={view.audit.proposal.digest} />
-          {view.audit.decision ? (
-            <AuditRow label="Decision" value={view.audit.decision.digest} />
-          ) : null}
-          {view.audit.commit ? <AuditRow label="Commit" value={view.audit.commit.digest} /> : null}
-          <AuditRow
-            label="Policy"
-            value={
-              view.decision.observation === 'supplied' && view.decision.policy.mode === 'evaluated'
-                ? `${view.decision.policy.resource.uri} · ${view.decision.policy.resource.digest}`
-                : 'Not evaluated'
-            }
-          />
-        </dl>
-        {view.audit.statements.length > 0 ? (
-          <ul className="mt-3 grid gap-2">
-            {view.audit.statements.map((statement) => (
-              <li
-                className="rounded-md bg-[var(--surface-panel)] p-2 text-[var(--text-secondary)]"
-                key={statement.statement.digest}
-              >
-                <div className="font-mono">{statement.predicateType}</div>
-                <div className="mt-1">
-                  Claimed {actorLabel(statement.claimedActor)} · issued by{' '}
-                  {actorLabel(statement.issuerActor)}
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </details>
+      <TransitionAuditDetails
+        changeProjection={changeProjection}
+        className="mt-4 border-t border-[var(--stroke-divider)] pt-3"
+        reviewSnapshot={reviewSnapshot}
+        view={view}
+      />
     </section>
+  );
+}
+
+export function TransitionAuditDetails({
+  changeProjection,
+  className,
+  reviewSnapshot,
+  view,
+}: {
+  changeProjection: ChangeProjectionV1 | null;
+  className?: string;
+  reviewSnapshot: ReviewSnapshotV1 | null;
+  view: TransitionGraphViewV1;
+}) {
+  return (
+    <details className={`text-xs ${className ?? ''}`}>
+      <summary className="cursor-pointer font-semibold text-[var(--text-secondary)]">
+        Advanced audit
+      </summary>
+      {reviewSnapshot || changeProjection ? (
+        <ReviewSnapshotSummary
+          changeProjection={changeProjection}
+          reviewSnapshot={reviewSnapshot}
+        />
+      ) : null}
+
+      <dl className="mt-3 grid gap-2 text-[var(--text-secondary)]">
+        <AuditRow label="Effect" value={view.audit.effect.digest} />
+        <AuditRow label="Proposal" value={view.audit.proposal.digest} />
+        {view.audit.decision ? (
+          <AuditRow label="Decision" value={view.audit.decision.digest} />
+        ) : null}
+        {view.audit.commit ? <AuditRow label="Commit" value={view.audit.commit.digest} /> : null}
+        <AuditRow
+          label="Policy"
+          value={
+            view.decision.observation === 'supplied' && view.decision.policy.mode === 'evaluated'
+              ? `${view.decision.policy.resource.uri} · ${view.decision.policy.resource.digest}`
+              : 'Not evaluated'
+          }
+        />
+      </dl>
+      {view.audit.statements.length > 0 ? (
+        <ul className="mt-3 grid gap-2">
+          {view.audit.statements.map((statement) => (
+            <li
+              className="rounded-md bg-[var(--surface-panel)] p-2 text-[var(--text-secondary)]"
+              key={statement.statement.digest}
+            >
+              <div className="font-mono">{statement.predicateType}</div>
+              <div className="mt-1">
+                Claimed {actorLabel(statement.claimedActor)} · issued by{' '}
+                {actorLabel(statement.issuerActor)}
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </details>
   );
 }
 
@@ -226,11 +248,10 @@ function ReviewSnapshotSummary({
     changeProjection?.review.policyDigest ??
     null;
   const changeHref = reviewSnapshot
-    ? reviewSnapshotHref(
-        reviewSnapshot.projectId,
-        reviewSnapshot.workspaceId,
-        reviewSnapshot.snapshotId
-      )
+    ? workspaceReviewHref(reviewSnapshot.projectId, reviewSnapshot.workspaceId, {
+        snapshotId: reviewSnapshot.snapshotId,
+        branch: reviewSnapshot.review.precondition.refName,
+      })
     : null;
 
   return (
@@ -254,7 +275,7 @@ function ReviewSnapshotSummary({
               className="text-xs font-semibold text-[var(--accent-commit)] hover:underline"
               href={changeHref}
             >
-              Open Changes
+              Open Review
             </a>
           ) : null}
           {changeProjection ? (
@@ -415,25 +436,7 @@ function shortToken(value: string): string {
   return `${normalized.slice(0, 12)}…${normalized.slice(-6)}`;
 }
 
-function reviewSnapshotHref(projectId: string, workspaceId: string, snapshotId: string): string {
-  return `/project/${encodePathSegment(projectId)}/changes/${encodePathSegment(
-    workspaceId
-  )}/${encodePathSegment(snapshotId)}`;
-}
-
-function encodePathSegment(value: string): string {
-  return encodeURIComponent(safeDecodeURIComponent(value));
-}
-
-function safeDecodeURIComponent(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
-
-function operationLabel(operation: unknown, index: number): string {
+export function operationLabel(operation: unknown, index: number): string {
   if (!isRecord(operation)) return `Change ${index + 1}`;
   const keyed = Object.entries(operation).find(
     ([key, value]) => ['set', 'assert', 'delete', 'insert', 'move'].includes(key) && isRecord(value)
@@ -449,7 +452,7 @@ function operationLabel(operation: unknown, index: number): string {
   return `${op} ${path}`;
 }
 
-function operationDetail(operation: unknown): string {
+export function operationDetail(operation: unknown): string {
   if (!isRecord(operation)) return JSON.stringify(operation);
   const keyed = Object.entries(operation).find(
     ([key, value]) => ['set', 'assert', 'delete', 'insert', 'move'].includes(key) && isRecord(value)

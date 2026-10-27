@@ -1,5 +1,12 @@
 import type { MergeDecision } from '@t3x-dev/core';
+import type { ApiPullRequestMergeReview } from '@/domain/project/pullRequestMergeReview';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
+
+export type {
+  ApiPullRequestMergeReview,
+  ApiPullRequestMergeReviewNode,
+  ApiPullRequestMergeReviewSlot,
+} from '@/domain/project/pullRequestMergeReview';
 
 export type ProjectPullRequestStatus =
   | 'draft'
@@ -99,6 +106,7 @@ export interface ApiProjectPullRequestCompareCandidate {
   description: string;
   head_commit_id: string;
   base_commit_id: string | null;
+  merge_base_commit_id?: string | null;
   updated_at: string;
   ahead_by: number;
   behind_by: number;
@@ -231,4 +239,14 @@ export async function rerunProjectPullRequestReadiness(
     }
   );
   return handleResponse<ApiProjectPullRequestDetail>(res);
+}
+
+export async function getProjectPullRequestMergeReview(
+  projectId: string,
+  number: number
+): Promise<ApiPullRequestMergeReview> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/pull-requests/${number}/merge-review`
+  );
+  return handleResponse<ApiPullRequestMergeReview>(res);
 }

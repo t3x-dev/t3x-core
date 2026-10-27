@@ -1,6 +1,7 @@
 'use client';
 
 export const PROJECT_DELETED_EVENT = 't3x:project-deleted';
+export const PROJECT_RESTORED_EVENT = 't3x:project-restored';
 export const CONVERSATION_DELETED_EVENT = 't3x:conversation-deleted';
 
 export interface ProjectDeletedDetail {
@@ -15,6 +16,11 @@ export interface ConversationDeletedDetail {
 export function dispatchProjectDeleted(detail: ProjectDeletedDetail): void {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent<ProjectDeletedDetail>(PROJECT_DELETED_EVENT, { detail }));
+}
+
+export function dispatchProjectRestored(detail: ProjectDeletedDetail): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent<ProjectDeletedDetail>(PROJECT_RESTORED_EVENT, { detail }));
 }
 
 export function dispatchConversationDeleted(detail: ConversationDeletedDetail): void {

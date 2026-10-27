@@ -90,13 +90,39 @@ describe('HistoryCanvas', () => {
     expect(screen.getByText('Root commit has no parent.')).toBeInTheDocument();
   });
 
+  it('renders every loaded commit instead of truncating the graph', () => {
+    const extra = commit('sha256:extra', 'Follow-up change', [merge.hash]);
+    render(
+      <HistoryCanvas
+        branches={[]}
+        commits={[extra, merge, feature, main, root].map((item) => ({ commit: item }))}
+        selectedBranch="all"
+        onBack={vi.fn()}
+        onBranchChange={vi.fn()}
+        onListView={vi.fn()}
+        onViewDiff={vi.fn()}
+      />
+    );
+
+    for (const name of [
+      'Create release plan',
+      'Refine rollout outcome',
+      'Canary rollout',
+      'Merge PR #24',
+      'Follow-up change',
+    ]) {
+      expect(screen.getByRole('button', { name: `Inspect ${name}` })).toBeInTheDocument();
+    }
+    expect(screen.getByRole('heading', { name: 'Follow-up change' })).toBeInTheDocument();
+  });
+
   it('lets the canvas tools select, pan, reset, and download the graph', () => {
-    const createObjectURL = vi.fn(() => 'blob:history');
+    const createObjectURL = vi.fn((_blob: Blob) => 'blob:history');
     const revokeObjectURL = vi.fn();
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     vi.stubGlobal('URL', { createObjectURL, revokeObjectURL });
 
-    const { container } = render(
+    render(
       <HistoryCanvas
         branches={[]}
         commits={[merge, feature, main, root].map((item) => ({ commit: item }))}
@@ -108,22 +134,16 @@ describe('HistoryCanvas', () => {
       />
     );
 
-    const canvas = screen.getByRole('region', { name: 'Commit graph canvas' });
-    const viewport = container.querySelector('[data-history-viewport="true"]');
-    expect(viewport).toHaveStyle({ transform: 'translate(0px, 0px) scale(1)' });
-
     fireEvent.click(screen.getByRole('button', { name: 'Pan tool' }));
     expect(screen.getByRole('button', { name: 'Pan tool' })).toHaveAttribute(
       'aria-pressed',
       'true'
     );
-    fireEvent.pointerDown(canvas, { clientX: 120, clientY: 80, pointerId: 1 });
-    fireEvent.pointerMove(canvas, { clientX: 180, clientY: 110, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { pointerId: 1 });
-    expect(viewport).toHaveStyle({ transform: 'translate(60px, 30px) scale(1)' });
+    expect(screen.getByRole('region', { name: 'Commit graph canvas' }).className).toMatch(
+      /canvasPan/
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Reset canvas view' }));
-    expect(viewport).toHaveStyle({ transform: 'translate(0px, 0px) scale(1)' });
     expect(screen.getByRole('button', { name: 'Select tool' })).toHaveAttribute(
       'aria-pressed',
       'true'
@@ -138,28 +158,5 @@ describe('HistoryCanvas', () => {
       vi.unstubAllGlobals();
       vi.restoreAllMocks();
     }
-  });
-
-  it('keeps connector coordinates in the same pixel space as the graph nodes', () => {
-    const { container } = render(
-      <HistoryCanvas
-        branches={[]}
-        commits={[merge, feature, main, root].map((item) => ({ commit: item }))}
-        selectedBranch="all"
-        onBack={vi.fn()}
-        onBranchChange={vi.fn()}
-        onListView={vi.fn()}
-        onViewDiff={vi.fn()}
-      />
-    );
-
-    const svg = container.querySelector('svg[data-history-edges="true"]');
-    expect(svg).not.toHaveAttribute('viewBox');
-    expect(svg).not.toHaveAttribute('preserveAspectRatio');
-
-    const mainToMerge = container.querySelector(
-      `path[data-parent-hash="${main.hash}"][data-child-hash="${merge.hash}"]`
-    );
-    expect(mainToMerge).toHaveAttribute('d', 'M 600 258 C 644 258, 636 408, 680 408');
   });
 });

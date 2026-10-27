@@ -43,4 +43,15 @@ describe('Studio preview ownership', () => {
     expect(result.current.data).toBeUndefined();
     await waitFor(() => expect(result.current.error).toBe('Source no longer authorized'));
   });
+  it('rechecks source authority on focus and invalidates the old review', async () => {
+    vi.mocked(previewStudioSelection)
+      .mockResolvedValueOnce({ reviewHash: 'old' } as never)
+      .mockRejectedValueOnce(new Error('Source no longer authorized'));
+    const { result } = renderHook(() => useStudioPreview('p', { candidateIds: ['one'] }, 2));
+    await waitFor(() => expect(result.current.data?.reviewHash).toBe('old'));
+    act(() => window.dispatchEvent(new Event('focus')));
+    expect(result.current.data).toBeUndefined();
+    await waitFor(() => expect(result.current.error).toBe('Source no longer authorized'));
+    expect(result.current.data).toBeUndefined();
+  });
 });

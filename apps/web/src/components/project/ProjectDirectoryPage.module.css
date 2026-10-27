@@ -1,0 +1,377 @@
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-block: 16px;
+  border-block: 1px solid var(--stroke-divider);
+}
+
+.primaryLink {
+  color: var(--primary-foreground);
+}
+
+.search {
+  position: relative;
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.search > svg {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  color: var(--text-secondary);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.search input {
+  width: 100%;
+  height: 36px;
+  padding: 6px 12px 6px 36px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  outline: none;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-size: 14px;
+  box-shadow: none;
+  transition: border-color var(--transition-fast);
+}
+
+.search input::placeholder {
+  color: var(--text-secondary);
+}
+
+.search input:focus-visible {
+  border-color: var(--accent-commit);
+  outline: 2px solid var(--accent-commit);
+  outline-offset: 2px;
+}
+
+.section {
+  margin-top: 32px;
+}
+
+.sectionHeading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 20px;
+  margin-bottom: 16px;
+}
+
+.sectionHeading h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.sectionHeading h2 svg,
+.sectionHeading > span {
+  color: var(--text-secondary);
+}
+
+.sectionHeading > span,
+.listScope {
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.listScope {
+  margin: -4px 0 16px;
+  color: var(--text-secondary);
+}
+
+.recentGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.recentCard {
+  min-width: 0;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+}
+
+.recentLink {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  height: 100%;
+  padding: 16px;
+  border-radius: inherit;
+  color: var(--text-secondary);
+}
+
+.recentLink:hover {
+  background: var(--hover-bg);
+}
+
+.recentLink h3 {
+  color: var(--accent-commit);
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.repoMark {
+  display: grid;
+  flex: 0 0 40px;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  color: var(--text-secondary);
+}
+
+.rowMark {
+  flex-basis: 36px;
+  width: 36px;
+  height: 36px;
+}
+
+.rowContent {
+  min-width: 0;
+}
+
+.repositoryLink {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: baseline;
+  gap: 10px;
+  border-radius: var(--radius-sm);
+  color: var(--accent-commit);
+}
+
+.repositoryLink h3 {
+  min-width: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.repositoryLink:hover {
+  color: var(--accent-commit);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.repositoryPath {
+  margin-top: 4px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.description {
+  max-width: 720px;
+  margin-top: 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.rowHeading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
+}
+
+.visibility {
+  padding: 1px 8px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  text-transform: capitalize;
+}
+
+.metrics,
+.rowMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.repositories {
+  border-top: 1px solid var(--stroke-divider);
+}
+
+.repositoryRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 24px 0;
+  border-bottom: 1px solid var(--stroke-divider);
+}
+
+.rowMeta {
+  margin-top: 12px;
+  gap: 6px 24px;
+  color: var(--text-tertiary);
+}
+
+.actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.emptyState,
+.noResults {
+  display: flex;
+  min-height: 280px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.emptyState h2,
+.noResults h3 {
+  margin-top: 4px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.emptyState p,
+.noResults p {
+  max-width: 440px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.noResults > svg {
+  color: var(--text-secondary);
+}
+
+.loading {
+  display: block;
+  padding: 48px 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.notice,
+.refreshError {
+  margin-top: 20px;
+}
+
+.refreshError {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.expand {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.expand:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.expand:focus-visible {
+  outline: 2px solid var(--accent-commit);
+  outline-offset: 2px;
+}
+
+.expand svg {
+  width: 16px;
+  height: 16px;
+}
+
+.deletedLink {
+  display: inline-flex;
+  min-height: 36px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.deletedLink:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 720px) {
+  .recentGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .toolbar {
+    flex-wrap: wrap;
+  }
+
+  .search {
+    flex-basis: calc(100% - 44px);
+  }
+
+  .deletedLink {
+    margin-right: auto;
+  }
+
+  .repositoryRow {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 420px) {
+  .repositoryRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .repositoryRow > .repoMark {
+    display: none;
+  }
+
+  .refreshError {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search input {
+    transition: none;
+  }
+}

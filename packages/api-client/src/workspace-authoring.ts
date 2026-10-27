@@ -1,4 +1,23 @@
+import type { WorkspaceSchemaDefinitionSnapshot } from './schema-studio';
 import type { TransitionControlPlaneView, TransitionProtocolValue } from './types';
+export interface WorkspaceCommitChanges {
+  projectId: string;
+  commitDigest: string;
+  committedAt: string;
+  source: 'authoring' | 'commit_diff';
+  base: TransitionProtocolValue;
+  current: TransitionProtocolValue;
+  actions: Array<{
+    action: WorkspaceAuthoringAction;
+    cards: WorkspaceAuthoringCard[];
+    before: TransitionProtocolValue;
+    after: TransitionProtocolValue;
+  }>;
+  nextBeforeSequence: number | null;
+  netDiff: WorkspaceAuthoringCard[];
+  schemaCards: import('./assistant-schema-settings').AssistantSchemaSettingsView[];
+  schemaReview: import('./schema-studio').WorkspaceFullSchemaReview | null;
+}
 export interface WorkspaceAuthoringActor {
   kind: 'human' | 'agent' | 'service';
   id: string;
@@ -17,6 +36,7 @@ export interface WorkspaceAuthoringAction {
   affectedNodeCount?: number;
   affectedNodeIds?: string[];
   generation?: { transitionId: string; preparationDigest: string; preparation: unknown };
+  deletionConfirmation?: { status: 'required' | 'confirmed'; paths: string[] };
 }
 export interface WorkspaceAuthoringCard {
   nodeId: string;
@@ -32,6 +52,7 @@ export interface WorkspaceAuthoringView {
   workspaceRevision: number;
   compositionRevision: number;
   basis: { refName: string; refHead: string | null; baseDigest: string };
+  synchronization?: { currentRefHead: string | null; required: boolean };
   sources?: Array<{
     id: string;
     title?: string;
@@ -48,9 +69,18 @@ export interface WorkspaceAuthoringView {
   candidateWindowTruncated?: boolean;
   actions: WorkspaceAuthoringAction[];
   nextBeforeSequence: number | null;
-  selected: { action: WorkspaceAuthoringAction; cards: WorkspaceAuthoringCard[] } | null;
+  selected: {
+    action: WorkspaceAuthoringAction;
+    cards: WorkspaceAuthoringCard[];
+    before?: TransitionProtocolValue;
+    after?: TransitionProtocolValue;
+  } | null;
   base?: TransitionProtocolValue;
   current?: TransitionProtocolValue;
+  /** Exact effective binding at workspaceRevision, not the latest Studio candidate. */
+  currentSchema?: WorkspaceSchemaDefinitionSnapshot;
+  /** Net content or effective Schema change. Omitted when the Base contract is unknown. */
+  hasChanges?: boolean;
   netDiff: WorkspaceAuthoringCard[];
   node: {
     nodeId: string;
@@ -101,6 +131,21 @@ export interface WorkspaceAuthoringOutcome {
   receipt?: { actionId: string; outcome: 'no_change'; message: string };
 }
 export interface WorkspaceAuthoringCapability {
+  reconcile(
+    projectId: string,
+    workspaceId: string,
+    input: Omit<InitializeWorkspaceAuthoringInput, 'legacy_document'>
+  ): Promise<{ kind: 'reconciled' | 'reused' | 'no_change'; workspaceRevision: number }>;
+  confirmDeletion(
+    projectId: string,
+    workspaceId: string,
+    actionId: string,
+    input: {
+      expected_workspace_revision: number;
+      expected_revision: number;
+      expected_ref_head: string | null;
+    }
+  ): Promise<{ workspaceRevision: number }>;
   prepareReview(
     projectId: string,
     workspaceId: string,
@@ -114,6 +159,7 @@ export interface WorkspaceAuthoringCapability {
       preparationDigest: string;
     };
     reused: boolean;
+    schemaReview?: import('./schema-studio').WorkspaceFullSchemaReview;
   }>;
   read(
     projectId: string,

@@ -44,12 +44,13 @@ function graph(input: {
   base?: ProtocolValue;
   path?: string;
   intent?: string;
+  operations?: ProtocolValue[];
 }) {
   const posture = input.posture ?? 'guided';
   const base = createYOpsState(input.base ?? {});
   const generated = createYOpsEffect({
     base,
-    operations: [
+    operations: input.operations ?? [
       {
         set: {
           path: input.path ?? 'prd/audience',
@@ -144,6 +145,46 @@ async function verify(
 }
 
 describe('Proposal generation posture provider', () => {
+  const bootstrap = [
+    { set: { path: 'domain', value: 't3x.dev/semantic-content' } },
+    { set: { path: 'version', value: 1 } },
+    { set: { path: 'content', value: { trees: [], relations: [] } } },
+  ];
+  const audience = {
+    set: { path: 'content/audience', value: 'enterprise operators' },
+  };
+  it('does not require source quotes for exact envelope bootstrap metadata on an empty document', async () => {
+    const result = await verify(graph({ operations: [...bootstrap, audience] }));
+    expect(result.outcome).toBe('statement');
+    if (result.outcome !== 'statement') return;
+    const predicate = parseRunnerValidationStatement(result.statement).predicate;
+    expect(predicate.outcome, JSON.stringify(predicate.findings)).toBe('passed');
+  });
+  it.each([
+    [
+      'invented domain',
+      {},
+      [{ set: { path: 'domain', value: 'invented-domain' } }, ...bootstrap.slice(1), audience],
+    ],
+    ['overwrite existing domain', { domain: 'existing-domain' }, [...bootstrap, audience]],
+    [
+      'unquoted business value',
+      {},
+      [
+        ...bootstrap,
+        {
+          set: { path: 'content/audience', value: 'invented users' },
+        },
+      ],
+    ],
+  ])('still blocks %s when assessing bootstrap support', async (_name, base, operations) => {
+    const result = await verify(graph({ base, operations }));
+    expect(result.outcome).toBe('statement');
+    if (result.outcome !== 'statement') return;
+    const predicate = parseRunnerValidationStatement(result.statement).predicate;
+    expect(predicate.outcome).toBe('failed');
+    expect(predicate.findings.map((finding) => finding.code)).toContain('SOURCE_SUPPORT_REQUIRED');
+  });
   it('issues the exact required runner Statement for deterministic source support', async () => {
     const result = await verify(graph({}));
     expect(result.outcome).toBe('statement');

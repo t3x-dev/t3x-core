@@ -37,10 +37,6 @@ export type { CommitExportFormat } from '@/infrastructure/export/commit';
 export type { ExportFormat } from '@/infrastructure/export/core';
 export type { TemplateExportFormat } from '@/infrastructure/export/template';
 export type {
-  CosineBucket,
-  FeedbackStats,
-} from '@/infrastructure/extraction-feedback';
-export type {
   Assertion,
   CompareModelsResult,
   Constraint,
@@ -111,6 +107,7 @@ export type {
   Conversation,
   LLMProviderInfo,
   Project,
+  ProjectDetail,
   ProjectVisibility,
   Turn,
 } from '@/infrastructure/types';

@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { AssistantSchemaSettingsInputSchema } from '@t3x-dev/api-client';
 import { type DraftYOp, DraftYOpSchema } from '@t3x-dev/application';
-import type { LLMProvider } from '@t3x-dev/core';
+import { type LLMProvider, WorkspaceSchemaYOpsError } from '@t3x-dev/core';
 import {
+  ConflictError,
   findApiKeyById,
   findConversationById,
   findTransitionProposalByRequest,
@@ -20,6 +22,7 @@ import {
   resolveInferenceIngressChannel,
   resolveInferenceProjectScope,
   resolveInferenceRunId,
+  toGenerationModelScope,
 } from '../lib/inference';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
 import {
@@ -28,12 +31,23 @@ import {
 } from '../lib/proposal-generation';
 import { resolveProviderAndModel } from '../lib/provider-resolver';
 import {
+  defaultGenerationProviderRuntime,
+  getGenerationProviderRuntime,
+} from '../lib/provider-runtime';
+import { StudioError } from '../lib/schema-studio-preview';
+import {
   requireTransitionAuthority,
   TransitionProjectScopeDeniedError,
   TransitionScopeDeniedError,
   transitionApiKey,
 } from '../lib/transition-authority';
 import { chatWithWorkspace } from '../lib/workspace-assistant';
+import { createWorkspaceProposalModel } from '../lib/workspace-assistant/adapters/generation-model';
+import type { AssistantModelBinding } from '../lib/workspace-assistant/adapters/provider-tools';
+import {
+  createAssistantSchemaSettingsService,
+  schemaSettingsView,
+} from '../lib/workspace-assistant/schema-settings';
 import { workspaceAuthoringState } from '../lib/workspace-authoring';
 import { ErrorResponseSchema } from '../schemas/common';
 
@@ -65,12 +79,20 @@ const Request = z
     posture: z.enum(['source_only', 'guided', 'recommend']).default('source_only'),
     provider: z.string().max(100).optional(),
     model: z.string().max(200).optional(),
+    reasoning_effort: z.enum(['low', 'medium', 'high']).optional(),
+    context_mode: z.enum(['auto', 'compact', 'expanded']).default('auto'),
+    fast: z.boolean().default(false),
+    confirmed_settings_id: z.string().min(1).max(200).optional(),
   })
   .strict();
 const Params = z.object({ projectId: z.string().min(1), workspaceId: z.string().min(1) });
 export const workspaceAssistantRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 workspaceAssistantRoutes.onError((error, c) => {
   if (error instanceof HTTPException) return error.getResponse();
+  if (error instanceof StudioError)
+    return errorResponse(c, error.code, error.message, error.details);
+  if (error instanceof ConflictError)
+    return errorResponse(c, 'CONFLICT', 'Workspace changed. Refresh the settings card.');
   if (
     error instanceof TransitionScopeDeniedError ||
     error instanceof TransitionProjectScopeDeniedError
@@ -104,18 +126,49 @@ workspaceAssistantRoutes.post(
     const conversation = await findConversationById(db, body.conversation_id);
     if (conversation?.projectId !== projectId)
       return errorResponse(c, 'NOT_FOUND', 'Source thread not found');
-    const resolved = await resolveProviderAndModel({
-      db,
-      projectId,
-      conversationId: body.conversation_id,
-      userId: getUserId(c),
-      requestedProvider: body.provider,
-      requestedModel: body.model,
-    });
-    if (!resolved.ok) return errorResponse(c, 'INVALID_REQUEST', resolved.message);
-    const provider = resolved.provider as LLMProvider;
-    if (typeof provider.generate !== 'function')
-      return errorResponse(c, 'INVALID_REQUEST', 'Selected provider cannot chat');
+    const inference = {
+      runtime: getInferenceRuntime(c) ?? defaultRuntime,
+      runId: resolveInferenceRunId(c),
+      scope: {
+        actor: resolveInferenceActor(c),
+        ingressChannel: resolveInferenceIngressChannel(c),
+        ...resolveInferenceProjectScope(project),
+      },
+    };
+    const modelRuntime = getGenerationProviderRuntime(c);
+    let binding: AssistantModelBinding;
+    let selectedModel: string;
+    let selectedProvider: string;
+    if (modelRuntime !== defaultGenerationProviderRuntime) {
+      // "managed" is a discovery label, never a local provider or credential lookup.
+      if (body.provider && body.provider !== 'managed')
+        return errorResponse(c, 'INVALID_REQUEST', 'Select a model from the managed catalog');
+      const resolved = await modelRuntime.resolve({
+        requestedModel: body.model,
+        scope: toGenerationModelScope(inference.scope, { conversationId: body.conversation_id }),
+        requiredCapabilities: ['text'],
+      });
+      if (!resolved.ok) return errorResponse(c, 'INVALID_REQUEST', resolved.message);
+      binding = { generationModel: resolved.model };
+      selectedModel = body.model ?? resolved.model.modelId;
+      selectedProvider = 'managed';
+    } else {
+      const resolved = await resolveProviderAndModel({
+        db,
+        projectId,
+        conversationId: body.conversation_id,
+        userId: getUserId(c),
+        requestedProvider: body.provider,
+        requestedModel: body.model,
+      });
+      if (!resolved.ok) return errorResponse(c, 'INVALID_REQUEST', resolved.message);
+      const provider = resolved.provider as LLMProvider;
+      if (typeof provider.generate !== 'function')
+        return errorResponse(c, 'INVALID_REQUEST', 'Selected provider cannot chat');
+      binding = { provider };
+      selectedModel = resolved.model;
+      selectedProvider = resolved.providerId;
+    }
     const authorize = async (capability: 'read' | 'propose') => {
       const initialCredential = transitionApiKey(c);
       if (initialCredential) {
@@ -128,7 +181,12 @@ workspaceAssistantRoutes.post(
           scope: capability === 'read' ? 'transition:inspect' : 'transition:propose',
         });
       }
-      const access = await assertProjectAccess(c, db, projectId);
+      const access = await assertProjectAccess(
+        c,
+        db,
+        projectId,
+        capability === 'read' ? 'project:read' : 'project:edit'
+      );
       if (access instanceof Response) throw new HTTPException(403, { res: access });
       requireTransitionAuthority({
         apiKey: transitionApiKey(c),
@@ -165,31 +223,48 @@ workspaceAssistantRoutes.post(
             sourceMaterialIds: body.source_material_ids,
             selectedActionId: body.selected_action_id,
             selectedNodeId: body.selected_node_id,
+            maxContextChars:
+              body.context_mode === 'compact'
+                ? 16_000
+                : body.context_mode === 'expanded'
+                  ? 96_000
+                  : undefined,
           },
           actor: principal.actor,
-          provider,
-          model: resolved.model,
-          inference: {
-            runtime: getInferenceRuntime(c) ?? defaultRuntime,
-            runId: resolveInferenceRunId(c),
-            scope: {
-              actor: resolveInferenceActor(c),
-              ingressChannel: resolveInferenceIngressChannel(c),
-              ...resolveInferenceProjectScope(project),
-            },
-          },
+          ...binding,
+          model: selectedModel,
+          reasoningEffort: body.fast ? 'low' : body.reasoning_effort,
+          inference,
           operationNamespace,
           authorize,
+          schemaSettings: createAssistantSchemaSettingsService(
+            c,
+            db,
+            projectId,
+            workspaceId,
+            principal.actor,
+            body.conversation_id
+          ),
+          confirmedSettingsId: body.confirmed_settings_id,
           exactEdit: body.exact_edit
             ? { ...body.exact_edit, operations: body.exact_edit.operations as DraftYOp[] }
             : undefined,
-          proposal: body.allow_proposal
-            ? {
-                posture: body.posture,
-                requestedProvider: resolved.providerId,
-                requestedModel: resolved.model,
-              }
-            : undefined,
+          proposal:
+            body.allow_proposal &&
+            (!binding.generationModel ||
+              binding.generationModel.capabilities.includes('structured_output'))
+              ? {
+                  posture: body.posture,
+                  requestedProvider: selectedProvider,
+                  requestedModel: selectedModel,
+                  ...(binding.generationModel
+                    ? {
+                        resolveModel: async () =>
+                          createWorkspaceProposalModel(binding.generationModel!),
+                      }
+                    : {}),
+                }
+              : undefined,
           signal: controller.signal,
           emit: async (event) => {
             if (event.type === 'text') content += event.content;
@@ -242,6 +317,93 @@ workspaceAssistantRoutes.post(
     });
   }
 );
+const settingsPath =
+  '/v1/projects/:projectId/workspaces/:workspaceId/source-chat/assistant/schema-settings';
+workspaceAssistantRoutes.get(settingsPath, async (c) => {
+  const { projectId, workspaceId } = Params.parse(c.req.param());
+  const conversationId = z.string().min(1).parse(c.req.query('conversation_id'));
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+  const principal = requireTransitionAuthority({
+    apiKey: transitionApiKey(c),
+    projectId,
+    scope: 'transition:inspect',
+  });
+  const record = await createAssistantSchemaSettingsService(
+    c,
+    db,
+    projectId,
+    workspaceId,
+    principal.actor,
+    conversationId
+  ).read();
+  c.header('Cache-Control', 'private, no-store');
+  return c.json({ success: true, data: record ? schemaSettingsView(record) : null });
+});
+workspaceAssistantRoutes.post(settingsPath, async (c) => {
+  const { projectId, workspaceId } = Params.parse(c.req.param());
+  const input = z
+    .object({
+      conversationId: z.string().min(1),
+      settingsId: z.string().min(1),
+      ifRevision: z.number().int().positive(),
+      settings: AssistantSchemaSettingsInputSchema.nullable(),
+      generateSnapshot: z.boolean().default(false),
+      applyToDraft: z.boolean().default(false),
+      discardStudioCandidate: z.boolean().default(false),
+    })
+    .strict()
+    .parse(await c.req.json());
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId, 'project:edit');
+  if (access instanceof Response) return access;
+  const principal = requireTransitionAuthority({
+    apiKey: transitionApiKey(c),
+    projectId,
+    scope: 'transition:propose',
+  });
+  if (principal.actor.kind !== 'human')
+    return errorResponse(c, 'FORBIDDEN', 'Settings confirmation requires a human principal.');
+  const service = createAssistantSchemaSettingsService(
+    c,
+    db,
+    projectId,
+    workspaceId,
+    principal.actor,
+    input.conversationId
+  );
+  if ((input.generateSnapshot || input.applyToDraft) && !input.settings)
+    return errorResponse(c, 'INVALID_REQUEST', 'Snapshot generation requires confirmed settings.');
+  await service.confirm(input.settingsId, input.ifRevision, input.settings, {
+    discardStudioCandidate: input.discardStudioCandidate,
+  });
+  let failure: unknown;
+  try {
+    if (input.generateSnapshot || input.applyToDraft) await service.propose(input.settingsId);
+    if (input.applyToDraft) await service.applyToDraft(input.settingsId);
+  } catch (error) {
+    failure = error;
+  }
+  const record = await service.read();
+  if (failure instanceof StudioError)
+    return errorResponse(c, failure.code, failure.message, failure.details);
+  if (failure instanceof TypeError || failure instanceof WorkspaceSchemaYOpsError)
+    return errorResponse(c, 'INVALID_REQUEST', failure.message);
+  if (failure instanceof ConflictError)
+    return errorResponse(c, 'CONFLICT', 'Workspace changed. Refresh the settings card.');
+  if (failure instanceof HTTPException) return failure.getResponse();
+  if (failure)
+    return errorResponse(
+      c,
+      'INTERNAL_ERROR',
+      failure instanceof Error ? failure.message : 'Schema operation failed.'
+    );
+  return c.json({
+    success: true,
+    data: record ? schemaSettingsView(record) : null,
+  });
+});
 const recovery = createRoute({
   method: 'get',
   path: '/v1/projects/{projectId}/workspaces/{workspaceId}/source-chat/assistant/operations/{operationId}',

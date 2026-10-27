@@ -2,6 +2,7 @@
  * API client types - aligned with @t3x-dev/storage schema
  */
 
+import type { RepositoryProfile } from '@t3x-dev/api-client';
 import type { ExtractionStyleConfig } from '@t3x-dev/core';
 
 // Re-export external types used by consumers
@@ -21,6 +22,14 @@ export type {
 export type ProjectVisibility = 'private' | 'unlisted' | 'public';
 
 export interface Project {
+  repository_profile?: RepositoryProfile;
+  can_edit?: boolean;
+  deleted_at?: string | null;
+  can_restore?: boolean;
+  can_permanently_delete?: boolean;
+  namespace?: string | null;
+  canonical_path?: string | null;
+  path_status?: 'ready' | 'pending_migration';
   project_id: string;
   name: string;
   visibility: ProjectVisibility;
@@ -99,8 +108,21 @@ export interface Branch {
   head_commit_hash?: string | null;
   description?: string | null;
   is_current: boolean;
+  rules?: BranchRules;
   created_at: string;
   updated_at: string;
+}
+
+/** Per-branch rules. Each key is one rule kind; more kinds are added alongside `commit`. */
+export interface BranchRules {
+  commit: {
+    require_independent_review: boolean;
+    source: 'default' | 'preset' | 'custom';
+  };
+}
+
+export interface BranchRulesUpdate {
+  commit?: { require_independent_review: boolean };
 }
 
 // ============================================================================
@@ -307,6 +329,7 @@ export interface DiffResult {
 // ============================================================================
 
 export interface ProjectListData {
+  status?: 'deleted';
   projects: Project[];
   limit: number;
   offset: number;

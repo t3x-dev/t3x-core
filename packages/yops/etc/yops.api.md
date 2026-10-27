@@ -687,7 +687,7 @@ declare const YOpSchema: z.ZodUnion<readonly [z.ZodObject<{
     source: z.ZodOptional<z.ZodDiscriminatedUnion<[z.ZodObject<{
         type: z.ZodLiteral<"llm">;
         model: z.ZodOptional<z.ZodString>;
-        at: z.ZodOptional<z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodString>>;
+        at: z.ZodOptional<z.ZodPreprocess<z.ZodString, unknown>>;
         turn_ref: z.ZodObject<{
             turn_hash: z.ZodString;
             quote: z.ZodString;
@@ -708,7 +708,7 @@ declare const YOpSchema: z.ZodUnion<readonly [z.ZodObject<{
     source: z.ZodOptional<z.ZodDiscriminatedUnion<[z.ZodObject<{
         type: z.ZodLiteral<"llm">;
         model: z.ZodOptional<z.ZodString>;
-        at: z.ZodOptional<z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodString>>;
+        at: z.ZodOptional<z.ZodPreprocess<z.ZodString, unknown>>;
         turn_ref: z.ZodObject<{
             turn_hash: z.ZodString;
             quote: z.ZodString;
@@ -730,7 +730,7 @@ declare const YOpSchema: z.ZodUnion<readonly [z.ZodObject<{
     source: z.ZodOptional<z.ZodDiscriminatedUnion<[z.ZodObject<{
         type: z.ZodLiteral<"llm">;
         model: z.ZodOptional<z.ZodString>;
-        at: z.ZodOptional<z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodString>>;
+        at: z.ZodOptional<z.ZodPreprocess<z.ZodString, unknown>>;
         turn_ref: z.ZodObject<{
             turn_hash: z.ZodString;
             quote: z.ZodString;
@@ -752,7 +752,7 @@ declare const YOpSchema: z.ZodUnion<readonly [z.ZodObject<{
     source: z.ZodOptional<z.ZodDiscriminatedUnion<[z.ZodObject<{
         type: z.ZodLiteral<"llm">;
         model: z.ZodOptional<z.ZodString>;
-        at: z.ZodOptional<z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodString>>;
+        at: z.ZodOptional<z.ZodPreprocess<z.ZodString, unknown>>;
         turn_ref: z.ZodObject<{
             turn_hash: z.ZodString;
             quote: z.ZodString;
@@ -773,7 +773,7 @@ declare const YOpSchema: z.ZodUnion<readonly [z.ZodObject<{
     source: z.ZodOptional<z.ZodDiscriminatedUnion<[z.ZodObject<{
         type: z.ZodLiteral<"llm">;
         model: z.ZodOptional<z.ZodString>;
-        at: z.ZodOptional<z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodString>>;
+        at: z.ZodOptional<z.ZodPreprocess<z.ZodString, unknown>>;
         turn_ref: z.ZodObject<{
             turn_hash: z.ZodString;
             quote: z.ZodString;
@@ -795,7 +795,7 @@ declare const YOpSchema: z.ZodUnion<readonly [z.ZodObject<{
     source: z.ZodOptional<z.ZodDiscriminatedUnion<[z.ZodObject<{
         type: z.ZodLiteral<"llm">;
         model: z.ZodOptional<z.ZodString>;
-        at: z.ZodOptional<z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodString>>;
+        at: z.ZodOptional<z.ZodPreprocess<z.ZodString, unknown>>;
         turn_ref: z.ZodObject<{
             turn_hash: z.ZodString;
             quote: z.ZodString;
@@ -817,7 +817,7 @@ declare const YOpSchema: z.ZodUnion<readonly [z.ZodObject<{
     source: z.ZodOptional<z.ZodDiscriminatedUnion<[z.ZodObject<{
         type: z.ZodLiteral<"llm">;
         model: z.ZodOptional<z.ZodString>;
-        at: z.ZodOptional<z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodString>>;
+        at: z.ZodOptional<z.ZodPreprocess<z.ZodString, unknown>>;
         turn_ref: z.ZodObject<{
             turn_hash: z.ZodString;
             quote: z.ZodString;
@@ -839,7 +839,7 @@ declare const YOpSchema: z.ZodUnion<readonly [z.ZodObject<{
     source: z.ZodOptional<z.ZodDiscriminatedUnion<[z.ZodObject<{
         type: z.ZodLiteral<"llm">;
         model: z.ZodOptional<z.ZodString>;
-        at: z.ZodOptional<z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodString>>;
+        at: z.ZodOptional<z.ZodPreprocess<z.ZodString, unknown>>;
         turn_ref: z.ZodObject<{
             turn_hash: z.ZodString;
             quote: z.ZodString;
@@ -861,7 +861,7 @@ declare const YOpSchema: z.ZodUnion<readonly [z.ZodObject<{
     source: z.ZodOptional<z.ZodDiscriminatedUnion<[z.ZodObject<{
         type: z.ZodLiteral<"llm">;
         model: z.ZodOptional<z.ZodString>;
-        at: z.ZodOptional<z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodString>>;
+        at: z.ZodOptional<z.ZodPreprocess<z.ZodString, unknown>>;
         turn_ref: z.ZodObject<{
             turn_hash: z.ZodString;
             quote: z.ZodString;
@@ -884,7 +884,7 @@ declare const YOpSchema: z.ZodUnion<readonly [z.ZodObject<{
     source: z.ZodOptional<z.ZodDiscriminatedUnion<[z.ZodObject<{
         type: z.ZodLiteral<"llm">;
         model: z.ZodOptional<z.ZodString>;
-        at: z.ZodOptional<z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodString>>;
+        at: z.ZodOptional<z.ZodPreprocess<z.ZodString, unknown>>;
         turn_ref: z.ZodObject<{
             turn_hash: z.ZodString;
             quote: z.ZodString;
@@ -906,7 +906,7 @@ declare const YOpSchema: z.ZodUnion<readonly [z.ZodObject<{
     source: z.ZodOptional<z.ZodDiscriminatedUnion<[z.ZodObject<{
         type: z.ZodLiteral<"llm">;
         model: z.ZodOptional<z.ZodString>;
-        at: z.ZodOptional<z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodString>>;
+        at: z.ZodOptional<z.ZodPreprocess<z.ZodString, unknown>>;
         turn_ref: z.ZodObject<{
             turn_hash: z.ZodString;
             quote: z.ZodString;
@@ -927,7 +927,7 @@ declare const YOpSchema: z.ZodUnion<readonly [z.ZodObject<{
     source: z.ZodOptional<z.ZodDiscriminatedUnion<[z.ZodObject<{
         type: z.ZodLiteral<"llm">;
         model: z.ZodOptional<z.ZodString>;
-        at: z.ZodOptional<z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodString>>;
+        at: z.ZodOptional<z.ZodPreprocess<z.ZodString, unknown>>;
         turn_ref: z.ZodObject<{
             turn_hash: z.ZodString;
             quote: z.ZodString;
@@ -950,7 +950,7 @@ declare const YOpSchema: z.ZodUnion<readonly [z.ZodObject<{
     source: z.ZodOptional<z.ZodDiscriminatedUnion<[z.ZodObject<{
         type: z.ZodLiteral<"llm">;
         model: z.ZodOptional<z.ZodString>;
-        at: z.ZodOptional<z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodString>>;
+        at: z.ZodOptional<z.ZodPreprocess<z.ZodString, unknown>>;
         turn_ref: z.ZodObject<{
             turn_hash: z.ZodString;
             quote: z.ZodString;
@@ -976,7 +976,7 @@ declare const YOpSchema: z.ZodUnion<readonly [z.ZodObject<{
     source: z.ZodOptional<z.ZodDiscriminatedUnion<[z.ZodObject<{
         type: z.ZodLiteral<"llm">;
         model: z.ZodOptional<z.ZodString>;
-        at: z.ZodOptional<z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodString>>;
+        at: z.ZodOptional<z.ZodPreprocess<z.ZodString, unknown>>;
         turn_ref: z.ZodObject<{
             turn_hash: z.ZodString;
             quote: z.ZodString;
@@ -998,7 +998,7 @@ declare const YOpSchema: z.ZodUnion<readonly [z.ZodObject<{
     source: z.ZodOptional<z.ZodDiscriminatedUnion<[z.ZodObject<{
         type: z.ZodLiteral<"llm">;
         model: z.ZodOptional<z.ZodString>;
-        at: z.ZodOptional<z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodString>>;
+        at: z.ZodOptional<z.ZodPreprocess<z.ZodString, unknown>>;
         turn_ref: z.ZodObject<{
             turn_hash: z.ZodString;
             quote: z.ZodString;
@@ -1020,7 +1020,7 @@ declare const YOpSchema: z.ZodUnion<readonly [z.ZodObject<{
     source: z.ZodOptional<z.ZodDiscriminatedUnion<[z.ZodObject<{
         type: z.ZodLiteral<"llm">;
         model: z.ZodOptional<z.ZodString>;
-        at: z.ZodOptional<z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodString>>;
+        at: z.ZodOptional<z.ZodPreprocess<z.ZodString, unknown>>;
         turn_ref: z.ZodObject<{
             turn_hash: z.ZodString;
             quote: z.ZodString;
@@ -1042,7 +1042,7 @@ declare const YOpSchema: z.ZodUnion<readonly [z.ZodObject<{
     source: z.ZodOptional<z.ZodDiscriminatedUnion<[z.ZodObject<{
         type: z.ZodLiteral<"llm">;
         model: z.ZodOptional<z.ZodString>;
-        at: z.ZodOptional<z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodString>>;
+        at: z.ZodOptional<z.ZodPreprocess<z.ZodString, unknown>>;
         turn_ref: z.ZodObject<{
             turn_hash: z.ZodString;
             quote: z.ZodString;
@@ -1070,7 +1070,7 @@ declare const YOpSchema: z.ZodUnion<readonly [z.ZodObject<{
     source: z.ZodOptional<z.ZodDiscriminatedUnion<[z.ZodObject<{
         type: z.ZodLiteral<"llm">;
         model: z.ZodOptional<z.ZodString>;
-        at: z.ZodOptional<z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodString>>;
+        at: z.ZodOptional<z.ZodPreprocess<z.ZodString, unknown>>;
         turn_ref: z.ZodObject<{
             turn_hash: z.ZodString;
             quote: z.ZodString;

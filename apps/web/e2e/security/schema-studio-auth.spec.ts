@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { expect, test } from '../fixtures/test';
 import { API_BASE } from '../fixtures/api-helpers';
 
-test('signed-in Studio enforces independent source and destination authority with exact old releases', async ({
+test('signed-in Studio preserves community releases while enforcing destination authority', async ({
   page,
   request,
 }, testInfo) => {
@@ -54,6 +54,27 @@ test('signed-in Studio enforces independent source and destination authority wit
   page.on('pageerror', (error) => errors.push(error.message));
   try {
     const workspaceId = 'publish';
+    const sourceTitle = `community-release-${suffix}.txt`;
+    const materialResponse = await request.post(
+      `${API_BASE}/projects/${source}/materials/document`,
+      {
+        headers: { Authorization: `Bearer ${ownerSession.api_key}` },
+        multipart: {
+          file: {
+            name: sourceTitle,
+            mimeType: 'text/plain',
+            buffer: Buffer.from(
+              'Product and engineering collaborators need an authenticated community Schema release that remains available after its source project is removed.'
+            ),
+          },
+        },
+      }
+    );
+    expect(materialResponse.ok(), await materialResponse.text()).toBe(true);
+    const material = (await materialResponse.json()).data as {
+      id: string;
+      content_hash: string;
+    };
     const workspace = {
       id: workspaceId,
       projectId: source,
@@ -63,9 +84,42 @@ test('signed-in Studio enforces independent source and destination authority wit
       summary: '',
       updatedAt: new Date().toISOString(),
       baseCommitHash: null,
-      sourceBundle: [],
+      sourceBundle: [
+        {
+          id: `material:${material.id}`,
+          type: 'document',
+          title: sourceTitle,
+          materialId: material.id,
+          contentHash: material.content_hash,
+        },
+      ],
       schemaBindings: [],
-      schemaCandidate: { summary: '', fields: [] },
+      schemaCandidate: {
+        summary: 'Publishable community Schema content',
+        fields: [
+          {
+            path: 'summary.problem',
+            value: 'Teams need an authenticated community Schema publishing path.',
+          },
+          {
+            path: 'summary.audience',
+            value: 'Product and engineering collaborators',
+          },
+          {
+            path: 'summary.outcome',
+            value: 'A verified release remains available after its source project is removed.',
+          },
+          {
+            path: 'requirements.community_release.title',
+            value: 'Publish a durable community release',
+          },
+          { path: 'requirements.community_release.priority', value: 'must' },
+          {
+            path: 'requirements.community_release.acceptance',
+            value: ['Authorized readers can adopt the release after source deletion.'],
+          },
+        ],
+      },
       schemaReview: { verdict: 'ready', summary: '', gaps: [] },
       yopsDraft: { id: 'draft', operations: [] },
       outputTargets: [],
@@ -106,23 +160,15 @@ test('signed-in Studio enforces independent source and destination authority wit
           composition_hash: compiled.preview.compositionHash,
           canonical_name: canonicalName,
           version,
-          title: 'Private release definition',
-          description: 'An exact release for our team.',
+          title: 'Community release definition',
+          description: 'An exact release for the community.',
+          visibility: 'community',
+          license: 'MIT',
         }
       );
       expect(published.ok(), await published.text()).toBe(true);
     }
-    const input = { sourceProjectId: source, canonicalName, version: '1.0.0' };
-    expect(
-      (
-        await api(
-          readerSession.api_key,
-          'POST',
-          `/projects/${target}/schema-studio/candidates`,
-          input
-        )
-      ).status()
-    ).toBe(404);
+    const input = { canonicalName, version: '1.0.0' };
     async function grant(project: string) {
       const response = await api(ownerSession.api_key, 'PUT', `/projects/${project}/guests`, {
         principal: { kind: 'human', principal_id: readerSession.id },
@@ -130,9 +176,7 @@ test('signed-in Studio enforces independent source and destination authority wit
         expires_at: null,
       });
       expect(response.ok(), await response.text()).toBe(true);
-      return (await response.json()).data.guest;
     }
-    const sourceGuest = await grant(source);
     await grant(readOnlyTarget);
     const added = await api(
       readerSession.api_key,
@@ -169,42 +213,33 @@ test('signed-in Studio enforces independent source and destination authority wit
     await page.getByRole('button', { name: 'Sign In' }).click();
     await expect(page).toHaveURL('/');
     await page.goto(`/project/${target}?tab=schemas&schemaView=studio&candidate=${candidate.id}`, {
-      waitUntil: 'networkidle',
+      waitUntil: 'domcontentloaded',
     });
-    await expect(page.getByRole('heading', { name: 'Composed structure' })).toBeVisible();
     await expect(
-      page.getByText('Importing private structure requires edit authority on its source project.')
+      page
+        .getByRole('complementary', { name: 'Available Schema sources' })
+        .getByText('Community release definition')
     ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Review & apply' })).toBeDisabled();
-    await expect(
-      page.getByRole('checkbox', { name: 'Select Private release definition 1.0.0', exact: true })
-    ).toBeChecked();
+    await expect(page.getByRole('button', { name: 'Review Schema changes' })).toBeEnabled();
     await page.screenshot({
-      path: testInfo.outputPath('studio-source-read-only.png'),
+      path: testInfo.outputPath('studio-community-release.png'),
       animations: 'disabled',
     });
-    const revoked = await api(
-      ownerSession.api_key,
-      'DELETE',
-      `/projects/${source}/guests/${sourceGuest.grant_id}`
-    );
-    expect(revoked.ok(), await revoked.text()).toBe(true);
-    await page.reload({ waitUntil: 'networkidle' });
-    await expect(page.getByRole('complementary', { name: 'Studio sources' })).toContainText(
-      'Unavailable source'
-    );
-    await expect(page.getByRole('complementary', { name: 'Studio sources' })).not.toContainText(
-      'Private release definition'
-    );
+    const deletedSource = await api(ownerSession.api_key, 'DELETE', `/projects/${source}`);
+    expect(deletedSource.ok(), await deletedSource.text()).toBe(true);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(
+      page.getByRole('complementary', { name: 'Available Schema sources' })
+    ).toContainText('Community release definition');
     const list = await api(
       readerSession.api_key,
       'GET',
       `/projects/${target}/schema-studio/candidates`
     );
     expect((await list.json()).data.items[0]).toMatchObject({
-      available: false,
-      source: null,
-      title: null,
+      available: true,
+      source: { projectId: null, version: '1.0.0' },
+      title: 'Community release definition',
     });
     expect(
       (
@@ -212,12 +247,12 @@ test('signed-in Studio enforces independent source and destination authority wit
           candidateIds: [candidate.id],
         })
       ).status()
-    ).toBe(404);
+    ).toBe(200);
     expect((await api(readerSession.api_key, 'GET', `/projects/${target}/workspaces`)).ok()).toBe(
       true
     );
     await page.screenshot({
-      path: testInfo.outputPath('studio-source-revoked.png'),
+      path: testInfo.outputPath('studio-community-source-retained.png'),
       animations: 'disabled',
     });
     expect(errors).toEqual([]);

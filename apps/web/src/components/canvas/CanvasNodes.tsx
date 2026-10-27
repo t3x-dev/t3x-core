@@ -19,7 +19,6 @@ import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { commitHashLabel } from '@/domain/format/formatters';
 import { useConversationContext } from '@/hooks/conversations/useConversationContext';
-import { leafContextMenuHandlerRef } from '@/hooks/shared/useContextMenu';
 import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
 import { useTerminology } from '@/hooks/shared/useTerminology';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -139,13 +138,8 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const contentExpanded = contentExpandedManual;
 
   const { t } = useTerminology();
-  // Read from module-level ref to avoid Zustand re-renders on every callback update
-  const leafContextMenuHandler = leafContextMenuHandlerRef.current;
   const openNodeModal = useCanvasStore((state) => state.openNodeModal);
   const notify = useProjectStore((state) => state.notifyCallback);
-  const projectName = useProjectStore((state) =>
-    projectId ? state.getProject(projectId)?.name : undefined
-  );
 
   // Pin store
   const { isPinned } = usePinsStore();
@@ -522,10 +516,6 @@ const UnitNode = memo(function UnitNode(props: Props) {
             setLeavesExpanded={setLeavesExpanded}
             isDetail={isDetail}
             prefersReducedMotion={prefersReducedMotion}
-            projectId={projectId}
-            projectName={projectName}
-            nodeId={id}
-            leafContextMenuHandler={leafContextMenuHandler}
           />
         )}
         {isCommitted && (!data.leaves || data.leaves.length === 0) && (

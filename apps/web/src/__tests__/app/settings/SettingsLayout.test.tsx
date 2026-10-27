@@ -1,18 +1,21 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import SettingsLayout from '@/app/settings/layout';
 
 let mockPathname = '/settings';
 let mockSearchParams = new URLSearchParams();
 let activeNamespaceName: string | null = 'Orbit Labs';
+let activeNamespaceSlug = 'orbit-labs';
+const mockPush = vi.fn();
 
 vi.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
   useSearchParams: () => mockSearchParams,
+  useRouter: () => ({ push: mockPush }),
 }));
 
 vi.mock('next/link', () => ({
@@ -43,7 +46,13 @@ vi.mock('@/hooks/projects/useProjectDetail', () => ({
 vi.mock('@/hooks/accounts/useNamespaceAccounts', () => ({
   useNamespaceAccounts: () => ({
     activeAccount: activeNamespaceName
-      ? { namespace: { kind: 'organization', display_name: activeNamespaceName } }
+      ? {
+          namespace: {
+            kind: 'organization',
+            display_name: activeNamespaceName,
+            slug: activeNamespaceSlug,
+          },
+        }
       : null,
   }),
 }));
@@ -57,26 +66,111 @@ function renderLayout() {
 }
 
 describe('SettingsLayout', () => {
-  it('keeps the shared project title bar on settings pages', () => {
+  beforeEach(() => {
+    activeNamespaceName = 'Orbit Labs';
+    activeNamespaceSlug = 'orbit-labs';
+    mockPathname = '/settings';
+    mockSearchParams = new URLSearchParams();
+    mockPush.mockClear();
+  });
+
+  it('keeps a provider-credentials owner as entry context without propagating it to Members', () => {
+    activeNamespaceName = 'Team A';
+    activeNamespaceSlug = 'team-a';
+    mockPathname = '/settings/provider-credentials';
+    mockSearchParams = new URLSearchParams({ owner: 'team-b' });
+
+    renderLayout();
+
+    expect(screen.getByRole('link', { name: 'team-b' })).toHaveAttribute('href', '/team-b');
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'href',
+      '/settings/provider-credentials?owner=team-b'
+    );
+    expect(screen.getByText('Organization: Team A')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Members' })).toHaveAttribute(
+      'href',
+      '/settings/members'
+    );
+    expect(screen.getByRole('link', { name: 'General' })).toHaveAttribute('href', '/settings');
+    fireEvent.change(screen.getByLabelText('Settings'), {
+      target: { value: '/settings/members' },
+    });
+    expect(mockPush).toHaveBeenLastCalledWith('/settings/members');
+  });
+
+  it.each([
+    '/settings',
+    '/settings/members',
+  ])('shows active account A on %s even when a stale owner B remains in the URL', (pathname) => {
+    activeNamespaceName = 'Team A';
+    activeNamespaceSlug = 'team-a';
+    mockPathname = pathname;
+    mockSearchParams = new URLSearchParams({ owner: 'team-b' });
+
+    renderLayout();
+
+    expect(screen.getByRole('link', { name: 'team-a' })).toHaveAttribute('href', '/team-a');
+    expect(screen.queryByRole('link', { name: 'team-b' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'New repository' })).toHaveAttribute(
+      'href',
+      '/team-a/new'
+    );
+    expect(screen.getByRole('link', { name: 'Members' })).toHaveAttribute(
+      'href',
+      '/settings/members'
+    );
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'href',
+      '/settings/provider-credentials'
+    );
+  });
+
+  it('keeps return context and a project filter when switching between automation pages', () => {
+    mockPathname = '/settings/recipes';
+    mockSearchParams = new URLSearchParams({
+      owner: 'team-a',
+      project: 'proj_test',
+      returnTo: '/team-a/repo/workspaces',
+      unrelated: 'ignored',
+    });
+
+    renderLayout();
+
+    const href = screen.getByRole('link', { name: 'Webhooks' }).getAttribute('href') ?? '';
+    const query = new URL(href, 'http://localhost').searchParams;
+    expect(query.has('owner')).toBe(false);
+    expect(query.get('project')).toBe('proj_test');
+    expect(query.get('returnTo')).toBe('/team-a/repo/workspaces');
+    expect(query.has('unrelated')).toBe(false);
+
+    fireEvent.change(screen.getByLabelText('Settings'), {
+      target: { value: '/settings/webhooks' },
+    });
+    expect(mockPush).toHaveBeenLastCalledWith(href);
+    expect(screen.getByRole('link', { name: 'Usage' }).getAttribute('href')).not.toContain(
+      'project='
+    );
+  });
+
+  it('keeps account settings outside project navigation even with a legacy project parameter', () => {
     mockPathname = '/settings';
     mockSearchParams = new URLSearchParams('project=proj_test');
 
     renderLayout();
 
     expect(screen.getByRole('banner')).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Project views' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: 'Usage' })).toHaveAttribute(
-      'href',
-      '/settings/usage?project=proj_test'
-    );
+    expect(screen.getByRole('link', { name: 'Usage' })).toHaveAttribute('href', '/settings/usage');
     expect(screen.getByText('Automations')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Webhooks/i })).toHaveAttribute(
       'href',
-      '/settings/webhooks?project=proj_test'
+      '/settings/webhooks'
     );
     expect(screen.getByRole('link', { name: /Recipes/i })).toHaveAttribute(
       'href',
-      '/settings/recipes?project=proj_test'
+      '/settings/recipes'
     );
   });
 
@@ -105,10 +199,7 @@ describe('SettingsLayout', () => {
       '/settings/members'
     );
     expect(screen.getByRole('link', { name: 'Usage' })).toHaveAttribute('href', '/settings/usage');
-    expect(screen.getByRole('link', { name: 'Provider credentials' })).toHaveAttribute(
-      'href',
-      '/settings/provider-credentials'
-    );
+    expect(screen.queryByRole('link', { name: 'Provider credentials' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Help' })).toHaveAttribute('href', '/settings/help');
   });
 

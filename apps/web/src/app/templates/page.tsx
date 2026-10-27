@@ -1,16 +1,13 @@
-import Link from 'next/link';
-import { Suspense } from 'react';
-import { ExploreDiscoverySurface } from '@/components/schemas/ExploreDiscoverySurface';
-
-export default function TemplatesPage() {
-  return (
-    <Suspense fallback={null}>
-      <div className="h-full overflow-auto">
-        <nav className="px-6 pt-4" aria-label="Template archive">
-          <Link href="/templates/archive">Legacy prompt archive</Link>
-        </nav>
-        <ExploreDiscoverySurface />
-      </div>
-    </Suspense>
-  );
+import { redirect } from 'next/navigation';
+export default async function TemplatesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(await searchParams)) {
+    for (const item of Array.isArray(value) ? value : value ? [value] : [])
+      params.append(key, item);
+  }
+  redirect(`/explore${params.size ? `?${params}` : ''}`);
 }

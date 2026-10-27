@@ -93,7 +93,7 @@ describe('Namespace persistence and project isolation', () => {
       data: { projects: Array<{ name: string }> };
     };
     expect(personalPayload.data.projects.map((project) => project.name)).toEqual([
-      'Personal project',
+      'Personal-project',
     ]);
 
     const organizationResponse = await app.request('/v1/projects?namespace=t3x-dev');
@@ -101,7 +101,7 @@ describe('Namespace persistence and project isolation', () => {
       data: { projects: Array<{ name: string }> };
     };
     expect(organizationPayload.data.projects.map((project) => project.name)).toEqual([
-      'Organization project',
+      'Organization-project',
     ]);
 
     const personalNamespace = await findNamespaceBySlug(mockDB, 'personal-space');
@@ -109,7 +109,7 @@ describe('Namespace persistence and project isolation', () => {
       owner_id: 'user_namespace_owner',
       namespace_id: personalNamespace?.namespaceId,
     });
-    expect(storedProjects.map((project) => project.name)).toEqual(['Personal project']);
+    expect(storedProjects.map((project) => project.name)).toEqual(['Personal-project']);
   });
 
   it('rejects access from another user', async () => {

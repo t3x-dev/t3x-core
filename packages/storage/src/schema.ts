@@ -122,6 +122,29 @@ export const projects = pgTable(
   ]
 );
 
+/** Current and historical addresses stay reserved through soft deletion and are
+ * released on permanent deletion. Unattributed legacy claims remain blocked. */
+export const repositoryPaths = pgTable(
+  'repository_paths',
+  {
+    namespaceId: text('namespace_id')
+      .notNull()
+      .references(() => namespaces.namespaceId, { onDelete: 'restrict' }),
+    nameKey: text('name_key').notNull(),
+    resolvable: boolean('resolvable').notNull().default(false),
+    projectId: text('project_id').references(() => projects.projectId, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.namespaceId, table.nameKey] }),
+    index('repository_paths_project').on(table.projectId),
+    check(
+      'repository_paths_name_key_check',
+      sql`${table.nameKey} = lower(${table.nameKey} COLLATE "C")`
+    ),
+  ]
+);
+
 /** Append-only evidence for explicit project visibility transitions. */
 export const projectVisibilityEvents = pgTable(
   'project_visibility_events',
@@ -756,6 +779,10 @@ export const yschemaArtifacts = pgTable(
     metadataRevision: integer('metadata_revision').notNull().default(1),
     ownerProjectId: text('owner_project_id').references(() => projects.projectId, {
       onDelete: 'cascade',
+    }),
+    // Public releases belong to a publisher namespace, never to a disposable repository.
+    publisherNamespaceId: text('publisher_namespace_id').references(() => namespaces.namespaceId, {
+      onDelete: 'restrict',
     }),
     visibility: text('visibility').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

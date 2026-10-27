@@ -3,7 +3,6 @@ import {
   API_BASE,
   cleanupProject,
   createTestCommitFromTrees,
-  createTestConversation,
   createTestProject,
 } from '../fixtures/api-helpers';
 
@@ -52,98 +51,16 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
       branch: 'feature/prd-audience',
       message: 'Workspace commit: PRD audience handoff',
     });
-    const conversationId = await createTestConversation(
-      request,
-      projectId,
-      'State page smoke source'
+    const workspacesResponse = await request.get(
+      `${API_BASE}/projects/${projectId}/workspaces`
     );
-    const workspaceResponse = await request.patch(
-      `${API_BASE}/projects/${projectId}/workspaces/workspace_prd_handoff`,
-      {
-        data: {
-          workspace: {
-            baseCommitHash: commitHash,
-            id: 'workspace_prd_handoff',
-            outputTargets: [],
-            projectId,
-            schemaBindings: [{ mode: 'pinned', schemaName: 'PRD Schema', version: 'v2' }],
-            schemaCandidate: { fields: [], summary: '' },
-            schemaReview: {
-              gaps: [],
-              summary: 'The staged state is ready for the smoke test commit.',
-              verdict: 'needs_review',
-            },
-            sourceBundle: [
-              {
-                conversationId,
-                id: `source:${conversationId}`,
-                title: 'State page smoke source',
-                type: 'chat',
-              },
-            ],
-            status: 'schema_review',
-            summary: 'Reviewed PRD workspace',
-            targetBranch: 'feature/prd-audience',
-            title: 'PRD audience handoff',
-            updatedAt: new Date().toISOString(),
-            yopsDraft: {
-              id: 'draft:workspace_prd_handoff',
-              operations: [
-                {
-                  afterValue: 'You: i need food and drink',
-                  id: 'op_backend_1',
-                  op: 'set',
-                  path: 'prd/summary/problem',
-                  summary: 'Set summary.problem',
-                },
-                {
-                  afterValue: 'Office workers',
-                  id: 'op_backend_2',
-                  op: 'set',
-                  path: 'prd/summary/audience',
-                  summary: 'Set summary.audience',
-                },
-                {
-                  afterValue: 'Office workers',
-                  id: 'op_backend_3',
-                  op: 'set',
-                  path: 'prd/summary/outcome',
-                  summary: 'Set summary.outcome',
-                },
-                {
-                  afterValue: 'Find food and drinks',
-                  id: 'op_backend_4',
-                  op: 'set',
-                  path: 'prd/requirements/you_i_need_food_and_drink/title',
-                  summary: 'Set requirements title',
-                },
-              ],
-            },
-          },
-        },
-      }
+    expect(workspacesResponse.ok(), await workspacesResponse.text()).toBe(true);
+    const branchWorkspace = (await workspacesResponse.json()).data.workspaces.find(
+      (workspace: { targetBranch?: string }) =>
+        workspace.targetBranch === 'feature/prd-audience'
     );
-    expect(workspaceResponse.status()).toBe(200);
-    const workspaceResponseBody = await workspaceResponse.json();
-    const workspaceRevision = workspaceResponseBody.data.workspace.revision;
-    expect(workspaceRevision).toBeGreaterThan(0);
-    const commitResponse = await request.post(
-      `${API_BASE}/projects/${projectId}/workspaces/workspace_prd_handoff/commit`,
-      {
-        data: {
-          content: { relations: [], trees: PRD_TREE },
-          if_revision: workspaceRevision,
-          message: 'Workspace commit: PRD audience handoff',
-          validationOverride: {
-            blockers: ['Resolve schema review before committing.'],
-            kind: 'schema_review',
-            reason: 'E2E fixture accepted for State page workflow coverage.',
-          },
-        },
-      }
-    );
-    const commitResponseBody = await commitResponse.json();
-    expect(commitResponse.status(), JSON.stringify(commitResponseBody)).toBe(200);
+    expect(branchWorkspace).toBeDefined();
+    const workspaceId = branchWorkspace.id as string;
 
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push('pageerror: ' + error.message));
@@ -164,7 +81,9 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     );
     await expect(page.getByRole('button', { name: 'Switch branches/tags, current branch feature/prd-audience' })).toBeVisible();
     await expect(page.getByText('Workspace commit: PRD audience handoff')).toBeVisible();
-    const rootRow = page.getByRole('region', { name: 'Structured state tree' }).getByText('prd', { exact: true }).locator('xpath=ancestor::tr');
+    const rootRow = page
+      .getByRole('region', { name: 'State structure rows' })
+      .getByRole('row', { name: /Collapse prd/ });
     expect((await rootRow.boundingBox())!.height).toBeLessThanOrEqual(40);
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('state-structure-desktop.png') });
     await page.getByRole('button', { name: 'Switch branches/tags, current branch feature/prd-audience' }).click();
@@ -173,20 +92,21 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
 
     // Transition commits carry native review evidence; legacy validation runs do not apply.
     await page.getByRole('tab', { name: /Overview/ }).click();
-    await expect(
-      page.getByRole('complementary', { name: 'T3X rendered State' }).getByRole('heading', { exact: true, name: 'Summary' })
-    ).toBeVisible();
-    await expect(page.getByText('Office workers').first()).toBeVisible();
+    const committedState = page.getByRole('region', { name: 'Committed State' });
+    await expect(committedState.getByRole('heading', { name: 'Structure' })).toBeVisible();
+    await expect(committedState.getByText('PRD audience handoff')).toBeVisible();
 
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('state-render-desktop.png') });
-    await page.getByRole('tab', { name: /Code/ }).click();
-    const codeView = page.getByRole('region', { name: 'YAML code view' });
+    await committedState.getByRole('button', { name: 'Open full view' }).click();
+    await page.getByRole('button', { name: 'Code', exact: true }).click();
+    const codeView = page.getByRole('region', { name: 'State structure' });
     await expect(codeView).toContainText('prd:');
     await expect(codeView).toContainText('summary:');
     await expect(codeView).not.toContainText('trees:');
     await expect(codeView).not.toContainText('slots:');
     await codeView.getByRole('button', { name: 'JSON', exact: true }).click();
     await expect(codeView.getByRole('button', { name: 'JSON', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await codeView.getByRole('button', { name: 'Find in code', exact: true }).click();
     await codeView.getByRole('textbox', { name: 'Find in code' }).fill('Office workers');
     await expect(codeView).toContainText('2 matching lines');
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('state-code-desktop.png') });
@@ -198,12 +118,12 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     await page.setViewportSize({ width: 1280, height: 720 });
 
 
-    await page.getByRole('button', { name: 'Canvas', exact: true }).click();
+    await page.getByRole('tab', { name: 'Canvas', exact: true }).click();
     await expect(page).toHaveURL((url) => url.searchParams.get('view') === 'canvas');
     const canvasRegion = page.getByRole('region', { name: 'Multi-commit state canvas' });
     await expect(canvasRegion).toBeVisible();
     await expect(page.getByRole('tree', { name: 'State graph canvas' })).toBeVisible();
-    await expect(canvasRegion).toContainText('2 commits');
+    await expect(canvasRegion).toContainText('1 commit');
 
     const canvasBox = await canvasRegion.boundingBox();
     const repositoryBox = await canvasRegion.locator('..').boundingBox();
@@ -217,7 +137,7 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     ).toBeLessThanOrEqual(2);
 
     await page.getByRole('tab', { name: /Snapshot/ }).click();
-    await expect(page.getByRole('region', { name: 'YAML code view' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'State structure' })).toBeVisible();
 
     await page.getByRole('link', { name: 'Propose change' }).click();
     await expect(page).toHaveURL((url) => {
@@ -226,7 +146,7 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
         url.searchParams.get('branch') === 'feature/prd-audience'
       );
     });
-    await expect(page.getByRole('link', { name: 'Workspaces' })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: 'Workspace' })).toHaveAttribute(
       'aria-current',
       'page'
     );

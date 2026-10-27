@@ -1,8 +1,22 @@
 'use client';
 
-import { LayoutTemplate, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
+import {
+  ArrowRight,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Clock3,
+  FolderGit2,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+} from 'lucide-react';
 import Link from 'next/link';
-import { type FormEvent, useCallback, useMemo, useState } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { type FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -14,279 +28,160 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
-import {
-  DEFAULT_OWNER_SLUG,
-  getProjectIdRepoPath,
-  getProjectRepoPath,
-} from '@/domain/project/repoPath';
+import { DEFAULT_OWNER_SLUG, getProjectRepoPath } from '@/domain/project/repoPath';
+import { repositoryMutationError } from '@/hooks/projects/useDeletedProjects';
 import { useProjects } from '@/hooks/projects/useProjects';
+import { useRepositoryName } from '@/hooks/projects/useRepositoryName';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
+import palette from '@/styles/management-palette.module.css';
 import { cn } from '@/utils/cn';
 import {
   orderProjectsByRecentOpen,
   readRecentProjectIds,
   recordRecentProjectOpen,
 } from '@/utils/recentProjects';
+import { DeletedRepositoriesView } from './DeletedRepositoriesView';
+import styles from './ProjectDirectoryPage.module.css';
+import management from './RepositoryManagement.module.css';
+import { RepositoryNameFeedback } from './RepositoryNameFeedback';
+
+const focusRing =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50';
 
 function metricValue(value: number | undefined): number {
   return value ?? 0;
 }
 
-function ProjectMetric({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number | string;
-  tone: 'source' | 'schema' | 'state';
-}) {
-  const toneVar = {
-    source: 'var(--source)',
-    schema: 'var(--accent-extract)',
-    state: 'var(--accent-commit)',
-  }[tone];
-
+function RepoMark({ size = 'card' }: { size?: 'card' | 'row' }) {
   return (
-    <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-[var(--text-secondary)]">
-      <span
-        aria-hidden="true"
-        className="size-1.5 rounded-full"
-        style={{ backgroundColor: toneVar }}
-      />
-      <span className="truncate">
-        {label} {value}
-      </span>
+    <span aria-hidden="true" className={cn(styles.repoMark, size === 'row' && styles.rowMark)}>
+      <FolderGit2 className={size === 'card' ? 'size-5' : 'size-4'} strokeWidth={1.8} />
     </span>
   );
 }
 
 function ProjectMetrics({ project }: { project: ProjectSummary }) {
+  const commits = metricValue(project.commitsCount);
+  const branches = metricValue(project.branchesCount);
   return (
-    <div className="flex flex-wrap gap-x-3.5 gap-y-1.5">
-      <ProjectMetric label="Commits" value={metricValue(project.commitsCount)} tone="state" />
-      <ProjectMetric label="Branches" value={metricValue(project.branchesCount)} tone="schema" />
+    <div className={styles.metrics}>
+      <span>
+        {commits} {commits === 1 ? 'commit' : 'commits'}
+      </span>
+      <span>
+        {branches} {branches === 1 ? 'branch' : 'branches'}
+      </span>
     </div>
   );
 }
 
-function ProjectCard({
-  project,
-  compact = false,
+function ProjectActions({
   onDelete,
   onRename,
-  ownerSlug,
+  project,
 }: {
-  project: ProjectSummary;
-  compact?: boolean;
   onDelete: (project: ProjectSummary) => void;
   onRename: (project: ProjectSummary) => void;
-  ownerSlug: string;
+  project: ProjectSummary;
 }) {
   return (
-    <article
-      className={cn(
-        'group rounded-[var(--radius-card)] border border-[var(--stroke-default)] bg-[var(--surface-card)]',
-        'transition-colors duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
-        'hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)]',
-        compact ? 'p-4' : 'p-5'
-      )}
-    >
-      <div className="flex min-w-0 items-start justify-between gap-4">
-        <Link
-          href={getProjectIdRepoPath(project.id)}
-          onClick={() => recordRecentProjectOpen(project.id)}
-          className="min-w-0 flex-1 rounded-[var(--radius-control)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
-        >
-          <h3 className="truncate text-base font-semibold leading-tight text-[var(--text-primary)] transition-colors group-hover:text-[var(--accent-commit)]">
-            {project.name}
-          </h3>
-          <p className="mt-1.5 line-clamp-2 text-xs font-normal leading-relaxed text-[var(--text-secondary)]">
-            {project.description || 'Structured state repository.'}
-          </p>
-          <p className="mt-2 truncate text-xs font-mono text-[var(--text-tertiary)]">
-            {getProjectRepoPath(project, ownerSlug)}
-          </p>
-        </Link>
-        {!compact && (
-          <span className="mt-1 shrink-0 text-xs font-normal text-[var(--text-tertiary)]">
-            Updated {project.updatedAt}
-          </span>
-        )}
-        <div className="flex shrink-0 items-center gap-1 opacity-100 md:opacity-0 md:transition-opacity md:group-hover:opacity-100 md:group-focus-within:opacity-100">
-          <Button
-            aria-label={`Rename repository ${project.name}`}
-            className="size-8"
-            onClick={() => onRename(project)}
-            size="icon-sm"
-            type="button"
-            variant="canvas-ghost"
-          >
-            <Pencil className="size-4" />
-          </Button>
-          <Button
-            aria-label={`Delete repository ${project.name}`}
-            className="size-8 text-[var(--status-error)] hover:bg-[var(--status-error)]/10 hover:text-[var(--status-error)]"
-            onClick={() => onDelete(project)}
-            size="icon-sm"
-            type="button"
-            variant="canvas-ghost"
-          >
-            <Trash2 className="size-4" />
-          </Button>
+    <div className={styles.actions}>
+      <Button
+        aria-label={`Rename repository ${project.name}`}
+        title={`Rename repository ${project.name}`}
+        onClick={() => onRename(project)}
+        size="icon"
+        type="button"
+        variant="canvas-ghost"
+      >
+        <Pencil className="size-3.5" />
+      </Button>
+      <Button
+        aria-label={`Delete repository ${project.name}`}
+        title={`Delete repository ${project.name}`}
+        className="hover:bg-[var(--status-error)]/10 hover:text-[var(--status-error)]"
+        onClick={() => onDelete(project)}
+        size="icon"
+        type="button"
+        variant="canvas-ghost"
+      >
+        <Trash2 className="size-3.5" />
+      </Button>
+    </div>
+  );
+}
+
+function RecentProjectCard({ project }: { project: ProjectSummary }) {
+  return (
+    <article className={styles.recentCard}>
+      <Link
+        href={getProjectRepoPath(project)}
+        onClick={() => recordRecentProjectOpen(project.id)}
+        className={cn(styles.recentLink, focusRing)}
+      >
+        <FolderGit2 aria-hidden="true" className="size-4" />
+        <div>
+          <h3>{project.name}</h3>
+          <p className={styles.repositoryPath}>{getProjectRepoPath(project)}</p>
         </div>
-      </div>
-      <div className="mt-4">
-        <ProjectMetrics project={project} />
-      </div>
+        <ArrowRight aria-hidden="true" className="size-4" />
+      </Link>
     </article>
   );
 }
 
-function DirectoryTopBar({
-  isPersonalNamespace,
-  onRefresh,
+function ProjectRow({
+  onDelete,
+  onRename,
   ownerSlug,
-  refreshing,
+  project,
 }: {
-  isPersonalNamespace: boolean;
-  onRefresh: () => void;
+  onDelete: (project: ProjectSummary) => void;
+  onRename: (project: ProjectSummary) => void;
   ownerSlug: string;
-  refreshing: boolean;
+  project: ProjectSummary;
 }) {
-  const settingsPath = isPersonalNamespace ? '/settings/profile' : `/${ownerSlug}/settings`;
-  const newRepositoryPath = `/${ownerSlug}/new`;
-
   return (
-    <header className="sticky top-0 z-30 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)]">
-      <div className="flex h-16 items-center gap-3 px-6">
-        <div className="flex items-center gap-3 pr-4">
-          <div className="flex size-9 items-center justify-center rounded-[var(--radius-control)] bg-[var(--text-primary)] text-sm font-bold text-[var(--surface-card)]">
-            T3
-          </div>
-          <span className="text-base font-bold text-[var(--text-primary)]">{ownerSlug}</span>
-        </div>
-        <nav aria-label="Namespace navigation" className="hidden items-center gap-1 md:flex">
+    <article className={styles.repositoryRow}>
+      <RepoMark size="row" />
+      <div className={styles.rowContent}>
+        <div className={styles.rowHeading}>
           <Link
-            className="rounded-[var(--radius-control)] px-3 py-2 text-sm font-semibold text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
-            href={settingsPath}
+            href={getProjectRepoPath(project)}
+            onClick={() => recordRecentProjectOpen(project.id)}
+            className={cn(styles.repositoryLink, focusRing)}
           >
-            Settings
+            <h3>{project.name}</h3>
           </Link>
-        </nav>
-        <div className="ml-auto" />
-        <Button asChild className="size-9" size="icon" variant="canvas-outline">
-          <Link aria-label="New repository" href={newRepositoryPath}>
-            <Plus className="size-4" />
-          </Link>
-        </Button>
-        <Button
-          aria-label="Refresh repositories"
-          className="size-9"
-          disabled={refreshing}
-          onClick={onRefresh}
-          size="icon"
-          type="button"
-          variant="canvas-outline"
-        >
-          <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
-        </Button>
+          {project.visibility && <span className={styles.visibility}>{project.visibility}</span>}
+        </div>
+        <p className={styles.repositoryPath}>{getProjectRepoPath(project, ownerSlug)}</p>
+        {project.description && <p className={styles.description}>{project.description}</p>}
+        <div className={styles.rowMeta}>
+          <ProjectMetrics project={project} />
+          <span>Created {project.updatedAt}</span>
+        </div>
       </div>
-    </header>
+      <ProjectActions onDelete={onDelete} onRename={onRename} project={project} />
+    </article>
   );
 }
 
-function NamespaceHeader({
-  dataAvailable,
+function DirectoryIntroduction({
   isPersonalNamespace,
   ownerSlug,
-  projects,
 }: {
-  dataAvailable: boolean;
   isPersonalNamespace: boolean;
   ownerSlug: string;
-  projects: ProjectSummary[];
 }) {
-  const commits = projects.reduce((sum, project) => sum + metricValue(project.commitsCount), 0);
-  const avatarLabel =
-    ownerSlug
-      .replace(/[^a-z0-9]/gi, '')
-      .slice(0, 2)
-      .toUpperCase() || 'T3';
-
   return (
-    <section className="border-b border-[var(--stroke-divider)] pb-7">
-      <div className="flex flex-col gap-5 md:flex-row md:items-center">
-        <div className="flex size-28 shrink-0 items-center justify-center rounded-[var(--radius-panel)] bg-[var(--text-primary)] text-3xl font-bold text-[var(--surface-card)]">
-          {avatarLabel}
-        </div>
-        <div className="min-w-0">
-          <h1 className="text-3xl font-bold leading-tight text-[var(--text-primary)]">
-            {ownerSlug}
-          </h1>
-          <p className="mt-2 text-base font-semibold text-[var(--text-secondary)]">
-            {isPersonalNamespace
-              ? 'Personal namespace for structured state repositories.'
-              : 'Organization namespace for structured state repositories.'}
-          </p>
-          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold text-[var(--text-secondary)]">
-            <span>{isPersonalNamespace ? 'Personal namespace' : 'Organization namespace'}</span>
-            <span>{dataAvailable ? projects.length : '—'} repos</span>
-            <span>{dataAvailable ? commits : '—'} commits</span>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function DirectorySideRail({
-  dataAvailable,
-  projects,
-}: {
-  dataAvailable: boolean;
-  projects: ProjectSummary[];
-}) {
-  const drafts = projects.filter((project) => project.status === 'draft').length;
-  const recent = projects[0];
-
-  if (!dataAvailable) {
-    return (
-      <aside className="space-y-7">
-        <section>
-          <h2 className="text-base font-bold text-[var(--text-primary)]">
-            Repositories at a glance
-          </h2>
-          <p className="mt-3 text-sm font-semibold leading-snug text-[var(--text-secondary)]">
-            Repository data is unavailable.
-          </p>
-        </section>
-        <section className="border-t border-[var(--stroke-divider)] pt-6">
-          <h2 className="text-base font-bold text-[var(--text-primary)]">Recently created</h2>
-          <p className="mt-3 text-sm font-semibold leading-snug text-[var(--text-secondary)]">
-            Retry loading repositories to see recent creations.
-          </p>
-        </section>
-      </aside>
-    );
-  }
-
-  return (
-    <aside className="space-y-7">
-      <section>
-        <h2 className="text-base font-bold text-[var(--text-primary)]">Repositories at a glance</h2>
-        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-2 text-sm font-semibold text-[var(--text-secondary)]">
-          <ProjectMetric label="Repositories" value={projects.length} tone="state" />
-          <ProjectMetric label="Without commits" value={drafts} tone="schema" />
-        </div>
-      </section>
-      <section className="border-t border-[var(--stroke-divider)] pt-6">
-        <h2 className="text-base font-bold text-[var(--text-primary)]">Recently created</h2>
-        <p className="mt-3 text-sm font-semibold leading-snug text-[var(--text-secondary)]">
-          {recent ? `${recent.name} created ${recent.updatedAt}.` : 'No repositories yet.'}
-        </p>
-      </section>
-    </aside>
+    <header className={management.heading}>
+      <p className={management.context}>
+        {isPersonalNamespace ? 'Personal namespace' : 'Organization namespace'}
+      </p>
+      <h1>{ownerSlug}</h1>
+      <p>A home for your structured state. Pick up a repository or start something new.</p>
+    </header>
   );
 }
 
@@ -300,14 +195,11 @@ function DirectoryLoadFailure({
   retrying: boolean;
 }) {
   return (
-    <div
-      className="flex min-h-[280px] flex-col items-center justify-center rounded-[var(--radius-card)] border border-[var(--status-error)]/25 bg-[var(--surface-card)] p-8 text-center"
-      role="alert"
-    >
-      <h2 className="text-lg font-bold text-[var(--text-primary)]">
+    <div className={styles.emptyState} role="alert">
+      <h2 className="text-sm font-semibold text-[var(--text-primary)]">
         Couldn&apos;t load repositories
       </h2>
-      <p className="mt-2 max-w-[520px] text-sm leading-normal text-[var(--text-secondary)]">
+      <p className="mt-2 max-w-[520px] text-[13px] leading-normal text-[var(--text-secondary)]">
         {error}
       </p>
       <Button
@@ -317,7 +209,9 @@ function DirectoryLoadFailure({
         type="button"
         variant="outline"
       >
-        <RefreshCw className={cn('size-4', retrying && 'animate-spin')} />
+        <RefreshCw
+          className={cn('size-4', retrying && 'animate-spin motion-reduce:animate-none')}
+        />
         {retrying ? 'Retrying...' : 'Retry'}
       </Button>
     </div>
@@ -326,17 +220,15 @@ function DirectoryLoadFailure({
 
 function EmptyDirectory({ newRepositoryPath }: { newRepositoryPath: string }) {
   return (
-    <div className="flex min-h-[360px] flex-col items-center justify-center rounded-[var(--radius-card)] border border-[var(--stroke-default)] bg-[var(--surface-card)] p-8 text-center">
-      <div className="flex size-10 items-center justify-center rounded-[var(--radius-control)] border border-[var(--accent-commit)]/20 bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]">
-        <LayoutTemplate className="size-5" />
-      </div>
-      <h2 className="mt-4 text-lg font-bold text-[var(--text-primary)]">No repositories yet</h2>
-      <p className="mt-2 max-w-[420px] text-sm leading-normal text-[var(--text-secondary)]">
-        Create a repository, shape your YAML or JSON in a Workspace, then review, commit, and export
-        it.
+    <div className={styles.emptyState}>
+      <RepoMark />
+      <h2>No repositories yet</h2>
+      <p>
+        Give your next project a place to grow. Create a repository, then bring your source material
+        into its Workspace.
       </p>
-      <Button asChild className="mt-5" variant="commit">
-        <Link href={newRepositoryPath}>
+      <Button asChild className="mt-5">
+        <Link href={newRepositoryPath} className={styles.primaryLink}>
           <Plus className="size-4" /> New repository
         </Link>
       </Button>
@@ -344,7 +236,37 @@ function EmptyDirectory({ newRepositoryPath }: { newRepositoryPath: string }) {
   );
 }
 
+function SectionHeading({ count, title }: { count?: string; title: string }) {
+  return (
+    <div className={styles.sectionHeading}>
+      <h2>{title}</h2>
+      {count && <span>{count}</span>}
+    </div>
+  );
+}
+
 export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { ownerSlug?: string }) {
+  return (
+    <Suspense fallback={null}>
+      <ProjectDirectoryContent key={ownerSlug} ownerSlug={ownerSlug} />
+    </Suspense>
+  );
+}
+
+function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const deletedView = searchParams.get('view') === 'deleted';
+  const pageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (pageRef.current) pageRef.current.scrollTop = 0;
+  }, [deletedView]);
+  const deletedParams = new URLSearchParams(searchParams.toString());
+  deletedParams.set('view', 'deleted');
+  const deletedHref = `${pathname}?${deletedParams.toString()}`;
+  const activeParams = new URLSearchParams(searchParams.toString());
+  activeParams.delete('view');
+  const activeHref = `${pathname}${activeParams.size ? `?${activeParams.toString()}` : ''}`;
   const projectStoreRemove = useProjectStore((state) => state.removeProject);
   const projectStoreUpdate = useProjectStore((state) => state.updateProject);
   const {
@@ -356,12 +278,18 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
     rename: renameProject,
   } = useProjects(50, ownerSlug);
   const [query, setQuery] = useState('');
+  const [repositoriesExpanded, setRepositoriesExpanded] = useState(false);
   const [renameTarget, setRenameTarget] = useState<ProjectSummary | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
+  const nameCheck = useRepositoryName(renameTarget?.namespace, renameValue, renameTarget?.id);
   const [deleteTarget, setDeleteTarget] = useState<ProjectSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<ReturnType<typeof repositoryMutationError> | null>(
+    null
+  );
+  const [notice, setNotice] = useState<{ message: string; deleted?: boolean } | null>(null);
   const [recentProjectIds] = useState(() => readRecentProjectIds());
   const isPersonalNamespace = ownerSlug !== DEFAULT_OWNER_SLUG;
   const newRepositoryPath = `/${ownerSlug}/new`;
@@ -394,11 +322,8 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
     async (event?: FormEvent<HTMLFormElement>) => {
       event?.preventDefault();
       if (!renameTarget || renaming) return;
-      const nextName = renameValue.trim();
-      if (!nextName) {
-        setRenameError('Name is required');
-        return;
-      }
+      if (!nameCheck.canSubmit || !nameCheck.result) return;
+      const nextName = nameCheck.result.name;
       if (nextName === renameTarget.name.trim()) {
         handleRenameDialogOpenChange(false);
         return;
@@ -408,11 +333,12 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
       setRenameError(null);
       try {
         const project = await renameProject(renameTarget.id, nextName);
-        projectStoreUpdate(renameTarget.id, { name: project.name ?? nextName });
+        projectStoreUpdate(renameTarget.id, apiProjectToSummary(project));
+        setNotice({ message: `${renameTarget.name} was renamed to ${project.name}.` });
         setRenameTarget(null);
         setRenameValue('');
-      } catch {
-        setRenameError('Failed to rename repository');
+      } catch (cause) {
+        setRenameError(cause instanceof Error ? cause.message : 'Failed to rename repository');
       } finally {
         setRenaming(false);
       }
@@ -422,22 +348,35 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
       projectStoreUpdate,
       renameProject,
       renameTarget,
-      renameValue,
+      nameCheck.canSubmit,
+      nameCheck.result,
       renaming,
     ]
   );
 
   const handleConfirmDeleteProject = useCallback(async () => {
-    if (!deleteTarget || deleting) return;
+    if (!deleteTarget || deleting || deleteError?.refreshRequired) return;
     setDeleting(true);
+    setDeleteError(null);
     try {
       await removeProject(deleteTarget.id);
       projectStoreRemove(deleteTarget.id);
+      setNotice({
+        message: `${deleteTarget.name} was deleted. Its data and names are kept.`,
+        deleted: true,
+      });
       setDeleteTarget(null);
+    } catch (cause) {
+      setDeleteError(repositoryMutationError(cause));
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, deleting, projectStoreRemove, removeProject]);
+  }, [deleteTarget, deleting, deleteError, projectStoreRemove, removeProject]);
+
+  const openDeleteDialog = useCallback((project: ProjectSummary) => {
+    setDeleteError(null);
+    setDeleteTarget(project);
+  }, []);
 
   const filteredProjects = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -451,145 +390,219 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
     () => orderProjectsByRecentOpen(filteredProjects, recentProjectIds).slice(0, 2),
     [filteredProjects, recentProjectIds]
   );
-  const pinnedProjects = recentProjects.length > 0 ? recentProjects : filteredProjects.slice(0, 2);
   const hasLoadedProjects = projectSummaries.length > 0;
-  const dataAvailable = hasLoadedProjects || (!loading && !error);
 
   return (
-    <div className="min-h-screen bg-[var(--surface-app)] text-[var(--text-primary)]">
-      <DirectoryTopBar
-        isPersonalNamespace={isPersonalNamespace}
-        onRefresh={handleRefreshProjects}
-        ownerSlug={ownerSlug}
-        refreshing={loading}
+    <div className={cn(palette.scope, management.shell)}>
+      <DiscoverHeader
+        owner={ownerSlug}
+        namespaceTab="repositories"
+        settingsHref={`/settings/provider-credentials?owner=${encodeURIComponent(ownerSlug)}`}
+        contextLabel={isPersonalNamespace ? 'Personal' : 'Organization'}
       />
-      <main className="mx-auto grid max-w-[1560px] grid-cols-1 gap-8 px-6 py-10 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="min-w-0 space-y-8">
-          <NamespaceHeader
-            dataAvailable={dataAvailable}
-            isPersonalNamespace={isPersonalNamespace}
-            ownerSlug={ownerSlug}
-            projects={projectSummaries}
-          />
 
-          {error && hasLoadedProjects && (
-            <div
-              className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-card)] border border-[var(--status-error)]/25 bg-[var(--surface-card)] p-4 text-sm font-semibold text-[var(--status-error)]"
-              role="alert"
-            >
-              <span>Couldn&apos;t refresh repositories. Showing the last loaded data.</span>
-              <Button
-                disabled={loading}
-                onClick={handleRefreshProjects}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                <RefreshCw className={cn('size-4', loading && 'animate-spin')} />
-                Retry
-              </Button>
-            </div>
-          )}
-
-          {loading && projectSummaries.length === 0 ? (
-            <div className="rounded-[var(--radius-card)] border border-[var(--stroke-default)] bg-[var(--surface-card)] p-8 text-sm font-semibold text-[var(--text-secondary)]">
-              Loading repositories...
-            </div>
-          ) : error && projectSummaries.length === 0 ? (
-            <DirectoryLoadFailure
-              error={error}
-              onRetry={handleRefreshProjects}
-              retrying={loading}
-            />
-          ) : projectSummaries.length === 0 ? (
-            <EmptyDirectory newRepositoryPath={newRepositoryPath} />
+      <div className={management.content} ref={pageRef}>
+        <main className={cn(management.scope, management.container)}>
+          {deletedView ? (
+            <DeletedRepositoriesView namespace={ownerSlug} backHref={activeHref} />
           ) : (
             <>
-              <section>
-                <div className="mb-4 flex items-end justify-between gap-4">
-                  <h2 className="text-xl font-bold text-[var(--text-primary)]">
-                    Pinned repositories
-                  </h2>
-                  <span className="hidden text-xs font-bold text-[var(--text-tertiary)] md:block">
-                    {isPersonalNamespace ? 'Personal' : 'Organization'} repositories with shareable
-                    paths
-                  </span>
-                </div>
-                <div className="grid gap-3 lg:grid-cols-2">
-                  {pinnedProjects.map((project) => (
-                    <ProjectCard
-                      compact
-                      key={project.id}
-                      onDelete={setDeleteTarget}
-                      onRename={openRenameDialog}
-                      ownerSlug={ownerSlug}
-                      project={project}
-                    />
-                  ))}
-                </div>
-              </section>
+              <DirectoryIntroduction
+                isPersonalNamespace={isPersonalNamespace}
+                ownerSlug={ownerSlug}
+              />
+              <div className={styles.toolbar}>
+                <label className={styles.search}>
+                  <span className="sr-only">Find a repository</span>
+                  <Search aria-hidden="true" className="size-4" />
+                  <Input
+                    type="search"
+                    aria-controls="repository-list"
+                    aria-describedby={
+                      projectSummaries.length === 50 ? 'repository-list-scope' : undefined
+                    }
+                    onChange={(event) => {
+                      setQuery(event.target.value);
+                      setRepositoriesExpanded(false);
+                    }}
+                    placeholder="Find a repository..."
+                    value={query}
+                  />
+                </label>
+                <Button
+                  aria-label="Refresh repositories"
+                  title="Refresh repositories"
+                  disabled={loading}
+                  onClick={handleRefreshProjects}
+                  size="icon"
+                  variant="outline"
+                >
+                  <RefreshCw
+                    className={cn('size-4', loading && 'animate-spin motion-reduce:animate-none')}
+                  />
+                </Button>
+                <Link
+                  href={deletedHref}
+                  scroll={false}
+                  className={cn(styles.deletedLink, focusRing)}
+                >
+                  <Trash2 aria-hidden="true" className="size-4" /> Deleted repositories
+                </Link>
+                <Button asChild>
+                  <Link href={newRepositoryPath} className={styles.primaryLink}>
+                    <Plus className="size-4" /> New repository
+                  </Link>
+                </Button>
+              </div>
 
-              <section>
-                <div className="mb-4 flex items-end justify-between gap-4">
-                  <h2 className="text-xl font-bold text-[var(--text-primary)]">Repositories</h2>
-                  <span className="text-xs font-bold text-[var(--text-tertiary)]">
-                    {filteredProjects.length} repos
-                  </span>
+              {notice && (
+                <div className={cn(management.notice, styles.notice)}>
+                  <CheckCircle2
+                    aria-hidden="true"
+                    className={cn('size-4', management.successIcon)}
+                  />
+                  <output>
+                    {notice.message}{' '}
+                    {notice.deleted && (
+                      <Link href={deletedHref} scroll={false}>
+                        Manage deleted repositories
+                      </Link>
+                    )}
+                  </output>
                 </div>
-                <div className="mb-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
-                  <label className="relative min-w-0">
-                    <span className="sr-only">Find a repository</span>
-                    <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--text-tertiary)]" />
-                    <input
-                      className="h-10 w-full rounded-[var(--radius-control)] border border-[var(--stroke-default)] bg-[var(--surface-card)] pl-9 pr-3 text-sm font-semibold text-[var(--text-primary)] outline-none transition-colors placeholder:text-[var(--text-tertiary)] focus:border-[var(--stroke-strong)] focus:ring-2 focus:ring-[var(--ring)]/30"
-                      onChange={(event) => setQuery(event.target.value)}
-                      placeholder="Find a repository..."
-                      value={query}
+              )}
+
+              {error && hasLoadedProjects && (
+                <div className={cn(management.notice, styles.refreshError)} role="alert">
+                  <span>Couldn&apos;t refresh repositories. Showing the last loaded data.</span>
+                  <Button
+                    disabled={loading}
+                    onClick={handleRefreshProjects}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    <RefreshCw
+                      className={cn('size-4', loading && 'animate-spin motion-reduce:animate-none')}
                     />
-                  </label>
-                  <Button asChild variant="commit">
-                    <Link href={newRepositoryPath}>
-                      <Plus className="size-4" /> New repository
-                    </Link>
+                    Retry
                   </Button>
                 </div>
-                <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--stroke-default)] bg-[var(--surface-card)]">
-                  {filteredProjects.length > 0 ? (
-                    filteredProjects.map((project) => (
-                      <div
-                        className="border-b border-[var(--stroke-divider)] last:border-b-0"
-                        key={project.id}
-                      >
-                        <ProjectCard
-                          onDelete={setDeleteTarget}
-                          onRename={openRenameDialog}
-                          ownerSlug={ownerSlug}
-                          project={project}
-                        />
+              )}
+
+              {loading && projectSummaries.length === 0 ? (
+                <output className={styles.loading}>Loading repositories...</output>
+              ) : error && projectSummaries.length === 0 ? (
+                <DirectoryLoadFailure
+                  error={error}
+                  onRetry={handleRefreshProjects}
+                  retrying={loading}
+                />
+              ) : projectSummaries.length === 0 ? (
+                <EmptyDirectory newRepositoryPath={newRepositoryPath} />
+              ) : (
+                <>
+                  {recentProjects.length > 0 && !query.trim() && (
+                    <section
+                      className={styles.section}
+                      aria-labelledby="recent-repositories-heading"
+                    >
+                      <div className={styles.sectionHeading}>
+                        <h2 id="recent-repositories-heading">
+                          <Clock3 aria-hidden="true" className="size-4" /> Recently opened
+                        </h2>
+                        <span>On this browser</span>
                       </div>
-                    ))
-                  ) : (
-                    <div className="flex items-center justify-between gap-4 p-5 text-sm font-semibold text-[var(--text-secondary)]">
-                      <span>No repositories match this filter.</span>
-                      <Button onClick={() => setQuery('')} type="button" variant="canvas-outline">
-                        Clear
-                      </Button>
-                    </div>
+                      <div className={styles.recentGrid}>
+                        {recentProjects.map((project) => (
+                          <RecentProjectCard key={project.id} project={project} />
+                        ))}
+                      </div>
+                    </section>
                   )}
-                </div>
-              </section>
+
+                  <section className={styles.section}>
+                    <SectionHeading
+                      count={
+                        query.trim()
+                          ? `${filteredProjects.length} matches`
+                          : `${projectSummaries.length} loaded`
+                      }
+                      title="Repositories"
+                    />
+                    {projectSummaries.length === 50 && (
+                      <p className={styles.listScope} id="repository-list-scope">
+                        Showing the first 50 repositories. Search filters this loaded list.
+                      </p>
+                    )}
+                    <div className={styles.repositories} id="repository-list" aria-busy={loading}>
+                      {filteredProjects.length > 0 ? (
+                        <div>
+                          {(repositoriesExpanded
+                            ? filteredProjects
+                            : filteredProjects.slice(0, 6)
+                          ).map((project) => (
+                            <ProjectRow
+                              key={project.id}
+                              onDelete={openDeleteDialog}
+                              onRename={openRenameDialog}
+                              ownerSlug={ownerSlug}
+                              project={project}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <div className={styles.noResults}>
+                          <Search aria-hidden="true" className="size-5" />
+                          <h3>No repositories match this filter.</h3>
+                          <p>Try another name or description, or clear your search.</p>
+                          <Button
+                            onClick={() => setQuery('')}
+                            type="button"
+                            variant="canvas-outline"
+                          >
+                            Clear
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    {filteredProjects.length > 6 ? (
+                      <button
+                        className={styles.expand}
+                        aria-expanded={repositoriesExpanded}
+                        aria-controls="repository-list"
+                        onClick={() => setRepositoriesExpanded((value) => !value)}
+                        type="button"
+                      >
+                        {repositoriesExpanded ? (
+                          <ChevronUp aria-hidden="true" />
+                        ) : (
+                          <ChevronDown aria-hidden="true" />
+                        )}
+                        {repositoriesExpanded
+                          ? 'Show less'
+                          : `Show all ${filteredProjects.length} repositories`}
+                      </button>
+                    ) : null}
+                  </section>
+                </>
+              )}
             </>
           )}
-        </div>
-        <DirectorySideRail dataAvailable={dataAvailable} projects={projectSummaries} />
-      </main>
+        </main>
+      </div>
 
       <Dialog open={Boolean(renameTarget)} onOpenChange={handleRenameDialogOpenChange}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent
+          className={cn(palette.scope, management.scope, management.dialog, 'sm:max-w-[480px]')}
+          showCloseButton={!renaming}
+        >
           <form className="grid gap-4" onSubmit={handleRenameProject}>
             <DialogHeader>
               <DialogTitle>Rename Repository</DialogTitle>
-              <DialogDescription>Rename this structured state repository.</DialogDescription>
+              <DialogDescription>
+                Rename {renameTarget ? getProjectRepoPath(renameTarget) : 'this repository'}.
+              </DialogDescription>
             </DialogHeader>
             <div className="grid gap-2">
               <label
@@ -610,8 +623,13 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
                 placeholder={DEFAULT_PROJECT_NAME}
                 value={renameValue}
               />
+              <RepositoryNameFeedback check={nameCheck} />
+              <p className="text-xs text-[var(--text-secondary)]">
+                Previous addresses stay reserved and redirect to the new address.
+              </p>
               {renameError && (
                 <p
+                  role="alert"
                   className="text-xs text-[var(--status-error)]"
                   id="directory-rename-project-error"
                 >
@@ -628,7 +646,7 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
               >
                 Cancel
               </Button>
-              <Button disabled={renaming || !renameValue.trim()} type="submit" variant="commit">
+              <Button disabled={renaming || !nameCheck.canSubmit} type="submit">
                 {renaming ? 'Saving...' : 'Save'}
               </Button>
             </DialogFooter>
@@ -642,14 +660,23 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
           if (!open && !deleting) setDeleteTarget(null);
         }}
       >
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent
+          className={cn(palette.scope, management.scope, management.dialog, 'sm:max-w-[480px]')}
+          showCloseButton={!deleting}
+        >
           <DialogHeader>
-            <DialogTitle>Delete Repository</DialogTitle>
-            <DialogDescription>
-              Delete "{deleteTarget?.name ?? DEFAULT_PROJECT_NAME}" from the backend? This cannot be
-              undone.
+            <DialogTitle>Delete repository?</DialogTitle>
+            <DialogDescription className="break-words">
+              Delete "{deleteTarget?.name ?? DEFAULT_PROJECT_NAME}"? Collaborators lose access. Its
+              data and all names stay reserved. Use Deleted repositories to restore it or
+              permanently delete it and release its names.
             </DialogDescription>
           </DialogHeader>
+          {deleteError && (
+            <p role="alert" className="text-sm text-[var(--status-error)]">
+              {deleteError.message}
+            </p>
+          )}
           <DialogFooter>
             <Button
               disabled={deleting}
@@ -659,14 +686,26 @@ export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { owner
             >
               Cancel
             </Button>
-            <Button
-              disabled={deleting}
-              onClick={handleConfirmDeleteProject}
-              type="button"
-              variant="destructive"
-            >
-              {deleting ? 'Deleting...' : 'Delete'}
-            </Button>
+            {deleteError?.refreshRequired ? (
+              <Button
+                variant="canvas-outline"
+                onClick={() => {
+                  setDeleteTarget(null);
+                  void refreshProjects();
+                }}
+              >
+                Refresh list
+              </Button>
+            ) : (
+              <Button
+                disabled={deleting}
+                onClick={handleConfirmDeleteProject}
+                type="button"
+                variant="destructive"
+              >
+                {deleting ? 'Deleting...' : 'Delete'}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

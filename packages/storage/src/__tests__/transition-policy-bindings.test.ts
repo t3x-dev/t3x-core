@@ -6,6 +6,7 @@ import { insertProject } from '../queries/projects';
 import {
   bindTransitionPolicy,
   getTransitionPolicyBinding,
+  listTransitionPolicyBindings,
   TransitionPolicyBindingIntegrityError,
   unbindTransitionPolicy,
 } from '../queries/transition-policy-bindings';
@@ -71,6 +72,35 @@ describe('Transition AcceptancePolicy bindings', () => {
   });
 
   afterAll(async () => cleanup());
+
+  it('lists every verified binding of one project and none from others', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Policy list' }));
+    const other = await insertProject(db, testData.project({ name: 'Policy list other' }));
+    for (const [projectId, refName, allowSelfApproval] of [
+      [project.projectId, 'main', false],
+      [project.projectId, 'release', true],
+      [other.projectId, 'main', true],
+    ] as const) {
+      await bindTransitionPolicy(db, {
+        projectId,
+        refName,
+        uri: `t3x://policies/list/${refName}`,
+        policy: policy(allowSelfApproval),
+        actor: { kind: 'human', id: 'user:maintainer' },
+      });
+    }
+
+    const listed = await listTransitionPolicyBindings(db, project.projectId);
+    expect(
+      listed
+        .map((binding) => [binding.refName, binding.policy.authorization.allowSelfApproval])
+        .sort()
+    ).toEqual([
+      ['main', false],
+      ['release', true],
+    ]);
+    expect(await listTransitionPolicyBindings(db, 'missing-project')).toEqual([]);
+  });
 
   it.each([
     { operation: 'rebind', hasExistingBinding: true },

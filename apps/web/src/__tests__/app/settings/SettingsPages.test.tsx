@@ -78,7 +78,9 @@ describe('settings pages', () => {
 
     expect(screen.getByRole('heading', { name: 'Provider credentials' })).toBeInTheDocument();
     expect(
-      screen.getByText('Configure local provider API keys and connection defaults.')
+      screen.getByText(
+        'Deployment operators manage shared AI credentials here. Database credentials take priority over environment configuration.'
+      )
     ).toBeInTheDocument();
     expect(screen.getByText('Mock Providers Settings Panel')).toBeInTheDocument();
   });

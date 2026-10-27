@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { commitHashLabel } from '@/domain/format/formatters';
 import { cn } from '@/utils/cn';
+import navigationStyles from './StateNavigationControls.module.css';
 
 interface StateBranchControlsProps {
   branch: string;
@@ -118,7 +119,7 @@ export function StateBranchControls({
         <PopoverTrigger asChild>
           <button
             aria-label={`Switch branches/tags, current branch ${branch}`}
-            className="inline-flex h-7 min-w-[164px] max-w-[260px] items-center gap-2 rounded-[5px] border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2.5 text-xs font-medium text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)] transition-colors hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)] focus-visible:border-[var(--accent-commit)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-commit)]/20"
+            className={navigationStyles.branch}
             disabled={disabled}
             type="button"
           >
@@ -330,7 +331,8 @@ export function StateBranchControls({
             <DialogHeader>
               <DialogTitle>Create a new branch</DialogTitle>
               <DialogDescription>
-                Start a new line of structured state from {branch}.
+                Start with the same committed content and Schema as {branch}. Future changes stay
+                independent. Uncommitted Draft changes are not copied.
               </DialogDescription>
             </DialogHeader>
 

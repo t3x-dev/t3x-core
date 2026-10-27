@@ -1,30 +1,40 @@
-import type { ChangeProjectionV1, ReviewSnapshotV1 } from '@t3x-dev/api-client';
+import type {
+  ChangeProjectionV1,
+  ReviewSnapshotV1,
+  WorkspaceAuthoringView,
+  WorkspaceFullSchemaReview,
+} from '@t3x-dev/api-client';
 import type { TransitionViewV1 } from '@t3x-dev/core';
 import * as yaml from 'js-yaml';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { updateConversationContextPins } from '@/commands/conversations';
 import { formatUserFacingError } from '@/domain/format/errors';
-import { providerSupports } from '@/domain/providerCapabilities';
-import { includedImportPinIds } from '@/domain/workspaces/includedImportPinIds';
+import {
+  authoringDeterministicValidation,
+  authoringReviewDocuments,
+} from '@/domain/workspaces/authoringReview';
+import { EMPTY_WORKSPACE_REVIEW } from '@/domain/workspaces/changeDecision';
+import {
+  DEFAULT_WORKSPACE_SCHEMA_BINDING,
+  rebindWorkspaceCandidate,
+  workspaceSchemaBindingsEqual,
+} from '@/domain/workspaces/schemaBindings';
 import { useMaterialUpload } from '@/hooks/materials/useMaterialUpload';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
-import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
-import { useSourceThreadGeneration } from '@/hooks/sourceThreads/useSourceThreadGeneration';
 import { validateWorkspaceCandidateYOps } from '@/hooks/workspaces/useWorkspaceYOps';
+import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
 import type {
   WorkspaceTransitionContent,
   WorkspaceTransitionOutcome,
   WorkspaceTransitionPrecondition,
 } from '@/infrastructure/workspaces';
 import { decideWorkspaceTransition, reviewWorkspaceTransition } from '@/queries/workspaces';
-import { useChatSessionStore } from '@/store/chatSessionStore';
 import { usePinsStore } from '@/store/pinsStore';
+import { useProjectWorkspaceSchemaBindingsStore } from '@/store/projectWorkspaceSchemaBindingsStore';
 import type { Material } from '@/types/api';
-import type { AttachedImage } from '@/types/generation';
 import type {
   SourceBundleItem,
-  SourceConversationTurn,
   WorkspaceCandidate,
+  WorkspaceSchemaBinding,
   WorkspaceSourceArtifact,
 } from '@/types/workspaces';
 import type { WorkspaceYOpsValidationResult } from '@/types/workspaceYops';
@@ -38,13 +48,6 @@ export interface WorkspacePreparationOptions {
 type WorkspaceDraftCommand = string;
 export type WorkspaceDraftCommandName = WorkspaceDraftCommand;
 
-export interface WorkspaceComposeReviewMessage {
-  author: string;
-  content: string;
-  id: string;
-  role: 'assistant' | 'user';
-}
-
 export interface WorkspaceReviewSessionState {
   changeProjection: ChangeProjectionV1 | null;
   content: WorkspaceTransitionContent | null;
@@ -53,13 +56,13 @@ export interface WorkspaceReviewSessionState {
   reviewSnapshot: ReviewSnapshotV1 | null;
   transitionId: string | null;
   view: TransitionViewV1 | null;
+  schemaReview?: WorkspaceFullSchemaReview | null;
 }
 
 export interface WorkspaceComposeReviewControllerOptions {
   candidate: WorkspaceCandidate;
   flowError?: string;
   onApplyAfterRefresh?: (workspace: WorkspaceCandidate) => Promise<WorkspaceCandidate>;
-  onChatSourceEvidenceChange?: (sourceId: string, source: SourceBundleItem | null) => void;
   onDraftCommand?: (
     workspace: WorkspaceCandidate,
     command: WorkspaceDraftCommand
@@ -75,8 +78,6 @@ export interface WorkspaceComposeReviewControllerOptions {
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
   onYOpsCommitted?: (commitHash: string, branch: string, workspace: WorkspaceCandidate) => void;
-  sourceConversationId?: string;
-  sourceParentCommitHash?: string;
   scenarioOptions?: WorkspaceCandidate[];
 }
 
@@ -88,13 +89,13 @@ const EMPTY_REVIEW: WorkspaceReviewSessionState = {
   reviewSnapshot: null,
   transitionId: null,
   view: null,
+  schemaReview: null,
 };
 
 export function useWorkspaceComposeReviewController({
   candidate,
   flowError,
   onApplyAfterRefresh,
-  onChatSourceEvidenceChange,
   onDraftCommand,
   onPrepareDraft,
   onScenarioArchive,
@@ -104,114 +105,66 @@ export function useWorkspaceComposeReviewController({
   onSourceMaterialUploaded,
   onViewCommitInState,
   onYOpsCommitted,
-  sourceConversationId: sourceConversationIdProp,
-  sourceParentCommitHash,
   scenarioOptions = [],
 }: WorkspaceComposeReviewControllerOptions) {
   const [workingCandidate, setWorkingCandidate] = useState(candidate);
-  const [sourceConversationId, setSourceConversationId] = useState(
-    sourceConversationIdProp ?? findSourceConversationId(candidate)
-  );
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [review, setReview] = useState<WorkspaceReviewSessionState>(EMPTY_REVIEW);
   const [decisionReason, setDecisionReason] = useState('');
   const [hasCollaborationConflict, setHasCollaborationConflict] = useState(false);
+  const [assistantPrefill, setAssistantPrefill] = useState<string | null>(null);
   const reviewGenerationRef = useRef(0);
   const activeCandidateIdRef = useRef(candidate.id);
-  const sourceConversationIdRef = useRef(sourceConversationId);
-
-  const modelSelection = useChatModelSelection({});
-  const thinkingEnabled = useChatSessionStore((state) => state.thinkingEnabled);
-  const setThinking = useChatSessionStore((state) => state.setThinking);
-  const supportsThinking = providerSupports(modelSelection.selectedProvider ?? '', 'thinking');
+  const candidateVersion = JSON.stringify([
+    candidate.id,
+    candidate.revision,
+    candidate.schemaBindings,
+    candidate.authoringLedger,
+  ]);
+  const candidateVersionRef = useRef(candidateVersion);
   const materialUpload = useMaterialUpload();
   const pinsCrud = usePinsCrud();
   const { fetch: refreshPins } = pinsCrud;
   const pins = usePinsStore((state) => state.pins);
 
   useEffect(() => {
-    if (!supportsThinking && thinkingEnabled) setThinking(false);
-  }, [supportsThinking, thinkingEnabled, setThinking]);
-
-  useEffect(() => {
     const candidateChanged = activeCandidateIdRef.current !== candidate.id;
+    const versionChanged = candidateVersionRef.current !== candidateVersion;
+    candidateVersionRef.current = candidateVersion;
     activeCandidateIdRef.current = candidate.id;
     if (candidateChanged) {
       reviewGenerationRef.current += 1;
       setWorkingCandidate(candidate);
-      setSourceConversationId(sourceConversationIdProp ?? findSourceConversationId(candidate));
       setReview(EMPTY_REVIEW);
       setDecisionReason('');
       setHasCollaborationConflict(false);
       setLocalError(null);
       setNotice(null);
+      setAssistantPrefill(null);
       return;
+    }
+    if (versionChanged) {
+      // The legacy preparation path performs its own save; that acknowledgement
+      // is not a concurrent edit. Managed authoring Review itself is read-only.
+      if (candidate.authoringLedger || busyAction !== 'review.prepare')
+        reviewGenerationRef.current += 1;
+      setReview(EMPTY_REVIEW);
+      setDecisionReason('');
+      if (busyAction !== 'review.prepare' && review.transitionId)
+        setNotice('Draft changed; prepare a complete Review again.');
     }
     setWorkingCandidate((current) =>
       candidate.revision === undefined || (current.revision ?? -1) <= candidate.revision
         ? candidate
         : current
     );
-  }, [candidate, sourceConversationIdProp]);
-
-  useEffect(() => {
-    if (sourceConversationIdProp) setSourceConversationId(sourceConversationIdProp);
-  }, [sourceConversationIdProp]);
-
-  useEffect(() => {
-    sourceConversationIdRef.current = sourceConversationId;
-  }, [sourceConversationId]);
+  }, [candidate, candidateVersion, busyAction, review.transitionId]);
 
   useEffect(() => {
     void refreshPins(candidate.projectId);
   }, [candidate.projectId, refreshPins]);
-
-  const syncImportPinsToConversation = useCallback(async (conversationId: string) => {
-    await updateConversationContextPins(
-      conversationId,
-      includedImportPinIds(usePinsStore.getState().pins)
-    );
-  }, []);
-
-  const syncImportPinsIfConversationReady = useCallback(async () => {
-    const conversationId = sourceConversationIdRef.current;
-    if (!conversationId) return;
-    try {
-      await syncImportPinsToConversation(conversationId);
-    } catch {
-      // The next send retries through onConversationReady.
-    }
-  }, [syncImportPinsToConversation]);
-
-  const chat = useSourceThreadGeneration({
-    projectId: candidate.projectId,
-    conversationId: sourceConversationId,
-    title: `${candidate.title} source chat`,
-    provider: modelSelection.selectedProvider ?? undefined,
-    model: modelSelection.selectedModel ?? undefined,
-    parentCommitHash: sourceParentCommitHash,
-    onConversationCreated: setSourceConversationId,
-    onConversationReady: syncImportPinsToConversation,
-  });
-
-  const rawMessages = useMemo(() => {
-    if (chat.messages.length > 0) return chat.messages;
-    const source = workingCandidate.sourceBundle.find(
-      (item) =>
-        item.type === 'chat' &&
-        (!sourceConversationId || item.conversationId === sourceConversationId)
-    );
-    return (source?.previewTurns ?? []).map((turn) => ({
-      id: turn.id,
-      role: turn.role,
-      content: turn.content,
-      conversationId: turn.conversationId,
-      projectId: turn.projectId,
-      rings: turn.rings,
-    }));
-  }, [chat.messages, sourceConversationId, workingCandidate.sourceBundle]);
 
   const materialSources = useMemo(
     () =>
@@ -226,33 +179,13 @@ export function useWorkspaceComposeReviewController({
     [pins, workingCandidate.sourceBundle]
   );
 
-  const persistedSourceTurns = useMemo(
-    () => rawMessages.filter((message) => isPersistedTurnId(message.id)).map(messageToSourceTurn),
-    [rawMessages]
-  );
-
-  const messages = useMemo<WorkspaceComposeReviewMessage[]>(() => {
-    const persisted = rawMessages.map((message) => ({
-      author: message.role === 'user' ? 'You' : 'Assistant',
-      content: message.content,
-      id: message.id,
-      role: message.role,
-    }));
-    if (chat.streamingContent.trim()) {
-      persisted.push({
-        author: 'Assistant',
-        content: chat.streamingContent,
-        id: `${sourceConversationId ?? candidate.id}:streaming`,
-        role: 'assistant',
-      });
-    }
-    return persisted;
-  }, [candidate.id, chat.streamingContent, rawMessages, sourceConversationId]);
-
   const persistCandidate = useCallback(
     async (nextCandidate: WorkspaceCandidate, command: WorkspaceDraftCommand) => {
       setWorkingCandidate(nextCandidate);
-      if (command !== 'review.prepare') setReview(EMPTY_REVIEW);
+      if (command !== 'review.prepare') {
+        reviewGenerationRef.current += 1;
+        setReview(EMPTY_REVIEW);
+      }
       if (!onDraftCommand) return nextCandidate;
       try {
         const saved = await onDraftCommand(nextCandidate, command);
@@ -295,9 +228,7 @@ export function useWorkspaceComposeReviewController({
       needsSchema
         ? {
             ...workingCandidate,
-            schemaBindings: [
-              { schemaName: 'PRD Schema', canonicalName: 't3x/prd', version: 'v2', mode: 'pinned' },
-            ],
+            schemaBindings: [DEFAULT_WORKSPACE_SCHEMA_BINDING],
           }
         : workingCandidate,
       'authoring.initialize'
@@ -341,70 +272,27 @@ export function useWorkspaceComposeReviewController({
     [busyAction]
   );
 
-  const chatSourceSyncInFlightRef = useRef<{
-    promise: Promise<WorkspaceCandidate>;
-    signature: string;
-  } | null>(null);
-
-  const syncChatSource = useCallback(
-    async (turns: readonly SourceConversationTurn[]) => {
-      const sourceId = getSourceChatSourceId(workingCandidate.id, sourceConversationId);
-      const source = buildChatSourceBundle(
-        sourceId,
-        workingCandidate.title,
-        sourceConversationId,
-        turns
-      );
-      const existingSource = findChatSource(workingCandidate.sourceBundle, sourceId);
-      if (chatSourceMatches(existingSource, source)) return workingCandidate;
-      const signature = chatSourceSignature(source);
-      if (chatSourceSyncInFlightRef.current?.signature === signature) {
-        return chatSourceSyncInFlightRef.current.promise;
-      }
-      onChatSourceEvidenceChange?.(sourceId, source);
-      const nextCandidate = invalidateWorkspaceProposal({
-        ...workingCandidate,
-        sourceBundle: upsertSource(workingCandidate.sourceBundle, sourceId, source),
-      });
-      const promise = persistCandidate(nextCandidate, 'source.include').finally(() => {
-        if (chatSourceSyncInFlightRef.current?.signature === signature) {
-          chatSourceSyncInFlightRef.current = null;
-        }
-      });
-      chatSourceSyncInFlightRef.current = { promise, signature };
-      return promise;
-    },
-    [onChatSourceEvidenceChange, persistCandidate, sourceConversationId, workingCandidate]
-  );
-
   const addMaterial = useCallback(
     async (material: Material) => {
-      await pinsCrud.add(candidate.projectId, 'import', material.id);
-      if (
-        !usePinsStore
+      const isIncluded = () =>
+        usePinsStore
           .getState()
-          .pins.some((pin) => pin.type === 'import' && pin.ref_id === material.id)
-      ) {
-        throw new Error('Uploaded material could not be included.');
-      }
+          .pins.some((pin) => pin.type === 'import' && pin.ref_id === material.id);
+      if (!isIncluded()) await pinsCrud.add(candidate.projectId, 'import', material.id);
+      if (!isIncluded()) throw new Error('Uploaded material could not be included.');
       const source = materialToSourceBundleItem(material);
-      const nextCandidate = invalidateWorkspaceProposal({
+      const withSource = {
         ...workingCandidate,
         sourceBundle: upsertSource(workingCandidate.sourceBundle, source.id, source),
-      });
-      await persistCandidate(nextCandidate, 'source.add');
+      };
+      await persistCandidate(
+        workingCandidate.authoringLedger ? withSource : invalidateWorkspaceProposal(withSource),
+        'source.add'
+      );
       await onSourceMaterialUploaded?.();
-      await syncImportPinsIfConversationReady();
       setNotice(`${material.title} added as source evidence.`);
     },
-    [
-      candidate.projectId,
-      onSourceMaterialUploaded,
-      persistCandidate,
-      pinsCrud,
-      syncImportPinsIfConversationReady,
-      workingCandidate,
-    ]
+    [candidate.projectId, onSourceMaterialUploaded, persistCandidate, pinsCrud, workingCandidate]
   );
 
   const toggleMaterialSource = useCallback(
@@ -426,8 +314,8 @@ export function useWorkspaceComposeReviewController({
             existing ? 'Material could not be excluded.' : 'Material could not be included.'
           );
         }
-        await persistCandidate(invalidateWorkspaceProposal(workingCandidate), 'source.include');
-        await syncImportPinsIfConversationReady();
+        if (!workingCandidate.authoringLedger)
+          await persistCandidate(invalidateWorkspaceProposal(workingCandidate), 'source.include');
         setNotice(included ? 'Material included as source evidence.' : 'Material excluded.');
       } catch (error) {
         setLocalError(formatUserFacingError(error, 'Material source update failed.'));
@@ -435,14 +323,7 @@ export function useWorkspaceComposeReviewController({
         setBusyAction(null);
       }
     },
-    [
-      busyAction,
-      candidate.projectId,
-      persistCandidate,
-      pinsCrud,
-      syncImportPinsIfConversationReady,
-      workingCandidate,
-    ]
+    [busyAction, candidate.projectId, persistCandidate, pinsCrud, workingCandidate]
   );
 
   const uploadFile = useCallback(
@@ -454,11 +335,16 @@ export function useWorkspaceComposeReviewController({
       }
       setBusyAction('source:file');
       setLocalError(null);
+      let uploaded = false;
       try {
-        await addMaterial(await materialUpload.upload(candidate.projectId, file));
+        const material = await materialUpload.upload(candidate.projectId, file);
+        uploaded = true;
+        await addMaterial(material);
         return true;
       } catch (error) {
-        setLocalError(formatUserFacingError(error, 'Material upload failed.'));
+        setLocalError(
+          `${uploaded ? 'Material saved, but Workspace inclusion failed. ' : ''}${formatUserFacingError(error, 'Material upload failed.')}`
+        );
         return false;
       } finally {
         setBusyAction(null);
@@ -467,149 +353,155 @@ export function useWorkspaceComposeReviewController({
     [addMaterial, candidate.projectId, materialUpload]
   );
 
-  const addPaste = useCallback(
-    async (title: string, text: string) => {
-      const content = text.trim();
-      if (!content) return false;
-      const safeTitle = title.trim() || 'Pasted source note';
-      const slug =
-        safeTitle
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-+|-+$/g, '')
-          .slice(0, 48) || 'pasted-source-note';
-      return uploadFile(new File([content], `${slug}.txt`, { type: 'text/plain' }));
-    },
-    [uploadFile]
-  );
-
-  const generateChanges = useCallback(async () => {
-    if (!onPrepareDraft || busyAction) return false;
-    const generation = reviewGenerationRef.current + 1;
-    reviewGenerationRef.current = generation;
-    setBusyAction('draft.generate');
-    setLocalError(null);
-    setNotice('Generating structured changes from the selected source evidence…');
-    setReview(EMPTY_REVIEW);
-    try {
-      const sourceSyncedCandidate =
-        persistedSourceTurns.length > 0
-          ? await syncChatSource(persistedSourceTurns)
-          : workingCandidate;
-      const prepared = await onPrepareDraft(sourceSyncedCandidate, {
-        instruction: chat.input.trim() || undefined,
-        provider: modelSelection.selectedProvider ?? undefined,
-        model: modelSelection.selectedModel ?? undefined,
-      });
-      if (generation !== reviewGenerationRef.current) return false;
-      setWorkingCandidate(prepared);
-      setNotice(
-        prepared.yopsDraft.operations.length > 0
-          ? `${prepared.yopsDraft.operations.length} structured changes generated.`
-          : 'No structured changes were generated. Add source evidence and try again.'
-      );
-      return prepared.yopsDraft.operations.length > 0;
-    } catch (error) {
-      if (generation !== reviewGenerationRef.current) return false;
-      setLocalError(formatUserFacingError(error, 'Change generation failed.'));
-      setNotice(null);
-      return false;
-    } finally {
-      setBusyAction(null);
-    }
-  }, [
-    busyAction,
-    chat.input,
-    modelSelection.selectedModel,
-    modelSelection.selectedProvider,
-    onPrepareDraft,
-    persistedSourceTurns,
-    syncChatSource,
-    workingCandidate,
-  ]);
-
-  const prepareReview = useCallback(async () => {
-    if (!onPrepareDraft || busyAction) return false;
-    const generation = reviewGenerationRef.current + 1;
-    reviewGenerationRef.current = generation;
-    setReview(EMPTY_REVIEW);
-    setBusyAction('review.prepare');
-    setLocalError(null);
-    setNotice('Preparing the exact deterministic result…');
-    try {
-      const sourceSyncedCandidate =
-        persistedSourceTurns.length > 0
-          ? await syncChatSource(persistedSourceTurns)
-          : workingCandidate;
-      const prepared = await onPrepareDraft(sourceSyncedCandidate, {
-        instruction: chat.input.trim() || undefined,
-        provider: modelSelection.selectedProvider ?? undefined,
-        model: modelSelection.selectedModel ?? undefined,
-      });
-      if (generation !== reviewGenerationRef.current) return false;
-      setWorkingCandidate(prepared);
-      if (prepared.yopsDraft.operations.length === 0) {
-        throw new Error('No YOps operations were generated from the selected source evidence.');
-      }
-
-      const deterministicValidation = await validateWorkspaceCandidateYOps(prepared);
-      if (!deterministicValidation.ok) {
-        throw new Error(
-          deterministicValidation.error?.message ?? 'Deterministic YOps validation failed.'
-        );
-      }
-      const content = {
-        trees: deterministicValidation.previewTrees ?? deterministicValidation.baselineTrees,
-        relations:
-          deterministicValidation.previewRelations ?? deterministicValidation.baselineRelations,
-      };
-      const saved = await persistCandidate(prepared, 'review.prepare');
-      if (saved.revision === undefined) {
-        throw new Error('Saved Workspace did not return a review revision.');
-      }
-      const reviewed = await reviewWorkspaceTransition(
-        saved.projectId,
-        saved.id,
-        content,
-        `Review ${saved.yopsDraft.operations.length} structured Workspace changes.`,
-        saved.revision
-      );
-      if (generation !== reviewGenerationRef.current) return false;
-      setReview({
-        changeProjection: reviewed.change_projection,
-        content,
-        deterministicValidation,
-        precondition: reviewed.precondition,
-        reviewSnapshot: reviewed.review_snapshot,
-        transitionId: reviewed.transition_id,
-        view: reviewed.transition,
-      });
-      setNotice('Immutable review prepared from the current draft.');
-      return true;
-    } catch (error) {
+  const prepareReview = useCallback(
+    async (onPrepared?: (snapshot: ReviewSnapshotV1) => void) => {
+      if (busyAction) return false;
+      const generation = reviewGenerationRef.current + 1;
+      reviewGenerationRef.current = generation;
       setReview(EMPTY_REVIEW);
-      setLocalError(formatUserFacingError(error, 'Workspace review preparation failed.'));
-      setNotice(null);
-      return false;
-    } finally {
-      setBusyAction(null);
-    }
-  }, [
-    busyAction,
-    chat.input,
-    modelSelection.selectedModel,
-    modelSelection.selectedProvider,
-    onPrepareDraft,
-    persistCandidate,
-    persistedSourceTurns,
-    syncChatSource,
-    workingCandidate,
-  ]);
+      setBusyAction('review.prepare');
+      setLocalError(null);
+      setNotice('Preparing the exact deterministic result…');
+      try {
+        let authoringView: WorkspaceAuthoringView | null = null;
+        try {
+          authoringView = await getSharedApiClient().workspaces.authoring.read(
+            workingCandidate.projectId,
+            workingCandidate.id
+          );
+        } catch (error) {
+          if (workingCandidate.authoringLedger) throw error;
+          authoringView = null;
+        }
+        if (authoringView?.hasChanges === false) {
+          throw new Error(EMPTY_WORKSPACE_REVIEW);
+        }
+        const documents = authoringReviewDocuments(
+          authoringView ? { ...authoringView, selected: null } : null
+        );
+        if (workingCandidate.authoringLedger && !documents) {
+          throw new Error('The complete Authoring Draft is unavailable. Retry Workspace Review.');
+        }
+        if (authoringView && documents) {
+          const reviewed = await getSharedApiClient().workspaces.authoring.prepareReview(
+            workingCandidate.projectId,
+            workingCandidate.id,
+            {
+              request_id: crypto.randomUUID(),
+              expected_workspace_revision: authoringView.workspaceRevision,
+              expected_revision: authoringView.compositionRevision,
+              expected_ref_head: authoringView.basis.refHead,
+              reason: `Review ${authoringView.netDiff.length} authoring Workspace changes.`,
+            }
+          );
+          if (generation !== reviewGenerationRef.current) return false;
+          const latest = await getSharedApiClient().workspaces.getLatestReviewSnapshot(
+            workingCandidate.projectId,
+            workingCandidate.id,
+            {
+              transition_id: reviewed.view.transition_id,
+            }
+          );
+          if (generation !== reviewGenerationRef.current) return false;
+          if (!latest?.snapshot)
+            throw new Error('The saved review snapshot is unavailable. Prepare Review again.');
+          setReview({
+            changeProjection: latest?.change_projection ?? null,
+            content: documents.current,
+            deterministicValidation: authoringDeterministicValidation(
+              documents,
+              authoringView.netDiff.length
+            ),
+            precondition: {
+              workspace_revision: reviewed.view.precondition.workspace_revision,
+              ref_head: reviewed.view.precondition.ref_head,
+              effect_digest: reviewed.view.precondition.effect_digest,
+              proposal_digest: reviewed.view.precondition.proposal_digest,
+              statement_digests: reviewed.view.precondition.statement_digests,
+              policy_digest: reviewed.view.precondition.policy_digest ?? '',
+            },
+            reviewSnapshot: latest?.snapshot ?? null,
+            transitionId: reviewed.view.transition_id,
+            view: reviewed.view.transition,
+            schemaReview: reviewed.schemaReview ?? latest?.schema_review ?? null,
+          });
+          setNotice('Immutable review prepared from the current draft.');
+          onPrepared?.(latest.snapshot);
+          return true;
+        }
+
+        if (!onPrepareDraft) {
+          throw new Error('Prepare the current Compose draft before Review.');
+        }
+        const prepared = await onPrepareDraft(workingCandidate, {});
+        if (generation !== reviewGenerationRef.current) return false;
+        setWorkingCandidate(prepared);
+        if (prepared.yopsDraft.operations.length === 0) {
+          throw new Error('No YOps operations were generated from the selected source evidence.');
+        }
+
+        const deterministicValidation = await validateWorkspaceCandidateYOps(prepared);
+        if (!deterministicValidation.ok) {
+          throw new Error(
+            deterministicValidation.error?.message ?? 'Deterministic YOps validation failed.'
+          );
+        }
+        const content = {
+          trees: deterministicValidation.previewTrees ?? deterministicValidation.baselineTrees,
+          relations:
+            deterministicValidation.previewRelations ?? deterministicValidation.baselineRelations,
+        };
+        const saved = await persistCandidate(prepared, 'review.prepare');
+        if (saved.revision === undefined) {
+          throw new Error('Saved Workspace did not return a review revision.');
+        }
+        const reviewed = await reviewWorkspaceTransition(
+          saved.projectId,
+          saved.id,
+          content,
+          `Review ${saved.yopsDraft.operations.length} structured Workspace changes.`,
+          saved.revision
+        );
+        if (generation !== reviewGenerationRef.current) return false;
+        setReview({
+          changeProjection: reviewed.change_projection,
+          content,
+          deterministicValidation,
+          precondition: reviewed.precondition,
+          reviewSnapshot: reviewed.review_snapshot,
+          transitionId: reviewed.transition_id,
+          view: reviewed.transition,
+        });
+        setNotice('Immutable review prepared from the current draft.');
+        onPrepared?.(reviewed.review_snapshot);
+        return true;
+      } catch (error) {
+        if (generation !== reviewGenerationRef.current) return false;
+        setReview(EMPTY_REVIEW);
+        setLocalError(formatUserFacingError(error, 'Workspace review preparation failed.'));
+        setNotice(null);
+        return false;
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [busyAction, onPrepareDraft, persistCandidate, workingCandidate]
+  );
 
   const decide = useCallback(
     async (outcome: WorkspaceTransitionOutcome, reason?: string) => {
       if (!review.transitionId || !review.content || !review.precondition || busyAction) {
         setLocalError('Prepare the current draft for review before making a decision.');
+        return null;
+      }
+      if (
+        workingCandidate.authoringLedger &&
+        outcome !== 'rejected' &&
+        (!review.schemaReview || review.schemaReview.base.status === 'unknown')
+      ) {
+        setLocalError(
+          'A complete Workspace Schema Review with a verified Base is required. Prepare Review again.'
+        );
         return null;
       }
       const normalizedReason = reason?.trim();
@@ -644,13 +536,21 @@ export function useWorkspaceComposeReviewController({
         setNotice('Decision recorded without advancing branch history.');
         return null;
       } catch (error) {
+        if (/changed|revision|conflict|stale/i.test(String(error))) setReview(EMPTY_REVIEW);
         setLocalError(formatUserFacingError(error, 'Workspace decision failed.'));
         return null;
       } finally {
         setBusyAction(null);
       }
     },
-    [busyAction, candidate.id, candidate.projectId, onYOpsCommitted, review]
+    [
+      busyAction,
+      candidate.id,
+      candidate.projectId,
+      onYOpsCommitted,
+      review,
+      workingCandidate.authoringLedger,
+    ]
   );
 
   const copyReceipt = useCallback(async () => {
@@ -665,6 +565,23 @@ export function useWorkspaceComposeReviewController({
       return false;
     }
   }, [review.reviewSnapshot]);
+
+  const bindSchema = useCallback(
+    async (binding: WorkspaceSchemaBinding) => {
+      if (workspaceSchemaBindingsEqual(workingCandidate.schemaBindings[0], binding)) {
+        return workingCandidate;
+      }
+      const next = rebindWorkspaceCandidate(workingCandidate, binding, new Date().toISOString());
+      const saved = await persistCandidate(next, 'schema.bind');
+      useProjectWorkspaceSchemaBindingsStore.getState().bindSchema({
+        binding: saved.schemaBindings[0] ?? binding,
+        projectId: saved.projectId,
+        workspaceId: saved.id,
+      });
+      return saved;
+    },
+    [persistCandidate, workingCandidate]
+  );
 
   const viewCommit = useCallback(() => {
     const commitId =
@@ -700,49 +617,21 @@ export function useWorkspaceComposeReviewController({
   );
 
   return {
-    addPaste,
+    bindSchema,
     busyAction,
+    assistantPrefill,
     candidate: workingCandidate,
-    chat: {
-      error: chat.error,
-      input: chat.input,
-      isLoading: chat.isLoading,
-      isStreaming: chat.isStreaming,
-      citations: chat.citations,
-      isThinking: chat.isThinking,
-      messages,
-      searchQuery: chat.searchQuery,
-      send: (images?: AttachedImage[]) => {
-        const text = chat.input.trim();
-        if (!text && !images?.length) return;
-        chat.sendMessage(text || 'Attached image', images?.length ? { images } : undefined);
-      },
-      setInput: chat.setInput,
-      stop: chat.stopGenerating,
-      thinkingContent: chat.thinkingContent,
-      warning: chat.warning,
-    },
+    clearAssistantPrefill: () => setAssistantPrefill(null),
     copyReceipt,
     ensureSaved,
     decide,
     decisionReason,
-    error: localError ?? flowError ?? chat.error,
-    generateChanges,
+    error: localError ?? flowError,
     hasCollaborationConflict,
     isBusy: Boolean(busyAction),
-    model: {
-      availabilityError: modelSelection.availabilityError,
-      change: modelSelection.handleModelChange,
-      loading: modelSelection.loading,
-      ready: modelSelection.isSelectionReady,
-      selectedModel: modelSelection.selectedModel ?? '',
-      selectedProvider: modelSelection.selectedProvider ?? '',
-      setThinking,
-      supportsThinking,
-      thinkingEnabled,
-    },
     materialSources,
     notice,
+    prefillAssistant: (text: string) => setAssistantPrefill(text),
     prepareReview,
     renderedYaml,
     review,
@@ -785,110 +674,6 @@ export function useWorkspaceComposeReviewController({
 export type WorkspaceComposeReviewController = ReturnType<
   typeof useWorkspaceComposeReviewController
 >;
-
-function findSourceConversationId(candidate: WorkspaceCandidate): string | undefined {
-  return candidate.sourceBundle.find(
-    (source) => source.type === 'chat' && Boolean(source.conversationId)
-  )?.conversationId;
-}
-
-function isPersistedTurnId(id: string): boolean {
-  return Boolean(id) && !id.startsWith('msg-') && !id.endsWith(':streaming');
-}
-
-function messageToSourceTurn(message: {
-  id: string;
-  role: 'assistant' | 'user';
-  content: string;
-  conversationId?: string;
-  projectId?: string;
-  rings?: Record<string, unknown> | null;
-}): SourceConversationTurn {
-  return {
-    id: message.id,
-    role: message.role,
-    author: message.role === 'user' ? 'You' : 'Assistant',
-    content: message.content,
-    conversationId: message.conversationId,
-    projectId: message.projectId,
-    pinnable: true,
-    ...(message.rings ? { rings: message.rings } : {}),
-  };
-}
-
-function getSourceChatSourceId(candidateId: string, conversationId?: string): string {
-  return `source_chat:${conversationId ?? candidateId}`;
-}
-
-function buildChatSourceBundle(
-  sourceId: string,
-  candidateTitle: string,
-  conversationId: string | undefined,
-  turns: readonly SourceConversationTurn[]
-): SourceBundleItem | null {
-  if (turns.length === 0) return null;
-  return {
-    id: sourceId,
-    type: 'chat',
-    title: `${candidateTitle} source chat`,
-    ...(conversationId ? { conversationId } : {}),
-    previewTurns: [...turns],
-  };
-}
-
-function findChatSource(sourceBundle: SourceBundleItem[], sourceId: string) {
-  return sourceBundle.find((source) => source.id === sourceId && source.type === 'chat');
-}
-
-function chatSourceMatches(
-  existing: SourceBundleItem | undefined,
-  source: SourceBundleItem | null
-) {
-  if (!source) return existing === undefined;
-  if (!existing) return false;
-  if (existing.title !== source.title || existing.conversationId !== source.conversationId) {
-    return false;
-  }
-  return sourceTurnsMatch(existing.previewTurns ?? [], source.previewTurns ?? []);
-}
-
-function sourceTurnsMatch(
-  previousTurns: readonly SourceConversationTurn[],
-  nextTurns: readonly SourceConversationTurn[]
-) {
-  if (previousTurns.length !== nextTurns.length) return false;
-  return previousTurns.every((turn, index) => {
-    const next = nextTurns[index];
-    return (
-      next !== undefined &&
-      turn.id === next.id &&
-      turn.role === next.role &&
-      turn.author === next.author &&
-      turn.content === next.content &&
-      turn.conversationId === next.conversationId &&
-      turn.projectId === next.projectId &&
-      JSON.stringify(turn.rings ?? null) === JSON.stringify(next.rings ?? null)
-    );
-  });
-}
-
-function chatSourceSignature(source: SourceBundleItem | null): string {
-  if (!source) return 'chat:none';
-  return JSON.stringify({
-    id: source.id,
-    title: source.title,
-    conversationId: source.conversationId ?? null,
-    turns: source.previewTurns?.map((turn) => ({
-      id: turn.id,
-      role: turn.role,
-      author: turn.author,
-      content: turn.content,
-      conversationId: turn.conversationId ?? null,
-      projectId: turn.projectId ?? null,
-      rings: turn.rings ?? null,
-    })),
-  });
-}
 
 function materialToSourceBundleItem(material: Material): SourceBundleItem {
   const filename = material.filename?.toLowerCase() ?? '';

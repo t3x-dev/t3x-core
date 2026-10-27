@@ -16,6 +16,7 @@ import { getProviderRegistry, resetProviderRegistry } from '../lib/provider-regi
 import {
   createGenerationModelCatalogSnapshot,
   createGenerationProviderRuntimeMiddleware,
+  defaultGenerationProviderRuntime,
   GENERATION_PROVIDER_RUNTIME_VERSION,
   type GenerationProviderRuntime,
 } from '../lib/provider-runtime';
@@ -195,8 +196,32 @@ describe('GET /v1/llm/models', () => {
 
     const body = await hostedApp.request('/v1/llm/models').then((response) => response.json());
     expect(body.data.catalog).toEqual(hostedCatalog);
+    expect(body.data.providers).toEqual([
+      expect.objectContaining({ name: 'managed', available: true, default_model: 'balanced' }),
+    ]);
+    expect(body.data.providers[0].models[0].id).toBe('balanced');
     expect(body.data.catalog.models[0]).not.toHaveProperty('providerModelId');
     expect(body.data.catalog.models[0]).not.toHaveProperty('pricing');
+  });
+
+  it.each([
+    false,
+    true,
+  ])('keeps injected runtimes managed when using the compatibility catalog: %s', async (explicitCatalog) => {
+    process.env.OPENAI_API_KEY = 'compatibility-key';
+    const runtime: GenerationProviderRuntime = {
+      contractVersion: GENERATION_PROVIDER_RUNTIME_VERSION,
+      ...(explicitCatalog ? { catalog: defaultGenerationProviderRuntime.catalog } : {}),
+      resolve: async () => ({ ok: false, code: 'unavailable', message: 'not exercised' }),
+    };
+    const hosted = new Hono();
+    hosted.use('*', createGenerationProviderRuntimeMiddleware(runtime));
+    hosted.route('/', llmRoutes);
+    const response = await hosted.request('/v1/llm/models').then((r) => r.json());
+    expect(response.data.providers).toEqual([
+      expect.objectContaining({ name: 'managed', available: true }),
+    ]);
+    expect(response.data.generation_provider_order).toEqual(['managed']);
   });
 
   it('returns the latest public 3-model sets for OpenAI and Google', async () => {

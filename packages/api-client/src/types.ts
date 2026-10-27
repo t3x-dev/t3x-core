@@ -36,6 +36,16 @@ export type ApiResponse<T> = ApiSuccessResponse<T> | ApiErrorResponse;
 export type ProjectVisibility = 'private' | 'unlisted' | 'public';
 
 export interface Project {
+  repository_profile?: import('./repository-profile').RepositoryProfile;
+  /** Present on the authorized project detail response. */
+  can_edit?: boolean;
+  deleted_at?: string | null;
+  /** Management capabilities returned by status=deleted lists. */
+  can_restore?: boolean;
+  can_permanently_delete?: boolean;
+  namespace?: string | null;
+  canonical_path?: string | null;
+  path_status?: 'ready' | 'pending_migration';
   project_id: string;
   name: string;
   visibility: ProjectVisibility;
@@ -52,6 +62,9 @@ export interface ProjectWithStats extends Project {
 }
 
 export interface CreateProjectInput {
+  initialize_readme?: boolean;
+  tags?: string[];
+  namespace?: string;
   /** Initialize a private repository with a deterministic, editable PRD; no AI call. */
   starter?: 'prd-v1';
   name: string;
@@ -59,6 +72,7 @@ export interface CreateProjectInput {
 }
 
 export interface UpdateProjectInput {
+  repository_profile?: import('./repository-profile').RepositoryProfilePatch;
   name?: string;
   metadata?: Record<string, unknown>;
 }
@@ -76,9 +90,16 @@ export interface ChangeProjectVisibilityResult {
 }
 
 export interface ListProjectsResponse {
+  /** Echoed for deleted lists, including empty results. */
+  status?: 'deleted';
   projects: Project[];
   limit: number;
   offset: number;
+}
+
+export interface ListProjectsParams extends PaginationParams {
+  namespace?: string;
+  status?: 'active' | 'deleted';
 }
 
 // Conversation types
@@ -538,23 +559,6 @@ export interface GenerationProviderCatalog {
   default: string;
 }
 
-export type GenerationStreamEvent =
-  | { type: 'token'; content: string }
-  | { type: 'thinking'; content: string }
-  | { type: 'searching'; query?: string }
-  | {
-      type: 'done';
-      content?: string;
-      model?: string;
-      usage?: { input_tokens?: number; output_tokens?: number };
-      citations?: Array<{ url: string; title: string }>;
-    }
-  | { type: 'error'; message: string };
-
-export interface GenerationStreamOptions {
-  signal?: AbortSignal;
-}
-
 export interface SourceThreadMemory {
   text: string;
   token_estimate: number;
@@ -577,10 +581,6 @@ export type SourceThreadEvidence = ConversationSourceEvidence;
 
 export interface GenerationCapability {
   complete(input: GenerationRequest): Promise<GenerationResponse>;
-  stream(
-    input: GenerationRequest,
-    options?: GenerationStreamOptions
-  ): AsyncGenerator<GenerationStreamEvent, void, unknown>;
   providers(): Promise<GenerationProviderCatalog>;
 }
 
@@ -760,6 +760,7 @@ export interface WorkspaceTransitionDecisionEnvelope extends WorkspaceTransition
 }
 
 export interface WorkspaceTransitionReviewSnapshotEnvelope {
+  schema_review?: import('./schema-studio').WorkspaceFullSchemaReview | null;
   snapshot_id: string;
   snapshot_digest: string;
   project_id: string;
@@ -1246,6 +1247,14 @@ export interface YSchemaCompositionDraftV2 {
 
 export type YSchemaCompositionDraft = YSchemaCompositionDraftV1 | YSchemaCompositionDraftV2;
 
+export type YSchemaCompositionSourceOrigin =
+  | { artifact: string; version: string; kind: 'core' | 'module' }
+  | { kind: 'local'; contributionId: string; revision: number };
+
+export type YSchemaCompositionOrigin =
+  | YSchemaCompositionSourceOrigin
+  | { kind: 'derived'; sources: YSchemaCompositionSourceOrigin[] };
+
 export interface YSchemaCompositionPreview {
   schema: Record<string, unknown>;
   renderPlan: Array<{
@@ -1255,7 +1264,7 @@ export interface YSchemaCompositionPreview {
     slot: string;
     nodePaths: string[];
   }>;
-  originsByPath: Record<string, { artifact: string; version: string; kind: 'core' | 'module' }>;
+  originsByPath: Record<string, YSchemaCompositionOrigin>;
   report: {
     valid: boolean;
     issues: Array<{
@@ -1275,6 +1284,7 @@ export interface WorkspaceYSchemaCompositionResult {
   workspaceRevision: number;
   preview?: YSchemaCompositionPreview;
   binding?: Record<string, unknown>;
+  pending?: import('./schema-studio').WorkspaceSchemaPending;
 }
 
 export interface PublishWorkspaceYSchemaCompositionInput {
@@ -1285,6 +1295,7 @@ export interface PublishWorkspaceYSchemaCompositionInput {
   title: string;
   description?: string;
   releaseNotes?: string;
+  license?: 'Apache-2.0' | 'MIT' | 'BSD-2-Clause' | 'BSD-3-Clause' | 'ISC' | 'CC0-1.0';
   tags?: string[];
 }
 
@@ -1328,4 +1339,24 @@ export interface CommitTransitionResult {
   commit: TransitionProtocolValue;
   transition: TransitionViewV1;
   workspace?: Record<string, unknown>;
+}
+
+/** Application-owned repository address contracts. */
+export interface RepositoryAddress {
+  project_id: string;
+  name: string;
+  namespace: string | null;
+  canonical_path: string | null;
+  path_status: 'ready' | 'pending_migration';
+  redirect: boolean;
+}
+export interface RepositoryNameCheck {
+  name: string;
+  changed: boolean;
+  valid: boolean;
+  available: boolean;
+  code: string | null;
+  message: string | null;
+  namespace: string;
+  canonical_path: string | null;
 }

@@ -17,9 +17,15 @@ interface ModelSelectorProps {
   initialProvider?: string | null;
   initialModel?: string | null;
   onChange: (provider: string | null, model: string | null) => void;
+  contentClassName?: string;
 }
 
-export function ModelSelector({ initialProvider, initialModel, onChange }: ModelSelectorProps) {
+export function ModelSelector({
+  initialProvider,
+  initialModel,
+  onChange,
+  contentClassName,
+}: ModelSelectorProps) {
   const [providers, setProviders] = useState<LLMProviderInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +94,7 @@ export function ModelSelector({ initialProvider, initialModel, onChange }: Model
           <SelectTrigger id="provider-select" className="w-full">
             <SelectValue placeholder="Select a provider" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className={contentClassName}>
             <SelectItem value="__none__">
               <span className="text-muted-foreground">None (use default)</span>
             </SelectItem>
@@ -116,7 +122,7 @@ export function ModelSelector({ initialProvider, initialModel, onChange }: Model
               placeholder={selectedProvider ? 'Select a model' : 'Select a provider first'}
             />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className={contentClassName}>
             <SelectItem value="__none__">
               <span className="text-muted-foreground">None (use default)</span>
             </SelectItem>

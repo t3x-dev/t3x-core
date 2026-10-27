@@ -14,7 +14,7 @@
     "packages/core/src/providers/embedding",
     "packages/core/src/providers/llm"
   ],
-  "totalObservedCalls": 31,
+  "totalObservedCalls": 29,
   "sources": [
     {
       "file": "packages/api/src/lib/proposal-generation.ts",
@@ -44,9 +44,9 @@
       "file": "packages/api/src/routes/chat.openapi.ts",
       "feature": "generation-chat",
       "status": "migrated",
-      "coveredCount": 7,
-      "observedCount": 7,
-      "note": "Non-streaming and provider-specific streaming transports share the execution lifecycle."
+      "coveredCount": 3,
+      "observedCount": 3,
+      "note": "Non-streaming provider transports share the execution lifecycle."
     },
     {
       "file": "packages/core/src/extractors/v2/compress.ts",
@@ -131,6 +131,14 @@
       "coveredCount": 2,
       "observedCount": 2,
       "note": "Every bounded tool-loop continuation and plain-chat fallback executes inside executeMeteredInference; proposal tools reuse governed generation."
+    },
+    {
+      "file": "packages/api/src/lib/workspace-assistant/adapters/generation-model.ts",
+      "feature": "workspace-assistant-managed-model",
+      "status": "migrated",
+      "coveredCount": 2,
+      "observedCount": 2,
+      "note": "Managed chat and structured Proposal generation reuse the admitted attempt identity and report upstream evidence; local credentials are never consulted."
     }
   ]
 }

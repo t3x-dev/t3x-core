@@ -1,9 +1,14 @@
+import { getSchemaProjectTab } from '@/domain/project/repositoryLocation';
+
 export type ProjectTabId =
   | 'state'
   | 'schemas'
+  | 'discover'
+  | 'browse'
   | 'workspaces'
   | 'reviews'
-  | 'outputs'
+  | 'checks'
+  | 'history'
   | 'community'
   | 'settings';
 
@@ -15,17 +20,20 @@ export interface ProjectTabDefinition {
 
 export const PROJECT_TABS: ProjectTabDefinition[] = [
   { id: 'state', label: 'State' },
-  { id: 'schemas', label: 'Schemas' },
-  { id: 'workspaces', label: 'Workspaces' },
+  { id: 'schemas', label: 'Schema' },
+  { id: 'workspaces', label: 'Workspace' },
+  { id: 'checks', label: 'Run' },
   { id: 'reviews', label: 'Pull requests', segment: 'pull-requests' },
   { id: 'community', label: 'Community' },
   { id: 'settings', label: 'Settings' },
 ];
 
-// Retained for bookmarks and historical artifacts, not primary navigation.
+// Discover and Browse remain routable for migration to global Explore; historical routes stay valid.
 const ROUTABLE_PROJECT_TABS: ProjectTabDefinition[] = [
   ...PROJECT_TABS,
-  { id: 'outputs', label: 'Legacy outputs' },
+  { id: 'history', label: 'History' },
+  { id: 'discover', label: 'Discover' },
+  { id: 'browse', label: 'Browse' },
 ];
 const PROJECT_TAB_BY_ID = new Map(ROUTABLE_PROJECT_TABS.map((tab) => [tab.id, tab]));
 const PROJECT_TAB_SEGMENTS = new Set(ROUTABLE_PROJECT_TABS.map((tab) => tab.segment ?? tab.id));
@@ -44,4 +52,26 @@ export function isProjectTabSegment(value: string | null): boolean {
 export function parseProjectTab(value: string | null): ProjectTabId {
   if (value) return PROJECT_TAB_ID_BY_SEGMENT.get(value) ?? 'state';
   return 'state';
+}
+
+/** Keep historical Schema catalog links on their promoted project view. */
+export function resolveProjectTab(tab: ProjectTabId, schemaView: string | null): ProjectTabId {
+  return tab === 'schemas' ? getSchemaProjectTab(schemaView) : tab;
+}
+
+export function projectTabKeepsWorkspace(tab: ProjectTabId): boolean {
+  return tab === 'schemas' || tab === 'discover' || tab === 'browse' || tab === 'workspaces';
+}
+
+/** Resolve the page within a repository, including detail routes owned by a tab. */
+export function resolveProjectRouteTab(
+  view: string | null,
+  searchParams: URLSearchParams
+): ProjectTabId {
+  if (view === 'history' || view === 'diff') return 'history';
+  if (view === 'changes') return 'workspaces';
+  return resolveProjectTab(
+    parseProjectTab(view || searchParams.get('tab')),
+    searchParams.get('schemaView')
+  );
 }

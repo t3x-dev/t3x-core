@@ -225,7 +225,6 @@ describe('batch 4 terminology entries', () => {
   it('returns English terms for batch 4 entries in default mode', () => {
     const { result, unmount } = renderHook(() => useTerminology());
 
-    expect(result.current.t('search_command')).toBe('Search commands...');
     expect(result.current.t('no_results')).toBe('No results found');
     expect(result.current.t('loading')).toBe('Loading...');
     expect(result.current.t('all_branches')).toBe('All branches');
@@ -239,7 +238,6 @@ describe('batch 4 terminology entries', () => {
     useSettingsStore.setState({ developerMode: true });
     const { result, unmount } = renderHook(() => useTerminology());
 
-    expect(result.current.t('search_command')).toBe('Search commands...');
     expect(result.current.t('no_results')).toBe('No results found');
     expect(result.current.t('loading')).toBe('Loading...');
     expect(result.current.t('all_branches')).toBe('All branches');

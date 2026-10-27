@@ -170,10 +170,6 @@ export function ApiTokensSettingsPanel() {
 
         <header className={styles.titleRow}>
           <h1>API tokens</h1>
-          <span className={styles.scopeBadge}>
-            <i aria-hidden="true" className="ph ph-buildings" />
-            Organization
-          </span>
         </header>
 
         <section aria-label="API tokens" className={styles.card}>
@@ -210,7 +206,7 @@ export function ApiTokensSettingsPanel() {
                   value={scope}
                 >
                   <option value="all">All scopes</option>
-                  <option value="organization">Organization</option>
+                  <option value="organization">No project restriction</option>
                   <option value="projects">Projects</option>
                 </select>
                 <i aria-hidden="true" className="ph ph-caret-down" />
@@ -286,7 +282,7 @@ export function ApiTokensSettingsPanel() {
                             aria-hidden="true"
                             className={token.project_id ? 'ph ph-cube' : 'ph ph-buildings'}
                           />
-                          {token.project_id ? 'Projects' : 'Organization'}
+                          {token.project_id ? 'Project' : 'No project restriction'}
                         </span>
                       </td>
                       <td className={styles.dateCell}>
@@ -402,7 +398,7 @@ export function ApiTokensSettingsPanel() {
             role="dialog"
           >
             <h2 id="create-api-token-title">Create API token</h2>
-            <p>Create a token for organization or project access.</p>
+            <p>Create a token, optionally restricted to one project.</p>
             <form className={styles.dialogForm} onSubmit={(event) => void handleCreate(event)}>
               <label className={styles.dialogField}>
                 Token name
@@ -416,7 +412,7 @@ export function ApiTokensSettingsPanel() {
                 Project ID (optional)
                 <input
                   onChange={(event) => setNewProjectId(event.target.value)}
-                  placeholder="Leave empty for organization scope"
+                  placeholder="Leave empty for no project restriction"
                   value={newProjectId}
                 />
               </label>

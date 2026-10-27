@@ -1,0 +1,224 @@
+'use client';
+
+import { Check, Copy, FileText, GitBranch, GitCommitHorizontal, Pencil } from 'lucide-react';
+import { type FormEvent, useState } from 'react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { formatUserFacingError } from '@/domain/format/errors';
+import { getProjectIdRepoPath } from '@/domain/project/repoPath';
+import { projectDescription } from '@/hooks/projects/useProjectSettings';
+import { useRepositoryName } from '@/hooks/projects/useRepositoryName';
+import type { ProjectDetail } from '@/types/api';
+import { RepositoryNameFeedback } from '../RepositoryNameFeedback';
+import styles from './ProjectGeneralSettings.module.css';
+import { SettingsField } from './SettingsSection';
+
+const DESCRIPTION_LIMIT = 280;
+
+function CopyValue({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className={styles.copyField}>
+      <code className="min-w-0 flex-1 font-mono text-xs text-[var(--text-primary)]">{value}</code>
+      <Button
+        aria-label={`Copy ${label}`}
+        className="size-7"
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(value);
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1500);
+          } catch {
+            toast.error(`Could not copy ${label}`);
+          }
+        }}
+        size="icon-sm"
+        type="button"
+        variant="canvas-ghost"
+      >
+        {copied ? (
+          <Check className="size-3.5 text-[var(--status-success)]" />
+        ) : (
+          <Copy className="size-3.5" />
+        )}
+      </Button>
+    </div>
+  );
+}
+
+function RepositoryStats({ project }: { project: ProjectDetail }) {
+  const stats = [
+    {
+      icon: GitCommitHorizontal,
+      label: 'Commits',
+      value: project.commits_count ?? project.stats?.commits_count ?? 0,
+    },
+    { icon: GitBranch, label: 'Branches', value: project.branches_count ?? 0 },
+    { icon: Pencil, label: 'Drafts', value: project.drafts_count ?? 0 },
+    { icon: FileText, label: 'Outputs', value: project.outputs_count ?? 0 },
+  ];
+  return (
+    <dl className={styles.stats}>
+      {stats.map(({ icon: Icon, label, value }) => (
+        <div key={label} data-kind={label}>
+          <span className={styles.statIcon}>
+            <Icon aria-hidden="true" size={16} />
+          </span>
+          <dd>{value}</dd>
+          <dt>{label}</dt>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+export function ProjectGeneralSettings({
+  onSave,
+  project,
+}: {
+  onSave: (input: { description: string; name: string }) => Promise<void>;
+  project: ProjectDetail;
+}) {
+  const savedDescription = projectDescription(project);
+  const [name, setName] = useState(project.name);
+  const [description, setDescription] = useState(savedDescription);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const nameCheck = useRepositoryName(project.namespace, name, project.project_id);
+  const trimmedName = nameCheck.result?.name ?? name.trim();
+  const trimmedDescription = description.trim();
+  const nameEdited = name !== project.name;
+  const dirty = nameEdited || trimmedDescription !== savedDescription;
+  const slugChanges = trimmedName !== project.name;
+  const stableLink =
+    typeof window === 'undefined'
+      ? getProjectIdRepoPath(project.project_id)
+      : `${window.location.origin}${getProjectIdRepoPath(project.project_id)}`;
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (nameEdited && !nameCheck.canSubmit) {
+      setError(
+        nameCheck.result?.message ?? nameCheck.error ?? 'Wait for the name check to finish.'
+      );
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave({
+        description: trimmedDescription,
+        name: nameEdited ? trimmedName : project.name,
+      });
+      toast.success('Repository details saved');
+    } catch (cause) {
+      setError(formatUserFacingError(cause, 'Failed to save repository details.'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section
+      className={styles.general}
+      id="general"
+      aria-labelledby="general-heading"
+      tabIndex={-1}
+    >
+      <h2 id="general-heading">General</h2>
+      <form className={styles.details} onSubmit={handleSubmit}>
+        <SettingsField
+          hint="Shown in the header and in links."
+          htmlFor="settings-repo-name"
+          label="Repository name"
+        >
+          <Input
+            aria-invalid={error && !trimmedName ? 'true' : undefined}
+            disabled={saving}
+            id="settings-repo-name"
+            maxLength={4096}
+            onChange={(event) => {
+              setName(event.target.value);
+              setError(null);
+            }}
+            value={name}
+          />
+          {nameEdited ? <RepositoryNameFeedback check={nameCheck} /> : null}
+          {slugChanges && (
+            <p className="mt-1.5 text-xs text-[var(--status-warning)]">
+              Previous repository addresses will remain reserved and redirect to this repository.
+            </p>
+          )}
+        </SettingsField>
+
+        <SettingsField
+          hint="A short summary for people visiting the project."
+          htmlFor="settings-repo-description"
+          label="Description"
+        >
+          <div className={styles.descriptionField}>
+            <Textarea
+              className="min-h-[76px] resize-y"
+              disabled={saving}
+              id="settings-repo-description"
+              maxLength={DESCRIPTION_LIMIT}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="Add a description"
+              value={description}
+            />
+            <p className="text-right text-xs tabular-nums text-[var(--text-secondary)]">
+              {description.length} / {DESCRIPTION_LIMIT}
+            </p>
+          </div>
+        </SettingsField>
+
+        {error ? (
+          <p
+            className="rounded-lg bg-[var(--status-error)]/10 px-3 py-2 text-xs text-[var(--status-error)]"
+            role="alert"
+          >
+            {error}
+          </p>
+        ) : null}
+
+        <div className={styles.actions}>
+          {dirty ? <span className={styles.unsaved}>You have unsaved changes</span> : null}
+          <Button
+            disabled={!dirty || saving}
+            onClick={() => {
+              setName(project.name);
+              setDescription(savedDescription);
+              setError(null);
+            }}
+            type="button"
+            variant="outline"
+          >
+            Discard
+          </Button>
+          <Button disabled={!dirty || saving || (nameEdited && !nameCheck.canSubmit)} type="submit">
+            {saving ? 'Saving…' : 'Save changes'}
+          </Button>
+        </div>
+      </form>
+
+      <div className={styles.referenceInfo}>
+        <div className={styles.identifiers}>
+          <h3>Identifiers</h3>
+          <SettingsField hint="Stable and read-only." label="Project ID">
+            <CopyValue label="project ID" value={project.project_id} />
+          </SettingsField>
+          <SettingsField hint="Keeps working if the project is renamed." label="Stable link">
+            <CopyValue label="stable link" value={stableLink} />
+          </SettingsField>
+        </div>
+        <div className={styles.contents}>
+          <h3>Contents</h3>
+          <RepositoryStats project={project} />
+        </div>
+      </div>
+    </section>
+  );
+}

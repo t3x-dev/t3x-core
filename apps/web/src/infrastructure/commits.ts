@@ -2,8 +2,25 @@
  * Commits API (tree-based)
  */
 
+import type { WorkspaceCommitChanges } from '@t3x-dev/api-client';
 import type { SemanticContent, TransitionViewV1 } from '@t3x-dev/core';
 import { API_V1, buildQueryString, fetchWithTimeout, handleResponse } from './core';
+
+export async function getCommitChanges(
+  projectId: string,
+  hash: string,
+  beforeSequence?: number,
+  signal?: AbortSignal
+): Promise<WorkspaceCommitChanges> {
+  const query = buildQueryString({ before_sequence: beforeSequence });
+  const response = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/commits/${encodeURIComponent(hash)}/changes${query ? `?${query}` : ''}`,
+    undefined,
+    undefined,
+    signal
+  );
+  return handleResponse<WorkspaceCommitChanges>(response);
+}
 
 // ============================================================================
 // ContentNode type (used by DiffDisplayView and other components)
@@ -334,7 +351,6 @@ export async function getApiCommitHistory(commitHash: string, limit = 50): Promi
 // ApiCommit helper functions
 // ============================================================================
 // Moved to @/domain/commitContent (v2 §2.2 pure functions). Re-export
-// here for backward compat so existing non-component consumers (e.g.
-// app/insights/page.tsx) keep working without a churn PR.
+// here for backward compatibility with existing non-component consumers.
 
 export { getSemanticContent, treeSummaryText } from '@/domain/commitContent';

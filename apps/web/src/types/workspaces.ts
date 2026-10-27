@@ -254,6 +254,13 @@ export interface WorkspaceYOpsDraftOperation {
   afterValue?: WorkspaceYOpsValue;
   reason?: string;
   sourceRefs?: string[];
+  /** Frontend display grouping; sources retain their original paths and lineage IDs. */
+  objectChange?: {
+    sources: import('@t3x-dev/api-client').WorkspaceAuthoringCard[];
+    beforePath?: string;
+    afterPath?: string;
+  };
+  sourceCards?: import('@t3x-dev/api-client').WorkspaceAuthoringCard[];
 }
 
 export interface WorkspaceYOpsDraft {

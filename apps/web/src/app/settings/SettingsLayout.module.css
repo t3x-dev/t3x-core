@@ -1,47 +1,49 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+.accountLayout {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+  color: var(--text-primary);
+  background: var(--surface-card);
+}
 
 .shell {
   display: flex;
   width: 100%;
-  height: calc(100dvh - 6rem);
+  max-width: 1280px;
+  margin-inline: auto;
+  padding-inline: 32px;
+  flex: 1;
   min-height: 0;
   overflow: hidden;
-  background: #fff;
-  color: #1e293b;
-  font-family: "Inter", sans-serif;
-  -webkit-font-smoothing: antialiased;
 }
 
 .sidebar {
-  position: sticky;
-  top: 0;
   display: flex;
-  flex: 0 0 260px;
+  flex: 0 0 216px;
   flex-direction: column;
   gap: 32px;
-  width: 260px;
-  height: 100%;
-  padding: 24px 16px;
+  min-width: 0;
+  padding: 40px 8px 32px 0;
   overflow-y: auto;
-  background: #f8fafc;
-  border-right: 1px solid #e2e8f0;
 }
 
 .groupTitle {
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   padding: 0 12px;
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  line-height: 16px;
-  text-transform: uppercase;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  overflow-wrap: anywhere;
 }
 
-.navList {
+.navList,
+.automationSection,
+.automationNav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .navLink,
@@ -49,75 +51,67 @@
 .signOut {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-height: 36px;
-  padding: 8px 12px;
-  color: #334155;
+  gap: 10px;
+  min-height: 40px;
+  padding: 9px 12px;
+  color: var(--text-secondary);
   font-size: 14px;
   font-weight: 500;
   line-height: 20px;
   text-decoration: none;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   transition:
     color 150ms ease,
     background-color 150ms ease;
 }
 
 .navLink svg,
+.navLinkActive svg,
 .signOut svg {
   flex: 0 0 auto;
-  color: #64748b;
 }
 
 .navLink:hover,
 .signOut:hover {
-  background: #f1f5f9;
+  color: var(--text-primary);
+  background: var(--hover-bg);
 }
 
 .navLinkActive {
-  color: #1d4ed8;
-  background: #eff6ff;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 2%);
+  position: relative;
+  color: var(--text-primary);
+  font-weight: 600;
+  background: var(--management-selected-bg);
 }
 
-.navLinkActive svg {
-  color: #2563eb;
+.navLinkActive::before {
+  position: absolute;
+  inset-block: 10px;
+  left: -5px;
+  width: 3px;
+  background: var(--accent-commit);
+  border-radius: var(--radius-full);
+  content: "";
 }
 
 .automationSection {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-top: 4px;
+  margin-top: 16px;
 }
 
 .automationTitle {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-height: 36px;
+  gap: 10px;
   padding: 8px 12px;
-  color: var(--accent-commit);
-  font-size: 14px;
+  color: var(--text-secondary);
+  font-size: 12px;
   font-weight: 600;
-  line-height: 20px;
-}
-
-.automationChevron {
-  margin-left: auto;
+  line-height: 18px;
 }
 
 .automationNav {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding-left: 20px;
-}
-
-.automationNav .navLink,
-.automationNav .navLinkActive {
-  min-height: 34px;
+  padding-left: 12px;
 }
 
 .automationNav .navLink svg,
@@ -139,34 +133,72 @@
   min-width: 0;
   height: 100%;
   overflow-y: auto;
-  background: #fff;
+  background: var(--surface-card);
 }
 
-.sidebar::-webkit-scrollbar,
-.content::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+.accountLayout :is(a, button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
 }
 
-.sidebar::-webkit-scrollbar-track,
-.content::-webkit-scrollbar-track {
-  background: transparent;
+.mobileNavigation {
+  display: none;
 }
 
-.sidebar::-webkit-scrollbar-thumb,
-.content::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
-}
+@media (max-width: 760px) {
+  .shell {
+    padding-inline: 0;
+  }
 
-.sidebar::-webkit-scrollbar-thumb:hover,
-.content::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-
-@media (max-width: 720px) {
   .sidebar {
-    flex-basis: 220px;
-    width: 220px;
+    display: none;
+  }
+
+  .mobileNavigation {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--stroke-divider);
+  }
+
+  .mobileSignOut {
+    display: inline-flex;
+    flex: 0 0 40px;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    color: var(--text-secondary);
+    background: var(--management-control-bg);
+    border: 1px solid var(--stroke-default);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+  }
+
+  .mobileNavigation label {
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .mobileNavigation select {
+    width: 100%;
+    min-width: 0;
+    min-height: 40px;
+    padding: 8px 12px;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 14px;
+    background: var(--management-control-bg);
+    border: 1px solid var(--stroke-default);
+    border-radius: var(--radius-md);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navLink,
+  .navLinkActive,
+  .signOut {
+    transition: none;
   }
 }

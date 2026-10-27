@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectStateTab } from '@/components/project/ProjectStateTab';
 import { PRD_CORE_ARTIFACT, PRD_MODULE_ARTIFACTS } from '@/data/schemaModules';
@@ -13,6 +13,7 @@ import type { WorkspaceCandidate } from '@/types/workspaces';
 
 const hookMocks = vi.hoisted(() => ({
   branchHeads: {} as Record<string, string | null>,
+  branchesLoading: false,
   nativeView: null as unknown,
   createBranch: vi.fn(),
   loadCanvas: vi.fn(),
@@ -33,17 +34,22 @@ vi.mock('@/hooks/workspaces/useCommitTransitionView', () => ({
 
 vi.mock('@/components/project/StateOverviewView', () => ({
   StateOverviewView: ({
+    commitDigest,
     reader,
     schemaHref,
   }: {
+    commitDigest: string | null;
     reader?: (expanded: boolean, expand: () => void) => import('react').ReactNode;
     schemaHref?: string;
-  }) => (
-    <section aria-label="Overview">
-      {schemaHref ? <a href={schemaHref}>View schemas</a> : null}
-      {reader ? reader(true, () => {}) : 'Structured reader'}
-    </section>
-  ),
+  }) =>
+    commitDigest === null ? (
+      <section aria-label="Overview">No commits yet</section>
+    ) : (
+      <section aria-label="Overview">
+        {schemaHref ? <a href={schemaHref}>View schemas</a> : null}
+        {reader ? reader(true, () => {}) : 'Structured reader'}
+      </section>
+    ),
 }));
 
 vi.mock('@/components/canvas', () => ({
@@ -86,7 +92,7 @@ vi.mock('@/hooks/shared/useBranches', () => ({
     branchHeads: hookMocks.branchHeads,
     branches: ['main', 'feature/prd-audience'],
     create: hookMocks.createBranch,
-    loading: false,
+    loading: hookMocks.branchesLoading,
     refresh: hookMocks.refreshBranches,
   }),
 }));
@@ -462,6 +468,7 @@ const PROMPT_VALIDATION: YSchemaValidationSummary = {
 
 function setupHookMocks() {
   hookMocks.branchHeads = {};
+  hookMocks.branchesLoading = false;
   hookMocks.loadCommit.mockResolvedValue(PRD_COMMIT);
   hookMocks.createBranch.mockResolvedValue({
     branch_id: 'branch_feature_checkout_retry',
@@ -514,19 +521,161 @@ function renderStateTab(validation: YSchemaValidationSummary | null = VALIDATION
   );
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 describe('ProjectStateTab', () => {
+  it('shows the pointed State before slow change evidence and starts evidence requests in parallel', async () => {
+    const operations = deferred<{ commit_hash: string; operations: [] }>();
+    const parent = deferred<ApiCommit>();
+    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
+    hookMocks.loadCommit.mockImplementation((hash: string) =>
+      hash === PRD_COMMIT.hash ? Promise.resolve(PRD_COMMIT) : parent.promise
+    );
+    hookMocks.loadOperations.mockReturnValue(operations.promise);
+    renderStateTab();
+
+    const body = await screen.findByRole('region', { name: 'State structure' });
+    expect(within(body).getByText('problem')).toBeVisible();
+    expect(screen.queryByText('Loading state')).not.toBeInTheDocument();
+    expect(screen.getByText('Loading change details…')).toBeVisible();
+    expect(hookMocks.loadCommits).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(hookMocks.loadCommit).toHaveBeenCalledWith(PARENT_COMMIT.hash, 'proj_test')
+    );
+    expect(hookMocks.loadOperations).toHaveBeenCalledOnce();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Code', exact: true }));
+    expect(screen.queryByText('Loading state')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Tree', exact: true }));
+    const restoredBody = screen.getByRole('region', { name: 'State structure' });
+    expect(restoredBody).toBeVisible();
+    expect(hookMocks.loadCommit).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      operations.resolve({ commit_hash: PRD_COMMIT.hash, operations: [] });
+      parent.resolve(PARENT_COMMIT);
+    });
+    expect(screen.queryByText('Loading change details…')).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'State structure' })).toBe(restoredBody);
+  });
+
+  it('waits for the initial branch pointer instead of starting a redundant history request', async () => {
+    hookMocks.branchesLoading = true;
+    const view = renderStateTab();
+    expect(hookMocks.loadCommits).not.toHaveBeenCalled();
+    expect(hookMocks.loadCommit).not.toHaveBeenCalled();
+    hookMocks.branchesLoading = false;
+    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
+    hookMocks.loadCommit.mockImplementation(async (hash: string) =>
+      hash === PRD_COMMIT.hash ? PRD_COMMIT : PARENT_COMMIT
+    );
+    view.rerender(
+      <ProjectStateTab initialView="structure" projectId="proj_test" projectName="Test Project" />
+    );
+    expect(await screen.findByRole('region', { name: 'State structure' })).toBeVisible();
+    expect(hookMocks.loadCommits).not.toHaveBeenCalled();
+  });
+
+  it('keeps evidence loading across a branch pointer refresh and ignores late evidence from the old version', async () => {
+    const operations = deferred<{ commit_hash: string; operations: [] }>();
+    const newerHead = { ...PRD_COMMIT, hash: 'sha256:newer', message: 'New version' };
+    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
+    hookMocks.loadCommit.mockImplementation(async (hash: string) =>
+      hash === PRD_COMMIT.hash ? PRD_COMMIT : hash === newerHead.hash ? newerHead : PARENT_COMMIT
+    );
+    hookMocks.loadOperations.mockReturnValueOnce(operations.promise);
+    const view = renderStateTab();
+    await screen.findByRole('region', { name: 'State structure' });
+    hookMocks.branchHeads = { main: newerHead.hash };
+    view.rerender(
+      <ProjectStateTab initialView="structure" projectId="proj_test" projectName="Test Project" />
+    );
+    expect(screen.getByText(PRD_COMMIT.message!)).toBeVisible();
+    expect(screen.getByText('Loading change details…')).toBeVisible();
+    expect(hookMocks.loadOperations).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'View latest' }));
+    await screen.findByRole('link', { name: 'New version' });
+    await act(async () => operations.reject(new Error('Old request failed')));
+    expect(screen.getByRole('link', { name: 'New version' })).toBeVisible();
+    expect(screen.queryByText('YOps log unavailable.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Loading change details…')).not.toBeInTheDocument();
+  });
+
+  it('does not reuse a pinned main revision when switching projects', async () => {
+    const view = renderStateTab();
+    await screen.findByRole('region', { name: 'State structure' });
+    hookMocks.loadCommits.mockResolvedValue([]);
+    hookMocks.loadCommit.mockClear();
+    view.rerender(
+      <ProjectStateTab initialView="structure" projectId="proj_other" projectName="Other" />
+    );
+    expect(await screen.findByText('No commit on this branch')).toBeVisible();
+    expect(hookMocks.loadCommits).toHaveBeenLastCalledWith('proj_other', 'main', 100);
+    expect(hookMocks.loadCommit).not.toHaveBeenCalled();
+    expect(screen.queryByText(PRD_COMMIT.message!)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [
+      { ...PRD_COMMIT, hash: 'sha256:wrong' },
+      'Branch HEAD response does not match the registered branch pointer.',
+    ],
+    [
+      { ...PRD_COMMIT, project_id: 'proj_other' },
+      'Commit response does not match the selected project.',
+    ],
+  ])('rejects a mismatched direct State response before showing content', async (commit, message) => {
+    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
+    hookMocks.loadCommit.mockResolvedValue(commit);
+    renderStateTab();
+    expect(await screen.findByText(message)).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'State structure' })).not.toBeInTheDocument();
+    expect(hookMocks.loadOperations).not.toHaveBeenCalled();
+  });
+
+  it('creates a branch through the server without overwriting its inherited Schema with a client Draft', async () => {
+    renderStateTab();
+    await screen.findByRole('link', { name: 'PRD audience handoff committed' });
+    fireEvent.click(screen.getByRole('button', { name: /Switch branches\/tags/ }));
+    fireEvent.change(screen.getByPlaceholderText('Find or create branch'), {
+      target: { value: 'feature/new-schema' },
+    });
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: /Create branch feature\/new-schema from main/ })
+    );
+    await waitFor(() =>
+      expect(hookMocks.createBranch).toHaveBeenCalledWith('feature/new-schema', 'main')
+    );
+    expect(hookMocks.saveDraft).not.toHaveBeenCalled();
+    expect(navigationMocks.router.push).toHaveBeenCalledWith(
+      '/project/proj_test?branch=feature%2Fnew-schema&tab=workspaces'
+    );
+  });
   it('defaults to Overview and keeps legacy Render links on the same revision', async () => {
     navigationMocks.search = `view=render&commit=${encodeURIComponent(PRD_COMMIT.hash)}`;
-    render(<ProjectStateTab projectId="fresh-project" projectName="Fresh" />);
+    hookMocks.loadCommit.mockImplementation(async (hash) =>
+      hash === PRD_COMMIT.hash ? PRD_COMMIT : PARENT_COMMIT
+    );
+    render(<ProjectStateTab projectId="proj_test" projectName="Fresh" />);
     await waitFor(() =>
       expect(screen.getByRole('tab', { name: /Overview/ })).toHaveAttribute('aria-selected', 'true')
     );
     expect(screen.getByRole('tablist', { name: 'State views' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'History' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Propose change' })).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: /Snapshot/ })).toBeNull();
+    expect(screen.getByRole('tab', { name: /Snapshot/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /Canvas/ })).toHaveAttribute('aria-selected', 'false');
     expect(screen.queryByRole('tab', { name: /Render/ })).toBeNull();
-    fireEvent.click(screen.getByRole('tab', { name: /Code/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Structure/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Code', exact: true }));
     expect(navigationMocks.router.replace).toHaveBeenLastCalledWith(
       expect.stringContaining(`commit=${encodeURIComponent(PRD_COMMIT.hash)}`),
       { scroll: false }
@@ -547,7 +696,7 @@ describe('ProjectStateTab', () => {
     await waitFor(() =>
       expect(hookMocks.loadCommit).toHaveBeenCalledWith(PARENT_COMMIT.hash, 'proj_test')
     );
-    expect(await screen.findByRole('heading', { name: PARENT_COMMIT.message })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: PARENT_COMMIT.message })).toBeInTheDocument();
   });
 
   beforeEach(() => {
@@ -623,14 +772,42 @@ describe('ProjectStateTab', () => {
     expect(hookMocks.loadCommits).toHaveBeenCalledTimes(calls);
   });
 
+  it('labels a historical revision and returns to the originating History detail', async () => {
+    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
+    hookMocks.loadCommit.mockImplementation(async (hash: string) =>
+      hash === PRD_COMMIT.hash ? PRD_COMMIT : PARENT_COMMIT
+    );
+    const returnTo = `/team/repo/history?view=list&q=title&commit=${encodeURIComponent(PRD_COMMIT.hash)}`;
+    navigationMocks.search = new URLSearchParams({
+      commit: PRD_COMMIT.hash,
+      branch: 'main',
+      returnTo,
+    }).toString();
+    renderStateTab();
+    expect(await screen.findByText(/Historical version/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to previous page' })).toHaveAttribute(
+      'href',
+      returnTo
+    );
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Details', exact: true }));
+    const traceLink = await screen.findByRole('link', { name: 'View in history' });
+    const destination = new URL(traceLink.getAttribute('href')!, 'http://localhost');
+    expect(destination.searchParams.get('commit')).toBe(PRD_COMMIT.hash);
+    expect(destination.searchParams.get('returnTo')).toBe(
+      `${navigationMocks.pathname}?${navigationMocks.search}`
+    );
+  });
+
   it('loads the branch HEAD into the restored Structure layout and navigation', async () => {
     renderStateTab();
-    await screen.findByRole('region', { name: 'Structured state tree' });
+    await screen.findByRole('region', { name: 'State structure' });
     expect(screen.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('tab', { name: /Render/ })).toBeNull();
     expect(
       screen.queryByRole('complementary', { name: 'State relationships' })
     ).not.toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: 'Field trace' })).toBeNull();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Details', exact: true }));
     expect(screen.getByRole('complementary', { name: 'Field trace' })).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Find a field or value...')).toBeInTheDocument();
     expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', 'main', 100);
@@ -643,18 +820,22 @@ describe('ProjectStateTab', () => {
       'href',
       '/project/proj_test?branch=main&tab=workspaces'
     );
-    const tree = screen.getByRole('region', { name: 'Structured state tree' });
-    expect(within(tree).getByRole('region', { name: 'Workspace structure rows' })).toHaveAttribute(
+    const tree = screen.getByRole('region', { name: 'State structure' });
+    expect(within(tree).getByRole('region', { name: 'State structure rows' })).toHaveAttribute(
       'tabindex',
       '0'
     );
-    expect(within(tree).getByRole('table').querySelectorAll('col')).toHaveLength(4);
+    expect(
+      within(tree)
+        .getAllByRole('columnheader')
+        .map((cell) => cell.textContent)
+    ).toEqual(['Field', 'Value', 'Type']);
     expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull();
   });
 
   it('selects a state row and shows its change provenance', async () => {
     renderStateTab();
-    const tree = await screen.findByRole('region', { name: 'Structured state tree' });
+    const tree = await screen.findByRole('region', { name: 'State structure' });
     const row = within(within(tree).getByRole('table')).getByText('problem').closest('tr')!;
     fireEvent.click(row);
     expect(row).toHaveAttribute('aria-selected', 'true');
@@ -663,9 +844,9 @@ describe('ProjectStateTab', () => {
 
   it('traces the selected parent and leaf with their stored values', async () => {
     renderStateTab();
-    await screen.findByRole('region', { name: 'Structured state tree' });
+    await screen.findByRole('region', { name: 'State structure' });
     const table = () =>
-      within(screen.getByRole('region', { name: 'Structured state tree' })).getByRole('table');
+      within(screen.getByRole('region', { name: 'State structure' })).getByRole('table');
     fireEvent.click(within(table()).getByTitle('prd').closest('tr')!);
     const trace = screen.getByRole('complementary', { name: 'Field trace' });
     expect(trace).toHaveTextContent('root / prd');
@@ -680,6 +861,38 @@ describe('ProjectStateTab', () => {
     fireEvent.click(within(table()).getByTitle('prd/summary/audience').closest('tr')!);
     expect(trace).toHaveTextContent('root / prd / summary / audience');
     expect(trace).toHaveTextContent('empty');
+  });
+
+  it('shares Structure details across formats without changing the pinned revision or selected field', async () => {
+    hookMocks.loadCommit.mockImplementation(async (hash) =>
+      hash === PRD_COMMIT.hash ? PRD_COMMIT : PARENT_COMMIT
+    );
+    navigationMocks.search = new URLSearchParams({
+      view: 'data',
+      branch: 'main',
+      commit: PRD_COMMIT.hash,
+    }).toString();
+    renderStateTab();
+    const data = await screen.findByRole('region', { name: 'State structure' });
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      'Snapshot',
+      'Canvas',
+      'Overview',
+      'Structure',
+    ]);
+    const row = within(within(data).getByRole('table')).getByText('problem').closest('tr')!;
+    fireEvent.click(row);
+    expect(screen.getByRole('checkbox', { name: 'Details', exact: true })).toBeChecked();
+    const loads = hookMocks.loadCommits.mock.calls.length;
+    fireEvent.click(screen.getByRole('button', { name: 'Code', exact: true }));
+    expect(screen.getByRole('complementary', { name: 'Source information' })).toBeVisible();
+    expect(screen.queryByRole('complementary', { name: 'Field trace' })).toBeNull();
+    expect(new URLSearchParams(navigationMocks.search).get('commit')).toBe(PRD_COMMIT.hash);
+    expect(screen.getAllByRole('link', { name: 'Propose change' })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Tree', exact: true }));
+    expect(screen.getByRole('complementary', { name: 'Field trace' })).toHaveTextContent('problem');
+    expect(screen.queryByRole('complementary', { name: 'Source information' })).toBeNull();
+    expect(hookMocks.loadCommits).toHaveBeenCalledTimes(loads);
   });
 
   it('uses branch metadata without loading snapshot commits in Canvas mode', () => {
@@ -703,8 +916,8 @@ describe('ProjectStateTab', () => {
     renderStateTab();
 
     await screen.findByText('PRD must conditions committed');
-    const structureView = screen.getByRole('region', { name: 'Structured state tree' });
-    expect(within(structureView).getByRole('table').querySelectorAll('col')).toHaveLength(4);
+    const structureView = screen.getByRole('region', { name: 'State structure' });
+    expect(within(structureView).getAllByRole('columnheader')).toHaveLength(3);
 
     const mustToggle = within(structureView).getByRole('button', {
       name: 'Expand Must conditions',
@@ -768,7 +981,7 @@ describe('ProjectStateTab', () => {
     renderStateTab();
 
     await screen.findByText('Dense rule groups committed');
-    const structureView = screen.getByRole('region', { name: 'Structured state tree' });
+    const structureView = screen.getByRole('region', { name: 'State structure' });
     const constraintsToggle = within(structureView).getByRole('button', {
       name: 'Expand constraints',
     });
@@ -804,7 +1017,7 @@ describe('ProjectStateTab', () => {
   it('checks branch freshness on focus without exposing a manual Refresh action', async () => {
     renderStateTab();
 
-    await screen.findByRole('heading', { name: 'PRD audience handoff committed' });
+    await screen.findByRole('link', { name: 'PRD audience handoff committed' });
     expect(screen.queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument();
     fireEvent.focus(window);
 
@@ -828,7 +1041,7 @@ describe('ProjectStateTab', () => {
     });
     const view = renderStateTab();
 
-    await screen.findByRole('heading', { name: 'PRD audience handoff committed' });
+    await screen.findByRole('link', { name: 'PRD audience handoff committed' });
     hookMocks.branchHeads = { main: newerHead.hash };
     hookMocks.loadCommits.mockResolvedValue([newerHead, PRD_COMMIT]);
     view.rerender(
@@ -844,14 +1057,14 @@ describe('ProjectStateTab', () => {
     expect(update).toHaveTextContent('Newer commit available on main');
     expect(update).toHaveTextContent('9f31c42');
     expect(
-      screen.getByRole('heading', { name: 'PRD audience handoff committed' })
+      screen.getByRole('link', { name: 'PRD audience handoff committed' })
     ).toBeInTheDocument();
     expect(screen.getByText('main · pinned cb5813f')).toBeInTheDocument();
 
     fireEvent.click(within(update).getByRole('button', { name: 'View latest' }));
 
     expect(
-      await screen.findByRole('heading', { name: 'Confirm retry recovery validation evidence' })
+      await screen.findByRole('link', { name: 'Confirm retry recovery validation evidence' })
     ).toBeInTheDocument();
     expect(screen.queryByText('Newer commit available on main')).not.toBeInTheDocument();
   });
@@ -859,7 +1072,7 @@ describe('ProjectStateTab', () => {
   it('switches from restored Structure to the unchanged schema-selected Overview', async () => {
     renderStateTab();
 
-    await screen.findByRole('region', { name: 'Structured state tree' });
+    await screen.findByRole('region', { name: 'State structure' });
     fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
 
     expect(screen.getByRole('heading', { name: 'PRD audience handoff' })).toBeInTheDocument();
@@ -999,7 +1212,7 @@ describe('ProjectStateTab', () => {
     ];
 
     renderStateTab();
-    await screen.findByRole('region', { name: 'Structured state tree' });
+    await screen.findByRole('region', { name: 'State structure' });
     fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
 
     expect(screen.getByRole('link', { name: 'View schemas' })).toHaveAttribute(
@@ -1187,15 +1400,19 @@ describe('ProjectStateTab', () => {
       '/project/proj_test?branch=main&tab=workspaces'
     );
     expect(screen.queryByRole('button', { name: 'New branch' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
+    expect(await screen.findByText('No commits yet')).toBeInTheDocument();
   });
 
   it('switches to canonical YAML Code without exposing internal trees', async () => {
     renderStateTab();
 
-    await screen.findByRole('region', { name: 'Structured state tree' });
-    fireEvent.click(screen.getByRole('tab', { name: /Code/ }));
+    await screen.findByRole('region', { name: 'State structure' });
+    fireEvent.click(screen.getByRole('tab', { name: /Structure/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Code', exact: true }));
 
-    const codeView = screen.getByRole('region', { name: 'YAML code view' });
+    const codeView = screen.getByRole('region', { name: 'State structure' });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Details', exact: true }));
     expect(within(codeView).getByText('prd:')).toBeInTheDocument();
     expect(codeView).toHaveTextContent('summary:');
     expect(codeView).toHaveTextContent('problem: "You: i need food and drink"');
@@ -1203,7 +1420,9 @@ describe('ProjectStateTab', () => {
     expect(codeView).not.toHaveTextContent('slots:');
     expect(within(codeView).queryByRole('button', { name: 'Copy' })).not.toBeInTheDocument();
     expect(within(codeView).queryByRole('button', { name: 'Download' })).not.toBeInTheDocument();
-    expect(codeView).toHaveClass('min-h-0', 'flex-1', 'overflow-hidden');
+    expect(
+      within(codeView).getByRole('complementary', { name: 'Source information' })
+    ).toHaveTextContent('Canonical YAML');
     const codeScroller = within(codeView).getByRole('region', {
       name: 'Canonical YAML content',
     });
@@ -1211,7 +1430,7 @@ describe('ProjectStateTab', () => {
     const codeScrollArea = codeScroller.closest('[data-slot="state-scroll-area"]');
     expect(codeScrollArea).toHaveClass('min-h-0', 'flex-1');
     expect(codeScrollArea).toHaveAttribute('data-scroll-axes', 'both');
-    expect(codeView.querySelector('code')).toHaveClass('min-w-max');
+    expect(codeView.querySelector('code')).toBeInTheDocument();
     expect(within(codeView).getByText('problem:').parentElement).toHaveClass('whitespace-pre');
   });
 
@@ -1317,7 +1536,7 @@ describe('ProjectStateTab', () => {
     renderStateTab(null);
 
     expect(
-      await screen.findByRole('heading', { name: 'PRD audience handoff committed' })
+      await screen.findByRole('link', { name: 'PRD audience handoff committed' })
     ).toBeInTheDocument();
     expect(screen.getAllByText('01 SET')[0]).toBeInTheDocument();
     expect(screen.getAllByText('02 SET')[0]).toBeInTheDocument();
@@ -1340,7 +1559,7 @@ describe('ProjectStateTab', () => {
       />
     );
 
-    await screen.findByRole('heading', { name: 'PRD audience handoff committed' });
+    await screen.findByRole('link', { name: 'PRD audience handoff committed' });
     expect(screen.getAllByText('Validation pending').length).toBeGreaterThan(0);
     expect(screen.queryByText('Validated at HEAD')).not.toBeInTheDocument();
 
@@ -1366,7 +1585,7 @@ describe('ProjectStateTab', () => {
       status: 'verified',
     });
 
-    await screen.findByRole('heading', { name: 'PRD audience handoff committed' });
+    await screen.findByRole('link', { name: 'PRD audience handoff committed' });
     expect(screen.getAllByText('Validated at HEAD').length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'Run validation' })).not.toBeInTheDocument();
     expect(screen.queryByText('missing')).not.toBeInTheDocument();
@@ -1378,9 +1597,9 @@ describe('ProjectStateTab', () => {
     renderStateTab();
 
     expect(
-      await screen.findByRole('heading', { name: 'PRD audience handoff committed' })
+      await screen.findByRole('link', { name: 'PRD audience handoff committed' })
     ).toBeInTheDocument();
-    expect(screen.getByText('YOps log unavailable.')).toBeInTheDocument();
+    expect(await screen.findByText('YOps log unavailable.')).toBeVisible();
     expect(screen.getAllByText('problem').length).toBeGreaterThan(0);
   });
 
@@ -1403,9 +1622,11 @@ describe('ProjectStateTab', () => {
 
     renderStateTab(null);
 
-    expect(await screen.findByRole('heading', { name: 'Actual branch tip' })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'Actual branch tip' })).toBeInTheDocument();
     expect(screen.queryByText('Timestamp-newer parent')).not.toBeInTheDocument();
-    expect(hookMocks.loadOperations).toHaveBeenCalledWith(tip.hash, 'proj_test');
+    await waitFor(() => {
+      expect(hookMocks.loadOperations).toHaveBeenCalledWith(tip.hash, 'proj_test');
+    });
   });
 
   it('rejects commit rows that do not belong to the selected project', async () => {
@@ -1417,6 +1638,43 @@ describe('ProjectStateTab', () => {
       await screen.findByText('Commit response does not match the selected project.')
     ).toBeInTheDocument();
     expect(screen.queryByText('PRD audience handoff committed')).not.toBeInTheDocument();
+  });
+
+  it('accepts merged ancestors with their origin branch and selects the merge tip despite clock skew', async () => {
+    const source = {
+      ...PRD_COMMIT,
+      hash: 'sha256:source',
+      branch: 'dev',
+      parents: [],
+      committed_at: '2099-01-01T00:00:00.000Z',
+    };
+    const merged = {
+      ...PRD_COMMIT,
+      hash: 'sha256:merged',
+      message: 'Merged branch HEAD',
+      parents: [PRD_COMMIT.hash, source.hash],
+    };
+    hookMocks.loadCommits.mockResolvedValue([source, merged, PRD_COMMIT]);
+    renderStateTab(null);
+    expect(await screen.findByRole('link', { name: 'Merged branch HEAD' })).toBeInTheDocument();
+    // Change details load in a separate effect after the committed state is visible.
+    await waitFor(() => {
+      expect(hookMocks.loadOperations).toHaveBeenCalledWith(merged.hash, 'proj_test');
+    });
+    expect(
+      screen.queryByText('Commit response does not match the selected project and branch.')
+    ).not.toBeInTheDocument();
+  });
+
+  it('still rejects an unrelated foreign-branch commit in a branch history response', async () => {
+    hookMocks.loadCommits.mockResolvedValue([
+      PRD_COMMIT,
+      { ...PRD_COMMIT, hash: 'sha256:unrelated', branch: 'dev', parents: [] },
+    ]);
+    renderStateTab(null);
+    expect(
+      await screen.findByText('Commit response does not match the selected project and branch.')
+    ).toBeInTheDocument();
   });
 
   it('ignores stale Canvas data from another project', async () => {
@@ -1470,7 +1728,7 @@ describe('ProjectStateTab', () => {
     renderStateTab();
 
     expect(
-      await screen.findByRole('heading', { name: 'PRD audience handoff committed' })
+      await screen.findByRole('link', { name: 'PRD audience handoff committed' })
     ).toBeInTheDocument();
     expect(hookMocks.loadCommit).toHaveBeenCalledWith(inheritedHead.hash, 'proj_test');
     expect(navigationMocks.router.replace).not.toHaveBeenCalled();
@@ -1479,7 +1737,7 @@ describe('ProjectStateTab', () => {
   it('switches its local read-only branch focus', async () => {
     const view = renderStateTab();
 
-    await screen.findByRole('region', { name: 'Structured state tree' });
+    await screen.findByRole('region', { name: 'State structure' });
     hookMocks.loadCommits.mockResolvedValueOnce([
       { ...PRD_COMMIT, branch: 'feature/prd-audience' },
     ]);
@@ -1518,7 +1776,7 @@ describe('ProjectStateTab', () => {
   it('clears stale commit actions while a newly selected branch is loading', async () => {
     const view = renderStateTab();
 
-    await screen.findByRole('heading', { name: 'PRD audience handoff committed' });
+    await screen.findByRole('link', { name: 'PRD audience handoff committed' });
     hookMocks.loadCommits.mockReturnValueOnce(new Promise<ApiCommit[]>(() => {}));
     fireEvent.click(screen.getByRole('button', { name: /Switch branches\/tags/ }));
     fireEvent.click(

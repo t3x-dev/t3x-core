@@ -417,11 +417,8 @@ export class ProviderRegistry {
       const instance = entry.factory(config) as AnyProvider;
       this.instances.set(id, instance);
       return instance as T;
-    } catch (error) {
-      console.warn(
-        `[ProviderRegistry] Failed to create provider "${id}":`,
-        error instanceof Error ? error.message : String(error)
-      );
+    } catch {
+      console.warn(`[ProviderRegistry] Failed to create provider "${id}"`);
       return null;
     }
   }

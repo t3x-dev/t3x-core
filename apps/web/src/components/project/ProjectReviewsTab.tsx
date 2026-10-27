@@ -1,20 +1,11 @@
 'use client';
 
 import {
-  ArrowDown as PhArrowDown,
-  ArrowRight as PhArrowRight,
   CaretDown as PhCaretDown,
-  CaretRight as PhCaretRight,
   CheckCircle as PhCheckCircle,
-  CircleDashed as PhCircleDashed,
-  Cube as PhCube,
-  File as PhFile,
   FileText as PhFileText,
-  Gear as PhGear,
   GitBranch as PhGitBranch,
-  GitCommit as PhGitCommit,
   GitPullRequest as PhGitPullRequest,
-  Info as PhInfo,
   Play as PhPlay,
   Tilde as PhTilde,
 } from '@phosphor-icons/react';
@@ -26,20 +17,23 @@ import {
   ChevronDown,
   ChevronRight,
   CircleAlert,
+  CircleDashed,
+  Clock3,
   Copy,
-  GitCompareArrows,
+  GitBranch,
   GitMerge,
+  GitPullRequest,
   GitPullRequestArrow,
   PencilLine,
   Plus,
   RefreshCw,
   Search,
+  SearchX,
   ShieldCheck,
-  UserRound,
   XCircle,
 } from 'lucide-react';
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
+import Link from 'next/link';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -49,7 +43,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { shortHash } from '@/domain/format/formatters';
-import type { PullRequestConflictSide } from '@/domain/project/pullRequestConflictDecision';
+import { checksHref } from '@/domain/project/checks';
+import { summarizeMergeReview } from '@/domain/project/pullRequestMergeReview';
 import type {
   ApiProjectPullRequest,
   ApiProjectPullRequestActivity,
@@ -57,16 +52,39 @@ import type {
   ApiProjectPullRequestDetail,
 } from '@/hooks/projects/useProjectPullRequestsApi';
 import { useProjectPullRequestsApi } from '@/hooks/projects/useProjectPullRequestsApi';
+import { usePullRequestChangePreview } from '@/hooks/projects/usePullRequestChangePreview';
+import { useViewPreference } from '@/hooks/shared/useViewPreference';
 import { cn } from '@/utils/cn';
 import createStyles from './ProjectReviewsCreate.module.css';
 import detailStyles from './ProjectReviewsDetail.module.css';
 import listStyles from './ProjectReviewsList.module.css';
+import { PullRequestChangePreview } from './PullRequestChangePreview';
+import {
+  type MergeDecisionSaveState,
+  type MergeResolutionProgress,
+  type MergeReviewLoadState,
+  PullRequestMergeReviewPanel,
+  type PullRequestMergeReviewPanelProps,
+} from './PullRequestMergeReviewPanel';
 
 type PullRequestStatus = 'draft' | 'open' | 'checking' | 'ready' | 'blocked' | 'merged' | 'closed';
 type PullRequestListMode = 'open' | 'merged' | 'closed';
 type PullRequestView = 'list' | 'create' | 'detail';
 type PullRequestDetailTab = 'overview' | 'structured-diff' | 'checks' | 'activity' | 'merge';
 type PullRequestCompareStatus = 'ready' | 'already_open' | 'no_changes' | 'base_empty';
+type PullRequestConflictSide = 'main' | 'feature';
+const PR_LIST_MODES = ['open', 'merged', 'closed'] as const;
+const PR_DETAIL_TABS = ['overview', 'structured-diff', 'checks', 'activity', 'merge'] as const;
+
+const LIST_STATUS_LABELS: Record<PullRequestStatus, string> = {
+  draft: 'Draft',
+  open: 'Checks queued',
+  checking: 'Checks running',
+  ready: 'Ready to merge',
+  blocked: 'Needs decision',
+  merged: 'Merged',
+  closed: 'Closed',
+};
 
 interface ProjectPullRequest {
   id: string;
@@ -89,6 +107,7 @@ interface ProjectPullRequest {
   readinessLabel: string;
   readinessTone: 'success' | 'pending' | 'warning' | 'muted';
   updatedAt: string;
+  updatedAtIso?: string;
   checks?: PullRequestCheck[];
   activity?: PullRequestActivity[];
   diffSummary?: PullRequestDiffSummary;
@@ -123,6 +142,7 @@ interface PullRequestCompareCandidate {
   description: string;
   headCommitId: string;
   baseCommitId: string | null;
+  mergeBaseCommitId?: string | null;
   updatedAt: string;
   aheadBy: number;
   behindBy: number;
@@ -144,6 +164,7 @@ interface ApiProjectPullRequestCompareCandidate {
   description: string;
   head_commit_id: string;
   base_commit_id: string | null;
+  merge_base_commit_id?: string | null;
   updated_at: string;
   ahead_by: number;
   behind_by: number;
@@ -344,6 +365,7 @@ function toProjectPullRequest(api: ApiProjectPullRequest): ProjectPullRequest {
     targetBranch: api.target_branch,
     title: api.title,
     updatedAt: new Date(api.updated_at).toLocaleString(),
+    updatedAtIso: api.updated_at,
     workspace: api.workspace_id ?? undefined,
   };
 }
@@ -463,6 +485,7 @@ function toCompareCandidate(
     aheadBy: api.ahead_by,
     baseBranch: api.base_branch,
     baseCommitId: api.base_commit_id,
+    mergeBaseCommitId: api.merge_base_commit_id ?? null,
     behindBy: api.behind_by,
     branch: api.branch,
     changedNodes: api.changed_nodes,
@@ -484,35 +507,63 @@ function toCompareCandidate(
 export function ProjectReviewsTab({
   projectId,
   initialPullRequestNumber,
+  initialDetailTab,
+  onDetailTabChange,
   onPullRequestNumberChange,
 }: {
   projectId?: string;
   initialPullRequestNumber?: number;
+  initialDetailTab?: string;
+  onDetailTabChange?: (tab: PullRequestDetailTab) => void;
   onPullRequestNumberChange?: (number?: number) => void;
 } = {}) {
   const {
-    applyConflictDecision: applyProjectConflictDecision,
     closePullRequest: closeProjectPullRequest,
     createPullRequest: createProjectPullRequest,
     fetchCompareCandidates,
+    fetchMergeReview,
     fetchPullRequest: fetchProjectPullRequest,
     fetchPullRequests,
     mergePullRequest: mergeProjectPullRequest,
     rerunReadiness: rerunProjectPullRequestReadiness,
+    saveMergeDecision,
   } = useProjectPullRequestsApi();
   const [pullRequests, setPullRequests] = useState(() => (projectId ? [] : INITIAL_PULL_REQUESTS));
+  const [listLoading, setListLoading] = useState(Boolean(projectId));
+  const [listError, setListError] = useState<string | null>(null);
+  const [listRefreshKey, setListRefreshKey] = useState(0);
+  const listId = useId();
+  const searchInput = useRef<HTMLInputElement>(null);
   const [baseBranches, setBaseBranches] = useState(() => (projectId ? [] : BASE_BRANCHES));
   const [compareCandidates, setCompareCandidates] = useState(() =>
     projectId ? [] : INITIAL_COMPARE_CANDIDATES
   );
-  const [mode, setMode] = useState<PullRequestListMode>('open');
+  const [mode, setMode] = useViewPreference(
+    `t3x.pr-list:${projectId ?? 'preview'}`,
+    PR_LIST_MODES,
+    'open'
+  );
   const [statusFilter, setStatusFilter] = useState<'all' | PullRequestStatus>('all');
   const [view, setView] = useState<PullRequestView>('list');
   const [selectedId, setSelectedId] = useState(
     projectId ? '' : (INITIAL_PULL_REQUESTS[0]?.id ?? '')
   );
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
-  const [detailTab, setDetailTab] = useState<PullRequestDetailTab>('overview');
+  const requestedTab = ['overview', 'structured-diff', 'checks', 'activity', 'merge'].includes(
+    initialDetailTab ?? ''
+  )
+    ? (initialDetailTab as PullRequestDetailTab)
+    : undefined;
+  const [preferredDetailTab, rememberDetailTab, , hasPreferredDetailTab] = useViewPreference(
+    `t3x.pr-detail:${projectId ?? 'preview'}`,
+    PR_DETAIL_TABS,
+    'structured-diff'
+  );
+  const [detailTab, setDetailTab] = useState<PullRequestDetailTab>(requestedTab ?? 'overview');
+  useEffect(() => {
+    if (requestedTab) setDetailTab(requestedTab);
+    else if (hasPreferredDetailTab) setDetailTab(preferredDetailTab);
+  }, [requestedTab, preferredDetailTab, hasPreferredDetailTab]);
   const [query, setQuery] = useState('');
   const [closeConfirmId, setCloseConfirmId] = useState<string | null>(null);
   const [closeError, setCloseError] = useState<string | null>(null);
@@ -523,6 +574,8 @@ export function ProjectReviewsTab({
   const [rerunningId, setRerunningId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [compareLoading, setCompareLoading] = useState(false);
+  const [compareError, setCompareError] = useState<string | null>(null);
+  const editedCreateFields = useRef({ title: false, description: false });
   const [compareRefreshKey, setCompareRefreshKey] = useState(0);
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -536,8 +589,15 @@ export function ProjectReviewsTab({
   }));
   const [apiError, setApiError] = useState<string | null>(null);
   const [conflictDecision, setConflictDecision] = useState<MergeDecision | null>(null);
-  const [applyingResolution, setApplyingResolution] = useState(false);
+  const [conflictProgress, setConflictProgress] = useState<MergeResolutionProgress | null>(null);
   const [resolutionError, setResolutionError] = useState<string | null>(null);
+  const handleResolutionChange = useCallback(
+    (decision: MergeDecision | null, progress: MergeResolutionProgress) => {
+      setConflictDecision(decision);
+      setConflictProgress(progress);
+    },
+    []
+  );
   const openedDeepLink = useRef<string | null>(null);
 
   useEffect(() => {
@@ -564,6 +624,7 @@ export function ProjectReviewsTab({
           ...items.filter((item) => item.number !== mapped.number),
         ]);
         setSelectedId(mapped.id);
+        if (mapped.status === 'blocked' && !requestedTab) setDetailTab('structured-diff');
       })
       .catch((err) => {
         if (!cancelled)
@@ -576,6 +637,7 @@ export function ProjectReviewsTab({
       });
     return () => {
       cancelled = true;
+      if (openedDeepLink.current === key) openedDeepLink.current = null;
     };
   }, [fetchProjectPullRequest, initialPullRequestNumber, projectId]);
 
@@ -583,7 +645,8 @@ export function ProjectReviewsTab({
     if (!projectId) return;
 
     let cancelled = false;
-    setApiError(null);
+    setListLoading(true);
+    setListError(null);
     fetchPullRequests(projectId)
       .then((data) => {
         if (!cancelled)
@@ -602,14 +665,17 @@ export function ProjectReviewsTab({
       })
       .catch((err) => {
         if (!cancelled) {
-          setApiError(err instanceof Error ? err.message : 'Could not load pull requests');
+          setListError(err instanceof Error ? err.message : 'Could not load pull requests');
         }
+      })
+      .finally(() => {
+        if (!cancelled) setListLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [fetchPullRequests, initialPullRequestNumber, projectId]);
+  }, [fetchPullRequests, initialPullRequestNumber, listRefreshKey, projectId]);
 
   useEffect(() => {
     if (!projectId || view !== 'create') return;
@@ -617,6 +683,7 @@ export function ProjectReviewsTab({
     let cancelled = false;
     setApiError(null);
     setCompareCandidates([]);
+    setCompareError(null);
     setCompareLoading(true);
     fetchCompareCandidates(projectId, createForm.targetBranch)
       .then((data) => {
@@ -639,7 +706,9 @@ export function ProjectReviewsTab({
       })
       .catch((err) => {
         if (!cancelled) {
-          setApiError(err instanceof Error ? err.message : 'Could not load comparable branches');
+          setCompareError(
+            err instanceof Error ? err.message : 'Could not load comparable branches'
+          );
         }
       })
       .finally(() => {
@@ -699,8 +768,10 @@ export function ProjectReviewsTab({
           : closedPullRequests;
     const normalized = query.toLowerCase().trim();
     return source.filter((item) => {
-      if (statusFilter !== 'all' && item.status !== statusFilter) return false;
+      if (mode === 'open' && statusFilter !== 'all' && item.status !== statusFilter) return false;
       if (!normalized) return true;
+      if (/^#\d+$/.test(normalized)) return item.number === Number(normalized.slice(1));
+      if (normalized === String(item.number)) return true;
       return [
         item.title,
         item.description,
@@ -717,6 +788,24 @@ export function ProjectReviewsTab({
         .includes(normalized);
     });
   }, [closedPullRequests, mergedPullRequests, mode, openPullRequests, query, statusFilter]);
+
+  const listCount =
+    mode === 'open'
+      ? openPullRequests.length
+      : mode === 'merged'
+        ? mergedPullRequests.length
+        : closedPullRequests.length;
+  const hasListFilters = Boolean(query.trim()) || (mode === 'open' && statusFilter !== 'all');
+  const listUnavailable = listLoading || Boolean(listError);
+  const changeListMode = (nextMode: PullRequestListMode) => {
+    setMode(nextMode);
+    setStatusFilter('all');
+  };
+  const clearListFilters = () => {
+    setQuery('');
+    setStatusFilter('all');
+    searchInput.current?.focus();
+  };
 
   const visibleCompareCandidates = useMemo(
     () =>
@@ -760,10 +849,12 @@ export function ProjectReviewsTab({
 
     setCreateForm((form) => ({
       ...form,
-      description: selectedCompareCandidate.description,
+      description: editedCreateFields.current.description
+        ? form.description
+        : selectedCompareCandidate.description,
       sourceBranch: selectedCompareCandidate.branch,
       targetBranch: selectedCompareCandidate.baseBranch,
-      title: selectedCompareCandidate.title,
+      title: editedCreateFields.current.title ? form.title : selectedCompareCandidate.title,
     }));
   }, [createForm.sourceBranch, selectedCompareCandidate, view]);
 
@@ -776,8 +867,9 @@ export function ProjectReviewsTab({
     setReadinessError(null);
     setDetailError(null);
     setConflictDecision(null);
+    setConflictProgress(null);
     setResolutionError(null);
-    setDetailTab('structured-diff');
+    setDetailTab(preferredDetailTab);
     setView('detail');
 
     if (projectId && onPullRequestNumberChange) {
@@ -807,6 +899,43 @@ export function ProjectReviewsTab({
       .finally(() => {
         setDetailLoadingId(null);
       });
+  };
+
+  const openExistingPullRequest = (number: number) => {
+    const existing = pullRequests.find((item) => item.number === number);
+    if (existing) {
+      openPullRequest(existing);
+      return;
+    }
+    if (onPullRequestNumberChange) {
+      onPullRequestNumberChange(number);
+      return;
+    }
+    if (!projectId) return;
+
+    setSelectedId('');
+    setHighlightedId(null);
+    setCloseConfirmId(null);
+    setCloseError(null);
+    setMergeError(null);
+    setReadinessError(null);
+    setConflictDecision(null);
+    setConflictProgress(null);
+    setResolutionError(null);
+    setDetailError(null);
+    setDetailLoadingId(`pr-${number}`);
+    setDetailTab(preferredDetailTab);
+    setView('detail');
+    fetchProjectPullRequest(projectId, number)
+      .then((detail) => {
+        const mapped = toProjectPullRequestDetail(detail);
+        setPullRequests((items) => [mapped, ...items.filter((item) => item.number !== number)]);
+        setSelectedId(mapped.id);
+      })
+      .catch((err) => {
+        setDetailError(err instanceof Error ? err.message : 'Could not load pull request details.');
+      })
+      .finally(() => setDetailLoadingId(null));
   };
 
   const markCompareCandidateOpened = (
@@ -847,6 +976,7 @@ export function ProjectReviewsTab({
       updatedAt: nowLabel,
     };
 
+    editedCreateFields.current = { title: false, description: false };
     setPullRequests((items) => [next, ...items]);
     markCompareCandidateOpened(next.sourceBranch, next.targetBranch, next.number);
     setSelectedId(next.id);
@@ -876,9 +1006,15 @@ export function ProjectReviewsTab({
       title: createForm.title.trim() || 'Untitled pull request',
     })
       .then((created) => {
+        editedCreateFields.current = { title: false, description: false };
         const mapped = toProjectPullRequestDetail(created);
         setPullRequests((items) => [mapped, ...items]);
         markCompareCandidateOpened(mapped.sourceBranch, mapped.targetBranch, mapped.number);
+        setApiError(null);
+        if (mapped.status === 'blocked') {
+          openPullRequest(mapped);
+          return;
+        }
         setSelectedId(mapped.id);
         setHighlightedId(mapped.id);
         setMode('open');
@@ -912,42 +1048,24 @@ export function ProjectReviewsTab({
   };
 
   const canMergePullRequest = (pullRequest: ProjectPullRequest) =>
-    pullRequest.status === 'ready' ||
-    (pullRequest.status === 'blocked' && conflictDecision !== null);
+    (conflictProgress?.unresolved ?? 0) === 0 &&
+    (pullRequest.status === 'ready' ||
+      (pullRequest.status === 'blocked' && conflictDecision !== null));
 
+  /** Local fixture PRs have no merge draft; one side settles their single sample conflict. */
   const applyResolution = (side: PullRequestConflictSide | null) => {
-    const pullRequest = selectedPullRequest;
-    if (!pullRequest || applyingResolution) return;
-
     setResolutionError(null);
-    if (side === null) {
-      setConflictDecision(null);
-      return;
-    }
-    if (!projectId || !pullRequest.mergeDraftId) {
-      setConflictDecision({
-        conflictResolutions: {},
-        keepFromSource: [],
-        keepFromTarget: [],
-        keepRelationsFromSource: true,
-        keepRelationsFromTarget: true,
-      });
-      return;
-    }
-
-    setApplyingResolution(true);
-    applyProjectConflictDecision(pullRequest.mergeDraftId, side)
-      .then((decision) => {
-        setConflictDecision(decision);
-      })
-      .catch((err) => {
-        setResolutionError(
-          err instanceof Error ? err.message : 'Could not save the conflict resolution.'
-        );
-      })
-      .finally(() => {
-        setApplyingResolution(false);
-      });
+    setConflictDecision(
+      side === null
+        ? null
+        : {
+            conflictResolutions: { fixture: side === 'feature' ? 'source' : 'target' },
+            keepFromSource: [],
+            keepFromTarget: [],
+            keepRelationsFromSource: true,
+            keepRelationsFromTarget: true,
+          }
+    );
   };
 
   const mergePullRequest = (pullRequest: ProjectPullRequest) => {
@@ -1064,6 +1182,9 @@ export function ProjectReviewsTab({
       .then((updated) => {
         const mapped = toProjectPullRequestDetail(updated);
         setPullRequests((items) => items.map((item) => (item.id === mapped.id ? mapped : item)));
+        setConflictDecision(null);
+        setConflictProgress(null);
+        if (mapped.status === 'blocked') setDetailTab('structured-diff');
       })
       .catch((err) => {
         setReadinessError(
@@ -1078,15 +1199,34 @@ export function ProjectReviewsTab({
   if (view === 'create') {
     return (
       <PullRequestCreateView
+        projectId={projectId}
         baseBranches={baseBranches}
         canCreate={canCreatePullRequest}
         candidates={visibleCompareCandidates}
+        compareError={compareError}
         compareLoading={compareLoading}
         creating={creating}
         error={apiError}
         form={createForm}
         onBack={() => setView('list')}
-        onChange={setCreateForm}
+        onChange={(next) => {
+          if (next.title !== createForm.title) editedCreateFields.current.title = true;
+          if (next.description !== createForm.description) {
+            editedCreateFields.current.description = true;
+          }
+          setCreateForm(next);
+        }}
+        onSelectCandidate={(candidate) => {
+          setCreateForm((form) => ({
+            description: editedCreateFields.current.description
+              ? form.description
+              : candidate.description,
+            sourceBranch: candidate.branch,
+            targetBranch: candidate.baseBranch,
+            title: editedCreateFields.current.title ? form.title : candidate.title,
+          }));
+        }}
+        onOpenExisting={openExistingPullRequest}
         onCreate={createPullRequest}
         onRefresh={() => setCompareRefreshKey((key) => key + 1)}
         selectedCandidate={selectedCompareCandidate}
@@ -1118,39 +1258,48 @@ export function ProjectReviewsTab({
   if (view === 'detail' && selectedPullRequest) {
     return (
       <PullRequestDetailView
-        applyingResolution={applyingResolution}
         closeConfirmationActive={closeConfirmId === selectedPullRequest.id}
         closeError={closeError}
         closing={closingId === selectedPullRequest.id}
+        conflictProgress={conflictProgress}
         conflictResolved={conflictDecision !== null}
         detailError={detailError}
         detailLoading={detailLoadingId === selectedPullRequest.id}
         detailTab={detailTab}
         mergeError={mergeError}
+        fetchMergeReview={fetchMergeReview}
         merging={mergingId === selectedPullRequest.id}
         onApplyResolution={applyResolution}
+        onResolutionChange={handleResolutionChange}
         onBack={() => {
           onPullRequestNumberChange?.(undefined);
           setView('list');
         }}
+        onCancelClose={() => setCloseConfirmId(null)}
         onClose={() => closePullRequest(selectedPullRequest)}
-        onChangeTab={setDetailTab}
+        onChangeTab={(tab) => {
+          rememberDetailTab(tab);
+          setDetailTab(tab);
+          onDetailTabChange?.(tab);
+        }}
         onMerge={() => mergePullRequest(selectedPullRequest)}
         onRerun={() => rerunReadiness(selectedPullRequest)}
+        projectId={projectId}
         pullRequest={selectedPullRequest}
         readinessError={readinessError}
         resolutionError={resolutionError}
         rerunning={rerunningId === selectedPullRequest.id}
+        saveMergeDecision={saveMergeDecision}
       />
     );
   }
 
   return (
-    <section className={listStyles.page}>
+    <section className={listStyles.listPage}>
       <header className={listStyles.pageHeader}>
         <div>
           <h1>Pull requests</h1>
-          <p>Changes proposed to this project</p>
+          <p>Review proposed changes and follow their progress.</p>
         </div>
         <Button
           aria-label="Create PR"
@@ -1168,36 +1317,51 @@ export function ProjectReviewsTab({
       </header>
 
       <div className={listStyles.controls}>
-        <div aria-label="Pull request states" className={listStyles.modes} role="tablist">
+        <div
+          aria-label="Pull request states"
+          className={listStyles.modes}
+          onKeyDown={(event) => {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+            const tabs = Array.from(
+              event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+            );
+            const index = tabs.indexOf(event.target as HTMLButtonElement);
+            if (index < 0) return;
+            event.preventDefault();
+            const nextIndex =
+              event.key === 'Home'
+                ? 0
+                : event.key === 'End'
+                  ? tabs.length - 1
+                  : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+            tabs[nextIndex]?.focus();
+            tabs[nextIndex]?.click();
+          }}
+          role="tablist"
+        >
           <ModeButton
             active={mode === 'open'}
-            count={openPullRequests.length}
+            controlsId={`${listId}-panel`}
+            count={listUnavailable ? null : openPullRequests.length}
+            id={`${listId}-open`}
             label="Open"
-            onClick={() => {
-              setMode('open');
-              setQuery('');
-              setStatusFilter('all');
-            }}
+            onClick={() => changeListMode('open')}
           />
           <ModeButton
             active={mode === 'merged'}
-            count={mergedPullRequests.length}
+            controlsId={`${listId}-panel`}
+            count={listUnavailable ? null : mergedPullRequests.length}
+            id={`${listId}-merged`}
             label="Merged"
-            onClick={() => {
-              setMode('merged');
-              setQuery('');
-              setStatusFilter('all');
-            }}
+            onClick={() => changeListMode('merged')}
           />
           <ModeButton
             active={mode === 'closed'}
-            count={closedPullRequests.length}
+            controlsId={`${listId}-panel`}
+            count={listUnavailable ? null : closedPullRequests.length}
+            id={`${listId}-closed`}
             label="Closed"
-            onClick={() => {
-              setMode('closed');
-              setQuery('');
-              setStatusFilter('all');
-            }}
+            onClick={() => changeListMode('closed')}
           />
         </div>
         <div className={listStyles.filters}>
@@ -1205,67 +1369,135 @@ export function ProjectReviewsTab({
             <Search aria-hidden="true" />
             <input
               aria-label="Search pull requests"
+              disabled={listUnavailable}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search by title or branch..."
+              placeholder="Search title, branch, or #number"
+              ref={searchInput}
+              type="search"
               value={query}
             />
           </label>
-          <label className={listStyles.statusSelect}>
-            <select
-              aria-label="Pull request status"
-              onChange={(event) => setStatusFilter(event.target.value as 'all' | PullRequestStatus)}
-              value={statusFilter}
-            >
-              <option value="all">All statuses</option>
-              <option value="ready">Ready to merge</option>
-              <option value="checking">Checks running</option>
-              <option value="blocked">Needs decision</option>
-              <option value="draft">Draft</option>
-            </select>
-            <ChevronDown aria-hidden="true" />
-          </label>
+          {mode === 'open' ? (
+            <label className={listStyles.statusSelect}>
+              <select
+                aria-label="Pull request status"
+                disabled={listUnavailable}
+                onChange={(event) =>
+                  setStatusFilter(event.target.value as 'all' | PullRequestStatus)
+                }
+                value={statusFilter}
+              >
+                <option value="all">All statuses</option>
+                <option value="ready">Ready to merge</option>
+                <option value="checking">Checks running</option>
+                <option value="open">Checks queued</option>
+                <option value="blocked">Needs decision</option>
+                <option value="draft">Draft</option>
+              </select>
+              <ChevronDown aria-hidden="true" />
+            </label>
+          ) : null}
+          {hasListFilters && !listUnavailable ? (
+            <button className={listStyles.clearFilters} onClick={clearListFilters} type="button">
+              Clear filters
+            </button>
+          ) : null}
+          <output aria-live="polite" className={listStyles.resultCount}>
+            {listLoading
+              ? 'Loading…'
+              : listError
+                ? ''
+                : hasListFilters
+                  ? `${visiblePullRequests.length} of ${listCount}`
+                  : `${listCount} pull request${listCount === 1 ? '' : 's'}`}
+          </output>
         </div>
       </div>
 
-      {apiError ? (
-        <div className={listStyles.error}>Could not load pull requests: {apiError}</div>
-      ) : null}
-
-      <div className={listStyles.tableWrap}>
-        <div aria-hidden="true" className={listStyles.tableHeader}>
-          <div>#</div>
-          <div>Title</div>
-          <div>Branches</div>
-          <div>Status</div>
-          <div>Author</div>
-          <div>Updated</div>
-          <div />
-        </div>
-        <div className={listStyles.rows}>
-          {visiblePullRequests.length > 0 ? (
-            visiblePullRequests.map((pullRequest, index) => (
-              <PullRequestRow
-                highlighted={pullRequest.id === highlightedId}
-                key={pullRequest.id}
-                onOpen={() => openPullRequest(pullRequest)}
-                pullRequest={pullRequest}
-                selected={
-                  pullRequest.id === selectedId ||
-                  (index === 0 && !visiblePullRequests.some((item) => item.id === selectedId))
-                }
-              />
-            ))
-          ) : (
-            <section className={listStyles.empty}>
-              <h3>No pull requests found</h3>
-              <p>
-                {query
-                  ? 'Try a different title or branch.'
-                  : `There are no ${mode} pull requests in this project.`}
-              </p>
-            </section>
-          )}
-        </div>
+      <div
+        aria-busy={listLoading}
+        aria-labelledby={`${listId}-${mode}`}
+        className={listStyles.tableWrap}
+        id={`${listId}-panel`}
+        role="tabpanel"
+      >
+        {listLoading ? (
+          <div aria-hidden="true">
+            {[0, 1, 2].map((index) => (
+              <div className={listStyles.loadingRow} key={index}>
+                <span className={listStyles.skeletonTitle} />
+                <span className={listStyles.skeletonMeta} />
+              </div>
+            ))}
+          </div>
+        ) : listError ? (
+          <section className={listStyles.empty} role="alert">
+            <CircleAlert aria-hidden="true" />
+            <h2>Could not load pull requests</h2>
+            <p>{listError}</p>
+            <Button
+              onClick={() => setListRefreshKey((key) => key + 1)}
+              type="button"
+              variant="outline"
+            >
+              Try again
+            </Button>
+          </section>
+        ) : visiblePullRequests.length > 0 ? (
+          <ul className={listStyles.rows}>
+            {visiblePullRequests.map((pullRequest) => (
+              <li key={pullRequest.id}>
+                <PullRequestRow
+                  highlighted={pullRequest.id === highlightedId}
+                  onOpen={() => openPullRequest(pullRequest)}
+                  pullRequest={pullRequest}
+                />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <section className={listStyles.empty}>
+            {hasListFilters ? (
+              <SearchX aria-hidden="true" />
+            ) : (
+              <GitPullRequestArrow aria-hidden="true" />
+            )}
+            <h2>
+              {hasListFilters
+                ? 'No matching pull requests'
+                : pullRequests.length === 0
+                  ? 'Propose your first change'
+                  : `No ${mode} pull requests`}
+            </h2>
+            <p>
+              {hasListFilters
+                ? 'Try a different search or clear the filters.'
+                : pullRequests.length === 0
+                  ? 'Create a pull request to review changes between branches.'
+                  : mode === 'merged'
+                    ? 'Merged pull requests will appear here.'
+                    : mode === 'closed'
+                      ? 'Pull requests closed without merging will appear here.'
+                      : 'New proposals will appear here when they are opened.'}
+            </p>
+            {hasListFilters ? (
+              <Button onClick={clearListFilters} type="button" variant="outline">
+                Clear filters
+              </Button>
+            ) : pullRequests.length === 0 ? (
+              <Button
+                onClick={() => {
+                  setApiError(null);
+                  setView('create');
+                }}
+                type="button"
+                variant="commit"
+              >
+                New pull request
+              </Button>
+            ) : null}
+          </section>
+        )}
       </div>
     </section>
   );
@@ -1273,26 +1505,33 @@ export function ProjectReviewsTab({
 
 function ModeButton({
   active,
+  controlsId,
   count,
+  id,
   label,
   onClick,
 }: {
   active: boolean;
-  count: number;
+  controlsId: string;
+  count: number | null;
+  id: string;
   label: string;
   onClick: () => void;
 }) {
   return (
     <button
-      aria-label={`${count} ${label}`}
+      aria-controls={controlsId}
+      aria-label={count === null ? label : `${count} ${label}`}
       aria-selected={active}
       className={cn(listStyles.mode, active && listStyles.modeActive)}
+      id={id}
       onClick={onClick}
       role="tab"
+      tabIndex={active ? 0 : -1}
       type="button"
     >
       <span>{label}</span>
-      <span className={listStyles.modeCount}>{count}</span>
+      <span className={listStyles.modeCount}>{count ?? '—'}</span>
     </button>
   );
 }
@@ -1301,85 +1540,102 @@ function PullRequestRow({
   highlighted,
   onOpen,
   pullRequest,
-  selected,
 }: {
   highlighted: boolean;
   onOpen: () => void;
   pullRequest: ProjectPullRequest;
-  selected: boolean;
 }) {
   return (
     <button
-      aria-label="View PR"
-      className={cn(listStyles.row, selected && listStyles.rowSelected)}
+      aria-label={`View PR #${pullRequest.number}: ${pullRequest.title}, ${LIST_STATUS_LABELS[pullRequest.status]}`}
+      className={listStyles.row}
       onClick={onOpen}
       type="button"
     >
-      <div className={listStyles.number}>
-        <GitPullRequestArrow aria-hidden="true" />
-        <span>#{pullRequest.number}</span>
-      </div>
-      <div className={listStyles.title}>
-        <span>{pullRequest.title}</span>
-        {highlighted ? <em>New</em> : null}
-      </div>
-      <div className={listStyles.branches}>
-        <code>{pullRequest.sourceBranch}</code>
-        <ArrowRight aria-hidden="true" />
-        <code>{pullRequest.targetBranch}</code>
-      </div>
-      <ListReadinessBadge pullRequest={pullRequest} />
-      <div className={listStyles.author}>
-        <span className={listStyles.avatar}>{authorInitials(pullRequest.author)}</span>
-        <span>{pullRequest.author}</span>
-      </div>
-      <time className={listStyles.updated}>{pullRequest.updatedAt}</time>
-      <ChevronRight aria-hidden="true" className={listStyles.rowArrow} />
+      <span
+        className={cn(listStyles.rowIcon, pullRequest.status === 'merged' && listStyles.mergedIcon)}
+      >
+        {pullRequest.status === 'merged' ? (
+          <GitMerge aria-hidden="true" />
+        ) : pullRequest.status === 'closed' ? (
+          <XCircle aria-hidden="true" />
+        ) : (
+          <GitPullRequestArrow aria-hidden="true" />
+        )}
+      </span>
+      <span className={listStyles.requestBody}>
+        <span className={listStyles.title}>
+          {pullRequest.title}
+          <small>#{pullRequest.number}</small>
+          {highlighted ? <em>New</em> : null}
+        </span>
+        <span className={listStyles.branches}>
+          <code>{pullRequest.sourceBranch}</code>
+          <span className={listStyles.branchTarget}>
+            <ArrowRight aria-hidden="true" />
+            <code>{pullRequest.targetBranch}</code>
+          </span>
+          {pullRequest.author ? (
+            <span className={listStyles.author}>
+              <span aria-hidden="true">·</span> {pullRequest.author}
+            </span>
+          ) : null}
+        </span>
+      </span>
+      <span className={listStyles.rowMeta}>
+        <ListReadinessBadge pullRequest={pullRequest} />
+        <time
+          className={listStyles.updated}
+          dateTime={pullRequest.updatedAtIso}
+          title={pullRequest.updatedAt}
+        >
+          {pullRequest.updatedAtIso
+            ? new Date(pullRequest.updatedAtIso).toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+              })
+            : pullRequest.updatedAt}
+        </time>
+      </span>
     </button>
   );
 }
 
 function ListReadinessBadge({ pullRequest }: { pullRequest: ProjectPullRequest }) {
-  const icon =
-    pullRequest.readinessTone === 'success' ? (
-      <CheckCircle2 aria-hidden="true" />
-    ) : pullRequest.readinessTone === 'warning' ? (
-      <CircleAlert aria-hidden="true" />
-    ) : pullRequest.readinessTone === 'pending' ? (
-      <RefreshCw
-        aria-hidden="true"
-        className={pullRequest.status === 'checking' ? 'animate-spin' : ''}
-      />
-    ) : (
-      <UserRound aria-hidden="true" />
-    );
+  const icons = {
+    ready: CheckCircle2,
+    blocked: CircleAlert,
+    checking: RefreshCw,
+    open: Clock3,
+    draft: CircleDashed,
+    merged: GitMerge,
+    closed: XCircle,
+  };
+  const Icon = icons[pullRequest.status];
 
   return (
     <span
       className={cn(
         listStyles.readiness,
-        pullRequest.readinessTone === 'success'
-          ? listStyles.readinessSuccess
-          : pullRequest.readinessTone === 'warning'
-            ? listStyles.readinessWarning
-            : pullRequest.readinessTone === 'pending'
-              ? listStyles.readinessPending
+        pullRequest.status === 'merged'
+          ? listStyles.readinessMerged
+          : pullRequest.status === 'ready'
+            ? listStyles.readinessSuccess
+            : pullRequest.status === 'blocked'
+              ? listStyles.readinessWarning
               : listStyles.readinessMuted
       )}
     >
-      {icon}
-      {pullRequest.readinessLabel}
+      <Icon
+        aria-hidden="true"
+        className={pullRequest.status === 'checking' ? listStyles.checking : undefined}
+      />
+      {LIST_STATUS_LABELS[pullRequest.status]}
     </span>
   );
-}
-
-function authorInitials(author: string): string {
-  return author
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join('');
 }
 
 function compareCommitLabel(hash: string | null | undefined): string {
@@ -1389,13 +1645,99 @@ function compareCommitLabel(hash: string | null | undefined): string {
 }
 
 function scrollToChangePreview() {
-  document.getElementById('change-preview')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const preview = document.getElementById('change-preview');
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  preview?.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+  preview?.focus({ preventScroll: true });
+}
+
+function getCreateComparisonState({
+  canCreate,
+  compareError,
+  compareLoading,
+  creating,
+  selectedCandidate,
+}: {
+  canCreate: boolean;
+  compareError: string | null;
+  compareLoading: boolean;
+  creating: boolean;
+  selectedCandidate: PullRequestCompareCandidate | null;
+}) {
+  if (creating) {
+    return {
+      label: 'Creating pull request',
+      detail: 'Opening the pull request with these revisions…',
+      tone: 'pending',
+    };
+  }
+  if (compareLoading) {
+    return {
+      label: 'Comparing branches',
+      detail: 'Loading branch comparisons...',
+      tone: 'pending',
+    };
+  }
+  if (compareError) {
+    return { label: 'Comparison unavailable', detail: compareError, tone: 'warning' };
+  }
+  if (!selectedCandidate) {
+    return {
+      label: 'No comparable branches',
+      detail: 'No other committed branches can be compared with this base.',
+      tone: 'muted',
+    };
+  }
+  if (selectedCandidate.status === 'already_open') {
+    return {
+      label: selectedCandidate.openPullRequestNumber
+        ? `PR #${selectedCandidate.openPullRequestNumber} already open`
+        : 'Pull request already open',
+      detail: `This source branch already has an open pull request into ${selectedCandidate.baseBranch}.`,
+      tone: 'warning',
+    };
+  }
+  if (selectedCandidate.status === 'base_empty' || !selectedCandidate.baseCommitId) {
+    return {
+      label: 'Base has no commit',
+      detail: 'Choose a base branch with a commit to compare these changes.',
+      tone: 'warning',
+    };
+  }
+  if (selectedCandidate.aheadBy <= 0) {
+    return {
+      label: selectedCandidate.statusLabel,
+      detail: 'The source branch has no commits ahead of this base.',
+      tone: 'muted',
+    };
+  }
+  if (selectedCandidate.status === 'no_changes') {
+    return {
+      label: 'No semantic changes',
+      detail: 'These branches have no structured changes to propose.',
+      tone: 'muted',
+    };
+  }
+  if (canCreate) {
+    return {
+      label: 'Ready to create',
+      detail: 'Review the description and changes before opening the pull request.',
+      tone: 'ready',
+    };
+  }
+  return {
+    label: 'Select branches',
+    detail: 'Choose a source and base branch to continue.',
+    tone: 'muted',
+  };
 }
 
 function PullRequestCreateView({
+  projectId,
   baseBranches,
   canCreate,
   candidates,
+  compareError,
   compareLoading,
   creating,
   error,
@@ -1403,12 +1745,16 @@ function PullRequestCreateView({
   onBack,
   onChange,
   onCreate,
+  onOpenExisting,
   onRefresh,
+  onSelectCandidate,
   selectedCandidate,
 }: {
+  projectId?: string;
   baseBranches: string[];
   canCreate: boolean;
   candidates: PullRequestCompareCandidate[];
+  compareError: string | null;
   compareLoading: boolean;
   creating: boolean;
   error: string | null;
@@ -1426,279 +1772,313 @@ function PullRequestCreateView({
     title: string;
   }) => void;
   onCreate: () => void;
+  onOpenExisting: (number: number) => void;
   onRefresh: () => void;
+  onSelectCandidate: (candidate: PullRequestCompareCandidate) => void;
   selectedCandidate: PullRequestCompareCandidate | null;
 }) {
+  const createId = useId();
+  const fieldPreview = usePullRequestChangePreview(
+    projectId,
+    selectedCandidate?.headCommitId,
+    selectedCandidate?.mergeBaseCommitId ?? selectedCandidate?.baseCommitId
+  );
   const update = (patch: Partial<typeof form>) => onChange({ ...form, ...patch });
   const sourceOptions =
     candidates.length > 0
-      ? candidates.map((candidate) => ({
-          status: candidate.statusLabel,
-          value: candidate.branch,
-        }))
+      ? candidates.map((candidate) => ({ status: candidate.statusLabel, value: candidate.branch }))
       : form.sourceBranch
         ? [{ value: form.sourceBranch }]
         : [];
-  const changedNodeCount = selectedCandidate?.changedNodes ?? 0;
+  const state = getCreateComparisonState({
+    canCreate,
+    compareError,
+    compareLoading,
+    creating,
+    selectedCandidate,
+  });
+  const existingNumber =
+    selectedCandidate?.status === 'already_open' && !compareLoading && !compareError
+      ? selectedCandidate.openPullRequestNumber
+      : null;
+  const changedNodeCount = selectedCandidate?.changedNodes;
   const previewRows = selectedCandidate
     ? [
         {
           kind: selectedCandidate.changedNodes > 0 ? 'modified' : 'unchanged',
           label: 'Changed nodes',
-          value: String(selectedCandidate.changedNodes),
+          value: selectedCandidate.changedNodes,
         },
         {
           kind: selectedCandidate.yopsChanges > 0 ? 'modified' : 'unchanged',
           label: 'YOps changes',
-          value: String(selectedCandidate.yopsChanges),
+          value: selectedCandidate.yopsChanges,
         },
         {
           kind: selectedCandidate.outputImpacts > 0 ? 'modified' : 'unchanged',
           label: 'Output impact',
-          value: String(selectedCandidate.outputImpacts),
+          value: selectedCandidate.outputImpacts,
         },
       ]
     : [];
-
-  const selectCandidate = (candidate: PullRequestCompareCandidate) => {
-    onChange({
-      description: candidate.description,
-      sourceBranch: candidate.branch,
-      targetBranch: candidate.baseBranch,
-      title: candidate.title,
-    });
-  };
+  const StateIcon =
+    state.tone === 'pending'
+      ? RefreshCw
+      : state.tone === 'ready'
+        ? CheckCircle2
+        : state.tone === 'warning'
+          ? CircleAlert
+          : CircleDashed;
 
   return (
     <section className={createStyles.page}>
-      <main className={createStyles.mainColumn}>
-        <header className={createStyles.header}>
-          <nav className={createStyles.breadcrumb}>
-            <button onClick={onBack} type="button">
-              Pull requests
-            </button>
-            <span>/</span>
-            <span>New</span>
-          </nav>
-          <h1>New pull request</h1>
-          <p>Create a pull request to propose and review your changes.</p>
-          <button
+      <header className={createStyles.header}>
+        <nav aria-label="Breadcrumb" className={createStyles.breadcrumb}>
+          <button disabled={creating} onClick={onBack} type="button">
+            Pull requests
+          </button>
+          <span aria-hidden="true">/</span>
+          <span aria-current="page">New</span>
+        </nav>
+        <h1>New pull request</h1>
+        <p>Propose committed changes for review before merging into the base branch.</p>
+      </header>
+
+      <section aria-label="Branch comparison" className={createStyles.comparison}>
+        <div className={createStyles.branchBar}>
+          <div className={createStyles.branchField}>
+            <span id={`${createId}-source-label`}>Source branch</span>
+            <CreateBranchSelect
+              ariaLabel="Source branch"
+              disabled={compareLoading || creating || sourceOptions.length === 0}
+              onChange={(sourceBranch) => {
+                const next = candidates.find((candidate) => candidate.branch === sourceBranch);
+                if (next) onSelectCandidate(next);
+              }}
+              options={sourceOptions}
+              placeholder="Choose source branch"
+              value={form.sourceBranch}
+            />
+            <small>
+              <span>Source commit</span>
+              <code title={selectedCandidate?.headCommitId}>
+                {compareLoading
+                  ? 'Comparing…'
+                  : selectedCandidate
+                    ? compareCommitLabel(selectedCandidate.headCommitId)
+                    : '—'}
+              </code>
+            </small>
+          </div>
+          <ArrowRight aria-hidden="true" className={createStyles.branchArrow} />
+          <div className={createStyles.branchField}>
+            <span id={`${createId}-base-label`}>Base branch</span>
+            <CreateBranchSelect
+              ariaLabel="Base branch"
+              disabled={compareLoading || creating || baseBranches.length === 0}
+              onChange={(targetBranch) => update({ sourceBranch: '', targetBranch })}
+              options={baseBranches.map((branch) => ({ value: branch }))}
+              placeholder="Choose base branch"
+              value={form.targetBranch}
+            />
+            <small>
+              <span>Base commit</span>
+              <code title={selectedCandidate?.baseCommitId ?? undefined}>
+                {compareLoading
+                  ? 'Comparing…'
+                  : selectedCandidate
+                    ? compareCommitLabel(selectedCandidate.baseCommitId)
+                    : '—'}
+              </code>
+            </small>
+          </div>
+          <Button
             aria-label="Refresh branch comparisons"
-            className={createStyles.srOnly}
-            disabled={compareLoading}
+            className={createStyles.refreshButton}
+            disabled={compareLoading || creating}
             onClick={onRefresh}
             type="button"
+            variant="canvas-ghost"
           >
-            Refresh branch comparisons
-          </button>
-        </header>
-
-        {selectedCandidate ? (
-          <div className={createStyles.commitNotice}>
-            <PhCheckCircle aria-hidden="true" size={20} weight="fill" />
-            <span className={createStyles.commitLabel}>Committed to</span>
-            <code>{selectedCandidate.branch}</code>
-            <strong>·</strong>
-            <code>{compareCommitLabel(selectedCandidate.headCommitId)}</code>
-          </div>
-        ) : null}
-
-        <div className={createStyles.branchBar}>
-          <CreateBranchSelect
-            ariaLabel="Source branch"
-            disabled={compareLoading || sourceOptions.length === 0}
-            onChange={(sourceBranch) => {
-              const next = candidates.find((candidate) => candidate.branch === sourceBranch);
-              if (next) {
-                selectCandidate(next);
-                return;
-              }
-              update({ sourceBranch });
-            }}
-            options={sourceOptions}
-            placeholder="Choose branch"
-            value={form.sourceBranch}
+            <RefreshCw
+              aria-hidden="true"
+              className={compareLoading ? createStyles.spinning : undefined}
+            />
+            Refresh
+          </Button>
+        </div>
+        <div aria-live="polite" className={createStyles.comparisonMessage} data-tone={state.tone}>
+          <StateIcon
+            aria-hidden="true"
+            className={state.tone === 'pending' ? createStyles.spinning : undefined}
           />
-          <PhArrowRight aria-hidden="true" className={createStyles.branchArrow} size={20} />
-          <CreateBranchSelect
-            ariaLabel="Base branch"
-            disabled={compareLoading || baseBranches.length === 0}
-            onChange={(targetBranch) => update({ sourceBranch: '', targetBranch })}
-            options={baseBranches.map((branch) => ({ value: branch }))}
-            placeholder="Choose base"
-            value={form.targetBranch}
-          />
-          {selectedCandidate ? (
-            <button
-              className={createStyles.changedPathsLink}
-              onClick={scrollToChangePreview}
-              type="button"
-            >
-              <PhFileText aria-hidden="true" size={18} />
-              {changedNodeCount} changed paths
+          <p id={`${createId}-reason`}>{state.detail}</p>
+          {compareError ? (
+            <button onClick={onRefresh} type="button">
+              Try again
             </button>
           ) : null}
         </div>
+      </section>
 
-        {compareLoading ? (
-          <div className={createStyles.inlineMessage}>Loading branch comparisons...</div>
-        ) : null}
-        {!compareLoading && candidates.length === 0 ? (
-          <div className={createStyles.inlineMessage}>
-            No other committed branches can be compared with this base.
+      <div className={createStyles.columns}>
+        <div className={createStyles.mainColumn}>
+          <div className={createStyles.formFields}>
+            <label>
+              <span>Title</span>
+              <input
+                aria-label="Title"
+                disabled={creating}
+                onChange={(event) => update({ title: event.target.value })}
+                value={form.title}
+              />
+            </label>
+            <label>
+              <span>
+                Description <small>Optional</small>
+              </span>
+              <textarea
+                aria-label="Description"
+                disabled={creating}
+                onChange={(event) => update({ description: event.target.value })}
+                placeholder="Describe what changed and why."
+                value={form.description}
+              />
+            </label>
+            {!projectId ? <p className={createStyles.author}>Author · YOps (demo)</p> : null}
           </div>
-        ) : null}
-        {selectedCandidate && !canCreate && !compareLoading ? (
-          <div className={createStyles.warningMessage}>
-            {selectedCandidate.statusLabel}. Branches with an open PR, no semantic changes, or no
-            commits ahead of the base cannot create another PR.
+
+          <section
+            aria-labelledby={`${createId}-preview-title`}
+            className={createStyles.preview}
+            id="change-preview"
+            tabIndex={-1}
+          >
+            <div className={createStyles.sectionHeading}>
+              <h2 id={`${createId}-preview-title`}>Change preview</h2>
+              <span>Read only</span>
+            </div>
+            <p>
+              {selectedCandidate
+                ? `Review what differs between ${selectedCandidate.branch} and the comparison base.`
+                : 'Select a source branch to preview the structured comparison.'}
+            </p>
+            {fieldPreview.loading ? (
+              <output className={cn('block', createStyles.inlineMessage)}>
+                Loading field changes…
+              </output>
+            ) : null}
+            {fieldPreview.error ? (
+              <output className={cn('block', createStyles.inlineMessage)}>
+                {fieldPreview.error}
+              </output>
+            ) : null}
+            {fieldPreview.changes && !fieldPreview.error && selectedCandidate ? (
+              <PullRequestChangePreview
+                baseBranch={selectedCandidate.baseBranch}
+                changes={fieldPreview.changes}
+                sourceBranch={selectedCandidate.branch}
+              />
+            ) : (
+              <div className={createStyles.previewList}>
+                {previewRows.length > 0 ? (
+                  previewRows.map((row) => (
+                    <div className={createStyles.previewRow} key={row.label}>
+                      <span className={createStyles.previewLabel}>{row.label}</span>
+                      <ChangeKindBadge kind={row.kind} />
+                      <span className={createStyles.previewValue}>{row.value}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className={createStyles.previewEmpty}>
+                    No structured comparison is ready yet.
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        </div>
+
+        <aside aria-label="Creation summary" className={createStyles.sidebar}>
+          <h2>Creation summary</h2>
+          <div
+            aria-live="polite"
+            className={createStyles.summaryStatus}
+            data-tone={state.tone}
+            id={`${createId}-status`}
+          >
+            <StateIcon
+              aria-hidden="true"
+              className={state.tone === 'pending' ? createStyles.spinning : undefined}
+            />
+            <strong>{state.label}</strong>
           </div>
-        ) : null}
-
-        <div className={createStyles.rule} />
-
-        <div className={createStyles.formFields}>
-          <label>
-            <span>Title</span>
-            <input
-              aria-label="Title"
-              onChange={(event) => update({ title: event.target.value })}
-              value={form.title}
-            />
-          </label>
-          <label>
-            <span>Description</span>
-            <textarea
-              aria-label="Description"
-              onChange={(event) => update({ description: event.target.value })}
-              value={form.description}
-            />
-          </label>
-          <div className={createStyles.authorRow}>
-            <span>Author</span>
-            <button type="button">
-              <b>YO</b>
-              <span>YOps (you)</span>
-              <PhCaretDown aria-hidden="true" size={14} />
+          {existingNumber ? (
+            <button
+              className={createStyles.textLink}
+              onClick={() => onOpenExisting(existingNumber)}
+              type="button"
+            >
+              View PR #{existingNumber}
+              <ArrowRight aria-hidden="true" />
+            </button>
+          ) : null}
+          <div className={createStyles.changesRow}>
+            <span>
+              {changedNodeCount === undefined
+                ? 'Changes not available'
+                : `${changedNodeCount} node${changedNodeCount === 1 ? '' : 's'} changed`}
+            </span>
+            {selectedCandidate ? (
+              <button onClick={scrollToChangePreview} type="button">
+                View changes
+              </button>
+            ) : null}
+          </div>
+          <div className={createStyles.checks}>
+            <h3>Checks run after opening</h3>
+            <p>
+              <CircleDashed aria-hidden="true" />
+              <span>
+                Schema validation<small>Results will appear on the pull request.</small>
+              </span>
+            </p>
+          </div>
+          <div className={createStyles.actionBar}>
+            <p aria-hidden="true" className={createStyles.mobileStatus}>
+              {state.label}
+            </p>
+            {error ? (
+              <p className={createStyles.errorMessage} role="alert">
+                {error}
+              </p>
+            ) : null}
+            <Button
+              aria-describedby={`${createId}-status ${createId}-reason`}
+              className={createStyles.createButton}
+              disabled={!canCreate || creating}
+              onClick={onCreate}
+              type="button"
+              variant="commit"
+            >
+              {creating ? (
+                <RefreshCw aria-hidden="true" className={createStyles.spinning} />
+              ) : (
+                <GitPullRequest aria-hidden="true" />
+              )}
+              {creating ? 'Creating...' : 'Create pull request'}
+            </Button>
+            <button
+              className={createStyles.backLink}
+              disabled={creating}
+              onClick={onBack}
+              type="button"
+            >
+              Back to pull requests
             </button>
           </div>
-          {error ? <div className={createStyles.warningMessage}>{error}</div> : null}
-        </div>
-
-        <div className={createStyles.rule} />
-
-        <section className={createStyles.preview} id="change-preview">
-          <h2>Change preview</h2>
-          <p>
-            {selectedCandidate
-              ? `Showing key changes from ${selectedCandidate.branch} to ${selectedCandidate.baseBranch}.`
-              : 'Select a source branch to preview the structured comparison.'}
-          </p>
-          <div className={createStyles.previewList}>
-            {previewRows.length > 0 ? (
-              previewRows.map((row) => (
-                <button className={createStyles.previewRow} key={row.label} type="button">
-                  <PhCube aria-hidden="true" className={createStyles.cubeIcon} size={24} />
-                  <span className={createStyles.previewLabel}>{row.label}</span>
-                  <ChangeKindBadge kind={row.kind} />
-                  <span className={createStyles.previewValue}>{row.value}</span>
-                  <PhCaretRight aria-hidden="true" className={createStyles.rowCaret} size={18} />
-                </button>
-              ))
-            ) : (
-              <div className={createStyles.previewEmpty}>
-                No structured comparison is ready yet.
-              </div>
-            )}
-          </div>
-        </section>
-      </main>
-
-      <aside className={createStyles.sidebar}>
-        <div className={createStyles.readyCard}>
-          <h2>Ready to open</h2>
-          <p>Review the details below and create the pull request.</p>
-
-          <div className={createStyles.metaList}>
-            <CreateMetaRow
-              icon={<PhGitBranch aria-hidden="true" size={18} />}
-              label="Source branch"
-              value={(selectedCandidate?.branch ?? form.sourceBranch) || '—'}
-            />
-            <CreateMetaRow
-              icon={<PhGitCommit aria-hidden="true" size={18} />}
-              label="Source commit"
-              value={compareCommitLabel(selectedCandidate?.headCommitId)}
-              valueClassName={createStyles.monoValue}
-            />
-            <CreateMetaRow
-              icon={<PhGitBranch aria-hidden="true" size={18} />}
-              label="Base branch"
-              value={(selectedCandidate?.baseBranch ?? form.targetBranch) || '—'}
-            />
-            <CreateMetaRow
-              icon={<PhGitCommit aria-hidden="true" size={18} />}
-              label="Base commit"
-              value={
-                selectedCandidate?.baseCommitId
-                  ? compareCommitLabel(selectedCandidate.baseCommitId)
-                  : 'No commit'
-              }
-              valueClassName={createStyles.monoValue}
-            />
-          </div>
-
-          <div className={createStyles.cardSection}>
-            <h3>Changes</h3>
-            <div className={createStyles.changesRow}>
-              <span>
-                <PhFileText aria-hidden="true" size={22} />
-                {changedNodeCount} paths changed
-              </span>
-              <button onClick={scrollToChangePreview} type="button">
-                View files
-              </button>
-            </div>
-          </div>
-
-          <div className={createStyles.cardSection}>
-            <h3>Checks run after opening</h3>
-            <div className={createStyles.checkRow}>
-              <PhCircleDashed aria-hidden="true" size={22} />
-              <div>
-                <span>Schema validation</span>
-                <small>Will run on the pull request</small>
-              </div>
-              <span
-                className={createStyles.infoIcon}
-                title="Schema and merge readiness checks run after the pull request is opened."
-              >
-                <PhInfo aria-hidden="true" size={20} />
-              </span>
-            </div>
-          </div>
-
-          <button
-            className={createStyles.createButton}
-            data-variant="commit"
-            disabled={!canCreate || creating}
-            onClick={onCreate}
-            type="button"
-          >
-            {creating ? (
-              <RefreshCw aria-hidden="true" className="animate-spin" size={20} />
-            ) : (
-              <PhGitPullRequest aria-hidden="true" size={20} />
-            )}
-            {creating ? 'Creating...' : 'Create pull request'}
-          </button>
-
-          <button className={createStyles.openLink} onClick={onBack} type="button">
-            <PhArrowRight aria-hidden="true" size={15} />
-            Opens in Pull requests
-          </button>
-        </div>
-      </aside>
+        </aside>
+      </div>
     </section>
   );
 }
@@ -1720,47 +2100,27 @@ function CreateBranchSelect({
 }) {
   return (
     <Select disabled={disabled} onValueChange={onChange} value={value}>
-      <SelectTrigger aria-label={ariaLabel} className={createStyles.branchSelect}>
-        <PhGitBranch aria-hidden="true" size={18} />
-        <SelectValue placeholder={placeholder} />
+      <SelectTrigger
+        aria-label={ariaLabel}
+        className={createStyles.branchSelect}
+        title={value || placeholder}
+      >
+        <GitBranch aria-hidden="true" />
+        <SelectValue placeholder={placeholder}>{value || undefined}</SelectValue>
       </SelectTrigger>
       <SelectContent
         align="start"
-        className="min-w-64 rounded-md border-[var(--stroke-divider)] bg-[var(--surface-elevated)] p-1.5 shadow-[var(--fx-shadow-lg)]"
+        className={createStyles.branchMenu}
         position="popper"
         sideOffset={8}
       >
         {options.map((option) => (
-          <SelectItem
-            className="h-9 rounded-sm pr-9 pl-3 font-medium text-[var(--text-primary)] focus:bg-[var(--hover-bg)] focus:text-[var(--text-primary)] data-[state=checked]:bg-[var(--accent-commit-soft)] data-[state=checked]:font-semibold data-[state=checked]:text-[var(--accent-commit)]"
-            key={option.value}
-            value={option.value}
-          >
+          <SelectItem className={createStyles.branchOption} key={option.value} value={option.value}>
             {option.status ? `${option.value} · ${option.status}` : option.value}
           </SelectItem>
         ))}
       </SelectContent>
     </Select>
-  );
-}
-
-function CreateMetaRow({
-  icon,
-  label,
-  value,
-  valueClassName,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  valueClassName?: string;
-}) {
-  return (
-    <div className={createStyles.metaRow}>
-      <div className={createStyles.metaIcon}>{icon}</div>
-      <div className={createStyles.metaLabel}>{label}</div>
-      <div className={cn(createStyles.metaValue, valueClassName)}>{value}</div>
-    </div>
   );
 }
 
@@ -1780,194 +2140,339 @@ function ChangeKindBadge({ kind }: { kind: string }) {
 }
 
 function PullRequestDetailView({
-  applyingResolution,
   closeConfirmationActive,
   closeError,
   closing,
+  conflictProgress,
   conflictResolved,
   detailError,
   detailLoading,
   detailTab,
+  fetchMergeReview,
   mergeError,
   merging,
   onApplyResolution,
   onBack,
+  onCancelClose,
   onClose,
   onChangeTab,
   onMerge,
   onRerun,
+  onResolutionChange,
+  projectId,
   pullRequest,
   readinessError,
   resolutionError,
   rerunning,
+  saveMergeDecision,
 }: {
-  applyingResolution: boolean;
   closeConfirmationActive: boolean;
   closeError: string | null;
   closing: boolean;
+  conflictProgress: MergeResolutionProgress | null;
   conflictResolved: boolean;
   detailError: string | null;
   detailLoading: boolean;
   detailTab: PullRequestDetailTab;
+  fetchMergeReview: PullRequestMergeReviewPanelProps['fetchMergeReview'];
   mergeError: string | null;
   merging: boolean;
   onApplyResolution: (side: PullRequestConflictSide | null) => void;
   onBack: () => void;
+  onCancelClose: () => void;
   onClose: () => void;
   onChangeTab: (tab: PullRequestDetailTab) => void;
   onMerge: () => void;
   onRerun: () => void;
+  onResolutionChange: PullRequestMergeReviewPanelProps['onResolutionChange'];
+  projectId?: string;
   pullRequest: ProjectPullRequest;
   readinessError: string | null;
   resolutionError: string | null;
   rerunning: boolean;
+  saveMergeDecision: PullRequestMergeReviewPanelProps['saveMergeDecision'];
 }) {
   const [copied, setCopied] = useState(false);
-  const closeable = !['merged', 'closed'].includes(pullRequest.status);
-  const rerunnable = ['open', 'ready', 'blocked'].includes(pullRequest.status);
-  const closeButtonLabel = closing
-    ? 'Closing...'
-    : closeConfirmationActive
-      ? 'Confirm close'
-      : 'Close PR';
-
-  const conflictCount = pullRequest.status === 'blocked' && !conflictResolved ? 1 : 0;
-  const passedChecks = (pullRequest.checks ?? []).filter(
-    (check) => check.status === 'passed'
-  ).length;
-  const ready = pullRequest.status === 'ready' || conflictResolved;
+  const tabsId = useId();
+  // Keep one review session across tabs so pending decision saves are not discarded.
+  const reviewKey = `${pullRequest.number}:${pullRequest.mergeDraftId ?? 'none'}:${pullRequest.updatedAtIso ?? ''}`;
+  const [loadedReview, setLoadedReview] = useState<(MergeReviewLoadState & { key: string }) | null>(
+    null
+  );
+  const [savedDecision, setSavedDecision] = useState<{
+    key: string;
+    state: MergeDecisionSaveState;
+  } | null>(null);
+  const onReviewChange = useCallback(
+    (state: MergeReviewLoadState) => {
+      setLoadedReview({ ...state, key: reviewKey });
+    },
+    [reviewKey]
+  );
+  const onSaveStateChange = useCallback(
+    (state: MergeDecisionSaveState) => {
+      setSavedDecision({ state, key: reviewKey });
+    },
+    [reviewKey]
+  );
+  const reviewState =
+    loadedReview?.key === reviewKey
+      ? loadedReview
+      : {
+          review: null,
+          loading: Boolean(projectId && pullRequest.mergeDraftId),
+          error: null,
+        };
+  const saveState = savedDecision?.key === reviewKey ? savedDecision.state : 'idle';
+  const terminal = ['merged', 'closed'].includes(pullRequest.status);
+  const busy = closing || merging || rerunning || detailLoading || saveState === 'saving';
+  const ready =
+    (conflictProgress?.unresolved ?? 0) === 0 &&
+    (pullRequest.status === 'ready' || conflictResolved);
+  const checks = pullRequest.checks ?? [];
+  const passedChecks = checks.filter((check) => check.status === 'passed').length;
+  const progress = projectId && !reviewState.review ? null : conflictProgress;
+  const readinessMessage = terminal
+    ? pullRequest.status === 'merged'
+      ? `Merged into ${pullRequest.targetBranch}.`
+      : 'Closed without merging.'
+    : conflictResolved
+      ? saveState === 'saving'
+        ? 'All conflicts decided. Saving decisions…'
+        : saveState === 'error'
+          ? 'Decisions could not be saved. Retry before merging.'
+          : 'All conflicts decided. Merge is ready.'
+      : progress && progress.unresolved > 0
+        ? `${progress.unresolved} of ${progress.total} conflicts still need a decision.`
+        : pullRequest.status === 'blocked'
+          ? 'Review the blocked checks and unresolved changes.'
+          : ready
+            ? `${passedChecks} of ${checks.length} checks passed. Ready to merge.`
+            : pullRequest.status === 'checking'
+              ? 'Checks are running.'
+              : 'Run checks to confirm merge readiness.';
+  const error = closeError ?? readinessError ?? detailError ?? mergeError ?? resolutionError;
 
   return (
     <section className={detailStyles.page}>
       <header className={detailStyles.header}>
-        <div className={detailStyles.headerMain}>
-          <button className={detailStyles.breadcrumb} onClick={onBack} type="button">
-            <GitPullRequestArrow aria-hidden="true" />
-            Pull requests / <strong>#{pullRequest.number}</strong>
-          </button>
+        <button className={detailStyles.breadcrumb} disabled={busy} onClick={onBack} type="button">
+          <ArrowLeft aria-hidden="true" /> Pull requests / <strong>#{pullRequest.number}</strong>
+        </button>
+        <div className={detailStyles.titleRow}>
           <h1>{pullRequest.title}</h1>
-          <div className={detailStyles.refs}>
-            <span>
-              <PhGitBranch aria-hidden="true" />
-              Base <b>{pullRequest.targetBranch}</b>
-              <code>@ {shortHash(pullRequest.targetBaseCommitId)}</code>
-            </span>
-            <ArrowLeft aria-hidden="true" />
-            <span>
-              <PhGitBranch aria-hidden="true" />
-              Compare <b>{pullRequest.sourceBranch}</b>
-              <code>@ {shortHash(pullRequest.sourceCommitId)}</code>
-            </span>
-            <span>
-              <GitCompareArrows aria-hidden="true" />
-              Common ancestor <b>{shortHash(pullRequest.targetBaseCommitId)}</b>
-            </span>
-          </div>
+          <ListReadinessBadge pullRequest={pullRequest} />
         </div>
-        <div className={detailStyles.headerAside}>
-          <ReadinessBadge pullRequest={pullRequest} />
+        <div className={detailStyles.refs} aria-label="Merge direction">
+          <span>
+            <GitBranch aria-hidden="true" />
+            <b>{pullRequest.sourceBranch}</b>
+            <code>{shortHash(pullRequest.sourceCommitId)}</code>
+          </span>
+          <ArrowRight aria-label="into" />
+          <span>
+            <GitBranch aria-hidden="true" />
+            <b>{pullRequest.targetBranch}</b>
+            <code>{shortHash(pullRequest.targetBaseCommitId)}</code>
+          </span>
+        </div>
+        <div className={detailStyles.metadata}>
           <span>Opened by {pullRequest.author}</span>
           <span>{pullRequest.updatedAt}</span>
+          {reviewState.review ? (
+            <span>
+              Common ancestor{' '}
+              <code>
+                {reviewState.review.merge_base_commit_id
+                  ? shortHash(reviewState.review.merge_base_commit_id)
+                  : 'None'}
+              </code>
+            </span>
+          ) : null}
         </div>
       </header>
 
-      {closeConfirmationActive ||
-      closeError ||
-      readinessError ||
-      detailError ||
-      mergeError ||
-      resolutionError ? (
-        <div className={detailStyles.notice}>
-          {closeError ??
-            readinessError ??
-            detailError ??
-            mergeError ??
-            resolutionError ??
-            'Close without merging? This moves the PR to Closed and leaves the target branch unchanged.'}
+      {error ? (
+        <div className={detailStyles.notice} role="alert">
+          {error}
         </div>
       ) : null}
+      {closeConfirmationActive ? (
+        <output className={detailStyles.notice}>
+          <span>
+            Close without merging? This moves the PR to Closed and leaves the target branch
+            unchanged.
+          </span>
+          <button disabled={closing} onClick={onCancelClose} type="button">
+            Cancel
+          </button>
+        </output>
+      ) : null}
 
-      <nav aria-label="Pull request detail" className={detailStyles.tabs}>
-        {DETAIL_TABS.map((tab) => (
+      <div aria-label="Pull request detail" className={detailStyles.tabs} role="tablist">
+        {DETAIL_TABS.map((tab, index) => (
           <button
-            aria-current={detailTab === tab.id ? 'page' : undefined}
+            aria-controls={`${tabsId}-panel-${tab.id}`}
+            aria-selected={detailTab === tab.id}
             className={detailTab === tab.id ? detailStyles.tabActive : undefined}
+            id={`${tabsId}-tab-${tab.id}`}
             key={tab.id}
             onClick={() => onChangeTab(tab.id)}
+            onKeyDown={(event) => {
+              const next =
+                event.key === 'Home'
+                  ? 0
+                  : event.key === 'End'
+                    ? DETAIL_TABS.length - 1
+                    : event.key === 'ArrowRight'
+                      ? (index + 1) % DETAIL_TABS.length
+                      : event.key === 'ArrowLeft'
+                        ? (index + DETAIL_TABS.length - 1) % DETAIL_TABS.length
+                        : -1;
+              if (next < 0) return;
+              event.preventDefault();
+              onChangeTab(DETAIL_TABS[next].id);
+              document.getElementById(`${tabsId}-tab-${DETAIL_TABS[next].id}`)?.focus();
+            }}
+            role="tab"
+            tabIndex={detailTab === tab.id ? 0 : -1}
             type="button"
           >
             {tab.label}
           </button>
         ))}
-      </nav>
+      </div>
 
       <div className={detailStyles.content}>
-        {detailTab === 'overview' ? (
-          <OverviewPanel onChangeTab={onChangeTab} pullRequest={pullRequest} />
-        ) : detailLoading ? (
-          <DetailLoadingState />
-        ) : detailTab === 'checks' ? (
-          <ChecksPanel checks={pullRequest.checks ?? []} />
-        ) : (
-          <StructuredDiffPanel
-            applyingResolution={applyingResolution}
-            conflictResolved={conflictResolved}
-            copied={copied}
-            onApplyResolution={onApplyResolution}
-            onCopy={() => {
-              void navigator.clipboard?.writeText('release_plan.rollout.branch');
-              setCopied(true);
-              window.setTimeout(() => setCopied(false), 1200);
-            }}
-            pullRequest={pullRequest}
-          />
-        )}
+        {DETAIL_TABS.map((tab) => (
+          <div
+            aria-labelledby={`${tabsId}-tab-${tab.id}`}
+            hidden={detailTab !== tab.id}
+            id={`${tabsId}-panel-${tab.id}`}
+            key={tab.id}
+            role="tabpanel"
+            // biome-ignore lint/a11y/noNoninteractiveTabindex: Tab panels must remain keyboard reachable when their content has no focusable controls.
+            tabIndex={0}
+          >
+            {detailLoading ? (
+              detailTab === tab.id ? (
+                <DetailLoadingState />
+              ) : null
+            ) : tab.id === 'overview' ? (
+              detailTab === tab.id ? (
+                <OverviewPanel
+                  onChangeTab={onChangeTab}
+                  pullRequest={pullRequest}
+                  reviewState={reviewState}
+                  readinessMessage={readinessMessage}
+                />
+              ) : null
+            ) : tab.id === 'checks' ? (
+              detailTab === tab.id ? (
+                <>
+                  {projectId ? (
+                    <p className="mb-4 text-sm">
+                      <Link
+                        className="inline-flex items-center gap-2 underline"
+                        href={checksHref(projectId, {
+                          recordId: `pull-request:${pullRequest.id}`,
+                          returnTo: `/project/${encodeURIComponent(projectId)}?tab=pull-requests&pr=${pullRequest.number}&prTab=checks`,
+                        })}
+                      >
+                        Open check details <ArrowRight size={14} />
+                      </Link>
+                    </p>
+                  ) : null}
+                  <ChecksPanel checks={checks} />
+                </>
+              ) : null
+            ) : projectId ? (
+              <PullRequestMergeReviewPanel
+                fetchMergeReview={fetchMergeReview}
+                key={reviewKey}
+                onRerun={onRerun}
+                onResolutionChange={onResolutionChange}
+                onReviewChange={onReviewChange}
+                onSaveStateChange={onSaveStateChange}
+                projectId={projectId}
+                pullRequest={pullRequest}
+                readOnly={terminal}
+                rerunning={rerunning}
+                saveMergeDecision={saveMergeDecision}
+              />
+            ) : detailTab === tab.id ? (
+              <StructuredDiffPanel
+                applyingResolution={false}
+                conflictResolved={conflictResolved}
+                copied={copied}
+                onApplyResolution={onApplyResolution}
+                onCopy={() => {
+                  void navigator.clipboard?.writeText('release_plan.rollout.branch');
+                  setCopied(true);
+                  window.setTimeout(() => setCopied(false), 1200);
+                }}
+                pullRequest={pullRequest}
+              />
+            ) : null}
+          </div>
+        ))}
       </div>
 
       <footer className={detailStyles.footer}>
-        <div>
-          {conflictResolved
-            ? 'Resolution saved. Merge is ready.'
-            : conflictCount > 0
-              ? `Choose ${conflictCount} conflict to continue.`
-              : `${passedChecks} checks passed.`}
+        <div className={detailStyles.footerSummary} aria-live="polite">
+          <span>{detailLoading ? 'Loading pull request details…' : readinessMessage}</span>
+          {!terminal && saveState !== 'idle' ? (
+            <small data-state={saveState}>
+              {saveState === 'saving'
+                ? 'Saving decisions…'
+                : saveState === 'saved'
+                  ? 'Decisions saved'
+                  : 'Save failed'}
+              {saveState === 'error' && detailTab !== 'structured-diff' ? (
+                <button onClick={() => onChangeTab('structured-diff')} type="button">
+                  Review save error
+                </button>
+              ) : null}
+            </small>
+          ) : null}
+          {conflictProgress?.requiresRecheck
+            ? ' Save and recheck your Schema/content edits in Changes.'
+            : null}
         </div>
-        <div className={detailStyles.footerActions}>
-          {closeable ? (
+        {!terminal ? (
+          <div className={detailStyles.footerActions}>
             <button
               className={detailStyles.secondaryAction}
-              disabled={closing}
+              disabled={busy}
               onClick={onClose}
               type="button"
             >
-              {closing ? 'Closing…' : closeButtonLabel}
+              {closing ? 'Closing…' : closeConfirmationActive ? 'Confirm close' : 'Close PR'}
             </button>
-          ) : null}
-          {rerunnable ? (
-            <button
-              aria-label="Rerun readiness"
-              className={detailStyles.secondaryAction}
-              disabled={rerunning}
-              onClick={onRerun}
-              type="button"
-            >
-              <RefreshCw aria-hidden="true" className={rerunning ? 'animate-spin' : undefined} />
-              {rerunning ? 'Rerunning…' : 'Rerun checks'}
-            </button>
-          ) : null}
-          {!['merged', 'closed'].includes(pullRequest.status) ? (
+            {['open', 'ready', 'blocked'].includes(pullRequest.status) ? (
+              <button
+                aria-label="Rerun readiness"
+                className={detailStyles.secondaryAction}
+                disabled={busy || conflictProgress?.requiresRecheck}
+                onClick={onRerun}
+                type="button"
+              >
+                <RefreshCw aria-hidden="true" className={rerunning ? 'animate-spin' : undefined} />
+                {rerunning ? 'Rerunning…' : 'Rerun checks'}
+              </button>
+            ) : null}
             <button
               aria-label="Merge PR"
               className={detailStyles.mergeButton}
-              disabled={!ready || merging}
+              disabled={!ready || busy || saveState === 'error'}
               onClick={onMerge}
               type="button"
             >
               <GitMerge aria-hidden="true" />
               {merging ? 'Merging…' : `Merge into ${pullRequest.targetBranch}`}
             </button>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </footer>
     </section>
   );
@@ -1976,178 +2481,104 @@ function PullRequestDetailView({
 function OverviewPanel({
   onChangeTab,
   pullRequest,
+  reviewState,
+  readinessMessage,
 }: {
   onChangeTab: (tab: PullRequestDetailTab) => void;
   pullRequest: ProjectPullRequest;
+  reviewState: MergeReviewLoadState;
+  readinessMessage: string;
 }) {
+  const summary = reviewState.review ? summarizeMergeReview(reviewState.review) : null;
   const checks = pullRequest.checks ?? [];
-  const conflictCount = pullRequest.status === 'blocked' ? 1 : 0;
-  const changedCount = Math.max(pullRequest.diffSummary?.changedNodes ?? 0, conflictCount);
-  const autoMergedCount = Math.max(0, changedCount - conflictCount);
-  const baseHash = shortHash(pullRequest.targetBaseCommitId);
-  const headHash = shortHash(pullRequest.sourceCommitId);
-  const impactRows = [
-    ['rollout.stage', pullRequest.targetBranch, pullRequest.sourceBranch],
-    ['rollout.revision', baseHash, headHash],
-    [
-      'requirements.checksPassed',
-      'false',
-      String(checks.every((check) => check.status === 'passed')),
-    ],
-  ];
-
+  const passed = checks.filter((check) => check.status === 'passed').length;
   return (
     <div className={detailStyles.overviewGrid}>
       <div className={detailStyles.overviewMain}>
-        <section className={detailStyles.descriptionCard}>
-          <h3>Description</h3>
-          <p>{pullRequest.description}</p>
+        <section className={detailStyles.overviewSection}>
+          <h2>Description</h2>
+          <p className={!pullRequest.description ? detailStyles.muted : undefined}>
+            {pullRequest.description || 'No description provided.'}
+          </p>
         </section>
-
-        <section className={detailStyles.readinessSection}>
-          <div className={detailStyles.readinessHeading}>
-            <h2>Merge readiness</h2>
-            <div>
-              <span className={detailStyles.autoMerged}>
-                <Plus aria-hidden="true" />
-                {autoMergedCount} paths auto-merged
-              </span>
-              <span className={detailStyles.conflicts}>
-                <CircleAlert aria-hidden="true" />
-                {conflictCount} conflict{conflictCount === 1 ? '' : 's'}
-              </span>
-            </div>
+        <section className={detailStyles.overviewSection}>
+          <div className={detailStyles.sectionHeading}>
+            <h2>Change summary</h2>
+            <button
+              className={detailStyles.textButton}
+              onClick={() => onChangeTab('structured-diff')}
+              type="button"
+            >
+              View changes <ArrowRight aria-hidden="true" />
+            </button>
           </div>
-          <div className={detailStyles.readinessCard}>
-            <div className={detailStyles.readinessColumns}>
-              <span />
-              <span>{pullRequest.targetBranch}</span>
-              <span>{pullRequest.sourceBranch}</span>
-              <span />
-            </div>
-            {conflictCount > 0 ? (
-              <div className={detailStyles.conflictRow}>
-                <div className={detailStyles.impactPath}>
-                  <PhFileText aria-hidden="true" weight="fill" />
-                  <b>release_plan.rollout.branch</b>
+          {summary ? (
+            <>
+              <p>
+                {summary.nodes} changed node{summary.nodes === 1 ? '' : 's'} · {summary.fields}{' '}
+                changed field{summary.fields === 1 ? '' : 's'}
+              </p>
+              <dl className={detailStyles.summaryStats}>
+                <div>
+                  <dt>Added</dt>
+                  <dd>{summary.added}</dd>
                 </div>
                 <div>
-                  <strong>{pullRequest.targetBranch}</strong>
-                  <code>@ {baseHash}</code>
+                  <dt>Auto-merged</dt>
+                  <dd>{summary.autoMerged}</dd>
                 </div>
                 <div>
-                  <strong>{pullRequest.sourceBranch}</strong>
-                  <code>@ {headHash}</code>
+                  <dt>Conflicts</dt>
+                  <dd>{summary.conflicts}</dd>
                 </div>
-                <button onClick={() => onChangeTab('structured-diff')} type="button">
-                  Resolve conflict <PhArrowRight aria-hidden="true" weight="bold" />
-                </button>
-              </div>
-            ) : null}
-            <div className={detailStyles.otherImpact}>
-              <h3>
-                Other merge impact <span>(auto-merge)</span>
-              </h3>
-            </div>
-            <div className={detailStyles.impactList}>
-              {impactRows.map(([path, before, after]) => (
-                <div className={detailStyles.impactRow} key={path}>
-                  <i />
-                  <PhFileText aria-hidden="true" />
-                  <b>{path}</b>
-                  <span>Updated</span>
-                  <div>
-                    <code>{before}</code>
-                    <PhArrowRight aria-hidden="true" />
-                    <code>{after}</code>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+              </dl>
+            </>
+          ) : (
+            <p className={detailStyles.muted}>
+              {reviewState.loading
+                ? 'Loading the merge comparison…'
+                : reviewState.error
+                  ? `Comparison unavailable: ${reviewState.error}`
+                  : 'A prepared merge comparison is not available yet.'}
+            </p>
+          )}
+        </section>
+        <section className={detailStyles.overviewSection}>
+          <h2>
+            {['merged', 'closed'].includes(pullRequest.status) ? 'Outcome' : 'Merge readiness'}
+          </h2>
+          <p>{readinessMessage}</p>
         </section>
       </div>
-
-      <aside className={detailStyles.overviewRail}>
-        <section className={detailStyles.overviewCard}>
-          <h2>Branch relationship</h2>
-          <div className={detailStyles.relationshipRows}>
-            <div>
-              <PhGitBranch aria-hidden="true" />
-              <span>From</span>
-              <code>
-                {pullRequest.sourceBranch} @ {headHash}
-              </code>
-            </div>
-            <div>
-              <PhArrowDown aria-hidden="true" />
-              <span>Into</span>
-              <code>
-                {pullRequest.targetBranch} @ {baseHash}
-              </code>
-            </div>
-            <div>
-              <PhGitCommit aria-hidden="true" />
-              <span>Common ancestor</span>
-              <code>{baseHash}</code>
-            </div>
-          </div>
-          <div className={detailStyles.lastReview}>
-            <b>Last review</b>
-            <span>{pullRequest.updatedAt}</span>
-          </div>
-        </section>
-
-        <section className={detailStyles.overviewCard}>
-          <h2>
-            Checks <span>(reviewed branch heads)</span>
-          </h2>
-          <div className={detailStyles.overviewChecks}>
-            {checks.slice(0, 4).map((check, index) => (
-              <div key={check.id}>
-                {index === 0 ? (
-                  <PhPlay aria-hidden="true" weight="fill" />
-                ) : index === 1 ? (
-                  <PhFile aria-hidden="true" />
-                ) : (
-                  <PhGear aria-hidden="true" weight="fill" />
-                )}
-                <b>{check.label}</b>
-                <span
-                  className={
-                    check.status === 'passed' ? detailStyles.checkPassed : detailStyles.checkPending
-                  }
-                >
-                  <CheckIcon status={check.status} />
-                  {check.status === 'passed'
-                    ? 'Passed'
-                    : check.status === 'running'
-                      ? 'Running'
-                      : 'Pending'}
+      <aside className={detailStyles.overviewAside}>
+        <div className={detailStyles.sectionHeading}>
+          <h2>Checks</h2>
+          <span>
+            {passed} of {checks.length} passed
+          </span>
+        </div>
+        {checks.length ? (
+          <ul className={detailStyles.checkSummary}>
+            {checks.map((check) => (
+              <li key={check.id}>
+                <CheckIcon status={check.status} />
+                <span>{check.label}</span>
+                <span className={detailStyles.checkStatus} data-status={check.status}>
+                  {CHECK_STATUS_LABELS[check.status]}
                 </span>
-                <small>{pullRequest.updatedAt}</small>
-              </div>
+              </li>
             ))}
-            <div>
-              <PhCircleDashed aria-hidden="true" weight="fill" />
-              <b>Merged result</b>
-              <span className={detailStyles.checkPending}>
-                <PhCircleDashed aria-hidden="true" weight="fill" />
-                Pending
-              </span>
-              <small>
-                {conflictCount > 0 ? 'Waiting for conflict resolution' : 'Waiting for merge'}
-              </small>
-            </div>
-          </div>
-          <button
-            className={detailStyles.viewChecks}
-            onClick={() => onChangeTab('checks')}
-            type="button"
-          >
-            View all checks <PhArrowRight aria-hidden="true" weight="bold" />
-          </button>
-        </section>
+          </ul>
+        ) : (
+          <p className={detailStyles.muted}>No readiness checks recorded.</p>
+        )}
+        <button
+          className={detailStyles.textButton}
+          onClick={() => onChangeTab('checks')}
+          type="button"
+        >
+          View all checks <ArrowRight aria-hidden="true" />
+        </button>
       </aside>
     </div>
   );
@@ -2190,6 +2621,10 @@ function StructuredDiffPanel({
   pullRequest: ProjectPullRequest;
 }) {
   const conflict = pullRequest.status === 'blocked' && !conflictResolved;
+  const canEditMergedValue = pullRequest.status === 'blocked';
+  const [selectedId, setSelectedId] = useState(conflict ? 'branch' : 'commit');
+  const [choice, setChoice] = useState<PullRequestConflictSide | null>(null);
+  const [editingMergedValue, setEditingMergedValue] = useState(false);
   const rows = useMemo<PullRequestTreeRow[]>(() => {
     const summary = pullRequest.diffSummary;
     return [
@@ -2254,7 +2689,12 @@ function StructuredDiffPanel({
         id: 'branch',
         key: 'branch',
         main: pullRequest.targetBranch,
-        merged: conflict ? 'Choose value' : pullRequest.sourceBranch,
+        merged:
+          choice === 'main'
+            ? pullRequest.targetBranch
+            : conflict
+              ? 'Choose value'
+              : pullRequest.sourceBranch,
         path: 'release_plan.rollout.branch',
         status: conflict ? 'conflict' : 'merged',
         type: 'string',
@@ -2304,10 +2744,9 @@ function StructuredDiffPanel({
         type: 'boolean',
       },
     ];
-  }, [conflict, pullRequest]);
-  const [selectedId, setSelectedId] = useState(conflict ? 'branch' : 'commit');
-  const [choice, setChoice] = useState<PullRequestConflictSide | null>(null);
+  }, [choice, conflict, pullRequest]);
   const selected = rows.find((row) => row.id === selectedId) ?? rows[0];
+  const showingChoices = selected.id === 'branch' && (conflict || editingMergedValue);
   const mergedCount = rows.filter((row) => row.status === 'merged').length;
   const conflictCount = rows.filter((row) => row.status === 'conflict').length;
   const passedChecks = (pullRequest.checks ?? []).filter(
@@ -2344,13 +2783,11 @@ function StructuredDiffPanel({
               <tr>
                 <th>Path</th>
                 <th>
-                  Main
-                  <br />
+                  {pullRequest.targetBranch}
                   <code>@ {shortHash(pullRequest.targetBaseCommitId)}</code>
                 </th>
                 <th>
-                  Feature / {pullRequest.sourceBranch}
-                  <br />
+                  {pullRequest.sourceBranch}
                   <code>@ {shortHash(pullRequest.sourceCommitId)}</code>
                 </th>
                 <th>Merged result</th>
@@ -2372,19 +2809,33 @@ function StructuredDiffPanel({
                       style={{ paddingLeft: row.depth * 22 }}
                     >
                       {row.type === 'object' ? (
-                        <>
-                          <PhCaretDown aria-hidden="true" />
-                          <PhCube aria-hidden="true" className={detailStyles.cube} />
-                        </>
+                        <PhCaretDown aria-hidden="true" />
                       ) : (
-                        <PhFileText aria-hidden="true" className={detailStyles.file} />
+                        <span style={{ width: 14, flex: 'none' }} />
                       )}
+                      <span className={detailStyles.typeIcon} data-type={row.type}>
+                        {row.type === 'object'
+                          ? '{ }'
+                          : row.type === 'number'
+                            ? '123'
+                            : row.type === 'boolean'
+                              ? 'T/F'
+                              : 'abc'}
+                      </span>
                       <b>{row.key}</b>
                       <em>{row.type}</em>
                     </span>
                   </td>
-                  <td title={row.main}>{row.main}</td>
-                  <td title={row.feature}>{row.feature}</td>
+                  <td title={row.main}>
+                    {row.type !== 'object' && (
+                      <span className={detailStyles.treeValue}>{row.main}</span>
+                    )}
+                  </td>
+                  <td title={row.feature}>
+                    {row.type !== 'object' && (
+                      <span className={detailStyles.treeValue}>{row.feature}</span>
+                    )}
+                  </td>
                   <td title={row.merged}>
                     {row.status === 'merged' ? (
                       <PhCheckCircle
@@ -2396,7 +2847,9 @@ function StructuredDiffPanel({
                     {row.status === 'conflict' ? (
                       <PhTilde aria-hidden="true" className={detailStyles.warnIcon} weight="bold" />
                     ) : null}
-                    <span>{row.merged}</span>
+                    {row.type !== 'object' && (
+                      <span className={detailStyles.treeValue}>{row.merged}</span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -2416,7 +2869,7 @@ function StructuredDiffPanel({
       <aside className={detailStyles.inspector}>
         <section className={detailStyles.inspectorCard}>
           <div className={detailStyles.inspectorHeader}>
-            <h2>{selected.status === 'conflict' ? 'Selected conflict' : 'Selected change'}</h2>
+            <h2>{showingChoices ? 'Selected conflict' : 'Selected change'}</h2>
             <button onClick={onCopy} type="button">
               <Copy aria-hidden="true" />
               {copied ? 'Copied' : 'Copy path'}
@@ -2425,16 +2878,12 @@ function StructuredDiffPanel({
           <div className={detailStyles.inspectorBody}>
             <code className={detailStyles.selectedPath}>{selected.path}</code>
             <span
-              className={
-                selected.status === 'conflict'
-                  ? detailStyles.decisionBadge
-                  : detailStyles.changeBadge
-              }
+              className={showingChoices ? detailStyles.decisionBadge : detailStyles.changeBadge}
             >
               <PhTilde aria-hidden="true" />
-              {selected.status === 'conflict' ? 'Needs decision' : 'Modified'}
+              {showingChoices ? (choice ? 'Edit merged value' : 'Needs decision') : 'Modified'}
             </span>
-            {selected.status === 'conflict' ? (
+            {showingChoices ? (
               <>
                 <span className={detailStyles.fieldLabel}>Ancestor (base)</span>
                 <div className={detailStyles.ancestorValue}>{pullRequest.targetBranch}</div>
@@ -2447,6 +2896,7 @@ function StructuredDiffPanel({
                       onChange={() => {
                         const next = choice === 'main' ? null : 'main';
                         setChoice(next);
+                        setEditingMergedValue(false);
                         onApplyResolution(next);
                       }}
                       type="checkbox"
@@ -2463,6 +2913,7 @@ function StructuredDiffPanel({
                       onChange={() => {
                         const next = choice === 'feature' ? null : 'feature';
                         setChoice(next);
+                        setEditingMergedValue(false);
                         onApplyResolution(next);
                       }}
                       type="checkbox"
@@ -2479,7 +2930,7 @@ function StructuredDiffPanel({
                   Before<span>{selected.main}</span>
                 </div>
                 <div>
-                  After<span>{selected.feature}</span>
+                  After<span>{choice === 'main' ? selected.main : selected.feature}</span>
                 </div>
               </div>
             )}
@@ -2496,10 +2947,19 @@ function StructuredDiffPanel({
               <code>{shortHash(pullRequest.sourceCommitId)}</code>
               <span>{pullRequest.description}</span>
             </div>
-            <button className={detailStyles.editButton} type="button">
-              <PencilLine aria-hidden="true" />
-              Edit merged value
-            </button>
+            {canEditMergedValue && !showingChoices ? (
+              <button
+                className={detailStyles.editButton}
+                onClick={() => {
+                  setSelectedId('branch');
+                  setEditingMergedValue(true);
+                }}
+                type="button"
+              >
+                <PencilLine aria-hidden="true" />
+                Edit merged value
+              </button>
+            ) : null}
           </div>
         </section>
         <section className={detailStyles.checkCard}>
@@ -2526,26 +2986,55 @@ function StructuredDiffPanel({
   );
 }
 
+const CHECK_STATUS_LABELS: Record<PullRequestCheck['status'], string> = {
+  passed: 'Passed',
+  failed: 'Failed',
+  blocked: 'Blocked',
+  warning: 'Warning',
+  pending: 'Pending',
+  running: 'Running',
+};
+
 function ChecksPanel({ checks }: { checks: PullRequestCheck[] }) {
   if (checks.length === 0) {
     return <DetailEmptyState message="No readiness checks have been recorded for this PR." />;
   }
-
   return (
-    <div className="grid gap-3">
-      {checks.map((check) => (
-        <article
-          className="flex items-start gap-3 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4"
-          key={check.id}
-        >
-          <CheckIcon status={check.status} />
-          <div>
-            <h3 className="font-semibold text-[var(--text-primary)]">{check.label}</h3>
-            <p className="mt-1 text-sm leading-5 text-[var(--text-secondary)]">{check.detail}</p>
-          </div>
-        </article>
-      ))}
-    </div>
+    <section className={detailStyles.checksPanel} aria-label="Readiness checks">
+      <div className={detailStyles.sectionHeading}>
+        <h2>Readiness checks</h2>
+        <span>
+          {checks.filter((check) => check.status === 'passed').length} of {checks.length} passed
+        </span>
+      </div>
+      <p className={detailStyles.checksIntro}>
+        Results and supporting evidence for the reviewed commits.
+      </p>
+      <div className={detailStyles.checkRows}>
+        {checks.map((check) => (
+          <article className={detailStyles.checkRow} key={check.id}>
+            <CheckIcon status={check.status} />
+            <div className={detailStyles.checkContent}>
+              <h3>{check.label}</h3>
+              {check.detail.length > 180 ? (
+                <>
+                  <p>{check.detail.slice(0, 180)}…</p>
+                  <details className={detailStyles.checkEvidence}>
+                    <summary>View full evidence</summary>
+                    <p>{check.detail}</p>
+                  </details>
+                </>
+              ) : (
+                <p>{check.detail || 'No additional evidence recorded.'}</p>
+              )}
+            </div>
+            <span className={detailStyles.checkStatus} data-status={check.status}>
+              {CHECK_STATUS_LABELS[check.status]}
+            </span>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -2555,19 +3044,6 @@ function DetailEmptyState({ message }: { message: string }) {
       {message}
     </div>
   );
-}
-
-function ReadinessBadge({ pullRequest }: { pullRequest: ProjectPullRequest }) {
-  const variant =
-    pullRequest.readinessTone === 'success'
-      ? 'branch'
-      : pullRequest.readinessTone === 'warning'
-        ? 'warning'
-        : pullRequest.readinessTone === 'pending'
-          ? 'pending'
-          : 'secondary';
-
-  return <Badge variant={variant}>{pullRequest.readinessLabel}</Badge>;
 }
 
 function CheckIcon({ status }: { status: PullRequestCheck['status'] }) {

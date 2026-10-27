@@ -3,40 +3,23 @@ import {
   getProjectIdCanvasCommitPath,
   getProjectIdCanvasPath,
   getProjectIdDiffPath,
-  getProjectIdOutputsPath,
   getProjectIdRepoPath,
-  getProjectOutputsPath,
   getProjectRepoPath,
   toRepoSlug,
 } from '@/domain/project/repoPath';
 
 describe('repoPath', () => {
-  it('normalizes project names into repository slugs', () => {
-    expect(toRepoSlug('Mobile Click Audit 1780972749777')).toBe('mobile-click-audit');
-    expect(toRepoSlug('  PRD / Audience Handoff  ')).toBe('prd-audience-handoff');
-    expect(toRepoSlug('Release 2026')).toBe('release-2026');
-  });
-
-  it('builds the display path without replacing the internal project route', () => {
-    expect(getProjectRepoPath({ id: 'proj_test', name: 'Test Project' })).toBe(
-      '/t3x-dev/test-project'
-    );
-    expect(getProjectRepoPath({ id: 'proj_audit', name: 'Mobile Click Audit 1780972749777' })).toBe(
-      '/t3x-dev/mobile-click-audit'
-    );
-    expect(getProjectRepoPath({ id: 'proj_test', name: 'Test Project' }, 'lqw905')).toBe(
-      '/lqw905/test-project'
-    );
-  });
-
-  it('falls back to a stable repo slug when the name is empty', () => {
-    expect(toRepoSlug('', 'proj_test')).toBe('repo-proj-test');
-  });
-
-  it('builds an Outputs deep link for a selected Leaf', () => {
+  it('uses only backend-confirmed paths and preserves exact names', () => {
     expect(
-      getProjectOutputsPath({ id: 'proj_test', name: 'Test Project' }, 'leaf/audience brief')
-    ).toBe('/t3x-dev/test-project/outputs?leaf=leaf%2Faudience%20brief');
+      getProjectRepoPath({
+        id: 'proj_test',
+        name: 'HoloCure_fishing_auto',
+        canonical_path: '/alice/HoloCure_fishing_auto',
+      })
+    ).toBe('/alice/HoloCure_fishing_auto');
+    expect(getProjectRepoPath({ id: 'proj_test', name: '中文' })).toBe('/project/proj_test');
+    expect(getProjectRepoPath({ id: 'proj_test', name: 'Demo' }, 'You')).toBe('/project/proj_test');
+    expect(toRepoSlug('Release-2026101500000')).toBe('Release-2026101500000');
   });
 
   it('builds project-id entry points that canonicalize in the route layer', () => {
@@ -47,9 +30,6 @@ describe('repoPath', () => {
     );
     expect(getProjectIdDiffPath('proj/test', 'sha256:base', 'sha256:target')).toBe(
       '/project/proj%2Ftest/diff?base=sha256%3Abase&target=sha256%3Atarget'
-    );
-    expect(getProjectIdOutputsPath('proj/test', 'leaf/audience brief')).toBe(
-      '/project/proj%2Ftest?tab=outputs&leaf=leaf%2Faudience+brief'
     );
   });
 });

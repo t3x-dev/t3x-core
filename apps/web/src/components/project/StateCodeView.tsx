@@ -1,7 +1,7 @@
 'use client';
 
 import { JSON_SCHEMA, load } from 'js-yaml';
-import { Check, ChevronDown, ChevronUp, Copy, Info, Search, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Copy, FileText, Info, Search, X } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import styles from '@/components/project/StateCodeView.module.css';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
@@ -13,21 +13,27 @@ type CodeMode = 'yaml' | 'json' | 'raw';
 export function StateCodeView({
   yamlText,
   commitHash,
+  schemaName,
+  renderLayout,
 }: {
+  renderLayout?: (content: ReactNode, details: ReactNode) => ReactNode;
+  schemaName?: string;
+  workspaceHref?: string;
   yamlText: string;
   branch: string;
   rootKey: string;
   commitHash: string;
 }) {
   const [mode, setMode] = useState<CodeMode>('yaml');
-  const [searchOpen, setSearchOpen] = useState(true);
-  const [query, setQuery] = useState('allocation');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const [activeMatch, setActiveMatch] = useState(0);
-  const [wrapLines, setWrapLines] = useState(true);
+  const [wrapLines, setWrapLines] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const copySequence = useRef(0);
+  const codeElement = useRef<HTMLElement>(null);
   const json = useMemo(() => {
     try {
       return {
@@ -56,6 +62,12 @@ export function StateCodeView({
     [lines, search]
   );
   const matches = matchingLines.length;
+  useEffect(() => {
+    if (!search || !matches) return;
+    codeElement.current
+      ?.querySelector(`[data-line="${matchingLines[activeMatch % matches]}"]`)
+      ?.scrollIntoView?.({ block: 'nearest' });
+  }, [activeMatch, matches, matchingLines, search]);
 
   useEffect(() => {
     if (searchOpen) input.current?.focus();
@@ -84,126 +96,123 @@ export function StateCodeView({
     }
   }
 
-  async function copyRevision() {
-    try {
-      await navigator.clipboard.writeText(commitHash);
-    } catch {
-      setCopyError('Clipboard unavailable. Select and copy the revision directly.');
-    }
-  }
-
   function moveMatch(direction: -1 | 1) {
     if (!matches) return;
     setActiveMatch((current) => (current + direction + matches) % matches);
   }
 
-  const shortHash = commitHash.replace(/^sha256:/, '').slice(0, 7);
   const modeLabel = mode === 'raw' ? 'Plain YAML' : mode.toUpperCase();
 
-  return (
-    <section
-      aria-label="YAML code view"
-      className={cn(styles.root, 'min-h-0 flex-1 overflow-hidden')}
-    >
-      <div className={styles.card}>
-        <header className={styles.toolbar}>
-          <div className={styles.titleGroup}>
-            <h2>State source</h2>
-            <span className={styles.readOnly}>Read-only</span>
-          </div>
+  const content = (
+    <div className={styles.card}>
+      <header className={styles.toolbar}>
+        <div className={styles.titleGroup}>
+          <h2>State source</h2>
+        </div>
 
-          <div className={styles.controls}>
-            <div aria-label="Code format" className={styles.formatTabs} role="toolbar">
-              {(['yaml', 'json', 'raw'] as const).map((format) => (
-                <button
-                  aria-label={format === 'raw' ? 'Raw' : undefined}
-                  aria-pressed={mode === format}
-                  className={cn(styles.formatButton, mode === format && styles.formatButtonActive)}
-                  key={format}
-                  onClick={() => setMode(format)}
-                  type="button"
-                >
-                  {format === 'raw' ? 'Plain YAML' : format.toUpperCase()}
-                </button>
-              ))}
-            </div>
-            <span aria-hidden="true" className={styles.separator} />
-            <label className={styles.wrapControl}>
-              <span>Wrap lines</span>
+        <div className={styles.controls}>
+          <div aria-label="Code format" className={styles.formatTabs} role="toolbar">
+            {(['yaml', 'json', 'raw'] as const).map((format) => (
               <button
-                aria-label="Wrap lines"
-                aria-pressed={wrapLines}
-                className={cn(styles.switch, wrapLines && styles.switchOn)}
-                onClick={() => setWrapLines((value) => !value)}
+                aria-label={format === 'raw' ? 'Raw' : undefined}
+                aria-pressed={mode === format}
+                className={cn(styles.formatButton, mode === format && styles.formatButtonActive)}
+                key={format}
+                onClick={() => setMode(format)}
                 type="button"
               >
-                <span />
+                {format === 'raw' ? 'Plain' : format.toUpperCase()}
               </button>
-            </label>
+            ))}
+          </div>
+          <span aria-hidden="true" className={styles.separator} />
+          <label className={styles.wrapControl}>
+            <span>Wrap</span>
             <button
-              aria-label={copied ? 'Copied code' : `Copy ${mode === 'json' ? 'JSON' : 'YAML'} code`}
-              className={styles.copyButton}
-              disabled={Boolean(error)}
-              onClick={() => void copy()}
+              aria-label="Wrap lines"
+              aria-pressed={wrapLines}
+              className={cn(styles.switch, wrapLines && styles.switchOn)}
+              onClick={() => setWrapLines((value) => !value)}
               type="button"
             >
-              {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-              <span>{copied ? 'Copied' : 'Copy'}</span>
+              <span />
             </button>
-            <button
+          </label>
+          <button
+            aria-label={copied ? 'Copied code' : `Copy ${mode === 'json' ? 'JSON' : 'YAML'} code`}
+            className={styles.copyButton}
+            disabled={Boolean(error)}
+            onClick={() => void copy()}
+            type="button"
+          >
+            {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+            <span>{copied ? 'Copied' : 'Copy'}</span>
+          </button>
+          <button
+            aria-label="Find in code"
+            className={cn(styles.findButton, searchOpen && 'sr-only')}
+            onClick={() => setSearchOpen(true)}
+            type="button"
+          >
+            <Search aria-hidden="true" />
+          </button>
+        </div>
+      </header>
+
+      {searchOpen ? (
+        <div className={styles.searchRow}>
+          <div className={styles.searchField}>
+            <Search aria-hidden="true" />
+            <input
+              ref={input}
               aria-label="Find in code"
-              className={cn(styles.findButton, searchOpen && 'sr-only')}
-              onClick={() => setSearchOpen(true)}
-              type="button"
-            >
-              <Search aria-hidden="true" />
-            </button>
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Find in code…"
+            />
           </div>
-        </header>
-
-        {searchOpen ? (
-          <div className={styles.searchRow}>
-            <div className={styles.searchField}>
-              <Search aria-hidden="true" />
-              <input
-                ref={input}
-                aria-label="Find in code"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Find in code…"
-              />
-            </div>
-            <output className={styles.matchCount}>
-              {matches ? `${Math.min(activeMatch + 1, matches)} of ${matches}` : '0 of 0'}
-              <span className="sr-only">{matches} matching lines</span>
-            </output>
-            <div className={styles.matchButtons}>
-              <button aria-label="Previous match" onClick={() => moveMatch(-1)} type="button">
-                <ChevronUp aria-hidden="true" />
-              </button>
-              <button aria-label="Next match" onClick={() => moveMatch(1)} type="button">
-                <ChevronDown aria-hidden="true" />
-              </button>
-            </div>
-            <span aria-hidden="true" className={styles.separator} />
+          <output className={styles.matchCount}>
+            {matches ? `${Math.min(activeMatch + 1, matches)} of ${matches}` : 'No matches'}
+            <span className="sr-only">{matches} matching lines</span>
+          </output>
+          <div className={styles.matchButtons}>
             <button
-              aria-label="Close search"
-              className={styles.closeSearch}
-              onClick={() => setSearchOpen(false)}
+              aria-label="Previous match"
+              disabled={!matches}
+              onClick={() => moveMatch(-1)}
               type="button"
             >
-              <X aria-hidden="true" />
-              <span>Close</span>
+              <ChevronUp aria-hidden="true" />
+            </button>
+            <button
+              aria-label="Next match"
+              disabled={!matches}
+              onClick={() => moveMatch(1)}
+              type="button"
+            >
+              <ChevronDown aria-hidden="true" />
             </button>
           </div>
-        ) : null}
+          <span aria-hidden="true" className={styles.separator} />
+          <button
+            aria-label="Close search"
+            className={styles.closeSearch}
+            onClick={() => setSearchOpen(false)}
+            type="button"
+          >
+            <X aria-hidden="true" />
+            <span>Close</span>
+          </button>
+        </div>
+      ) : null}
 
-        {(error || copyError) && (
-          <p role="alert" className={styles.error}>
-            {error ?? copyError}
-          </p>
-        )}
+      {(error || copyError) && (
+        <p role="alert" className={styles.error}>
+          {error ?? copyError}
+        </p>
+      )}
 
+      <div className={styles.sourcePanel}>
         <StateScrollArea
           label={
             mode === 'json'
@@ -216,10 +225,17 @@ export function StateCodeView({
           className={cn(styles.codeArea, 'min-h-0 flex-1')}
           viewportClassName={styles.viewport}
         >
-          <code className={cn(styles.code, 'min-w-max')}>
+          <code ref={codeElement} className={cn(styles.code, wrapLines && styles.wrapped)}>
             {!error &&
               lines.map((line, index) => (
-                <div className={styles.codeLine} key={`${index}:${line}`}>
+                <div
+                  data-line={index}
+                  className={cn(
+                    styles.codeLine,
+                    search && matchingLines[activeMatch % matches] === index && styles.activeLine
+                  )}
+                  key={`${index}:${line}`}
+                >
                   <span aria-hidden="true" className={styles.lineNumber}>
                     {index + 1}
                   </span>
@@ -238,30 +254,46 @@ export function StateCodeView({
         </StateScrollArea>
 
         <div className={styles.statusRow}>
+          <FileText aria-hidden="true" />
           <span>{modeLabel === 'YAML' ? 'Canonical YAML' : modeLabel}</span>
           <span aria-hidden="true">·</span>
           <span>Read-only</span>
-          <span className={styles.revision}>
-            Revision <code>{shortHash}</code>
-            <button
-              aria-label="Copy revision hash"
-              onClick={() => void copyRevision()}
-              type="button"
-            >
-              <Copy aria-hidden="true" />
-            </button>
-          </span>
-        </div>
-        <div className={styles.noteRow}>
-          <span className={styles.infoIcon}>
-            <Info aria-hidden="true" />
-          </span>
-          <span>Plain YAML shows the same YAML without syntax highlighting.</span>
-          <span className={styles.proposeNote}>
-            Propose a change to update this committed state.
-          </span>
+          <span>· {error ? '—' : lines.length} lines</span>
         </div>
       </div>
+      <div className={styles.noteRow}>
+        <span className={styles.infoIcon}>
+          <Info aria-hidden="true" />
+        </span>
+        <span>Plain YAML shows the same YAML without syntax highlighting.</span>
+      </div>
+    </div>
+  );
+  const details = (
+    <aside className={styles.side} aria-label="Source information">
+      <section className={styles.panel}>
+        <h3>Source</h3>
+        <dl>
+          <dt>Format</dt>
+          <dd>{modeLabel === 'YAML' ? 'Canonical YAML' : modeLabel}</dd>
+          <dt>Lines</dt>
+          <dd>{error ? '—' : lines.length}</dd>
+          <dt>Size</dt>
+          <dd>{error ? '—' : `${new TextEncoder().encode(text).byteLength} B`}</dd>
+          <dt>Schema</dt>
+          <dd>
+            <code>{schemaName || 'Not specified'}</code>
+          </dd>
+        </dl>
+      </section>
+    </aside>
+  );
+  return renderLayout ? (
+    renderLayout(content, details)
+  ) : (
+    <section aria-label="YAML code view" className={styles.root}>
+      {content}
+      {details}
     </section>
   );
 }
@@ -301,7 +333,7 @@ function valueClass(value: string): string | undefined {
   if (clean === 'null') return styles.nullValue;
   if (/^-?\d+(?:\.\d+)?$/.test(clean)) return styles.numberValue;
   if (/^".*"$/.test(clean)) return styles.stringValue;
-  return undefined;
+  return clean ? styles.stringValue : undefined;
 }
 
 function markSearch(text: string, search: string): ReactNode {

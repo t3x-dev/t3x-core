@@ -6,6 +6,7 @@
  */
 
 import type { ZodType } from 'zod';
+import { textAndImageParts } from '../../llm/content';
 import {
   type LLMBasicGenerateOptions,
   type LLMGenerateOptions,
@@ -118,6 +119,23 @@ function formatGeminiNoContentError(data: GeminiResponseShape, rawResponse: stri
     hints.push(`raw=${rawResponse.slice(0, 200)}`);
   }
   return `No content in response (${hints.join(' · ')})`;
+}
+
+function toGeminiContents(prompt: LLMPrompt) {
+  return prompt.messages.map((message) => {
+    const parts = textAndImageParts(message.content);
+    return {
+      role: message.role === 'assistant' ? 'model' : message.role,
+      parts:
+        parts === null
+          ? [{ text: JSON.stringify(message.content) }]
+          : parts.map((part) =>
+              part.type === 'text'
+                ? { text: part.text }
+                : { inlineData: { mimeType: part.mediaType, data: part.data } }
+            ),
+    };
+  });
 }
 
 export class GeminiProvider implements LLMProvider {
@@ -246,12 +264,19 @@ export class GeminiProvider implements LLMProvider {
     const maxTokens = options.maxTokens ?? 2048;
     const model = options.model ?? this.model;
     const url = `${this.baseUrl}/models/${model}:generateContent`;
-    const thinkingConfig = this.buildThinkingConfig(model);
+    const thinkingConfig =
+      options.reasoningEffort && this.supportsLegacyGenerationConfig(model)
+        ? {
+            thinkingBudget:
+              options.reasoningEffort === 'high'
+                ? 4096
+                : options.reasoningEffort === 'medium'
+                  ? 2048
+                  : 256,
+          }
+        : this.buildThinkingConfig(model);
 
-    const contents = prompt.messages.map((msg) => ({
-      role: msg.role === 'assistant' ? 'model' : msg.role,
-      parts: [{ text: msg.content }],
-    }));
+    const contents = toGeminiContents(prompt);
 
     const requestBody: Record<string, unknown> = {
       contents,
@@ -337,16 +362,18 @@ export class GeminiProvider implements LLMProvider {
     const maxTokens = options.maxTokens ?? 2048;
     const model = options.model ?? this.model;
     const url = `${this.baseUrl}/models/${model}:streamGenerateContent?alt=sse`;
-    const thinkingConfig = this.buildThinkingConfig(model);
-    const contents = prompt.messages.map((message) => ({
-      role: message.role === 'assistant' ? 'model' : message.role,
-      parts: [
-        {
-          text:
-            typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
-        },
-      ],
-    }));
+    const thinkingConfig =
+      options.reasoningEffort && this.supportsLegacyGenerationConfig(model)
+        ? {
+            thinkingBudget:
+              options.reasoningEffort === 'high'
+                ? 4096
+                : options.reasoningEffort === 'medium'
+                  ? 2048
+                  : 256,
+          }
+        : this.buildThinkingConfig(model);
+    const contents = toGeminiContents(prompt);
     const requestBody: Record<string, unknown> = {
       contents,
       generationConfig: {
@@ -435,10 +462,7 @@ export class GeminiProvider implements LLMProvider {
     const thinkingConfig = this.buildThinkingConfig(model);
     const url = `${this.baseUrl}/models/${model}:generateContent`;
 
-    const contents = prompt.messages.map((msg) => ({
-      role: msg.role === 'assistant' ? 'model' : msg.role,
-      parts: [{ text: msg.content }],
-    }));
+    const contents = toGeminiContents(prompt);
 
     const requestBody: Record<string, unknown> = {
       contents,

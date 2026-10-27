@@ -2,7 +2,23 @@
  * Generate a unique project name with timestamp
  */
 export function generateProjectName(prefix = 'E2E Test'): string {
-  return `${prefix} ${Date.now()}`;
+  return `${prefix}-${Date.now()}`;
+}
+
+/** Minimal content that satisfies the built-in PRD Core contract. */
+export function generatePrdSchemaCandidateFields() {
+  return [
+    { id: 'summary_problem', path: 'summary.problem', value: 'Teams need reviewable releases.' },
+    { id: 'summary_audience', path: 'summary.audience', value: 'Product teams' },
+    { id: 'summary_outcome', path: 'summary.outcome', value: 'A verified release definition.' },
+    { id: 'requirement_title', path: 'requirements.release.title', value: 'Review releases' },
+    { id: 'requirement_priority', path: 'requirements.release.priority', value: 'must' },
+    {
+      id: 'requirement_acceptance',
+      path: 'requirements.release.acceptance',
+      value: ['The release definition is reviewed and accepted.'],
+    },
+  ];
 }
 
 /** Short random suffix for ID uniqueness across parallel tests */

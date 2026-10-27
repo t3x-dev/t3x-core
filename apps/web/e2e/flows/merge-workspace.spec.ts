@@ -30,13 +30,16 @@ test.describe('Merge Workspace', () => {
   test.describe.configure({ mode: 'serial' });
 
   let projectId: string;
+  let projectPath: string;
   let sourceHash: string;
   let targetHash: string;
   let mergeId: string;
 
   test.beforeAll(async ({ request }) => {
-    const { projectId: id } = await createTestProject(request, `Merge E2E ${Date.now()}`);
+    const projectName = `Merge E2E ${Date.now()}`;
+    const { projectId: id } = await createTestProject(request, projectName);
     projectId = id;
+    projectPath = `/t3x-dev/${projectName.replaceAll(' ', '-')}`;
 
     const baseHash = await createTestCommitFromTrees(
       request,
@@ -72,7 +75,7 @@ test.describe('Merge Workspace', () => {
   // MW-01: Merge page loads with conflict sections
   test('MW-01: Merge page loads with conflicts', async ({ page }) => {
     const merge = new MergePage(page);
-    await merge.goto(projectId, mergeId);
+    await merge.goto(projectPath, mergeId);
     await merge.waitForLoad();
 
     const hasIdentical = await merge.hasIdenticalSection();
@@ -92,7 +95,7 @@ test.describe('Merge Workspace', () => {
   // #2: Use test.skip() instead of silent return
   test('MW-02: Resolve conflict with Keep A', async ({ page }) => {
     const merge = new MergePage(page);
-    await merge.goto(projectId, mergeId);
+    await merge.goto(projectPath, mergeId);
     await merge.waitForLoad();
 
     const hasConflicts = await merge.hasConflictsSection();
@@ -121,7 +124,7 @@ test.describe('Merge Workspace', () => {
   // MW-03: Resolve a conflict by choosing target
   test('MW-03: Resolve conflict with Keep B', async ({ page }) => {
     const merge = new MergePage(page);
-    await merge.goto(projectId, mergeId);
+    await merge.goto(projectPath, mergeId);
     await merge.waitForLoad();
 
     const hasConflicts = await merge.hasConflictsSection();
@@ -148,7 +151,7 @@ test.describe('Merge Workspace', () => {
   // MW-04: Merge workspace sections and summary
   test('MW-04: Merge workspace sections, voices, and summary', async ({ page }, testInfo) => {
     const merge = new MergePage(page);
-    await merge.goto(projectId, mergeId);
+    await merge.goto(projectPath, mergeId);
     await merge.waitForLoad();
 
     // Wait for merge content to fully render (sections load after action bar)
@@ -199,7 +202,7 @@ test.describe('Merge Workspace', () => {
     });
 
     const merge = new MergePage(page);
-    await merge.goto(projectId, freshMergeId);
+    await merge.goto(projectPath, freshMergeId);
     await merge.waitForLoad();
 
     // Resolve all conflicts by choosing the source voice.
@@ -282,7 +285,7 @@ test.describe('Merge Workspace', () => {
     expect(cancelMergeId).toBeTruthy();
 
     const merge = new MergePage(page);
-    await merge.goto(projectId, cancelMergeId);
+    await merge.goto(projectPath, cancelMergeId);
     await merge.waitForLoad();
 
     await merge.cancel();

@@ -3,7 +3,7 @@
  */
 
 import { API_V1, buildQueryString, fetchWithTimeout, handleResponse } from './core';
-import type { Branch, BranchListData } from './types';
+import type { Branch, BranchListData, BranchRulesUpdate } from './types';
 
 export async function listBranches(projectId: string): Promise<BranchListData> {
   const query = buildQueryString({ project_id: projectId });
@@ -34,6 +34,19 @@ export async function createBranch(
       description,
       checkout,
     }),
+  });
+  return handleResponse<Branch>(res);
+}
+
+export async function updateBranchRules(
+  projectId: string,
+  branchName: string,
+  rules: BranchRulesUpdate
+): Promise<Branch> {
+  const res = await fetchWithTimeout(`${API_V1}/branches/rules`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project_id: projectId, branch_name: branchName, rules }),
   });
   return handleResponse<Branch>(res);
 }

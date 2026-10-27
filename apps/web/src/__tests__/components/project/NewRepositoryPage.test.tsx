@@ -1,89 +1,183 @@
 // @vitest-environment jsdom
-
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type React from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import { NewRepositoryPage } from '@/components/project/NewRepositoryPage';
-import type { Project } from '@/types/api';
 
+vi.mock('@/queries/projects', () => ({
+  checkRepositoryName: async (namespace: string, name: string) => ({
+    name,
+    valid: true,
+    available: Boolean(name),
+    namespace,
+    canonical_path: `/${namespace}/${name}`,
+  }),
+}));
 const mocks = vi.hoisted(() => ({
-  createProject: vi.fn(),
-  routerPush: vi.fn(),
+  query: '',
+  create: vi.fn(),
+  push: vi.fn(),
+  setup: { pending: false, started: false, error: null as string | null },
 }));
-
 vi.mock('next/navigation', () => ({
+  useSearchParams: () => new URLSearchParams(mocks.query),
   useParams: () => ({ owner: 't3x-dev' }),
-  useRouter: () => ({ push: mocks.routerPush }),
+  useRouter: () => ({ push: mocks.push }),
 }));
-
-vi.mock('next/link', () => ({
-  default: ({
-    children,
-    href,
-    ...props
-  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
-    <a href={href} {...props}>
-      {children}
-    </a>
-  ),
+vi.mock('@/hooks/accounts/useNamespaceAccounts', () => ({
+  useNamespaceAccounts: () => ({ accounts: [{ namespace: { slug: 'another-team' } }] }),
 }));
-
-vi.mock('@/commands/projects', () => ({
-  createProject: mocks.createProject,
+vi.mock('@/hooks/shared/useProvidersList', () => ({
+  useProvidersList: () => {
+    throw new Error('Provider API unavailable; creation must not query it');
+  },
 }));
-
-describe('NewRepositoryPage', () => {
-  beforeEach(() => {
-    mocks.routerPush.mockReset();
-    mocks.createProject.mockReset();
+vi.mock('@/hooks/providers/useProviderCommands', () => ({
+  useProviderCommands: () => {
+    throw new Error('Creation must not test AI');
+  },
+}));
+vi.mock('@/hooks/projects/useRepositorySetup', () => ({
+  useRepositorySetup: () => ({ create: mocks.create, ...mocks.setup }),
+}));
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.query = '';
+  mocks.setup = { pending: false, started: false, error: null };
+});
+it('shows General and Configuration with optional README and tags inputs but no uploads', () => {
+  const { container } = render(<NewRepositoryPage />);
+  for (const name of ['Owner', 'Visibility'])
+    expect(screen.getByRole('combobox', { name })).toBeInTheDocument();
+  expect(screen.getByLabelText('Description').tagName).toBe('INPUT');
+  expect(screen.getByRole('region', { name: 'General' })).toBeInTheDocument();
+  expect(screen.getByRole('region', { name: 'Configuration' })).toBeInTheDocument();
+  expect(screen.getByRole('checkbox', { name: 'Initialize README' })).not.toBeChecked();
+  expect(screen.getByRole('textbox', { name: 'Tags', exact: true })).toBeInTheDocument();
+  expect(container.querySelector('input[type="file"]')).toBeNull();
+  expect(screen.queryByText(/Schema|\.gitignore|Add license/i)).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Create repository' })).toBeDisabled();
+});
+it('creates without AI and retains the canonical D01-005 destination', async () => {
+  mocks.create.mockResolvedValue({
+    project: { project_id: 'p', name: 'Catalog', canonical_path: '/another-team/Catalog' },
+    workspaceId: 'workspace_branch:main',
+    conversationId: 'c',
   });
+  render(<NewRepositoryPage />);
+  fireEvent.change(screen.getByLabelText('Repository name'), { target: { value: 'Catalog' } });
+  fireEvent.change(screen.getByLabelText('Owner'), { target: { value: 'another-team' } });
+  fireEvent.change(screen.getByLabelText('Visibility'), { target: { value: 'unlisted' } });
+  expect(screen.queryByLabelText('Connection')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Model')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Upload files')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Test' })).not.toBeInTheDocument();
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Create repository' })).toBeEnabled()
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Create repository' }));
+  await waitFor(() =>
+    expect(mocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Catalog',
+        owner: 'another-team',
+        visibility: 'unlisted',
+      })
+    )
+  );
+  expect(mocks.create.mock.calls[0][0]).not.toHaveProperty('provider');
+  expect(mocks.create.mock.calls[0][0]).not.toHaveProperty('files');
+  expect(mocks.create.mock.calls[0][0]).not.toHaveProperty('schema');
+  expect(mocks.create.mock.calls[0][0]).not.toHaveProperty('readme');
+  expect(mocks.create.mock.calls[0][0]).toMatchObject({ initializeReadme: false, tags: [] });
+  expect(mocks.push).toHaveBeenCalledWith(
+    '/another-team/Catalog/workspaces?workspace=workspace_branch%3Amain&conversation=c'
+  );
+});
+it('keeps a partially created repository locked and allows setup retry', async () => {
+  mocks.setup.started = true;
+  mocks.setup.error = 'Repository created; retry to finish setup. Permission denied';
+  render(<NewRepositoryPage />);
+  expect(screen.getByRole('alert')).toHaveTextContent('Permission denied');
+  expect(screen.getByLabelText('Repository name')).toBeDisabled();
+  expect(screen.getByLabelText('Owner')).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Retry setup' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry setup' }));
+  await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(1));
+});
 
-  it('renders an organization-scoped repository creation form', () => {
-    render(<NewRepositoryPage />);
+it('adds and removes hashtag chips and submits unfinished input with README initialization', async () => {
+  render(<NewRepositoryPage />);
+  fireEvent.change(screen.getByLabelText('Repository name'), { target: { value: 'Final-Name' } });
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Initialize README' }));
+  const input = screen.getByRole('textbox', { name: 'Tags', exact: true });
+  for (const tag of [' 中文 ', 'Dev', '中文', 'Remove me', '#Existing']) {
+    fireEvent.change(input, { target: { value: tag } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+  }
+  fireEvent.click(screen.getByRole('button', { name: 'Remove tag Remove me' }));
+  expect(screen.getByLabelText('Selected tags')).toHaveTextContent('#中文#Dev#Existing');
+  expect(screen.getByLabelText('Selected tags')).not.toHaveTextContent('##Existing');
+  expect(mocks.create).not.toHaveBeenCalled();
+  fireEvent.change(input, { target: { value: 'case' } });
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Create repository' })).toBeEnabled()
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Create repository' }));
+  await waitFor(() =>
+    expect(mocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        initializeReadme: true,
+        tags: ['中文', 'Dev', '#Existing', 'case'],
+      })
+    )
+  );
+});
 
-    expect(screen.getByRole('heading', { name: 'Create a new repository' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Owner')).toHaveValue('t3x-dev');
-    expect(screen.getByLabelText('Repository name')).toBeInTheDocument();
-    expect(screen.getByText('/t3x-dev/new-repository')).toBeInTheDocument();
-    expect(screen.getByLabelText('Description')).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /Blank repository/i })).toBeChecked();
-    expect(screen.getByRole('radio', { name: /Start from source evidence/i })).toBeInTheDocument();
-    expect(screen.getByText('Local repository')).toBeInTheDocument();
-    expect(screen.getByText('Private by default')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Cancel' })).toHaveAttribute('href', '/t3x-dev');
-    expect(screen.getByRole('button', { name: 'Create repository' })).toBeDisabled();
+it('keeps IME confirmation separate from adding tags and validates the pending tag', async () => {
+  render(<NewRepositoryPage />);
+  fireEvent.change(screen.getByLabelText('Repository name'), { target: { value: 'Catalog' } });
+  const input = screen.getByRole('textbox', { name: 'Tags', exact: true });
+  fireEvent.change(input, { target: { value: '中文' } });
+  fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+  expect(input).toHaveValue('中文');
+  expect(screen.queryByLabelText('Selected tags')).toBeNull();
+  fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 });
+  expect(input).toHaveValue('中文');
+  fireEvent.click(screen.getByRole('button', { name: 'Add tag', exact: true }));
+  expect(input).toHaveValue('');
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Create repository' })).toBeEnabled()
+  );
+  fireEvent.change(input, { target: { value: '中'.repeat(65) } });
+  expect(input).toHaveAttribute('aria-invalid', 'true');
+  expect(screen.getByRole('button', { name: 'Add tag', exact: true })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Create repository' })).toBeDisabled();
+  fireEvent.change(input, { target: { value: '中'.repeat(64) } });
+  expect(screen.getByRole('button', { name: 'Create repository' })).toBeEnabled();
+});
+
+it('returns a newly created project to the exact Explore release without applying it', async () => {
+  mocks.query = new URLSearchParams({
+    returnTo:
+      '/explore?catalogName=team%2Fschema&catalogVersion=1.0.0&catalogHash=sha256%3Aabc&type=schemas',
+  }).toString();
+  mocks.create.mockResolvedValue({
+    project: { project_id: 'new-project', name: 'new-project' },
+    workspaceId: 'workspace:main',
+    conversationId: 'chat',
   });
-
-  it('updates the path preview and opens the clean repository URL after create', async () => {
-    mocks.createProject.mockResolvedValueOnce({
-      branches_count: 1,
-      commits_count: 0,
-      conversations_count: 0,
-      created_at: new Date().toISOString(),
-      metadata: { description: 'Created from new repository page.' },
-      name: 'Backend project',
-      project_id: 'proj_new',
-      turns_count: 0,
-    } satisfies Project);
-
-    render(<NewRepositoryPage />);
-
-    fireEvent.change(screen.getByLabelText('Repository name'), {
-      target: { value: 'Backend project' },
-    });
-
-    expect(screen.getByText('/t3x-dev/backend-project')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Create repository' }));
-
-    await waitFor(() =>
-      expect(mocks.createProject).toHaveBeenCalledWith(
-        'Backend project',
-        { description: 'Structured state repository.' },
-        't3x-dev'
-      )
-    );
-    expect(mocks.routerPush).toHaveBeenCalledWith('/t3x-dev/backend-project');
-  });
+  render(<NewRepositoryPage />);
+  fireEvent.change(screen.getByLabelText(/Repository name/), { target: { value: 'new-project' } });
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: /Create repository/ })).toBeEnabled()
+  );
+  fireEvent.click(screen.getByRole('button', { name: /Create repository/ }));
+  await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+  const destination = new URL(mocks.push.mock.calls[0][0], 'http://local');
+  expect(destination.pathname).toBe('/explore');
+  expect(destination.searchParams.get('catalogName')).toBe('team/schema');
+  expect(destination.searchParams.get('catalogHash')).toBe('sha256:abc');
+  expect(destination.searchParams.get('studioTarget')).toBe('new-project');
+  expect(destination.searchParams.get('workspace')).toBe('workspace:main');
 });

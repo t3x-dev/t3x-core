@@ -23,6 +23,7 @@ export function useChatModelSelection({
     defaultProvider,
     defaultModel,
     availabilityError,
+    refresh,
   } = useAvailableModels();
   const sessionProvider = useChatModelPreferencesStore((s) => s.selectedProvider);
   const sessionModel = useChatModelPreferencesStore((s) => s.selectedModel);
@@ -133,6 +134,7 @@ export function useChatModelSelection({
     defaultProvider: fallbackProvider,
     defaultModel: fallbackModel,
     availabilityError,
+    refresh,
     selectedProvider: resolvedSelection.provider,
     selectedModel: resolvedSelection.model,
     handleModelChange,

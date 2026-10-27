@@ -3,7 +3,12 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { insertProject } from '@t3x-dev/storage';
+import {
+  bindTransitionPolicy,
+  findWorkspaceDraft,
+  getTransitionPolicyBinding,
+  insertProject,
+} from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -99,6 +104,15 @@ describe('Branches Routes', () => {
       expect(data.data.name).toBe('feature-test');
       expect(data.data.description).toBe('A test branch');
       expect(data.data.branch_id).toBeDefined();
+      const inherited = await findWorkspaceDraft(
+        mockDB,
+        testProjectId,
+        'workspace_branch:feature-test'
+      );
+      expect(inherited?.workspace_state?.authoringBasis).toMatchObject({
+        refName: 'feature-test',
+        refHead: null,
+      });
     });
 
     it('returns 400 for missing fields', async () => {
@@ -126,6 +140,11 @@ describe('Branches Routes', () => {
     });
 
     it('returns the existing branch for an identical create intent', async () => {
+      const before = await findWorkspaceDraft(
+        mockDB,
+        testProjectId,
+        'workspace_branch:feature-test'
+      );
       const res = await app.request('/v1/branches', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -136,6 +155,25 @@ describe('Branches Routes', () => {
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
       expect(data.data.name).toBe('feature-test');
+      expect(
+        await findWorkspaceDraft(mockDB, testProjectId, 'workspace_branch:feature-test')
+      ).toEqual(before);
+    });
+
+    it('rejects a missing parent without creating an empty branch', async () => {
+      const res = await app.request('/v1/branches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: testProjectId,
+          name: 'invalid-parent-child',
+          parent_branch: 'missing-parent',
+        }),
+      });
+      expect(res.status).toBe(404);
+      expect(
+        await findWorkspaceDraft(mockDB, testProjectId, 'workspace_branch:invalid-parent-child')
+      ).toBeNull();
     });
 
     it('returns 400 for invalid JSON', async () => {
@@ -242,4 +280,170 @@ describe('Branches Routes', () => {
       expect(res.status).toBe(400);
     });
   });
+
+  // =========================================================================
+  // Branch rules
+  // =========================================================================
+  describe('branch rules', () => {
+    async function createBranch(name: string) {
+      const res = await app.request('/v1/branches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: testProjectId, name }),
+      });
+      expect(res.status).toBe(201);
+    }
+
+    async function listedBranch(name: string) {
+      const res = await app.request(`/v1/branches?project_id=${testProjectId}`);
+      const data: ApiResponse = await res.json();
+      return data.data.branches.find((branch: { name: string }) => branch.name === name);
+    }
+
+    function putRules(branchName: string, rules: unknown, target = app) {
+      return target.request('/v1/branches/rules', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: testProjectId, branch_name: branchName, rules }),
+      });
+    }
+
+    it('exposes default commit rules on every branch', async () => {
+      await createBranch('rules-default');
+      expect((await listedBranch('rules-default')).rules).toEqual({
+        commit: { require_independent_review: false, source: 'default' },
+      });
+    });
+
+    it('toggles independent review and restores the default when lifted', async () => {
+      await createBranch('rules-preset');
+
+      const enabled = await putRules('rules-preset', {
+        commit: { require_independent_review: true },
+      });
+      expect(enabled.status).toBe(200);
+      expect(((await enabled.json()) as ApiResponse).data.rules.commit).toEqual({
+        require_independent_review: true,
+        source: 'preset',
+      });
+      expect((await listedBranch('rules-preset')).rules.commit.source).toBe('preset');
+      expect(await getTransitionPolicyBinding(mockDB, testProjectId, 'rules-preset')).not.toBe(
+        null
+      );
+
+      const lifted = await putRules('rules-preset', {
+        commit: { require_independent_review: false },
+      });
+      expect(((await lifted.json()) as ApiResponse).data.rules.commit.source).toBe('default');
+      expect(await getTransitionPolicyBinding(mockDB, testProjectId, 'rules-preset')).toBe(null);
+    });
+
+    it('keeps the rest of a custom policy when only self-approval changes', async () => {
+      await createBranch('rules-custom');
+      await bindTransitionPolicy(mockDB, {
+        projectId: testProjectId,
+        refName: 'rules-custom',
+        uri: 't3x://policies/custom/v1',
+        policy: customPolicy(),
+        actor: { kind: 'human', id: 'human:admin' },
+      });
+      expect((await listedBranch('rules-custom')).rules.commit).toEqual({
+        require_independent_review: true,
+        source: 'custom',
+      });
+
+      const res = await putRules('rules-custom', { commit: { require_independent_review: false } });
+      expect(((await res.json()) as ApiResponse).data.rules.commit).toEqual({
+        require_independent_review: false,
+        source: 'custom',
+      });
+      const stored = await getTransitionPolicyBinding(mockDB, testProjectId, 'rules-custom');
+      expect(stored?.policy).toEqual({
+        ...customPolicy(),
+        authorization: { ...customPolicy().authorization, allowSelfApproval: true },
+      });
+    });
+
+    it('leaves rules unchanged when a rule kind is omitted', async () => {
+      await createBranch('rules-omitted');
+      const res = await putRules('rules-omitted', {});
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as ApiResponse).data.rules.commit.source).toBe('default');
+    });
+
+    it('returns 404 for a branch that does not exist', async () => {
+      const res = await putRules('rules-missing', { commit: { require_independent_review: true } });
+      expect(res.status).toBe(404);
+      expect(await getTransitionPolicyBinding(mockDB, testProjectId, 'rules-missing')).toBe(null);
+    });
+
+    it('does not let an agent change branch rules', async () => {
+      const agentApp = new Hono();
+      agentApp.use('*', async (c, next) => {
+        c.set(
+          'apiKey' as never,
+          {
+            id: 'ak_rules_agent',
+            principal_kind: 'agent',
+            project_id: testProjectId,
+          } as never
+        );
+        await next();
+      });
+      agentApp.route('/', branchRoutes);
+      const res = await putRules(
+        'main',
+        { commit: { require_independent_review: false } },
+        agentApp
+      );
+      expect(res.status).toBe(403);
+    });
+  });
 });
+
+function customPolicy() {
+  return {
+    schema: 't3x.dev/acceptance-policy/v1' as const,
+    version: 1 as const,
+    authorization: {
+      decide: { actors: { mode: 'any' as const } },
+      override: { actors: { mode: 'any' as const } },
+      allowSelfApproval: false,
+    },
+    claims: {
+      intent: {
+        allowedModes: ['unspecified' as const],
+        minimumEvidence: 0,
+        humanConfirmation: 'not_required' as const,
+      },
+      rationale: {
+        allowedModes: ['unspecified' as const],
+        minimumEvidence: 0,
+        humanConfirmation: 'not_required' as const,
+      },
+    },
+    checks: {
+      replay: {
+        issuers: { mode: 'any' as const },
+        tools: { mode: 'any' as const },
+        environments: { mode: 'any' as const },
+      },
+      validation: {
+        requirement: 'optional' as const,
+        issuers: { mode: 'any' as const },
+        tools: { mode: 'any' as const },
+        environments: { mode: 'any' as const },
+        profiles: { mode: 'any' as const },
+        schemas: { mode: 'any' as const },
+        contexts: { mode: 'any' as const },
+      },
+      humanConfirmation: { issuers: { mode: 'any' as const } },
+    },
+    override: {
+      allowClaimFailures: false,
+      allowFailedValidation: false,
+      allowMissingHumanConfirmation: false,
+      allowMissingValidation: false,
+    },
+  };
+}

@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import palette from '@/styles/management-palette.module.css';
 import type {
   CreateRecipeInput,
   Recipe,
@@ -216,7 +217,7 @@ export function RecipeForm({
                   <small>{TRIGGER_DESCRIPTIONS[triggerOption.value]}</small>
                 </span>
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className={palette.scope}>
                 {TRIGGER_EVENTS.map((event) => (
                   <SelectItem key={event.value} value={event.value}>
                     {event.label}
@@ -240,7 +241,7 @@ export function RecipeForm({
                   <small>{ACTION_DESCRIPTIONS[actionOption.value]}</small>
                 </span>
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className={palette.scope}>
                 {STEP_ACTIONS.map((action) => (
                   <SelectItem key={action.value} value={action.value}>
                     {action.label}
@@ -343,7 +344,7 @@ export function RecipeForm({
           <SelectTrigger className="w-full">
             <SelectValue placeholder="Select an event" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className={palette.scope}>
             {TRIGGER_EVENTS.map((event) => (
               <SelectItem key={event.value} value={event.value}>
                 {event.label}
@@ -394,7 +395,7 @@ export function RecipeForm({
                   <SelectTrigger className="w-full" id={`step-action-${index}`}>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className={palette.scope}>
                     {STEP_ACTIONS.map((action) => (
                       <SelectItem key={action.value} value={action.value}>
                         {action.label}

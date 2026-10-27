@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect } from 'react';
+import {
+  attachedImageFile,
+  attachmentContentBlocks,
+  type TurnAttachment,
+} from '@/domain/conversations/turnAttachments';
 import {
   deriveConversationTitleFromMessage,
   isPlaceholderConversationTitle,
@@ -10,13 +15,8 @@ import { syncSavedTurnIntoWorkspace } from '@/hooks/conversations/syncSavedTurnI
 import { type ChatMessage, useChatHistory } from '@/hooks/conversations/useChatHistory';
 import { useChatStreamState } from '@/hooks/conversations/useChatStreamState';
 import { useChatWarnings } from '@/hooks/conversations/useChatWarnings';
-import { conversationMemorySystemMessage } from '@/hooks/sourceThreads/conversationMemorySystemMessage';
-import {
-  type GenerationCitation,
-  type GenerationContentBlock,
-  type GenerationMessage,
-  generationApi,
-} from '@/infrastructure/generation';
+import { type GenerationCitation, generationApi } from '@/infrastructure/generation';
+import { uploadDocumentMaterial } from '@/infrastructure/materials';
 import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
 import type { SourceChatDraftReplyResponse } from '@/infrastructure/sourceChatDraftReplies';
 import { sourceThreadApi } from '@/infrastructure/sourceThreads';
@@ -31,15 +31,24 @@ import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
 import { useTemporaryChatsStore } from '@/store/temporaryChatsStore';
 import type { AttachedImage } from '@/types/generation';
+import {
+  sessionValue,
+  useSourceThreadSessionRef,
+  useSourceThreadSessionState,
+  useWorkspaceAssistantSession,
+} from './sourceThreadSession';
 
 export type SourceThreadMessage = ChatMessage;
 
 const TURN_SAVE_RETRY_DELAY_MS = 250;
 
 interface SendMessageOptions {
+  confirmedSettingsId?: string;
   historyOverride?: Array<{ role: string; content: string }>;
   skipMemoryFetch?: boolean;
   images?: AttachedImage[];
+  /** Workspace Assistant only: stored as Source materials on the user turn. */
+  files?: File[];
   fixtureAssistantResponse?: string;
 }
 
@@ -58,8 +67,8 @@ export interface UseSourceThreadGenerationOptions {
   sourceDraftReply?: SourceDraftReplyContext;
   workspaceAssistant?: WorkspaceAssistantContext;
   onConversationCreated?: (conversationId: string) => void;
-  createConversation?: () => Promise<string>;
   onConversationReady?: (conversationId: string) => void | Promise<void>;
+  createConversation?: () => Promise<string>;
   onTurnsSaved?: () => void;
 }
 
@@ -223,53 +232,62 @@ export function useSourceThreadGeneration({
   sourceDraftReply,
   workspaceAssistant,
   onConversationCreated,
-  createConversation,
   onConversationReady,
+  createConversation,
   onTurnsSaved,
 }: UseSourceThreadGenerationOptions): UseSourceThreadGenerationReturn {
-  const history = useChatHistory(projectId, conversationId);
-  const stream = useChatStreamState();
-  const warnings = useChatWarnings();
+  const session = useWorkspaceAssistantSession(projectId, workspaceAssistant?.workspaceId);
+  const history = useChatHistory(projectId, conversationId, session);
+  const stream = useChatStreamState(session);
+  const warnings = useChatWarnings(session);
   const isTemporaryMode = !projectId;
 
-  const [turnsSavedCounter, setTurnsSavedCounter] = useState(0);
-  const [workspaceActivity, setWorkspaceActivity] = useState<WorkspaceAssistantActivity | null>(
-    null
+  const [turnsSavedCounter, setTurnsSavedCounter] = useSourceThreadSessionState(
+    session,
+    'generation.savedCounter',
+    0
   );
+  const [workspaceActivity, setWorkspaceActivity] =
+    useSourceThreadSessionState<WorkspaceAssistantActivity | null>(
+      session,
+      'generation.activity',
+      null
+    );
 
-  const conversationIdRef = useRef(conversationId);
+  const conversationIdRef = useSourceThreadSessionRef(
+    session,
+    'generation.conversation',
+    conversationId
+  );
+  const assistantRef = useSourceThreadSessionRef(
+    session,
+    'generation.assistant',
+    workspaceAssistant
+  );
   useEffect(() => {
-    conversationIdRef.current = conversationId;
-  }, [conversationId]);
+    if (conversationId || !session) conversationIdRef.current = conversationId;
+    assistantRef.current = workspaceAssistant;
+  }, [conversationId, workspaceAssistant, conversationIdRef, assistantRef, session]);
 
-  const webSearchEnabled = useChatSessionStore((s) => s.webSearchEnabled);
-  const thinkingEnabled = useChatSessionStore((s) => s.thinkingEnabled);
+  const reasoningEffort = useChatSessionStore((s) => s.reasoningEffort);
+  const contextMode = useChatSessionStore((s) => s.contextMode);
+  const fastEnabled = useChatSessionStore((s) => s.fastEnabled);
 
   const sendMessage = useCallback(
     async (messageOverride?: string, options?: SendMessageOptions) => {
       const rawMessage = messageOverride ?? history.input;
-      if (!rawMessage.trim() || stream.isChatStreaming || history.isChatLoading) return;
+      if (
+        !rawMessage.trim() ||
+        stream.isChatStreaming ||
+        sessionValue<boolean>(session, 'stream.running') ||
+        history.isChatLoading
+      )
+        return;
 
       const userMessage = rawMessage.trim();
 
-      // Build content for API (may include image blocks)
       const images = options?.images;
-      let apiContent: string | GenerationContentBlock[];
-      if (images?.length) {
-        apiContent = [
-          ...images.map((img) => ({
-            type: 'image' as const,
-            source: {
-              type: 'base64' as const,
-              media_type: img.mediaType,
-              data: img.base64,
-            },
-          })),
-          { type: 'text' as const, text: userMessage },
-        ];
-      } else {
-        apiContent = userMessage;
-      }
+      const files = workspaceAssistant ? options?.files : undefined;
 
       history.setInput('');
       warnings.setError(null);
@@ -344,7 +362,15 @@ export function useSourceThreadGeneration({
         if (!turn?.turn_hash) return;
         const savedMessage = savedTurnMessage(turn, role, content);
         history.setMessages((prev) => {
-          const next = prev.map((msg) => (msg.id === localMessageId ? savedMessage : msg));
+          const next = prev.map((msg) =>
+            msg.id === localMessageId
+              ? {
+                  ...savedMessage,
+                  ...(msg.images ? { images: msg.images } : {}),
+                  ...(msg.files ? { files: msg.files } : {}),
+                }
+              : msg
+          );
           history.messagesRef.current = next;
           return next;
         });
@@ -354,6 +380,23 @@ export function useSourceThreadGeneration({
         id: `msg-${Date.now()}`,
         role: 'user' as const,
         content: userMessage,
+        ...(images?.length
+          ? {
+              images: images.map((img) => ({
+                id: img.id,
+                src: `data:${img.mediaType};base64,${img.base64}`,
+              })),
+            }
+          : {}),
+        ...(files?.length
+          ? {
+              files: files.map((file, index) => ({
+                id: `${file.name}-${index}`,
+                name: file.name,
+                mimeType: file.type,
+              })),
+            }
+          : {}),
       };
       history.setMessages((prev) => [...prev, newUserMessage]);
 
@@ -363,6 +406,8 @@ export function useSourceThreadGeneration({
 
       stream.setIsChatStreaming(true);
       stream.setStreamingContent('');
+      const requestController = new AbortController();
+      stream.abortControllerRef.current = requestController;
 
       let stableConversationId: string | null = null;
       const saveAssistantResponse = async (
@@ -427,11 +472,43 @@ export function useSourceThreadGeneration({
         const currentConversationId = convId;
         stableConversationId = currentConversationId;
         if (isTemporaryMode) {
-          useTemporaryChatsStore.getState().addMessage(currentConversationId, newUserMessage);
+          useTemporaryChatsStore.getState().addMessage(currentConversationId, {
+            id: newUserMessage.id,
+            role: newUserMessage.role,
+            content: newUserMessage.content,
+          });
           applyGeneratedTitle(currentConversationId, initialTitleForGeneratedTitle);
         } else {
+          const attachments: TurnAttachment[] = [];
+          if (workspaceAssistant) {
+            const uploads = [
+              ...(images ?? []).map((image) => ({
+                kind: 'image' as const,
+                file: attachedImageFile(image),
+              })),
+              ...(files ?? []).map((file) => ({ kind: 'file' as const, file })),
+            ];
+            for (const upload of uploads) {
+              const material = await uploadDocumentMaterial(projectId, upload.file);
+              attachments.push({
+                materialId: material.id,
+                kind: upload.kind,
+                title: upload.file.name,
+                mimeType: material.mime_type ?? upload.file.type,
+              });
+            }
+          }
           const userTurn = await saveTurnWithRetry(() =>
-            sourceThreadApi.appendTurn(projectId, currentConversationId, 'user', userMessage)
+            attachments.length
+              ? sourceThreadApi.appendTurn(
+                  projectId,
+                  currentConversationId,
+                  'user',
+                  userMessage,
+                  undefined,
+                  { content_blocks: attachmentContentBlocks(projectId, userMessage, attachments) }
+                )
+              : sourceThreadApi.appendTurn(projectId, currentConversationId, 'user', userMessage)
           );
           savedUserTurnHash = userTurn.turn_hash;
           mirrorSavedTurn(currentConversationId, userTurn, 'user', userMessage);
@@ -445,30 +522,12 @@ export function useSourceThreadGeneration({
           try {
             await onConversationReady(currentConversationId);
           } catch {
-            // Context preparation is best-effort; memory may be empty if it fails.
+            // Context prep is best-effort; memory may be empty if it fails.
           }
         }
-
-        let systemMessage: GenerationMessage | null = null;
-        if (!isTemporaryMode && !workspaceAssistant && !options?.skipMemoryFetch) {
-          try {
-            const ctx = await sourceThreadApi.memory(currentConversationId);
-            systemMessage = conversationMemorySystemMessage(ctx);
-          } catch {
-            // Memory fetch failed — proceed without context.
-          }
-        }
-        const messages: GenerationMessage[] = [
-          ...(systemMessage ? [systemMessage] : []),
-          ...previousMessages,
-          { role: 'user' as const, content: apiContent },
-        ];
 
         let fullResponse = '';
-        let addedFinalMessage = false;
         let localAssistantMessageId: string | null = null;
-        let streamCompleted = false;
-        let streamFailed = false;
         stream.tokenBufferRef.current = '';
 
         if (fixtureAssistantResponse) {
@@ -494,10 +553,11 @@ export function useSourceThreadGeneration({
           return;
         }
 
-        if (!isTemporaryMode && workspaceAssistant && savedUserTurnHash && !images?.length) {
-          // Creating the bound conversation saves the source bundle and advances the Draft revision.
+        if (!isTemporaryMode && workspaceAssistant && savedUserTurnHash) {
+          // Source turns and settings confirmations can advance the Workspace independently
+          // of its last rendered authoring view. Pin each new chat run to the live revision.
           let assistantContext = workspaceAssistant;
-          if (!hasExistingConversation && createConversation) {
+          {
             const { workspace } = await getSharedApiClient().workspaces.get(
               projectId,
               workspaceAssistant.workspaceId
@@ -506,8 +566,8 @@ export function useSourceThreadGeneration({
               throw new Error('Workspace revision is unavailable.');
             assistantContext = { ...workspaceAssistant, workspaceRevision: workspace.revision };
           }
-          const controller = new AbortController();
-          stream.abortControllerRef.current = controller;
+          const controller = requestController;
+          controller.signal.throwIfAborted();
           const unfinished = new Set<string>();
           const completedCandidates = new Set<string>();
           let receivedText = false;
@@ -523,7 +583,15 @@ export function useSourceThreadGeneration({
               projectId,
               assistantContext,
               { conversationId: currentConversationId, userTurnHash: savedUserTurnHash },
-              { signal: controller.signal, provider, model }
+              {
+                signal: controller.signal,
+                provider,
+                model,
+                reasoningEffort,
+                contextMode,
+                fast: fastEnabled,
+                confirmedSettingsId: options?.confirmedSettingsId,
+              }
             )) {
               if (event.type === 'context') {
                 setWorkspaceActivity((current) =>
@@ -566,6 +634,10 @@ export function useSourceThreadGeneration({
                   );
                 }
                 if (event.status === 'completed') {
+                  if (event.name === 'showSchemaChangeCard' || event.result?.kind === 'schema')
+                    assistantRef.current?.onSchemaSettings?.(
+                      event.result?.settings?.conversationId
+                    );
                   unfinished.delete(event.operationId);
                   if (event.result?.transitionId)
                     completedCandidates.add(event.result.transitionId);
@@ -618,7 +690,7 @@ export function useSourceThreadGeneration({
                   operationId
                 );
                 if (result.status === 'candidate' && result.transitionId)
-                  workspaceAssistant.onCandidate?.(result.transitionId);
+                  assistantRef.current?.onCandidate?.(result.transitionId);
               } catch {
                 warnings.setWarning('Connection ended. Recheck saved proposals before retrying.');
               }
@@ -650,7 +722,7 @@ export function useSourceThreadGeneration({
           // gap where only the user turn exists and hide the completed reply until a
           // manual page reload.
           for (const transitionId of completedCandidates) {
-            workspaceAssistant.onCandidate?.(transitionId, newUserMessage.id);
+            assistantRef.current?.onCandidate?.(transitionId, newUserMessage.id);
           }
           setWorkspaceActivity((current) =>
             current ? { ...current, phase: completed ? 'complete' : 'error' } : current
@@ -683,7 +755,6 @@ export function useSourceThreadGeneration({
               },
             ]);
             stream.setStreamingContent('');
-            addedFinalMessage = true;
             await saveAssistantResponse(
               fullResponse,
               localAssistantMessageId,
@@ -693,119 +764,10 @@ export function useSourceThreadGeneration({
           }
           warnings.setError('Model returned no content. Try again or check the provider key.');
           stream.setStreamingContent('');
-          addedFinalMessage = true;
           return;
         }
 
-        const flushBuffer = () => {
-          if (stream.tokenBufferRef.current) {
-            stream.setStreamingContent(stream.tokenBufferRef.current);
-          }
-          stream.rafIdRef.current = null;
-        };
-
-        const controller = new AbortController();
-        stream.abortControllerRef.current = controller;
-
-        for await (const event of generationApi.stream(
-          { messages, provider, model, web_search: webSearchEnabled, thinking: thinkingEnabled },
-          { signal: controller.signal }
-        )) {
-          if (event.type === 'token' && event.content) {
-            stream.setSearchQuery(null);
-            stream.setIsThinking(false);
-            fullResponse += event.content;
-            stream.tokenBufferRef.current = fullResponse;
-            if (stream.rafIdRef.current === null) {
-              stream.rafIdRef.current = requestAnimationFrame(flushBuffer);
-            }
-          } else if (event.type === 'thinking') {
-            stream.setIsThinking(true);
-            stream.setThinkingContent((prev) => prev + (event.content ?? ''));
-          } else if (event.type === 'searching') {
-            stream.setSearchQuery(event.query ?? null);
-          } else if (event.type === 'done') {
-            streamCompleted = true;
-            stream.setSearchQuery(null);
-            if (event.citations?.length) {
-              stream.setCitations(event.citations);
-            }
-            if (stream.rafIdRef.current !== null) {
-              cancelAnimationFrame(stream.rafIdRef.current);
-              stream.rafIdRef.current = null;
-            }
-            if (event.content) fullResponse = event.content;
-            // Skip the assistant append entirely when the upstream produced
-            // no visible tokens (provider blip, safety block, etc.). Adding
-            // an empty `{role: 'assistant', content: ''}` to the local
-            // history poisons every subsequent /chat/stream call — the
-            // server validator rejects empty content with "messages[N]:
-            // content must be non-empty" and chat stalls.
-            if (!addedFinalMessage && fullResponse.trim().length > 0) {
-              localAssistantMessageId = `msg-${Date.now()}-assistant`;
-              history.setMessages((prev) => [
-                ...prev,
-                {
-                  id: localAssistantMessageId!,
-                  role: 'assistant' as const,
-                  content: fullResponse,
-                },
-              ]);
-              if (isTemporaryMode) {
-                useTemporaryChatsStore.getState().addMessage(currentConversationId, {
-                  id: localAssistantMessageId,
-                  role: 'assistant',
-                  content: fullResponse,
-                });
-              }
-              stream.setStreamingContent('');
-              addedFinalMessage = true;
-            } else if (!addedFinalMessage) {
-              // Failed quietly — surface a hint instead of poisoning history.
-              warnings.setError('Model returned no content. Try again or check the provider key.');
-              stream.setStreamingContent('');
-              addedFinalMessage = true;
-            }
-          } else if (event.type === 'error') {
-            streamFailed = true;
-            warnings.setError(formatUserFacingError(event.message, 'Chat request failed.'));
-          }
-        }
-
-        if (fullResponse && !addedFinalMessage) {
-          localAssistantMessageId = `msg-${Date.now()}-assistant`;
-          history.setMessages((prev) => [
-            ...prev,
-            {
-              id: localAssistantMessageId!,
-              role: 'assistant' as const,
-              content: fullResponse,
-            },
-          ]);
-          if (isTemporaryMode && stableConversationId) {
-            useTemporaryChatsStore.getState().addMessage(stableConversationId, {
-              id: localAssistantMessageId,
-              role: 'assistant',
-              content: fullResponse,
-            });
-          }
-          stream.setStreamingContent('');
-          if (!streamCompleted && !streamFailed) {
-            warnings.showWarning(
-              'Assistant stream ended before completion — partial response preserved.'
-            );
-          }
-        }
-
-        if (!isTemporaryMode) {
-          await saveAssistantResponse(
-            fullResponse,
-            localAssistantMessageId,
-            streamCompleted
-              ? undefined
-              : assistantStreamStatusRings(streamFailed ? 'stream_error' : 'stream_eof')
-          );
-        }
+        throw new Error('Workspace assistant context is required to send a message.');
       } catch (err) {
         if (workspaceAssistant)
           setWorkspaceActivity((current) => (current ? { ...current, phase: 'error' } : current));
@@ -842,6 +804,11 @@ export function useSourceThreadGeneration({
         }
         warnings.setError(formatUserFacingError(err, 'Chat request failed.'));
       } finally {
+        if (stream.rafIdRef.current !== null) {
+          cancelAnimationFrame(stream.rafIdRef.current);
+          stream.rafIdRef.current = null;
+        }
+        stream.abortControllerRef.current = null;
         stream.setIsChatStreaming(false);
         stream.setStreamingContent('');
       }
@@ -858,12 +825,18 @@ export function useSourceThreadGeneration({
       sourceDraftReply,
       workspaceAssistant,
       onConversationCreated,
-      createConversation,
       onConversationReady,
+      createConversation,
       onTurnsSaved,
-      webSearchEnabled,
-      thinkingEnabled,
+      reasoningEffort,
+      contextMode,
+      fastEnabled,
       isTemporaryMode,
+      session,
+      conversationIdRef,
+      assistantRef,
+      setTurnsSavedCounter,
+      setWorkspaceActivity,
     ]
   );
 

@@ -53,6 +53,13 @@
     {
       "source": "auth-me.openapi.ts",
       "method": "GET",
+      "path": "/v1/auth/me/capabilities",
+      "policy": "authenticated",
+      "rationale": "Returns only the authenticated request identity's administration permissions and disables shared response caching."
+    },
+    {
+      "source": "auth-me.openapi.ts",
+      "method": "GET",
       "path": "/v1/auth/me",
       "policy": "authenticated",
       "rationale": "Authenticated user surface without a cross-project resource."
@@ -149,6 +156,13 @@
       "rationale": "Project ownership or project-scoped resource boundary."
     },
     {
+      "source": "branches.openapi.ts",
+      "method": "PUT",
+      "path": "/v1/branches/rules",
+      "policy": "project",
+      "rationale": "Requires project access and a human principal before changing the branch Transition policy binding."
+    },
+    {
       "source": "chat.openapi.ts",
       "method": "POST",
       "path": "/v1/chat",
@@ -159,13 +173,6 @@
       "source": "chat.openapi.ts",
       "method": "GET",
       "path": "/v1/chat/providers",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "chat.openapi.ts",
-      "method": "POST",
-      "path": "/v1/chat/stream",
       "policy": "project",
       "rationale": "Project ownership or project-scoped resource boundary."
     },
@@ -301,6 +308,13 @@
       "path": "/v1/commits/{hash}/history",
       "policy": "project",
       "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "commits.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/commits/{hash}/changes",
+      "policy": "project",
+      "rationale": "Project-scoped read of verified immutable Commit evidence."
     },
     {
       "source": "commits.openapi.ts",
@@ -1003,6 +1017,20 @@
       "rationale": "Project-scoped visibility mutation guarded by explicit visibility-management authority."
     },
     {
+      "source": "project-checks.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/checks",
+      "policy": "project",
+      "rationale": "Read-only check evidence requires canonical project access and project-scoped record lookup."
+    },
+    {
+      "source": "project-checks.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/checks/{recordId}",
+      "policy": "project",
+      "rationale": "Read-only check evidence requires canonical project access and project-scoped record lookup."
+    },
+    {
       "source": "projects.openapi.ts",
       "method": "GET",
       "path": "/v1/projects",
@@ -1200,6 +1228,13 @@
     },
     {
       "source": "pull-requests.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/pull-requests/{number}/merge-review",
+      "policy": "project",
+      "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "pull-requests.openapi.ts",
       "method": "POST",
       "path": "/v1/projects/{projectId}/pull-requests/{number}/checks/rerun",
       "policy": "project",
@@ -1260,6 +1295,20 @@
       "path": "/v1/commits/{hash}/relations",
       "policy": "project",
       "rationale": "Project ownership or project-scoped resource boundary."
+    },
+    {
+      "source": "repository-paths.openapi.ts",
+      "method": "GET",
+      "path": "/v1/repositories/{owner}/{name}",
+      "policy": "project",
+      "rationale": "Resolves a current or historical repository address, then checks read access to the resolved project before returning its identity and canonical path."
+    },
+    {
+      "source": "repository-paths.openapi.ts",
+      "method": "GET",
+      "path": "/v1/repository-name",
+      "policy": "project",
+      "rationale": "Requires project edit access for renames, or project creation and namespace access for new names; availability never returns another project identity."
     },
     {
       "source": "runner.openapi.ts",
@@ -1803,13 +1852,6 @@
     {
       "source": "workspaces.openapi.ts",
       "method": "POST",
-      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/extract-candidate",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "workspaces.openapi.ts",
-      "method": "POST",
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/transition/decide",
       "policy": "project",
       "rationale": "Project ownership or project-scoped resource boundary."
@@ -1818,13 +1860,6 @@
       "source": "workspaces.openapi.ts",
       "method": "POST",
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/transition/review",
-      "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
-    },
-    {
-      "source": "workspaces.openapi.ts",
-      "method": "POST",
-      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/yops-draft",
       "policy": "project",
       "rationale": "Project ownership or project-scoped resource boundary."
     },
@@ -2039,6 +2074,48 @@
       "rationale": "Project edit authority and server-selected Transition policy with exact-head CAS."
     },
     {
+      "source": "schema-publish.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/schema-studio/publish/{workspaceId}",
+      "policy": "project",
+      "rationale": "Requires target edit and source redistribution authority; freezes the exact saved and reviewed candidate as a private immutable Schema without changing Workspace state."
+    },
+    {
+      "source": "schema-studio.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/schema-studio/edit-candidates/{workspaceId}",
+      "policy": "project",
+      "rationale": "Project read authority recovers only the scoped saved edit candidate."
+    },
+    {
+      "source": "schema-studio.openapi.ts",
+      "method": "PUT",
+      "path": "/v1/projects/{projectId}/schema-studio/edit-candidates/{workspaceId}",
+      "policy": "project",
+      "rationale": "Project edit authority and Workspace revision guard protect candidate persistence."
+    },
+    {
+      "source": "schema-studio.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/schema-studio/pending/{workspaceId}",
+      "policy": "project",
+      "rationale": "Project read authority reports the scoped pending Schema and live freshness checks."
+    },
+    {
+      "source": "schema-preparation.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/schema-studio/preparation/{workspaceId}/preview",
+      "policy": "project",
+      "rationale": "Project read and Transition inspect authority guard read-only content migration preview."
+    },
+    {
+      "source": "schema-preparation.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/schema-studio/preparation/{workspaceId}",
+      "policy": "project",
+      "rationale": "Project edit and Transition propose authority guard atomic Schema and content preparation."
+    },
+    {
       "source": "schema-studio.openapi.ts",
       "method": "GET",
       "path": "/v1/projects/{projectId}/schema-studio/candidates",
@@ -2058,6 +2135,13 @@
       "path": "/v1/projects/{projectId}/schema-studio/candidates/{candidateId}",
       "policy": "project",
       "rationale": "Requires target project:edit; removes only the scoped candidate."
+    },
+    {
+      "source": "schema-studio.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/schema-studio/initial-schema",
+      "policy": "project",
+      "rationale": "Requires target project:edit and an exact Workspace revision before binding a schema to an empty Workspace."
     },
     {
       "source": "schema-studio.openapi.ts",
@@ -2104,9 +2188,23 @@
     {
       "source": "workspace-authoring.openapi.ts",
       "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/actions/{actionId}/deletion-confirmation",
+      "policy": "project",
+      "rationale": "Project edit authority and human-only Transition propose principal; exact action/version-bound deletion authorization without content mutation."
+    },
+    {
+      "source": "workspace-authoring.openapi.ts",
+      "method": "POST",
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/candidates/{transitionId}/publication",
       "policy": "project",
       "rationale": "Project authorization and explicit Transition inspect/propose scope; server-owned actor and guarded immutable Draft publication."
+    },
+    {
+      "source": "workspace-authoring.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/reconciliation",
+      "policy": "project",
+      "rationale": "Requires project access and Transition propose authority; server-owned actor, exact Workspace/ref CAS, immutable archived edits, and deterministic reconciliation without advancing the ref."
     },
     {
       "source": "workspace-authoring.openapi.ts",
@@ -2128,6 +2226,34 @@
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/source-chat/assistant/operations/{operationId}",
       "policy": "project",
       "rationale": "Project-scoped Workspace Assistant; rechecks current project/Transition authority, uses only saved source user turns and server-bound operation identities."
+    },
+    {
+      "source": "explore.openapi.ts",
+      "method": "GET",
+      "path": "/v1/explore/projects",
+      "policy": "authenticated",
+      "rationale": "Public-only introduction projection; does not grant project authority."
+    },
+    {
+      "source": "explore.openapi.ts",
+      "method": "GET",
+      "path": "/v1/explore/projects/{projectId}",
+      "policy": "authenticated",
+      "rationale": "Rechecks public visibility and deletion; only introduction fields are exposed."
+    },
+    {
+      "source": "explore.openapi.ts",
+      "method": "GET",
+      "path": "/v1/explore/schema-targets",
+      "policy": "authenticated",
+      "rationale": "Lists only projects with current edit capability; candidate writes recheck authority."
+    },
+    {
+      "source": "explore.openapi.ts",
+      "method": "GET",
+      "path": "/v1/explore/schema-release",
+      "policy": "authenticated",
+      "rationale": "Exact release read verifies source project authority, lifecycle, visibility and integrity without a destination."
     }
   ]
 }

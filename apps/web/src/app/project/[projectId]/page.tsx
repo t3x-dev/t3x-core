@@ -3,10 +3,10 @@
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasWorkspace } from '@/components/canvas';
+import { ProjectChecksPage } from '@/components/checks/ProjectChecksPage';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { ProjectDemoTourOverlay } from '@/components/onboarding/ProjectDemoTourOverlay';
 import { ProjectCommunityTab } from '@/components/project/ProjectCommunityTab';
-import { ProjectOutputsTab } from '@/components/project/ProjectOutputsTab';
 import { ProjectReviewsTab } from '@/components/project/ProjectReviewsTab';
 import { ProjectSchemasTab } from '@/components/project/ProjectSchemasTab';
 import { ProjectShell } from '@/components/project/ProjectShell';
@@ -16,9 +16,11 @@ import {
   getProjectTabSegment,
   type ProjectTabId,
   parseProjectTab,
+  resolveProjectTab,
 } from '@/components/project/projectTabModel';
 import { isRefHeadIntegrityInvalid } from '@/domain/format/errors';
 import { getProjectIdRepoPath, getProjectRepoPath } from '@/domain/project/repoPath';
+import { repositoryLocation } from '@/domain/project/repositoryLocation';
 import { toYSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 import { useCanvasDeletionWiring } from '@/hooks/canvas/useCanvasDeletionWiring';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
@@ -29,7 +31,6 @@ import {
 } from '@/hooks/commits/commitEvents';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
-import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { fetchProject } from '@/queries/project';
 import { fetchLatestYSchemaValidation, runYSchemaValidation } from '@/queries/yschemaValidation';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -62,40 +63,23 @@ function isNotFoundError(error: Error | null): boolean {
 function withCurrentQuery(path: string, searchParams: { toString: () => string }) {
   const params = new URLSearchParams(searchParams.toString());
   params.delete('tab');
-  params.delete('zoom');
-  params.delete('x');
-  params.delete('y');
   const query = params.toString();
   return query ? `${path}?${query}` : path;
-}
-
-function getProjectTabPath(
-  project: { id?: string; name: string },
-  tab: ProjectTabId,
-  ownerSlug?: string
-) {
-  const basePath = getProjectRepoPath(project, ownerSlug);
-  return tab === 'state' ? basePath : `${basePath}/${getProjectTabSegment(tab)}`;
 }
 
 function getProjectCanonicalPath(
   project: { id?: string; name: string },
   searchParams: URLSearchParams,
-  ownerSlug?: string
+  ownerSlug?: string,
+  hash = ''
 ) {
-  return withCurrentQuery(
-    getProjectTabPath(project, parseProjectTab(searchParams.get('tab')), ownerSlug),
-    searchParams
-  );
+  const next = new URLSearchParams(searchParams);
+  next.set('tab', getProjectTabSegment(parseProjectTab(next.get('tab'))));
+  return repositoryLocation(getProjectRepoPath(project, ownerSlug), '', next.toString(), hash);
 }
 
 function hasProjectUiQuery(searchParams: { has: (key: string) => boolean }) {
-  return (
-    searchParams.has('tab') ||
-    searchParams.has('zoom') ||
-    searchParams.has('x') ||
-    searchParams.has('y')
-  );
+  return searchParams.has('tab');
 }
 
 export function ProjectDetailPageContent({
@@ -112,10 +96,14 @@ export function ProjectDetailPageContent({
 
   const searchParams = useSearchParams();
   const isCanvasSurface = surface === 'canvas';
-  const activeTab = initialTabOverride ?? parseProjectTab(searchParams.get('tab'));
+  const activeTab = resolveProjectTab(
+    initialTabOverride ?? parseProjectTab(searchParams.get('tab')),
+    searchParams.get('schemaView')
+  );
   const isSettingsRedirect = activeTab === 'settings';
-  const isSchemaStudio = activeTab === 'schemas' && searchParams.get('schemaView') === 'studio';
-  const isSchemaRelease = activeTab === 'schemas' && searchParams.get('schemaView') === 'release';
+  const isHistoryRedirect = activeTab === 'history';
+  const isSchemaStudio = activeTab === 'schemas';
+  const isSchemaRelease = activeTab === 'browse' && searchParams.get('schemaView') === 'release';
   const isEmbeddedCanvasSurface =
     !isCanvasSurface && activeTab === 'state' && searchParams.get('view') === 'canvas';
   const isCanvasActive = isCanvasSurface || isEmbeddedCanvasSurface;
@@ -132,19 +120,17 @@ export function ProjectDetailPageContent({
   }, [showIntroDemo]);
 
   useEffect(() => {
-    if (!isSettingsRedirect) return;
-    const returnTo = pathname || getProjectIdRepoPath(projectId);
+    if (!isSettingsRedirect && !isHistoryRedirect) return;
+    const query = new URLSearchParams(searchParams.toString());
+    query.delete('tab');
     router.replace(
-      `/project/${encodeURIComponent(projectId)}/settings?returnTo=${encodeURIComponent(returnTo)}`
+      `/project/${encodeURIComponent(projectId)}/${isHistoryRedirect ? 'history' : 'settings'}${query.size ? `?${query}` : ''}${window.location.hash}`
     );
-  }, [isSettingsRedirect, pathname, projectId, router]);
+  }, [isHistoryRedirect, isSettingsRedirect, projectId, router, searchParams]);
 
-  const projectFromStore = useProjectStore((state) =>
-    state.projects.find((item) => item.id === projectId)
+  const projectFromStore = useProjectStore(
+    (state) => state.details?.[projectId] ?? state.projects.find((item) => item.id === projectId)
   );
-  const projectsInitialized = useProjectStore((state) => state.initialized);
-  const projectsLoading = useProjectStore((state) => state.loading);
-  const projectScope = useProjectStore((state) => state.projectScope);
   const [fetchedProject, setFetchedProject] = useState<ProjectSummary | null>(null);
   const [projectLookupLoading, setProjectLookupLoading] = useState(false);
   const [projectLookupError, setProjectLookupError] = useState<Error | null>(null);
@@ -162,7 +148,6 @@ export function ProjectDetailPageContent({
     () => (projectBase ? { ...projectBase, yschemaValidation } : null),
     [projectBase, yschemaValidation]
   );
-  const { list: fetchProjects } = useProjectCrud();
   const { fetch: fetchPins } = usePinsCrud();
   const { load: loadCanvas } = useCanvasNodeActions();
   useCanvasDeletionWiring(isCanvasActive);
@@ -205,7 +190,8 @@ export function ProjectDetailPageContent({
         ? getProjectCanonicalPath(
             project,
             new URLSearchParams(searchParams.toString()),
-            ownerSlugOverride
+            ownerSlugOverride,
+            window.location.hash
           )
         : withCurrentQuery(pathname, searchParams);
     router.replace(nextPath, { scroll: false });
@@ -215,22 +201,8 @@ export function ProjectDetailPageContent({
     // Viewport state is intentionally local to keep owner/repo URLs clean.
   }, []);
 
-  // Fetch projects list if not initialized (handles direct URL access)
   useEffect(() => {
-    if (!projectsInitialized && !projectsLoading) {
-      void fetchProjects();
-    }
-  }, [projectsInitialized, projectsLoading, fetchProjects]);
-
-  useEffect(() => {
-    if (!projectsInitialized || projectsLoading || !projectId) return;
-    if (projectFromStore) {
-      setFetchedProject(null);
-      setProjectLookupError(null);
-      setProjectLookupLoading(false);
-      return;
-    }
-
+    if (!projectId) return;
     let cancelled = false;
     setProjectLookupLoading(true);
     setProjectLookupError(null);
@@ -238,7 +210,9 @@ export function ProjectDetailPageContent({
     fetchProject(projectId)
       .then((detail) => {
         if (cancelled) return;
-        setFetchedProject(apiProjectToSummary(detail));
+        const summary = apiProjectToSummary(detail);
+        setFetchedProject(summary);
+        useProjectStore.getState().cacheProject(summary);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -252,7 +226,7 @@ export function ProjectDetailPageContent({
     return () => {
       cancelled = true;
     };
-  }, [projectId, projectFromStore, projectsInitialized, projectsLoading]);
+  }, [projectId]);
 
   useEffect(() => {
     if (isCanvasSurface || !projectBase?.id) {
@@ -372,18 +346,13 @@ export function ProjectDetailPageContent({
 
   // Show loading while projects list is still loading, or while confirming a
   // direct/new project URL that is not present in the list cache yet.
-  const projectLookupPending =
-    projectsInitialized &&
-    !projectsLoading &&
-    !projectFromStore &&
-    !fetchedProject &&
-    !projectLookupError;
+  const projectLookupPending = !projectFromStore && !fetchedProject && !projectLookupError;
 
-  if (isSettingsRedirect) {
+  if (isSettingsRedirect || isHistoryRedirect) {
     return null;
   }
 
-  if (!projectsInitialized || projectsLoading || projectLookupLoading || projectLookupPending) {
+  if ((projectLookupLoading && !project) || projectLookupPending) {
     return (
       <div className="flex h-full flex-col">
         <LoadingSpinner message="Loading project..." />
@@ -485,6 +454,8 @@ export function ProjectDetailPageContent({
         projectDescription={project.description}
         projectOwner={project.owner}
         projectVisibility={project.visibility}
+        repositoryProfile={project.repositoryProfile}
+        canEditRepository={project.canEdit}
         validation={project.yschemaValidation}
         validationError={yschemaValidationError}
         validationRunning={yschemaValidationRunning}
@@ -494,14 +465,30 @@ export function ProjectDetailPageContent({
 
   const activeContent = (() => {
     switch (activeTab) {
+      case 'checks':
+        return <ProjectChecksPage projectId={projectId} />;
       case 'schemas':
-        return <ProjectSchemasTab projectId={projectId} schemaBindings={schemaBindings} />;
+      case 'discover':
+      case 'browse':
+        return (
+          <ProjectSchemasTab
+            projectId={projectId}
+            schemaBindings={schemaBindings}
+            tab={activeTab}
+          />
+        );
       case 'workspaces':
         return <ProjectWorkspacesTab projectId={projectId} schemaBindings={schemaBindings} />;
       case 'reviews':
         return (
           <ProjectReviewsTab
             initialPullRequestNumber={Number(searchParams.get('pr')) || undefined}
+            initialDetailTab={searchParams.get('prTab') ?? undefined}
+            onDetailTabChange={(tab) => {
+              const next = new URLSearchParams(searchParams.toString());
+              next.set('prTab', tab);
+              router.replace(`${pathname}?${next}`, { scroll: false });
+            }}
             key={projectId}
             onPullRequestNumberChange={(number) => {
               const next = new URLSearchParams(searchParams.toString());
@@ -513,8 +500,6 @@ export function ProjectDetailPageContent({
             projectId={projectId}
           />
         );
-      case 'outputs':
-        return <ProjectOutputsTab key={projectId} projectId={projectId} />;
       case 'community':
         return <ProjectCommunityTab branch={searchParams.get('branch')} projectId={projectId} />;
       default:
@@ -528,9 +513,7 @@ export function ProjectDetailPageContent({
         activeTab={activeTab}
         branch={searchParams.get('branch')}
         immersive={isSchemaStudio || isSchemaRelease}
-        ownerSlug={
-          ownerSlugOverride ?? (projectFromStore ? (projectScope ?? undefined) : undefined)
-        }
+        ownerSlug={project.namespace ?? ownerSlugOverride}
         project={project}
         projectIdNavigation={!!routeProjectId}
         pullRequestNumber={Number(searchParams.get('pr')) || undefined}

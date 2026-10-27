@@ -4,6 +4,7 @@ import {
   type StatePresentationResult,
   StatePresentationResultSchema,
 } from './state-presentation.js';
+import type { ListProjectsParams, RepositoryAddress, RepositoryNameCheck } from './types';
 import {
   type WorkspaceDeliveryInput,
   type WorkspaceDeliveryResult,
@@ -91,8 +92,6 @@ import type {
   GenerationProviderCatalog,
   GenerationRequest,
   GenerationResponse,
-  GenerationStreamEvent,
-  GenerationStreamOptions,
   HealthResponse,
   ImportUrlInput,
   ImportUrlPreviewResult,
@@ -196,7 +195,6 @@ export class T3xClient {
     this.fetchFn = config.fetch ?? fetch;
     this.generation = Object.freeze<GenerationCapability>({
       complete: (input) => this.generate(input),
-      stream: (input, options) => this.streamGeneration(input, options),
       providers: () => this.listGenerationProviders(),
     });
     this.sourceThreads = Object.freeze<SourceThreadCapability>({
@@ -219,6 +217,8 @@ export class T3xClient {
       `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/authoring`;
     this.workspaces = Object.freeze<RepositoryWorkspaceCapability>({
       authoring: Object.freeze({
+        reconcile: (projectId, workspaceId, input) =>
+          this.request('POST', `${authoringPath(projectId, workspaceId)}/reconciliation`, input),
         prepareReview: (projectId, workspaceId, input) =>
           this.request('POST', `${authoringPath(projectId, workspaceId)}/reviews`, input),
         read: (projectId, workspaceId, query) =>
@@ -236,6 +236,12 @@ export class T3xClient {
           this.request(
             'POST',
             `${authoringPath(projectId, workspaceId)}/candidates/${encodeURIComponent(transitionId)}/publication`,
+            input
+          ),
+        confirmDeletion: (projectId, workspaceId, actionId, input) =>
+          this.request(
+            'POST',
+            `${authoringPath(projectId, workspaceId)}/actions/${encodeURIComponent(actionId)}/deletion-confirmation`,
             input
           ),
       } satisfies import('./workspace-authoring').WorkspaceAuthoringCapability),
@@ -591,7 +597,7 @@ export class T3xClient {
   // Projects
   // ============================================
 
-  async listProjects(params?: PaginationParams): Promise<ListProjectsResponse> {
+  async listProjects(params?: ListProjectsParams): Promise<ListProjectsResponse> {
     return this.request<ListProjectsResponse>(
       'GET',
       '/v1/projects',
@@ -604,12 +610,29 @@ export class T3xClient {
     return this.request<ProjectWithStats>('GET', `/v1/projects/${id}`);
   }
 
+  async resolveRepository(owner: string, name: string): Promise<RepositoryAddress> {
+    return this.request(
+      'GET',
+      `/v1/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`
+    );
+  }
+
+  async checkRepositoryName(
+    namespace: string,
+    name: string,
+    projectId?: string
+  ): Promise<RepositoryNameCheck> {
+    const query = new URLSearchParams({ namespace, name });
+    if (projectId) query.set('project_id', projectId);
+    return this.request('GET', `/v1/repository-name?${query.toString()}`);
+  }
+
   async createProject(input: CreateProjectInput): Promise<Project> {
     return this.request<Project>('POST', '/v1/projects', input);
   }
 
   async updateProject(id: string, input: UpdateProjectInput): Promise<Project> {
-    return this.request<Project>('PATCH', `/v1/projects/${id}`, input);
+    return this.request<Project>('PUT', `/v1/projects/${encodeURIComponent(id)}`, input);
   }
 
   async changeProjectVisibility(
@@ -623,12 +646,17 @@ export class T3xClient {
     );
   }
 
-  async deleteProject(id: string, options?: { permanent?: boolean }): Promise<void> {
+  async deleteProject(
+    id: string,
+    options?: { permanent?: boolean; onlyIfDeleted?: boolean }
+  ): Promise<void> {
     await this.request<void>(
       'DELETE',
       `/v1/projects/${id}`,
       undefined,
-      options?.permanent ? { permanent: 'true' } : undefined
+      options?.permanent
+        ? { permanent: 'true', ...(options.onlyIfDeleted ? { only_if_deleted: 'true' } : {}) }
+        : undefined
     );
   }
 
@@ -1042,64 +1070,6 @@ export class T3xClient {
 
   async listGenerationProviders(): Promise<GenerationProviderCatalog> {
     return this.request<GenerationProviderCatalog>('GET', '/v1/chat/providers');
-  }
-
-  async *streamGeneration(
-    input: GenerationRequest,
-    options?: GenerationStreamOptions
-  ): AsyncGenerator<GenerationStreamEvent, void, unknown> {
-    const response = await this.fetchFn(`${this.baseUrl}/v1/chat/stream`, {
-      method: 'POST',
-      headers: this.headers,
-      body: JSON.stringify(input),
-      signal: options?.signal,
-    });
-
-    if (!response.ok) {
-      const data = (await response.json().catch(() => null)) as ApiErrorResponse | null;
-      const error = data?.success === false ? data.error : null;
-      throw new T3xApiError(
-        error?.code ?? 'GENERATION_FAILED',
-        error?.message || response.statusText || 'Generation stream failed',
-        response.status,
-        error?.details
-      );
-    }
-    if (response.body === null) {
-      throw new T3xApiError(
-        'GENERATION_STREAM_UNAVAILABLE',
-        'Generation stream response has no body',
-        response.status
-      );
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const records = buffer.split(/\r?\n\r?\n/);
-        buffer = records.pop() ?? '';
-        for (const record of records) {
-          const data = record
-            .split(/\r?\n/)
-            .filter((line) => line.startsWith('data:'))
-            .map((line) => line.slice(5).trim())
-            .join('\n');
-          if (data.length === 0 || data === '[DONE]') continue;
-          try {
-            yield JSON.parse(data) as GenerationStreamEvent;
-          } catch {
-            // Ignore malformed upstream records. The server owns event validation.
-          }
-        }
-      }
-    } finally {
-      reader.releaseLock();
-    }
   }
 
   /** @deprecated Use generation.complete() or generate(). */
@@ -1556,6 +1526,7 @@ export class T3xClient {
         workspaceId
       )}/schema-composition/publish`,
       {
+        visibility: 'community',
         composition_revision: input.compositionRevision,
         composition_hash: input.compositionHash,
         canonical_name: input.canonicalName,
@@ -1563,6 +1534,7 @@ export class T3xClient {
         title: input.title,
         ...(input.description ? { description: input.description } : {}),
         ...(input.releaseNotes ? { release_notes: input.releaseNotes } : {}),
+        ...(input.license ? { license: input.license } : {}),
         ...(input.tags?.length ? { tags: input.tags } : {}),
       }
     );

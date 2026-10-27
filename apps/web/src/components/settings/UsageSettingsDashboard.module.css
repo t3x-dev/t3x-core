@@ -1,13 +1,15 @@
 .page {
   width: 100%;
   min-height: 100%;
-  padding: 24px 40px 80px;
-  background: #fff;
-  color: #1e293b;
+  padding: 32px clamp(20px, 4vw, 48px) 56px;
+  background: var(--surface-card);
+  color: var(--text-primary);
 }
 
 .inner {
-  max-width: 1100px;
+  margin-inline: auto;
+  min-width: 0;
+  max-width: 1120px;
 }
 
 .breadcrumb {
@@ -15,7 +17,7 @@
   align-items: center;
   gap: 8px;
   margin-bottom: 20px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 14px;
   line-height: 20px;
 }
@@ -25,46 +27,48 @@
   transition: color 150ms ease;
 }
 .breadcrumb a:hover {
-  color: #0f172a;
+  color: var(--text-primary);
 }
 .breadcrumb > span {
-  color: #94a3b8;
+  color: var(--text-secondary);
 }
 .breadcrumb strong {
-  color: #1d4ed8;
+  color: var(--text-primary);
   font-weight: 600;
 }
 
 .titleRow {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 24px;
 }
 .titleGroup {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 16px;
 }
 .titleGroup h1 {
   margin: 0;
-  color: #0f172a;
-  font-size: 28px;
+  color: var(--text-primary);
+  font-size: 24px;
   font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 42px;
+  letter-spacing: normal;
+  line-height: 32px;
 }
 .organizationBadge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 4px 12px;
-  color: #2563eb;
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
   line-height: 16px;
-  background: #eff6ff;
-  border: 1px solid #dbeafe;
+  background: var(--management-control-bg);
+  border: 1px solid var(--stroke-default);
   border-radius: 999px;
 }
 .rangeWrap {
@@ -75,27 +79,27 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  color: #334155;
+  color: var(--text-primary);
   font: inherit;
   font-size: 14px;
   font-weight: 500;
   line-height: 20px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--management-control-bg);
+  border: 1px solid var(--stroke-default);
   border-radius: 8px;
   box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
   cursor: pointer;
   transition: background 150ms ease;
 }
 .rangeButton:hover {
-  background: #f8fafc;
+  background: var(--management-control-hover);
 }
 .rangeButton > svg:first-child {
-  color: #64748b;
+  color: var(--text-secondary);
 }
 .rangeChevron {
   margin-left: 4px;
-  color: #94a3b8;
+  color: var(--text-secondary);
 }
 .rangeMenu {
   position: absolute;
@@ -104,15 +108,15 @@
   z-index: 20;
   width: 150px;
   padding: 5px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--surface-card);
+  border: 1px solid var(--stroke-default);
   border-radius: 9px;
   box-shadow: 0 10px 25px rgb(15 23 42 / 12%);
 }
 .rangeMenu button {
   width: 100%;
   padding: 8px 10px;
-  color: #334155;
+  color: var(--text-secondary);
   font: inherit;
   font-size: 13px;
   text-align: left;
@@ -122,7 +126,7 @@
   cursor: pointer;
 }
 .rangeMenu button:hover {
-  background: #f1f5f9;
+  background: var(--surface-panel);
 }
 
 .planCard {
@@ -132,8 +136,8 @@
   margin-bottom: 32px;
   padding: 20px;
   min-height: 89.5px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--surface-card);
+  border: 1px solid var(--stroke-default);
   border-radius: 12px;
   box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
 }
@@ -148,35 +152,35 @@
   justify-content: center;
   width: 44px;
   height: 44px;
-  color: #2563eb;
-  background: #eff6ff;
+  color: var(--text-secondary);
+  background: var(--management-control-bg);
   border-radius: 999px;
 }
 .planIdentity h2,
 .chartHeader h2,
 .tableCard header h2 {
   margin: 0;
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 17px;
   font-weight: 700;
   line-height: 24px;
 }
 .planIdentity p {
   margin: 2px 0 0;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 14px;
   line-height: 20px;
 }
 .planIdentity p span {
   margin: 0 6px;
-  color: #cbd5e1;
+  color: var(--text-secondary);
 }
 .planActions {
   display: flex;
   align-items: center;
   gap: 32px;
   padding-left: 32px;
-  border-left: 1px solid #f1f5f9;
+  border-left: 1px solid var(--stroke-divider);
 }
 .planActions div {
   display: flex;
@@ -184,36 +188,36 @@
 }
 .planActions span {
   margin-bottom: 2px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 12px;
   line-height: 16px;
 }
 .planActions strong {
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 14px;
   font-weight: 600;
   line-height: 20px;
 }
 .planActions button {
   padding: 8px 16px;
-  color: #2563eb;
+  color: var(--text-secondary);
   font: inherit;
   font-size: 14px;
   font-weight: 600;
   line-height: 20px;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  background: var(--management-control-bg);
+  border: 1px solid var(--stroke-default);
   border-radius: 8px;
   cursor: pointer;
   transition: background 150ms ease;
 }
 .planActions button:hover {
-  background: #dbeafe;
+  background: var(--management-control-hover);
 }
 
 .sectionTitle {
   margin: 0 0 16px;
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 18px;
   font-weight: 700;
   line-height: 28px;
@@ -231,8 +235,8 @@
   min-width: 0;
   padding: 20px;
   min-height: 101.5px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--surface-card);
+  border: 1px solid var(--stroke-default);
   border-radius: 12px;
   box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
 }
@@ -244,17 +248,17 @@
   justify-content: center;
   width: 40px;
   height: 40px;
-  color: #2563eb;
-  background: #eff6ff;
+  color: var(--text-secondary);
+  background: var(--management-control-bg);
   border-radius: 999px;
 }
 .metricIconMuted {
-  color: #3b82f6;
-  background: #f1f5f9;
+  color: var(--text-secondary);
+  background: var(--surface-panel);
 }
 .metricCard p {
   margin: 0 0 4px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 500;
   line-height: 16px;
@@ -266,7 +270,7 @@
 }
 .metricValue strong {
   overflow: hidden;
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 24px;
   font-weight: 700;
   line-height: 32px;
@@ -276,18 +280,18 @@
 .metricValue span {
   display: flex;
   align-items: center;
-  color: #10b981;
+  color: var(--text-secondary);
   font-size: 14px;
   font-weight: 600;
 }
 .metricValue .trendFlat {
-  color: #94a3b8;
+  color: var(--text-secondary);
 }
 .metricValue .trendUp {
-  color: #10b981;
+  color: var(--text-secondary);
 }
 .metricValue .trendDown {
-  color: #e11d48;
+  color: var(--text-secondary);
 }
 
 .errorState {
@@ -296,10 +300,10 @@
   justify-content: space-between;
   margin: -16px 0 20px;
   padding: 10px 12px;
-  color: #b91c1c;
+  color: var(--status-error);
   font-size: 13px;
-  background: #fff1f2;
-  border: 1px solid #fecdd3;
+  background: var(--status-error-muted);
+  border: 1px solid color-mix(in srgb, var(--status-error) 30%, transparent);
   border-radius: 8px;
 }
 .errorState button {
@@ -318,8 +322,8 @@
   margin-bottom: 32px;
   padding: 24px;
   min-height: 327.5px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--surface-card);
+  border: 1px solid var(--stroke-default);
   border-radius: 12px;
   box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
 }
@@ -333,7 +337,7 @@
   display: flex;
   align-items: center;
   gap: 20px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 14px;
   font-weight: 500;
 }
@@ -350,13 +354,13 @@
   border-radius: 999px;
 }
 .dotRequests {
-  background: #2563eb;
+  background: var(--accent-commit);
 }
 .dotInput {
-  background: #38bdf8;
+  background: var(--text-secondary);
 }
 .dotOutput {
-  background: #c084fc;
+  background: var(--stroke-strong);
 }
 .chart {
   display: grid;
@@ -368,7 +372,7 @@
   flex-direction: column;
   justify-content: space-between;
   height: 196px;
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 500;
   line-height: 16px;
@@ -389,10 +393,10 @@
 .gridLines i {
   width: 100%;
   height: 1px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--stroke-divider);
 }
 .gridLines i:last-child {
-  border-color: #e2e8f0;
+  border-color: var(--stroke-default);
 }
 .bars {
   position: absolute;
@@ -416,11 +420,11 @@
   width: 100%;
 }
 .inputBar {
-  background: #bae6fd;
+  background: var(--text-secondary);
   border-radius: 1px 1px 0 0;
 }
 .outputBar {
-  background: #d8b4fe;
+  background: var(--stroke-strong);
   border-radius: 0 0 1px 1px;
 }
 .line {
@@ -439,8 +443,8 @@
   left: 0;
   display: flex;
   justify-content: space-between;
-  color: #94a3b8;
-  font-size: 11px;
+  color: var(--text-secondary);
+  font-size: 12px;
   font-weight: 500;
   line-height: 16px;
 }
@@ -448,14 +452,14 @@
 .tableCard {
   margin-bottom: 48px;
   overflow: hidden;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--surface-card);
+  border: 1px solid var(--stroke-default);
   border-radius: 12px;
   box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
 }
 .tableCard > header {
   padding: 20px 24px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--stroke-divider);
 }
 .tableScroll {
   width: 100%;
@@ -468,12 +472,12 @@
   text-align: left;
 }
 .tableCard thead tr {
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--stroke-divider);
 }
 .tableCard th {
   width: 20%;
   padding: 12px 24px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 500;
   line-height: 16px;
@@ -491,21 +495,21 @@
   gap: 4px;
 }
 .tableCard th svg {
-  color: #3b82f6;
+  color: var(--text-secondary);
 }
 .tableCard tbody tr {
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--stroke-divider);
   transition: background 150ms ease;
 }
 .tableCard tbody tr:last-child {
   border-bottom: 0;
 }
 .tableCard tbody tr:hover {
-  background: rgb(248 250 252 / 50%);
+  background: var(--hover-bg);
 }
 .tableCard td {
   padding: 16px 24px;
-  color: #334155;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 600;
   line-height: 20px;
@@ -522,7 +526,7 @@
 }
 .modelCell strong {
   overflow: hidden;
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 13px;
   font-weight: 700;
   text-overflow: ellipsis;
@@ -530,8 +534,8 @@
 }
 .modelCell span {
   margin-top: 2px;
-  color: #64748b;
-  font-size: 11px;
+  color: var(--text-secondary);
+  font-size: 12px;
   font-weight: 400;
   line-height: 16px;
 }
@@ -548,7 +552,7 @@
   width: 28px;
   height: 28px;
   margin: 0;
-  color: #000;
+  color: var(--text-primary);
   font-size: 27px;
   font-weight: 600;
   line-height: 28px;
@@ -561,7 +565,7 @@
   width: 28px;
   height: 28px;
   margin: 0;
-  color: #2563eb;
+  color: var(--text-secondary);
 }
 .share {
   display: flex;
@@ -570,7 +574,7 @@
 }
 .share > span {
   min-width: 32px;
-  color: #475569;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 500;
 }
@@ -579,18 +583,18 @@
   max-width: 80px;
   height: 6px;
   overflow: hidden;
-  background: #f1f5f9;
+  background: var(--surface-panel);
   border-radius: 999px;
 }
 .share b {
   display: block;
   height: 100%;
-  background: #2563eb;
+  background: var(--accent-commit);
   border-radius: inherit;
 }
 .tableCard td.emptyRow {
   height: 72px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-weight: 400;
   text-align: center;
 }
@@ -604,8 +608,8 @@
   align-items: center;
   gap: 4px;
   padding: 6px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--surface-card);
+  border: 1px solid var(--stroke-default);
   border-radius: 16px;
   box-shadow:
     0 20px 25px -5px rgb(15 23 42 / 12%),
@@ -619,27 +623,27 @@
   width: 40px;
   height: 40px;
   padding: 0;
-  color: #334155;
-  background: #fff;
+  color: var(--text-secondary);
+  background: var(--surface-card);
   border: 0;
   border-radius: 12px;
   cursor: pointer;
   transition: background 150ms ease;
 }
 .prototypeTools button:hover {
-  background: #f1f5f9;
+  background: var(--surface-panel);
 }
 .prototypeTools > i {
   width: 1px;
   height: 24px;
   margin: 0 4px;
-  background: #e2e8f0;
+  background: var(--stroke-default);
 }
 
 @media (max-width: 960px) {
   .page {
-    padding-right: 24px;
-    padding-left: 24px;
+    padding-right: 20px;
+    padding-left: 20px;
   }
   .metrics {
     grid-template-columns: 1fr;
@@ -668,11 +672,12 @@
     width: 100%;
     justify-content: space-between;
     padding: 16px 0 0;
-    border-top: 1px solid #f1f5f9;
+    border-top: 1px solid var(--stroke-divider);
     border-left: 0;
   }
   .organizationBadge {
-    display: none;
+    max-width: 100%;
+    overflow-wrap: anywhere;
   }
   .chartHeader {
     flex-direction: column;

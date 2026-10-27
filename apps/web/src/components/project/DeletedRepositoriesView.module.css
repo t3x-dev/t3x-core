@@ -1,0 +1,220 @@
+.page {
+  min-width: 0;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 24px 0 12px;
+}
+
+.toolbar h2 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.listStatus {
+  display: block;
+  min-height: 20px;
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.notice,
+.errorState {
+  margin-bottom: 16px;
+}
+
+.retentionNote {
+  color: var(--text-secondary);
+}
+
+.errorState {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.loading {
+  padding: 40px 20px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.emptyState {
+  display: flex;
+  min-height: 280px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.emptyIcon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-app);
+  color: var(--text-secondary);
+}
+
+.emptyState h2 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.emptyState p {
+  max-width: 440px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.listFrame {
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+}
+
+.columnHeadings,
+.repository {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 160px 280px;
+  align-items: center;
+  gap: 20px;
+}
+
+.columnHeadings {
+  padding: 10px 16px;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background: var(--surface-app);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.columnHeadings > :last-child {
+  text-align: right;
+}
+
+.repository {
+  padding: 16px;
+  border-top: 1px solid var(--stroke-divider);
+}
+
+.repositoryCopy {
+  min-width: 0;
+}
+
+.repository h3 {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.path {
+  margin-top: 4px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.deletedAt {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.mobileLabel {
+  display: none;
+}
+
+.visibility {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.permanentDelete {
+  color: var(--status-error);
+}
+
+.permanentDelete:hover:not(:disabled),
+.permanentDelete:focus-visible {
+  color: var(--status-error);
+}
+
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 880px) {
+  .columnHeadings {
+    display: none;
+  }
+
+  .repository {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 16px;
+  }
+
+  .repository:first-child {
+    border-top: 0;
+  }
+
+  .deletedAt {
+    grid-column: 1;
+  }
+
+  .mobileLabel {
+    display: inline;
+  }
+
+  .actions {
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
+}
+
+@media (max-width: 600px) {
+  .repository {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .actions {
+    grid-column: 1;
+    grid-row: auto;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    margin-top: 4px;
+  }
+
+  .errorState {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

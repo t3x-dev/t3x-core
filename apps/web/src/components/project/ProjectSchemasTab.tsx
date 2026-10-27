@@ -26,6 +26,7 @@ import type { WorkspaceCandidate } from '@/types/workspaces';
 interface ProjectSchemasTabProps {
   projectId: string;
   schemaBindings?: ProjectWorkspaceSchemaBindings;
+  tab?: 'schemas' | 'discover' | 'browse';
 }
 
 interface BindingFeedback {
@@ -33,13 +34,9 @@ interface BindingFeedback {
   tone: SchemaBindingFeedbackTone;
 }
 
-interface WorkspaceBindingResult {
-  regenerationError?: string;
-}
-
 export function ProjectSchemasTab(props: ProjectSchemasTabProps) {
   return (
-    <SchemaCatalogExperience key={props.projectId} projectId={props.projectId}>
+    <SchemaCatalogExperience key={props.projectId} projectId={props.projectId} tab={props.tab}>
       <ProjectSchemaStudio {...props} />
     </SchemaCatalogExperience>
   );
@@ -58,7 +55,7 @@ function ProjectSchemaStudio({ projectId, schemaBindings }: ProjectSchemasTabPro
     [projectId, publishedVersions.versions]
   );
   const projectWorkspaces = useProjectWorkspaces(projectId);
-  const { extractCandidate, saveDraft } = useWorkspaceFlow();
+  const { saveDraft } = useWorkspaceFlow();
   const bindSchema = useProjectWorkspaceSchemaBindingsStore((state) => state.bindSchema);
   const [pending, setPending] = useState<SchemaBindingActionKind | null>(null);
   const [feedback, setFeedback] = useState<BindingFeedback>();
@@ -74,39 +71,23 @@ function ProjectSchemaStudio({ projectId, schemaBindings }: ProjectSchemasTabPro
     : undefined;
 
   const applyReleaseToWorkspace = useCallback(
-    async (release: SchemaReleasePreview): Promise<WorkspaceBindingResult> => {
-      if (!workspaceTarget) return {};
+    async (release: SchemaReleasePreview) => {
+      if (!workspaceTarget) return;
       const binding = schemaReleaseToWorkspaceBinding(release, 'pinned');
       const staleWorkspace = rebindWorkspaceCandidate(
         workspaceTarget,
         binding,
         new Date().toISOString()
       );
-      const saved = await saveDraft(staleWorkspace);
+      await saveDraft(staleWorkspace);
       bindSchema({
         binding,
         projectId,
         workspaceId: workspaceTarget.id,
       });
-
-      try {
-        const extracted = await extractCandidate(saved.workspace);
-        const extractedBinding = extracted.workspace.schemaBindings[0] ?? binding;
-        bindSchema({
-          binding: extractedBinding,
-          projectId,
-          workspaceId: workspaceTarget.id,
-        });
-        return {};
-      } catch (error) {
-        return {
-          regenerationError: formatUserFacingError(error, 'Unknown error'),
-        };
-      } finally {
-        await projectWorkspaces.refresh();
-      }
+      await projectWorkspaces.refresh();
     },
-    [bindSchema, extractCandidate, projectId, projectWorkspaces.refresh, saveDraft, workspaceTarget]
+    [bindSchema, projectId, projectWorkspaces.refresh, saveDraft, workspaceTarget]
   );
 
   const handleApplyToWorkspace = useCallback(
@@ -116,18 +97,11 @@ function ProjectSchemaStudio({ projectId, schemaBindings }: ProjectSchemasTabPro
       setFeedback(undefined);
 
       try {
-        const result = await applyReleaseToWorkspace(release);
-        setFeedback(
-          result.regenerationError
-            ? {
-                message: `${release.name} ${release.version} was saved, but candidate regeneration failed: ${result.regenerationError}`,
-                tone: 'warning',
-              }
-            : {
-                message: `${workspaceTarget.title} now uses ${release.name} ${release.version}; its candidate was regenerated.`,
-                tone: 'success',
-              }
-        );
+        await applyReleaseToWorkspace(release);
+        setFeedback({
+          message: `${workspaceTarget.title} now uses ${release.name} ${release.version}.`,
+          tone: 'success',
+        });
       } catch (error) {
         setFeedback({
           message: formatUserFacingError(error, 'Failed to bind the Schema to this Workspace.'),

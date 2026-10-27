@@ -130,6 +130,73 @@ function preparation(posture: 'source_only' | 'guided' | 'recommend' = 'guided')
 }
 
 describe('resolveApplicableTransitionPolicy', () => {
+  it('requires Schema evidence for a complete bound Workspace Review without weakening branch rules', () => {
+    const original = refPolicyBinding({ allowSelfApproval: false });
+    const ref = createAcceptancePolicyResource({
+      uri: 't3x://policies/test-optional-schema',
+      policy: {
+        ...original.policy,
+        checks: {
+          ...original.policy.checks,
+          validation: { ...original.policy.checks.validation, requirement: 'optional' },
+        },
+        override: { ...original.policy.override, allowMissingValidation: true },
+      },
+    });
+    const review = {
+      schema: 't3x.application/workspace-schema-review/v1',
+      base: { status: 'unbound', schemaHash: null, definition: null, bindings: [] },
+      draft: {
+        status: 'bound',
+        schemaHash: DIGEST,
+        definition: { yschema: '0.1', name: 'test', nodes: {} },
+        bindings: [],
+      },
+      changes: [],
+      actionCount: 0,
+      baseContent: {},
+      draftContent: {},
+    };
+    const facts = {
+      schema: 't3x.application/workspace-authoring-preparation/v1',
+      ledger: { actions: [] },
+      schemaReview: review,
+    } as unknown as ProtocolValue;
+    const result = resolveApplicableTransitionPolicy({
+      refPolicyBinding: ref,
+      requestKind: 'structured_yops',
+      preparationFacts: facts,
+    });
+    expect(result.mode).toBe('workspace_schema_overlay');
+    expect(result.refPolicyResource).toEqual(ref.resource);
+    expect(result.resource.digest).not.toBe(ref.resource.digest);
+    expect(result.policy.authorization).toEqual(ref.policy.authorization);
+    expect(result.policy.claims).toEqual(ref.policy.claims);
+    expect(result.policy.checks).toEqual({
+      ...ref.policy.checks,
+      validation: { ...ref.policy.checks.validation, requirement: 'required' },
+    });
+    expect(result.policy.override).toEqual({
+      ...ref.policy.override,
+      allowMissingValidation: false,
+    });
+    expect(ref.policy.checks.validation.requirement).toBe('optional');
+    expect(ref.policy.override.allowMissingValidation).toBe(true);
+    const generated = resolveApplicableTransitionPolicy({
+      refPolicyBinding: ref,
+      requestKind: 'structured_yops',
+      preparationFacts: {
+        ...(facts as object),
+        ledger: { actions: [{ generation: { preparation: preparation() } }] },
+      } as unknown as ProtocolValue,
+    });
+    expect(generated.mode).toBe('generation_overlay');
+    expect(generated.policy.checks.validation.requirement).toBe('required');
+    expect(generated.policy.checks.runner?.requirement).toBe('required');
+    expect(generated.policy.authorization).toEqual(ref.policy.authorization);
+    expect(generated.refPolicyResource).toEqual(ref.resource);
+    expect(generated.policy.override.allowMissingValidation).toBe(false);
+  });
   it.each([
     'agent',
     'service',
@@ -178,9 +245,7 @@ describe('resolveApplicableTransitionPolicy', () => {
     expect(applicable.refPolicyResource).toEqual(ref.resource);
     expect(applicable.resource.digest).not.toBe(ref.resource.digest);
     expect(applicable.resource.uri).toContain('/guided');
-    expect(applicable.policy.authorization.decide).toEqual(ref.policy.authorization.decide);
-    expect(applicable.policy.authorization.override).toEqual(ref.policy.authorization.override);
-    expect(applicable.policy.authorization.allowSelfApproval).toBe(false);
+    expect(applicable.policy.authorization).toEqual(ref.policy.authorization);
     expect(applicable.policy.claims).toEqual(ref.policy.claims);
     expect(applicable.policy.checks.replay).toEqual(ref.policy.checks.replay);
     expect(applicable.policy.checks.validation).toEqual(ref.policy.checks.validation);
@@ -221,8 +286,22 @@ describe('resolveApplicableTransitionPolicy', () => {
     expect(retry.resource).toEqual(first.resource);
     expect(postureChange.resource.digest).toBe(first.resource.digest);
     expect(postureChange.resource.uri).not.toBe(first.resource.uri);
-    expect(refChange.resource.digest).toBe(first.resource.digest);
+    expect(refChange.resource.digest).not.toBe(first.resource.digest);
     expect(refChange.resource.uri).not.toBe(first.resource.uri);
+  });
+
+  it.each([
+    true,
+    false,
+  ] as const)('inherits allowSelfApproval=%s from the ref policy for generated Proposals', (allowSelfApproval) => {
+    const applicable = resolveApplicableTransitionPolicy({
+      refPolicyBinding: refPolicyBinding({ allowSelfApproval }),
+      requestKind: 'structured_yops',
+      preparationFacts: preparation() as unknown as ProtocolValue,
+    });
+
+    expect(applicable.mode).toBe('generation_overlay');
+    expect(applicable.policy.authorization.allowSelfApproval).toBe(allowSelfApproval);
   });
 
   it.each([

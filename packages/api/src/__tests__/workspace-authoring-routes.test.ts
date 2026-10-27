@@ -56,6 +56,16 @@ describe('Workspace authoring HTTP boundary', () => {
   }
   it('requires exact project authority and separate inspect/propose scopes', async () => {
     const reader = await authenticated(credential(['transition:inspect']));
+    const reconciliation = await reader.request(`${url}/reconciliation`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        request_id: 'sync',
+        expected_workspace_revision: 1,
+        expected_ref_head: null,
+      }),
+    });
+    expect(reconciliation.status).toBe(403);
     // Scope checks precede any authoring-state read.
     expect(
       (
@@ -75,6 +85,19 @@ describe('Workspace authoring HTTP boundary', () => {
       credential(['transition:inspect', 'transition:propose'], other)
     );
     expect((await outsider.request(url)).status).toBe(403);
+    expect(
+      (
+        await outsider.request(`${url}/reconciliation`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            request_id: 'sync',
+            expected_workspace_revision: 1,
+            expected_ref_head: null,
+          }),
+        })
+      ).status
+    ).toBe(403);
     const writer = await authenticated(credential(['transition:propose']));
     expect((await writer.request(url)).status).toBe(403);
   });
@@ -106,8 +129,33 @@ describe('Workspace authoring HTTP boundary', () => {
     expect(view.data.selected.cards[0].after).toBe('T3X');
     expect(view.data.compositionRevision).toBe(1);
     expect((await post(`${url}/actions`, { ...request, request_id: 'stale' })).status).toBe(409);
+    const unchanged = await post(`${url}/reconciliation`, {
+      request_id: 'already-current',
+      expected_workspace_revision: view.data.workspaceRevision,
+      expected_ref_head: null,
+    });
+    expect(unchanged.status).toBe(200);
+    expect((await unchanged.json()).data.kind).toBe('no_change');
     expect(
       (await post(`${url}/actions`, { ...request, actor: { id: 'forged', kind: 'human' } })).status
     ).toBe(400);
+  });
+  it('does not let an agent or client-supplied actor manufacture human deletion authority', async () => {
+    const body = { expected_workspace_revision: 3, expected_revision: 1, expected_ref_head: null };
+    const target = `${url}/actions/edit/deletion-confirmation`;
+    const agent = await authenticated(credential(['transition:propose']));
+    expect(
+      (
+        await agent.request(target, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+      ).status
+    ).toBe(403);
+    expect((await post(target, { ...body, actor: { kind: 'human', id: 'forged' } })).status).toBe(
+      400
+    );
+    expect((await post(target, body)).status).toBe(409);
   });
 });
