@@ -2,6 +2,7 @@
 import '@testing-library/jest-dom';
 import type { StudioSchemaEditCandidate } from '@t3x-dev/api-client';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { dump, load } from 'js-yaml';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { SchemaStudioExperience } from '@/components/schemas/SchemaStudioExperience';
 import type { WorkspaceSchemaBinding } from '@/types/workspaces';
@@ -37,6 +38,23 @@ const mocks = vi.hoisted(() => ({
     title: string;
     schemaBindings?: WorkspaceSchemaBinding[];
   }>,
+}));
+vi.mock('@/components/workspaces/WorkspaceYOpsEditor', () => ({
+  WorkspaceYOpsEditor: ({
+    ariaLabel,
+    value,
+    onChange,
+  }: {
+    ariaLabel: string;
+    value: string;
+    onChange: (value: string) => void;
+  }) => (
+    <textarea
+      aria-label={ariaLabel}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  ),
 }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mocks.push, replace: mocks.replace }),
@@ -448,7 +466,7 @@ it('opens source composition without applying or discarding the current candidat
   expect(mocks.apply).not.toHaveBeenCalled();
 });
 
-it('opens the embedded definition workbench and saves one shared Structure/YAML candidate', async () => {
+it('opens the embedded definition workbench and saves the YAML candidate', async () => {
   mocks.workspaces = [
     {
       id: 'workspace_branch:main',
@@ -468,17 +486,17 @@ it('opens the embedded definition workbench and saves one shared Structure/YAML 
   openYaml();
   fireEvent.click(screen.getByRole('button', { name: 'Edit YAML' }));
   const dialog = screen.getByRole('dialog', { name: 'Edit Schema definition' });
-  expect(within(dialog).getByRole('tab', { name: 'YAML' })).toHaveAttribute(
-    'aria-selected',
-    'true'
-  );
-  fireEvent.click(within(dialog).getByRole('tab', { name: 'Structure' }));
+  expect(within(dialog).queryByRole('tab', { name: 'Structure' })).not.toBeInTheDocument();
   expect(within(dialog).getByText('Base (immutable)')).toBeVisible();
   expect(within(dialog).getByText('Result preview')).toBeVisible();
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Add node' }));
-  expect(within(dialog).getByLabelText('Node name new_node')).toBeVisible();
-  fireEvent.click(within(dialog).getByRole('tab', { name: 'YAML' }));
-  expect(within(dialog).getByLabelText('Schema definition YAML editor')).toBeVisible();
+  const yaml = within(dialog).getByLabelText(
+    'Schema definition YAML editor'
+  ) as HTMLTextAreaElement;
+  fireEvent.change(yaml, {
+    target: {
+      value: dump({ ...(load(yaml.value) as object), nodes: { new_node: { slots: {} } } }),
+    },
+  });
   fireEvent.click(within(dialog).getByRole('button', { name: 'Save candidate' }));
   await waitFor(() =>
     expect(mocks.saveSchemaEdit).toHaveBeenCalledWith(
@@ -542,9 +560,9 @@ it('starts a new branch editor from its inherited bound definition, not the orig
   openSources();
   openYaml();
   fireEvent.click(screen.getByRole('button', { name: 'Edit YAML' }));
-  fireEvent.click(screen.getByRole('tab', { name: 'Structure' }));
-  expect(screen.getByLabelText('Slot type existing_local')).toHaveValue('string');
-  fireEvent.change(screen.getByLabelText('Slot type owner'), { target: { value: 'number' } });
+  const yaml = screen.getByLabelText('Schema definition YAML editor') as HTMLTextAreaElement;
+  expect(load(yaml.value)).toEqual(inherited);
+  fireEvent.change(yaml, { target: { value: yaml.value.replace('type: string', 'type: number') } });
   fireEvent.click(screen.getByRole('button', { name: 'Save candidate' }));
   await waitFor(() =>
     expect(mocks.saveSchemaEdit).toHaveBeenCalledWith(
@@ -590,12 +608,12 @@ it('edits existing fields against a frozen Base and retains unsaved input while 
   openSources();
   openYaml();
   fireEvent.click(screen.getByRole('button', { name: 'Edit YAML' }));
-  fireEvent.click(screen.getByRole('tab', { name: 'Structure' }));
-  fireEvent.change(screen.getByLabelText('Slot type title'), { target: { value: 'number' } });
-  expect(screen.getByLabelText('Slot type title')).toHaveValue('number');
+  const yaml = screen.getByLabelText('Schema definition YAML editor') as HTMLTextAreaElement;
+  const editedYaml = yaml.value.replace('type: string', 'type: number');
+  fireEvent.change(yaml, { target: { value: editedYaml } });
   mocks.data = undefined;
   rerender(<SchemaStudioExperience projectId="p" />);
-  expect(screen.getByLabelText('Slot type title')).toHaveValue('number');
+  expect(screen.getByLabelText('Schema definition YAML editor')).toHaveValue(editedYaml);
   fireEvent.click(screen.getByRole('button', { name: 'Save candidate' }));
   await waitFor(() =>
     expect(mocks.saveSchemaEdit).toHaveBeenCalledWith(
@@ -1105,18 +1123,9 @@ it('uses the resolved branch target in all outbound Studio links and normalizes 
     scroll: false,
   });
   const back = screen.getByRole('link', { name: 'Back to source' });
-  fireEvent.keyDown(screen.getByRole('button', { name: 'Schema actions' }), { key: 'Enter' });
-  for (const link of [
-    back,
-    screen.getByRole('menuitem', { name: 'Open Workspace', exact: true }),
-  ]) {
-    const url = new URL(link.getAttribute('href')!, 'http://local');
-    expect(url.searchParams.get('workspace')).toBe('feature-draft');
-    expect(url.searchParams.get('branch')).toBe('feature');
-  }
-  fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Open Workspace', exact: true }), {
-    key: 'Escape',
-  });
+  const url = new URL(back.getAttribute('href')!, 'http://local');
+  expect(url.searchParams.get('workspace')).toBe('feature-draft');
+  expect(url.searchParams.get('branch')).toBe('feature');
   openSources();
   expect(screen.getByRole('link', { name: 'Browse source releases' })).not.toHaveAttribute(
     'href',
@@ -1182,7 +1191,9 @@ it('keeps one source palette and opens candidate YAML from More without changing
   expect(screen.queryByRole('region', { name: 'Schema details' })).not.toBeInTheDocument();
   expect(screen.queryByRole('dialog', { name: 'Schema YAML' })).not.toBeInTheDocument();
   expect(screen.getByText('In use: team/base · 1.0')).toBeVisible();
-  openYaml();
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Schema actions' }), { key: 'Enter' });
+  expect(screen.queryByRole('menuitem', { name: 'Open Workspace' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('menuitem', { name: 'View YAML', exact: true }));
   expect(screen.getByText(/yschema: '0.1'/, { selector: 'code' })).toBeVisible();
   expect(screen.queryByRole('tablist', { name: 'Studio view' })).not.toBeInTheDocument();
   expect(screen.queryByRole('region', { name: 'Composed structure' })).not.toBeInTheDocument();

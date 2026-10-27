@@ -27,7 +27,6 @@ export function SchemaStudioSurface({
   editorInvalid = false,
   contextLocked = false,
   sourceHref,
-  workspaceHref,
   branch,
   draftStatus,
   bindingStatus,
@@ -49,7 +48,6 @@ export function SchemaStudioSurface({
   dataEditor?: () => ReactNode;
   contextLocked?: boolean;
   sourceHref?: string;
-  workspaceHref?: string;
   branch?: string;
   draftStatus?: string;
   bindingStatus?: string;
@@ -121,11 +119,6 @@ export function SchemaStudioSurface({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onSelect={() => setYamlOpen(true)}>View YAML</DropdownMenuItem>
-                {workspaceHref ? (
-                  <DropdownMenuItem asChild>
-                    <Link href={workspaceHref}>Open Workspace</Link>
-                  </DropdownMenuItem>
-                ) : null}
               </DropdownMenuContent>
             </DropdownMenu>
             <Button

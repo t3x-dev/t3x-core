@@ -938,7 +938,6 @@ export function SchemaStudioExperience({
           />
         )}
         sourceHref={sourceHref}
-        workspaceHref={target ? workspaceLink : undefined}
         branch={target?.targetBranch}
         draftStatus={
           dataDirty ? 'Unsaved changes' : savedCandidateRef ? 'Candidate saved' : undefined
@@ -1051,7 +1050,6 @@ export function SchemaStudioExperience({
         />
       ) : null}
       <SchemaDefinitionWorkbench
-        initialMode="yaml"
         baseSchema={definitionOpen ? editorBase?.schema : basePreview.data?.schema}
         initialContribution={localContribution}
         initialDefinition={schemaDefinition ?? (definitionOpen ? editorBase?.initial : undefined)}
