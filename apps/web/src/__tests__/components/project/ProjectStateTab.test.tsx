@@ -669,7 +669,8 @@ describe('ProjectStateTab', () => {
     expect(screen.getByRole('tablist', { name: 'State views' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'History' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Propose change' })).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: /Snapshot/ })).toBeNull();
+    expect(screen.getByRole('tab', { name: /Snapshot/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /Canvas/ })).toHaveAttribute('aria-selected', 'false');
     expect(screen.queryByRole('tab', { name: /Render/ })).toBeNull();
     fireEvent.click(screen.getByRole('tab', { name: /Structure/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Code', exact: true }));
@@ -872,6 +873,8 @@ describe('ProjectStateTab', () => {
     renderStateTab();
     const data = await screen.findByRole('region', { name: 'State structure' });
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      'Snapshot',
+      'Canvas',
       'Overview',
       'Structure',
     ]);

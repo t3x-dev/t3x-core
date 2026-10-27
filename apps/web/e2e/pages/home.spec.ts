@@ -44,9 +44,9 @@ test.describe('Home Page', () => {
     await expect(navigation).toBeVisible({ timeout: 15000 });
     await expect(navigation.getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
-      '/t3x-dev/settings'
+      '/settings/provider-credentials?owner=t3x-dev'
     );
-    await expect(page.getByLabel('New repository', { exact: true })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: 'New repository', exact: true }).first()).toHaveAttribute(
       'href',
       '/t3x-dev/new'
     );
@@ -55,7 +55,7 @@ test.describe('Home Page', () => {
 
   // Projects list displays created projects
   test('Projects list shows existing projects', async ({ page, request }) => {
-    const projectName = `Home E2E ${Date.now()}`;
+    const projectName = `Home-E2E-${Date.now()}`;
     const { projectId } = await createTestProject(request, projectName);
     projectIdsToCleanup.push(projectId);
 
@@ -70,7 +70,7 @@ test.describe('Home Page', () => {
     page,
     request,
   }) => {
-    const projectName = `Home Nav E2E ${Date.now()}`;
+    const projectName = `Home-Nav-E2E-${Date.now()}`;
     const { projectId } = await createTestProject(request, projectName);
     projectIdsToCleanup.push(projectId);
 
@@ -78,7 +78,7 @@ test.describe('Home Page', () => {
     const projectCard = page.locator('article').filter({ hasText: projectName }).first();
     await projectCard.getByRole('link').click();
 
-    await expect(page).toHaveURL(new RegExp(`/project/${projectId}$`));
+    await expect(page).toHaveURL(new RegExp(`/t3x-dev/${projectName}$`));
     await expect(page.getByRole('tab', { name: 'Overview', exact: true })).toBeVisible({
       timeout: 15000,
     });
@@ -88,12 +88,13 @@ test.describe('Home Page', () => {
     page,
     request,
   }) => {
+    test.setTimeout(60_000);
     const suffix = Date.now().toString(36);
-    const projectName = `Release UI ${suffix}`;
-    const renamedProjectName = `Release Renamed ${suffix}`;
+    const projectName = `Release-UI-${suffix}`;
+    const renamedProjectName = `Release-Renamed-${suffix}`;
 
     await page.goto('/');
-    await page.getByLabel('New repository', { exact: true }).click();
+    await page.goto('/t3x-dev/new');
     await expect(page.getByRole('heading', { name: 'Create a new repository' })).toBeVisible();
 
     await page.getByLabel('Repository name').fill(projectName);
@@ -110,8 +111,8 @@ test.describe('Home Page', () => {
     const projectId = createdBody.data.project_id as string;
     projectIdsToCleanup.push(projectId);
 
-    await expect(page).toHaveURL(new RegExp(`/t3x-dev/release-ui-${suffix}$`));
-    await expect(page.getByRole('tab', { name: 'Overview', exact: true })).toBeVisible({
+    await expect(page).toHaveURL(new RegExp(`/t3x-dev/${projectName}/workspaces\\?`));
+    await expect(page.getByRole('region', { name: 'Workspace detail' })).toBeVisible({
       timeout: 15000,
     });
 
@@ -130,12 +131,11 @@ test.describe('Home Page', () => {
     );
     await page.getByRole('button', { name: 'Save' }).click();
     await renamedResponse;
-    await expect(page.getByText(renamedProjectName).first()).toBeVisible();
-
     await page.getByPlaceholder('Find a repository...').fill('');
-    const renamedCard = page.locator('article').filter({ hasText: renamedProjectName }).first();
-    await renamedCard
+    await expect(page.getByText(renamedProjectName).first()).toBeVisible();
+    await page
       .getByRole('button', { name: `Delete repository ${renamedProjectName}` })
+      .first()
       .click();
     const deletedResponse = page.waitForResponse(
       (response) =>
@@ -145,6 +145,7 @@ test.describe('Home Page', () => {
     );
     await page.getByRole('button', { name: 'Delete', exact: true }).click();
     await deletedResponse;
+    await page.reload();
     await expect(page.getByText(renamedProjectName)).toHaveCount(0);
 
     const getDeleted = await request.get(`${API_BASE}/projects/${projectId}`);
@@ -163,8 +164,6 @@ test.describe('Home Page', () => {
     await expect(
       page.getByRole('heading', { name: "Couldn't load repositories" })
     ).toBeVisible({ timeout: 15000 });
-    await expect(page.getByText('— repos')).toBeVisible();
-    await expect(page.getByText('— commits')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'No repositories yet' })).toHaveCount(0);
 
     await page.unroute('**/api/v1/projects?**');

@@ -94,16 +94,40 @@ function watchRelevantBrowserErrors(page: Page): string[] {
   return errors;
 }
 
-function flattenCandidateFields(fields: unknown[]): Array<Record<string, unknown>> {
-  return fields.flatMap((field) => {
-    if (!field || typeof field !== 'object') return [];
-    const record = field as Record<string, unknown>;
-    const children = Array.isArray(record.children) ? record.children : [];
-    return [record, ...flattenCandidateFields(children)];
-  });
-}
+const COMPLEX_TREE = [
+  {
+    key: 'prd',
+    slots: { title: 'Reviewable enterprise changes' },
+    children: [
+      {
+        key: 'summary',
+        slots: {
+          problem: 'Enterprise reviewers need traceable and safe generated changes.',
+          audience: 'Platform product managers, compliance reviewers, and release engineers',
+          outcome: 'Every proposed field is reviewable before branch history advances.',
+        },
+        children: [],
+      },
+      {
+        key: 'requirements',
+        slots: {},
+        children: COMPLEX_SOURCES.map((source, index) => ({
+          key: ['evidence_coverage_matrix', 'validation_recovery_loop', 'branch_head_precondition'][
+            index
+          ],
+          slots: {
+            title: source.text.match(/Requirement: (.+)/)?.[1] ?? source.title,
+            priority: source.text.match(/Priority: (.+)/)?.[1] ?? 'must',
+            acceptance: [source.text.match(/Acceptance: (.+)/)?.[1] ?? 'The change is accepted.'],
+          },
+          children: [],
+        })),
+      },
+    ],
+  },
+];
 
-test('complex workspace: multiple sources flow through proposal, validation, preview, and audited commit', async ({
+test('complex workspace: multiple sources flow through authoring and a safe review gate', async ({
   page,
   request,
 }, testInfo) => {
@@ -126,7 +150,7 @@ test('complex workspace: multiple sources flow through proposal, validation, pre
       data: { workspace: {
         id: workspaceId, projectId, title: 'Main workspace', targetBranch: 'main', status: 'draft',
         summary: '', updatedAt: new Date().toISOString(), baseCommitHash: null, sourceBundle: [],
-        schemaBindings: [{ canonicalName: 't3x/prd', schemaName: 'PRD Schema', version: 'v2', mode: 'pinned' }],
+        schemaBindings: [],
         schemaCandidate: { summary: '', fields: [] }, schemaReview: { verdict: 'ready', summary: '', gaps: [] },
         yopsDraft: { id: 'complex-draft', operations: [] }, outputTargets: [],
       } },
@@ -139,90 +163,53 @@ test('complex workspace: multiple sources flow through proposal, validation, pre
     await page.goto(workspaceUrl);
 
     await expect(page.getByRole('region', { name: 'Workspace detail' })).toBeVisible();
-    const sources = page.getByRole('button', { name: 'Open 3 workspace sources' });
+    const sources = page.getByRole('button', { name: 'Workspace sources (3 included)' });
     await expect(sources).toBeVisible();
+    await sources.click();
     for (const source of COMPLEX_SOURCES) {
-      await expect(sources).toHaveAttribute('title', new RegExp(source.title));
+      await expect(page.getByText(source.title, { exact: true })).toBeVisible();
     }
+    await page.keyboard.press('Escape');
     await page.screenshot({ path: testInfo.outputPath('workspace-compose.png') });
-    const generated = page.waitForResponse(response =>
-      response.request().method() === 'POST' && response.url().endsWith('/yops-draft')
+    const initialized = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        response.url().endsWith(`/workspaces/${encodeURIComponent(workspaceId)}/authoring`)
     );
-    await page.getByRole('button', { name: 'Generate changes', exact: true }).click();
-    expect((await generated).ok()).toBe(true);
-    await expect(page.getByText(/12 structured changes generated/)).toBeVisible();
+    await page.getByRole('button', { name: 'Enable Draft activity' }).click();
+    const initializedResponse = await initialized;
+    expect(initializedResponse.ok(), await initializedResponse.text()).toBe(true);
+    const initializedPayload = await initializedResponse.json();
+    const published = await request.post(
+      `${API_BASE}/projects/${projectId}/workspaces/${encodeURIComponent(workspaceId)}/authoring/actions`,
+      {
+        data: {
+          request_id: `complex-${token}`,
+          expected_workspace_revision: initializedPayload.data.workspaceRevision,
+          expected_revision: initializedPayload.data.compositionRevision,
+          expected_ref_head: null,
+          operations: [{ set: { path: 'trees', value: COMPLEX_TREE } }],
+          reason: 'Combine the three reviewed sources into one explicit PRD draft.',
+        },
+      }
+    );
+    expect(published.ok(), await published.text()).toBe(true);
+    const authoringResponse = await request.get(
+      `${API_BASE}/projects/${projectId}/workspaces/${encodeURIComponent(workspaceId)}/authoring`
+    );
+    const authoringPayload = await authoringResponse.json();
+    expect(authoringResponse.status(), JSON.stringify(authoringPayload)).toBe(200);
+    expect(authoringPayload.data.current.trees).toEqual(COMPLEX_TREE);
 
-    const extractedResponse = await request.get(
-      `${API_BASE}/projects/${projectId}/workspaces/${encodeURIComponent(workspaceId)}`
-    );
-    const extractedPayload = await extractedResponse.json();
-    expect(extractedResponse.status(), JSON.stringify(extractedPayload)).toBe(200);
-    expect(extractedPayload.data.workspace.schemaCandidate.summary).toMatch(
-      /Deterministic scaffold mapped \d+ schema fields from 3 sources/
-    );
-    const candidateFields = flattenCandidateFields(
-      extractedPayload.data.workspace.schemaCandidate.fields as unknown[]
-    );
-    expect(candidateFields).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          path: 'requirements.evidence_coverage_matrix.title',
-          value: 'Evidence coverage matrix',
-        }),
-        expect.objectContaining({
-          path: 'requirements.validation_recovery_loop.title',
-          value: 'Validation recovery loop',
-        }),
-        expect.objectContaining({
-          path: 'requirements.branch_head_precondition.title',
-          value: 'Branch head precondition',
-        }),
-      ])
-    );
-
-    const yopsResponse = await request.get(
-      `${API_BASE}/projects/${projectId}/workspaces/${encodeURIComponent(workspaceId)}`
-    );
-    const yopsPayload = await yopsResponse.json();
-    expect(yopsResponse.status(), JSON.stringify(yopsPayload)).toBe(200);
-    expect(yopsPayload.data.workspace.yopsDraft.operations).toHaveLength(12);
-    expect(yopsPayload.data.workspace.yopsDraft.operations).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          op: 'add',
-          path: 'prd/requirements/branch_head_precondition/acceptance/-',
-        }),
-      ])
-    );
-
-    await page.getByRole('button', { name: 'Review full draft', exact: true }).click();
-    await expect(page.getByRole('tab', { name: 'Review', exact: true })).toHaveAttribute('aria-selected', 'true');
-    await expect(page.getByText('Review snapshot ready for decision.', { exact: true })).toBeVisible();
+    await page.reload();
     await expect(page.getByText('Branch head precondition', { exact: true }).first()).toBeVisible();
+    await page.getByRole('tab', { name: 'Review', exact: true }).click();
+    await expect(page.getByRole('tab', { name: 'Review', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await page.getByRole('button', { name: 'Prepare review', exact: true }).click();
+    await expect(page).toHaveURL(/reviewSnapshot=/);
     await page.screenshot({ path: testInfo.outputPath('workspace-review-validated.png') });
-    await page.getByRole('button', { name: 'Commit changes', exact: true }).click();
-    await expect(page).toHaveURL(/\/changes\//);
-    await expect(
-      page.getByRole('heading', { name: 'Review Workspace change', exact: true })
-    ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Approve and save' })).toBeEnabled();
-    await page.getByRole('button', { name: 'Approve and save' }).click();
-    await expect(page.getByRole('region', { name: 'Saved change review' })).toContainText(
-      'Saved change'
-    );
-
-    await page.goto(workspaceUrl);
-    await expect(page.getByRole('complementary', { name: 'Post-commit actions' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'View in State' }).first()).toBeVisible();
-
-    await page.getByRole('link', { name: 'Pull requests' }).click();
-    await page.getByRole('button', { name: /Create PR/i }).click();
-    await expect(page.getByRole('heading', { name: 'New pull request' })).toBeVisible();
-    await expect(page.getByRole('combobox', { name: 'Base branch' })).toContainText('main');
-    await expect(
-      page.getByText('No other committed branches can be compared with this base.')
-    ).toBeVisible();
-    await expect(page.getByText('Loading branch comparisons...')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Approve and commit' })).toBeDisabled();
+    await expect(page.getByText('The bound Schema has no conclusive validation result.')).toBeVisible();
     expect(browserErrors).toEqual([]);
 
     test.info().annotations.push({

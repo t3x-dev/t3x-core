@@ -52,20 +52,23 @@ test.describe('Inherited baseline workspace state', () => {
     if (projectId) await cleanupProject(request, projectId).catch(() => {});
   });
 
-  test('keeps inherited baseline separate from included sources and source chat read-only', async ({ page }) => {
-    await page.goto(`/chat/${conversationId}`, { waitUntil: 'domcontentloaded' });
+  test('keeps inherited baseline metadata and source evidence read-only', async ({ page, request }) => {
+    const conversationResponse = await request.get(`${API_BASE}/conversations/${conversationId}`);
+    expect(conversationResponse.ok()).toBe(true);
+    expect((await conversationResponse.json()).data.parent_commit_hash).toMatch(
+      /^sha256:[a-f0-9]{64}$/
+    );
+    await page.goto(`/project/${projectId}/sources/conversations/${conversationId}`, {
+      waitUntil: 'domcontentloaded',
+    });
 
     await expect(page.getByText('I want to eat Beijing roast duck.')).toBeVisible({
       timeout: 10_000,
     });
 
-    const sourcesButton = page.getByRole('button', { name: 'Open sources' });
-    await expect(sourcesButton).toContainText('Baseline');
-    await expect(sourcesButton).toContainText('0 included');
-    await expect(page.getByRole('textbox', { name: 'Reply...' })).toBeDisabled();
-    await expect(page.getByRole('link', { name: 'Open Workspace' })).toHaveAttribute(
-      'href', `/project/${projectId}?branch=main&tab=workspaces&sourceConversation=${conversationId}`
-    );
-    await expect(page.getByTestId('commit-button')).not.toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Immutable turns' })).toBeVisible();
+    await expect(page.getByText('Source is available')).toBeVisible();
+    await expect(page.getByRole('textbox')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /commit/i })).toHaveCount(0);
   });
 });

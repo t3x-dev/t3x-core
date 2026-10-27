@@ -24,7 +24,11 @@ export class MergePage {
   }
 
   async goto(projectId: string, mergeId: string): Promise<void> {
-    await this.page.goto(`/project/${projectId}/merge/${mergeId}`);
+    await this.page.goto(
+      projectId.startsWith('/')
+        ? `${projectId}/merge/${mergeId}`
+        : `/project/${projectId}/merge/${mergeId}`
+    );
   }
 
   async waitForLoad(timeout = 15000): Promise<void> {
