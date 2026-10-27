@@ -565,7 +565,7 @@ it('starts a new branch editor from its inherited bound definition, not the orig
       })
     )
   );
-}, 20_000);
+});
 
 it('edits existing fields against a frozen Base and retains unsaved input while preview is revalidating', async () => {
   mocks.workspaces = [
@@ -609,7 +609,7 @@ it('edits existing fields against a frozen Base and retains unsaved input while 
       })
     )
   );
-}, 20_000);
+});
 
 it.each([
   false,
