@@ -1,5 +1,11 @@
 # @t3x-dev/application
 
+## 1.6.1
+
+### Patch Changes
+
+- @t3x-dev/core@1.5.1
+
 ## 1.6.0
 
 ### Minor Changes
