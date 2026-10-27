@@ -58,6 +58,12 @@ export function WorkspaceSnapshotReview({
   });
   const composeHref = workspaceReviewHref(projectId, workspaceId, { branch, mode: 'compose' });
   const historyHref = getProjectIdHistoryPath(projectId, { branch, commit, returnTo: reviewHref });
+  const schemaHref = `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({
+    tab: 'schemas',
+    schemaView: 'studio',
+    workspace: workspaceId,
+    ...(branch ? { branch } : {}),
+  })}`;
   const stateHref =
     commit && branch
       ? `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ branch, commit, view: 'overview' }).toString()}`
@@ -109,7 +115,7 @@ export function WorkspaceSnapshotReview({
             </div>
             <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
               {commit
-                ? 'This revision is saved. Open State to inspect or export it.'
+                ? 'This revision is committed. Open State to inspect or export it.'
                 : view?.decision?.observation === 'supplied' && view.decision.outcome === 'rejected'
                   ? 'This revision was rejected. The decision is recorded and the branch was not changed.'
                   : 'Review this fixed revision, then approve and commit or reject it here. Run contains the detailed evidence.'}
@@ -118,6 +124,11 @@ export function WorkspaceSnapshotReview({
           {stateHref ? (
             <Button asChild size="sm">
               <Link href={stateHref}>View State & export</Link>
+            </Button>
+          ) : null}
+          {schemaReview ? (
+            <Button asChild size="sm" variant="outline">
+              <Link href={schemaHref}>{commit ? 'Continue editing Schema' : 'Edit Schema'}</Link>
             </Button>
           ) : null}
           <Button asChild size="sm" variant="outline">
@@ -200,6 +211,7 @@ export function WorkspaceSnapshotReview({
               <ChangeSummary
                 branch={branch ?? null}
                 fieldCount={fieldGroups ? fieldChangeCount(fieldGroups) : null}
+                schemaChangeCount={schemaReview?.changes.length ?? 0}
                 title={fieldGroups?.[0]?.label ?? null}
                 view={view}
               />
@@ -213,6 +225,7 @@ export function WorkspaceSnapshotReview({
             </div>
             <div className="lg:sticky lg:top-4 lg:col-start-2 lg:row-span-3 lg:row-start-1">
               <ChangeDecisionPanel
+                contentValidation={schemaReview?.contentValidation}
                 branch={branch ?? null}
                 busy={state.deciding || state.loading}
                 onDecide={(outcome, reason) => void decide(outcome, reason)}
@@ -244,11 +257,13 @@ export function WorkspaceSnapshotReview({
 function ChangeSummary({
   branch,
   fieldCount,
+  schemaChangeCount,
   title,
   view,
 }: {
   branch: string | null;
   fieldCount: number | null;
+  schemaChangeCount: number;
   title: string | null;
   view: TransitionViewV1;
 }) {
@@ -268,6 +283,7 @@ function ChangeSummary({
         <h2 className="text-lg font-semibold leading-7 text-[var(--text-primary)]">{title}</h2>
       ) : null}
       <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
+        {schemaChangeCount > 0 ? `${schemaChangeCount} Schema definition changes · ` : ''}
         {fieldCount !== null ? `${fieldCount} ${fieldCount === 1 ? 'field' : 'fields'} · ` : ''}
         {operationCount} {operationCount === 1 ? 'operation' : 'operations'}
         {branch ? (

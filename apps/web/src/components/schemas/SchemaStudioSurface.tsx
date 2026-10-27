@@ -40,6 +40,7 @@ export function SchemaStudioSurface({
   data,
   onEditDefinition,
   onReview,
+  onInspect,
   canReview = false,
   onDownload,
 }: {
@@ -61,6 +62,7 @@ export function SchemaStudioSurface({
   data?: StudioPreview;
   onEditDefinition?: () => void;
   onReview?: () => void;
+  onInspect?: () => void;
   canReview?: boolean;
   onDownload?: () => void;
 }) {
@@ -119,6 +121,14 @@ export function SchemaStudioSurface({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onSelect={() => setYamlOpen(true)}>View YAML</DropdownMenuItem>
+                {onInspect ? (
+                  <DropdownMenuItem
+                    onSelect={onInspect}
+                    disabled={!data || contextLocked || pending}
+                  >
+                    Schema checks & publishing
+                  </DropdownMenuItem>
+                ) : null}
               </DropdownMenuContent>
             </DropdownMenu>
             <Button

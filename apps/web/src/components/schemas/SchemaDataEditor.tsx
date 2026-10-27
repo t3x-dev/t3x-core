@@ -323,7 +323,7 @@ export function SchemaDataEditor({
       await onSave(definition, intent.trim() || 'Edit Schema fields.', sourceMappings);
       setDirty(false);
       setHistory([]);
-      setNotice('Schema candidate saved.');
+      setNotice('Schema changes saved. Not committed.');
       return true;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save the Schema candidate.');
@@ -356,11 +356,11 @@ export function SchemaDataEditor({
   });
   useEffect(() => {
     if (!navigationRef) return;
-    navigationRef.current = { requestNavigation: navigation.requestNavigation };
+    navigationRef.current = { requestNavigation: navigation.requestNavigation, save };
     return () => {
       navigationRef.current = null;
     };
-  }, [navigationRef, navigation.requestNavigation]);
+  });
 
   if (!definition)
     return (

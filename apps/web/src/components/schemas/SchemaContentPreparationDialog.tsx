@@ -24,7 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { walkDraftStructure } from '@/domain/workspaces/draftStructure';
+import { draftPathSegment, walkDraftStructure } from '@/domain/workspaces/draftStructure';
 import { useSchemaContentPreparation } from '@/hooks/schemas/useSchemaContentPreparation';
 import {
   newPreparationChange,
@@ -34,6 +34,7 @@ import {
   preparationCommands,
   readablePreparationPath,
 } from './SchemaPreparationFields';
+import { requiredContentChange } from './schemaPreparationSuggestions';
 
 const stepClass =
   'space-y-3 rounded-xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4 shadow-[var(--shadow-xs)]';
@@ -53,6 +54,7 @@ export function SchemaContentPreparationDialog({
   open,
   onOpenChange,
   onPrepared,
+  continueToReview = false,
 }: {
   projectId: string;
   workspaceId: string;
@@ -61,6 +63,7 @@ export function SchemaContentPreparationDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onPrepared: () => void | Promise<void>;
+  continueToReview?: boolean;
 }) {
   const scope = JSON.stringify([projectId, workspaceId, revision, target, open]);
   const pathsId = useId();
@@ -105,7 +108,14 @@ export function SchemaContentPreparationDialog({
       })
       .then(
         (data) => {
-          if (epoch.current === token) setContext(data);
+          if (epoch.current === token) {
+            setContext(data);
+            setReview({
+              data,
+              input: { target: selection, ifRevision, commands: [], confirmedChanges: [] },
+              requestId: `schema-preparation:${crypto.randomUUID()}`,
+            });
+          }
         },
         (cause) => {
           if (epoch.current === token)
@@ -218,7 +228,9 @@ export function SchemaContentPreparationDialog({
               <GitCompareArrows className="size-4" />
             </span>
             <div className="min-w-0 space-y-1">
-              <DialogTitle>Prepare Schema content</DialogTitle>
+              <DialogTitle>
+                {continueToReview ? 'Resolve Schema content' : 'Prepare Schema content'}
+              </DialogTitle>
               <DialogDescription className="max-w-3xl text-xs leading-relaxed">
                 Adapt existing content to the new Schema, preview the result, then save both
                 together as one Draft revision. Nothing is published or committed here.
@@ -245,7 +257,7 @@ export function SchemaContentPreparationDialog({
           <section aria-label="Content changes" className={stepClass}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h3 className={stepTitleClass}>1 · Plan content changes</h3>
+                <h3 className={stepTitleClass}>Resolve content requirements</h3>
                 <p className="mt-1 text-xs text-[var(--text-secondary)]">
                   Move or rename existing content, fill missing values, or remove content
                   explicitly.
@@ -260,6 +272,38 @@ export function SchemaContentPreparationDialog({
                 + Add change
               </Button>
             </div>
+            {context?.issues.map((issue) => {
+              const suggested = requiredContentChange(context, issue);
+              if (!suggested) return null;
+              const planned = changes.some((change) => change.id === suggested.id);
+              return (
+                <div
+                  key={`${issue.code}:${issue.path}`}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 text-sm"
+                >
+                  <span>
+                    <strong>{issue.path}</strong> ·{' '}
+                    {issue.code === 'DEFAULT_REQUIRES_APPROVAL'
+                      ? 'A default is available; confirm it before saving.'
+                      : 'Required content is missing.'}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy || planned}
+                    onClick={() => changeCommands([...changes, suggested])}
+                  >
+                    {planned
+                      ? 'Added below'
+                      : issue.code === 'DEFAULT_REQUIRES_APPROVAL'
+                        ? `Use default for ${issue.path}`
+                        : issue.code === 'REQUIRED_NODE_MISSING'
+                          ? `Add node ${issue.path}`
+                          : `Fill ${issue.path}`}
+                  </Button>
+                </div>
+              );
+            })}
             <datalist id={pathsId}>
               {walkDraftStructure(data?.before).map((node) => (
                 <option key={node.path} value={node.path}>
@@ -321,7 +365,7 @@ export function SchemaContentPreparationDialog({
           ) : null}
           {data ? (
             <div className={stepClass}>
-              <h3 className={stepTitleClass}>2 · Check and preview</h3>
+              <h3 className={stepTitleClass}>Check content changes</h3>
               {stale ? (
                 <output className="flex items-start gap-2 rounded-lg border border-[var(--status-warning)] bg-[var(--status-warning-muted)] px-3 py-2.5 text-xs">
                   <TriangleAlert
@@ -365,8 +409,9 @@ export function SchemaContentPreparationDialog({
                     className="mt-0.5 size-4 shrink-0 text-[var(--status-success)]"
                   />
                   <span>
-                    Content satisfies the candidate Schema.
-                    {!review ? ' Preview once more to confirm before saving.' : ''}
+                    {data.contentValidation === 'not_applicable'
+                      ? 'No business content to migrate. Required fields will be checked when content is added.'
+                      : 'Content satisfies the candidate Schema.'}
                   </span>
                 </output>
               )}
@@ -486,7 +531,7 @@ export function SchemaContentPreparationDialog({
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-[var(--stroke-divider)] bg-[var(--surface-elevated)] px-6 py-3">
           <p className="mr-auto text-xs text-[var(--text-tertiary)]">
-            3 · Save to Draft · not a publish or Commit
+            Saving updates the Draft. Commit happens after Review.
           </p>
           <Button variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>
             Cancel
@@ -499,7 +544,7 @@ export function SchemaContentPreparationDialog({
             onClick={() => void prepare()}
             variant="commit"
           >
-            Save prepared Draft
+            {continueToReview ? 'Save Draft & continue to Review' : 'Save prepared Draft'}
           </Button>
         </div>
       </DialogContent>
@@ -521,27 +566,42 @@ function Document({ title, value }: { title: string; value: unknown }) {
 }
 
 function contentDifferences(before: unknown, after: unknown) {
-  const leaves = (value: unknown) =>
-    new Map(
-      walkDraftStructure({ document: value })
-        .filter((node) => !node.expandable)
-        .map((node) => [node.path.replace(/^document\/?/, ''), node.value])
-    );
-  const left = leaves(before);
-  const right = leaves(after);
-  return [...new Set([...left.keys(), ...right.keys()])]
-    .filter(
-      (path) =>
-        left.has(path) !== right.has(path) ||
-        canonicalJson(left.get(path) as YValue) !== canonicalJson(right.get(path) as YValue)
+  const rows: Array<{
+    path: string;
+    before: unknown;
+    after: unknown;
+    beforeExists: boolean;
+    afterExists: boolean;
+  }> = [];
+  const mapping = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === 'object' && !Array.isArray(value);
+  const visit = (left: unknown, right: unknown, path: string) => {
+    if (left === undefined && right === undefined) return;
+    if (
+      left !== undefined &&
+      right !== undefined &&
+      canonicalJson(left as YValue) === canonicalJson(right as YValue)
     )
-    .map((path) => ({
+      return;
+    if (mapping(left) && mapping(right)) {
+      for (const key of new Set([...Object.keys(left), ...Object.keys(right)]))
+        visit(
+          left[key],
+          right[key],
+          path ? `${path}/${draftPathSegment(key)}` : draftPathSegment(key)
+        );
+      return;
+    }
+    rows.push({
       path,
-      before: left.get(path),
-      after: right.get(path),
-      beforeExists: left.has(path),
-      afterExists: right.has(path),
-    }));
+      before: left,
+      after: right,
+      beforeExists: left !== undefined,
+      afterExists: right !== undefined,
+    });
+  };
+  visit(before, after, '');
+  return rows;
 }
 
 function preparationError(cause: unknown) {

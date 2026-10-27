@@ -9,6 +9,12 @@ import type { WorkspaceSchemaBinding } from '@/types/workspaces';
 
 const mocks = vi.hoisted(() => ({
   apply: vi.fn(),
+  ensureAuthoring: vi.fn(),
+  livePreview: vi.fn(),
+  contentPreview: vi.fn(),
+  prepareContent: vi.fn(),
+  fullReview: vi.fn(),
+  draftView: undefined as unknown,
   publish: vi.fn(),
   data: undefined as unknown,
   previewResult: undefined as ((input: unknown) => unknown) | undefined,
@@ -28,6 +34,7 @@ const mocks = vi.hoisted(() => ({
     origin: { channel: string };
     baseSources?: StudioSchemaEditCandidate['baseSources'];
     baseDefinition?: StudioSchemaEditCandidate['baseDefinition'];
+    authoringDraft?: StudioSchemaEditCandidate['authoringDraft'];
   },
   previewInputs: [] as unknown[],
   workspaces: [] as Array<{
@@ -38,6 +45,19 @@ const mocks = vi.hoisted(() => ({
     title: string;
     schemaBindings?: WorkspaceSchemaBinding[];
   }>,
+}));
+vi.mock('@/hooks/schemas/useSchemaDraftStatus', () => ({
+  useSchemaDraftStatus: () => mocks.draftView,
+}));
+vi.mock('@/hooks/schemas/useSchemaReviewFlow', () => ({
+  useSchemaReviewFlow: () => ({
+    readEdit: async () => mocks.schemaEditCandidate,
+    ensureAuthoring: mocks.ensureAuthoring,
+    preview: mocks.livePreview,
+    previewContent: mocks.contentPreview,
+    prepareContent: mocks.prepareContent,
+    review: mocks.fullReview,
+  }),
 }));
 vi.mock('@/components/workspaces/WorkspaceYOpsEditor', () => ({
   WorkspaceYOpsEditor: ({
@@ -127,6 +147,14 @@ vi.mock('@/hooks/schemas/useWorkspaceSchemaPending', () => ({
 }));
 beforeEach(() => {
   mocks.query = 'candidate=provider';
+  mocks.draftView = undefined;
+  mocks.ensureAuthoring.mockReset().mockResolvedValue(undefined);
+  mocks.livePreview.mockReset().mockImplementation(async () => mocks.data);
+  mocks.contentPreview.mockReset().mockResolvedValue({ canPrepare: true, previewHash: 'checked' });
+  mocks.prepareContent.mockReset().mockResolvedValue({ outcome: 'prepared' });
+  mocks.fullReview
+    .mockReset()
+    .mockResolvedValue('/project/p?tab=workspaces&reviewSnapshot=exact-review');
   mocks.previewResult = undefined;
   mocks.candidatesLoading = false;
   mocks.apply.mockReset();
@@ -272,21 +300,21 @@ it('keeps a required provider checked and locked while blocking a failed definit
 it.each([
   '',
   'workspace=workspace_branch%3Amain&branch=main',
-])('restores bound sources without applying again (query: %s)', async (query) => {
+])('restores the bound snapshot without selecting or applying sources (query: %s)', async (query) => {
   mocks.query = query;
   mocks.workspaces = [boundWorkspace()];
   const { unmount } = render(<SchemaStudioExperience projectId="p" />);
   openSources();
-  await expectBoundSelection();
+  await expectBoundSnapshot();
   unmount();
   render(<SchemaStudioExperience projectId="p" />);
   openSources();
-  await expectBoundSelection();
+  await expectBoundSnapshot();
   expect(mocks.apply).not.toHaveBeenCalled();
   expect(mocks.saveDraft).not.toHaveBeenCalled();
 });
 
-it('waits for sources before restoring and does not undo an explicit clear', async () => {
+it('keeps bound snapshot editing independent of source list refreshes', async () => {
   mocks.query = '';
   mocks.workspaces = [boundWorkspace()];
   mocks.candidatesLoading = true;
@@ -295,8 +323,7 @@ it('waits for sources before restoring and does not undo an explicit clear', asy
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).not.toBeChecked();
   mocks.candidatesLoading = false;
   rerender(<SchemaStudioExperience projectId="p" />);
-  await expectBoundSelection();
-  fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }));
+  await expectBoundSnapshot();
   mocks.workspaces = [{ ...boundWorkspace(), revision: 3 }];
   rerender(<SchemaStudioExperience projectId="p" />);
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).not.toBeChecked();
@@ -334,7 +361,7 @@ it('clears restored sources when switching to an unbound Workspace', async () =>
   ];
   const { rerender } = render(<SchemaStudioExperience projectId="p" />);
   openSources();
-  await expectBoundSelection();
+  await expectBoundSnapshot();
   fireEvent.change(screen.getByLabelText('Target Workspace'), {
     target: { value: 'workspace_branch:feature' },
   });
@@ -632,7 +659,7 @@ it('edits existing fields against a frozen Base and retains unsaved input while 
 it.each([
   false,
   true,
-])('adopts a pending candidate and returns to the same Workspace (local edit: %s)', async (localEdit) => {
+])('opens the complete Review without adopting a pending candidate (local edit: %s)', async (localEdit) => {
   mocks.query = 'workspace=workspace_branch%3Amain';
   mocks.pendingSchema = {
     status: 'pending_preparation',
@@ -683,22 +710,16 @@ it.each([
     expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).toBeChecked()
   );
   fireEvent.click(screen.getByRole('button', { name: 'Review Schema changes' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-  expect(mocks.apply).not.toHaveBeenCalled();
-  expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Review Schema changes' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Adopt & return to Workspace' }));
-  expect(mocks.apply).toHaveBeenCalledWith({
+  await waitFor(() => expect(mocks.fullReview).toHaveBeenCalledWith('workspace_branch:main'));
+  expect(mocks.livePreview).toHaveBeenCalledWith({
     candidateIds: ['provider'],
     workspaceId: 'workspace_branch:main',
-    ifRevision: 3,
-    reviewHash: 'review',
     ...(localEdit ? { schemaEditCandidate: { candidateId: 'saved-local', revision: 3 } } : {}),
   });
+  expect(mocks.apply).not.toHaveBeenCalled();
+  expect(mocks.prepareContent).not.toHaveBeenCalled();
   await waitFor(() =>
-    expect(mocks.push).toHaveBeenCalledWith(
-      '/project/p?branch=main&tab=workspaces&workspace=workspace_branch%3Amain'
-    )
+    expect(mocks.push).toHaveBeenCalledWith(expect.stringContaining('reviewSnapshot=exact-review'))
   );
 });
 
@@ -754,12 +775,12 @@ it('shows unsafe content impact while preventing confirmation, then discards a s
   mocks.data = preview;
   const { rerender } = render(<SchemaStudioExperience projectId="p" />);
   openSources();
-  fireEvent.click(screen.getByRole('button', { name: 'Review Schema changes' }));
-  const dialog = screen.getByRole('dialog', { name: 'Review Schema changes' });
+  openChecks();
+  const dialog = screen.getByRole('dialog', { name: 'Schema checks' });
   expect(within(dialog).getByText('Map existing content before removing product.')).toBeVisible();
   expect(
-    within(dialog).getByRole('button', { name: 'Adopt & return to Workspace' })
-  ).toBeDisabled();
+    within(dialog).queryByRole('button', { name: 'Adopt & return to Workspace' })
+  ).not.toBeInTheDocument();
   expect(within(dialog).getByRole('region', { name: 'Schema definition changes' })).toBeVisible();
   expect(within(dialog).getByRole('region', { name: 'Schema content impact' })).toBeVisible();
   mocks.data = { ...preview, reviewHash: 'new-revision-review' };
@@ -768,7 +789,7 @@ it('shows unsafe content impact while preventing confirmation, then discards a s
   expect(mocks.apply).not.toHaveBeenCalled();
 });
 
-it('reuses Confirm & apply for an empty first binding without opening content migration', async () => {
+it('prepares an empty first binding and opens full Review without adoption', async () => {
   mocks.query = 'workspace=workspace_branch%3Amain&candidate=provider';
   mocks.workspaces = [
     {
@@ -806,23 +827,20 @@ it('reuses Confirm & apply for an empty first binding without opening content mi
     expect(screen.getByRole('button', { name: 'Review Schema changes' })).toBeEnabled()
   );
   fireEvent.click(screen.getByRole('button', { name: 'Review Schema changes' }));
-  const dialog = screen.getByRole('dialog', { name: 'Apply exact definition' });
-  expect(
-    within(dialog).queryByRole('button', { name: 'Prepare content & mappings' })
-  ).not.toBeInTheDocument();
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm & apply' }));
   await waitFor(() =>
-    expect(mocks.apply).toHaveBeenCalledWith({
-      candidateIds: ['provider'],
-      workspaceId: 'workspace_branch:main',
-      ifRevision: 3,
-      reviewHash: 'review',
-    })
-  );
-  await waitFor(() =>
-    expect(mocks.push).toHaveBeenCalledWith(
-      expect.stringContaining('workspace=workspace_branch%3Amain')
+    expect(mocks.prepareContent).toHaveBeenCalledWith(
+      'workspace_branch:main',
+      expect.objectContaining({
+        ifRevision: 3,
+        commands: [],
+        previewHash: 'checked',
+      })
     )
+  );
+  expect(mocks.apply).not.toHaveBeenCalled();
+  expect(screen.queryByRole('dialog', { name: 'Apply exact definition' })).not.toBeInTheDocument();
+  await waitFor(() =>
+    expect(mocks.push).toHaveBeenCalledWith(expect.stringContaining('reviewSnapshot=exact-review'))
   );
 });
 
@@ -869,7 +887,7 @@ it('opens private publication from the checked saved candidate without applying 
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Review Schema changes' })).toBeEnabled()
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Review Schema changes' }));
+  openChecks();
   fireEvent.keyDown(screen.getByRole('button', { name: 'Review actions' }), { key: 'Enter' });
   fireEvent.click(screen.getByRole('menuitem', { name: 'Publish public Schema' }));
   expect(screen.getByRole('dialog', { name: 'Publish public Schema' })).toBeVisible();
@@ -919,7 +937,7 @@ it('edits Schema fields in the default Data view and saves through the existing 
   expect(screen.queryByRole('tablist', { name: 'Studio view' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByLabelText('Required checklist/title'));
   expect(screen.getByLabelText('Target Workspace')).toBeEnabled();
-  expect(screen.getByRole('button', { name: 'Review Schema changes' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Review Schema changes' })).toBeEnabled();
   openSources();
   expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).toBeDisabled();
   openYaml();
@@ -1093,7 +1111,7 @@ it.each([
 it('reviews failed checks without a Workspace and never offers adoption into another target', () => {
   render(<SchemaStudioExperience projectId="p" />);
   fireEvent.click(screen.getByRole('button', { name: 'Review Schema changes' }));
-  const dialog = screen.getByRole('dialog', { name: 'Review Schema changes' });
+  const dialog = screen.getByRole('dialog', { name: 'Schema checks' });
   expect(within(dialog).getByRole('region', { name: 'Schema checks' })).toBeVisible();
   expect(within(dialog).getByText('Missing service capability')).toBeVisible();
   expect(
@@ -1190,7 +1208,7 @@ it('keeps one source palette and opens candidate YAML from More without changing
   );
   expect(screen.queryByRole('region', { name: 'Schema details' })).not.toBeInTheDocument();
   expect(screen.queryByRole('dialog', { name: 'Schema YAML' })).not.toBeInTheDocument();
-  expect(screen.getByText('In use: team/base · 1.0')).toBeVisible();
+  expect(screen.getByText('Draft Schema: team/base · 1.0')).toBeVisible();
   fireEvent.keyDown(screen.getByRole('button', { name: 'Schema actions' }), { key: 'Enter' });
   expect(screen.queryByRole('menuitem', { name: 'Open Workspace' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('menuitem', { name: 'View YAML', exact: true }));
@@ -1231,4 +1249,86 @@ it('downloads the candidate as YAML without applying it', () => {
     click.mockRestore();
     vi.unstubAllGlobals();
   }
+});
+
+function openChecks() {
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Schema actions' }), { key: 'Enter' });
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Schema checks & publishing' }));
+}
+
+async function expectBoundSnapshot() {
+  await waitFor(() =>
+    expect(mocks.previewInputs).toContainEqual({
+      candidateIds: [],
+      workspaceId: 'workspace_branch:main',
+    })
+  );
+  expect(
+    screen.queryByText('Choose a Schema or Module in Sources to start editing.')
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole('checkbox', { name: 'Select Shared foundation 1.0' })).not.toBeChecked();
+}
+
+it.each([
+  false,
+  true,
+])('recovers an applied edit from the snapshot with truthful committed status: %s', async (committed) => {
+  mocks.query = 'workspace=workspace_branch%3Amain';
+  const workspace = boundWorkspace();
+  workspace.schemaBindings = [
+    { ...workspace.schemaBindings[0], schemaHash: 'snapshot-hash', studioSources: undefined },
+  ];
+  mocks.workspaces = [workspace];
+  mocks.schemaEditCandidate = {
+    candidateId: 'applied',
+    revision: 2,
+    localContribution: {},
+    origin: { channel: 'studio' },
+    baseSources: [
+      {
+        projectId: null,
+        artifactVersionId: 'removed',
+        canonicalName: 'team/removed',
+        version: '1.0',
+        hash: 'sha256:removed',
+      },
+    ],
+    authoringDraft: {
+      resultSchemaHash: 'snapshot-hash',
+    } as StudioSchemaEditCandidate['authoringDraft'],
+  };
+  mocks.draftView = {
+    hasChanges: !committed,
+    basis: { refHead: committed ? 'sha256:committed-head' : null },
+  };
+  mocks.data = {
+    ...(mocks.data as object),
+    schema: { yschema: '0.1', nodes: { item: { slots: { title: { type: 'number' } } } } },
+  };
+  render(<SchemaStudioExperience projectId="p" />);
+  openSources();
+  await expectBoundSnapshot();
+  expect(screen.getByLabelText('Type item/title')).toHaveValue('number');
+  expect(
+    screen.getByText(committed ? 'Committed · committed-he' : 'Saved to Draft · not committed', {
+      exact: true,
+    })
+  ).toBeVisible();
+  expect(screen.queryByText(/needs missing sources/)).not.toBeInTheDocument();
+  expect(screen.queryByText('Changes saved · not committed')).not.toBeInTheDocument();
+});
+
+it('keeps a failed Review on the editor without navigating to Workspace', async () => {
+  mocks.query = 'workspace=workspace_branch%3Amain';
+  mocks.workspaces = [boundWorkspace()];
+  mocks.data = {
+    ...(mocks.data as object),
+    report: { valid: true, issues: [] },
+    workspace: { id: 'workspace_branch:main', revision: 2, changes: [] },
+  };
+  mocks.fullReview.mockRejectedValue(new Error('The branch moved. Review again.'));
+  render(<SchemaStudioExperience projectId="p" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Review Schema changes' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('The branch moved. Review again.');
+  expect(mocks.push).not.toHaveBeenCalled();
 });

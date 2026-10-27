@@ -11,7 +11,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 
-export type SchemaEditorNavigation = { requestNavigation: (navigate: () => void) => void };
+export type SchemaEditorNavigation = {
+  requestNavigation: (navigate: () => void) => void;
+  save?: () => Promise<boolean>;
+};
 
 // Feature-detected: history traversal can be cancelled before a client router unmounts the editor.
 type TraversalEvent = Event & {

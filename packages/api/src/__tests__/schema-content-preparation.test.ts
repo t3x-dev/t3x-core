@@ -31,7 +31,10 @@ import {
   workspaceAuthoringState,
 } from '../lib/workspace-authoring';
 import { prepareWorkspaceAuthoringReview } from '../lib/workspace-authoring-review';
-import { assertWorkspaceSchemaReview } from '../lib/workspace-schema-review';
+import {
+  assertWorkspaceSchemaReview,
+  hasSchemaReviewEvidence,
+} from '../lib/workspace-schema-review';
 import { decideWorkspaceTransition, reviewWorkspaceTransition } from '../lib/workspace-transition';
 import { resolveWorkspaceYSchema } from '../lib/workspace-yschema';
 import { setupTestDB } from './setup';
@@ -573,9 +576,99 @@ it('allows a Schema-only change even when the complete content matches Base', as
   expect((await fullDecision(id, review)).commit).toBeDefined();
   expect((await readWorkspaceAuthoring(db, { projectId, workspaceId: id })).hasChanges).toBe(false);
 });
+it('reopens a prepared snapshot without picker sources, edits twice and commits exact definitions with empty content', async () => {
+  const id = 'snapshot-edit-loop';
+  await seed(id, false, { document: {} });
+  const definition = normalizeYSchemaObject({
+    ...baseSchema,
+    nodes: { ...baseSchema.nodes, extra: { slots: { note: { type: 'string' } } } },
+  });
+  const source = await addSchema('snapshot-edit-loop', definition);
+  async function prepare(body: Awaited<ReturnType<typeof input>>) {
+    const response = await post(`${preparationPath(id)}/preview`, body);
+    expect(response.status).toBe(200);
+    const plan = (await response.json()).data;
+    expect(plan.canPrepare).toBe(true);
+    expect(
+      (
+        await post(preparationPath(id), {
+          ...body,
+          previewHash: plan.previewHash,
+          requestId: crypto.randomUUID(),
+        })
+      ).status
+    ).toBe(200);
+  }
+  await prepare(await input(id, source));
+  const bound = (await findWorkspaceDraft(db, projectId, id))!;
+  expect(bound.workspace_state.schemaBindings[0]).not.toHaveProperty('studioSources');
+  expect((await getTransitionRefHead(db, { projectId, refName: id })).head).toBeNull();
+  let expected = definition;
+  let candidateRevision = 0;
+  for (const name of ['before_commit', 'after_commit']) {
+    const read = await studio('preview', { workspaceId: id, candidateIds: [] });
+    expect(read.status).toBe(200);
+    const current = (await read.json()).data;
+    expect(current.schema).toEqual(expected);
+    expect(current.sources).toHaveLength(1);
+    expected = normalizeYSchemaObject({
+      ...expected,
+      nodes: { ...expected.nodes, [name]: { slots: {} } },
+    });
+    const response = await app.request(
+      `/v1/projects/${projectId}/schema-studio/edit-candidates/${id}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId: id,
+          candidateIds: [],
+          ifRevision: candidateRevision,
+          rebase: true,
+          retryKey: name,
+          intent: name,
+          origin: 'studio',
+          localContribution: {},
+          schemaDefinition: expected,
+          baseSchemaHash: current.schemaHash,
+        }),
+      }
+    );
+    expect(response.status).toBe(200);
+    const edit = (await response.json()).data.candidate;
+    candidateRevision = edit.revision;
+    const schemaEditCandidate = { candidateId: edit.candidateId, revision: edit.revision };
+    const edited = (
+      await (
+        await studio('preview', { workspaceId: id, candidateIds: [], schemaEditCandidate })
+      ).json()
+    ).data;
+    expect(edited.schema).toEqual(expected);
+    await prepare({
+      target: {
+        kind: 'studio',
+        candidateIds: [],
+        reviewHash: edited.reviewHash,
+        schemaEditCandidate,
+      } as never,
+      ifRevision: edited.workspace.revision,
+      commands: [],
+      confirmedChanges: [],
+    });
+    const reviewed = await fullReview(id, name);
+    expect(reviewed.schemaReview.draft.definition).toEqual(expected);
+    expect(reviewed.schemaReview.draftContent).toEqual({});
+    expect((await fullDecision(id, reviewed)).commit).toBeDefined();
+    expect((await readWorkspaceAuthoring(db, { projectId, workspaceId: id })).hasChanges).toBe(
+      false
+    );
+  }
+  const reopened = (await (await studio('preview', { workspaceId: id, candidateIds: [] })).json())
+    .data;
+  expect(reopened.schema).toEqual(expected);
+});
 it.each([
-  ['empty', {}],
-  ['missing-required-node', { candidate: {} }],
+  ['missing-required-node', { candidate: { existing_record: {} } }],
   ['wrong-root', { unrelated: { requirements: { title: 'Do not validate this root' } } }],
 ])('blocks accepting a bound Schema Review with %s content even on an unprotected branch', async (kind, document) => {
   const id = `bound-review-${kind}`;
@@ -1437,4 +1530,112 @@ it('rejects unmapped content, invalid inputs, stale previews, moved heads and re
     ).status
   ).toBe(409);
   expect(await findWorkspaceDraft(db, projectId, 'adversarial')).toEqual(unchanged);
+});
+
+it.each([
+  ['document', {}],
+  ['root', { candidate: {} }],
+  [
+    'semantic',
+    { domain: 't3x.dev/semantic-content', version: 1, content: { trees: [], relations: [] } },
+  ],
+])('adopts and commits a required Schema without inventing business content: %s', async (kind, document) => {
+  const id = `initial-required-${kind}`;
+  await seed(id, false, { document });
+  const body = await input(id, inputId);
+  const response = await post(`${preparationPath(id)}/preview`, body);
+  expect(response.status).toBe(200);
+  const plan = (await response.json()).data;
+  expect(plan).toMatchObject({
+    canPrepare: true,
+    contentValidation: 'not_applicable',
+    issues: [],
+    before: document,
+    after: document,
+  });
+  const prepared = await post(preparationPath(id), {
+    ...body,
+    previewHash: plan.previewHash,
+    requestId: id,
+  });
+  expect(prepared.status).toBe(200);
+  const reviewed = await fullReview(id);
+  expect(reviewed.schemaReview.contentValidation).toBe('not_applicable');
+  expect(reviewed.view.transition.checks.validation.runs).toEqual([]);
+  const graph = await resolveTransitionProposalGraph(db, projectId, reviewed.view.transitionId);
+  expect(await hasSchemaReviewEvidence(graph.proposal, reviewed.schemaReview)).toBe(true);
+  // Changing the application snapshot cannot silently change the committed contract.
+  const replaced = {
+    ...reviewed.schemaReview,
+    draft: {
+      ...reviewed.schemaReview.draft,
+      definition: {
+        ...reviewed.schemaReview.draft.definition,
+        description: 'different definition',
+      },
+    },
+  };
+  replaced.draft.schemaHash = await sha256CompositionValue(replaced.draft.definition);
+  expect(await hasSchemaReviewEvidence(graph.proposal, replaced)).toBe(false);
+  const committed = await fullDecision(id, reviewed);
+  expect(committed.commit).toBeDefined();
+  expect(committed.workspace.schemaReview.summary).toContain('not applicable');
+  const restored = await readWorkspaceAuthoring(db, { projectId, workspaceId: id });
+  expect(restored.current).toEqual(document);
+  expect(restored.currentSchema.definition.nodes.advantage.required).toBe(true);
+  const branch = await createBranchWorkspace(db, {
+    projectId,
+    name: `${id}-child`,
+    parentBranch: id,
+  });
+  expect(branch).toBeDefined();
+  // Recover even when the mutable Workspace Base cache was lost.
+  await transactWorkspaceAuthoring(
+    db,
+    { projectId, workspaceId: id, refName: id },
+    async (_tx, current) => {
+      const { workspaceSchemaBase: _cache, ...workspace } = current.workspace_state;
+      return { workspace, value: undefined };
+    }
+  );
+  expect(
+    (await readWorkspaceAuthoring(db, { projectId, workspaceId: id })).currentSchema.schemaHash
+  ).toBe(plan.schemaHash);
+});
+
+it('does not turn deletion of existing required content into Schema initialization', async () => {
+  const id = 'deleted-required-content';
+  const schema = normalizeYSchemaObject({
+    ...baseSchema,
+    nodes: {
+      requirements: {
+        required: true,
+        requiredSlots: ['title'],
+        slots: { title: { type: 'string' } },
+      },
+    },
+  });
+  await seed(id, false, {
+    schema,
+    document: { candidate: { requirements: { title: 'Existing content' } } },
+  });
+  await fullDecision(id, await fullReview(id));
+  const saved = (await findWorkspaceDraft(db, projectId, id))!;
+  const { ledger, basis } = workspaceAuthoringState(saved.workspace_state);
+  await publishWorkspaceAuthoringAction(db, {
+    projectId,
+    workspaceId: id,
+    actor: reviewer,
+    actionId: 'delete-content',
+    channel: 'manual',
+    expectedWorkspaceRevision: saved.revision,
+    expectedRevision: ledger.compositionRevision,
+    expectedRefHead: basis.refHead,
+    operations: [{ unset: { path: 'candidate' } }],
+  });
+  const reviewed = await fullReview(id, 'review-after-deletion');
+  expect(reviewed.schemaReview.contentValidation).toBeUndefined();
+  expect(reviewed.view.transition.checks.validation.runs[0].predicate.outcome).toBe('failed');
+  await expect(fullDecision(id, reviewed)).rejects.toThrow();
+  expect((await getTransitionRefHead(db, { projectId, refName: id })).head).toBe(basis.refHead);
 });

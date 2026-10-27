@@ -34,6 +34,7 @@ export function ChangeDecisionPanel({
   view,
   commitBlocker,
   checksHref,
+  contentValidation,
 }: {
   branch: string | null;
   busy: boolean;
@@ -43,17 +44,18 @@ export function ChangeDecisionPanel({
   view: TransitionViewV1;
   commitBlocker?: string;
   checksHref?: string;
+  contentValidation?: 'not_applicable';
 }) {
   const reasonRef = useRef<HTMLTextAreaElement>(null);
   const [reasonError, setReasonError] = useState(false);
-  const checks = changeCheckRows(view);
+  const checks = changeCheckRows(view, contentValidation);
   const blockers = changeDecisionBlockers(view);
   const decided = view.decision.observation === 'supplied';
   const acceptAllowed = !commitBlocker && view.capabilities.accept.disposition === 'allowed';
   const overrideAllowed =
     !commitBlocker && !acceptAllowed && view.capabilities.override.disposition === 'allowed';
   const rejectAllowed = view.capabilities.reject.disposition === 'allowed';
-  const status = panelStatus(view, acceptAllowed, overrideAllowed);
+  const status = panelStatus(view, acceptAllowed, overrideAllowed, contentValidation);
 
   return (
     <section
@@ -299,7 +301,12 @@ const STATUS_TONE: Record<Tone, { header: string; icon: string }> = {
   },
 };
 
-function panelStatus(view: TransitionViewV1, acceptAllowed: boolean, overrideAllowed: boolean) {
+function panelStatus(
+  view: TransitionViewV1,
+  acceptAllowed: boolean,
+  overrideAllowed: boolean,
+  contentValidation?: 'not_applicable'
+) {
   if (view.decision.observation === 'supplied') {
     if (view.decision.outcome === 'rejected')
       return {
@@ -321,7 +328,9 @@ function panelStatus(view: TransitionViewV1, acceptAllowed: boolean, overrideAll
       icon: CheckCircle2,
       title: 'Ready to commit',
       detail:
-        'Checks passed for this snapshot. The Draft and branch are checked again when you commit.',
+        contentValidation === 'not_applicable'
+          ? 'Schema is ready to commit. No business content is being submitted; content validation is not applicable yet.'
+          : 'Checks passed for this snapshot. The Draft and branch are checked again when you commit.',
     };
   if (overrideAllowed)
     return {

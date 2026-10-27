@@ -310,6 +310,38 @@ export async function compileStudioSelection(
     adoption: { allowed: !adoptionReason, reason: adoptionReason },
   };
 }
+/** Continue the exact saved definition without reconstructing it from the Sources picker. */
+export async function workspaceStudioSelection(
+  c: Context,
+  db: AnyDB,
+  projectId: string,
+  workspace: Record<string, unknown>
+) {
+  const resolved = await resolveWorkspaceYSchema(workspace, db, projectId);
+  if (!resolved.schema)
+    throw new StudioError(
+      'CONFLICT',
+      'The exact bound Schema is unavailable. Restore its snapshot before editing.'
+    );
+  const basis = await resolveWorkspaceSchemaEditBasis(c, db, projectId, workspace, resolved.schema);
+  const selection: Awaited<ReturnType<typeof compileStudioSelection>> = {
+    schema: basis.schema,
+    schemaHash: basis.schemaHash,
+    selectionHash: basis.selectionHash,
+    sources: basis.sources,
+    composition: basis.composition,
+    renderPlan: basis.renderPlan,
+    origins: basis.origins,
+    nodeProvenance: basis.nodeProvenance,
+    compositionConflicts: [],
+    samples: [],
+    modules: [],
+    report: { valid: true, issues: [] },
+    adoption: { allowed: true, reason: null },
+  };
+  return { selection, basis };
+}
+
 export async function previewStudio(
   c: Context,
   db: AnyDB,
@@ -349,17 +381,33 @@ export async function previewStudio(
     editCandidate?.authoringDraft?.base.kind === 'composition'
       ? await readStudioComposition(db, projectId, editCandidate.authoringDraft.base)
       : undefined;
-  let selected = await compileStudioSelection(
-    c,
-    db,
-    projectId,
-    input.candidateIds,
-    (editCandidate?.localContribution ?? input.localContribution) as
-      | Record<string, unknown>
-      | undefined,
-    editCandidate ? { id: editCandidate.candidateId, revision: editCandidate.revision } : undefined,
-    recoveredComposition ?? input.composition
-  );
+  if (!input.candidateIds.length && !draft?.workspace_state)
+    throw new StudioError('NOT_FOUND', 'A Workspace with a bound Schema is required.');
+  if (
+    !input.candidateIds.length &&
+    (input.composition ||
+      Object.keys(input.localContribution ?? {}).length ||
+      (editCandidate && !editCandidate.authoringDraft))
+  )
+    throw new StudioError(
+      'INVALID_REQUEST',
+      'Edit the complete bound Schema definition, or select sources to compose a new definition.'
+    );
+  let selected = !input.candidateIds.length
+    ? (await workspaceStudioSelection(c, db, projectId, draft!.workspace_state!)).selection
+    : await compileStudioSelection(
+        c,
+        db,
+        projectId,
+        input.candidateIds,
+        (editCandidate?.localContribution ?? input.localContribution) as
+          | Record<string, unknown>
+          | undefined,
+        editCandidate
+          ? { id: editCandidate.candidateId, revision: editCandidate.revision }
+          : undefined,
+        recoveredComposition ?? input.composition
+      );
   if (editCandidate && !sameStudioSources(editCandidate.baseSources, selected.sources))
     throw new StudioError(
       'CONFLICT',
@@ -378,6 +426,7 @@ export async function previewStudio(
           resolved.schema
         );
         if (
+          input.candidateIds.length > 0 &&
           !input.composition &&
           basis.composition &&
           sameStudioSources(basis.sources, selected.sources)
