@@ -81,11 +81,13 @@ vi.mock('@t3x-dev/storage', async (original) => {
 
 import { schemaStudioRoutes } from '../routes/schema-studio.openapi';
 import { workspaceAuthoringRoutes } from '../routes/workspace-authoring.openapi';
+import { workspaceRoutes } from '../routes/workspaces.openapi';
 import { yschemaCompositionRoutes } from '../routes/yschema-composition.openapi';
 
 const app = new Hono().route('/', schemaStudioRoutes);
 app.route('/', yschemaCompositionRoutes);
 app.route('/', workspaceAuthoringRoutes);
+app.route('/', workspaceRoutes);
 const baseSchema = normalizeYSchemaObject({
   yschema: '0.1',
   name: 'base',
@@ -575,6 +577,145 @@ it('allows a Schema-only change even when the complete content matches Base', as
   const review = await fullReview(id, 'schema-only-change');
   expect((await fullDecision(id, review)).commit).toBeDefined();
   expect((await readWorkspaceAuthoring(db, { projectId, workspaceId: id })).hasChanges).toBe(false);
+});
+it('commits an empty Schema Review over HTTP, then saves metadata without crossing the authoring boundary', async () => {
+  const id = 'committed-schema-metadata';
+  await seed(id, false, { document: {} });
+  const path = `/v1/projects/${projectId}/workspaces/${id}`;
+  const before = (await findWorkspaceDraft(db, projectId, id))!;
+  const { ledger, basis } = workspaceAuthoringState(before.workspace_state);
+  const reviewed = await post(`${path}/authoring/reviews`, {
+    request_id: 'empty-schema-http-review',
+    expected_workspace_revision: before.revision,
+    expected_revision: ledger.compositionRevision,
+    expected_ref_head: basis.refHead,
+  });
+  expect(reviewed.status).toBe(200);
+  const transitionId = (await reviewed.json()).data.view.transition_id;
+  const review = await app.request(
+    `${path}/transition/review-snapshots/latest?transition_id=${transitionId}`
+  );
+  expect(review.status).toBe(200);
+  const { snapshot } = (await review.json()).data;
+  const precondition = snapshot.review.precondition;
+  // Preparing and reading Review must not write the Workspace it freezes.
+  expect(await findWorkspaceDraft(db, projectId, id)).toEqual(before);
+  const decided = await post(`${path}/transition/decide`, {
+    transition_id: transitionId,
+    outcome: 'accepted',
+    precondition: {
+      workspace_revision: precondition.workspaceRevision,
+      ref_head: precondition.refHead,
+      effect_digest: precondition.effectDigest,
+      proposal_digest: precondition.proposalDigest,
+      statement_digests: precondition.statementDigests,
+      policy_digest: precondition.policyDigest,
+    },
+  });
+  expect(decided.status, await decided.clone().text()).toBe(200);
+  expect((await decided.json()).data.commit.schema).toBe('t3x/commit/v2');
+  const committed = (await findWorkspaceDraft(db, projectId, id))!;
+  expect(committed.revision).toBe(before.revision + 1);
+  const commitHash = committed.workspace_state.lastCommitHash;
+  expect(commitHash).toMatch(/^sha256:/);
+  const patch = (workspace: Record<string, unknown>, revision: number) =>
+    app.request(path, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspace, if_revision: revision }),
+    });
+
+  // A read/save roundtrip after the first commit used to drop lastCommitHash
+  // and report a revision conflict even with the latest revision.
+  const read = (await (await app.request(path)).json()).data.workspace;
+  const saved = await patch({ ...read, title: 'Renamed after commit' }, read.revision);
+  expect(saved.status, await saved.clone().text()).toBe(200);
+  const metadata = (await findWorkspaceDraft(db, projectId, id))!;
+  expect(metadata.workspace_state).toEqual({
+    ...committed.workspace_state,
+    title: 'Renamed after commit',
+    updatedAt: expect.any(String),
+  });
+  expect(metadata.revision).toBe(committed.revision + 1);
+
+  // A client cannot replace the server-owned commit receipt either.
+  const forged = await patch(
+    { ...metadata.workspace_state, lastCommitHash: `sha256:${'f'.repeat(64)}` },
+    metadata.revision
+  );
+  expect(forged.status).toBe(200);
+  expect((await forged.json()).data.workspace.lastCommitHash).toBe(commitHash);
+  const current = (await findWorkspaceDraft(db, projectId, id))!;
+  for (const change of [
+    { schemaBindings: [] },
+    {
+      authoringLedger: {
+        ...current.workspace_state.authoringLedger,
+        actions: [],
+        compositionRevision: 99,
+      },
+    },
+    { authoringBasis: { ...current.workspace_state.authoringBasis, refHead: null } },
+    { baseCommitHash: null },
+    { yopsDraft: { operations: [] } },
+  ]) {
+    const rejected = await patch({ ...current.workspace_state, ...change }, current.revision);
+    expect(rejected.status).toBe(409);
+    expect((await rejected.json()).error).toMatchObject({
+      code: 'AUTHORING_COMMAND_REQUIRED',
+      message:
+        'This save cannot change protected Workspace state. Use the Schema or Draft editing actions instead.',
+    });
+    expect(await findWorkspaceDraft(db, projectId, id)).toEqual(current);
+  }
+  const stale = await patch(current.workspace_state, committed.revision);
+  expect(stale.status).toBe(409);
+  expect((await stale.json()).error).toMatchObject({ code: 'CONFLICT' });
+  expect(await findWorkspaceDraft(db, projectId, id)).toEqual(current);
+  expect((await getTransitionRefHead(db, { projectId, refName: id })).head).toBe(commitHash);
+
+  const active = workspaceAuthoringState(current.workspace_state);
+  await publishWorkspaceAuthoringAction(db, {
+    projectId,
+    workspaceId: id,
+    actionId: 'content-after-schema-commit',
+    actor: reviewer,
+    channel: 'manual',
+    expectedWorkspaceRevision: current.revision,
+    expectedRevision: active.ledger.compositionRevision,
+    expectedRefHead: active.basis.refHead,
+    operations: [{ set: { path: 'candidate', value: { requirements: { title: 'New content' } } } }],
+  });
+  const nextReview = await fullReview(id, 'review-before-metadata-change');
+  const reviewedDraft = (await findWorkspaceDraft(db, projectId, id))!;
+  expect(
+    (
+      await patch(
+        { ...reviewedDraft.workspace_state, title: 'Changed during Review' },
+        reviewedDraft.revision
+      )
+    ).status
+  ).toBe(200);
+  const changed = (await findWorkspaceDraft(db, projectId, id))!;
+  const staleDecision = await post(`${path}/transition/decide`, {
+    transition_id: nextReview.view.transitionId,
+    outcome: 'accepted',
+    precondition: {
+      workspace_revision: nextReview.view.precondition.workspaceRevision,
+      ref_head: nextReview.view.precondition.refHead,
+      effect_digest: nextReview.view.precondition.effectDigest,
+      proposal_digest: nextReview.view.precondition.proposalDigest,
+      statement_digests: nextReview.view.precondition.statementDigests,
+      policy_digest: nextReview.view.precondition.policyDigest,
+    },
+  });
+  expect(staleDecision.status).toBe(409);
+  expect((await staleDecision.json()).error).toEqual({
+    code: 'STALE_REVIEW',
+    message: 'Workspace or ref facts changed; review again.',
+  });
+  expect(await findWorkspaceDraft(db, projectId, id)).toEqual(changed);
+  expect((await getTransitionRefHead(db, { projectId, refName: id })).head).toBe(commitHash);
 });
 it('reopens a prepared snapshot without picker sources, edits twice and commits exact definitions with empty content', async () => {
   const id = 'snapshot-edit-loop';

@@ -560,11 +560,15 @@ export const workspaceRoutes = new OpenAPIHono({
 workspaceRoutes.route('/', workspaceDeliveryRoutes);
 
 workspaceRoutes.onError((error, c) => {
-  if (
-    error instanceof ConflictError ||
-    error instanceof DraftAuthoringConflictError ||
-    isWorkspaceIdConflict(error)
-  ) {
+  if (error instanceof DraftAuthoringConflictError) {
+    return errorResponse(
+      c,
+      'AUTHORING_COMMAND_REQUIRED',
+      'This save cannot change protected Workspace state. Use the Schema or Draft editing actions instead.',
+      { reason: error.message }
+    );
+  }
+  if (error instanceof ConflictError || isWorkspaceIdConflict(error)) {
     return errorResponse(
       c,
       'CONFLICT',
@@ -787,7 +791,7 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
   const storedWorkspace = storedDraft?.workspace_state ?? {};
   const {
     backendCandidateId: _storedBackendCandidateId,
-    lastCommitHash: _storedLastCommitHash,
+    lastCommitHash: storedLastCommitHash,
     schemaEditCandidate: storedSchemaEditCandidate,
     assistantSchemaSettings: storedAssistantSchemaSettings,
     schemaPending: storedSchemaPending,
@@ -820,6 +824,7 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
     updatedAt: savedAt,
     ...(typeof nextStatus === 'string' ? { status: nextStatus } : {}),
     ...(storedBackendCandidateId ? { backendCandidateId: storedBackendCandidateId } : {}),
+    ...(storedLastCommitHash !== undefined ? { lastCommitHash: storedLastCommitHash } : {}),
     ...(storedSchemaEditCandidate !== undefined
       ? { schemaEditCandidate: storedSchemaEditCandidate }
       : {}),
