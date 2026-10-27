@@ -86,7 +86,7 @@ describe('Schema data editor', () => {
     expect(screen.getByRole('button', { name: `Select source ${item}` })).toBeVisible();
     if (item.startsWith('object'))
       expect(screen.getByLabelText('Required project/profile')).toBeChecked();
-    fireEvent.click(screen.getByRole('button', { name: 'Save candidate' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
     await waitFor(() => expect(handlers.onSave).toHaveBeenCalledOnce());
     expect(handlers.onSave.mock.lastCall?.[2]).toEqual(handlers.onPreview.mock.lastCall?.[1]);
   });
@@ -173,7 +173,7 @@ describe('Schema data editor', () => {
       target: { value: 'string' },
     });
     fireEvent.click(screen.getByLabelText('Required checklist/items/done'));
-    fireEvent.click(screen.getByRole('button', { name: 'Save candidate' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
     await waitFor(() => expect(handlers.onSave).toHaveBeenCalledTimes(1));
     const saved = handlers.onSave.mock.calls[0]![0];
     expect(saved.nodes.checklist.requiredSlots).toEqual(['heading']);
@@ -202,7 +202,7 @@ describe('Schema data editor', () => {
     );
     expect(screen.getByLabelText('Type checklist/title')).toHaveValue('number');
     expect(screen.getByRole('alert')).toHaveTextContent('changed elsewhere');
-    expect(screen.getByRole('button', { name: 'Save candidate' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save edits' })).toBeDisabled();
     expect(handlers.onSave).not.toHaveBeenCalled();
   });
   it('uses shared attribute controls and blocks invalid JSON without losing it', async () => {
@@ -212,9 +212,7 @@ describe('Schema data editor', () => {
     fireEvent.change(screen.getByLabelText('default for slot checklist/title'), {
       target: { value: '{' },
     });
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Save candidate' })).toBeDisabled()
-    );
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save edits' })).toBeDisabled());
     fireEvent.change(screen.getByLabelText('Type checklist/items/done'), {
       target: { value: 'string' },
     });
@@ -222,9 +220,7 @@ describe('Schema data editor', () => {
     fireEvent.change(screen.getByLabelText('default for slot checklist/title'), {
       target: { value: '"Untitled"' },
     });
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Save candidate' })).toBeEnabled()
-    );
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save edits' })).toBeEnabled());
   });
 });
 
@@ -322,4 +318,38 @@ it('opens the verified original project and Commit without replacing it with the
   expect(screen.getByText('original/checklist')).toBeVisible();
   expect(screen.getByRole('link', { name: 'View release ↗' })).toBeVisible();
   expect(screen.queryByText('Original commit unavailable.')).not.toBeInTheDocument();
+});
+
+it('adds fields through the shared Add menu with an explicit parent and opens contextual properties', async () => {
+  const handlers = callbacks();
+  render(
+    <SchemaDataEditor
+      initialDefinition={definition}
+      revisionKey="r1"
+      loading={false}
+      {...handlers}
+    />
+  );
+  expect(
+    screen.queryByRole('complementary', { name: 'Schema properties' })
+  ).not.toBeInTheDocument();
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Add', exact: true }), { key: 'Enter' });
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Field…' }));
+  const parent = screen.getByLabelText('Parent node');
+  expect(screen.getByRole('button', { name: 'Add field', exact: true })).toBeDisabled();
+  fireEvent.change(parent, { target: { value: '["nodes","checklist"]' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Add field', exact: true }));
+  await waitFor(() =>
+    expect(handlers.onPreview).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        nodes: expect.objectContaining({
+          checklist: expect.objectContaining({
+            slots: expect.objectContaining({ new_field: { type: 'string' } }),
+          }),
+        }),
+      }),
+      expect.any(Array)
+    )
+  );
+  expect(screen.getByRole('complementary', { name: 'Schema properties' })).toBeVisible();
 });

@@ -52,7 +52,7 @@
 }
 .columns {
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) 180px 44px;
+  grid-template-columns: minmax(150px, 1fr) 180px 64px;
   gap: 8px;
   padding: 10px;
   border-bottom: 1px solid var(--stroke-divider);
@@ -95,7 +95,7 @@
   cursor: default;
 }
 .dragRow [role="treeitem"] {
-  grid-template-columns: minmax(150px, 1fr) 180px 44px;
+  grid-template-columns: minmax(150px, 1fr) 180px 64px;
 }
 .dragRow[data-drop-target],
 .rootDrop[data-drop-target] {
@@ -173,7 +173,7 @@
   height: 100%;
 }
 .fieldWorkarea[data-sources] {
-  grid-template-columns: 180px minmax(0, 1fr);
+  grid-template-columns: 200px minmax(0, 1fr);
 }
 .fieldMain {
   min-width: 0;
@@ -402,4 +402,11 @@
   .inline select {
     height: 36px;
   }
+}
+
+.toolbarSpacer {
+  margin-left: auto;
+}
+.editor [hidden] {
+  display: none;
 }

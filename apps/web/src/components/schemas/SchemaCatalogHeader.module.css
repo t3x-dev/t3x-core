@@ -11,3 +11,7 @@
 .slot {
   min-width: 0;
 }
+
+.header:has(.slot:empty) {
+  display: none;
+}

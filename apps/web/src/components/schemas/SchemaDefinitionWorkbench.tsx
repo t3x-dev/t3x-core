@@ -173,7 +173,7 @@ export function SchemaDefinitionWorkbench({
             Cancel
           </Button>
           <Button disabled={pending} onClick={() => void save()} variant="commit">
-            <Save className="size-4" /> {pending ? 'Saving…' : 'Save candidate'}
+            <Save className="size-4" /> {pending ? 'Saving…' : 'Save edits'}
           </Button>
         </div>
       </DialogContent>

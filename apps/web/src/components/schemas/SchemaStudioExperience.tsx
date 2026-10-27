@@ -225,6 +225,7 @@ export function SchemaStudioExperience({
   const [editorReset, setEditorReset] = useState(0);
   const [editorInvalid, setEditorInvalid] = useState(false);
   const [dataDirty, setDataDirty] = useState(false);
+  const [dataCanSave, setDataCanSave] = useState(false);
   const dataDirtyRef = useRef(false);
   const updateDataDirty = useCallback((dirty: boolean) => {
     dataDirtyRef.current = dirty;
@@ -912,12 +913,15 @@ export function SchemaStudioExperience({
         </p>
       ) : null}
       <SchemaStudioSurface
+        hidden={!!preparation}
         navigation={navigation}
         contextLocked={dataDirty || definitionOpen || applying}
         editorInvalid={editorInvalid}
         dataEditor={() => (
           <SchemaDataEditor
             navigationRef={navigationRef}
+            showSaveAction={false}
+            onSaveAvailabilityChange={setDataCanSave}
             onValidationChange={setEditorInvalid}
             provenance={data}
             sourceIdentities={sourceIdentities}
@@ -1049,6 +1053,8 @@ export function SchemaStudioExperience({
             : undefined
         }
         onReview={() => void openReview()}
+        onSave={() => void navigationRef.current?.save?.()}
+        canSave={dataCanSave && !definitionOpen && !applying && !schemaEdit.pending}
         onInspect={inspectDefinition}
         canReview={canReview}
         onDownload={downloadDefinition}
@@ -1258,6 +1264,7 @@ export function SchemaStudioExperience({
           target={preparation.target}
           open
           continueToReview
+          embedded
           onOpenChange={(open) => {
             if (!open) setPreparation(undefined);
           }}

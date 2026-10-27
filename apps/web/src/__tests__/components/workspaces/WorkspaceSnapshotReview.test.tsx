@@ -311,3 +311,53 @@ it('keeps recovery explicit on a stale decision and disables actions during refr
   expect(recovery.searchParams.get('workspace')).toBe('workspace_prd_handoff');
   expect(recovery.searchParams.has('reviewSnapshot')).toBe(false);
 });
+
+it('keeps Schema review and its decided snapshot in Schema while exposing the complete content scope', () => {
+  const data = snapshotResponse();
+  data.snapshot.snapshotId = 'rvs_schema_decided';
+  Object.assign(data, {
+    schema_review: {
+      schema: 't3x.application/workspace-schema-review/v1',
+      base: { status: 'unbound', schemaHash: null, definition: null, bindings: [] },
+      draft: {
+        status: 'bound',
+        schemaHash: 'sha256:draft',
+        definition: { nodes: { item: {} } },
+        bindings: [],
+      },
+      changes: [{ kind: 'ADD', path: 'nodes.item', summary: 'Item added' }],
+      actionCount: 2,
+      contentValidation: 'not_applicable',
+      baseContent: {},
+      draftContent: { unrelated: 'Also in this decision' },
+    },
+  });
+  const decide = vi.fn();
+  vi.mocked(useWorkspaceReviewSnapshot).mockReturnValue({
+    decide,
+    load: vi.fn(),
+    overrideReason: '',
+    setOverrideReason: vi.fn(),
+    state: { data: data as never, deciding: false, loading: false, error: null },
+  });
+  render(
+    <WorkspaceSnapshotReview
+      projectId="proj_1"
+      workspaceId="workspace_prd_handoff"
+      snapshotId="rvs_old"
+      context="schema"
+    />
+  );
+  expect(screen.getByRole('heading', { name: 'Review Schema changes' })).toBeVisible();
+  expect(screen.getByText('This decision covers the complete Workspace Draft.')).toBeVisible();
+  expect(screen.getByText('nodes.item')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: /All content changes/ }));
+  fireEvent.click(screen.getByText('Compare complete content'));
+  expect(screen.getByText(/Also in this decision/)).toBeVisible();
+  const destination = new URL(replace.mock.calls.at(-1)![0], 'http://local');
+  expect(destination.searchParams.get('tab')).toBe('schemas');
+  expect(destination.searchParams.get('schemaView')).toBe('review');
+  expect(destination.searchParams.get('reviewSnapshot')).toBe('rvs_schema_decided');
+  fireEvent.click(screen.getByRole('button', { name: 'Approve and commit' }));
+  expect(decide).toHaveBeenCalledWith('accepted', undefined);
+});

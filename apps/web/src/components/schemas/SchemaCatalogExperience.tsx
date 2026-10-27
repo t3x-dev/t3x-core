@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useEffect, useState } from 'react';
+import { WorkspaceSnapshotReview } from '@/components/workspaces/WorkspaceSnapshotReview';
 import { legacyExploreLocation } from '@/domain/project/exploreLocation';
 import headerStyles from './SchemaCatalogHeader.module.css';
 import { SchemaStudioExperience } from './SchemaStudioExperience';
@@ -38,6 +39,27 @@ function LegacyCatalogRedirect({
 }
 function ProjectSchemas({ projectId, children }: { projectId: string; children: ReactNode }) {
   const [toolbarTarget, setToolbarTarget] = useState<HTMLDivElement | null>(null);
+  const params = useSearchParams();
+  if (params.get('schemaView') === 'review') {
+    const workspaceId = params.get('workspace');
+    const snapshotId = params.get('reviewSnapshot');
+    if (!workspaceId || !snapshotId)
+      return (
+        <p role="alert" className="p-6">
+          A Workspace and review snapshot are required. Return to the Schema editor to prepare a
+          review.
+        </p>
+      );
+    return (
+      <WorkspaceSnapshotReview
+        key={`${projectId}:${workspaceId}:${snapshotId}`}
+        projectId={projectId}
+        workspaceId={workspaceId}
+        snapshotId={snapshotId}
+        context="schema"
+      />
+    );
+  }
   return (
     <SchemaToolbarContext.Provider value={toolbarTarget}>
       <section

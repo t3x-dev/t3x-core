@@ -5,10 +5,12 @@ import { Box, GitBranch, Loader2, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect } from 'react';
+import { SchemaReviewChanges } from '@/components/schemas/SchemaReviewChanges';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { checksHref } from '@/domain/project/checks';
 import { getProjectIdHistoryPath, getProjectIdRepoPath } from '@/domain/project/repoPath';
+import { schemaReviewHref } from '@/domain/schemas/schemaNavigation';
 import { workspaceCommitBlocker } from '@/domain/workspaces/changeDecision';
 import { fieldChangeCount, fieldChangeGroups } from '@/domain/workspaces/changeFields';
 import { workspaceReviewHref } from '@/domain/workspaces/reviewNavigation';
@@ -24,10 +26,12 @@ export function WorkspaceSnapshotReview({
   projectId,
   snapshotId,
   workspaceId,
+  context = 'workspace',
 }: {
   projectId: string;
   snapshotId: string;
   workspaceId: string;
+  context?: 'workspace' | 'schema';
 }) {
   const router = useRouter();
   const pane = useSearchParams().get('reviewPane');
@@ -51,11 +55,14 @@ export function WorkspaceSnapshotReview({
   const branch = snapshot?.review.precondition.refName;
   const activeSnapshotId = snapshot?.snapshotId ?? snapshotId;
   const workspaceHref = workspaceReviewHref(projectId, workspaceId, { branch, pane });
-  const reviewHref = workspaceReviewHref(projectId, workspaceId, {
-    branch,
-    pane,
-    snapshotId: activeSnapshotId,
-  });
+  const reviewHref =
+    context === 'schema'
+      ? schemaReviewHref(projectId, workspaceId, activeSnapshotId, branch)
+      : workspaceReviewHref(projectId, workspaceId, {
+          branch,
+          pane,
+          snapshotId: activeSnapshotId,
+        });
   const composeHref = workspaceReviewHref(projectId, workspaceId, { branch, mode: 'compose' });
   const historyHref = getProjectIdHistoryPath(projectId, { branch, commit, returnTo: reviewHref });
   const schemaHref = `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({
@@ -80,7 +87,7 @@ export function WorkspaceSnapshotReview({
       <div className={stageStyles.header}>
         <div className={stageStyles.identity}>
           <Box aria-hidden="true" />
-          <span title={workspaceId}>Workspace</span>
+          <span title={workspaceId}>{context === 'schema' ? 'Schema' : 'Workspace'}</span>
         </div>
         {branch ? (
           <span className="inline-flex items-center gap-1 text-xs font-mono">
@@ -88,24 +95,33 @@ export function WorkspaceSnapshotReview({
             {branch}
           </span>
         ) : null}
-        <WorkspaceStageNavigation
-          mode="review"
-          onModeChange={(mode) => {
-            if (mode === 'compose') router.push(composeHref);
-          }}
-        />
+        {context === 'schema' ? (
+          <nav aria-label="Schema workflow" className="flex items-center gap-3 text-sm">
+            <Link href={schemaHref}>Edit</Link>
+            <span aria-current="page" className="font-semibold">
+              Review
+            </span>
+          </nav>
+        ) : (
+          <WorkspaceStageNavigation
+            mode="review"
+            onModeChange={(mode) => {
+              if (mode === 'compose') router.push(composeHref);
+            }}
+          />
+        )}
         <div className={stageStyles.meta}>
           <Link className={stageStyles.chatToggle} href={workspaceHref}>
-            Current draft
+            {context === 'schema' ? 'Workspace Draft' : 'Current draft'}
           </Link>
         </div>
       </div>
       <header className="border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3">
         <div className="mx-auto flex max-w-6xl flex-wrap items-start gap-3">
-          <div className="min-w-0 flex-1">
+          <div className="w-full min-w-0 sm:w-auto sm:flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="truncate text-base font-semibold text-[var(--text-primary)]">
-                Review
+                {context === 'schema' ? 'Review Schema changes' : 'Review'}
               </h1>
               <Badge variant="commit-subtle">
                 {snapshot
@@ -126,7 +142,7 @@ export function WorkspaceSnapshotReview({
               <Link href={stateHref}>View State & export</Link>
             </Button>
           ) : null}
-          {schemaReview ? (
+          {schemaReview && (context !== 'schema' || commit) ? (
             <Button asChild size="sm" variant="outline">
               <Link href={schemaHref}>{commit ? 'Continue editing Schema' : 'Edit Schema'}</Link>
             </Button>
@@ -164,7 +180,9 @@ export function WorkspaceSnapshotReview({
       <div className="mx-auto grid max-w-6xl gap-4 p-4">
         {snapshot ? (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-[var(--text-secondary)]">
-            <span title={activeSnapshotId}>Snapshot {activeSnapshotId}</span>
+            <span className="min-w-0 break-all" title={activeSnapshotId}>
+              Snapshot {activeSnapshotId}
+            </span>
             <Link
               className="underline"
               href={checksHref(projectId, { workspace: workspaceId, returnTo: reviewHref })}
@@ -197,7 +215,7 @@ export function WorkspaceSnapshotReview({
             <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">{state.error}</p>
             <p className="mt-2 text-xs text-[var(--text-secondary)]">
               If the Draft or branch has changed,{' '}
-              <Link className="underline" href={workspaceHref}>
+              <Link className="underline" href={context === 'schema' ? schemaHref : workspaceHref}>
                 open the current draft and prepare a new review
               </Link>
               . This snapshot stays available in Run.
@@ -212,16 +230,25 @@ export function WorkspaceSnapshotReview({
                 branch={branch ?? null}
                 fieldCount={fieldGroups ? fieldChangeCount(fieldGroups) : null}
                 schemaChangeCount={schemaReview?.changes.length ?? 0}
-                title={fieldGroups?.[0]?.label ?? null}
+                title={
+                  context === 'schema' ? 'Schema and content' : (fieldGroups?.[0]?.label ?? null)
+                }
                 view={view}
               />
             </div>
             <div className="min-w-0 lg:col-start-1">
-              <WorkspaceSchemaReviewPanel
-                review={state.data?.schema_review}
-                historical={Boolean(commit)}
-              />
-              <ChangeReviewChanges groups={fieldGroups} operations={view.change.operations} />
+              {context === 'schema' ? (
+                <SchemaReviewChanges
+                  review={schemaReview}
+                  groups={fieldGroups}
+                  operations={view.change.operations}
+                />
+              ) : (
+                <>
+                  <WorkspaceSchemaReviewPanel review={schemaReview} historical={Boolean(commit)} />
+                  <ChangeReviewChanges groups={fieldGroups} operations={view.change.operations} />
+                </>
+              )}
             </div>
             <div className="lg:sticky lg:top-4 lg:col-start-2 lg:row-span-3 lg:row-start-1">
               <ChangeDecisionPanel
@@ -232,7 +259,11 @@ export function WorkspaceSnapshotReview({
                 onOverrideReasonChange={setOverrideReason}
                 overrideReason={overrideReason}
                 view={view}
-                commitBlocker={workspaceCommitBlocker(state.data?.schema_review, view)}
+                commitBlocker={
+                  context === 'schema' && !schemaReview
+                    ? 'The complete Schema review is unavailable. Prepare a new review from Schema.'
+                    : workspaceCommitBlocker(schemaReview, view)
+                }
                 checksHref={checksHref(projectId, {
                   recordId: `review:${activeSnapshotId}`,
                   returnTo: reviewHref,

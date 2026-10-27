@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import {
   schemaBrowseHref,
+  schemaReviewHref,
   schemaSourceHref,
   schemaWorkspaceHref,
 } from '@/domain/schemas/schemaNavigation';
@@ -47,4 +48,18 @@ it('preserves the incoming candidate when normalizing an initial target', () => 
   const params = new URL(href, 'http://local').searchParams;
   expect(params.get('candidate')).toBe('exact');
   expect(params.get('tab')).toBe('schemas');
+});
+
+it('opens the complete review in Schema and preserves exact identifiers', () => {
+  const url = new URL(
+    schemaReviewHref('p', 'draft/a', 'snapshot:a+b', 'feature/a'),
+    'http://local'
+  );
+  expect(Object.fromEntries(url.searchParams)).toEqual({
+    tab: 'schemas',
+    schemaView: 'review',
+    workspace: 'draft/a',
+    reviewSnapshot: 'snapshot:a+b',
+    branch: 'feature/a',
+  });
 });

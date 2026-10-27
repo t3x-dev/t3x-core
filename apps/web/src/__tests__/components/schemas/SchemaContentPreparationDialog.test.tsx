@@ -54,6 +54,7 @@ const props = {
   onPrepared: mocks.prepared,
 };
 async function addMove() {
+  fireEvent.click(screen.getByText('Advanced content edits'));
   await waitFor(() => expect(screen.getByRole('button', { name: '+ Add change' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: '+ Add change' }));
   fireEvent.change(screen.getByLabelText('Action for change 1'), { target: { value: 'move' } });
@@ -74,7 +75,7 @@ it('previews explicit mappings and invalidates approval as soon as the input cha
   await addMove();
   expect(screen.getByRole('button', { name: 'Save prepared Draft' })).toBeDisabled();
   fireEvent.click(screen.getByRole('checkbox', { name: /My changes explicitly handle/ }));
-  fireEvent.click(screen.getByRole('button', { name: 'Preview migration' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Preview result' }));
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Save prepared Draft' })).toBeEnabled()
   );
@@ -94,7 +95,7 @@ it('retries a lost response with the same request identity and saves through the
   render(<SchemaContentPreparationDialog {...props} />);
   await addMove();
   fireEvent.click(screen.getByRole('checkbox', { name: /My changes explicitly handle/ }));
-  fireEvent.click(screen.getByRole('button', { name: 'Preview migration' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Preview result' }));
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Save prepared Draft' })).toBeEnabled()
   );
@@ -152,7 +153,7 @@ it('uses the initial checked preview for unchanged content without a second conf
   expect(screen.getByRole('region', { name: 'Prepared Draft' })).toHaveTextContent(
     'Edited content'
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Preview migration' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Preview result' }));
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Save prepared Draft' })).toBeEnabled()
   );
@@ -185,7 +186,7 @@ it('uses typed inputs for object values and preserves numbers, booleans, empty t
     });
   }
   fireEvent.change(screen.getByLabelText('Value for change 1, item 1'), { target: { value: '0' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Preview migration' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Preview result' }));
   await waitFor(() =>
     expect(mocks.preview).toHaveBeenLastCalledWith(
       'p',
@@ -207,7 +208,7 @@ it('validates incomplete form values locally with a human-readable error', async
   render(<SchemaContentPreparationDialog {...props} />);
   await waitFor(() => expect(screen.getByRole('button', { name: '+ Add change' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: '+ Add change' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Preview migration' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Preview result' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Change 1: choose a content path.');
   expect(mocks.preview).toHaveBeenCalledTimes(1);
   expect(mocks.apply).not.toHaveBeenCalled();
@@ -223,7 +224,7 @@ it('discards a delayed preview when a form field changes and requires a fresh co
         finish = resolve;
       })
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Preview migration' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Preview result' }));
   act(() => window.dispatchEvent(new Event('focus')));
   fireEvent.change(screen.getByLabelText('Destination for change 1'), {
     target: { value: 'candidate/other' },
@@ -351,15 +352,15 @@ it.each([
   });
   expect(mocks.apply).not.toHaveBeenCalled();
   fireEvent.click(action);
-  expect(screen.getByLabelText('Content path for change 1')).toHaveValue('candidate/item/title');
-  expect(screen.getByLabelText('Value for change 1')).toHaveValue(
+  expect(screen.queryByLabelText('Content path for change 1')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('Value for item/title')).toHaveValue(
     hasDefault ? 'Suggested title' : ''
   );
   if (!hasDefault)
-    fireEvent.change(screen.getByLabelText('Value for change 1'), {
+    fireEvent.change(screen.getByLabelText('Value for item/title'), {
       target: { value: 'User title' },
     });
-  fireEvent.click(screen.getByRole('button', { name: 'Preview migration' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Preview result' }));
   await waitFor(() =>
     expect(mocks.preview).toHaveBeenLastCalledWith(
       'p',
@@ -428,4 +429,62 @@ it('shows empty Draft additions without claiming the root or an expanded parent 
   expect(comparison).toHaveTextContent('Not present');
   expect(comparison).toHaveTextContent('New title');
   expect(comparison).not.toHaveTextContent('Removed');
+});
+
+it('creates a missing node without exposing its internal envelope, then resolves newly required fields', async () => {
+  const initial = {
+    ...preview(),
+    impact: { items: [] },
+    before: { candidate: { existing: {} } },
+    after: { candidate: { existing: {} } },
+    schema: {
+      nodes: {
+        item: { required: true, requiredSlots: ['title'], slots: { title: { type: 'string' } } },
+      },
+    },
+    issues: [{ code: 'REQUIRED_NODE_MISSING', path: 'item', message: 'Item is required' }],
+  };
+  mocks.preview.mockImplementation(async (_p, _w, input) => {
+    if (!input.commands.length) return initial;
+    return {
+      ...initial,
+      after: {
+        candidate: { existing: {}, item: input.commands.length > 1 ? { title: 'User title' } : {} },
+      },
+      canPrepare: input.commands.length > 1,
+      issues:
+        input.commands.length > 1
+          ? []
+          : [{ code: 'REQUIRED_SLOT_MISSING', path: 'item/title', message: 'Title is required' }],
+    };
+  });
+  render(<SchemaContentPreparationDialog {...props} continueToReview embedded />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Add node item' }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Content path for change 1')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Continue to Review' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Preview result' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Fill item/title' }));
+  fireEvent.change(screen.getByLabelText('Value for item/title'), {
+    target: { value: 'User title' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Preview result' }));
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Continue to Review' })).toBeEnabled()
+  );
+  expect(screen.getByRole('region', { name: 'Resolve item' })).toHaveTextContent('Resolved');
+  expect(screen.getByRole('region', { name: 'Resolve item/title' })).toHaveTextContent('Resolved');
+  fireEvent.click(screen.getByRole('button', { name: 'Continue to Review' }));
+  await waitFor(() =>
+    expect(mocks.apply).toHaveBeenCalledWith(
+      'p',
+      'w',
+      expect.objectContaining({
+        commands: [
+          { kind: 'set', path: 'candidate/item', value: {} },
+          { kind: 'set', path: 'candidate/item/title', value: 'User title' },
+        ],
+      })
+    )
+  );
 });

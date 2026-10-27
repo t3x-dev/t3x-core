@@ -1,7 +1,7 @@
 'use client';
 
 import type { StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
-import { MoreHorizontal } from 'lucide-react';
+import { Settings2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -65,7 +65,7 @@ export function SchemaSourceManager({
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="sm" aria-label="Manage sources" title="Manage sources">
-          <MoreHorizontal size={16} aria-hidden="true" />
+          <Settings2 size={14} aria-hidden="true" /> Manage
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -129,7 +129,10 @@ export function SchemaSourceManager({
                   </span>
                 </label>
                 <div className={s.sourceMetadata}>
-                  <code>{module.candidate?.source?.hash ?? 'Hash unavailable'}</code>
+                  <details>
+                    <summary>Source details</summary>
+                    <code>{module.candidate?.source?.hash ?? 'Hash unavailable'}</code>
+                  </details>
                   {dependencies.length ? <span>Required by {dependencies.join(', ')}</span> : null}
                 </div>
                 {module.candidate ? (

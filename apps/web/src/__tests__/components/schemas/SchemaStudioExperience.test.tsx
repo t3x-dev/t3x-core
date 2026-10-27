@@ -524,7 +524,7 @@ it('opens the embedded definition workbench and saves the YAML candidate', async
       value: dump({ ...(load(yaml.value) as object), nodes: { new_node: { slots: {} } } }),
     },
   });
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Save candidate' }));
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save edits' }));
   await waitFor(() =>
     expect(mocks.saveSchemaEdit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -590,7 +590,7 @@ it('starts a new branch editor from its inherited bound definition, not the orig
   const yaml = screen.getByLabelText('Schema definition YAML editor') as HTMLTextAreaElement;
   expect(load(yaml.value)).toEqual(inherited);
   fireEvent.change(yaml, { target: { value: yaml.value.replace('type: string', 'type: number') } });
-  fireEvent.click(screen.getByRole('button', { name: 'Save candidate' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
   await waitFor(() =>
     expect(mocks.saveSchemaEdit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -641,7 +641,7 @@ it('edits existing fields against a frozen Base and retains unsaved input while 
   mocks.data = undefined;
   rerender(<SchemaStudioExperience projectId="p" />);
   expect(screen.getByLabelText('Schema definition YAML editor')).toHaveValue(editedYaml);
-  fireEvent.click(screen.getByRole('button', { name: 'Save candidate' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
   await waitFor(() =>
     expect(mocks.saveSchemaEdit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -948,7 +948,7 @@ it('edits Schema fields in the default Data view and saves through the existing 
   );
   expect(screen.getByRole('tree', { name: 'Schema fields' })).toBeVisible();
   expect(screen.getByLabelText('Required checklist/title')).toBeChecked();
-  fireEvent.click(screen.getByRole('button', { name: 'Save candidate' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
   await waitFor(() =>
     expect(mocks.saveSchemaEdit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -999,7 +999,7 @@ it('does not replace an unsaved Data edit when another candidate revision arrive
   rerender(<SchemaStudioExperience projectId="p" />);
   expect(screen.getByLabelText('Type checklist/title')).toHaveValue('number');
   expect(screen.getByRole('alert')).toHaveTextContent('changed elsewhere');
-  expect(screen.getByRole('button', { name: 'Save candidate' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Save edits' })).toBeDisabled();
   expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
 });
 
@@ -1092,11 +1092,12 @@ it.each([
       })
     )
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Editing actions' }), { key: 'Enter' });
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Discard changes' }));
   await waitFor(() => expect(screen.getByLabelText('Type chosen/title')).toHaveValue('string'));
   expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
   fireEvent.change(screen.getByLabelText('Type chosen/title'), { target: { value: 'object' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Save candidate' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
   await waitFor(() =>
     expect(mocks.saveSchemaEdit).toHaveBeenCalledWith(
       expect.objectContaining({

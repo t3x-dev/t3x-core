@@ -1,4 +1,4 @@
-import { workspaceReviewHref } from '@/domain/workspaces/reviewNavigation';
+import { schemaReviewHref } from '@/domain/schemas/schemaNavigation';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { getSharedApiClient } from './sharedApiClient';
 
@@ -33,8 +33,5 @@ export async function prepareSchemaWorkspaceReview(projectId: string, workspaceI
     transition_id: reviewed.view.transition_id,
   });
   if (!saved?.snapshot) throw new Error('The saved Review is unavailable. Retry Review.');
-  return workspaceReviewHref(projectId, workspaceId, {
-    branch: draft.basis.refName,
-    snapshotId: saved.snapshot.snapshotId,
-  });
+  return schemaReviewHref(projectId, workspaceId, saved.snapshot.snapshotId, draft.basis.refName);
 }

@@ -62,7 +62,7 @@ function setup(initial: Record<string, unknown> = structuredClone(definition)) {
   const view = render(<Harness />);
   // The dialog footer survives editor updates. Reuse its control rather than
   // recomputing accessible names across every (including collapsed) field.
-  const saveButton = screen.getByRole('button', { name: 'Save candidate' });
+  const saveButton = screen.getByRole('button', { name: 'Save edits' });
   const change = (label: string, value: string) =>
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
   const saved = () => {
