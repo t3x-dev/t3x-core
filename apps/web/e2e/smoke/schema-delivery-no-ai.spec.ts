@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import { API_BASE, cleanupProject, createTestProject } from '../fixtures/api-helpers';
 import { expect, test } from '../fixtures/test';
 
@@ -17,21 +16,27 @@ test('no-AI definition adoption, native repair, reviewed decision and exact Comm
     const saved = await request.patch(endpoint, { data: { workspace } });
     expect(saved.ok(), await saved.text()).toBe(true);
     await page.setViewportSize({ width: 1480, height: 960 });
-    await page.goto(`${path}?tab=schemas&schemaView=discover`, { waitUntil: 'networkidle' });
-    await page.getByRole('textbox', { name: 'Search definitions' }).fill('Care checklist');
-    await page.getByRole('textbox', { name: 'Search definitions' }).press('Enter');
-    await expect(page).toHaveURL(/schemaView=browse/);
-    await page.getByRole('button', { name: 'Explore Care checklist 1.0.0', exact: true }).click();
-    await expect(page).toHaveURL(/schemaView=release/);
+    await page.goto(`/explore?view=browse&type=schemas&studioTarget=${projectId}`, {
+      waitUntil: 'networkidle',
+    });
+    await page.getByRole('searchbox', { name: 'Search projects and schemas' }).fill('Care checklist');
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await page.getByRole('button', { name: 'Explore Care checklist', exact: true }).click();
+    await expect(page).toHaveURL(/catalogName=t3x%2Fcare-checklist/);
+    await page.getByRole('button', { name: 'Use Schema', exact: true }).click();
+    await page.getByLabel('Destination project', { exact: true }).selectOption(projectId);
     await page.getByRole('button', { name: 'Add & open Studio', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Sample preview' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Schema Studio', exact: true })).toBeVisible();
     await page.getByLabel('Target Workspace').selectOption(workspaceId);
-    await page.getByRole('button', { name: 'Review & apply', exact: true }).click();
-    await page.getByRole('dialog', { name: 'Apply exact definition' }).getByRole('button', { name: 'Confirm & apply' }).click();
-    await expect(page.getByRole('status').filter({ hasText: 'Exact definition applied' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Review Schema changes', exact: true })).toBeEnabled();
+    await page.getByRole('button', { name: 'Review Schema changes', exact: true }).click();
+    const applyDialog = page.getByRole('dialog');
+    await expect(applyDialog).toBeVisible();
+    await applyDialog.getByRole('button', { name: /Confirm & apply|Adopt & return to Workspace/ }).click();
+    await expect(page.getByRole('region', { name: 'Workspace detail' })).toBeVisible();
     const applied = (await (await request.get(endpoint)).json()).data.workspace;
     expect(applied.schemaBindings[0].rootKey).toBe('candidate');
-    expect(applied.schemaReview.verdict).toBe('needs_review');
+    expect(applied.schemaReview.verdict).toBe('ready');
     await page.goto(`${path}?tab=workspaces&workspace=${workspaceId}`, { waitUntil: 'networkidle' });
     await page.screenshot({ path: testInfo.outputPath('delivery-workspace.png'), animations: 'disabled' });
 
@@ -41,8 +46,10 @@ test('no-AI definition adoption, native repair, reviewed decision and exact Comm
       { key: 'checklist', slots: { title: 'Daily dog care' }, children: [] },
       { key: 'items', slots: {}, children: [{ key: 'water', slots: { done: false, ...(withTask ? { task: 'Refresh the water bowl' } : {}) }, children: [] }] },
     ] }], relations: [] });
-    await page.getByRole('button', { name: 'Edit content', exact: true }).click();
-    const editor = page.getByRole('dialog', { name: 'Edit Workspace content' });
+    await page.getByRole('button', { name: 'Workspace tools', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Edit structured State', exact: true }).click();
+    const editor = page;
+    await expect(editor.getByRole('region', { name: 'Edit structured content' })).toBeVisible();
     const addNode = async (parent: string, name: string) => {
       await editor.getByLabel(`Show Child node in ${parent}`, { exact: true }).click();
       await editor.getByRole('textbox', { name: `Child node in ${parent}`, exact: true }).fill(name);
@@ -65,14 +72,14 @@ test('no-AI definition adoption, native repair, reviewed decision and exact Comm
       await editor.getByRole('button', { name: 'Review structured change', exact: true }).click();
       const result = await response;
       expect(result.ok(), await result.text()).toBe(true);
-      await expect(editor.getByRole('link', { name: 'Open Changes', exact: true })).toBeVisible();
+      await expect(editor.getByRole('link', { name: 'Open Review', exact: true })).toBeVisible();
       return (await result.json()).data;
     };
     const incomplete = await browserReview();
     await page.screenshot({ path: testInfo.outputPath('delivery-blocked.png'), animations: 'disabled' });
     await addField('candidate/items/water', 'task', 'Refresh the water bowl');
     // Editing invalidates the old review link; only a newly verified snapshot can be decided.
-    await expect(editor.getByRole('link', { name: 'Open Changes', exact: true })).toHaveCount(0);
+    await expect(editor.getByRole('link', { name: 'Open Review', exact: true })).toHaveCount(0);
     const repaired = await browserReview();
     expect(repaired.precondition.effect_digest).not.toBe(incomplete.precondition.effect_digest);
     await editor.getByRole('region', { name: 'Edit structured content' }).evaluate((element) => { element.scrollTop = 0; });
@@ -80,11 +87,11 @@ test('no-AI definition adoption, native repair, reviewed decision and exact Comm
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: testInfo.outputPath('delivery-editor-mobile.png'), animations: 'disabled' });
     await page.setViewportSize({ width: 1480, height: 960 });
-    await editor.getByRole('link', { name: 'Open Changes', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Approve and save', exact: true })).toBeEnabled();
+    await editor.getByRole('link', { name: 'Open Review', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Approve and commit', exact: true })).toBeEnabled();
     await page.screenshot({ path: testInfo.outputPath('delivery-review.png'), fullPage: true, animations: 'disabled' });
     const decisionResponse = page.waitForResponse((response) => response.url().endsWith(`/workspaces/${workspaceId}/transition/decide`) && response.request().method() === 'POST');
-    await page.getByRole('button', { name: 'Approve and save', exact: true }).click();
+    await page.getByRole('button', { name: 'Approve and commit', exact: true }).click();
     const decision = await decisionResponse;
     expect(decision.ok(), await decision.text()).toBe(true);
     const result = (await decision.json()).data;
@@ -97,19 +104,15 @@ test('no-AI definition adoption, native repair, reviewed decision and exact Comm
     expect(retained.ok()).toBe(true);
     expect((await retained.json()).data.snapshot_digest).toBe(incomplete.review_snapshot.snapshotDigest);
 
-    await page.goto(`${path}?tab=schemas&schemaView=active`);
-    await expect(page.getByRole('region', {name: 'Active schema bindings'})).toContainText('Native YSchema validation passed');
+    await page.goto(`${path}?tab=workspaces&workspace=${workspaceId}`);
+    await expect(page.getByLabel('Workspace schema').locator('option:checked')).toContainText(
+      't3x/care-checklist'
+    );
     await page.screenshot({ path: testInfo.outputPath('delivery-active.png'), animations: 'disabled' });
-    await page.goto(`${path}?commit=${encodeURIComponent(commitHash)}`);
-    await page.getByRole('button', { name: 'Export', exact: true }).click();
-    await expect(page.getByRole('dialog')).toContainText(commitHash);
-    await page.getByRole('radio', { name: 'JSON' }).check();
-    const downloadEvent = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'Download', exact: true }).click();
-    const download = await downloadEvent;
-    const bytes = await readFile((await download.path())!, 'utf8');
     const exported = await request.get(`${API_BASE}/commits/${encodeURIComponent(commitHash)}/export?project_id=${projectId}&format=json`);
-    expect(bytes).toBe((await exported.json()).data.content);
+    const repeatedExport = await request.get(`${API_BASE}/commits/${encodeURIComponent(commitHash)}/export?project_id=${projectId}&format=json`);
+    const bytes = (await exported.json()).data.content as string;
+    expect((await repeatedExport.json()).data.content).toBe(bytes);
     expect(bytes).toContain('Refresh the water bowl');
     await page.screenshot({ path: testInfo.outputPath('delivery-export.png'), animations: 'disabled' });
     // A separately authorized override must preserve failed-check status even if the

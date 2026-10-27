@@ -1,5 +1,11 @@
 # @t3x-dev/api-client
 
+## 1.5.1
+
+### Patch Changes
+
+- @t3x-dev/core@1.5.1
+
 ## 1.4.0
 
 ### Minor Changes

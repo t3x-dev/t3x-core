@@ -606,16 +606,12 @@ export function ProjectStateTab({
       className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--surface-card)]"
       data-state-view={activeView}
     >
-      {activeView === 'canvas' ? (
-        <div className="flex min-h-10 shrink-0 flex-wrap items-center border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-1">
-          <StateModeTabs
-            activeMode={activeView === 'canvas' ? 'canvas' : 'snapshot'}
-            onModeChange={(mode) =>
-              updateActiveView(mode === 'canvas' ? 'canvas' : lastSnapshotView)
-            }
-          />
-        </div>
-      ) : null}
+      <div className="flex min-h-10 shrink-0 flex-wrap items-center border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-1">
+        <StateModeTabs
+          activeMode={activeView === 'canvas' ? 'canvas' : 'snapshot'}
+          onModeChange={(mode) => updateActiveView(mode === 'canvas' ? 'canvas' : lastSnapshotView)}
+        />
+      </div>
 
       <div className="grid min-h-0 flex-1 overflow-auto min-[1121px]:overflow-hidden">
         <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--surface-card)]">
@@ -1007,7 +1003,12 @@ function StateModeTabs({
     <SegmentedControl
       ariaLabel="State modes"
       itemClassName="min-w-[110px] text-xs"
-      items={modes.map((mode) => ({ icon: mode.icon, label: mode.label, value: mode.id }))}
+      items={modes.map((mode) => ({
+        dataIntroTarget: mode.id === 'snapshot' ? 'state-snapshot-mode' : undefined,
+        icon: mode.icon,
+        label: mode.label,
+        value: mode.id,
+      }))}
       onValueChange={onModeChange}
       value={activeMode}
     />

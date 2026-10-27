@@ -65,6 +65,26 @@ export async function createTestTurn(
   return data.data.turn_hash;
 }
 
+/** Upload a small text material that can be used as accepted source evidence. */
+export async function createTestMaterial(
+  request: APIRequestContext,
+  projectId: string,
+  content = 'Reviewed source evidence for the test release.'
+): Promise<{ materialId: string; contentHash: string }> {
+  const response = await request.post(`${API_BASE}/projects/${projectId}/materials/document`, {
+    multipart: {
+      file: {
+        name: 'release-evidence.txt',
+        mimeType: 'text/plain',
+        buffer: Buffer.from(content),
+      },
+    },
+  });
+  const data = await response.json();
+  if (!data.success) throw new Error(`Failed to create material: ${data.error?.message}`);
+  return { materialId: data.data.id, contentHash: data.data.content_hash };
+}
+
 /**
  * Create a frame-based commit
  */

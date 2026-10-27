@@ -1,45 +1,32 @@
-import { readFile } from 'node:fs/promises';
-import type { APIRequestContext, Page } from '@playwright/test';
-import { API_BASE, cleanupProject, createTestProject } from '../fixtures/api-helpers';
+import type { APIRequestContext } from '@playwright/test';
+import {
+  API_BASE,
+  cleanupProject,
+  createTestBranch,
+  createTestMaterial,
+  createTestProject,
+} from '../fixtures/api-helpers';
 import { expect, test } from '../fixtures/test';
 
-const WORKSPACE_TREE = [
-  {
-    key: 'prd',
-    slots: { title: 'Post-commit workspace smoke' },
-    children: [
-      {
-        key: 'summary',
-        slots: {
-          problem: 'Users need to continue working after a commit.',
-          audience: 'Product teams',
-          outcome: 'A fresh iteration keeps the committed baseline.',
-        },
-        children: [],
-      },
-      {
-        key: 'requirements',
-        slots: {},
-        children: [
-          {
-            key: 'continue_after_commit',
-            slots: {
-              acceptance: 'Users can start a fresh iteration from the committed baseline.',
-              priority: 'P1',
-              title: 'Continue after commit',
-            },
-            children: [],
-          },
-        ],
-      },
-    ],
+const WORKSPACE_PRD = {
+  title: 'Post-commit workspace smoke',
+  summary: {
+    problem: 'Users need to continue working after a commit.',
+    audience: 'Product teams',
+    outcome: 'A fresh iteration keeps the committed baseline.',
   },
-];
+  requirements: {
+    continue_after_commit: {
+      title: 'Continue after commit',
+      priority: 'must',
+      acceptance: ['Users can continue from the committed baseline.'],
+    },
+  },
+};
 
-interface CommittedWorkspaceFixture {
+interface RenewedWorkspaceFixture {
   commitHash: string;
   projectId: string;
-  projectName: string;
   repoPath: string;
   workspaceId: string;
 }
@@ -53,177 +40,121 @@ function repoSlug(name: string): string {
     .replace(/-{2,}/g, '-');
 }
 
-async function createCommittedWorkspaceFixture(
+async function createRenewedWorkspaceFixture(
   request: APIRequestContext,
   scenario: string
-): Promise<CommittedWorkspaceFixture> {
+): Promise<RenewedWorkspaceFixture> {
   const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const projectName = `Post commit ${scenario} ${token}`;
   const { projectId } = await createTestProject(request, projectName);
-  const workspaceId = `workspace_post_commit_${scenario}_${token.replaceAll('-', '_')}`;
+  const material = await createTestMaterial(
+    request,
+    projectId,
+    'Product teams need to continue working from the committed PRD baseline.'
+  );
+  const workspaceId = 'workspace_branch:main';
+  const endpoint = `${API_BASE}/projects/${projectId}/workspaces/${encodeURIComponent(workspaceId)}`;
   try {
-    const saveResponse = await request.patch(
-      `${API_BASE}/projects/${projectId}/workspaces/${workspaceId}`,
-      {
+    let currentResponse = await request.get(endpoint);
+    if (currentResponse.status() === 404) {
+      const created = await request.patch(endpoint, {
         data: {
           workspace: {
-            baseCommitHash: null,
             id: workspaceId,
-            outputTargets: [],
             projectId,
-            schemaBindings: [{ mode: 'pinned', schemaName: 'PRD Schema', version: 'v2' }],
-            schemaCandidate: {
-              fields: [
-                {
-                  id: 'field_problem',
-                  label: 'Problem',
-                  path: 'prd/summary/problem',
-                  required: true,
-                  status: 'covered',
-                  type: 'string',
-                  value: 'Users need to continue working after a commit.',
-                },
-                {
-                  id: 'field_audience',
-                  label: 'Audience',
-                  path: 'prd/summary/audience',
-                  required: true,
-                  status: 'covered',
-                  type: 'string',
-                  value: 'Product teams',
-                },
-                {
-                  id: 'field_outcome',
-                  label: 'Outcome',
-                  path: 'prd/summary/outcome',
-                  required: true,
-                  status: 'covered',
-                  type: 'string',
-                  value: 'A fresh iteration keeps the committed baseline.',
-                },
-                {
-                  id: 'field_requirement_title',
-                  label: 'Requirement title',
-                  path: 'prd/requirements/continue_after_commit/title',
-                  required: true,
-                  status: 'covered',
-                  type: 'string',
-                  value: 'Continue after commit',
-                },
-                {
-                  id: 'field_requirement_acceptance',
-                  label: 'Acceptance',
-                  path: 'prd/requirements/continue_after_commit/acceptance',
-                  required: true,
-                  status: 'covered',
-                  type: 'string',
-                  value: 'Users can start a fresh iteration from the committed baseline.',
-                },
-              ],
-              summary: 'Committed workspace candidate for live E2E verification.',
-            },
-            schemaReview: {
-              gaps: [],
-              summary: 'Ready to commit.',
-              verdict: 'needs_review',
-            },
+            title: 'Main workspace',
+            targetBranch: 'main',
+            status: 'draft',
+            summary: '',
+            updatedAt: new Date().toISOString(),
+            baseCommitHash: null,
             sourceBundle: [
               {
-                id: 'source_chat_before_commit',
-                title: 'Committed source chat',
-                type: 'chat',
-                previewTurns: [
-                  {
-                    author: 'User',
-                    content: 'Keep this conversation in the committed history.',
-                    id: 'turn_before_commit',
-                    role: 'user',
-                  },
-                ],
-              },
-              {
-                id: 'source_material_kept',
-                previewText: 'Persistent source material for the next iteration.',
-                title: 'Persistent material',
-                type: 'text',
+                id: `material:${material.materialId}`,
+                type: 'document',
+                title: 'release-evidence.txt',
+                materialId: material.materialId,
+                contentHash: material.contentHash,
               },
             ],
-            status: 'schema_review',
-            summary: 'Verify the post-commit continuation workflow.',
-            targetBranch: 'main',
-            title: `Post-commit ${scenario} workspace`,
-            updatedAt: new Date().toISOString(),
-            yopsDraft: {
-              id: `draft:${workspaceId}`,
-              operations: [
-                {
-                  afterValue: 'Users need to continue working after a commit.',
-                  id: 'op_problem',
-                  op: 'set',
-                  path: 'prd/summary/problem',
-                  summary: 'Set the product problem.',
-                },
-                {
-                  afterValue: 'Product teams',
-                  id: 'op_audience',
-                  op: 'set',
-                  path: 'prd/summary/audience',
-                  summary: 'Set the target audience.',
-                },
-                {
-                  afterValue: 'A fresh iteration keeps the committed baseline.',
-                  id: 'op_outcome',
-                  op: 'set',
-                  path: 'prd/summary/outcome',
-                  summary: 'Set the target outcome.',
-                },
-                {
-                  afterValue: 'Continue after commit',
-                  id: 'op_requirement_title',
-                  op: 'set',
-                  path: 'prd/requirements/continue_after_commit/title',
-                  summary: 'Set the continuation requirement title.',
-                },
-                {
-                  afterValue: 'Users can start a fresh iteration from the committed baseline.',
-                  id: 'op_requirement_acceptance',
-                  op: 'set',
-                  path: 'prd/requirements/continue_after_commit/acceptance',
-                  summary: 'Set the continuation requirement acceptance.',
-                },
-              ],
-            },
+            schemaBindings: [
+              {
+                canonicalName: 't3x/prd',
+                mode: 'pinned',
+                schemaName: 'PRD Schema',
+                version: 'v2',
+              },
+            ],
+            schemaCandidate: { summary: '', fields: [] },
+            schemaReview: { verdict: 'ready', summary: '', gaps: [] },
+            yopsDraft: { id: `draft:${workspaceId}`, operations: [] },
+            outputTargets: [],
           },
         },
-      }
-    );
-    expect(saveResponse.status()).toBe(200);
-    const savePayload = await saveResponse.json();
-    const workspaceRevision = savePayload.data.workspace.revision as number;
-    expect(workspaceRevision).toBeGreaterThan(0);
-    const commitResponse = await request.post(
-      `${API_BASE}/projects/${projectId}/workspaces/${workspaceId}/commit`,
+      });
+      expect(created.ok(), await created.text()).toBe(true);
+      currentResponse = await request.get(endpoint);
+    }
+    expect(currentResponse.ok(), await currentResponse.text()).toBe(true);
+    const current = (await currentResponse.json()).data.workspace;
+    const initialized = await request.post(`${endpoint}/authoring`, {
+      data: {
+        request_id: `initialize-${token}`,
+        expected_workspace_revision: current.revision,
+        expected_ref_head: null,
+      },
+    });
+    expect(initialized.ok(), await initialized.text()).toBe(true);
+    const initializedData = (await initialized.json()).data;
+    const action = await request.post(`${endpoint}/authoring/actions`, {
+      data: {
+        request_id: `action-${token}`,
+        expected_workspace_revision: initializedData.workspaceRevision,
+        expected_revision: initializedData.compositionRevision,
+        expected_ref_head: null,
+        operations: [{ set: { path: 'prd', value: WORKSPACE_PRD } }],
+        reason: `Prepare the ${scenario} post-commit baseline.`,
+      },
+    });
+    expect(action.ok(), await action.text()).toBe(true);
+    const actionData = (await action.json()).data;
+    const review = await request.post(`${endpoint}/authoring/reviews`, {
+      data: {
+        request_id: `review-${token}`,
+        expected_workspace_revision: actionData.workspaceRevision,
+        expected_revision: actionData.compositionRevision,
+        expected_ref_head: null,
+      },
+    });
+    expect(review.ok(), await review.text()).toBe(true);
+    const reviewed = (await review.json()).data;
+    const decision = await request.post(
+      `${API_BASE}/projects/${projectId}/transitions/${reviewed.view.transition_id}/decisions`,
       {
         data: {
-          content: { relations: [], trees: WORKSPACE_TREE },
-          if_revision: workspaceRevision,
-          message: `Post-commit ${scenario} baseline`,
-          validationOverride: {
-            blockers: ['Resolve schema review before committing.'],
-            kind: 'schema_review',
-            reason: 'E2E fixture accepted for post-commit workflow coverage.',
-          },
+          request_id: `decision-${token}`,
+          outcome: 'accepted',
+          precondition: reviewed.view.precondition,
         },
       }
     );
-    const commitPayload = await commitResponse.json();
-    expect(commitResponse.status(), JSON.stringify(commitPayload)).toBe(200);
-    const commitHash = commitPayload.data.commit.hash as string;
-
+    expect(decision.ok(), await decision.text()).toBe(true);
+    const decisionData = (await decision.json()).data;
+    const committed = await request.post(
+      `${API_BASE}/projects/${projectId}/transitions/${reviewed.view.transition_id}/commits`,
+      {
+        data: {
+          request_id: `commit-${token}`,
+          decision_digest: decisionData.decision_digest,
+          expected_head: reviewed.view.precondition.ref_head,
+        },
+      }
+    );
+    expect(committed.ok(), await committed.text()).toBe(true);
+    const commitHash = (await committed.json()).data.commit_digest as string;
     return {
       commitHash,
       projectId,
-      projectName,
       repoPath: `/t3x-dev/${repoSlug(projectName)}`,
       workspaceId,
     };
@@ -233,238 +164,85 @@ async function createCommittedWorkspaceFixture(
   }
 }
 
-function watchRelevantBrowserErrors(page: Page): string[] {
-  const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
-  page.on('response', (response) => {
-    if (response.status() < 400) return;
-    const url = response.url();
-    if (!/\/api\/v1\/(projects|workspaces|conversations|branches|commits)/.test(url)) return;
-    errors.push(`api ${response.status()}: ${response.request().method()} ${url}`);
-  });
-  return errors;
-}
-
-async function openCommittedWorkspace(page: Page, fixture: CommittedWorkspaceFixture) {
-  await page.goto(
-    `${fixture.repoPath}/workspaces?workspace=${encodeURIComponent(fixture.workspaceId)}`
-  );
-  await expect(page.getByRole('region', { name: 'Workspace detail' })).toBeVisible({
-    timeout: 15_000,
-  });
-  await expect(page.getByRole('complementary', { name: 'Post-commit actions' })).toBeVisible();
-}
-
-async function readWorkspace(request: APIRequestContext, fixture: CommittedWorkspaceFixture) {
+async function readWorkspace(request: APIRequestContext, fixture: RenewedWorkspaceFixture) {
   const response = await request.get(
-    `${API_BASE}/projects/${fixture.projectId}/workspaces/${fixture.workspaceId}`
+    `${API_BASE}/projects/${fixture.projectId}/workspaces/${encodeURIComponent(fixture.workspaceId)}`
   );
   expect(response.status()).toBe(200);
   return (await response.json()).data.workspace;
 }
 
-async function readWorkspaceConversations(
-  request: APIRequestContext,
-  fixture: CommittedWorkspaceFixture
-) {
-  const response = await request.get(
-    `${API_BASE}/conversations?project_id=${encodeURIComponent(fixture.projectId)}`
-  );
-  expect(response.status()).toBe(200);
-  const payload = await response.json();
-  return payload.data.conversations.filter(
-    (conversation: { metadata?: { workspace_id?: string } | null }) =>
-      conversation.metadata?.workspace_id === fixture.workspaceId
-  );
-}
-
-test('post-commit: View in State focuses the commit, then Continue starts a main iteration', async ({
+test('post-commit: accepted change renews the main Workspace from the committed baseline', async ({
   page,
   request,
 }) => {
-  test.setTimeout(60_000);
-  const fixture = await createCommittedWorkspaceFixture(request, 'continue');
-  const browserErrors = watchRelevantBrowserErrors(page);
-
+  const fixture = await createRenewedWorkspaceFixture(request, 'continue');
   try {
-    await openCommittedWorkspace(page, fixture);
-
-    await page.getByRole('complementary', { name: 'Post-commit actions' }).getByRole('button', { exact: true, name: 'View in State' }).click();
-    await expect(page).toHaveURL((url) => {
-      return (
-        url.pathname === fixture.repoPath &&
-        url.searchParams.get('view') === 'canvas' &&
-        url.searchParams.get('branch') === 'main' &&
-        url.searchParams.get('commit') === fixture.commitHash
-      );
-    });
-    await expect(page.getByRole('region', { name: 'Multi-commit state canvas' })).toBeVisible();
-    await expect(
-      page.locator(`.react-flow__node.selected[data-id="${fixture.commitHash}"]`)
-    ).toBeVisible({ timeout: 15_000 });
-
-    await openCommittedWorkspace(page, fixture);
-    const workspaceSave = page.waitForResponse(
-      (response) =>
-        response.request().method() === 'PATCH' &&
-        response.url().endsWith(
-          `/api/v1/projects/${fixture.projectId}/workspaces/${fixture.workspaceId}`
-        )
-    );
-    const conversationCreate = page.waitForResponse(
-      (response) =>
-        response.request().method() === 'POST' &&
-        response.url().endsWith('/api/v1/conversations')
-    );
-    await page.getByRole('button', { exact: true, name: 'Continue on main' }).click();
-    const [workspaceSaveResponse, conversationCreateResponse] = await Promise.all([
-      workspaceSave,
-      conversationCreate,
-    ]);
-    expect(workspaceSaveResponse.status()).toBe(200);
-    expect(conversationCreateResponse.status()).toBe(201);
-
-    await expect(page.getByRole('tab', { exact: true, name: 'Compose' })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
-    await expect(page.getByRole('textbox', { name: 'Workspace instruction' })).toBeVisible();
-    await expect(page.getByText(`Based on ${fixture.commitHash.slice(7, 19)}`)).toBeVisible();
-    await expect(page.getByText('Next commit to main')).toBeVisible();
-    await expect(page.getByRole('textbox', { name: 'Workspace instruction' })).toHaveValue('');
-
     const workspace = await readWorkspace(request, fixture);
     expect(workspace.status).toBe('draft');
     expect(workspace.baseCommitHash).toBe(fixture.commitHash);
-    expect(workspace.targetBranch).toBe('main');
-    expect(workspace.lastCommitHash).toBeUndefined();
-    expect(workspace.sourceBundle.map((source: { id: string }) => source.id)).toEqual([
-      'source_material_kept',
-    ]);
-    expect(workspace.schemaCandidate.fields).toEqual([]);
-    expect(workspace.yopsDraft.operations).toEqual([]);
+    expect(workspace.lastCommitHash).toBe(fixture.commitHash);
+    expect(workspace.authoringLedger.compositionRevision).toBe(0);
 
-    const conversations = await readWorkspaceConversations(request, fixture);
-    expect(conversations).toHaveLength(1);
-    expect(conversations[0].parent_commit_hash).toBe(fixture.commitHash);
-    expect(conversations[0].metadata).toMatchObject({
-      target_branch: 'main',
-      workspace_id: fixture.workspaceId,
-    });
-    expect(browserErrors, browserErrors.join('\n')).toEqual([]);
-  } finally {
-    await cleanupProject(request, fixture.projectId).catch(() => {});
-  }
-});
-
-test('post-commit: Create a new branch starts a fresh iteration from the committed baseline', async ({
-  page,
-  request,
-}) => {
-  test.setTimeout(60_000);
-  const fixture = await createCommittedWorkspaceFixture(request, 'branch');
-  const browserErrors = watchRelevantBrowserErrors(page);
-  const branchName = `feature/post-commit-${Date.now().toString(36)}`;
-
-  try {
-    await openCommittedWorkspace(page, fixture);
-    await page.getByRole('button', { exact: true, name: 'Create a new branch' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Create a new branch' });
-    await expect(dialog).toBeVisible();
-    await dialog.getByLabel('Branch name').fill(branchName);
-
-    const branchCreate = page.waitForResponse(
-      (response) =>
-        response.request().method() === 'POST' &&
-        response.url().endsWith('/api/v1/branches')
+    await page.goto(
+      `${fixture.repoPath}/workspaces?workspace=${encodeURIComponent(fixture.workspaceId)}`
     );
-    const workspaceSave = page.waitForResponse(
-      (response) =>
-        response.request().method() === 'PATCH' &&
-        response.url().startsWith(
-          `${API_BASE}/projects/${fixture.projectId}/workspaces/workspace_`
-        )
-    );
-    const conversationCreate = page.waitForResponse(
-      (response) =>
-        response.request().method() === 'POST' &&
-        response.url().endsWith('/api/v1/conversations')
-    );
-    await dialog.getByRole('button', { exact: true, name: 'Start on new branch' }).click();
-    const [branchCreateResponse, workspaceSaveResponse, conversationCreateResponse] =
-      await Promise.all([branchCreate, workspaceSave, conversationCreate]);
-    expect(branchCreateResponse.status()).toBe(201);
-    expect(workspaceSaveResponse.status()).toBe(200);
-    expect(conversationCreateResponse.status()).toBe(201);
-    const workspaceSavePayload = await workspaceSaveResponse.json();
-    const nextWorkspaceId = workspaceSavePayload.data.workspace.id as string;
-    const nextFixture = { ...fixture, workspaceId: nextWorkspaceId };
-
-    await expect(page.getByRole('tab', { exact: true, name: 'Compose' })).toHaveAttribute(
+    await expect(page.getByRole('region', { name: 'Workspace detail' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Compose', exact: true })).toHaveAttribute(
       'aria-selected',
       'true'
     );
-    await expect(page.getByText(`Based on ${fixture.commitHash.slice(7, 19)}`)).toBeVisible();
-    await expect(page.getByText(`Next commit to ${branchName}`)).toBeVisible();
-    await expect(page.getByRole('textbox', { name: 'Workspace instruction' })).toHaveValue('');
+    await expect(page.getByRole('complementary', { name: 'Post-commit actions' })).toHaveCount(0);
 
-    const workspace = await readWorkspace(request, nextFixture);
-    expect(workspace.status).toBe('draft');
-    expect(workspace.baseCommitHash).toBe(fixture.commitHash);
-    expect(workspace.targetBranch).toBe(branchName);
-    expect(workspace.lastCommitHash).toBeUndefined();
-
-    const branchesResponse = await request.get(
-      `${API_BASE}/branches?project_id=${encodeURIComponent(fixture.projectId)}`
-    );
-    expect(branchesResponse.status()).toBe(200);
-    const branchesPayload = await branchesResponse.json();
-    const branch = branchesPayload.data.branches.find(
-      (item: { name: string }) => item.name === branchName
-    );
-    expect(branch).toMatchObject({ name: branchName, parent_branch: 'main' });
-
-    const conversations = await readWorkspaceConversations(request, nextFixture);
-    expect(conversations).toHaveLength(1);
-    expect(conversations[0].parent_commit_hash).toBe(fixture.commitHash);
-    expect(conversations[0].metadata).toMatchObject({
-      target_branch: branchName,
-      workspace_id: nextWorkspaceId,
-    });
-    expect(browserErrors, browserErrors.join('\n')).toEqual([]);
+    await page.goto(`${fixture.repoPath}?view=overview&commit=${encodeURIComponent(fixture.commitHash)}`);
+    await expect(
+      page.getByRole('region', { name: 'Committed State' }).getByText('Post-commit workspace smoke')
+    ).toBeVisible();
   } finally {
-    await cleanupProject(request, fixture.projectId).catch(() => {});
+    await cleanupProject(request, fixture.projectId);
   }
 });
 
-
-test('post-commit: delivery downloads exact State and keeps one receipt on repeat', async ({ page, request }, testInfo) => {
-  test.setTimeout(90_000);
-  const fixture = await createCommittedWorkspaceFixture(request, 'delivery');
-  const browserErrors = watchRelevantBrowserErrors(page);
+test('post-commit: a new branch inherits the committed head and gets its own Workspace', async ({
+  page,
+  request,
+}) => {
+  const fixture = await createRenewedWorkspaceFixture(request, 'branch');
+  const branchName = `feature/post-commit-${Date.now().toString(36)}`;
   try {
-    await openCommittedWorkspace(page, fixture);
-    await page.getByRole('tab', { name: 'Review', exact: true }).click();
-    await page.getByRole('button', { name: 'Delivery', exact: true }).click();
-    const panel = page.getByRole('region', { name: 'Workspace delivery' });
-    await expect(panel.getByRole('button', { name: 'Download State' })).toBeEnabled();
-    await expect(panel).toContainText(fixture.commitHash);
-    await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('workspace-delivery-desktop.png') });
-    const event = page.waitForEvent('download');
-    await panel.getByRole('button', { name: 'Download State' }).click();
-    const download = await event;
-    expect(download.suggestedFilename()).toMatch(/\.yaml$/);
-    const bytes = await readFile((await download.path())!, 'utf8');
-    const expected = await request.get(`${API_BASE}/commits/${encodeURIComponent(fixture.commitHash)}/export?project_id=${fixture.projectId}&format=yaml`);
-    expect(bytes).toBe((await expected.json()).data.content);
-    await expect(panel.getByText('File prepared', { exact: true })).toBeVisible();
-    const repeat = page.waitForEvent('download');
-    await panel.getByRole('button', { name: 'Download State' }).click();
-    await repeat;
-    const receipts = await request.get(`${API_BASE}/projects/${fixture.projectId}/workspaces/${fixture.workspaceId}/deliveries`);
-    expect((await receipts.json()).data.receipts).toHaveLength(1);
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('workspace-delivery-mobile.png') });
-    expect(browserErrors).toEqual([]);
-  } finally { await cleanupProject(request, fixture.projectId); }
+    await createTestBranch(request, fixture.projectId, branchName, { parentBranch: 'main' });
+    const workspaceId = `workspace_branch:${encodeURIComponent(branchName)}`;
+    const response = await request.get(
+      `${API_BASE}/projects/${fixture.projectId}/workspaces/${encodeURIComponent(workspaceId)}`
+    );
+    expect(response.ok(), await response.text()).toBe(true);
+    const workspace = (await response.json()).data.workspace;
+    expect(workspace.status).toBe('draft');
+    expect(workspace.baseCommitHash).toBe(fixture.commitHash);
+    expect(workspace.targetBranch).toBe(branchName);
+
+    await page.goto(
+      `${fixture.repoPath}/workspaces?branch=${encodeURIComponent(branchName)}&workspace=${encodeURIComponent(workspaceId)}`
+    );
+    await expect(page.getByText(`Branch workspace: ${branchName}`).first()).toBeVisible();
+  } finally {
+    await cleanupProject(request, fixture.projectId);
+  }
+});
+
+test('post-commit: exact committed State export remains stable after Workspace renewal', async ({
+  request,
+}) => {
+  const fixture = await createRenewedWorkspaceFixture(request, 'export');
+  try {
+    const endpoint = `${API_BASE}/commits/${encodeURIComponent(fixture.commitHash)}/export?project_id=${fixture.projectId}&format=yaml`;
+    const first = await request.get(endpoint);
+    const second = await request.get(endpoint);
+    expect(first.ok(), await first.text()).toBe(true);
+    expect(second.ok(), await second.text()).toBe(true);
+    expect((await second.json()).data.content).toBe((await first.json()).data.content);
+    expect((await readWorkspace(request, fixture)).baseCommitHash).toBe(fixture.commitHash);
+  } finally {
+    await cleanupProject(request, fixture.projectId);
+  }
 });

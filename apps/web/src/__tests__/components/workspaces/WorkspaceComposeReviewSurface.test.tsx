@@ -93,6 +93,8 @@ const conversationMocks = vi.hoisted(() => ({
     loading: false,
     error: null as Error | null,
     refetch: vi.fn(),
+    get: vi.fn(),
+    remove: vi.fn(),
     update: vi.fn(),
   },
 }));
@@ -285,6 +287,8 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     conversationMocks.value.loading = false;
     conversationMocks.value.error = null;
     conversationMocks.value.refetch.mockReset();
+    conversationMocks.value.get.mockReset();
+    conversationMocks.value.remove.mockReset().mockResolvedValue(undefined);
     conversationMocks.value.update.mockReset().mockResolvedValue(undefined);
     schemaDiscussion.mockReset();
     navigationMocks.push.mockReset();
@@ -445,12 +449,83 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Beta review' }));
     await waitFor(() => expect(sourceGenerationMocks.options?.conversationId).toBe('chat-beta'));
 
-    fireEvent.click(screen.getByRole('button', { name: 'New conversation' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New chat' }));
     await waitFor(() => expect(createAssistantConversation).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(sourceGenerationMocks.options?.conversationId).toBe('chat-new'));
     expect(conversationMocks.value.update).toHaveBeenCalledWith('chat-new', {
       title: 'New conversation',
       metadata: { workspace_id: candidate.id },
+    });
+  });
+
+  it('reuses the existing blank conversation instead of creating another one', async () => {
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    const blankConversation = {
+      conversation_id: 'chat-blank',
+      project_id: 'proj_1',
+      title: 'New conversation',
+      created_at: '2026-10-26T10:00:00Z',
+      metadata: { workspace_id: candidate.id },
+    };
+    conversationMocks.value.data.conversations = [blankConversation];
+    conversationMocks.value.get.mockResolvedValue({ ...blankConversation, turns_count: 0 });
+    const createAssistantConversation = vi.fn().mockResolvedValue('chat-new');
+    enableComposeActivity(createAssistantConversation);
+    renderCompose();
+
+    fireEvent.click(screen.getByRole('button', { name: 'New chat' }));
+
+    await waitFor(() => expect(sourceGenerationMocks.options?.conversationId).toBe('chat-blank'));
+    expect(conversationMocks.value.get).toHaveBeenCalledWith('chat-blank');
+    expect(createAssistantConversation).not.toHaveBeenCalled();
+    expect(conversationMocks.value.update).not.toHaveBeenCalled();
+  });
+
+  it('does not create twice when New chat is clicked again before the blank list refreshes', async () => {
+    const createdConversation = {
+      conversation_id: 'chat-new',
+      project_id: 'proj_1',
+      title: 'New conversation',
+      created_at: '2026-10-26T10:00:00Z',
+      metadata: { workspace_id: getProjectWorkspaceStarterCandidate('proj_1').id },
+      turns_count: 0,
+    };
+    conversationMocks.value.get.mockResolvedValue(createdConversation);
+    const createAssistantConversation = vi.fn().mockResolvedValue('chat-new');
+    enableComposeActivity(createAssistantConversation);
+    renderCompose();
+
+    const newConversationButton = screen.getByRole('button', { name: 'New chat' });
+    fireEvent.click(newConversationButton);
+    await waitFor(() => expect(createAssistantConversation).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(newConversationButton).toBeEnabled());
+
+    fireEvent.click(newConversationButton);
+
+    await waitFor(() => expect(conversationMocks.value.get).toHaveBeenCalledWith('chat-new'));
+    expect(createAssistantConversation).toHaveBeenCalledTimes(1);
+  });
+
+  it('creates a new conversation once the previous placeholder has a turn', async () => {
+    const usedConversation = {
+      conversation_id: 'chat-used',
+      project_id: 'proj_1',
+      title: 'New conversation',
+      created_at: '2026-10-26T10:00:00Z',
+      metadata: { workspace_id: getProjectWorkspaceStarterCandidate('proj_1').id },
+    };
+    conversationMocks.value.data.conversations = [usedConversation];
+    conversationMocks.value.get.mockResolvedValue({ ...usedConversation, turns_count: 1 });
+    const createAssistantConversation = vi.fn().mockResolvedValue('chat-next');
+    enableComposeActivity(createAssistantConversation);
+    renderCompose();
+
+    fireEvent.click(screen.getByRole('button', { name: 'New chat' }));
+
+    await waitFor(() => expect(createAssistantConversation).toHaveBeenCalledTimes(1));
+    expect(conversationMocks.value.update).toHaveBeenCalledWith('chat-next', {
+      title: 'New conversation',
+      metadata: { workspace_id: getProjectWorkspaceStarterCandidate('proj_1').id },
     });
   });
 
@@ -466,17 +541,33 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       },
     ];
     enableComposeActivity();
-    const prompt = vi.spyOn(window, 'prompt');
-    prompt.mockReturnValueOnce('Planning');
     renderCompose();
 
     fireEvent.click(screen.getByRole('button', { name: 'New folder' }));
+    const createFolderDialog = screen.getByRole('dialog', { name: 'Create folder' });
+    expect(createFolderDialog).toBeVisible();
+    expect(
+      within(createFolderDialog).getByRole('button', { name: 'Create folder' })
+    ).toBeDisabled();
+    fireEvent.change(within(createFolderDialog).getByLabelText('Folder name'), {
+      target: { value: 'Planning' },
+    });
+    fireEvent.click(within(createFolderDialog).getByRole('button', { name: 'Create folder' }));
     expect(screen.getByText('Planning')).toBeVisible();
-    prompt.mockReturnValueOnce('Roadmap');
-    fireEvent.click(screen.getByRole('button', { name: 'Rename folder Planning' }));
-    expect(screen.getByText('Roadmap')).toBeVisible();
+    expect(screen.queryByRole('dialog', { name: 'Create folder' })).not.toBeInTheDocument();
 
-    prompt.mockReturnValueOnce('Alpha renamed');
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Actions for folder Planning' }), {
+      key: 'Enter',
+    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Rename' }));
+    const renameFolderDialog = screen.getByRole('dialog', { name: 'Rename folder' });
+    fireEvent.change(within(renameFolderDialog).getByLabelText('Folder name'), {
+      target: { value: 'Roadmap' },
+    });
+    fireEvent.click(within(renameFolderDialog).getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(screen.getByText('Roadmap')).toBeVisible());
+
+    const prompt = vi.spyOn(window, 'prompt').mockReturnValueOnce('Alpha renamed');
     fireEvent.keyDown(screen.getByRole('button', { name: 'Actions for Alpha plan' }), {
       key: 'Enter',
     });
@@ -503,6 +594,115 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       )
     );
     prompt.mockRestore();
+  });
+
+  it('pins folders and removes them without deleting their conversations', async () => {
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    const storageKey = `t3x-workspace-chat-folders:proj_1:${candidate.id}`;
+    localStorage.setItem(storageKey, JSON.stringify([{ id: 'folder:planning', name: 'Planning' }]));
+    conversationMocks.value.data.conversations = [
+      {
+        conversation_id: 'chat-alpha',
+        project_id: 'proj_1',
+        title: 'Alpha plan',
+        created_at: '2026-10-26T09:00:00Z',
+        metadata: {
+          workspace_id: candidate.id,
+          workspace_folder_id: 'folder:planning',
+          workspace_folder_name: 'Planning',
+        },
+      },
+    ];
+    enableComposeActivity();
+    renderCompose();
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Actions for folder Planning' }), {
+      key: 'Enter',
+    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Pin' }));
+    await waitFor(() =>
+      expect(JSON.parse(localStorage.getItem(storageKey) ?? '[]')).toEqual([
+        expect.objectContaining({ id: 'folder:planning', pinned: true }),
+      ])
+    );
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Actions for folder Planning' }), {
+      key: 'Enter',
+    });
+    expect(await screen.findByRole('menuitem', { name: 'Unpin' })).toBeVisible();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove folder' }));
+    const removeDialog = screen.getByRole('dialog', { name: 'Remove “Planning”?' });
+    expect(removeDialog).toHaveTextContent(
+      'Conversations inside this folder will move to Recent. They will not be deleted.'
+    );
+    fireEvent.click(within(removeDialog).getByRole('button', { name: 'Remove folder' }));
+
+    await waitFor(() =>
+      expect(conversationMocks.value.update).toHaveBeenCalledWith('chat-alpha', {
+        metadata: { workspace_id: candidate.id },
+      })
+    );
+    await waitFor(() => expect(screen.queryByText('Planning')).not.toBeInTheDocument());
+    expect(conversationMocks.value.remove).not.toHaveBeenCalled();
+  });
+
+  it('deletes a confirmed conversation and selects the next conversation', async () => {
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    conversationMocks.value.data.conversations = [
+      {
+        conversation_id: 'chat-alpha',
+        project_id: 'proj_1',
+        title: 'Alpha plan',
+        created_at: '2026-10-26T10:00:00Z',
+        metadata: { workspace_id: candidate.id },
+      },
+      {
+        conversation_id: 'chat-beta',
+        project_id: 'proj_1',
+        title: 'Beta review',
+        created_at: '2026-10-26T09:00:00Z',
+        metadata: { workspace_id: candidate.id },
+      },
+    ];
+    enableComposeActivity();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderCompose();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Alpha plan' }));
+    await waitFor(() => expect(sourceGenerationMocks.options?.conversationId).toBe('chat-alpha'));
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Actions for Alpha plan' }), {
+      key: 'Enter',
+    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+
+    expect(confirm).toHaveBeenCalledWith('Delete “Alpha plan”? This cannot be undone.');
+    await waitFor(() => expect(conversationMocks.value.remove).toHaveBeenCalledWith('chat-alpha'));
+    await waitFor(() => expect(sourceGenerationMocks.options?.conversationId).toBe('chat-beta'));
+    confirm.mockRestore();
+  });
+
+  it('keeps a conversation when deletion is cancelled', async () => {
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    conversationMocks.value.data.conversations = [
+      {
+        conversation_id: 'chat-alpha',
+        project_id: 'proj_1',
+        title: 'Alpha plan',
+        created_at: '2026-10-26T10:00:00Z',
+        metadata: { workspace_id: candidate.id },
+      },
+    ];
+    enableComposeActivity();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderCompose();
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Actions for Alpha plan' }), {
+      key: 'Enter',
+    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+
+    expect(conversationMocks.value.remove).not.toHaveBeenCalled();
+    confirm.mockRestore();
   });
 
   it('replaces only the center with historical cards and restores the same live Draft on Return', () => {
