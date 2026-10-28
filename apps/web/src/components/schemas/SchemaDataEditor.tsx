@@ -66,6 +66,7 @@ function schemaEditorValueKey(definition: SchemaDefinition, mappings: SchemaSour
 
 export function SchemaDataEditor({
   navigationRef,
+  focusSemanticPath,
   showSaveAction = true,
   onSaveAvailabilityChange,
   view = 'data',
@@ -96,6 +97,7 @@ export function SchemaDataEditor({
   initialSourceMappings = [],
 }: {
   navigationRef?: RefObject<SchemaEditorNavigation | null>;
+  focusSemanticPath?: string;
   showSaveAction?: boolean;
   onSaveAvailabilityChange?: (available: boolean) => void;
   onValidationChange?: (invalid: boolean) => void;
@@ -226,6 +228,17 @@ export function SchemaDataEditor({
       if (matches.has(row.path) && row.parentPath) matches.add(row.parentPath);
     return rows.filter((row) => matches.has(row.path));
   }, [rows, collapsed, query]);
+  const lastFocus = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!focusSemanticPath || lastFocus.current === focusSemanticPath) return;
+    const row = rows.find((item) => item.semanticPath === focusSemanticPath);
+    if (!row) return;
+    lastFocus.current = focusSemanticPath;
+    setSelected(row.path);
+    setPanel('properties');
+    setQuery('');
+    setCollapsed({});
+  }, [focusSemanticPath, rows]);
   const active = rows.find((row) => row.path === selected);
 
   function transfer(

@@ -35,6 +35,7 @@ export function ChangeDecisionPanel({
   commitBlocker,
   checksHref,
   contentValidation,
+  embedded = false,
 }: {
   branch: string | null;
   busy: boolean;
@@ -45,6 +46,7 @@ export function ChangeDecisionPanel({
   commitBlocker?: string;
   checksHref?: string;
   contentValidation?: 'not_applicable';
+  embedded?: boolean;
 }) {
   const reasonRef = useRef<HTMLTextAreaElement>(null);
   const [reasonError, setReasonError] = useState(false);
@@ -60,7 +62,11 @@ export function ChangeDecisionPanel({
   return (
     <section
       aria-label="Decision"
-      className="overflow-hidden rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] shadow-[0_1px_2px_oklch(0_0_0/4%)]"
+      className={
+        embedded
+          ? 'overflow-hidden'
+          : 'overflow-hidden rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] shadow-[0_1px_2px_oklch(0_0_0/4%)]'
+      }
     >
       <header className={`border-b px-4 py-3 ${STATUS_TONE[status.tone].header}`}>
         <div className="flex items-center gap-2">
@@ -106,7 +112,7 @@ export function ChangeDecisionPanel({
             className="mt-2 inline-block text-xs underline text-[var(--text-secondary)]"
             href={checksHref}
           >
-            Run details and evidence
+            {embedded ? 'View run' : 'Run details and evidence'}
           </Link>
         ) : null}
       </section>

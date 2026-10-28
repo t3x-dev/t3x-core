@@ -616,7 +616,20 @@ export function useWorkspaceComposeReviewController({
     [scenarioOptions]
   );
 
+  const refreshFromServer = useCallback(async () => {
+    const workspaceId = workingCandidate.id;
+    const saved = await getSharedApiClient().workspaces.get(
+      workingCandidate.projectId,
+      workspaceId
+    );
+    if (activeCandidateIdRef.current !== workspaceId) return;
+    reviewGenerationRef.current += 1;
+    setWorkingCandidate(saved.workspace as unknown as WorkspaceCandidate);
+    setReview(EMPTY_REVIEW);
+  }, [workingCandidate.projectId, workingCandidate.id]);
+
   return {
+    refreshFromServer,
     bindSchema,
     busyAction,
     assistantPrefill,

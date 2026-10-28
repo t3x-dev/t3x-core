@@ -2328,7 +2328,7 @@
   gap: 5px;
   border-radius: 6px;
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
 }
 .workspaceToolTabs button:hover {
@@ -2559,8 +2559,13 @@
 
 .composeBoard {
   width: 100%;
-  max-width: var(--project-page-max-width, 1264px);
-  margin-inline: auto;
+  max-width: none;
+  margin: 0;
+}
+
+.composeBoard > header {
+  max-width: none;
+  margin: 0;
 }
 
 /* Both stages share a stable header, followed by one dedicated tool row. */
@@ -3040,7 +3045,7 @@
   padding: 0 14px 12px;
   font-size: 13px;
 }
-.currentDraftSection + .currentDraftSection {
+.currentDraftSection:not([hidden]) + .currentDraftSection:not([hidden]) {
   margin-top: 12px;
 }
 .currentDraftSection > summary {
@@ -3173,4 +3178,97 @@ button.currentDraftRow:hover {
   min-height: 28px;
   border-radius: var(--radius-sm);
   font-size: 13px;
+}
+
+/* Compose actions live with the tool they affect; only feedback spans the workbench. */
+.composeFeedback {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--stroke-divider);
+  padding: 8px 16px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.composeFeedback[role="alert"] {
+  color: var(--status-error);
+}
+.changesToolbar,
+.structureToolbar {
+  display: flex;
+  flex: none;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 46px;
+  border-bottom: 1px solid var(--stroke-divider);
+  padding: 8px 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.changesToolbar .changeScope,
+.subjectTabs {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  padding: 2px;
+}
+.subjectTabs {
+  margin-right: auto;
+}
+.subjectTabs button,
+.structureEdit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  gap: 6px;
+  border-radius: var(--radius-sm);
+  padding: 0 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.subjectTabs button[aria-pressed="true"] {
+  background: var(--surface-app);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.structureEdit {
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+}
+.structureEdit:hover {
+  background: var(--surface-app);
+}
+.structureEdit svg {
+  width: 14px;
+  height: 14px;
+}
+.structurePanel {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.structurePanel[hidden] {
+  display: none;
+}
+.structurePanel .currentDraftBody {
+  padding-top: 12px;
+}
+
+.schemaBindingControl {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
 }

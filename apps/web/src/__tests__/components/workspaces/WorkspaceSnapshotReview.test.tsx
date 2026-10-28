@@ -2,16 +2,21 @@
 
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceSnapshotReview } from '@/components/workspaces/WorkspaceSnapshotReview';
 import { useReviewedFieldChanges } from '@/hooks/workspaces/useReviewedFieldChanges';
 import { useWorkspaceReviewSnapshot } from '@/hooks/workspaces/useWorkspaceReviewSnapshot';
 
 const replace = vi.hoisted(() => vi.fn());
 const push = vi.hoisted(() => vi.fn());
+const route = vi.hoisted(() => ({ query: 'reviewPane=yaml' }));
+beforeEach(() => {
+  localStorage.clear();
+  route.query = 'reviewPane=yaml';
+});
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace, push }),
-  useSearchParams: () => new URLSearchParams('reviewPane=yaml'),
+  useSearchParams: () => new URLSearchParams(route.query),
 }));
 
 vi.mock('@/hooks/workspaces/useWorkspaceReviewSnapshot', () => ({
@@ -39,19 +44,24 @@ vi.mock('@/components/workspaces/ChangeDecisionPanel', () => ({
     onDecide,
     commitBlocker,
     busy,
+    checksHref,
   }: {
     onDecide: (outcome: 'accepted' | 'overridden' | 'rejected', reason?: string) => void;
     commitBlocker?: string;
     busy?: boolean;
+    checksHref?: string;
   }) => (
-    <button
-      disabled={Boolean(commitBlocker) || busy}
-      title={commitBlocker}
-      onClick={() => onDecide('accepted')}
-      type="button"
-    >
-      Approve and commit
-    </button>
+    <>
+      <a href={checksHref}>View run</a>
+      <button
+        disabled={Boolean(commitBlocker) || busy}
+        title={commitBlocker}
+        onClick={() => onDecide('accepted')}
+        type="button"
+      >
+        Approve and commit
+      </button>
+    </>
   ),
 }));
 
@@ -133,7 +143,7 @@ describe('WorkspaceSnapshotReview', () => {
       'href',
       '/project/proj_1?tab=workspaces&workspace=workspace_prd_handoff&workspaceMode=review&branch=feature%2Frelease&reviewPane=yaml'
     );
-    expect(await screen.findByRole('heading', { name: 'Review' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /^Review ·/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Review' })).toHaveAttribute('aria-selected', 'true');
     const checks = new URL(
       screen.getByRole('link', { name: 'View run' }).getAttribute('href')!,
@@ -186,7 +196,7 @@ describe('WorkspaceSnapshotReview', () => {
       />
     );
 
-    await screen.findByRole('heading', { name: 'Review' });
+    await screen.findByRole('heading', { name: /^Review ·/ });
     fireEvent.click(screen.getByRole('button', { name: /Refresh/ }));
     await waitFor(() => expect(load).toHaveBeenCalledOnce());
   });
@@ -256,7 +266,7 @@ it('keeps the complete frozen Schema and content visible without loading a newer
     setOverrideReason: vi.fn(),
     state: { data: data as never, deciding: false, loading: false, error: null },
   });
-  render(
+  const rendered = render(
     <WorkspaceSnapshotReview
       projectId="proj_1"
       workspaceId="workspace_prd_handoff"
@@ -268,10 +278,21 @@ it('keeps the complete frozen Schema and content visible without loading a newer
     'title',
     expect.stringContaining('no conclusive validation result')
   );
+  expect(screen.getByRole('region', { name: 'Reviewed Content' })).toHaveTextContent(
+    'Frozen complete Draft'
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Schema', exact: true }));
+  expect(screen.getByRole('region', { name: 'Reviewed Schema' })).toHaveTextContent('advantage');
+  fireEvent.click(screen.getByRole('button', { name: 'Changes', exact: true }));
+  route.query = 'reviewPane=changes';
+  rendered.rerender(
+    <WorkspaceSnapshotReview
+      projectId="proj_1"
+      workspaceId="workspace_prd_handoff"
+      snapshotId={data.snapshot_id}
+    />
+  );
   expect(screen.getByText('ADD nodes.advantage')).toBeInTheDocument();
-  expect(
-    screen.getByRole('region', { name: 'Complete Draft content', hidden: true })
-  ).toHaveTextContent('Frozen complete Draft');
   expect(useReviewedFieldChanges).toHaveBeenLastCalledWith(
     'proj_1',
     'workspace_prd_handoff',
@@ -360,4 +381,57 @@ it('keeps Schema review and its decided snapshot in Schema while exposing the co
   expect(destination.searchParams.get('reviewSnapshot')).toBe('rvs_schema_decided');
   fireEvent.click(screen.getByRole('button', { name: 'Approve and commit' }));
   expect(decide).toHaveBeenCalledWith('accepted', undefined);
+});
+
+it('restores the same Workspace view preference in a snapshot and respects an explicit URL', () => {
+  const data = snapshotResponse();
+  const key = 't3x.workspace-view:proj_1:workspace_prd_handoff:review';
+  localStorage.setItem(key, 'yaml');
+  route.query = '';
+  vi.mocked(useWorkspaceReviewSnapshot).mockReturnValue({
+    decide: vi.fn(),
+    load: vi.fn(),
+    overrideReason: '',
+    setOverrideReason: vi.fn(),
+    state: { data: data as never, deciding: false, loading: false, error: null },
+  });
+  const ui = (
+    <WorkspaceSnapshotReview
+      projectId="proj_1"
+      workspaceId="workspace_prd_handoff"
+      snapshotId={data.snapshot_id}
+    />
+  );
+  const rendered = render(ui);
+  expect(screen.getByRole('button', { name: 'YAML', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page'
+  );
+  route.query = 'reviewPane=changes';
+  rendered.rerender(
+    <WorkspaceSnapshotReview
+      projectId="proj_1"
+      workspaceId="workspace_prd_handoff"
+      snapshotId={data.snapshot_id}
+    />
+  );
+  expect(screen.getByRole('button', { name: 'Changes', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page'
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Preview', exact: true }));
+  expect(localStorage.getItem(key)).toBe('rendered');
+  expect(replace).toHaveBeenLastCalledWith(expect.stringContaining('reviewPane=rendered'), {
+    scroll: false,
+  });
+  rendered.unmount();
+  route.query = '';
+  render(ui);
+  expect(screen.getByRole('button', { name: 'Preview', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page'
+  );
+  expect(
+    screen.getByText('The complete content is unavailable for this revision.')
+  ).toBeInTheDocument();
 });

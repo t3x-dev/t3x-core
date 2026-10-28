@@ -464,12 +464,14 @@ export function AssistantSchemaSettingsDetails({
   projectId,
   workspaceId,
   onDiscuss,
+  onEdit,
   committedHash,
 }: {
   record: AssistantSchemaSettingsView;
   projectId?: string;
   workspaceId?: string;
   onDiscuss?: () => void;
+  onEdit?: () => void;
   committedHash?: string;
 }) {
   const { settings } = record;
@@ -536,6 +538,11 @@ export function AssistantSchemaSettingsDetails({
             >
               <Sparkles aria-hidden="true" /> Ask AI
             </Button>
+            {onEdit ? (
+              <Button variant="canvas-outline" size="sm" onClick={onEdit}>
+                Edit Schema
+              </Button>
+            ) : null}
             <Button
               asChild
               variant="canvas-outline"

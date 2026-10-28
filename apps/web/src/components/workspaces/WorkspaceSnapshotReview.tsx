@@ -14,10 +14,22 @@ import { schemaReviewHref } from '@/domain/schemas/schemaNavigation';
 import { workspaceCommitBlocker } from '@/domain/workspaces/changeDecision';
 import { fieldChangeCount, fieldChangeGroups } from '@/domain/workspaces/changeFields';
 import { workspaceReviewHref } from '@/domain/workspaces/reviewNavigation';
+import { useViewPreference } from '@/hooks/shared/useViewPreference';
 import { useReviewedFieldChanges } from '@/hooks/workspaces/useReviewedFieldChanges';
 import { useWorkspaceReviewSnapshot } from '@/hooks/workspaces/useWorkspaceReviewSnapshot';
 import { ChangeDecisionPanel } from './ChangeDecisionPanel';
 import { ChangeReviewChanges } from './ChangeReviewChanges';
+import {
+  WorkspaceReviewContentPreview,
+  WorkspaceReviewSchemaView,
+  WorkspaceReviewYaml,
+} from './WorkspaceReviewDocuments';
+import {
+  useWorkspaceReviewSubject,
+  WORKSPACE_REVIEW_VIEWS,
+  WorkspaceReviewWorkbench,
+  workspaceReviewPreferenceKey,
+} from './WorkspaceReviewWorkbench';
 import { WorkspaceSchemaReviewPanel } from './WorkspaceSchemaReviewPanel';
 import stageStyles from './WorkspaceStageHeader.module.css';
 import { WorkspaceStageNavigation } from './WorkspaceStageNavigation';
@@ -34,7 +46,16 @@ export function WorkspaceSnapshotReview({
   context?: 'workspace' | 'schema';
 }) {
   const router = useRouter();
-  const pane = useSearchParams().get('reviewPane');
+  const rawPane = useSearchParams().get('reviewPane');
+  const [preferredPane, rememberPane, paneReady] = useViewPreference(
+    workspaceReviewPreferenceKey(projectId, workspaceId),
+    WORKSPACE_REVIEW_VIEWS,
+    'changes'
+  );
+  const pane = WORKSPACE_REVIEW_VIEWS.includes(rawPane as typeof preferredPane)
+    ? (rawPane as typeof preferredPane)
+    : preferredPane;
+  const [subject, setSubject] = useWorkspaceReviewSubject(projectId, workspaceId);
   const { decide, load, retryDecision, overrideReason, setOverrideReason, state } =
     useWorkspaceReviewSnapshot(projectId, workspaceId, snapshotId);
   const snapshot = state.data?.snapshot ?? null;
@@ -74,13 +95,77 @@ export function WorkspaceSnapshotReview({
       : null;
 
   useEffect(() => {
+    if (context === 'workspace' && !paneReady) return;
     if (snapshot && snapshot.snapshotId !== snapshotId) {
       router.replace(reviewHref, { scroll: false });
     }
-  }, [snapshot, snapshotId, reviewHref, router]);
+  }, [snapshot, snapshotId, reviewHref, router, context, paneReady]);
+
+  const recoveryNotice = state.error ? (
+    <section
+      aria-label="Change review unavailable"
+      className="rounded-md border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] p-4"
+      role="alert"
+    >
+      <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+        Change review unavailable
+      </h2>
+      <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">{state.error}</p>
+      {state.recovery ? (
+        <div className="mt-2 space-y-2 text-sm">
+          <p>
+            The original decision may already have been processed. Check its result or retry that
+            same decision before taking another action.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={state.loading || state.deciding || !retryDecision}
+            onClick={() => void retryDecision?.()}
+          >
+            Retry original decision
+          </Button>
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-[var(--text-secondary)]">
+          If the Draft or branch has changed,{' '}
+          <Link className="underline" href={context === 'schema' ? schemaHref : workspaceHref}>
+            open the current draft and prepare a new review
+          </Link>
+          . This snapshot stays available in Run.
+        </p>
+      )}
+    </section>
+  ) : null;
+  const decisionPanel = view ? (
+    <ChangeDecisionPanel
+      embedded={context === 'workspace'}
+      contentValidation={schemaReview?.contentValidation}
+      branch={branch ?? null}
+      busy={
+        state.deciding ||
+        state.loading ||
+        Boolean(state.recovery) ||
+        Boolean(state.latestUnavailable)
+      }
+      onDecide={(outcome, reason) => void decide(outcome, reason)}
+      onOverrideReasonChange={setOverrideReason}
+      overrideReason={overrideReason}
+      view={view}
+      commitBlocker={
+        context === 'schema' && !schemaReview
+          ? 'The complete Schema review is unavailable. Prepare a new review from Schema.'
+          : workspaceCommitBlocker(schemaReview, view)
+      }
+      checksHref={checksHref(projectId, {
+        recordId: `review:${activeSnapshotId}`,
+        returnTo: reviewHref,
+      })}
+    />
+  ) : null;
 
   return (
-    <main className="h-full overflow-y-auto bg-[var(--workspace-bg)] text-[var(--text-primary)]">
+    <main className="flex h-full min-h-0 flex-col overflow-y-auto bg-[var(--workspace-bg)] text-[var(--text-primary)]">
       <div className={stageStyles.header}>
         <div className={stageStyles.identity}>
           <Box aria-hidden="true" />
@@ -114,196 +199,296 @@ export function WorkspaceSnapshotReview({
           </Link>
         </div>
       </div>
-      <header className="border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-start gap-3">
-          <div className="w-full min-w-0 sm:w-auto sm:flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="truncate text-base font-semibold text-[var(--text-primary)]">
-                {context === 'schema' ? 'Review Schema changes' : 'Review'}
-              </h1>
-              <Badge variant="commit-subtle">
-                {snapshot
-                  ? `Snapshot r${snapshot.review.precondition.workspaceRevision}`
-                  : 'Fixed snapshot'}
-              </Badge>
-            </div>
-            <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
-              {commit
-                ? 'This revision is committed. Open State to inspect or export it.'
-                : view?.decision?.observation === 'supplied' && view.decision.outcome === 'rejected'
-                  ? 'This revision was rejected. The Draft is retained for editing; the branch was not changed.'
-                  : 'Review this fixed revision, then approve and commit or reject it here. Run contains the detailed evidence.'}
-            </p>
-          </div>
-          {stateHref ? (
-            <Button asChild size="sm">
-              <Link href={stateHref}>View State & export</Link>
-            </Button>
-          ) : null}
-          {schemaReview && (context !== 'schema' || commit) ? (
-            <Button asChild size="sm" variant="outline">
-              <Link href={schemaHref}>{commit ? 'Continue editing Schema' : 'Edit Schema'}</Link>
-            </Button>
-          ) : null}
-          <Button asChild size="sm" variant="outline">
-            <Link href={historyHref}>{commit ? 'View commit in History' : 'View History'}</Link>
-          </Button>
-          <Button asChild size="sm" variant="outline">
-            <Link
-              href={checksHref(projectId, {
-                recordId: `review:${activeSnapshotId}`,
-                returnTo: reviewHref,
-              })}
-            >
-              View run
-            </Link>
-          </Button>
-          <Button
-            disabled={state.loading || state.deciding}
-            onClick={() => void load()}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            {state.loading ? (
-              <Loader2 aria-hidden="true" className="size-4 animate-spin" />
-            ) : (
-              <RefreshCw aria-hidden="true" className="size-4" />
-            )}
-            Refresh
-          </Button>
-        </div>
-      </header>
-
-      <div className="mx-auto grid max-w-6xl gap-4 p-4">
-        {snapshot ? (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-[var(--text-secondary)]">
-            <span className="min-w-0 break-all" title={activeSnapshotId}>
-              Snapshot {activeSnapshotId}
-            </span>
-            <Link
-              className="underline"
-              href={checksHref(projectId, { workspace: workspaceId, returnTo: reviewHref })}
-            >
-              Workspace check history
-            </Link>
-            {commit ? (
-              <Link
-                className="underline"
-                href={workspaceReviewHref(projectId, workspaceId, {
-                  branch,
-                  tool: 'delivery',
-                  returnTo: reviewHref,
-                })}
-              >
-                Open Delivery
-              </Link>
-            ) : null}
-          </div>
-        ) : null}
-        {state.error ? (
-          <section
-            aria-label="Change review unavailable"
-            className="rounded-md border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] p-4"
-            role="alert"
-          >
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">
-              Change review unavailable
-            </h2>
-            <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">{state.error}</p>
-            {state.recovery ? (
-              <div className="mt-2 space-y-2 text-sm">
-                <p>
-                  The original decision may already have been processed. Check its result or retry
-                  that same decision before taking another action.
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={state.loading || state.deciding || !retryDecision}
-                  onClick={() => void retryDecision?.()}
-                >
-                  Retry original decision
+      {context === 'workspace' ? (
+        <WorkspaceReviewWorkbench
+          title={
+            <>
+              Review ·{' '}
+              {snapshot
+                ? `Snapshot r${snapshot.review.precondition.workspaceRevision}`
+                : 'Fixed snapshot'}
+            </>
+          }
+          status={
+            commit
+              ? 'Committed. This snapshot stays available for reference.'
+              : view?.decision?.observation === 'supplied' && view.decision.outcome === 'rejected'
+                ? 'Rejected. The Draft is retained for editing; the branch was not changed.'
+                : 'Fixed revision. Review Content and Schema, then approve and commit or reject.'
+          }
+          pane={pane}
+          onPaneChange={(next) => {
+            rememberPane(next);
+            router.replace(
+              workspaceReviewHref(projectId, workspaceId, {
+                branch,
+                pane: next,
+                snapshotId: activeSnapshotId,
+              }),
+              { scroll: false }
+            );
+          }}
+          subject={subject}
+          onSubjectChange={setSubject}
+          notice={recoveryNotice}
+          actions={
+            <>
+              {stateHref ? (
+                <Button asChild size="sm">
+                  <Link href={stateHref}>View State & export</Link>
                 </Button>
+              ) : null}
+              <Button asChild size="sm" variant="outline">
+                <Link href={composeHref}>Edit in Compose</Link>
+              </Button>
+              <Button
+                disabled={state.loading || state.deciding}
+                onClick={() => void load()}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                {state.loading ? (
+                  <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+                ) : (
+                  <RefreshCw aria-hidden="true" className="size-4" />
+                )}{' '}
+                Refresh
+              </Button>
+            </>
+          }
+          sidebar={
+            <>
+              {decisionPanel}
+              <div className="mt-4 grid gap-2 text-xs">
+                <Link className="underline" href={historyHref}>
+                  {commit ? 'View commit in History' : 'View History'}
+                </Link>
               </div>
+            </>
+          }
+          details={
+            snapshot ? (
+              <>
+                <dl>
+                  <dt>Snapshot</dt>
+                  <dd>{activeSnapshotId}</dd>
+                  {schemaReview ? (
+                    <>
+                      <dt>Base Schema</dt>
+                      <dd>{schemaReview.base.schemaHash ?? schemaReview.base.status}</dd>
+                      <dt>Reviewed Schema</dt>
+                      <dd>{schemaReview.draft.schemaHash ?? schemaReview.draft.status}</dd>
+                    </>
+                  ) : null}
+                  <dd>
+                    <Link
+                      href={checksHref(projectId, { workspace: workspaceId, returnTo: reviewHref })}
+                    >
+                      Workspace check history
+                    </Link>
+                  </dd>
+                  {commit ? (
+                    <dd>
+                      <Link
+                        href={workspaceReviewHref(projectId, workspaceId, {
+                          branch,
+                          tool: 'delivery',
+                          returnTo: reviewHref,
+                        })}
+                      >
+                        Open Delivery
+                      </Link>
+                    </dd>
+                  ) : null}
+                </dl>
+                {view ? (
+                  <ChangeSummary
+                    branch={branch ?? null}
+                    fieldCount={fieldGroups ? fieldChangeCount(fieldGroups) : null}
+                    schemaChangeCount={schemaReview?.changes.length ?? 0}
+                    title={fieldGroups?.[0]?.label ?? null}
+                    view={view}
+                  />
+                ) : null}
+              </>
+            ) : null
+          }
+        >
+          {view ? (
+            subject === 'schema' ? (
+              <WorkspaceReviewSchemaView
+                pane={pane}
+                review={schemaReview}
+                branch={branch ?? 'main'}
+                frozen
+              />
+            ) : pane === 'rendered' ? (
+              <WorkspaceReviewContentPreview value={schemaReview?.draftContent} frozen />
+            ) : pane === 'yaml' ? (
+              <WorkspaceReviewYaml
+                base={schemaReview?.baseContent}
+                result={schemaReview?.draftContent}
+                branch={branch ?? 'main'}
+                subject="Content"
+                frozen
+              />
             ) : (
-              <p className="mt-2 text-xs text-[var(--text-secondary)]">
-                If the Draft or branch has changed,{' '}
+              <ChangeReviewChanges
+                groups={fieldGroups}
+                operations={view.change.operations}
+                operationsAsDetails
+              />
+            )
+          ) : state.loading ? (
+            <output className="text-sm">Loading change review</output>
+          ) : null}
+        </WorkspaceReviewWorkbench>
+      ) : (
+        <>
+          <header className="border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3">
+            <div className="mx-auto flex max-w-6xl flex-wrap items-start gap-3">
+              <div className="w-full min-w-0 sm:w-auto sm:flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="truncate text-base font-semibold text-[var(--text-primary)]">
+                    {context === 'schema' ? 'Review Schema changes' : 'Review'}
+                  </h1>
+                  <Badge variant="commit-subtle">
+                    {snapshot
+                      ? `Snapshot r${snapshot.review.precondition.workspaceRevision}`
+                      : 'Fixed snapshot'}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
+                  {commit
+                    ? 'This revision is committed. Open State to inspect or export it.'
+                    : view?.decision?.observation === 'supplied' &&
+                        view.decision.outcome === 'rejected'
+                      ? 'This revision was rejected. The Draft is retained for editing; the branch was not changed.'
+                      : 'Review this fixed revision, then approve and commit or reject it here. Run contains the detailed evidence.'}
+                </p>
+              </div>
+              {stateHref ? (
+                <Button asChild size="sm">
+                  <Link href={stateHref}>View State & export</Link>
+                </Button>
+              ) : null}
+              {schemaReview && (context !== 'schema' || commit) ? (
+                <Button asChild size="sm" variant="outline">
+                  <Link href={schemaHref}>
+                    {commit ? 'Continue editing Schema' : 'Edit Schema'}
+                  </Link>
+                </Button>
+              ) : null}
+              <Button asChild size="sm" variant="outline">
+                <Link href={historyHref}>{commit ? 'View commit in History' : 'View History'}</Link>
+              </Button>
+              <Button asChild size="sm" variant="outline">
+                <Link
+                  href={checksHref(projectId, {
+                    recordId: `review:${activeSnapshotId}`,
+                    returnTo: reviewHref,
+                  })}
+                >
+                  View run
+                </Link>
+              </Button>
+              <Button
+                disabled={state.loading || state.deciding}
+                onClick={() => void load()}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                {state.loading ? (
+                  <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+                ) : (
+                  <RefreshCw aria-hidden="true" className="size-4" />
+                )}
+                Refresh
+              </Button>
+            </div>
+          </header>
+
+          <div className="mx-auto grid max-w-6xl gap-4 p-4">
+            {snapshot ? (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-[var(--text-secondary)]">
+                <span className="min-w-0 break-all" title={activeSnapshotId}>
+                  Snapshot {activeSnapshotId}
+                </span>
                 <Link
                   className="underline"
-                  href={context === 'schema' ? schemaHref : workspaceHref}
+                  href={checksHref(projectId, { workspace: workspaceId, returnTo: reviewHref })}
                 >
-                  open the current draft and prepare a new review
+                  Workspace check history
                 </Link>
-                . This snapshot stays available in Run.
-              </p>
-            )}
-          </section>
-        ) : null}
+                {commit ? (
+                  <Link
+                    className="underline"
+                    href={workspaceReviewHref(projectId, workspaceId, {
+                      branch,
+                      tool: 'delivery',
+                      returnTo: reviewHref,
+                    })}
+                  >
+                    Open Delivery
+                  </Link>
+                ) : null}
+              </div>
+            ) : null}
+            {recoveryNotice}
 
-        {view ? (
-          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-[auto_auto_1fr]">
-            <div className="min-w-0 lg:col-start-1">
-              <ChangeSummary
-                branch={branch ?? null}
-                fieldCount={fieldGroups ? fieldChangeCount(fieldGroups) : null}
-                schemaChangeCount={schemaReview?.changes.length ?? 0}
-                title={
-                  context === 'schema' ? 'Schema and content' : (fieldGroups?.[0]?.label ?? null)
-                }
-                view={view}
-              />
-            </div>
-            <div className="min-w-0 lg:col-start-1">
-              {context === 'schema' ? (
-                <SchemaReviewChanges
-                  review={schemaReview}
-                  groups={fieldGroups}
-                  operations={view.change.operations}
-                />
-              ) : (
-                <>
-                  <WorkspaceSchemaReviewPanel review={schemaReview} historical={Boolean(commit)} />
-                  <ChangeReviewChanges groups={fieldGroups} operations={view.change.operations} />
-                </>
-              )}
-            </div>
-            <div className="lg:sticky lg:top-4 lg:col-start-2 lg:row-span-3 lg:row-start-1">
-              <ChangeDecisionPanel
-                contentValidation={schemaReview?.contentValidation}
-                branch={branch ?? null}
-                busy={
-                  state.deciding ||
-                  state.loading ||
-                  Boolean(state.recovery) ||
-                  Boolean(state.latestUnavailable)
-                }
-                onDecide={(outcome, reason) => void decide(outcome, reason)}
-                onOverrideReasonChange={setOverrideReason}
-                overrideReason={overrideReason}
-                view={view}
-                commitBlocker={
-                  context === 'schema' && !schemaReview
-                    ? 'The complete Schema review is unavailable. Prepare a new review from Schema.'
-                    : workspaceCommitBlocker(schemaReview, view)
-                }
-                checksHref={checksHref(projectId, {
-                  recordId: `review:${activeSnapshotId}`,
-                  returnTo: reviewHref,
-                })}
-              />
-            </div>
+            {view ? (
+              <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-[auto_auto_1fr]">
+                <div className="min-w-0 lg:col-start-1">
+                  <ChangeSummary
+                    branch={branch ?? null}
+                    fieldCount={fieldGroups ? fieldChangeCount(fieldGroups) : null}
+                    schemaChangeCount={schemaReview?.changes.length ?? 0}
+                    title={
+                      context === 'schema'
+                        ? 'Schema and content'
+                        : (fieldGroups?.[0]?.label ?? null)
+                    }
+                    view={view}
+                  />
+                </div>
+                <div className="min-w-0 lg:col-start-1">
+                  {context === 'schema' ? (
+                    <SchemaReviewChanges
+                      review={schemaReview}
+                      groups={fieldGroups}
+                      operations={view.change.operations}
+                    />
+                  ) : (
+                    <>
+                      <WorkspaceSchemaReviewPanel
+                        review={schemaReview}
+                        historical={Boolean(commit)}
+                      />
+                      <ChangeReviewChanges
+                        groups={fieldGroups}
+                        operations={view.change.operations}
+                      />
+                    </>
+                  )}
+                </div>
+                <div className="lg:sticky lg:top-4 lg:col-start-2 lg:row-span-3 lg:row-start-1">
+                  {decisionPanel}
+                </div>
+              </div>
+            ) : state.loading ? (
+              <section
+                aria-label="Loading change review"
+                className="flex min-h-28 items-center justify-center rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] text-sm text-[var(--text-secondary)]"
+              >
+                <Loader2 aria-hidden="true" className="mr-2 size-4 animate-spin" />
+                Loading change review
+              </section>
+            ) : null}
           </div>
-        ) : state.loading ? (
-          <section
-            aria-label="Loading change review"
-            className="flex min-h-28 items-center justify-center rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] text-sm text-[var(--text-secondary)]"
-          >
-            <Loader2 aria-hidden="true" className="mr-2 size-4 animate-spin" />
-            Loading change review
-          </section>
-        ) : null}
-      </div>
+        </>
+      )}
     </main>
   );
 }
