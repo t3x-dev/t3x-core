@@ -3,17 +3,27 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSourceThreadGeneration } from '@/hooks/sourceThreads/useSourceThreadGeneration';
 import type { WorkspaceAssistantEvent } from '@/infrastructure/workspaceAssistant';
+import { useChatStore } from '@/store/chatStore';
 
 const mocks = vi.hoisted(() => ({
   listTurns: vi.fn(),
   appendTurn: vi.fn(),
+  update: vi.fn(),
+  complete: vi.fn(),
   stream: vi.fn(),
   recover: vi.fn(),
   workspace: vi.fn(),
 }));
 vi.mock('@/infrastructure/sourceThreads', () => ({
-  sourceThreadApi: { listTurns: mocks.listTurns, appendTurn: mocks.appendTurn },
+  sourceThreadApi: {
+    listTurns: mocks.listTurns,
+    appendTurn: mocks.appendTurn,
+    update: mocks.update,
+  },
   isSourceThreadRequestAborted: () => false,
+}));
+vi.mock('@/infrastructure/generation', () => ({
+  generationApi: { complete: mocks.complete },
 }));
 vi.mock('@/infrastructure/sharedApiClient', () => ({
   getSharedApiClient: () => ({ workspaces: { get: mocks.workspace } }),
@@ -86,14 +96,54 @@ function streamRun() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.stream.mockReset();
   mocks.listTurns.mockResolvedValue({ turns: [] });
   mocks.appendTurn.mockResolvedValue({ turn_hash: 'user-turn' });
+  mocks.update.mockImplementation(async (_conversationId: string, input: { title: string }) => ({
+    title: input.title,
+  }));
+  mocks.complete.mockResolvedValue({ content: 'Change workspace owner' });
   mocks.recover.mockResolvedValue({ status: 'unknown' });
   mocks.workspace.mockResolvedValue({ workspace: { revision: 7 } });
+  useChatStore.setState({ activeConversationId: null, conversationTitle: null, refreshKey: 0 });
 });
 afterEach(cleanup);
 
 describe('Workspace assistant route lifetime', () => {
+  it('replaces a Workspace placeholder title after the first user message', async () => {
+    mocks.stream.mockImplementation(async function* (): AsyncGenerator<WorkspaceAssistantEvent> {
+      yield { type: 'context' };
+      yield { type: 'done', turnHash: 'assistant-turn', content: 'Done' };
+    });
+    const initial = { ...options(), title: 'New conversation' };
+    const view = renderHook(() => useSourceThreadGeneration(initial));
+    await waitFor(() => expect(view.result.current.isLoading).toBe(false));
+
+    let request: unknown;
+    act(() => {
+      request = view.result.current.sendMessage('Please change the workspace owner to Alice');
+    });
+
+    await act(async () => {
+      await request;
+    });
+
+    expect(mocks.update).toHaveBeenCalledWith(initial.conversationId, {
+      title: 'Change workspace owner',
+    });
+    expect(mocks.complete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: expect.arrayContaining([
+          expect.objectContaining({
+            role: 'user',
+            content: 'Please change the workspace owner to Alice',
+          }),
+        ]),
+      })
+    );
+    expect(useChatStore.getState().refreshKey).toBe(1);
+  });
+
   it('reattaches to generation and publishes once using the current view callback', async () => {
     const run = streamRun();
     const initial = options();
