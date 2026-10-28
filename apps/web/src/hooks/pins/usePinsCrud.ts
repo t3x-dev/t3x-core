@@ -15,51 +15,63 @@ import { formatUserFacingError } from '@/domain/format/errors';
 import { fetchPins } from '@/queries/pins';
 import { usePinsStore } from '@/store/pinsStore';
 
-// Module-level flag to prevent concurrent fetchPins calls for the same project.
-// Survives hook remounts so two concurrent effect firings don't both slip past
-// the loading guard.
-let fetchInProgressFor: string | null = null;
+// The store has one selected project. Readers share a promise only within that
+// visit; an older visit must not reclaim ownership when its request finishes.
+let fetchInProgress: {
+  projectId: string;
+  scopeVersion: number;
+  promise: Promise<void>;
+} | null = null;
+
+function ownsScope(projectId: string | null, scopeVersion: number) {
+  const current = usePinsStore.getState();
+  return current.currentProjectId === projectId && current.scopeVersion === scopeVersion;
+}
 
 export function usePinsCrud() {
   const fetch = useCallback(async (projectId: string): Promise<void> => {
-    if (fetchInProgressFor === projectId) return;
-    const store = usePinsStore.getState();
-    if (store.initialized && store.currentProjectId === projectId) return;
+    usePinsStore.getState().setCurrentProjectId(projectId);
+    const { scopeVersion, initialized } = usePinsStore.getState();
+    if (fetchInProgress?.projectId === projectId && fetchInProgress.scopeVersion === scopeVersion)
+      return fetchInProgress.promise;
+    if (initialized) return;
 
-    fetchInProgressFor = projectId;
-    store.setLoading(true);
-    store.setError(null);
-    try {
-      const pins = await fetchPins(projectId);
-      store.setPins(pins);
-      store.setLoading(false);
-      store.setInitialized(true);
-      store.setCurrentProjectId(projectId);
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      store.setError(error);
-      store.setLoading(false);
-      store.setInitialized(true);
-      store.setCurrentProjectId(projectId);
-      store.notifyCallback?.(formatUserFacingError(error, 'Failed to load pins.'), 'error');
-    } finally {
-      fetchInProgressFor = null;
-    }
+    usePinsStore.setState({ loading: true, error: null });
+    const request = { projectId, scopeVersion, promise: Promise.resolve() };
+    fetchInProgress = request;
+    request.promise = (async () => {
+      try {
+        const pins = await fetchPins(projectId);
+        if (!ownsScope(projectId, scopeVersion) || fetchInProgress !== request) return;
+        usePinsStore.setState({ pins, loading: false, initialized: true, error: null });
+      } catch (err) {
+        if (!ownsScope(projectId, scopeVersion) || fetchInProgress !== request) return;
+        const error = err instanceof Error ? err : new Error(String(err));
+        usePinsStore.setState({ loading: false, initialized: false, error });
+        usePinsStore
+          .getState()
+          .notifyCallback?.(formatUserFacingError(error, 'Failed to load pins.'), 'error');
+      } finally {
+        if (fetchInProgress === request) fetchInProgress = null;
+      }
+    })();
+    return request.promise;
   }, []);
 
   const add = useCallback(
     async (projectId: string, type: PinType, refId: string): Promise<Pin | null> => {
       const store = usePinsStore.getState();
       const notify = store.notifyCallback;
+      const scopeVersion = store.scopeVersion;
 
-      if (store.isPinned(type, refId)) {
+      if (store.currentProjectId === projectId && store.isPinned(type, refId)) {
         notify?.('Item is already pinned', 'warning');
         return null;
       }
 
       try {
         const pin = await createPin(projectId, type, refId);
-        store.addToPins(pin);
+        if (ownsScope(projectId, scopeVersion)) store.addToPins(pin);
         notify?.('Item pinned', 'success');
         return pin;
       } catch (err) {
@@ -78,6 +90,7 @@ export function usePinsCrud() {
   const remove = useCallback(async (pinId: string): Promise<void> => {
     const store = usePinsStore.getState();
     const notify = store.notifyCallback;
+    const { currentProjectId, scopeVersion } = store;
 
     // Optimistically remove from UI, capturing the evicted entry for rollback.
     const removed = store.removePinById(pinId);
@@ -86,7 +99,7 @@ export function usePinsCrud() {
       await deletePin(pinId);
       notify?.('Pin removed', 'success');
     } catch (err) {
-      if (removed) {
+      if (removed && ownsScope(currentProjectId, scopeVersion)) {
         store.addToPins(removed);
       }
       const error = err instanceof Error ? err : new Error(String(err));
@@ -102,10 +115,11 @@ export function usePinsCrud() {
     async (pinId: string, assertionIds: string[]): Promise<Pin | null> => {
       const store = usePinsStore.getState();
       const notify = store.notifyCallback;
+      const { currentProjectId, scopeVersion } = store;
 
       try {
         const updated = await updatePinAssertions(pinId, assertionIds);
-        store.replacePin(pinId, updated);
+        if (ownsScope(currentProjectId, scopeVersion)) store.replacePin(pinId, updated);
         notify?.('Pin assertions updated', 'success');
         return updated;
       } catch (err) {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { API_KEY } from '@/infrastructure/core';
 import { getSessionKey } from '@/infrastructure/session';
@@ -25,38 +25,58 @@ export function useProjectWorkspaces(
   projectId: string | null | undefined,
   enabled = true
 ): UseProjectWorkspacesResult {
-  const [workspaces, setWorkspaces] = useState<WorkspaceCandidate[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const key = JSON.stringify([projectId, enabled]);
+  const available = Boolean(projectId && enabled);
+  const [snapshot, setSnapshot] = useState<{
+    key: string;
+    workspaces: WorkspaceCandidate[];
+    loading: boolean;
+    error: string | null;
+  }>();
+  const activeKey = useRef(key);
+  activeKey.current = key;
+  const mounted = useRef(false);
+  const request = useRef(0);
 
   const load = useCallback(
     async (showLoading: boolean) => {
-      if (!projectId || !enabled) {
-        setWorkspaces([]);
-        setError(null);
-        setLoading(false);
-        return;
-      }
-
-      if (showLoading) setLoading(true);
+      if (!projectId || !enabled || !mounted.current || activeKey.current !== key) return;
+      const token = ++request.current;
+      const isCurrent = () =>
+        mounted.current && activeKey.current === key && token === request.current;
+      setSnapshot((current) => ({
+        key,
+        workspaces: current?.key === key ? current.workspaces : [],
+        loading: showLoading || (current?.key === key ? current.loading : true),
+        error: null,
+      }));
       try {
-        const data = await fetchProjectWorkspaces(projectId);
-        setWorkspaces(data);
-        setError(null);
+        const workspaces = await fetchProjectWorkspaces(projectId);
+        if (isCurrent()) setSnapshot({ key, workspaces, loading: false, error: null });
       } catch (err) {
-        setError(formatUserFacingError(err, 'Failed to load workspaces.'));
-      } finally {
-        setLoading(false);
+        if (isCurrent())
+          setSnapshot((current) => ({
+            key,
+            workspaces: current?.key === key ? current.workspaces : [],
+            loading: false,
+            error: formatUserFacingError(err, 'Failed to load workspaces.'),
+          }));
       }
     },
-    [enabled, projectId]
+    [enabled, key, projectId]
   );
 
   const refresh = useCallback(() => load(true), [load]);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    mounted.current = true;
+    if (available) void refresh();
+    else setSnapshot(undefined);
+    return () => {
+      mounted.current = false;
+      ++request.current;
+    };
+  }, [available, refresh]);
 
   useEffect(() => {
     if (!projectId || !enabled) return;
@@ -145,5 +165,11 @@ export function useProjectWorkspaces(
     };
   }, [enabled, load, projectId]);
 
-  return { workspaces, loading, error, refresh };
+  const current = available && snapshot?.key === key ? snapshot : undefined;
+  return {
+    workspaces: current?.workspaces ?? [],
+    loading: available && (current?.loading ?? true),
+    error: current?.error ?? null,
+    refresh,
+  };
 }

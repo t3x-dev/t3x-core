@@ -108,7 +108,28 @@ export function useWorkspaceComposeReviewController({
   scenarioOptions = [],
 }: WorkspaceComposeReviewControllerOptions) {
   const [workingCandidate, setWorkingCandidate] = useState(candidate);
-  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [busyAction, setBusyActionState] = useState<string | null>(null);
+  const busyActionRef = useRef<string | null>(null);
+  const scopeKey = JSON.stringify([candidate.projectId, candidate.id]);
+  const scope = useMemo(() => ({ key: scopeKey, active: true, epoch: 0 }), [scopeKey]);
+  const activeScope = useRef(scope);
+  activeScope.current = scope;
+  const captureScope = useCallback(() => {
+    const epoch = scope.epoch;
+    return () => scope.active && activeScope.current === scope && scope.epoch === epoch;
+  }, [scope]);
+  const assertActive = useCallback(() => {
+    if (!scope.active || activeScope.current !== scope)
+      throw new Error('Workspace context changed. Reopen the current Draft.');
+  }, [scope]);
+  const setBusyAction = useCallback(
+    (action: string | null) => {
+      if (!scope.active || activeScope.current !== scope) return;
+      busyActionRef.current = action;
+      setBusyActionState(action);
+    },
+    [scope]
+  );
   const [localError, setLocalError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [review, setReview] = useState<WorkspaceReviewSessionState>(EMPTY_REVIEW);
@@ -116,8 +137,9 @@ export function useWorkspaceComposeReviewController({
   const [hasCollaborationConflict, setHasCollaborationConflict] = useState(false);
   const [assistantPrefill, setAssistantPrefill] = useState<string | null>(null);
   const reviewGenerationRef = useRef(0);
-  const activeCandidateIdRef = useRef(candidate.id);
+  const activeCandidateIdRef = useRef(scopeKey);
   const candidateVersion = JSON.stringify([
+    candidate.projectId,
     candidate.id,
     candidate.revision,
     candidate.schemaBindings,
@@ -130,10 +152,21 @@ export function useWorkspaceComposeReviewController({
   const pins = usePinsStore((state) => state.pins);
 
   useEffect(() => {
-    const candidateChanged = activeCandidateIdRef.current !== candidate.id;
+    scope.active = true;
+    busyActionRef.current = null;
+    setBusyActionState(null);
+    return () => {
+      scope.active = false;
+      ++scope.epoch;
+      ++reviewGenerationRef.current;
+    };
+  }, [scope]);
+
+  useEffect(() => {
+    const candidateChanged = activeCandidateIdRef.current !== scopeKey;
     const versionChanged = candidateVersionRef.current !== candidateVersion;
     candidateVersionRef.current = candidateVersion;
-    activeCandidateIdRef.current = candidate.id;
+    activeCandidateIdRef.current = scopeKey;
     if (candidateChanged) {
       reviewGenerationRef.current += 1;
       setWorkingCandidate(candidate);
@@ -160,7 +193,7 @@ export function useWorkspaceComposeReviewController({
         ? candidate
         : current
     );
-  }, [candidate, candidateVersion, busyAction, review.transitionId]);
+  }, [candidate, candidateVersion, busyAction, review.transitionId, scopeKey]);
 
   useEffect(() => {
     void refreshPins(candidate.projectId);
@@ -181,6 +214,8 @@ export function useWorkspaceComposeReviewController({
 
   const persistCandidate = useCallback(
     async (nextCandidate: WorkspaceCandidate, command: WorkspaceDraftCommand) => {
+      assertActive();
+      const isCurrent = captureScope();
       setWorkingCandidate(nextCandidate);
       if (command !== 'review.prepare') {
         reviewGenerationRef.current += 1;
@@ -189,31 +224,26 @@ export function useWorkspaceComposeReviewController({
       if (!onDraftCommand) return nextCandidate;
       try {
         const saved = await onDraftCommand(nextCandidate, command);
+        if (!isCurrent()) throw new Error('Workspace context changed. Reopen the current Draft.');
         setWorkingCandidate(saved);
         setHasCollaborationConflict(false);
         return saved;
       } catch (error) {
-        if (/changed since it was loaded|revision|conflict/i.test(String(error))) {
+        if (isCurrent() && /changed since it was loaded|revision|conflict/i.test(String(error))) {
           setHasCollaborationConflict(true);
         }
         throw error;
       }
     },
-    [onDraftCommand]
+    [onDraftCommand, assertActive, captureScope]
   );
 
   const updateSourceArtifact = useCallback(
     async (artifact: WorkspaceSourceArtifact | undefined) => {
       if (!onDraftCommand) throw new Error('Workspace saving is unavailable.');
-      const saved = await onDraftCommand(
-        { ...workingCandidate, sourceArtifact: artifact },
-        'source.artifact'
-      );
-      setWorkingCandidate(saved);
-      setReview(EMPTY_REVIEW);
-      return saved;
+      return persistCandidate({ ...workingCandidate, sourceArtifact: artifact }, 'source.artifact');
     },
-    [onDraftCommand, workingCandidate]
+    [onDraftCommand, workingCandidate, persistCandidate]
   );
 
   const ensureSaved = useCallback(async () => {
@@ -236,49 +266,56 @@ export function useWorkspaceComposeReviewController({
   }, [workingCandidate, onDraftCommand, persistCandidate]);
 
   const resolveCollaborationConflict = useCallback(async () => {
-    if (!onApplyAfterRefresh || busyAction) return false;
+    const isCurrent = captureScope();
+    if (!isCurrent() || !onApplyAfterRefresh || busyActionRef.current) return false;
     setBusyAction('collaboration.apply_after_refresh');
     setLocalError(null);
     try {
       const saved = await onApplyAfterRefresh(workingCandidate);
+      if (!isCurrent()) return false;
       setWorkingCandidate(saved);
       setHasCollaborationConflict(false);
       setNotice('Remote revision refreshed and the local draft was applied with CAS.');
       return true;
     } catch (error) {
-      setLocalError(formatUserFacingError(error, 'Unable to apply after refresh.'));
+      if (isCurrent())
+        setLocalError(formatUserFacingError(error, 'Unable to apply after refresh.'));
       return false;
     } finally {
-      setBusyAction(null);
+      if (isCurrent()) setBusyAction(null);
     }
-  }, [busyAction, onApplyAfterRefresh, workingCandidate]);
+  }, [onApplyAfterRefresh, workingCandidate, captureScope, setBusyAction]);
 
   const runScenarioAction = useCallback(
     async (action: string, callback: () => Promise<void>) => {
-      if (busyAction) return false;
+      const isCurrent = captureScope();
+      if (!isCurrent() || busyActionRef.current) return false;
       setBusyAction(action);
       setLocalError(null);
       try {
         await callback();
+        if (!isCurrent()) return false;
         setNotice('Scenario updated.');
         return true;
       } catch (error) {
-        setLocalError(formatUserFacingError(error, 'Scenario update failed.'));
+        if (isCurrent()) setLocalError(formatUserFacingError(error, 'Scenario update failed.'));
         return false;
       } finally {
-        setBusyAction(null);
+        if (isCurrent()) setBusyAction(null);
       }
     },
-    [busyAction]
+    [captureScope, setBusyAction]
   );
 
   const addMaterial = useCallback(
     async (material: Material) => {
+      assertActive();
       const isIncluded = () =>
         usePinsStore
           .getState()
           .pins.some((pin) => pin.type === 'import' && pin.ref_id === material.id);
       if (!isIncluded()) await pinsCrud.add(candidate.projectId, 'import', material.id);
+      assertActive();
       if (!isIncluded()) throw new Error('Uploaded material could not be included.');
       const source = materialToSourceBundleItem(material);
       const withSource = {
@@ -289,15 +326,25 @@ export function useWorkspaceComposeReviewController({
         workingCandidate.authoringLedger ? withSource : invalidateWorkspaceProposal(withSource),
         'source.add'
       );
+      assertActive();
       await onSourceMaterialUploaded?.();
+      assertActive();
       setNotice(`${material.title} added as source evidence.`);
     },
-    [candidate.projectId, onSourceMaterialUploaded, persistCandidate, pinsCrud, workingCandidate]
+    [
+      candidate.projectId,
+      onSourceMaterialUploaded,
+      persistCandidate,
+      pinsCrud,
+      workingCandidate,
+      assertActive,
+    ]
   );
 
   const toggleMaterialSource = useCallback(
     async (materialId: string) => {
-      if (busyAction) return;
+      const isCurrent = captureScope();
+      if (!isCurrent() || busyActionRef.current) return;
       setBusyAction(`source:material:${materialId}`);
       setLocalError(null);
       try {
@@ -306,6 +353,7 @@ export function useWorkspaceComposeReviewController({
           .pins.find((pin) => pin.type === 'import' && pin.ref_id === materialId);
         if (existing) await pinsCrud.remove(existing.id);
         else await pinsCrud.add(candidate.projectId, 'import', materialId);
+        if (!isCurrent()) return;
         const included = usePinsStore
           .getState()
           .pins.some((pin) => pin.type === 'import' && pin.ref_id === materialId);
@@ -316,18 +364,22 @@ export function useWorkspaceComposeReviewController({
         }
         if (!workingCandidate.authoringLedger)
           await persistCandidate(invalidateWorkspaceProposal(workingCandidate), 'source.include');
+        if (!isCurrent()) return;
         setNotice(included ? 'Material included as source evidence.' : 'Material excluded.');
       } catch (error) {
-        setLocalError(formatUserFacingError(error, 'Material source update failed.'));
+        if (isCurrent())
+          setLocalError(formatUserFacingError(error, 'Material source update failed.'));
       } finally {
-        setBusyAction(null);
+        if (isCurrent()) setBusyAction(null);
       }
     },
-    [busyAction, candidate.projectId, persistCandidate, pinsCrud, workingCandidate]
+    [candidate.projectId, persistCandidate, pinsCrud, workingCandidate, captureScope, setBusyAction]
   );
 
   const uploadFile = useCallback(
     async (file: File) => {
+      const isCurrent = captureScope();
+      if (!isCurrent() || busyActionRef.current) return false;
       const unsupported = unsupportedWorkspaceMaterialMessage(file);
       if (unsupported) {
         setLocalError(unsupported);
@@ -338,24 +390,27 @@ export function useWorkspaceComposeReviewController({
       let uploaded = false;
       try {
         const material = await materialUpload.upload(candidate.projectId, file);
+        if (!isCurrent()) return false;
         uploaded = true;
         await addMaterial(material);
-        return true;
+        return isCurrent();
       } catch (error) {
+        if (!isCurrent()) return false;
         setLocalError(
           `${uploaded ? 'Material saved, but Workspace inclusion failed. ' : ''}${formatUserFacingError(error, 'Material upload failed.')}`
         );
         return false;
       } finally {
-        setBusyAction(null);
+        if (isCurrent()) setBusyAction(null);
       }
     },
-    [addMaterial, candidate.projectId, materialUpload]
+    [addMaterial, candidate.projectId, materialUpload, captureScope, setBusyAction]
   );
 
   const prepareReview = useCallback(
     async (onPrepared?: (snapshot: ReviewSnapshotV1) => void) => {
-      if (busyAction) return false;
+      const isCurrent = captureScope();
+      if (!isCurrent() || busyActionRef.current) return false;
       const generation = reviewGenerationRef.current + 1;
       reviewGenerationRef.current = generation;
       setReview(EMPTY_REVIEW);
@@ -373,6 +428,7 @@ export function useWorkspaceComposeReviewController({
           if (workingCandidate.authoringLedger) throw error;
           authoringView = null;
         }
+        if (!isCurrent() || generation !== reviewGenerationRef.current) return false;
         if (authoringView?.hasChanges === false) {
           throw new Error(EMPTY_WORKSPACE_REVIEW);
         }
@@ -394,7 +450,7 @@ export function useWorkspaceComposeReviewController({
               reason: `Review ${authoringView.netDiff.length} authoring Workspace changes.`,
             }
           );
-          if (generation !== reviewGenerationRef.current) return false;
+          if (!isCurrent() || generation !== reviewGenerationRef.current) return false;
           const latest = await getSharedApiClient().workspaces.getLatestReviewSnapshot(
             workingCandidate.projectId,
             workingCandidate.id,
@@ -402,7 +458,7 @@ export function useWorkspaceComposeReviewController({
               transition_id: reviewed.view.transition_id,
             }
           );
-          if (generation !== reviewGenerationRef.current) return false;
+          if (!isCurrent() || generation !== reviewGenerationRef.current) return false;
           if (!latest?.snapshot)
             throw new Error('The saved review snapshot is unavailable. Prepare Review again.');
           setReview({
@@ -434,13 +490,14 @@ export function useWorkspaceComposeReviewController({
           throw new Error('Prepare the current Compose draft before Review.');
         }
         const prepared = await onPrepareDraft(workingCandidate, {});
-        if (generation !== reviewGenerationRef.current) return false;
+        if (!isCurrent() || generation !== reviewGenerationRef.current) return false;
         setWorkingCandidate(prepared);
         if (prepared.yopsDraft.operations.length === 0) {
           throw new Error('No YOps operations were generated from the selected source evidence.');
         }
 
         const deterministicValidation = await validateWorkspaceCandidateYOps(prepared);
+        if (!isCurrent() || generation !== reviewGenerationRef.current) return false;
         if (!deterministicValidation.ok) {
           throw new Error(
             deterministicValidation.error?.message ?? 'Deterministic YOps validation failed.'
@@ -452,6 +509,7 @@ export function useWorkspaceComposeReviewController({
             deterministicValidation.previewRelations ?? deterministicValidation.baselineRelations,
         };
         const saved = await persistCandidate(prepared, 'review.prepare');
+        if (!isCurrent() || generation !== reviewGenerationRef.current) return false;
         if (saved.revision === undefined) {
           throw new Error('Saved Workspace did not return a review revision.');
         }
@@ -462,7 +520,7 @@ export function useWorkspaceComposeReviewController({
           `Review ${saved.yopsDraft.operations.length} structured Workspace changes.`,
           saved.revision
         );
-        if (generation !== reviewGenerationRef.current) return false;
+        if (!isCurrent() || generation !== reviewGenerationRef.current) return false;
         setReview({
           changeProjection: reviewed.change_projection,
           content,
@@ -476,21 +534,23 @@ export function useWorkspaceComposeReviewController({
         onPrepared?.(reviewed.review_snapshot);
         return true;
       } catch (error) {
-        if (generation !== reviewGenerationRef.current) return false;
+        if (!isCurrent() || generation !== reviewGenerationRef.current) return false;
         setReview(EMPTY_REVIEW);
         setLocalError(formatUserFacingError(error, 'Workspace review preparation failed.'));
         setNotice(null);
         return false;
       } finally {
-        setBusyAction(null);
+        if (isCurrent()) setBusyAction(null);
       }
     },
-    [busyAction, onPrepareDraft, persistCandidate, workingCandidate]
+    [onPrepareDraft, persistCandidate, workingCandidate, captureScope, setBusyAction]
   );
 
   const decide = useCallback(
     async (outcome: WorkspaceTransitionOutcome, reason?: string) => {
-      if (!review.transitionId || !review.content || !review.precondition || busyAction) {
+      const isActive = captureScope();
+      if (!isActive() || busyActionRef.current) return null;
+      if (!review.transitionId || !review.content || !review.precondition) {
         setLocalError('Prepare the current draft for review before making a decision.');
         return null;
       }
@@ -509,6 +569,8 @@ export function useWorkspaceComposeReviewController({
         setLocalError('Explain why this change should continue despite the failed check.');
         return null;
       }
+      const generation = reviewGenerationRef.current;
+      const isCurrent = () => isActive() && generation === reviewGenerationRef.current;
       setBusyAction(`decision:${outcome}`);
       setLocalError(null);
       try {
@@ -519,6 +581,7 @@ export function useWorkspaceComposeReviewController({
           ...(normalizedReason ? { decisionReason: normalizedReason } : {}),
           precondition: review.precondition,
         });
+        if (!isCurrent()) return null;
         setReview((current) => ({
           ...current,
           changeProjection: decided.change_projection,
@@ -536,15 +599,17 @@ export function useWorkspaceComposeReviewController({
         setNotice('Decision recorded without advancing branch history.');
         return null;
       } catch (error) {
+        if (!isCurrent()) return null;
         if (/changed|revision|conflict|stale/i.test(String(error))) setReview(EMPTY_REVIEW);
         setLocalError(formatUserFacingError(error, 'Workspace decision failed.'));
         return null;
       } finally {
-        setBusyAction(null);
+        if (isActive()) setBusyAction(null);
       }
     },
     [
-      busyAction,
+      captureScope,
+      setBusyAction,
       candidate.id,
       candidate.projectId,
       onYOpsCommitted,
@@ -554,17 +619,19 @@ export function useWorkspaceComposeReviewController({
   );
 
   const copyReceipt = useCallback(async () => {
+    const isCurrent = captureScope();
     const receipt = review.reviewSnapshot;
-    if (!receipt) return false;
+    if (!receipt || !isCurrent()) return false;
     try {
       await navigator.clipboard.writeText(JSON.stringify(receipt, null, 2));
+      if (!isCurrent()) return false;
       setNotice('Receipt copied.');
       return true;
     } catch (error) {
-      setLocalError(formatUserFacingError(error, 'Unable to copy the receipt.'));
+      if (isCurrent()) setLocalError(formatUserFacingError(error, 'Unable to copy the receipt.'));
       return false;
     }
-  }, [review.reviewSnapshot]);
+  }, [review.reviewSnapshot, captureScope]);
 
   const bindSchema = useCallback(
     async (binding: WorkspaceSchemaBinding) => {
@@ -617,16 +684,18 @@ export function useWorkspaceComposeReviewController({
   );
 
   const refreshFromServer = useCallback(async () => {
+    const isCurrent = captureScope();
+    if (!isCurrent()) return;
     const workspaceId = workingCandidate.id;
     const saved = await getSharedApiClient().workspaces.get(
       workingCandidate.projectId,
       workspaceId
     );
-    if (activeCandidateIdRef.current !== workspaceId) return;
+    if (!isCurrent()) return;
     reviewGenerationRef.current += 1;
     setWorkingCandidate(saved.workspace as unknown as WorkspaceCandidate);
     setReview(EMPTY_REVIEW);
-  }, [workingCandidate.projectId, workingCandidate.id]);
+  }, [workingCandidate.projectId, workingCandidate.id, captureScope]);
 
   return {
     refreshFromServer,

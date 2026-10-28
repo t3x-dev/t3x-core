@@ -2,6 +2,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { useStudioSchemaEditCandidate } from '@/hooks/schemas/useStudioSchemaEditCandidate';
+import { deferred } from '../deferred';
 
 const mocks = vi.hoisted(() => ({ read: vi.fn(), save: vi.fn() }));
 vi.mock('@/infrastructure/schemaStudio', () => ({
@@ -25,6 +26,51 @@ const saveInput = {
   schemaDefinition: { nodes: { item: { slots: {} } } },
   baseSchemaHash: 'base',
 };
+
+it('does not replace a newer refresh with an older response', async () => {
+  const old = deferred<unknown>();
+  mocks.read.mockReturnValueOnce(old.promise).mockResolvedValueOnce({ revision: 3 });
+  const { result } = renderHook(() => useStudioSchemaEditCandidate('project', 'workspace', 7));
+  await act(async () => result.current.refresh());
+  await act(async () => old.resolve({ revision: 2 }));
+  expect(result.current.candidate?.revision).toBe(3);
+});
+
+it('does not overwrite a saved candidate with a read started before the save', async () => {
+  const old = deferred<unknown>();
+  mocks.read.mockReturnValueOnce(old.promise);
+  const saved = { candidate: { revision: 3 }, workspaceRevision: 8 };
+  mocks.save.mockResolvedValueOnce(saved);
+  const { result } = renderHook(() => useStudioSchemaEditCandidate('project', 'workspace', 7));
+  await act(async () => result.current.save(saveInput));
+  await act(async () => old.resolve({ revision: 2 }));
+  expect(result.current.candidate?.revision).toBe(3);
+});
+
+it('coalesces a double save and prevents another write while it is pending', async () => {
+  mocks.read.mockResolvedValue(null);
+  const save = deferred<unknown>();
+  mocks.save.mockReturnValue(save.promise);
+  const { result } = renderHook(() => useStudioSchemaEditCandidate('project', 'workspace', 7));
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  let first!: ReturnType<typeof result.current.save>;
+  let second!: ReturnType<typeof result.current.save>;
+  act(() => {
+    first = result.current.save(saveInput);
+    second = result.current.save({ ...saveInput, retryKey: 'double-click' });
+  });
+  await act(async () => {
+    await expect(result.current.save({ ...saveInput, intent: 'different' })).rejects.toThrow(
+      /saving/i
+    );
+  });
+  expect(mocks.save).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    save.resolve({ candidate: { revision: 3 } });
+    await Promise.all([first, second]);
+  });
+  expect(result.current.pending).toBe(false);
+});
 
 it('recovers a saved attempt after its response is lost by replaying the exact request', async () => {
   mocks.read.mockResolvedValue(null);

@@ -18,6 +18,15 @@ export function useStudioSchemaEditCandidate(
 ) {
   const key = `${projectId}:${workspaceId}:${workspaceRevision ?? 'unknown'}`;
   const epoch = useRef(0);
+  const activeKey = useRef(key);
+  activeKey.current = key;
+  const mounted = useRef(false);
+  const readRequest = useRef(0);
+  const running = useRef<{
+    epoch: number;
+    facts: string;
+    promise: Promise<Awaited<ReturnType<typeof saveStudioSchemaEditCandidate>>>;
+  } | null>(null);
   const saveAttempt = useRef<
     | {
         scope: string;
@@ -31,16 +40,29 @@ export function useStudioSchemaEditCandidate(
     candidate: StudioSchemaEditCandidate | null;
     error?: string;
   }>();
-  const [pending, setPending] = useState(false);
+  const [pendingKey, setPendingKey] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!projectId || !workspaceId) return;
+    if (
+      !projectId ||
+      !workspaceId ||
+      !mounted.current ||
+      activeKey.current !== key ||
+      running.current?.epoch === epoch.current
+    )
+      return;
     const current = epoch.current;
+    const token = ++readRequest.current;
+    const isCurrent = () =>
+      mounted.current &&
+      activeKey.current === key &&
+      current === epoch.current &&
+      token === readRequest.current;
     try {
       const candidate = await readStudioSchemaEditCandidate(projectId, workspaceId);
-      if (current === epoch.current) setResult({ key, candidate });
+      if (isCurrent()) setResult({ key, candidate });
     } catch (error) {
-      if (current === epoch.current)
+      if (isCurrent())
         setResult({
           key,
           candidate: null,
@@ -50,12 +72,15 @@ export function useStudioSchemaEditCandidate(
   }, [key, projectId, workspaceId]);
 
   useEffect(() => {
+    mounted.current = true;
     ++epoch.current;
     setResult(undefined);
-    setPending(false);
+    setPendingKey(null);
     void refresh();
     return () => {
+      mounted.current = false;
       ++epoch.current;
+      ++readRequest.current;
     };
   }, [refresh]);
 
@@ -90,38 +115,55 @@ export function useStudioSchemaEditCandidate(
     candidate: current?.candidate ?? null,
     error: current?.error,
     loading: Boolean(projectId && workspaceId) && !current,
-    pending,
+    pending: pendingKey === key,
     refresh,
-    save: async (input: SaveStudioSchemaEditCandidateInput) => {
+    save: (input: SaveStudioSchemaEditCandidateInput) => {
+      if (!mounted.current || activeKey.current !== key || !projectId || !workspaceId)
+        return Promise.reject(new Error('The Schema editing context changed. Reopen the Draft.'));
       const currentEpoch = epoch.current;
+      const isCurrent = () =>
+        mounted.current && activeKey.current === key && currentEpoch === epoch.current;
       const scope = `${projectId}:${workspaceId}`;
       const { retryKey: _retryKey, ...facts } = input;
       const fingerprint = canonicalJson(JSON.parse(JSON.stringify(facts)));
+      const pending = running.current;
+      if (pending?.epoch === currentEpoch) {
+        return pending.facts === fingerprint
+          ? pending.promise
+          : Promise.reject(new Error('Schema is already saving. Wait before saving another edit.'));
+      }
       if (saveAttempt.current?.scope !== scope || saveAttempt.current.facts !== fingerprint) {
         saveAttempt.current = { scope, facts: fingerprint, input: structuredClone(input) };
       }
       const attempt = saveAttempt.current;
-      setPending(true);
-      try {
+      // Reads started before this write cannot acknowledge or replace its result.
+      ++readRequest.current;
+      setPendingKey(key);
+      const run = async () => {
         let saved: Awaited<ReturnType<typeof saveStudioSchemaEditCandidate>>;
         try {
           saved = await saveStudioSchemaEditCandidate(projectId, workspaceId, attempt.input);
         } catch (error) {
+          if (!isCurrent()) throw error;
           // A lost response does not prove that the write failed. Only retry the
           // exact request after the server identifies it as the saved attempt.
           const recovered = await readStudioSchemaEditCandidate(projectId, workspaceId).catch(
             () => null
           );
-          if (currentEpoch !== epoch.current || recovered?.retryKey !== attempt.input.retryKey)
-            throw error;
+          if (!isCurrent() || recovered?.retryKey !== attempt.input.retryKey) throw error;
           saved = await saveStudioSchemaEditCandidate(projectId, workspaceId, attempt.input);
         }
+        if (!isCurrent()) throw new Error('The Schema editing context changed. Reopen the Draft.');
         if (saveAttempt.current === attempt) saveAttempt.current = undefined;
-        if (currentEpoch === epoch.current) setResult({ key, candidate: saved.candidate });
+        setResult({ key, candidate: saved.candidate });
         return saved;
-      } finally {
-        if (currentEpoch === epoch.current) setPending(false);
-      }
+      };
+      const promise = run().finally(() => {
+        if (running.current?.promise === promise) running.current = null;
+        if (isCurrent()) setPendingKey(null);
+      });
+      running.current = { epoch: currentEpoch, facts: fingerprint, promise };
+      return promise;
     },
   };
 }
