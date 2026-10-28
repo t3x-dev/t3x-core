@@ -1145,8 +1145,9 @@ describe('ProjectStateTab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Rollout Plan · rollout_plan' }));
     expect(screen.getByText('Seventh rollout field remains visible')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /HEAD evidence 1/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /HEAD YOps 3/ })).toBeInTheDocument();
+    // State content renders before the asynchronous change evidence is ready.
+    expect(await screen.findByRole('button', { name: /HEAD evidence 1/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /HEAD YOps 3/ })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Find food and drinks · 0' }));
     const inspector = screen.getByRole('complementary', { name: 'PRD inspector' });
