@@ -2,11 +2,9 @@
   width: 100%;
   max-width: var(--project-page-max-width, 1264px);
   margin: 0 auto;
-  padding: 10px 16px;
-  min-height: 52px;
+  padding: 20px var(--project-page-gutter, 24px) 18px;
+  min-height: 88px;
   flex-shrink: 0;
-  border-bottom: 1px solid var(--stroke-divider);
-  background: var(--surface-panel);
 }
 .slot {
   min-width: 0;
@@ -14,4 +12,10 @@
 
 .header:has(.slot:empty) {
   display: none;
+}
+
+@media (max-width: 600px) {
+  .header {
+    padding-inline: 16px;
+  }
 }

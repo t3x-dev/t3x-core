@@ -185,6 +185,7 @@ import {
   workspaceReviewSubjectChanges,
 } from './WorkspaceReviewWorkbench';
 import workbenchStyles from './WorkspaceReviewWorkbench.module.css';
+import { WorkspaceSchemaDiagnostics } from './WorkspaceSchemaDiagnostics';
 import stageHeaderStyles from './WorkspaceStageHeader.module.css';
 import { WorkspaceStageNavigation } from './WorkspaceStageNavigation';
 
@@ -2891,21 +2892,29 @@ function ReviewSurface({
           </Button>
         }
         sidebar={
-          <WorkspaceReviewSummary
-            candidate={candidate}
-            controller={controller}
-            snapshotCurrent={snapshotCurrent}
-            hasChanges={hasSavedSchema ? true : authoring?.hasChanges}
-            preparingSchema={preparingSchema || Boolean(schemaPreparation)}
-            schemaLoading={savedSchema.loading}
-            hasSavedSchema={hasSavedSchema}
-            preparationError={
-              preparationError ?? savedSchema.error ?? controller.error ?? undefined
-            }
-            onEdit={() => onModeChange('compose')}
-            onOpenChecks={() => setPane('checks')}
-            onPrepare={() => void prepareReview()}
-          />
+          <>
+            <WorkspaceReviewSummary
+              candidate={candidate}
+              controller={controller}
+              snapshotCurrent={snapshotCurrent}
+              hasChanges={hasSavedSchema ? true : authoring?.hasChanges}
+              preparingSchema={preparingSchema || Boolean(schemaPreparation)}
+              schemaLoading={savedSchema.loading}
+              hasSavedSchema={hasSavedSchema}
+              preparationError={
+                preparationError ?? savedSchema.error ?? controller.error ?? undefined
+              }
+              onEdit={() => onModeChange('compose')}
+              onOpenChecks={() => setPane('checks')}
+              onPrepare={() => void prepareReview()}
+            />
+            <WorkspaceSchemaDiagnostics
+              key={`${candidate.projectId}:${candidate.id}:${candidate.revision}`}
+              projectId={candidate.projectId}
+              workspaceId={candidate.id}
+              revision={candidate.revision}
+            />
+          </>
         }
       >
         {comparisonScenario ? (

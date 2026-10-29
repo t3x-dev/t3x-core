@@ -250,6 +250,21 @@ export const StudioPreviewSchema = z.object({
     schemaHash: digest,
   }),
 });
+/** Read-only Studio diagnostics; never substitutes for the final Review validation. */
+export const SchemaReviewDiagnosticsSchema = StudioPreviewSchema.pick({
+  schemaHash: true,
+  reviewHash: true,
+  sources: true,
+  report: true,
+  adoption: true,
+  impact: true,
+});
+export type SchemaReviewDiagnostics = z.infer<typeof SchemaReviewDiagnosticsSchema>;
+export const SchemaPreparationDiagnosticsSchema = z.object({
+  workspaceRevision: z.number().int().nonnegative(),
+  diagnostics: SchemaReviewDiagnosticsSchema,
+});
+
 export type StudioPreview = z.infer<typeof StudioPreviewSchema>;
 export type StudioPreviewInput = z.infer<typeof StudioPreviewInputSchema>;
 export type StudioApplyInput = z.infer<typeof StudioApplyInputSchema>;
@@ -446,6 +461,8 @@ export const WorkspaceFullSchemaReviewSchema = z
     draftContent: schemaJsonValue,
     // Absent on historical reviews: never infer an exemption for an old snapshot.
     contentValidation: z.literal('not_applicable').optional(),
+    // Optional for historical snapshots; captured before each content adaptation.
+    preparationDiagnostics: z.array(SchemaPreparationDiagnosticsSchema).optional(),
   })
   .strict();
 export type WorkspaceSchemaDefinitionSnapshot = z.infer<

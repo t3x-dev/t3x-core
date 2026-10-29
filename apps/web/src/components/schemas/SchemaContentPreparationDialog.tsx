@@ -241,7 +241,7 @@ export function SchemaContentPreparationDialog({
               </p>
             ) : null}
             <Heading className="text-base font-semibold">
-              {continueToReview ? 'Adapt content to Schema' : 'Prepare Schema content'}
+              {continueToReview ? 'Update content for this schema' : 'Prepare Schema content'}
             </Heading>
             <Description className="max-w-3xl text-xs leading-relaxed">
               Adapt existing content to the new Schema, preview the result, then save both together
@@ -271,7 +271,7 @@ export function SchemaContentPreparationDialog({
             <section aria-label="Content changes" className={stepClass}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h3 className={stepTitleClass}>Resolve content requirements</h3>
+                  <h3 className={stepTitleClass}>Resolve required content changes</h3>
                   <p className="mt-1 text-xs text-[var(--text-secondary)]">
                     Move or rename existing content, fill missing values, or remove content
                     explicitly.
@@ -632,14 +632,14 @@ export function SchemaContentPreparationDialog({
           {embedded ? 'Back to editing' : 'Cancel'}
         </Button>
         <Button variant="outline" disabled={busy} onClick={() => void preview()}>
-          Preview result
+          Preview changes
         </Button>
         <Button
           disabled={busy || !review?.data.canPrepare}
           onClick={() => void prepare()}
           variant="commit"
         >
-          {continueToReview ? 'Continue to Review' : 'Save prepared Draft'}
+          {continueToReview ? 'Save and continue to review' : 'Save prepared Draft'}
         </Button>
       </div>
     </PreparationShell>
@@ -662,7 +662,7 @@ function PreparationShell({
   if (embedded)
     return open ? (
       <section
-        aria-label="Adapt content to Schema"
+        aria-label="Update content for this schema"
         className="flex min-h-0 flex-1 flex-col overflow-hidden"
       >
         {children}

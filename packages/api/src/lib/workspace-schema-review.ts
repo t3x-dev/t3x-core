@@ -1,4 +1,5 @@
 import {
+  SchemaPreparationDiagnosticsSchema,
   type WorkspaceFullSchemaReview,
   WorkspaceFullSchemaReviewSchema,
   type WorkspaceSchemaDefinitionSnapshot,
@@ -200,7 +201,19 @@ export async function buildWorkspaceSchemaReview(
       throw new DraftAuthoringConflictError('The frozen Schema definition has an invalid hash.');
   }
   const empty = normalizeYSchemaObject({ yschema: '0.1', name: 'Unbound', nodes: {} });
+  const preparationDiagnostics = (
+    Array.isArray(workspace.schemaPreparations) ? workspace.schemaPreparations : []
+  ).flatMap((receipt) => {
+    if (!receipt.diagnostics) return [];
+    return [
+      SchemaPreparationDiagnosticsSchema.parse({
+        workspaceRevision: receipt.workspaceRevision - 1,
+        diagnostics: receipt.diagnostics,
+      }),
+    ];
+  });
   const review = WorkspaceFullSchemaReviewSchema.parse({
+    ...(preparationDiagnostics.length ? { preparationDiagnostics } : {}),
     schema: 't3x.application/workspace-schema-review/v1',
     base,
     draft,

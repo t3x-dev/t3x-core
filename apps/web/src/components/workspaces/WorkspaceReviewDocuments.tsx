@@ -5,7 +5,7 @@ import type {
   WorkspaceSchemaDefinitionSnapshot,
 } from '@t3x-dev/api-client';
 import { dump } from 'js-yaml';
-import { SchemaDefinitionTree } from '@/components/schemas/SchemaDefinitionWorkbench';
+import { SchemaDefinitionTree } from '@/components/schemas/SchemaDefinitionTree';
 import { CurrentDraftContentTree } from './WorkspaceCurrentDraft';
 import { WorkspaceReviewCodeView } from './WorkspaceReviewCodeView';
 import type { WorkspaceReviewPane } from './WorkspaceReviewWorkbench';

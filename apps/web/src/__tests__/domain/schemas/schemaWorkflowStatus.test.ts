@@ -111,4 +111,42 @@ describe('Schema workflow presentation', () => {
       }).hasNewChanges
     ).toBe(true);
   });
+  it('does not turn existing content validation gaps into new Schema changes', () => {
+    expect(
+      schemaWorkflowStatus({
+        draft: { ...draft, hasChanges: false },
+        preview: { ...preview, impact: { content: { ready: false } } } as StudioPreview,
+        hasDefinition: true,
+      }).hasNewChanges
+    ).toBe(false);
+  });
+  it('uses the current Workspace contract when an older preview still reports changes', () => {
+    expect(
+      schemaWorkflowStatus({
+        draft: {
+          ...draft,
+          hasChanges: false,
+          currentSchema: { status: 'bound', schemaHash: 'schema', definition: {}, bindings: [] },
+        },
+        preview: {
+          ...preview,
+          workspace: { ...preview.workspace!, changes: [{ kind: 'added' }] as never },
+        },
+        hasDefinition: true,
+      }).hasNewChanges
+    ).toBe(false);
+  });
+  it('keeps a new saved source candidate reviewable even when the Workspace matches Base', () => {
+    expect(
+      schemaWorkflowStatus({
+        draft: {
+          ...draft,
+          hasChanges: false,
+          currentSchema: { status: 'bound', schemaHash: 'committed', definition: {}, bindings: [] },
+        },
+        preview,
+        hasDefinition: true,
+      }).hasNewChanges
+    ).toBe(true);
+  });
 });

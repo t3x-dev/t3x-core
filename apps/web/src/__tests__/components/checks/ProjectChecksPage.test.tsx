@@ -101,6 +101,10 @@ describe('Repository Checks', () => {
       'href',
       '/project/p?tab=workspaces&workspace=ws%3Amain&branch=main'
     );
+    expect(screen.getByRole('link', { name: 'Schema checks & impact' })).toHaveAttribute(
+      'href',
+      '/project/p?tab=workspaces&workspace=ws%3Amain&workspaceMode=review&branch=main&reviewSnapshot=r12&schemaDiagnostics=1'
+    );
     expect(mocks.detail).toHaveBeenCalledWith('p', 'review:r12', expect.any(AbortSignal));
     expect(mocks.list).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /Commit|Merge|Rerun/ })).not.toBeInTheDocument();

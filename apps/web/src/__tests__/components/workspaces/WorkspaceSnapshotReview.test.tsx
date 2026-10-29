@@ -331,7 +331,7 @@ it('keeps recovery explicit on a stale decision and disables actions during refr
   expect(recovery.searchParams.has('reviewSnapshot')).toBe(false);
 });
 
-it('keeps Schema review and its decided snapshot in Schema while exposing the complete content scope', () => {
+it('reviews Schema and content in one Workspace snapshot after a decision', () => {
   const data = snapshotResponse();
   data.snapshot.snapshotId = 'rvs_schema_decided';
   Object.assign(data, {
@@ -364,18 +364,16 @@ it('keeps Schema review and its decided snapshot in Schema while exposing the co
       projectId="proj_1"
       workspaceId="workspace_prd_handoff"
       snapshotId="rvs_old"
-      context="schema"
     />
   );
-  expect(screen.getByRole('heading', { name: 'Review Schema changes' })).toBeVisible();
-  expect(screen.getByText('This decision covers the complete Workspace Draft.')).toBeVisible();
-  expect(screen.getByText('nodes.item')).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: /All content changes/ }));
-  fireEvent.click(screen.getByText('Compare complete content'));
+  expect(screen.getByRole('region', { name: 'Workspace Review' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Schema', exact: true }));
+  expect(screen.getByRole('region', { name: 'Schema review' })).toHaveTextContent('item:');
+  fireEvent.click(screen.getByRole('button', { name: 'Content', exact: true }));
   expect(screen.getByText(/Also in this decision/)).toBeVisible();
   const destination = new URL(replace.mock.calls.at(-1)![0], 'http://local');
-  expect(destination.searchParams.get('tab')).toBe('schemas');
-  expect(destination.searchParams.get('schemaView')).toBe('review');
+  expect(destination.searchParams.get('tab')).toBe('workspaces');
+  expect(destination.searchParams.get('workspaceMode')).toBe('review');
   expect(destination.searchParams.get('reviewSnapshot')).toBe('rvs_schema_decided');
   fireEvent.click(screen.getByRole('button', { name: 'Approve and commit' }));
   expect(decide).toHaveBeenCalledWith('accepted', undefined);

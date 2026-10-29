@@ -271,20 +271,31 @@
 
 /* Compose owns its reference styling; shared State/History controls are untouched. */
 .composeBoard {
+  /* Keep the workbench horizontal; constrain saved widths to the available space. */
+  --draft-effective-width: clamp(180px, var(--draft-width, 260px), min(560px, calc(100% - 640px)));
   display: grid;
   flex: 1;
   min-width: 0;
   min-height: 0;
   width: 100%;
-  grid-template-columns: minmax(0, 5fr) minmax(300px, 2fr);
-  grid-template-rows: auto minmax(0, 1fr);
-  overflow: hidden;
+  grid-template-columns: var(--draft-effective-width) minmax(320px, 1fr) clamp(
+      320px,
+      var(--discussion-width, 440px),
+      calc(100% - var(--draft-effective-width) - 320px)
+    );
+  grid-template-rows: max-content max-content minmax(0, 1fr);
+  /* Very narrow windows scroll inside the board, never stack or widen the page. */
+  overflow-x: auto;
+  overflow-y: hidden;
   color: var(--text-primary);
   background: var(--surface-panel);
 }
+.composeBoard[data-draft-collapsed] {
+  --draft-effective-width: 48px;
+}
 .composeMain {
-  grid-column: 1;
-  grid-row: 2;
+  grid-column: 2;
+  grid-row: 3;
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -771,8 +782,8 @@
   white-space: nowrap;
 }
 .discussionSidebar {
-  grid-column: 2;
-  grid-row: 1 / span 2;
+  grid-column: 3;
+  grid-row: 3;
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -1489,26 +1500,10 @@
   .sourcesToolbar {
     grid-template-columns: minmax(0, 1fr);
   }
-  .composeBoard {
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-  }
-  .composeMain {
-    flex: none;
-    overflow: visible;
-    border-right: 0;
-  }
   .panel {
     height: auto;
     flex: none;
     overflow: visible;
-  }
-  .discussionSidebar {
-    flex: none;
-    min-height: 0;
-    height: min(700px, 85dvh);
-    border-top: 1px solid var(--stroke-divider);
   }
   .baseBar,
   .sourcesSection,
@@ -1575,9 +1570,6 @@
   .schemaLabel {
     width: auto;
   }
-  .discussionSidebar {
-    height: min(760px, 90dvh);
-  }
 }
 @media (max-width: 420px) {
   .baseContext .baseBar {
@@ -1591,10 +1583,6 @@
 }
 
 /* Compose direction 1E: calm, dense timeline workbench. Scoped here so Review stays untouched. */
-.composeBoard {
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 456px);
-  background: var(--surface-app);
-}
 .composeIdentity {
   display: flex;
   min-width: 0;
@@ -1958,9 +1946,6 @@
   opacity: 0.2;
 }
 @media (max-width: 1180px) {
-  .composeBoard {
-    grid-template-columns: minmax(0, 1fr) minmax(320px, 38vw);
-  }
   .sourcesSection {
     flex-wrap: wrap;
   }
@@ -2205,10 +2190,6 @@
 }
 
 /* Shared workbench surfaces. */
-.composeBoard {
-  grid-template-columns: minmax(0, 1fr) 440px;
-  background: var(--surface-panel);
-}
 .composeBoard .sourcesSection {
   padding: 0 32px 8px 24px;
 }
@@ -2280,7 +2261,6 @@
   color: var(--text-primary);
 }
 .composeBoard .discussionSidebar {
-  grid-row: 2;
   margin: 0;
   border: 0;
   border-left: 1px solid var(--stroke-divider);
@@ -2518,55 +2498,16 @@
   font-size: 13px;
 }
 @media (max-width: 1180px) {
-  .composeBoard {
-    grid-template-columns: minmax(0, 1fr) 360px;
-  }
   .composeBoard .sourcesSection {
     padding-inline: 16px;
   }
 }
 @media (max-width: 1100px) {
-  .composeBoard {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(440px, 1fr) minmax(340px, 1fr);
-    overflow-y: auto;
-  }
-  .composeBoard .composeMain {
-    grid-column: 1;
-    grid-row: 2;
-    overflow-y: auto;
-  }
-  .composeBoard .discussionSidebar {
-    grid-column: 1;
-    grid-row: 3;
-    margin: 0;
-    border-left: 0;
-    border-top: 1px solid var(--stroke-divider);
-    min-height: 340px;
-    height: auto;
-  }
-  .composeBoard .discussionSidebar[data-panel="split"] {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .composeBoard .changeDetailsPanel {
-    min-height: 340px;
-  }
   .composeBoard .proposedHeading {
     flex-basis: 100%;
   }
 }
 
-.composeBoard {
-  width: 100%;
-  max-width: none;
-  margin: 0;
-}
-
-/* The page header is outside the board; its former first grid row stays empty. */
-.composeBoard {
-  grid-template-rows: max-content max-content minmax(0, 1fr);
-}
 .composeBoard .sourcesSection {
   grid-column: 1 / -1;
   grid-row: 2;
@@ -2640,51 +2581,10 @@
   flex-shrink: 0;
   white-space: nowrap;
 }
-.composeBoard .composeMain {
-  grid-column: 2;
-  grid-row: 3;
-}
-.composeBoard .discussionSidebar {
-  grid-column: 3;
-  grid-row: 3;
-}
-@media (max-width: 1100px) {
-  .composeBoard {
-    grid-template-rows: max-content max-content minmax(180px, 240px) minmax(240px, auto) minmax(
-        380px,
-        1fr
-      );
-  }
-  .composeBoard .composeMain {
-    grid-column: 1;
-    grid-row: 4;
-  }
-  .composeBoard .discussionSidebar {
-    grid-column: 1;
-    grid-row: 5;
-  }
-}
 .composeMain {
   position: relative;
 }
 
-@media (min-width: 1101px) {
-  .composeBoard {
-    --draft-effective-width: clamp(
-      180px,
-      var(--draft-width, 260px),
-      min(560px, calc(100% - 640px))
-    );
-    grid-template-columns: var(--draft-effective-width) minmax(0, 1fr) clamp(
-        320px,
-        var(--discussion-width, 440px),
-        calc(100% - var(--draft-effective-width) - 320px)
-      );
-  }
-  .composeBoard[data-draft-collapsed] {
-    --draft-effective-width: 48px;
-  }
-}
 .discussionResize {
   grid-column: 3;
   grid-row: 3;
@@ -2726,11 +2626,6 @@
 .composeBoard[data-resizing] * {
   cursor: col-resize !important;
   user-select: none;
-}
-@media (max-width: 1100px) {
-  .discussionResize {
-    display: none;
-  }
 }
 
 .changeList {
@@ -3120,30 +3015,6 @@ button.currentDraftRow:hover {
   padding-left: 8px;
   color: var(--status-warning);
   line-height: 1.5;
-}
-@media (max-width: 1100px) {
-  .currentDraftSidebar {
-    grid-column: 1;
-    grid-row: 3;
-    border-right: 0;
-    border-bottom: 1px solid var(--stroke-divider);
-    padding-left: 12px;
-  }
-  .currentDraftSidebar > .currentDraft {
-    max-height: none;
-    flex: none;
-  }
-  .composeBoard[data-draft-collapsed] {
-    grid-template-rows: max-content max-content max-content minmax(240px, auto) minmax(380px, 1fr);
-  }
-  .currentDraftRail {
-    flex-direction: row;
-    justify-content: flex-start;
-    padding: 8px 12px;
-  }
-  .currentDraftRail > span {
-    writing-mode: horizontal-tb;
-  }
 }
 
 .sourcesHeading > h2 {

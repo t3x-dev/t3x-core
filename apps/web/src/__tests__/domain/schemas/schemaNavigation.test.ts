@@ -50,14 +50,14 @@ it('preserves the incoming candidate when normalizing an initial target', () => 
   expect(params.get('tab')).toBe('schemas');
 });
 
-it('opens the complete review in Schema and preserves exact identifiers', () => {
+it('opens the complete review in Workspace and preserves exact identifiers', () => {
   const url = new URL(
     schemaReviewHref('p', 'draft/a', 'snapshot:a+b', 'feature/a'),
     'http://local'
   );
   expect(Object.fromEntries(url.searchParams)).toEqual({
-    tab: 'schemas',
-    schemaView: 'review',
+    tab: 'workspaces',
+    workspaceMode: 'review',
     workspace: 'draft/a',
     reviewSnapshot: 'snapshot:a+b',
     branch: 'feature/a',
