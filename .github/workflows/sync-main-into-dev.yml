@@ -89,6 +89,10 @@ jobs:
 
           - [x] Not needed
 
+          ## Release Surface
+
+          - This back-merge preserves the release-surface changes already reviewed on main, including any package access, stability, or release-train policy updates in those commits. It introduces no additional release-surface decisions.
+
           ## Verification
 
           - PR Validation is expected to run on this generated PR.
