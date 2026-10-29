@@ -12,7 +12,7 @@ import {
 } from '@dnd-kit/core';
 import type { StudioCandidate } from '@t3x-dev/api-client';
 import { GripVertical } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import tree from '@/components/structure/StructureTree.module.css';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -43,6 +43,7 @@ export function SchemaFieldTree({
   projectId,
   sources = [],
   sourceManagement,
+  sourcesOpen = true,
   emptyContent,
   onMove,
   onImport,
@@ -56,6 +57,7 @@ export function SchemaFieldTree({
   projectId?: string;
   sources?: StudioCandidate[];
   sourceManagement?: ReactNode;
+  sourcesOpen?: boolean;
   emptyContent?: ReactNode;
   onMove: (path: string, target: SchemaFieldRow | null) => void;
   onImport: (item: SchemaSourceItem, target: SchemaFieldRow | null) => void;
@@ -67,6 +69,12 @@ export function SchemaFieldTree({
   const [source, setSource] = useState<SchemaSourceItem>();
   const [destination, setDestination] = useState('');
   const [moveOpen, setMoveOpen] = useState(false);
+  useEffect(() => {
+    if (!sourcesOpen) {
+      setSource(undefined);
+      setMoveOpen(false);
+    }
+  }, [sourcesOpen]);
   const availableSources = sources.filter((item) => item.available);
   const selectedRow = rows.find((row) => row.path === selected);
   const active: TransferItem | undefined = source
@@ -106,8 +114,11 @@ export function SchemaFieldTree({
         setDragging(undefined);
       }}
     >
-      <div className={styles.fieldWorkarea} data-sources={Boolean(projectId) || undefined}>
-        {projectId ? (
+      <div
+        className={styles.fieldWorkarea}
+        data-sources={(Boolean(projectId) && sourcesOpen) || undefined}
+      >
+        {projectId && sourcesOpen ? (
           <aside className={styles.importSources} aria-label="Available Schema sources">
             <div className={styles.sourceHeading}>
               <strong>Sources</strong>

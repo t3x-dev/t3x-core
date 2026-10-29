@@ -14,8 +14,10 @@ import {
 } from '@/components/ui/dialog';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import s from './SchemaStudioExperience.module.css';
@@ -48,6 +50,15 @@ export function SchemaStudioSurface({
   onInspect,
   canReview = false,
   onDownload,
+  onUndo,
+  canUndo = false,
+  onRules,
+  canOpenRules = false,
+  onDescribe,
+  onDiscard,
+  canDiscard = false,
+  sourcesOpen = false,
+  onToggleSources,
 }: {
   navigation?: ReactNode;
   hidden?: boolean;
@@ -75,8 +86,18 @@ export function SchemaStudioSurface({
   onInspect?: () => void;
   canReview?: boolean;
   onDownload?: () => void;
+  onUndo?: () => void;
+  canUndo?: boolean;
+  onRules?: () => void;
+  canOpenRules?: boolean;
+  onDescribe?: () => void;
+  onDiscard?: () => void;
+  canDiscard?: boolean;
+  sourcesOpen?: boolean;
+  onToggleSources?: () => void;
 }) {
   const [yamlOpen, setYamlOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const yaml = useMemo(
     () => (data?.schema ? dump(data.schema, { noRefs: true, lineWidth: 100 }) : ''),
     [data?.schema]
@@ -128,10 +149,26 @@ export function SchemaStudioSurface({
               </span>
             ) : null}
             <div className={s.toolbarActions}>
-              {draftStatus ? <output className={s.draftStatus}>{draftStatus}</output> : null}
-              <Button variant="canvas-outline" size="sm" disabled={!canSave} onClick={onSave}>
-                Save edits
-              </Button>
+              <fieldset aria-label="Schema save and review" className={s.saveGroup}>
+                {draftStatus ? <output className={s.draftStatus}>{draftStatus}</output> : null}
+                {onUndo ? (
+                  <Button variant="canvas-outline" size="sm" disabled={!canUndo} onClick={onUndo}>
+                    Undo
+                  </Button>
+                ) : null}
+                <Button variant="canvas-outline" size="sm" disabled={!canSave} onClick={onSave}>
+                  Save edits
+                </Button>
+                <Button
+                  variant="commit"
+                  size="sm"
+                  aria-label="Review Schema changes"
+                  disabled={!canReview}
+                  onClick={onReview}
+                >
+                  Review changes
+                </Button>
+              </fieldset>
               {sourceHref ? (
                 <Link href={sourceHref} className={s.navLink}>
                   Back to source
@@ -144,6 +181,22 @@ export function SchemaStudioSurface({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  {onToggleSources ? (
+                    <DropdownMenuCheckboxItem
+                      checked={sourcesOpen}
+                      onCheckedChange={onToggleSources}
+                    >
+                      Schema sources
+                    </DropdownMenuCheckboxItem>
+                  ) : null}
+                  {onRules ? (
+                    <DropdownMenuItem disabled={!canOpenRules} onSelect={onRules}>
+                      Relations & rules
+                    </DropdownMenuItem>
+                  ) : null}
+                  <DropdownMenuItem onSelect={() => setDetailsOpen(true)}>
+                    Schema details
+                  </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setYamlOpen(true)}>View YAML</DropdownMenuItem>
                   {onPublish ? (
                     <DropdownMenuItem onSelect={onPublish} disabled={!canPublish}>
@@ -158,24 +211,21 @@ export function SchemaStudioSurface({
                       Schema checks & impact
                     </DropdownMenuItem>
                   ) : null}
+                  <DropdownMenuSeparator />
+                  {onDescribe ? (
+                    <DropdownMenuItem onSelect={onDescribe}>Describe changes…</DropdownMenuItem>
+                  ) : null}
+                  {onDiscard ? (
+                    <DropdownMenuItem disabled={!canDiscard} onSelect={onDiscard}>
+                      Discard changes
+                    </DropdownMenuItem>
+                  ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button
-                variant="commit"
-                size="sm"
-                aria-label="Review Schema changes"
-                disabled={!canReview}
-                onClick={onReview}
-              >
-                Review changes
-              </Button>
             </div>
           </div>
         </SchemaToolbarSlot>
       ) : null}
-      <div className={s.inspectionToolbar} role="toolbar" aria-label="Schema status and inspection">
-        {bindingStatus ? <p className={s.bindingStatus}>{bindingStatus}</p> : null}
-      </div>
       {loading ? <output className={s.feedback}>Loading candidates…</output> : null}
       {error ? (
         <p role="alert" className={s.feedback}>
@@ -187,6 +237,23 @@ export function SchemaStudioSurface({
           <div className={s.dataEditor}>{dataEditor?.()}</div>
         </section>
       </div>
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Schema details</DialogTitle>
+            <DialogDescription>Identity of the current Schema candidate.</DialogDescription>
+          </DialogHeader>
+          <p className="break-all text-xs text-[var(--text-secondary)]">
+            {bindingStatus || 'No Schema selected.'}
+          </p>
+          {data ? (
+            <dl className="space-y-2 text-xs">
+              <dt>Definition hash</dt>
+              <dd className="break-all font-mono">{data.schemaHash}</dd>
+            </dl>
+          ) : null}
+        </DialogContent>
+      </Dialog>
       <Dialog open={yamlOpen} onOpenChange={setYamlOpen}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>

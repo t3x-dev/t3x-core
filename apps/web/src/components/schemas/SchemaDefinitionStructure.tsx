@@ -9,6 +9,8 @@ import { Textarea } from '@/components/ui/textarea';
 type Definition = Record<string, unknown>;
 type Field = {
   key: string;
+  label?: string;
+  hint?: string;
   kind?: 'text' | 'number' | 'json' | 'array' | 'boolean';
   options?: string[];
 };
@@ -71,8 +73,10 @@ export function SchemaDefinitionStructure({
   onChange,
   onValidationChange,
   showNodes = true,
+  progressive = false,
 }: {
   showNodes?: boolean;
+  progressive?: boolean;
   value: Definition;
   onChange: (value: Definition) => void;
   onValidationChange: (error?: string) => void;
@@ -87,6 +91,7 @@ export function SchemaDefinitionStructure({
     onValidationChange(Object.values(errors)[0]);
   }, [errors, onValidationChange]);
   useEffect(() => () => onValidationChange(undefined), [onValidationChange]);
+  const [newItems, setNewItems] = useState<string[]>([]);
   const relations = record(value.relationTypes);
   // YAML drafts can still contain invalid rule entries while the server preview
   // reports their errors. Keep Structure usable without rewriting those drafts.
@@ -122,6 +127,7 @@ export function SchemaDefinitionStructure({
             action="Add relation type"
             onAdd={() => {
               const name = freshKey(relations, 'new_relation');
+              setNewItems((items) => [...items, `relation:${name}`]);
               const endpoint = Object.keys(record(value.nodes))[0] ?? '';
               onChange({
                 ...value,
@@ -129,38 +135,69 @@ export function SchemaDefinitionStructure({
               });
             }}
           />
+          {progressive ? (
+            <p className="text-xs text-[var(--text-secondary)]">
+              Define which objects can connect and what the connection means.
+            </p>
+          ) : null}
+          {progressive && !Object.keys(relations).length ? (
+            <p className="text-xs text-[var(--text-secondary)]">No relation types defined.</p>
+          ) : null}
           {Object.entries(relations).map(([name, relation]) => (
-            <article aria-label={`Relation ${name}`} className={panelClass} key={name}>
-              <div className="flex items-start gap-2">
-                <NameField
-                  label={`Relation type name ${name}`}
-                  name={name}
-                  names={Object.keys(relations)}
+            <DefinitionDisclosure
+              key={name}
+              enabled={progressive}
+              label={name}
+              summary={`${String(record(relation).from ?? '')} → ${String(record(relation).to ?? '')}`}
+              initiallyOpen={newItems.includes(`relation:${name}`)}
+            >
+              <article aria-label={`Relation ${name}`} className={panelClass} key={name}>
+                <div className="flex items-start gap-2">
+                  <NameField
+                    label={`Relation type name ${name}`}
+                    name={name}
+                    names={Object.keys(relations)}
+                    onChange={(next) =>
+                      onChange({ ...value, relationTypes: rename(relations, name, next, relation) })
+                    }
+                  />
+                  <RemoveButton
+                    label={`Remove relation type ${name}`}
+                    onClick={() =>
+                      onChange({ ...value, relationTypes: withField(relations, name, undefined) })
+                    }
+                  />
+                </div>
+                <Fields
+                  context={`relation ${name}`}
+                  value={record(relation)}
+                  fields={
+                    progressive
+                      ? [
+                          { key: 'from', label: 'From objects' },
+                          { key: 'to', label: 'To objects' },
+                          { key: 'description', label: 'Description', kind: 'text' },
+                          { key: 'contentGuidance', label: 'Usage guidance', kind: 'text' },
+                          {
+                            key: 'acyclic',
+                            label: 'Prevent cycles',
+                            hint: 'Disallow chains that lead back to their starting object.',
+                            kind: 'boolean',
+                          },
+                        ]
+                      : [
+                          { key: 'from' },
+                          { key: 'to' },
+                          ...descriptions,
+                          { key: 'acyclic', kind: 'boolean' },
+                        ]
+                  }
                   onChange={(next) =>
-                    onChange({ ...value, relationTypes: rename(relations, name, next, relation) })
+                    onChange({ ...value, relationTypes: { ...relations, [name]: next } })
                   }
                 />
-                <RemoveButton
-                  label={`Remove relation type ${name}`}
-                  onClick={() =>
-                    onChange({ ...value, relationTypes: withField(relations, name, undefined) })
-                  }
-                />
-              </div>
-              <Fields
-                context={`relation ${name}`}
-                value={record(relation)}
-                fields={[
-                  { key: 'from' },
-                  { key: 'to' },
-                  ...descriptions,
-                  { key: 'acyclic', kind: 'boolean' },
-                ]}
-                onChange={(next) =>
-                  onChange({ ...value, relationTypes: { ...relations, [name]: next } })
-                }
-              />
-            </article>
+              </article>
+            </DefinitionDisclosure>
           ))}
         </section>
         <section aria-label="Schema rules" className="space-y-3">
@@ -169,20 +206,42 @@ export function SchemaDefinitionStructure({
             action="Add rule"
             onAdd={() => {
               const ids = Object.fromEntries(rules.map((rule) => [String(rule.id), true]));
-              onChange({ ...value, rules: [...rules, { id: freshKey(ids, 'new_rule') }] });
+              const id = freshKey(ids, 'new_rule');
+              setNewItems((items) => [...items, `rule:${id}`]);
+              onChange({ ...value, rules: [...rules, { id }] });
             }}
           />
+          {progressive ? (
+            <p className="text-xs text-[var(--text-secondary)]">
+              Require a connection, or keep a written guideline. Written guidelines are not
+              automatically checked.
+            </p>
+          ) : null}
+          {progressive && !rules.length ? (
+            <p className="text-xs text-[var(--text-secondary)]">No rules defined.</p>
+          ) : null}
           {rules.map((rule, index) => (
-            <RuleEditor
+            <DefinitionDisclosure
               key={String(rule.id)}
-              rule={rule}
-              rules={rules}
-              relations={relations}
-              onChange={(next) =>
-                onChange({ ...value, rules: rules.map((item, i) => (i === index ? next : item)) })
+              enabled={progressive}
+              label={String(rule.id)}
+              summary={
+                rule.kind === 'required_relation' ? 'Required connection' : 'Written guideline'
               }
-              onRemove={() => onChange({ ...value, rules: rules.filter((_, i) => i !== index) })}
-            />
+              initiallyOpen={newItems.includes(`rule:${rule.id}`)}
+            >
+              <RuleEditor
+                friendly={progressive}
+                key={String(rule.id)}
+                rule={rule}
+                rules={rules}
+                relations={relations}
+                onChange={(next) =>
+                  onChange({ ...value, rules: rules.map((item, i) => (i === index ? next : item)) })
+                }
+                onRemove={() => onChange({ ...value, rules: rules.filter((_, i) => i !== index) })}
+              />
+            </DefinitionDisclosure>
           ))}
         </section>
       </div>
@@ -667,6 +726,7 @@ function SlotEditor({
 }
 
 function RuleEditor({
+  friendly = false,
   rule,
   rules,
   relations,
@@ -674,6 +734,7 @@ function RuleEditor({
   onChange,
   onRemove,
 }: {
+  friendly?: boolean;
   rule: Definition;
   rules: Definition[];
   relations: Definition;
@@ -696,7 +757,7 @@ function RuleEditor({
         <RemoveButton label={`Remove rule ${id}`} onClick={onRemove} />
       </div>
       <label className="block space-y-1 text-xs">
-        kind
+        {friendly ? 'Rule type' : 'kind'}
         <select
           aria-label={`kind for rule ${id}`}
           className={inputClass}
@@ -724,8 +785,14 @@ function RuleEditor({
             }
           }}
         >
-          <option value="">Reserved rule (description only)</option>
-          <option value="required_relation">required_relation</option>
+          <option value="">
+            {friendly
+              ? 'Written guideline (not automatically checked)'
+              : 'Reserved rule (description only)'}
+          </option>
+          <option value="required_relation">
+            {friendly ? 'Required connection' : 'required_relation'}
+          </option>
         </select>
       </label>
       <Fields
@@ -734,16 +801,50 @@ function RuleEditor({
         fields={
           rule.kind === 'required_relation'
             ? [
-                { key: 'relationType', options: Object.keys(relations) },
-                { key: 'from' },
-                { key: 'to' },
-                { key: 'description', kind: 'text' },
+                {
+                  key: 'relationType',
+                  label: friendly ? 'Relation type' : undefined,
+                  options: Object.keys(relations),
+                },
+                { key: 'from', label: friendly ? 'From objects' : undefined },
+                { key: 'to', label: friendly ? 'To objects' : undefined },
+                { key: 'description', label: friendly ? 'Description' : undefined, kind: 'text' },
               ]
-            : [{ key: 'description', kind: 'text' }]
+            : [{ key: 'description', label: friendly ? 'Description' : undefined, kind: 'text' }]
         }
         onChange={onChange}
       />
     </article>
+  );
+}
+
+function DefinitionDisclosure({
+  enabled,
+  label,
+  summary,
+  initiallyOpen = false,
+  children,
+}: {
+  enabled: boolean;
+  label: string;
+  summary: string;
+  initiallyOpen?: boolean;
+  children: import('react').ReactNode;
+}) {
+  const [open, setOpen] = useState(initiallyOpen);
+  if (!enabled) return children;
+  return (
+    <details
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+      className="border-t border-[var(--stroke-divider)] py-2"
+    >
+      <summary className="cursor-pointer text-xs">
+        <strong className="font-medium">{label}</strong>
+        <span className="mt-1 block text-[var(--text-secondary)]">{summary}</span>
+      </summary>
+      <div className="pt-3">{children}</div>
+    </details>
   );
 }
 
@@ -784,7 +885,7 @@ function DefinitionField({
   value: unknown;
   onChange: (value: unknown) => void;
 }) {
-  const label = `${field.key} for ${context}`;
+  const label = `${field.label ?? field.key} for ${context}`;
   const id = useId();
   const reportError = useContext(reportErrorContext);
   const serialized =
@@ -837,9 +938,10 @@ function DefinitionField({
   return (
     <div className={`min-w-0 space-y-1 ${multiline ? 'sm:col-span-2' : ''}`}>
       <label className="block text-[11px] font-medium text-[var(--text-secondary)]" htmlFor={id}>
-        {field.key}
+        {field.label ?? field.key}
         {field.kind === 'json' || field.kind === 'array' ? ' (JSON)' : ''}
       </label>
+      {field.hint ? <p className="text-xs text-[var(--text-secondary)]">{field.hint}</p> : null}
       {field.options || field.kind === 'boolean' ? (
         <select
           id={id}
@@ -991,6 +1093,59 @@ export function SchemaFieldValidation({
 
 export { NameField as SchemaFieldName };
 
+const propertyLabels: Record<string, string> = {
+  description: 'Description',
+  contentGuidance: 'Writing guidance',
+  contentKind: 'Content form',
+  provenanceRequired: 'Require source evidence',
+  enum: 'Allowed values',
+  const: 'Fixed value',
+  default: 'Default value',
+  examples: 'Examples',
+  minimum: 'Minimum value',
+  maximum: 'Maximum value',
+  minLength: 'Minimum length',
+  maxLength: 'Maximum length',
+  maxWords: 'Maximum words',
+  pattern: 'Text pattern',
+  format: 'Format label',
+  gapQuestion: 'Question when missing',
+  repeated: 'Allow multiple items',
+};
+const propertyHints: Record<string, string> = {
+  enum: 'Only these values are accepted.',
+  const: 'Every value must match this exactly.',
+  default: 'A suggested value for review; it does not overwrite existing content.',
+  maxWords: 'Counts words separated by whitespace, not individual Chinese characters.',
+  pattern: 'A regular expression that the text must match.',
+  format: 'A format label only; it does not enforce validation.',
+  provenanceRequired: 'Require supporting source evidence for this field.',
+  gapQuestion: 'The question to ask when required information is missing.',
+};
+const propertyGroups = [
+  {
+    label: 'Writing guidance',
+    keys: ['contentGuidance', 'contentKind', 'examples', 'gapQuestion'],
+  },
+  {
+    label: 'Values and limits',
+    keys: [
+      'enum',
+      'const',
+      'default',
+      'minimum',
+      'maximum',
+      'minLength',
+      'maxLength',
+      'maxWords',
+      'pattern',
+      'repeated',
+    ],
+  },
+  { label: 'Source evidence', keys: ['provenanceRequired'] },
+  { label: 'Advanced', keys: ['format'] },
+];
+
 export function SchemaFieldProperties({
   kind,
   path,
@@ -1002,34 +1157,98 @@ export function SchemaFieldProperties({
   value: Definition;
   onChange: (next: Definition) => void;
 }) {
+  const [added, setAdded] = useState<string[]>([]);
+  const fields: Field[] = (
+    kind === 'slot'
+      ? slotFields
+      : [...descriptions, contentKind, { key: 'repeated', kind: 'boolean' } as Field]
+  ).map((field) => ({
+    ...field,
+    label: propertyLabels[field.key],
+    hint: propertyHints[field.key],
+  }));
+  const configured = fields.filter(
+    (field) =>
+      field.key !== 'description' && (value[field.key] !== undefined || added.includes(field.key))
+  );
+  const available = fields.filter(
+    (field) => field.key !== 'description' && !configured.includes(field)
+  );
+  const context = `${kind} ${path}`;
   return (
     <div className="space-y-4">
       <Fields
-        context={`${kind} ${path}`}
+        context={context}
         value={value}
-        fields={
-          kind === 'slot'
-            ? slotFields
-            : [...descriptions, contentKind, { key: 'repeated', kind: 'boolean' }]
-        }
+        fields={fields.filter((field) => field.key === 'description')}
         onChange={onChange}
       />
+      {configured.length ? (
+        <section
+          aria-label="Configured field settings"
+          className="space-y-3 border-t border-[var(--stroke-divider)] pt-3"
+        >
+          <h4 className="text-xs font-medium">Configured settings</h4>
+          <Fields context={context} value={value} fields={configured} onChange={onChange} />
+        </section>
+      ) : (
+        <p className="text-xs text-[var(--text-secondary)]">
+          No additional settings. Add one when you need it.
+        </p>
+      )}
+      {available.length ? (
+        <label className="block space-y-1 text-xs">
+          <span>Add setting</span>
+          <select
+            className={inputClass}
+            value=""
+            onChange={(event) => {
+              const key = event.target.value;
+              if (key) setAdded((current) => [...current, key]);
+            }}
+          >
+            <option value="">Choose a setting…</option>
+            {propertyGroups.map((group) => {
+              const choices = available.filter((field) => group.keys.includes(field.key));
+              return choices.length ? (
+                <optgroup key={group.label} label={group.label}>
+                  {choices.map((field) => (
+                    <option key={field.key} value={field.key}>
+                      {field.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null;
+            })}
+          </select>
+        </label>
+      ) : null}
       {kind === 'slot' ? (
-        <fieldset className="space-y-2">
-          <legend className="text-xs">YOps hint</legend>
+        <details className="space-y-3 border-t border-[var(--stroke-divider)] pt-3">
+          <summary className="cursor-pointer text-xs text-[var(--text-secondary)]">
+            Writing operation hints
+            {Object.keys(record(value.yopsHint)).length ? ' · configured' : ''}
+          </summary>
+          <p className="text-xs text-[var(--text-secondary)]">
+            Optional hints for generating write operations. These do not change validation.
+          </p>
           <Fields
             context={`YOps hint ${path}`}
             value={record(value.yopsHint)}
             fields={[
-              { key: 'preferredOp', options: ['define', 'set', 'populate', 'append'] },
-              { key: 'path' },
-              { key: 'slot' },
+              {
+                key: 'preferredOp',
+                label: 'Preferred operation',
+                options: ['define', 'set', 'populate', 'append'],
+              },
+              { key: 'path', label: 'Target path' },
+              { key: 'slot', label: 'Target field' },
             ]}
             onChange={(hint) =>
               onChange(withField(value, 'yopsHint', Object.keys(hint).length ? hint : undefined))
             }
           />
-        </fieldset>
+        </details>
       ) : null}
     </div>
   );

@@ -14,6 +14,10 @@ import {
 export type SchemaEditorNavigation = {
   requestNavigation: (navigate: () => void) => void;
   save?: () => Promise<boolean>;
+  undo?: () => void;
+  openRules?: () => void;
+  describeChanges?: () => void;
+  discard?: () => void;
 };
 
 // Feature-detected: history traversal can be cancelled before a client router unmounts the editor.

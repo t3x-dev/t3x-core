@@ -21,7 +21,10 @@ const definition = {
   },
 };
 
-function setup(initial: Record<string, unknown> = structuredClone(definition)) {
+function setup(
+  initial: Record<string, unknown> = structuredClone(definition),
+  progressive = false
+) {
   const save = vi.fn();
   function Harness() {
     const [value, setValue] = useState(initial);
@@ -29,6 +32,7 @@ function setup(initial: Record<string, unknown> = structuredClone(definition)) {
     return (
       <>
         <SchemaDefinitionStructure
+          progressive={progressive}
           value={value}
           onChange={setValue}
           onValidationChange={setError}
@@ -443,4 +447,34 @@ describe('complete Schema Structure settings', () => {
     expect(screen.getByRole('heading', { name: 'Rules' })).toBeInTheDocument();
     expect(saved().rules).toEqual([null]);
   });
+});
+
+it('keeps Schema-wide rules collapsed and preserves validation while their settings are hidden', () => {
+  const { save, saved } = setup(
+    {
+      ...definition,
+      relationTypes: { depends: { from: 'product', to: 'requirements' } },
+      rules: [
+        {
+          id: 'connection',
+          kind: 'required_relation',
+          relationType: 'depends',
+          from: 'product',
+          to: 'requirements',
+        },
+      ],
+    },
+    true
+  );
+  const name = screen.getByLabelText('Relation type name depends');
+  expect(name).not.toBeVisible();
+  fireEvent.click(screen.getByText('depends', { selector: 'strong' }));
+  expect(name).toBeVisible();
+  fireEvent.change(name, { target: { value: 'invalid name' } });
+  fireEvent.click(screen.getByText('depends', { selector: 'strong' }));
+  expect(screen.getByRole('button', { name: 'Save candidate' })).toBeDisabled();
+  expect(save).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText('depends', { selector: 'strong' }));
+  fireEvent.change(name, { target: { value: 'depends' } });
+  expect(saved()).toHaveProperty('rules.0.relationType', 'depends');
 });

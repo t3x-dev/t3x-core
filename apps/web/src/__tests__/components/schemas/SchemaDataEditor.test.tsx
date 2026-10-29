@@ -370,15 +370,16 @@ describe('Schema data editor', () => {
     const handlers = callbacks();
     render(<SchemaDataEditor initialDefinition={definition} revisionKey="1" {...handlers} />);
     fireEvent.focus(screen.getByLabelText('Name checklist/title'));
-    fireEvent.change(screen.getByLabelText('default for slot checklist/title'), {
+    fireEvent.change(screen.getByLabelText('Add setting'), { target: { value: 'default' } });
+    fireEvent.change(screen.getByLabelText('Default value for slot checklist/title'), {
       target: { value: '{' },
     });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save edits' })).toBeDisabled());
     fireEvent.change(screen.getByLabelText('Type checklist/items/done'), {
       target: { value: 'string' },
     });
-    expect(screen.getByLabelText('default for slot checklist/title')).toHaveValue('{');
-    fireEvent.change(screen.getByLabelText('default for slot checklist/title'), {
+    expect(screen.getByLabelText('Default value for slot checklist/title')).toHaveValue('{');
+    fireEvent.change(screen.getByLabelText('Default value for slot checklist/title'), {
       target: { value: '"Untitled"' },
     });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save edits' })).toBeEnabled());

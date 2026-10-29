@@ -1210,12 +1210,16 @@ function selectSchemaAction(name: string) {
 }
 
 function openSources() {
+  if (!screen.queryByRole('button', { name: 'Manage sources' })) {
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Schema actions' }), { key: 'Enter' });
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Schema sources' }));
+  }
   const trigger = screen.getByRole('button', { name: 'Manage sources' });
   if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
 }
 function closeSources() {
-  const trigger = screen.getByRole('button', { name: 'Manage sources' });
-  if (trigger.getAttribute('aria-expanded') === 'true') fireEvent.click(trigger);
+  const trigger = screen.queryByRole('button', { name: 'Manage sources' });
+  if (trigger?.getAttribute('aria-expanded') === 'true') fireEvent.click(trigger);
 }
 function openYaml() {
   if (screen.queryByRole('dialog', { name: 'Schema YAML' })) return;
@@ -1223,18 +1227,22 @@ function openYaml() {
   selectSchemaAction('View YAML');
 }
 
-it('keeps one source palette and opens candidate YAML from More without changing the candidate', () => {
+it('keeps sources and definition identity behind More without changing the candidate', () => {
   mocks.workspaces = [boundWorkspace()];
   render(<SchemaStudioExperience projectId="p" />);
   expect(screen.queryByRole('tablist', { name: 'Studio view' })).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('complementary', { name: 'Available Schema sources' })
+  ).not.toBeInTheDocument();
+  openSources();
+  closeSources();
   expect(screen.getByRole('complementary', { name: 'Available Schema sources' })).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Manage sources' })).toHaveAttribute(
-    'aria-expanded',
-    'false'
-  );
   expect(screen.queryByRole('region', { name: 'Schema details' })).not.toBeInTheDocument();
   expect(screen.queryByRole('dialog', { name: 'Schema YAML' })).not.toBeInTheDocument();
+  expect(screen.queryByText('Draft Schema: team/base · 1.0')).not.toBeInTheDocument();
+  selectSchemaAction('Schema details');
   expect(screen.getByText('Draft Schema: team/base · 1.0')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
   fireEvent.keyDown(screen.getByRole('button', { name: 'Schema actions' }), { key: 'Enter' });
   expect(screen.queryByRole('menuitem', { name: 'Open Workspace' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('menuitem', { name: 'View YAML', exact: true }));
@@ -1482,4 +1490,37 @@ it('shows a retry for unknown Draft changes instead of reporting a clean Draft',
   expect(screen.getByRole('button', { name: 'Review Schema changes' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Retry Draft status' })).toBeVisible();
   expect(screen.queryByText('No pending changes')).not.toBeInTheDocument();
+});
+
+it('groups Undo with Save and Review and opens global rules from More without field tabs', async () => {
+  mocks.query = 'workspace=workspace_branch%3Amain';
+  mocks.workspaces = [boundWorkspace()];
+  mocks.data = {
+    ...mocks.data,
+    schema: { nodes: { task: { slots: { title: { type: 'string' } } } } },
+    report: { valid: true, issues: [] },
+    workspace: { id: 'workspace_branch:main', revision: 2, changes: [] },
+  };
+  render(<SchemaStudioExperience projectId="p" />);
+  const group = screen.getByRole('group', { name: 'Schema save and review' });
+  const undo = within(group).getByRole('button', { name: 'Undo' });
+  expect(undo).toBeDisabled();
+  expect(within(group).getByRole('button', { name: 'Save edits' })).toBeVisible();
+  expect(within(group).getByRole('button', { name: 'Review Schema changes' })).toBeVisible();
+  expect(screen.getAllByRole('button', { name: 'Undo' })).toHaveLength(1);
+  expect(screen.queryByRole('button', { name: 'Relations & rules' })).not.toBeInTheDocument();
+  fireEvent.focus(screen.getByLabelText('Name task/title'));
+  fireEvent.change(screen.getByLabelText('Description for slot task/title'), {
+    target: { value: 'Edited title' },
+  });
+  expect(undo).toBeEnabled();
+  selectSchemaAction('Relations & rules');
+  expect(screen.getByRole('complementary', { name: 'Schema relations and rules' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Properties', exact: true })).not.toBeInTheDocument();
+  expect(screen.getByText('Applies to the whole Schema.')).toBeVisible();
+  fireEvent.click(undo);
+  fireEvent.focus(screen.getByLabelText('Name task/title'));
+  expect(screen.getByLabelText('Description for slot task/title')).toHaveValue('');
+  expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
+  expect(mocks.apply).not.toHaveBeenCalled();
 });

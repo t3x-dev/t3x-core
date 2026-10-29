@@ -68,6 +68,9 @@ export function SchemaDataEditor({
   navigationRef,
   focusSemanticPath,
   showSaveAction = true,
+  externalActions = false,
+  sourcesOpen = true,
+  onActionsAvailabilityChange,
   onSaveAvailabilityChange,
   view = 'data',
   layoutKey = 'schema',
@@ -99,6 +102,13 @@ export function SchemaDataEditor({
   navigationRef?: RefObject<SchemaEditorNavigation | null>;
   focusSemanticPath?: string;
   showSaveAction?: boolean;
+  externalActions?: boolean;
+  sourcesOpen?: boolean;
+  onActionsAvailabilityChange?: (availability: {
+    undo: boolean;
+    rules: boolean;
+    discard: boolean;
+  }) => void;
   onSaveAvailabilityChange?: (available: boolean) => void;
   onValidationChange?: (invalid: boolean) => void;
   view?: 'data' | 'visual';
@@ -409,6 +419,12 @@ export function SchemaDataEditor({
   useEffect(() => {
     onSaveAvailabilityChange?.(canSave);
   }, [canSave, onSaveAvailabilityChange]);
+  const canUndo = !busy && !!history.length && !validationError && !stale;
+  const canOpenRules = !busy && !validationError;
+  const canDiscard = !busy && (dirty || !!validationError);
+  useEffect(() => {
+    onActionsAvailabilityChange?.({ undo: canUndo, rules: canOpenRules, discard: canDiscard });
+  }, [canUndo, canOpenRules, canDiscard, onActionsAvailabilityChange]);
   const navigation = useSchemaNavigationGuard({
     dirty: dirty || Boolean(validationError),
     canSave,
@@ -417,7 +433,20 @@ export function SchemaDataEditor({
   });
   useEffect(() => {
     if (!navigationRef) return;
-    navigationRef.current = { requestNavigation: navigation.requestNavigation, save };
+    navigationRef.current = {
+      requestNavigation: navigation.requestNavigation,
+      save,
+      undo: () => {
+        if (canUndo) undo();
+      },
+      openRules: () => {
+        if (canOpenRules) setPanel('rules');
+      },
+      describeChanges: () => setIntentOpen(true),
+      discard: () => {
+        if (canDiscard) discard();
+      },
+    };
     return () => {
       navigationRef.current = null;
     };
@@ -484,14 +513,16 @@ export function SchemaDataEditor({
           />
         ) : null}
         <span>{rows.length} fields</span>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={busy || !!validationError}
-          onClick={() => setPanel('rules')}
-        >
-          Relations & rules
-        </Button>
+        {!externalActions ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!canOpenRules}
+            onClick={() => setPanel('rules')}
+          >
+            Relations & rules
+          </Button>
+        ) : null}
         <span className={styles.toolbarSpacer} />
         {showSaveAction ? (
           <Button
@@ -503,14 +534,11 @@ export function SchemaDataEditor({
             Save edits
           </Button>
         ) : null}
-        <Button
-          variant="canvas-outline"
-          size="sm"
-          disabled={busy || !history.length || !!validationError || stale}
-          onClick={undo}
-        >
-          Undo
-        </Button>
+        {!externalActions ? (
+          <Button variant="canvas-outline" size="sm" disabled={!canUndo} onClick={undo}>
+            Undo
+          </Button>
+        ) : null}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -541,21 +569,23 @@ export function SchemaDataEditor({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" aria-label="Editing actions">
-              <MoreHorizontal size={16} />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => setIntentOpen(true)}>
-              Describe changes…
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled={busy || (!dirty && !validationError)} onSelect={discard}>
-              Discard changes
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {!externalActions ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" aria-label="Editing actions">
+                <MoreHorizontal size={16} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setIntentOpen(true)}>
+                Describe changes…
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={busy || (!dirty && !validationError)} onSelect={discard}>
+                Discard changes
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
       </header>
       {error || validationError || (definition && previewError) || stale ? (
         <p role="alert" className={styles.error}>
@@ -572,6 +602,7 @@ export function SchemaDataEditor({
         <SchemaFieldValidation key={resetKey} onValidationChange={setFieldError}>
           <div className={styles.list} hidden={view !== 'data'}>
             <SchemaFieldTree
+              sourcesOpen={sourcesOpen}
               emptyContent={emptyContent}
               rows={rows}
               visible={visible}
@@ -787,26 +818,11 @@ export function SchemaDataEditor({
           ) : null}
           <aside
             className={styles.properties}
-            aria-label="Schema properties"
+            aria-label={panel === 'rules' ? 'Schema relations and rules' : 'Schema properties'}
             hidden={!active && panel !== 'rules'}
           >
-            <div className={styles.tabs}>
-              <button
-                type="button"
-                aria-pressed={panel === 'properties'}
-                disabled={busy || !!validationError}
-                onClick={() => setPanel('properties')}
-              >
-                Properties
-              </button>
-              <button
-                type="button"
-                aria-pressed={panel === 'rules'}
-                disabled={busy || !!validationError}
-                onClick={() => setPanel('rules')}
-              >
-                Relations & rules
-              </button>
+            <div className={styles.panelHeader}>
+              <strong>{panel === 'rules' ? 'Relations & rules' : 'Field properties'}</strong>
               <button
                 type="button"
                 className={styles.closeProperties}
@@ -900,6 +916,7 @@ export function SchemaDataEditor({
                   onChange={change}
                   onValidationChange={setRulesError}
                   showNodes={false}
+                  progressive
                 />
               ) : null}
             </div>

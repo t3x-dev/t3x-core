@@ -138,7 +138,7 @@ it('shares definition and selection across Data/Visual, moves a field, adds a re
   fireEvent.keyDown(screen.getByRole('button', { name: 'Canvas options' }), { key: 'Enter' });
   fireEvent.click(screen.getByRole('menuitem', { name: 'Relations & rules' }));
   fireEvent.click(screen.getByRole('button', { name: 'Add relation type' }));
-  fireEvent.change(screen.getByLabelText('to for relation new_relation'), {
+  fireEvent.change(screen.getByLabelText('To objects for relation new_relation'), {
     target: { value: 'owner' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
