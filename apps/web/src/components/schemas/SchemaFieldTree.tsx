@@ -12,10 +12,10 @@ import {
 } from '@dnd-kit/core';
 import type { StudioCandidate } from '@t3x-dev/api-client';
 import { GripVertical } from 'lucide-react';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import tree from '@/components/structure/StructureTree.module.css';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { SchemaDefinition, SchemaFieldRow } from '@/domain/schemas/schemaFieldEditing';
 import {
   isSourceBase,
@@ -23,6 +23,8 @@ import {
   sourceContainsRelation,
 } from '@/domain/schemas/schemaSourceRelations';
 import styles from './SchemaDataEditor.module.css';
+import overlay from './SchemaEditorOverlay.module.css';
+import { SchemaEditorSelect } from './SchemaEditorSelect';
 import { type SchemaSourceItem, SchemaVisualSource } from './SchemaVisualSources';
 
 type TransferItem = { row: SchemaFieldRow; source?: SchemaSourceItem };
@@ -79,11 +81,14 @@ export function SchemaFieldTree({
   onSelect: (row: SchemaFieldRow) => void;
   renderRow: (row: SchemaFieldRow, handle: ReactNode, select: () => void) => ReactNode;
 }) {
+  const destinationId = useId();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const [dragging, setDragging] = useState<TransferItem>();
   const [source, setSource] = useState<SchemaSourceItem>();
   const [destination, setDestination] = useState('');
   const [moveOpen, setMoveOpen] = useState(false);
+  const sourceAnchor = useRef<HTMLButtonElement | null>(null);
+  const sourcePosition = useRef<{ getBoundingClientRect: () => DOMRect } | null>(null);
   const [locating, setLocating] = useState<string>();
   const fieldScroll = useRef<HTMLDivElement>(null);
   const availableSources = sources.filter((item) => item.available);
@@ -199,7 +204,13 @@ export function SchemaFieldTree({
                 studio={studio}
                 relations={!source && selected ? relations?.get(selected) : undefined}
                 sourceBase={sourceBase}
-                onSelect={(item) => {
+                onSelect={(item, anchor) => {
+                  sourceAnchor.current = anchor;
+                  const bounds = anchor.getBoundingClientRect();
+                  sourcePosition.current = {
+                    getBoundingClientRect: () =>
+                      anchor.isConnected ? anchor.getBoundingClientRect() : bounds,
+                  };
                   setSource(item);
                   setDestination('');
                   setMoveOpen(true);
@@ -220,15 +231,48 @@ export function SchemaFieldTree({
               <div className={styles.moveToolbar}>
                 <span>{active.row.semanticPath}</span>
                 <Popover open={moveOpen} onOpenChange={setMoveOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant="canvas-outline" size="sm" disabled={disabled}>
-                      {source ? 'Add to draft…' : 'Move to…'}
+                  {source && sourcePosition.current ? (
+                    <PopoverAnchor virtualRef={{ current: sourcePosition.current }} />
+                  ) : null}
+                  {source ? (
+                    <Button
+                      variant="canvas-outline"
+                      size="sm"
+                      disabled={disabled}
+                      aria-expanded={moveOpen}
+                      onClick={() => setMoveOpen(!moveOpen)}
+                    >
+                      Add to draft…
                     </Button>
-                  </PopoverTrigger>
-                  <PopoverContent align="start" className={styles.moveMenu}>
-                    <label>
+                  ) : (
+                    <PopoverTrigger asChild>
+                      <Button variant="canvas-outline" size="sm" disabled={disabled}>
+                        Move to…
+                      </Button>
+                    </PopoverTrigger>
+                  )}
+                  <PopoverContent
+                    align="start"
+                    side={source ? 'right' : 'bottom'}
+                    sideOffset={8}
+                    collisionPadding={12}
+                    className={overlay.popover}
+                    aria-label={source ? 'Add source to draft' : 'Move to node'}
+                    onCloseAutoFocus={(event) => {
+                      if (source && sourceAnchor.current?.isConnected) {
+                        event.preventDefault();
+                        sourceAnchor.current.focus();
+                      }
+                    }}
+                  >
+                    <div>
+                      <h3 className={overlay.heading}>{source ? 'Add to draft' : 'Move to'}</h3>
+                      <p className={overlay.description}>{active.row.semanticPath}</p>
+                    </div>
+                    <label className={overlay.field} htmlFor={destinationId}>
                       Destination
-                      <select
+                      <SchemaEditorSelect
+                        id={destinationId}
                         aria-label="Destination node"
                         value={destination}
                         disabled={disabled}
@@ -243,18 +287,23 @@ export function SchemaFieldTree({
                             {row.semanticPath}
                           </option>
                         ))}
-                      </select>
+                      </SchemaEditorSelect>
                     </label>
-                    <Button
-                      size="sm"
-                      variant="commit"
-                      disabled={disabled || !canMove}
-                      onClick={() => {
-                        if (canMove) transfer(active, target ?? null);
-                      }}
-                    >
-                      {source ? 'Add here' : 'Move here'}
-                    </Button>
+                    <div className={overlay.actions}>
+                      <Button size="sm" variant="ghost" onClick={() => setMoveOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="commit"
+                        disabled={disabled || !canMove}
+                        onClick={() => {
+                          if (canMove) transfer(active, target ?? null);
+                        }}
+                      >
+                        {source ? 'Add here' : 'Move here'}
+                      </Button>
+                    </div>
                   </PopoverContent>
                 </Popover>
                 {studio && source ? (

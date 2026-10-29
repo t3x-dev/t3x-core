@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { getProjectIdRepoPath } from '@/domain/project/repoPath';
 import { usePublishStudioSchema } from '@/hooks/schemas/usePublishStudioSchema';
+import { SchemaEditorSelect } from './SchemaEditorSelect';
 
 export function StudioPublishDialog({
   projectId,
@@ -194,9 +195,8 @@ export function StudioPublishDialog({
             </label>
             <label htmlFor={`${id}-license`} className="grid gap-1 text-sm">
               License
-              <select
+              <SchemaEditorSelect
                 id={`${id}-license`}
-                className="h-9 rounded-md border bg-transparent px-3 text-sm"
                 value={license}
                 onChange={(event) => setLicense(event.target.value as typeof license)}
                 disabled={busy}
@@ -208,7 +208,7 @@ export function StudioPublishDialog({
                     </option>
                   )
                 )}
-              </select>
+              </SchemaEditorSelect>
             </label>
             <p className="text-xs text-[var(--text-secondary)]">
               Publish only definitions you are authorized to share under the selected license.

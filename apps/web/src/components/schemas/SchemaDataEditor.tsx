@@ -19,7 +19,7 @@ import {
   Trash2,
   Type,
 } from 'lucide-react';
-import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, type RefObject, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { StructureTreeRow, visibleTreeRows } from '@/components/structure/StructureTree';
 import tree from '@/components/structure/StructureTree.module.css';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   addSchemaField,
   changeSchemaField,
@@ -63,6 +65,8 @@ import {
   schemaFieldTypeLabels,
 } from './SchemaDefinitionStructure';
 import { SchemaDetailsPanel } from './SchemaDetailsPanel';
+import overlay from './SchemaEditorOverlay.module.css';
+import { SchemaEditorSelect } from './SchemaEditorSelect';
 import { SchemaFieldTree } from './SchemaFieldTree';
 import { SchemaSourceBadge } from './SchemaSourceBadge';
 import { type ParentLineMode, SchemaVisualEditor } from './SchemaVisualEditor';
@@ -180,6 +184,7 @@ export function SchemaDataEditor({
   onDirtyChange: (dirty: boolean) => void;
   onDiscard: () => void;
 }) {
+  const overlayId = useId();
   const [definition, setDefinition] = useState<SchemaDefinition>();
   const [dirty, setDirty] = useState(false);
   const [selected, setSelected] = useState<string>();
@@ -197,6 +202,8 @@ export function SchemaDataEditor({
   const intentInput = useRef<HTMLTextAreaElement>(null);
   const [addKind, setAddKind] = useState<'node' | 'slot'>();
   const [addParent, setAddParent] = useState('');
+  const addButton = useRef<HTMLButtonElement>(null);
+  const [addOpen, setAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sourceMappings, setSourceMappings] = useState<SchemaSourceMappings>([]);
   const [history, setHistory] = useState<
@@ -632,36 +639,151 @@ export function SchemaDataEditor({
             Undo
           </Button>
         ) : null}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+        <Popover
+          open={addOpen}
+          onOpenChange={(open) => {
+            setAddOpen(open);
+            if (!open) setAddKind(undefined);
+          }}
+        >
+          <PopoverTrigger asChild>
             <Button
+              ref={addButton}
               variant="canvas-outline"
               size="sm"
               disabled={busy || !!disabledReason || !!validationError || stale}
             >
               <Plus size={14} aria-hidden="true" /> Add <ChevronDown size={14} aria-hidden="true" />
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => add(null, 'node')}>Top-level node</DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() => {
-                setAddParent(active?.kind === 'node' ? active.path : (active?.parentPath ?? ''));
-                setAddKind('node');
-              }}
-            >
-              Child node…
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() => {
-                setAddParent(active?.kind === 'node' ? active.path : (active?.parentPath ?? ''));
-                setAddKind('slot');
-              }}
-            >
-              Field…
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            sideOffset={8}
+            collisionPadding={12}
+            className={overlay.popover}
+            aria-label={
+              !addKind ? 'Add to schema' : addKind === 'slot' ? 'Add field' : 'Add child node'
+            }
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              addButton.current?.focus();
+            }}
+          >
+            {!addKind ? (
+              <div className="grid gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="justify-start"
+                  onClick={() => {
+                    add(null, 'node');
+                    setAddOpen(false);
+                  }}
+                >
+                  Top-level node
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="justify-start"
+                  onClick={() => {
+                    setAddParent(
+                      active?.kind === 'node' ? active.path : (active?.parentPath ?? '')
+                    );
+                    setAddKind('node');
+                  }}
+                >
+                  Child node…
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="justify-start"
+                  onClick={() => {
+                    setAddParent(
+                      active?.kind === 'node' ? active.path : (active?.parentPath ?? '')
+                    );
+                    setAddKind('slot');
+                  }}
+                >
+                  Field…
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <h3 className={overlay.heading}>
+                    {addKind === 'slot' ? 'Add field' : 'Add child node'}
+                  </h3>
+                  <p className={overlay.description}>
+                    Choose the node that will contain the new{' '}
+                    {addKind === 'slot' ? 'field' : 'node'}.
+                  </p>
+                </div>
+                <label className={overlay.field} htmlFor={`${overlayId}-parent`}>
+                  Parent node
+                  <SchemaEditorSelect
+                    autoFocus
+                    id={`${overlayId}-parent`}
+                    aria-label="Parent node"
+                    value={addParent}
+                    onChange={(event) => setAddParent(event.target.value)}
+                  >
+                    <option value="">Choose a node</option>
+                    {rows
+                      .filter((row) => row.kind === 'node')
+                      .map((row) => (
+                        <option
+                          key={row.path}
+                          value={row.path}
+                          disabled={
+                            addKind === 'node' &&
+                            (row.definition.repeated === true || row.definition.children === 'any')
+                          }
+                        >
+                          {row.semanticPath}
+                          {addKind === 'node' &&
+                          (row.definition.repeated === true || row.definition.children === 'any')
+                            ? ' — child nodes unavailable'
+                            : ''}
+                        </option>
+                      ))}
+                  </SchemaEditorSelect>
+                </label>
+                {!rows.some((row) => row.kind === 'node') ? (
+                  <p className="text-sm">Add a top-level node first. Fields belong to nodes.</p>
+                ) : null}
+                <div className={overlay.actions}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setAddKind(undefined);
+                      setAddOpen(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={!addParent || busy || !!validationError || stale}
+                    variant="commit"
+                    onClick={() => {
+                      const parent = rows.find((row) => row.path === addParent);
+                      if (parent && addKind) {
+                        add(parent, addKind);
+                        setAddKind(undefined);
+                        setAddOpen(false);
+                      }
+                    }}
+                  >
+                    Add {addKind === 'slot' ? 'field' : 'child node'}
+                  </Button>
+                </div>
+              </>
+            )}
+          </PopoverContent>
+        </Popover>
         {!externalActions ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -1102,65 +1224,6 @@ export function SchemaDataEditor({
           {notice}
         </output>
       ) : null}
-      <Dialog
-        open={!!addKind}
-        onOpenChange={(open) => {
-          if (!open) setAddKind(undefined);
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{addKind === 'slot' ? 'Add field' : 'Add child node'}</DialogTitle>
-            <DialogDescription>
-              Choose the node that will contain the new {addKind === 'slot' ? 'field' : 'node'}.
-            </DialogDescription>
-          </DialogHeader>
-          <label className={styles.moveMenu}>
-            Parent node
-            <select
-              aria-label="Parent node"
-              value={addParent}
-              onChange={(event) => setAddParent(event.target.value)}
-            >
-              <option value="">Choose a node</option>
-              {rows
-                .filter((row) => row.kind === 'node')
-                .map((row) => (
-                  <option
-                    key={row.path}
-                    value={row.path}
-                    disabled={
-                      addKind === 'node' &&
-                      (row.definition.repeated === true || row.definition.children === 'any')
-                    }
-                  >
-                    {row.semanticPath}
-                    {addKind === 'node' &&
-                    (row.definition.repeated === true || row.definition.children === 'any')
-                      ? ' — child nodes unavailable'
-                      : ''}
-                  </option>
-                ))}
-            </select>
-          </label>
-          {!rows.some((row) => row.kind === 'node') ? (
-            <p className="text-sm">Add a top-level node first. Fields belong to nodes.</p>
-          ) : null}
-          <Button
-            disabled={!addParent || busy || !!validationError || stale}
-            variant="commit"
-            onClick={() => {
-              const parent = rows.find((row) => row.path === addParent);
-              if (parent && addKind) {
-                add(parent, addKind);
-                setAddKind(undefined);
-              }
-            }}
-          >
-            Add {addKind === 'slot' ? 'field' : 'child node'}
-          </Button>
-        </DialogContent>
-      </Dialog>
       <Dialog open={intentOpen} onOpenChange={setIntentOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -1203,13 +1266,14 @@ export function SchemaDataEditor({
               if (conflict) transfer(conflict.row, conflict.target, conflict.item, conflictName);
             }}
           >
-            <label className="flex flex-col gap-2">
+            <label className={overlay.field} htmlFor={`${overlayId}-name`}>
               New name
-              <input
+              <Input
+                id={`${overlayId}-name`}
                 aria-label="New name"
                 value={conflictName}
                 onChange={(event) => setConflictName(event.target.value)}
-                className="rounded border p-2"
+                aria-invalid={!!conflictError}
                 autoFocus
               />
             </label>

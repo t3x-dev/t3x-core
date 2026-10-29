@@ -335,8 +335,8 @@ describe('Schema data editor', () => {
         {...handlers}
       />
     );
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Add', exact: true }), { key: 'Enter' });
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Top-level node' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add', exact: true }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Top-level node' }));
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
     expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(true);
@@ -567,8 +567,8 @@ it('adds fields through the shared Add menu with an explicit parent and opens co
     />
   );
   expect(screen.getByRole('complementary', { name: 'Schema properties' })).toBeVisible();
-  fireEvent.keyDown(screen.getByRole('button', { name: 'Add', exact: true }), { key: 'Enter' });
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Field…' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Add', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Field…' }));
   const parent = screen.getByLabelText('Parent node');
   expect(screen.getByRole('button', { name: 'Add field', exact: true })).toBeDisabled();
   fireEvent.change(parent, { target: { value: '["nodes","checklist"]' } });
@@ -721,4 +721,25 @@ it('keeps an edited Schema after deleting its last node', async () => {
       []
     )
   );
+});
+
+it('keeps the parent picker focused after the Add menu closes and cancels without editing', async () => {
+  const handlers = callbacks();
+  render(
+    <SchemaDataEditor
+      initialDefinition={definition}
+      revisionKey="picker"
+      loading={false}
+      {...handlers}
+    />
+  );
+  const add = screen.getByRole('button', { name: 'Add', exact: true });
+  fireEvent.click(add);
+  fireEvent.click(screen.getByRole('button', { name: 'Field…' }));
+  await waitFor(() => expect(screen.getByLabelText('Parent node')).toHaveFocus());
+  expect(document.querySelector('[data-slot="dialog-overlay"]')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel', exact: true }));
+  await waitFor(() => expect(add).toHaveFocus());
+  expect(screen.queryByLabelText('Parent node')).not.toBeInTheDocument();
+  expect(handlers.onPreview).not.toHaveBeenCalled();
 });

@@ -30,7 +30,7 @@ function SourceItem({
   item: SchemaSourceItem;
   disabled: boolean;
   selected: boolean;
-  onSelect: (item: SchemaSourceItem) => void;
+  onSelect: (item: SchemaSourceItem, anchor: HTMLButtonElement) => void;
   studio?: boolean;
   related?: boolean;
 }) {
@@ -51,7 +51,7 @@ function SourceItem({
       aria-pressed={selected}
       data-related={related || undefined}
       title={related ? 'Source of the selected field' : undefined}
-      onClick={() => onSelect(item)}
+      onClick={(event) => onSelect(item, event.currentTarget)}
       style={{ touchAction: 'none', opacity: isDragging ? 0.45 : undefined }}
     >
       <span className={studio ? styles.sourceItemName : undefined}>
@@ -89,7 +89,7 @@ export function SchemaVisualSource({
   candidate: StudioCandidate;
   disabled: boolean;
   selected?: SchemaSourceItem;
-  onSelect: (item: SchemaSourceItem) => void;
+  onSelect: (item: SchemaSourceItem, anchor: HTMLButtonElement) => void;
   defaultOpen?: boolean;
   studio?: boolean;
   relations?: SchemaSourceRelation[];

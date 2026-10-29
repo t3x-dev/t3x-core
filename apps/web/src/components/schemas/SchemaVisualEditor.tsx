@@ -25,7 +25,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import type { StudioCandidate } from '@t3x-dev/api-client';
 import { ChevronDown, GripVertical } from 'lucide-react';
-import { type ButtonHTMLAttributes, type ReactNode, useMemo, useState } from 'react';
+import { type ButtonHTMLAttributes, type ReactNode, useId, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -43,6 +43,8 @@ import {
   type SchemaFieldRow,
   schemaRecord,
 } from '@/domain/schemas/schemaFieldEditing';
+import overlay from './SchemaEditorOverlay.module.css';
+import { SchemaEditorSelect } from './SchemaEditorSelect';
 import styles from './SchemaVisualEditor.module.css';
 import { type SchemaSourceItem, SchemaVisualSource } from './SchemaVisualSources';
 
@@ -211,6 +213,7 @@ export function SchemaVisualEditor({
   const [dimensions, setDimensions] = useState<Record<string, { width: number; height: number }>>(
     {}
   );
+  const destinationId = useId();
   const [destination, setDestination] = useState('');
   const [moveOpen, setMoveOpen] = useState(false);
   const [dragLabel, setDragLabel] = useState('');
@@ -375,10 +378,17 @@ export function SchemaVisualEditor({
                   {sourceItem ? 'Add to draft…' : 'Move to…'}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="end" className={styles.moveMenu}>
-                <label>
+              <PopoverContent
+                align="end"
+                sideOffset={8}
+                collisionPadding={12}
+                className={overlay.popover}
+                aria-label="Choose destination"
+              >
+                <label className={overlay.field} htmlFor={destinationId}>
                   {sourceItem ? 'Import' : 'Move'} {active.semanticPath} to
-                  <select
+                  <SchemaEditorSelect
+                    id={destinationId}
                     aria-label={`Move ${movableKind} to ${active.kind === 'node' ? 'parent' : 'node'}`}
                     value={destination}
                     disabled={disabled}
@@ -391,20 +401,26 @@ export function SchemaVisualEditor({
                         {row.semanticPath}
                       </option>
                     ))}
-                  </select>
+                  </SchemaEditorSelect>
                 </label>
-                <Button
-                  size="sm"
-                  disabled={disabled || !canMove}
-                  onClick={() => {
-                    if (!canMove) return;
-                    setMoveOpen(false);
-                    if (sourceItem) onImport?.(sourceItem, destinationRow ?? null);
-                    else onMove(active.path, destinationRow ?? null);
-                  }}
-                >
-                  {sourceItem ? 'Import' : 'Move'} {movableKind}
-                </Button>
+                <div className={overlay.actions}>
+                  <Button size="sm" variant="ghost" onClick={() => setMoveOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="commit"
+                    disabled={disabled || !canMove}
+                    onClick={() => {
+                      if (!canMove) return;
+                      setMoveOpen(false);
+                      if (sourceItem) onImport?.(sourceItem, destinationRow ?? null);
+                      else onMove(active.path, destinationRow ?? null);
+                    }}
+                  >
+                    {sourceItem ? 'Import' : 'Move'} {movableKind}
+                  </Button>
+                </div>
               </PopoverContent>
             </Popover>
           ) : null}
