@@ -110,6 +110,19 @@ describe('useProjectWorkspaces', () => {
     unmount();
   });
 
+  it('recovers a commit missed by realtime when returning to the window', async () => {
+    const before = [{ id: 'workspace_1', revision: 2 }] as WorkspaceCandidate[];
+    const after = [{ id: 'workspace_1', revision: 3 }] as WorkspaceCandidate[];
+    vi.mocked(fetchProjectWorkspaces).mockResolvedValueOnce(before).mockResolvedValueOnce(after);
+    const { result, unmount } = renderHook(() => useProjectWorkspaces('proj_1'));
+    await waitFor(() => expect(result.current.workspaces).toEqual(before));
+    act(() => window.dispatchEvent(new Event('focus')));
+    await waitFor(() => expect(result.current.workspaces).toEqual(after));
+    unmount();
+    window.dispatchEvent(new Event('focus'));
+    expect(fetchProjectWorkspaces).toHaveBeenCalledTimes(2);
+  });
+
   it('ignores duplicate and cross-project events', async () => {
     const { unmount } = renderHook(() => useProjectWorkspaces('proj_1'));
     await waitFor(() => expect(fetchProjectWorkspaces).toHaveBeenCalledTimes(1));

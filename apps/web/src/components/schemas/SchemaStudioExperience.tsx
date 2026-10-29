@@ -5,6 +5,14 @@ import { Settings2 } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { WorkspaceStageNavigation } from '@/components/workspaces/WorkspaceStageNavigation';
 import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
 import { schemaFieldRows } from '@/domain/schemas/schemaFieldEditing';
@@ -212,6 +220,7 @@ export function SchemaStudioExperience({
     setDataDirty(dirty);
   }, []);
   const [editorBase, setEditorBase] = useState<{
+    workspaceBase: string;
     schema: Record<string, unknown>;
     hash: string;
     initial: Record<string, unknown>;
@@ -233,6 +242,14 @@ export function SchemaStudioExperience({
   }>();
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string>();
+  const [discardRequest, setDiscardRequest] = useState<{
+    workspaceId: string;
+    workspaceRevision: number;
+    candidateRevision: number;
+    bindingHash: string;
+  }>();
+  const [discardError, setDiscardError] = useState<string>();
+  const discarding = useRef(false);
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -384,7 +401,11 @@ export function SchemaStudioExperience({
   const [recoveredEditIdentity, setRecoveredEditIdentity] = useState('');
   const [usingSavedCandidate, setUsingSavedCandidate] = useState(false);
   const activeCandidate = usingSavedCandidate && !savedEditIsApplied ? schemaEdit.candidate : null;
-  const editIdentity = `${projectId}:${workspaceId}:${recoveredCandidateKey}:${savedEditIsApplied}`;
+  const boundRevision = JSON.stringify([
+    currentBinding?.schemaHash ?? null,
+    persistedTarget?.baseCommitHash ?? null,
+  ]);
+  const editIdentity = `${projectId}:${workspaceId}:${recoveredCandidateKey}:${savedEditIsApplied}:${boundRevision}`;
   const missingEditSources = (schemaEdit.candidate?.baseSources ?? []).filter(
     (base) =>
       !candidates.items.some(
@@ -509,6 +530,8 @@ export function SchemaStudioExperience({
     setSchemaDefinition(undefined);
     setApplying(false);
     setPreparation(undefined);
+    setDiscardRequest(undefined);
+    setDiscardError(undefined);
   }, [workspaceId]);
 
   const previewInput = {
@@ -684,12 +707,12 @@ export function SchemaStudioExperience({
         return;
       }
       if (!fresh.workspace) throw new Error('The target Workspace is unavailable.');
-      if (
-        fresh.workspace.binding === null ||
-        fresh.workspace.changes.length ||
-        fresh.workspace.canBind ||
-        fresh.impact?.content.ready === false
-      ) {
+      const freshWorkflow = schemaWorkflowStatus({
+        draft: draftView?.workspaceRevision === fresh.workspace.revision ? draftView : undefined,
+        preview: fresh,
+        hasDefinition: true,
+      });
+      if (freshWorkflow.candidateChanged || fresh.impact?.content.ready === false) {
         const target: SchemaPreparationTarget = {
           kind: 'studio',
           candidateIds: [...selection],
@@ -730,6 +753,8 @@ export function SchemaStudioExperience({
       if (isCurrent()) {
         setApplying(false);
         void workspaces.refresh();
+        void draftState.refresh();
+        void reviewStatus.refresh();
         preview.refresh();
       }
     }
@@ -809,6 +834,82 @@ export function SchemaStudioExperience({
     !reviewStatus.loading &&
     !reviewStatus.error &&
     (persistedTarget ? workflow.hasNewChanges : selection.length > 0);
+  const canDiscardSaved = Boolean(
+    persistedTarget &&
+      persistedTarget.revision !== undefined &&
+      currentBinding?.schemaHash &&
+      schemaEdit.candidate &&
+      !savedEditIsApplied &&
+      (schemaEdit.candidate.authoringDraft?.resultSchemaHash ||
+        (activeCandidate && workflow.candidateChanged)) &&
+      !workspaces.loading &&
+      !schemaEdit.loading &&
+      !schemaEdit.pending &&
+      !schemaEdit.error &&
+      !definitionOpen &&
+      !applying
+  );
+  async function discardSavedDraft() {
+    if (!discardRequest || discarding.current) return;
+    const request = discardRequest;
+    const isCurrent = () => mounted.current && activeReviewScope.current === reviewScope;
+    discarding.current = true;
+    setApplying(true);
+    setDiscardError(undefined);
+    try {
+      const bound = await reviewFlow.preview({
+        workspaceId: request.workspaceId,
+        candidateIds: [],
+      });
+      if (!isCurrent()) return;
+      if (
+        bound.workspace?.revision !== request.workspaceRevision ||
+        bound.schemaHash !== request.bindingHash
+      )
+        throw new Error('The Workspace schema changed. Close this dialog and try again.');
+      // Save a new candidate revision matching the effective contract. This does
+      // not apply a Schema, migrate content, remove sources, or rewrite history.
+      await schemaEdit.save({
+        workspaceId: request.workspaceId,
+        candidateIds: [],
+        ifRevision: request.candidateRevision,
+        retryKey: `studio-discard:${crypto.randomUUID()}`,
+        origin: 'studio',
+        intent: 'Discard saved Schema edits and restore the Workspace schema.',
+        localContribution: {},
+        schemaDefinition: bound.schema,
+        baseSchemaHash: bound.schemaHash,
+        sourceMappings: [],
+        rebase: true,
+      });
+      if (!isCurrent()) return;
+      setSelection([]);
+      setUsingSavedCandidate(false);
+      setSavedCandidateRef(undefined);
+      setLocalContribution({});
+      setSourceMappings([]);
+      setSchemaDefinition(undefined);
+      setEditorBase(undefined);
+      setBlankWorkspace(undefined);
+      setEditorInvalid(false);
+      updateDataDirty(false);
+      setEditorReset((value) => value + 1);
+      setError(undefined);
+      setDiscardRequest(undefined);
+      void workspaces.refresh();
+      void draftState.refresh();
+      void reviewStatus.refresh();
+      basePreview.refresh();
+    } catch (cause) {
+      if (isCurrent())
+        setDiscardError(
+          cause instanceof Error ? cause.message : 'Could not discard the Schema draft.'
+        );
+    } finally {
+      discarding.current = false;
+      if (isCurrent()) setApplying(false);
+    }
+  }
   function showReview() {
     if (!persistedTarget) return;
     const navigate = () =>
@@ -991,7 +1092,7 @@ export function SchemaStudioExperience({
       ) : null}
       {error ? (
         <p className="px-6 py-2 text-sm text-[var(--status-error)]" role="alert">
-          {error} Review the refreshed selection before trying again.
+          {error}
         </p>
       ) : null}
       <SchemaStudioSurface
@@ -1066,7 +1167,7 @@ export function SchemaStudioExperience({
               setSourceManagerOpen(true);
             }}
             initialDefinition={
-              editorBase?.initial ??
+              (editorBase?.workspaceBase === boundRevision ? editorBase.initial : undefined) ??
               ((selection.length || currentBinding || creatingBlank || activeCandidate) &&
               recoveredDefinitionReady &&
               data
@@ -1075,7 +1176,7 @@ export function SchemaStudioExperience({
                   : data.schema
                 : undefined)
             }
-            revisionKey={`${workspaceId}:${recoveredCandidateKey}:${candidateSelectionKey}`}
+            revisionKey={`${workspaceId}:${recoveredCandidateKey}:${candidateSelectionKey}:${boundRevision}`}
             disabledReason={
               !persistedTarget ? 'Select a saved Workspace to edit its Schema.' : undefined
             }
@@ -1108,6 +1209,7 @@ export function SchemaStudioExperience({
               setSourceMappings(mappings ?? []);
               if (!editorBase && basePreview.data && data) {
                 setEditorBase({
+                  workspaceBase: boundRevision,
                   schema: structuredClone(
                     activeCandidate?.baseDefinition ??
                       basePreview.data.workspace?.boundSchema ??
@@ -1189,6 +1291,7 @@ export function SchemaStudioExperience({
           if (!initial || (!editorBase && !basePreview.data)) return;
           if (!editorBase && basePreview.data)
             setEditorBase({
+              workspaceBase: boundRevision,
               schema: structuredClone(
                 activeCandidate?.baseDefinition ??
                   basePreview.data.workspace?.boundSchema ??
@@ -1227,6 +1330,24 @@ export function SchemaStudioExperience({
         canUndo={editorActions.undo && !definitionOpen && !applying}
         onDiscard={() => navigationRef.current?.discard?.()}
         canDiscard={editorActions.discard && !definitionOpen && !applying}
+        onDiscardSaved={() => {
+          if (
+            !canDiscardSaved ||
+            !persistedTarget ||
+            persistedTarget.revision === undefined ||
+            !schemaEdit.candidate ||
+            !currentBinding?.schemaHash
+          )
+            return;
+          setDiscardError(undefined);
+          setDiscardRequest({
+            workspaceId: persistedTarget.id,
+            workspaceRevision: persistedTarget.revision,
+            candidateRevision: schemaEdit.candidate.revision,
+            bindingHash: currentBinding.schemaHash,
+          });
+        }}
+        canDiscardSaved={canDiscardSaved}
         onInspect={() => inspectDefinition()}
         canReview={canReview}
         hasUnsavedChanges={dataDirty}
@@ -1255,6 +1376,45 @@ export function SchemaStudioExperience({
         </p>
       ) : null}
       {sourceManager}
+      <Dialog
+        open={!!discardRequest}
+        onOpenChange={(open) => {
+          if (!open && !discarding.current) setDiscardRequest(undefined);
+        }}
+      >
+        <DialogContent showCloseButton={!applying}>
+          <DialogHeader>
+            <DialogTitle>Discard saved Schema draft?</DialogTitle>
+            <DialogDescription>
+              Restore the schema currently used by this Workspace. This discards the saved Schema
+              draft and any unsaved field edits. Content edits and imported sources are kept.
+            </DialogDescription>
+          </DialogHeader>
+          {discardError ? (
+            <p role="alert" className="text-sm text-[var(--status-error)]">
+              {discardError}
+            </p>
+          ) : null}
+          <DialogFooter>
+            <Button
+              variant="canvas-outline"
+              size="sm"
+              disabled={applying}
+              onClick={() => setDiscardRequest(undefined)}
+            >
+              Keep draft
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={applying}
+              onClick={() => void discardSavedDraft()}
+            >
+              {applying ? 'Discarding…' : 'Discard saved draft'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <SchemaYamlEditor
         open={definitionOpen}
         onOpenChange={setDefinitionOpen}

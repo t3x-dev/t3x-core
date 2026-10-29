@@ -47,6 +47,8 @@ export function SchemaStudioSurface({
   canOpenRules = false,
   onDiscard,
   canDiscard = false,
+  onDiscardSaved,
+  canDiscardSaved = false,
 }: {
   navigation?: ReactNode;
   hidden?: boolean;
@@ -80,6 +82,8 @@ export function SchemaStudioSurface({
   canOpenRules?: boolean;
   onDiscard?: () => void;
   canDiscard?: boolean;
+  onDiscardSaved?: () => void;
+  canDiscardSaved?: boolean;
 }) {
   return (
     <main
@@ -129,14 +133,14 @@ export function SchemaStudioSurface({
             {draftStatus ? <output className={s.draftStatus}>{draftStatus}</output> : null}
             <div className={s.toolbarActions}>
               <fieldset aria-label="Schema save and review" className={s.saveGroup}>
-                {onUndo || onDiscard ? (
+                {onUndo || onDiscard || onDiscardSaved ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
                         variant="canvas-outline"
                         size="sm"
                         aria-label="Undo and discard"
-                        disabled={!canUndo && !canDiscard}
+                        disabled={!canUndo && !canDiscard && !canDiscardSaved}
                       >
                         Undo <ChevronDown size={14} aria-hidden="true" />
                       </Button>
@@ -152,6 +156,14 @@ export function SchemaStudioSurface({
                         <DropdownMenuItem disabled={!canDiscard} onSelect={onDiscard}>
                           Discard all unsaved changes
                         </DropdownMenuItem>
+                      ) : null}
+                      {onDiscardSaved ? (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem disabled={!canDiscardSaved} onSelect={onDiscardSaved}>
+                            Discard saved Schema draft…
+                          </DropdownMenuItem>
+                        </>
                       ) : null}
                     </DropdownMenuContent>
                   </DropdownMenu>

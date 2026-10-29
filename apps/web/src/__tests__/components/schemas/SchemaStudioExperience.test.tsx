@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   draftView: undefined as unknown,
   draftLoading: false,
   draftError: undefined as string | undefined,
+  draftRefresh: vi.fn(),
   schemaEditLoading: false,
   schemaEditError: undefined as string | undefined,
   reviewStatus: { latest: null, loading: false, error: undefined } as {
@@ -52,6 +53,7 @@ const mocks = vi.hoisted(() => ({
     status: string;
     targetBranch: string;
     title: string;
+    baseCommitHash?: string;
     schemaBindings?: WorkspaceSchemaBinding[];
   }>,
 }));
@@ -60,7 +62,7 @@ vi.mock('@/hooks/schemas/useSchemaDraftStatus', () => ({
     view: mocks.draftView,
     loading: mocks.draftLoading,
     error: mocks.draftError,
-    refresh: vi.fn(),
+    refresh: mocks.draftRefresh,
   }),
 }));
 vi.mock('@/hooks/schemas/useSchemaReviewStatus', () => ({
@@ -175,6 +177,7 @@ vi.mock('@/hooks/schemas/useWorkspaceSchemaPending', () => ({
 beforeEach(() => {
   mocks.draftLoading = false;
   mocks.draftError = undefined;
+  mocks.draftRefresh.mockReset();
   mocks.schemaEditLoading = false;
   mocks.schemaEditError = undefined;
   mocks.query = 'candidate=provider';
@@ -1350,6 +1353,88 @@ it('keeps a failed Review on the editor without navigating to Workspace', async 
   expect(mocks.push).not.toHaveBeenCalled();
 });
 
+it('refreshes the clean Draft after a no-change Review response and disables another attempt', async () => {
+  mocks.query = 'workspace=workspace_branch%3Amain';
+  mocks.workspaces = [boundWorkspace()];
+  mocks.data = {
+    ...mocks.data,
+    report: { valid: true, issues: [] },
+    workspace: { id: 'workspace_branch:main', revision: 2, binding: {}, changes: [] },
+  };
+  mocks.fullReview.mockRejectedValue(
+    new Error('No changes to commit. Schema and content match the Base.')
+  );
+  mocks.draftRefresh.mockImplementation(async () => {
+    mocks.draftView = {
+      hasChanges: false,
+      basis: { refName: 'main', refHead: 'sha256:committed' },
+      currentSchema: {
+        status: 'bound',
+        schemaHash: 'definition-hash',
+        definition: {},
+        bindings: [],
+      },
+    };
+  });
+  render(<SchemaStudioExperience projectId="p" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Review changes', exact: true }));
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Review changes', exact: true })).toBeDisabled()
+  );
+  expect(await screen.findByText('Committed · committed', { exact: true })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Undo and discard' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Review changes', exact: true }));
+  expect(mocks.fullReview).toHaveBeenCalledTimes(1);
+});
+
+it('prepares a changed source contract even when its field diff is empty', async () => {
+  mocks.query = 'workspace=workspace_branch%3Amain';
+  const workspace = boundWorkspace();
+  workspace.schemaBindings[0].schemaHash = 'committed-hash';
+  mocks.workspaces = [workspace];
+  mocks.draftView = {
+    workspaceRevision: 2,
+    hasChanges: false,
+    basis: { refName: 'main', refHead: 'sha256:head' },
+    currentSchema: { status: 'bound', schemaHash: 'committed-hash', definition: {}, bindings: [] },
+  };
+  mocks.schemaEditCandidate = {
+    candidateId: 'new-source',
+    revision: 1,
+    localContribution: {},
+    origin: { channel: 'studio' },
+  };
+  mocks.data = {
+    ...mocks.data,
+    schemaHash: 'new-source-hash',
+    report: { valid: true, issues: [] },
+    workspace: {
+      id: workspace.id,
+      revision: 2,
+      binding: workspace.schemaBindings[0],
+      changes: [],
+      canBind: false,
+    },
+  };
+  render(<SchemaStudioExperience projectId="p" />);
+  const review = screen.getByRole('button', { name: 'Review changes', exact: true });
+  expect(review).toBeEnabled();
+  fireEvent.click(review);
+  await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+  expect(mocks.prepareContent).toHaveBeenCalledWith(
+    workspace.id,
+    expect.objectContaining({
+      target: expect.objectContaining({
+        schemaEditCandidate: { candidateId: 'new-source', revision: 1 },
+      }),
+    })
+  );
+  expect(mocks.prepareContent.mock.invocationCallOrder[0]).toBeLessThan(
+    mocks.fullReview.mock.invocationCallOrder[0]
+  );
+});
+
 it('starts blank explicitly and saves the empty definition before Schema Review', async () => {
   mocks.query = 'workspace=workspace_branch%3Amain';
   const workspace = boundWorkspace();
@@ -1446,6 +1531,77 @@ it('does not treat a saved candidate reference as a pending net change', () => {
   render(<SchemaStudioExperience projectId="p" />);
   expect(screen.getByRole('button', { name: /^(Review changes|Save and review)$/ })).toBeDisabled();
   expect(screen.getByText('No changes to review')).toBeVisible();
+});
+
+it.each([
+  false,
+  true,
+])('updates the editor baseline after Commit without losing unsaved edits: %s', async (dirty) => {
+  mocks.query = 'workspace=workspace_branch%3Amain';
+  const workspace = { ...boundWorkspace(), baseCommitHash: 'sha256:before' };
+  workspace.schemaBindings[0].schemaHash = 'definition-hash';
+  mocks.workspaces = [workspace];
+  const schema = { nodes: { task: { slots: { title: { type: 'string' } } } } };
+  mocks.draftView = {
+    hasChanges: false,
+    basis: { refName: 'main', refHead: 'sha256:before' },
+    currentSchema: {
+      status: 'bound',
+      schemaHash: 'definition-hash',
+      definition: schema,
+      bindings: [],
+    },
+  };
+  mocks.data = {
+    ...mocks.data,
+    schema,
+    report: { valid: true, issues: [] },
+    workspace: { id: workspace.id, revision: 2, binding: workspace.schemaBindings[0], changes: [] },
+  };
+  const view = render(<SchemaStudioExperience projectId="p" />);
+  fireEvent.change(screen.getByLabelText('Type task/title'), { target: { value: 'number' } });
+  if (!dirty)
+    fireEvent.change(screen.getByLabelText('Type task/title'), { target: { value: 'string' } });
+  expect(screen.getByRole('button', { name: 'Undo and discard' })).toBeEnabled();
+  const nextSchema = { nodes: { task: { slots: { title: { type: 'boolean' } } } } };
+  mocks.workspaces = [
+    {
+      ...workspace,
+      revision: 3,
+      baseCommitHash: 'sha256:after',
+      schemaBindings: [{ ...workspace.schemaBindings[0], schemaHash: 'next-hash' }],
+    },
+  ];
+  mocks.draftView = {
+    hasChanges: false,
+    basis: { refName: 'main', refHead: 'sha256:after' },
+    currentSchema: {
+      status: 'bound',
+      schemaHash: 'next-hash',
+      definition: nextSchema,
+      bindings: [],
+    },
+  };
+  mocks.data = {
+    ...mocks.data,
+    schema: nextSchema,
+    schemaHash: 'next-hash',
+    workspace: {
+      id: workspace.id,
+      revision: 3,
+      binding: mocks.workspaces[0].schemaBindings![0],
+      changes: [],
+    },
+  };
+  view.rerender(<SchemaStudioExperience projectId="p" />);
+  await waitFor(() =>
+    expect(screen.getByLabelText('Type task/title')).toHaveValue(dirty ? 'number' : 'boolean')
+  );
+  expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: /^(Review changes|Save and review)$/ })).toBeDisabled();
+  if (dirty) expect(screen.getByRole('alert')).toHaveTextContent('changed elsewhere');
+  else expect(screen.getByRole('button', { name: 'Undo and discard' })).toBeDisabled();
+  expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
 });
 
 it.each([
@@ -1558,6 +1714,165 @@ it.each([
   expect(screen.queryByLabelText('Default value for slot task/title')).not.toBeInTheDocument();
   expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
   expect(mocks.apply).not.toHaveBeenCalled();
+});
+
+function setupSavedDraftDiscard(contentChanged = false) {
+  mocks.query = 'workspace=workspace_branch%3Amain';
+  const workspace = boundWorkspace();
+  workspace.schemaBindings[0].schemaHash = 'bound-hash';
+  mocks.workspaces = [workspace];
+  const schema = {
+    yschema: '0.1',
+    name: 'bound',
+    nodes: { task: { slots: { title: { type: 'boolean' } } } },
+  };
+  const bound = {
+    ...(mocks.data as object),
+    schema,
+    schemaHash: 'bound-hash',
+    report: { valid: true, issues: [] },
+    workspace: { id: workspace.id, revision: 2, binding: workspace.schemaBindings[0], changes: [] },
+  };
+  mocks.draftView = {
+    workspaceRevision: 2,
+    hasChanges: contentChanged,
+    basis: { refName: 'main', refHead: 'committed' },
+    currentSchema: { status: 'bound', schemaHash: 'bound-hash', definition: schema, bindings: [] },
+  };
+  mocks.schemaEditCandidate = {
+    candidateId: 'saved-combination',
+    revision: 13,
+    localContribution: {},
+    origin: { channel: 'studio' },
+    baseSources: workspace.schemaBindings[0]
+      .studioSources as StudioSchemaEditCandidate['baseSources'],
+    authoringDraft: {
+      base: { kind: 'composition', schemaHash: 'source-hash' },
+      resultSchemaHash: 'saved-hash',
+    } as StudioSchemaEditCandidate['authoringDraft'],
+  };
+  const saved = {
+    ...bound,
+    schema: { ...schema, nodes: { task: { slots: { title: { type: 'string' } } } } },
+    schemaHash: 'saved-hash',
+  };
+  mocks.previewResult = (input) => {
+    const request = input as {
+      schemaEditCandidate?: unknown;
+      schemaDefinition?: unknown;
+      candidateIds: string[];
+    };
+    return request.schemaDefinition
+      ? { ...saved, schema: request.schemaDefinition }
+      : request.schemaEditCandidate || request.candidateIds.length
+        ? saved
+        : bound;
+  };
+  mocks.livePreview.mockResolvedValue(bound);
+  mocks.saveSchemaEdit.mockImplementation(async () => {
+    mocks.schemaEditCandidate = {
+      ...mocks.schemaEditCandidate!,
+      revision: 14,
+      authoringDraft: {
+        base: { kind: 'composition', schemaHash: 'bound-hash' },
+        resultSchemaHash: 'bound-hash',
+      } as StudioSchemaEditCandidate['authoringDraft'],
+    };
+    return { outcome: 'updated', candidate: mocks.schemaEditCandidate };
+  });
+  return { bound, ...render(<SchemaStudioExperience projectId="p" />) };
+}
+
+function openSavedDraftDiscard() {
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Undo and discard' }), { key: 'Enter' });
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Discard saved Schema draft…' }));
+  return screen.getByRole('dialog', { name: 'Discard saved Schema draft?' });
+}
+
+it('allows abandoning a saved source combination even without local undo history', () => {
+  setupSavedDraftDiscard();
+  expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Undo and discard' })).toBeEnabled();
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Undo and discard' }), { key: 'Enter' });
+  expect(screen.getByRole('menuitem', { name: 'Undo last change' })).toHaveAttribute(
+    'aria-disabled',
+    'true'
+  );
+  expect(screen.getByRole('menuitem', { name: 'Discard all unsaved changes' })).toHaveAttribute(
+    'aria-disabled',
+    'true'
+  );
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Discard saved Schema draft…' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Keep draft' }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('Type task/title')).toHaveValue('string');
+  expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
+});
+
+it.each([
+  false,
+  true,
+])('restores the exact bound schema and retains content review state: %s', async (contentChanged) => {
+  const { bound } = setupSavedDraftDiscard(contentChanged);
+  fireEvent.change(screen.getByLabelText('Type task/title'), { target: { value: 'number' } });
+  openSavedDraftDiscard();
+  fireEvent.click(screen.getByRole('button', { name: 'Discard saved draft' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(mocks.livePreview).toHaveBeenCalledWith({
+    workspaceId: 'workspace_branch:main',
+    candidateIds: [],
+  });
+  expect(mocks.saveSchemaEdit).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      workspaceId: 'workspace_branch:main',
+      candidateIds: [],
+      ifRevision: 13,
+      baseSchemaHash: 'bound-hash',
+      schemaDefinition: bound.schema,
+      localContribution: {},
+      sourceMappings: [],
+      rebase: true,
+    })
+  );
+  expect(screen.getByLabelText('Type task/title')).toHaveValue('boolean');
+  expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Undo and discard' })).toBeDisabled();
+  const review = screen.getByRole('button', { name: 'Review changes' });
+  if (contentChanged) expect(review).toBeEnabled();
+  else expect(review).toBeDisabled();
+  expect(mocks.refresh).toHaveBeenCalled();
+  expect(mocks.draftRefresh).toHaveBeenCalled();
+  expect(mocks.apply).not.toHaveBeenCalled();
+  expect(mocks.prepareContent).not.toHaveBeenCalled();
+  expect(mocks.saveDraft).not.toHaveBeenCalled();
+});
+
+it('preserves saved and unsaved edits if discarding fails', async () => {
+  setupSavedDraftDiscard();
+  mocks.saveSchemaEdit.mockRejectedValue(new Error('The saved draft changed elsewhere.'));
+  fireEvent.change(screen.getByLabelText('Type task/title'), { target: { value: 'number' } });
+  const dialog = openSavedDraftDiscard();
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Discard saved draft' }));
+  await waitFor(() =>
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('changed elsewhere')
+  );
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Keep draft' }));
+  expect(screen.getByLabelText('Type task/title')).toHaveValue('number');
+  expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
+  expect(mocks.schemaEditCandidate?.revision).toBe(13);
+  expect(mocks.refresh).not.toHaveBeenCalled();
+});
+
+it('refuses to discard against a changed Workspace snapshot', async () => {
+  const { bound } = setupSavedDraftDiscard();
+  mocks.livePreview.mockResolvedValue({ ...bound, workspace: { ...bound.workspace, revision: 3 } });
+  const dialog = openSavedDraftDiscard();
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Discard saved draft' }));
+  await waitFor(() =>
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Workspace schema changed')
+  );
+  expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
+  expect(mocks.schemaEditCandidate?.revision).toBe(13);
 });
 
 function setupYamlDraft() {

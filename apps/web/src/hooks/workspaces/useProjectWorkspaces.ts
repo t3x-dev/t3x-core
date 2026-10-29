@@ -94,9 +94,12 @@ export function useProjectWorkspaces(
         /* Ignore malformed notifications. */
       }
     };
+    const focus = () => void load(false);
+    window.addEventListener('focus', focus);
     window.addEventListener('t3x-schema-candidate-updated', updated);
     window.addEventListener('storage', storage);
     return () => {
+      window.removeEventListener('focus', focus);
       window.removeEventListener('t3x-schema-candidate-updated', updated);
       window.removeEventListener('storage', storage);
     };

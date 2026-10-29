@@ -344,3 +344,99 @@ it('recovers composition ownership from a bound snapshot and edits it in a fresh
   expect(recovered.status, JSON.stringify(recovered.body)).toBe(200);
   expect(recovered.body.data.schema).toEqual(definition);
 });
+
+it('discards a saved source combination by rebasing to the exact bound schema while keeping content and sources', async () => {
+  const workspaceId = 'discard-combination';
+  await upsertWorkspaceDraft(db, {
+    project_id: project,
+    workspace_id: workspaceId,
+    target_branch: workspaceId,
+    title: 'Discard combination',
+    workspace_state: { targetBranch: workspaceId, schemaBindings: [] },
+  });
+  const initial = (await request('preview', { workspaceId, candidateIds: [a] })).body.data;
+  const applied = await request('apply', {
+    workspaceId,
+    candidateIds: [a],
+    ifRevision: initial.workspace.revision,
+    reviewHash: initial.reviewHash,
+  });
+  expect(applied.status, JSON.stringify(applied.body)).toBe(200);
+  const boundWorkspace = (await findWorkspaceDraft(db, project, workspaceId))!;
+  const contentDraft = {
+    operations: [{ op: 'set', path: '/checklist/title', value: 'Keep my content edit' }],
+  };
+  await upsertWorkspaceDraft(
+    db,
+    {
+      project_id: project,
+      workspace_id: workspaceId,
+      target_branch: workspaceId,
+      title: 'Discard combination',
+      workspace_state: { ...boundWorkspace.workspace_state, yopsDraft: contentDraft },
+    },
+    boundWorkspace.revision
+  );
+  const composition = { $metadata: a };
+  const combination = (await request('preview', { workspaceId, candidateIds: [a, b], composition }))
+    .body.data;
+  const saved = await request(
+    'edit-candidates/' + workspaceId,
+    {
+      workspaceId,
+      candidateIds: [a, b],
+      ifRevision: 0,
+      retryKey: 'combine-before-discard',
+      composition,
+      intent: 'Combine two sources',
+      origin: 'studio',
+      localContribution: {},
+      schemaDefinition: combination.schema,
+      baseSchemaHash: combination.schemaHash,
+      rebase: true,
+    },
+    'PUT'
+  );
+  expect(saved.status, JSON.stringify(saved.body)).toBe(200);
+  const sourcesBefore = (await request('candidates')).body.data;
+  const bound = (await request('preview', { workspaceId, candidateIds: [] })).body.data;
+  expect(bound.schemaHash).not.toBe(saved.body.data.candidate.authoringDraft.resultSchemaHash);
+  const restore = {
+    workspaceId,
+    candidateIds: [],
+    ifRevision: saved.body.data.candidate.revision,
+    retryKey: 'discard-saved-combination',
+    intent: 'Discard saved Schema edits and restore the Workspace schema.',
+    origin: 'studio',
+    localContribution: {},
+    schemaDefinition: bound.schema,
+    baseSchemaHash: bound.schemaHash,
+    sourceMappings: [],
+    rebase: true,
+  };
+  const discarded = await request('edit-candidates/' + workspaceId, restore, 'PUT');
+  expect(discarded.status, JSON.stringify(discarded.body)).toBe(200);
+  const candidate = discarded.body.data.candidate;
+  expect(candidate.authoringDraft.resultSchemaHash).toBe(bound.schemaHash);
+  const recovered = await request('preview', {
+    workspaceId,
+    candidateIds: [],
+    schemaEditCandidate: { candidateId: candidate.candidateId, revision: candidate.revision },
+  });
+  expect(recovered.status, JSON.stringify(recovered.body)).toBe(200);
+  expect(recovered.body.data.schema).toEqual(bound.schema);
+  expect(recovered.body.data.workspace.changes).toEqual([]);
+  const after = (await findWorkspaceDraft(db, project, workspaceId))!;
+  expect(after.workspace_state.schemaBindings).toEqual(
+    boundWorkspace.workspace_state.schemaBindings
+  );
+  expect(after.workspace_state.yopsDraft).toEqual(contentDraft);
+  expect((await request('candidates')).body.data).toEqual(sourcesBefore);
+  const stale = await request(
+    'edit-candidates/' + workspaceId,
+    { ...restore, retryKey: 'stale-discard' },
+    'PUT'
+  );
+  expect(stale.status).toBe(409);
+  expect((await findWorkspaceDraft(db, project, workspaceId))?.revision).toBe(after.revision);
+});

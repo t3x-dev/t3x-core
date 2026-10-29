@@ -17,14 +17,19 @@ export function schemaWorkflowStatus({
   latest?: WorkspaceTransitionReviewSnapshotEnvelope | null;
   hasDefinition: boolean;
 }) {
-  const candidateChanged = Boolean(
-    hasDefinition &&
-      preview?.workspace &&
-      (preview.workspace.binding === null ||
-        preview.workspace.changes.length > 0 ||
-        preview.workspace.canBind ||
-        preview.impact?.content.ready === false)
-  );
+  const currentSchema = draft?.currentSchema;
+  const bindingHash = preview?.workspace?.binding?.schemaHash;
+  // The authoring view owns the effective contract. A validation gap describes
+  // content readiness, not a change, and a preview's diff can predate preparation.
+  const definitionChanged =
+    currentSchema?.status === 'bound' && currentSchema.schemaHash
+      ? currentSchema.schemaHash !== preview?.schemaHash
+      : currentSchema?.status === 'unbound'
+        ? true
+        : typeof bindingHash === 'string'
+          ? bindingHash !== preview?.schemaHash
+          : preview?.workspace?.binding === null || !!preview?.workspace?.changes.length;
+  const candidateChanged = Boolean(hasDefinition && preview?.workspace && definitionChanged);
   const hasChanges = candidateChanged || draft?.hasChanges === true;
   const snapshot = latest?.snapshot;
   const precondition = snapshot?.review.precondition;
@@ -60,5 +65,11 @@ export function schemaWorkflowStatus({
   // cannot authorize a newer revision, even when the content matches.
   const matchesReview = sameRevision || (hasRejection && sameContent);
   const rejected = matchesReview && hasRejection;
-  return { hasChanges, matchesReview, rejected, hasNewChanges: hasChanges && !matchesReview };
+  return {
+    candidateChanged,
+    hasChanges,
+    matchesReview,
+    rejected,
+    hasNewChanges: hasChanges && !matchesReview,
+  };
 }
