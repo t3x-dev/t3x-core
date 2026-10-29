@@ -2834,6 +2834,26 @@ function ReviewSurface({
   if (pane === 'checks') {
     return <WorkspaceChecksRedirect projectId={candidate.projectId} workspaceId={candidate.id} />;
   }
+  const comparisonStatus =
+    operations.length > 0 && !structureModel.hasReplayContent ? (
+      <div className="p-5 text-sm text-[var(--text-secondary)]">
+        <output>
+          {comparisonError ||
+            comparisonResult?.error?.message ||
+            'Loading the exact before and after values…'}
+        </output>
+        {(comparisonError || comparisonResult?.error) && (
+          <button
+            type="button"
+            className="mt-3 underline"
+            disabled={controller.isBusy || authoring?.hasChanges === false}
+            onClick={() => void prepareReview()}
+          >
+            Prepare exact review
+          </button>
+        )}
+      </div>
+    ) : null;
   return (
     <>
       <WorkspaceReviewWorkbench
@@ -2854,6 +2874,15 @@ function ReviewSurface({
               Saved Schema changes are awaiting preparation. Prepare review to inspect the complete
               snapshot.
             </p>
+          ) : comparisonStatus ? (
+            comparisonStatus
+          ) : committedId ? (
+            <div className="text-sm text-[var(--text-secondary)]">
+              <p>No Content or Schema changes available to review.</p>
+              <Button className="mt-4" size="sm" onClick={controller.viewCommit}>
+                View in State
+              </Button>
+            </div>
           ) : undefined
         }
         actions={
@@ -2904,24 +2933,8 @@ function ReviewSurface({
             onModeChange={onModeChange}
             onStructureDiff={() => setPane('changes')}
           />
-        ) : operations.length > 0 && !structureModel.hasReplayContent ? (
-          <div className="p-5 text-sm text-[var(--text-secondary)]">
-            <output>
-              {comparisonError ||
-                comparisonResult?.error?.message ||
-                'Loading the exact before and after values…'}
-            </output>
-            {(comparisonError || comparisonResult?.error) && (
-              <button
-                type="button"
-                className="mt-3 underline"
-                disabled={controller.isBusy || authoring?.hasChanges === false}
-                onClick={() => void prepareReview()}
-              >
-                Prepare exact review
-              </button>
-            )}
-          </div>
+        ) : comparisonStatus ? (
+          comparisonStatus
         ) : structureModel.rows.length > 0 &&
           (operations.length > 0 || structureModel.hasReplayContent) ? (
           <WorkspaceReviewStructureView

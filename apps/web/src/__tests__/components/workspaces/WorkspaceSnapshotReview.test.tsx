@@ -88,7 +88,11 @@ function snapshotResponse() {
       transition: {
         mode: 'transition',
         checks: { validation: { runs: [] } },
-        change: { operations: [{ op: 'set' }, { op: 'set' }] },
+        change: {
+          base: { digest: `sha256:${'a'.repeat(64)}` },
+          result: { digest: `sha256:${'b'.repeat(64)}` },
+          operations: [{ op: 'set' }, { op: 'set' }],
+        },
         claims: {
           intent: { mode: 'authored', value: 'Cut log noise' },
           rationale: { mode: 'unspecified' },

@@ -68,6 +68,14 @@ vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
   }),
 }));
 
+vi.mock('@/hooks/schemas/useStudioSchemaEditCandidate', () => ({
+  useStudioSchemaEditCandidate: () => ({ candidate: null, loading: false, error: undefined }),
+}));
+
+vi.mock('@/hooks/workspaces/useWorkspaceSchemaEditingRequests', () => ({
+  useWorkspaceSchemaEditingRequests: () => ({ hasPendingEdit: async () => false }),
+}));
+
 vi.mock('@/hooks/schemas/useProjectYSchemaVersions', () => ({
   useProjectYSchemaVersions: () => ({
     error: undefined,
@@ -333,11 +341,13 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
 
     expect(screen.getByRole('button', { name: 'Changes' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByText('Loading the exact before and after values…')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Content', exact: true })).toBeDisabled();
+    expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     expect(screen.getByLabelText('Rendered result')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
 
-    expect(screen.getByText('Loading the exact before and after values…')).toBeInTheDocument();
     expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
     const secondNode = within(screen.getByRole('table'))
       .getByTitle('prd/requirements/canary/title')
