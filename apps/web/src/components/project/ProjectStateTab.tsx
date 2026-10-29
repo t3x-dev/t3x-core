@@ -49,6 +49,7 @@ import {
 } from '@/domain/diff/structuredStateDiff';
 import { shortHash } from '@/domain/format/formatters';
 import {
+  getProjectIdCanvasPath,
   getProjectIdHistoryPath,
   getProjectIdRepoPath,
   getProjectIdWorkspacePath,
@@ -509,6 +510,7 @@ export function ProjectStateTab({
     branch: branchFocus,
     returnTo: currentStateReturnTo,
   });
+  const canvasHref = getProjectIdCanvasPath(projectId);
   const historicalReturnHref = safeInternalReturnTo(searchParams.get('returnTo'), '');
   const schemaHref = `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ tab: 'schemas', branch: branchFocus }).toString()}`;
   const workspaceHref = getProjectIdWorkspacePath(projectId, { branch: branchFocus });
@@ -621,6 +623,7 @@ export function ProjectStateTab({
                 activeView={activeView}
                 branch={branchFocus || 'main'}
                 branchOptions={branchOptions}
+                canvasHref={canvasHref}
                 headCommit={headCommit}
                 headCommitHash={mainHeadCommitHash}
                 historyHref={historyHref}
@@ -828,6 +831,7 @@ function StateInspectionToolbar({
   activeView,
   branch,
   branchOptions,
+  canvasHref,
   headCommit,
   headCommitHash,
   historyHref,
@@ -841,6 +845,7 @@ function StateInspectionToolbar({
   activeView: ProjectSnapshotView;
   branch: string;
   branchOptions: string[];
+  canvasHref: string;
   headCommit: ApiCommit | null;
   headCommitHash: string | null;
   historyHref: string;
@@ -896,7 +901,11 @@ function StateInspectionToolbar({
         <div className={overviewStyles.actions}>
           <Link href={historyHref}>
             <History />
-            History
+            History 1
+          </Link>
+          <Link href={canvasHref}>
+            <History />
+            History 2
           </Link>
           <Link href={workspaceHref} className={overviewStyles.primary}>
             <Pencil />
