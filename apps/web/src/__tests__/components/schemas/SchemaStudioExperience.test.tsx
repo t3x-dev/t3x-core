@@ -330,12 +330,7 @@ it('keeps a required provider checked and locked while blocking a failed definit
   expect(screen.getByRole('button', { name: 'Review Schema changes' })).toBeEnabled();
   closeSources();
   fireEvent.click(screen.getByRole('button', { name: 'Review Schema changes' }));
-  expect(screen.getByRole('region', { name: 'Schema checks' })).toBeVisible();
-  expect(screen.getByText('Missing service capability')).toBeVisible();
-  expect(screen.getByText('Composition dependencies')).toBeVisible();
-  expect(screen.getByText('Failed')).toBeVisible();
-  expect(screen.getByText('Changes require attention')).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(screen.getByRole('alert')).toHaveTextContent('Select a valid Workspace');
   openSources();
   expect(screen.queryByRole('button', { name: 'Clear selection' })).not.toBeInTheDocument();
   expect(
@@ -784,70 +779,65 @@ it.each([
   );
 });
 
-it('shows unsafe content impact while preventing confirmation, then discards a stale review', async () => {
+it.each([
+  'definition',
+  'authorization',
+  'impact',
+])('opens diagnostics instead of preparing or committing when fresh %s checks fail', async (failure) => {
+  mocks.query = 'workspace=workspace_branch%3Amain&candidate=provider';
   mocks.workspaces = [
     {
       id: 'workspace_branch:main',
       revision: 3,
       status: 'draft',
       targetBranch: 'main',
-      title: 'Main workspace',
+      title: 'Main',
     },
   ];
-  const preview = {
-    samples: [],
-    schema: { nodes: {} },
-    schemaHash: 'hash',
-    reviewHash: 'unsafe-review',
-    renderPlan: [],
-    origins: {},
-    sources: [],
-    modules: [],
-    report: { valid: true, issues: [], layers: [] },
-    adoption: { allowed: true },
-    workspace: {
+  mocks.data = {
+    ...mocks.data,
+    report: { valid: true, issues: [] },
+    workspace: { id: 'workspace_branch:main', revision: 3, changes: [] },
+  };
+  mocks.livePreview.mockResolvedValue({
+    ...mocks.data,
+    ...(failure === 'definition' ? { report: { valid: false, issues: [] } } : {}),
+    ...(failure === 'authorization' ? { adoption: { allowed: false } } : {}),
+    ...(failure === 'impact' ? { impact: { status: 'blocked' } } : {}),
+  });
+  render(<SchemaStudioExperience projectId="p" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Review Schema changes' }));
+  await waitFor(() =>
+    expect(mocks.push).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'workspaceMode=review&branch=main&schemaDiagnostics=1&schemaSelection=1&schemaSource=provider'
+      )
+    )
+  );
+  expect(mocks.apply).not.toHaveBeenCalled();
+  expect(mocks.prepareContent).not.toHaveBeenCalled();
+  expect(mocks.fullReview).not.toHaveBeenCalled();
+});
+
+it('opens detailed checks in Workspace Review without applying the Schema', () => {
+  mocks.query = 'workspace=workspace_branch%3Amain&candidate=provider';
+  mocks.workspaces = [
+    {
       id: 'workspace_branch:main',
       revision: 3,
-      changes: [{ kind: 'REMOVE', path: 'nodes.product', summary: 'Removed product' }],
+      status: 'draft',
+      targetBranch: 'main',
+      title: 'Main',
     },
-    impact: {
-      status: 'needs_mapping',
-      canAdopt: false,
-      canPublish: false,
-      changes: [],
-      items: [
-        {
-          kind: 'needs_mapping',
-          code: 'REMOVAL_REQUIRES_MAPPING',
-          path: 'nodes.product',
-          message: 'Map existing content before removing product.',
-          affectedPaths: ['product/title'],
-        },
-      ],
-      content: {
-        source: 'authoring_ledger',
-        hash: 'content-hash',
-        valid: true,
-        ready: true,
-        issues: [],
-      },
-    },
-  };
-  mocks.data = preview;
-  const { rerender } = render(<SchemaStudioExperience projectId="p" />);
-  openSources();
+  ];
+  render(<SchemaStudioExperience projectId="p" />);
   openChecks();
-  const dialog = screen.getByRole('dialog', { name: 'Schema checks' });
-  expect(within(dialog).getByText('Map existing content before removing product.')).toBeVisible();
-  expect(
-    within(dialog).queryByRole('button', { name: 'Adopt & return to Workspace' })
-  ).not.toBeInTheDocument();
-  expect(within(dialog).getByRole('region', { name: 'Schema definition changes' })).toBeVisible();
-  expect(within(dialog).getByRole('region', { name: 'Schema content impact' })).toBeVisible();
-  mocks.data = { ...preview, reviewHash: 'new-revision-review' };
-  rerender(<SchemaStudioExperience projectId="p" />);
-  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(mocks.push).toHaveBeenCalledWith(
+    '/project/p?tab=workspaces&workspace=workspace_branch%3Amain&workspaceMode=review&branch=main&schemaDiagnostics=1&schemaSelection=1&schemaSource=provider'
+  );
+  expect(screen.queryByRole('dialog', { name: 'Schema checks' })).not.toBeInTheDocument();
   expect(mocks.apply).not.toHaveBeenCalled();
+  expect(mocks.prepareContent).not.toHaveBeenCalled();
 });
 
 it('prepares an empty first binding and opens full Review without adoption', async () => {
@@ -905,7 +895,7 @@ it('prepares an empty first binding and opens full Review without adoption', asy
   );
 });
 
-it('opens private publication from the checked saved candidate without applying or navigating the Workspace', async () => {
+it('opens public publication from the checked saved candidate without applying or navigating the Workspace', async () => {
   mocks.query = 'workspace=workspace_branch%3Amain&candidate=provider';
   mocks.workspaces = [
     {
@@ -948,9 +938,9 @@ it('opens private publication from the checked saved candidate without applying 
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Review Schema changes' })).toBeEnabled()
   );
-  openChecks();
-  fireEvent.keyDown(screen.getByRole('button', { name: 'Review actions' }), { key: 'Enter' });
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Publish public Schema' }));
+  closeSources();
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Schema actions' }), { key: 'Enter' });
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Publish public Schema…' }));
   expect(screen.getByRole('dialog', { name: 'Publish public Schema' })).toBeVisible();
   expect(screen.getByRole('button', { name: 'Publish public version' })).toBeEnabled();
   expect(mocks.apply).not.toHaveBeenCalled();
@@ -1155,24 +1145,13 @@ it.each([
   else expect(screen.getByLabelText('Type chosen/title')).toBeVisible();
 });
 
-it('reviews failed checks without a Workspace and never offers adoption into another target', () => {
+it('requires a valid Workspace for diagnostics and never opens a retired check dialog', () => {
   render(<SchemaStudioExperience projectId="p" />);
   fireEvent.click(screen.getByRole('button', { name: 'Review Schema changes' }));
-  const dialog = screen.getByRole('dialog', { name: 'Schema checks' });
-  expect(within(dialog).getByRole('region', { name: 'Schema checks' })).toBeVisible();
-  expect(within(dialog).getByText('Missing service capability')).toBeVisible();
-  expect(
-    within(dialog).queryByRole('region', { name: 'Schema definition changes' })
-  ).not.toBeInTheDocument();
-  expect(
-    within(dialog).queryByRole('button', { name: 'Adopt & return to Workspace' })
-  ).not.toBeInTheDocument();
-  expect(
-    within(dialog).queryByRole('button', { name: 'Prepare content & mappings' })
-  ).not.toBeInTheDocument();
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+  expect(screen.getByRole('alert')).toHaveTextContent('Select a valid Workspace');
+  expect(screen.queryByRole('dialog', { name: 'Schema checks' })).not.toBeInTheDocument();
   expect(mocks.apply).not.toHaveBeenCalled();
-  expect(screen.queryByRole('tablist', { name: 'Studio view' })).not.toBeInTheDocument();
+  expect(mocks.push).not.toHaveBeenCalled();
 });
 
 it('uses the resolved branch target in all outbound Studio links and normalizes its URL', () => {
@@ -1300,7 +1279,7 @@ it('downloads the candidate as YAML without applying it', () => {
 
 function openChecks() {
   fireEvent.keyDown(screen.getByRole('button', { name: 'Schema actions' }), { key: 'Enter' });
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Schema checks & publishing' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Schema checks & impact' }));
 }
 
 async function expectBoundSnapshot() {

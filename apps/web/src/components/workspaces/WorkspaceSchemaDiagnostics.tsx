@@ -3,11 +3,6 @@
 import type { SchemaReviewDiagnostics, WorkspaceFullSchemaReview } from '@t3x-dev/api-client';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import {
-  StudioChanges,
-  StudioChecks,
-  StudioImpactPreview,
-} from '@/components/schemas/StudioDefinitionPreview';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -17,6 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useWorkspaceSchemaEditingRequests } from '@/hooks/workspaces/useWorkspaceSchemaEditingRequests';
+import { StudioChanges, StudioChecks, StudioImpactPreview } from './SchemaDiagnosticsReportParts';
 
 /** Diagnostics are advisory. Only the fixed Review checks authorize a decision. */
 export function WorkspaceSchemaDiagnostics({
@@ -34,6 +30,10 @@ export function WorkspaceSchemaDiagnostics({
 }) {
   const requests = useWorkspaceSchemaEditingRequests(projectId, workspaceId);
   const params = useSearchParams();
+  const selectionKey =
+    params.get('schemaSelection') === '1'
+      ? JSON.stringify(params.getAll('schemaSource'))
+      : undefined;
   const [open, setOpen] = useState(params.get('schemaDiagnostics') === '1');
   const [refresh, setRefresh] = useState(0);
   const [state, setState] = useState<{
@@ -48,7 +48,7 @@ export function WorkspaceSchemaDiagnostics({
     let active = true;
     const token = ++sequence.current;
     setState({ loading: true });
-    void requests.read().then(
+    void requests.read(selectionKey === undefined ? undefined : JSON.parse(selectionKey)).then(
       (value) => {
         if (!active || token !== sequence.current) return;
         if (revision !== undefined && value.workspace.revision !== revision) {
@@ -74,7 +74,7 @@ export function WorkspaceSchemaDiagnostics({
       active = false;
       window.removeEventListener('focus', onFocus);
     };
-  }, [open, frozen, requests, revision, refresh]);
+  }, [open, frozen, requests, revision, refresh, selectionKey]);
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
@@ -87,7 +87,7 @@ export function WorkspaceSchemaDiagnostics({
             <DialogDescription>
               {frozen
                 ? 'Recorded before content adaptation. These reports explain the Schema changes; the Review checks determine whether the final snapshot can be committed.'
-                : 'Read-only checks for the current saved Schema candidate and Draft content. Preparing Review may require content adjustments.'}
+                : 'Read-only checks for the selected Schema and Draft content. Preparing Review may require content adjustments.'}
             </DialogDescription>
           </DialogHeader>
           {frozen ? (
@@ -126,7 +126,10 @@ export function WorkspaceSchemaDiagnostics({
               ) : state.data ? (
                 <>
                   <p className="text-xs text-[var(--text-secondary)]">
-                    Current saved candidate · Draft r{state.revision}
+                    {selectionKey === undefined
+                      ? 'Current saved candidate'
+                      : 'Selected Schema sources'}{' '}
+                    · Draft r{state.revision}
                   </p>
                   <SchemaDiagnosticsReport diagnostics={state.data} />
                 </>

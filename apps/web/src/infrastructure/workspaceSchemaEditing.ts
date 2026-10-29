@@ -8,7 +8,11 @@ import {
 import { getSharedApiClient } from './sharedApiClient';
 
 /** Resume the existing candidate; never replace Studio work with a new editing base. */
-export async function readWorkspaceSchemaEditing(projectId: string, workspaceId: string) {
+export async function readWorkspaceSchemaEditing(
+  projectId: string,
+  workspaceId: string,
+  selectedCandidateIds?: string[]
+) {
   const [saved, edit] = await Promise.all([
     getSharedApiClient().workspaces.get(projectId, workspaceId),
     readStudioSchemaEditCandidate(projectId, workspaceId),
@@ -16,8 +20,13 @@ export async function readWorkspaceSchemaEditing(projectId: string, workspaceId:
   const workspace = saved.workspace as unknown as WorkspaceCandidate;
   const unapplied = hasUnappliedSchemaEdit(edit, workspace);
   const binding = workspace.schemaBindings[0];
-  let candidateIds: string[] = [];
-  if (unapplied && edit && edit.authoringDraft?.base.schemaHash !== binding?.schemaHash) {
+  let candidateIds: string[] = selectedCandidateIds ?? [];
+  if (
+    selectedCandidateIds === undefined &&
+    unapplied &&
+    edit &&
+    edit.authoringDraft?.base.schemaHash !== binding?.schemaHash
+  ) {
     const sources = await listStudioCandidates(projectId);
     candidateIds = edit.baseSources.map((base) => {
       const found = sources.find(

@@ -101,3 +101,13 @@ it('rejects a concurrent Draft revision and ignores a response after closing', a
   await act(async () => resolve({ workspace: { revision: 3 }, preview: diagnostics }));
   expect(screen.queryByText('Source authorization')).not.toBeInTheDocument();
 });
+
+it('preserves explicit source selection from Schema, including an empty selection', async () => {
+  mocks.query = 'schemaDiagnostics=1&schemaSelection=1&schemaSource=source%3Aa%2Bb';
+  mocks.read.mockResolvedValue({ workspace: { revision: 3 }, preview: diagnostics });
+  const view = render(<WorkspaceSchemaDiagnostics projectId="p" workspaceId="w" revision={3} />);
+  await waitFor(() => expect(mocks.read).toHaveBeenLastCalledWith(['source:a+b']));
+  mocks.query = 'schemaDiagnostics=1&schemaSelection=1';
+  view.rerender(<WorkspaceSchemaDiagnostics projectId="p" workspaceId="w" revision={3} />);
+  await waitFor(() => expect(mocks.read).toHaveBeenLastCalledWith([]));
+});

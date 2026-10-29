@@ -155,7 +155,7 @@ export function SchemaStudioSurface({
                       onSelect={onInspect}
                       disabled={!data || contextLocked || pending}
                     >
-                      Schema checks & publishing
+                      Schema checks & impact
                     </DropdownMenuItem>
                   ) : null}
                 </DropdownMenuContent>

@@ -2,23 +2,9 @@
 
 import type { SchemaPreparationTarget, StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
 import { dump } from 'js-yaml';
-import { ChevronDown } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { WorkspaceStageNavigation } from '@/components/workspaces/WorkspaceStageNavigation';
 import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
 import { schemaFieldRows } from '@/domain/schemas/schemaFieldEditing';
@@ -56,7 +42,6 @@ import { SchemaDefinitionWorkbench } from './SchemaDefinitionWorkbench';
 import { SchemaSourceCompositionDialog } from './SchemaSourceCompositionDialog';
 import { SchemaSourceManager } from './SchemaSourceManager';
 import { SchemaStudioSurface } from './SchemaStudioSurface';
-import { StudioChanges, StudioChecks, StudioImpactPreview } from './StudioDefinitionPreview';
 import { StudioPublishDialog } from './StudioPublishDialog';
 import type { SchemaEditorNavigation } from './useSchemaNavigationGuard';
 
@@ -236,7 +221,6 @@ export function SchemaStudioExperience({
     candidateId: string;
     revision: number;
   }>();
-  const [review, setReview] = useState<StudioPreview>();
   const [publishReview, setPublishReview] = useState<StudioPreview>();
   const [preparation, setPreparation] = useState<{
     workspaceId: string;
@@ -480,7 +464,6 @@ export function SchemaStudioExperience({
     setRecoveredEditIdentity(editIdentity);
     setUsingSavedCandidate(!!schemaEdit.candidate && !savedEditIsApplied);
     setSourceMappings(structuredClone(schemaEdit.candidate?.authoringDraft?.sourceMappings ?? []));
-    setReview(undefined);
     setPublishReview(undefined);
     setDefinitionOpen(false);
     setEditorBase(undefined);
@@ -578,9 +561,6 @@ export function SchemaStudioExperience({
   const candidateSelectionKey = JSON.stringify(selection);
 
   useEffect(() => {
-    setReview(undefined);
-  }, [candidateSelectionKey, workspaceId, data?.reviewHash]);
-  useEffect(() => {
     setError(undefined);
   }, [candidateSelectionKey, workspaceId]);
 
@@ -639,13 +619,18 @@ export function SchemaStudioExperience({
   }
 
   function inspectDefinition() {
-    if (!data) return;
-    const matchesWorkspace = target && data.workspace?.id === target.id;
-    setReview({
-      ...data,
-      workspace: matchesWorkspace ? data.workspace : null,
-      impact: matchesWorkspace ? data.impact : null,
-    });
+    if (!persistedTarget) {
+      setError('Select a valid Workspace to inspect Schema checks.');
+      return;
+    }
+    const diagnosticsParams = new URLSearchParams({ schemaDiagnostics: '1', schemaSelection: '1' });
+    for (const id of selection) diagnosticsParams.append('schemaSource', id);
+    const navigate = () =>
+      router.push(
+        `${schemaReviewHref(projectId, persistedTarget.id, undefined, persistedTarget.targetBranch)}&${diagnosticsParams}`
+      );
+    if (navigationRef.current) navigationRef.current.requestNavigation(navigate);
+    else navigate();
   }
 
   const reviewScope = `${projectId}:${workspaceId}`;
@@ -677,7 +662,7 @@ export function SchemaStudioExperience({
       });
       if (!isCurrent()) return;
       if (!fresh.report.valid || !fresh.adoption.allowed || fresh.impact?.status === 'blocked') {
-        setReview(fresh);
+        inspectDefinition();
         return;
       }
       if (!fresh.workspace) throw new Error('The target Workspace is unavailable.');
@@ -1034,7 +1019,6 @@ export function SchemaStudioExperience({
               }
               setSchemaDefinition(definition);
               setSavedCandidateRef(undefined);
-              setReview(undefined);
             }}
             onDiscard={() => {
               updateDataDirty(false);
@@ -1214,7 +1198,6 @@ export function SchemaStudioExperience({
               candidateId: saved.candidate.candidateId,
               revision: saved.candidate.revision,
             });
-            setReview(undefined);
             updateDataDirty(false);
             await workspaces.refresh();
           }}
@@ -1245,115 +1228,6 @@ export function SchemaStudioExperience({
         }
         resultSchema={data?.schema}
       />
-      <Dialog
-        open={!!review}
-        onOpenChange={(open) => {
-          if (!open && !applying) setReview(undefined);
-        }}
-      >
-        <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden sm:max-w-4xl">
-          <DialogHeader className="shrink-0">
-            <DialogTitle>Schema checks</DialogTitle>
-            <DialogDescription>
-              Definition checks and current content impact. Saving a Draft does not commit it. Use
-              Review Schema changes to inspect the complete Draft and make a decision.
-            </DialogDescription>
-          </DialogHeader>
-          {review ? (
-            <>
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-2">
-                <div className="space-y-1 text-xs">
-                  {review.sources.map((source) => (
-                    <p className="font-mono" key={source.artifactVersionId}>
-                      {source.canonicalName} · {source.version}
-                    </p>
-                  ))}
-                </div>
-                <StudioChecks preview={review} />
-                {review.workspace ? (
-                  <div className="grid min-w-0 gap-6 sm:grid-cols-2">
-                    <section aria-label="Schema definition changes" className="min-w-0">
-                      <h3 className="text-sm font-medium">Definition changes</h3>
-                      <StudioChanges changes={review.workspace?.changes ?? []} />
-                    </section>
-                    <div className="min-w-0">
-                      <h3 className="mb-3 text-sm font-medium">Content impact</h3>
-                      <StudioImpactPreview impact={review.impact ?? null} />
-                    </div>
-                  </div>
-                ) : null}
-                {hasSchemaEdit && !savedCandidateRef ? (
-                  <p className="text-xs text-[var(--text-secondary)]">
-                    Review saves these edits before creating the complete Draft snapshot.
-                  </p>
-                ) : null}
-                <details className="text-xs">
-                  <summary className="cursor-pointer">Reviewed definition hash</summary>
-                  <p className="mt-2 break-all font-mono">{review.schemaHash}</p>
-                </details>
-              </div>
-              <div className="flex shrink-0 flex-wrap justify-end gap-3 border-t border-[var(--stroke-divider)] pt-3">
-                <Button disabled={applying} onClick={() => setReview(undefined)} variant="outline">
-                  Cancel
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" aria-label="Review actions" disabled={applying}>
-                      More <ChevronDown size={14} aria-hidden="true" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        setReview(undefined);
-                        preview.refresh();
-                        pendingSchema.refresh();
-                        void workspaces.refresh();
-                      }}
-                    >
-                      Refresh checks
-                    </DropdownMenuItem>
-                    {review.workspace && !review.workspace.canBind ? (
-                      <DropdownMenuItem
-                        disabled={
-                          applying ||
-                          !savedCandidateRef ||
-                          !review.impact?.canPublish ||
-                          !review.report.valid ||
-                          !review.adoption.allowed ||
-                          review.reviewHash !== data?.reviewHash
-                        }
-                        onSelect={() => {
-                          setPublishReview(review);
-                          setReview(undefined);
-                        }}
-                      >
-                        Publish public Schema
-                      </DropdownMenuItem>
-                    ) : null}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <Button
-                  disabled={
-                    applying ||
-                    !review.workspace ||
-                    !review.report.valid ||
-                    !review.adoption.allowed ||
-                    review.impact?.status === 'blocked'
-                  }
-                  onClick={() => {
-                    setReview(undefined);
-                    void openReview();
-                  }}
-                  variant="commit"
-                >
-                  Continue to Review
-                </Button>
-              </div>
-            </>
-          ) : null}
-        </DialogContent>
-      </Dialog>
       {preparation ? (
         <SchemaContentPreparationDialog
           projectId={projectId}
