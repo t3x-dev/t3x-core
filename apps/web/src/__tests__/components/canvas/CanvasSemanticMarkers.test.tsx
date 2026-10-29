@@ -12,6 +12,8 @@ const navigationMocks = vi.hoisted(() => ({
   searchParams: new URLSearchParams(),
 }));
 
+const canvasUiMocks = vi.hoisted(() => ({ zoom: 1 }));
+
 vi.mock('@xyflow/react', () => ({
   Handle: ({ type }: { type: string }) => <div data-testid={`handle-${type}`} />,
   NodeToolbar: ({ children }: { children: React.ReactNode }) => (
@@ -19,7 +21,7 @@ vi.mock('@xyflow/react', () => ({
   ),
   Position: { Left: 'left', Right: 'right' },
   useStore: (selector: (state: { transform: [number, number, number] }) => unknown) =>
-    selector({ transform: [0, 0, 1] }),
+    selector({ transform: [0, 0, canvasUiMocks.zoom] }),
 }));
 
 vi.mock('framer-motion', () => ({
@@ -213,6 +215,33 @@ describe('Canvas node semantic markers', () => {
     navigationMocks.params = { projectId: 'proj_canvas' };
     navigationMocks.routerPush.mockClear();
     navigationMocks.searchParams = new URLSearchParams();
+    canvasUiMocks.zoom = 1;
+  });
+
+  it('renders a ringed short commit id in overview mode', () => {
+    canvasUiMocks.zoom = 0.2;
+    const data = makeNodeData();
+    data.commit = { ...data.commit!, hash: 'sha256:7d92785f' };
+    data.commitHash = 'sha256:7d92785f';
+
+    renderUnitNode(data);
+
+    const node = screen.getByRole('treeitem', { name: /Semantic canvas node \(minified\)/i });
+    expect(node).toHaveStyle({ height: '50px', width: '50px' });
+    expect(node.style.boxShadow).toContain('0 0 0 4px');
+    expect(within(node).getByText('7d92785')).toBeInTheDocument();
+  });
+
+  it('uses the full card branch color for the overview dot and ring', () => {
+    canvasUiMocks.zoom = 0.2;
+    const data = makeNodeData({ branchName: 'dev', branchType: 'branch' });
+    data.commit = { ...data.commit!, branch: 'dev' };
+
+    renderUnitNode(data);
+
+    const node = screen.getByRole('treeitem', { name: /Semantic canvas node \(minified\)/i });
+    expect(node).toHaveStyle({ backgroundColor: '#ec4899' });
+    expect(node.style.boxShadow).toContain('#ec4899');
   });
 
   it('labels committed, source, and leaf regions without relying on color alone', () => {
@@ -254,19 +283,69 @@ describe('Canvas node semantic markers', () => {
     );
   });
 
-  it('keeps committed card borders neutral for broad-audience scanning', () => {
-    renderSelectedUnitNode(
+  it('renders one yellow branch summary with every pending conversation name', () => {
+    renderUnitNode(
       makeNodeData({
-        branchName: 'branch 1',
-        branchType: 'branch',
+        commit: undefined,
+        commitHash: undefined,
+        commitStatus: undefined,
+        conversationId: undefined,
+        pendingBranch: 'main',
+        pendingConversationGroup: {
+          branch: 'main',
+          conversations: [
+            {
+              branch: 'main',
+              conversationId: 'conv_a',
+              createdAt: '2026-05-29T00:00:00Z',
+              title: 'First change',
+              turnsCount: 2,
+            },
+            {
+              branch: 'main',
+              conversationId: 'conv_b',
+              createdAt: '2026-05-29T00:01:00Z',
+              title: 'Second change',
+              turnsCount: 4,
+            },
+          ],
+        },
+        title: '2 pending',
       })
     );
 
+    const node = screen.getByRole('treeitem', { name: /2 pending conversations on main/i });
+    expect(node).toHaveAttribute('data-node-type', 'pending-group');
+    expect(node).toHaveAttribute('data-branch-color', 'pending');
+    expect(within(node).getByRole('link', { name: /First change/i })).toHaveAttribute(
+      'href',
+      expect.stringContaining('sourceConversation=conv_a')
+    );
+    expect(within(node).getByRole('link', { name: /Second change/i })).toBeInTheDocument();
+    expect(within(node).getByTitle('Highlight main branch')).toHaveAttribute(
+      'data-branch-highlight',
+      'main'
+    );
+  });
+
+  it('applies a stable branch color while retaining a textual branch identity', () => {
+    const data = makeNodeData({
+      branchName: 'dev',
+      branchType: 'branch',
+    });
+    data.commit = { ...data.commit!, branch: 'dev' };
+    renderSelectedUnitNode(data);
+
     const node = screen.getByRole('treeitem', { name: /Semantic canvas node/i });
+    expect(node).toHaveAttribute('data-branch-color', 'dev');
+    expect(node.style.getPropertyValue('--branch-accent')).toBe('#ec4899');
     expect(node.className).toContain('border-[var(--stroke-default)]');
     expect(node.className).toContain('ring-[var(--accent-commit)]/30');
     expect(node.className).not.toContain('border-l-');
-    expect(node.className).not.toContain('ring-[var(--accent-branch)]');
+    expect(within(node).getByTitle('Highlight dev branch')).toHaveAttribute(
+      'data-branch-highlight',
+      'dev'
+    );
   });
 
   it('does not duplicate committed node actions inside every card', () => {
@@ -324,10 +403,12 @@ describe('Canvas node semantic markers', () => {
     expect(screen.queryByRole('link', { name: /Launch brief/i })).not.toBeInTheDocument();
   });
 
-  it('keeps the empty leaf state informational without a local new leaf action', () => {
+  it('omits redundant tree stats and empty leaf placeholders from committed cards', () => {
     renderUnitNode(makeNodeData({ leaves: [] }));
 
-    expect(screen.getByText('No leaf yet')).toBeInTheDocument();
+    expect(screen.queryByText('initial goal tree')).not.toBeInTheDocument();
+    expect(screen.queryByText('1 node')).not.toBeInTheDocument();
+    expect(screen.queryByText('No leaf yet')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /New Leaf/i })).not.toBeInTheDocument();
   });
 });

@@ -107,6 +107,12 @@ export interface Conversation {
   conversation_id: string;
   project_id: string;
   title: string | null;
+  alias?: string | null;
+  parent_commit_hash?: string | null;
+  committed_as?: string | null;
+  committed_at?: string | null;
+  has_pending_changes?: boolean;
+  turns_count?: number;
   created_at: string;
   metadata: Record<string, unknown> | null;
 }

@@ -1,308 +1,328 @@
 'use client';
 
+import type { TransitionViewV1 } from '@t3x-dev/core';
 import type { Node } from '@xyflow/react';
-import { Leaf } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  Copy,
+  ExternalLink,
+  GitBranch,
+  GitMerge,
+  Loader2,
+  X,
+  XCircle,
+} from 'lucide-react';
+import { type CSSProperties, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { commitHashLabel, relativeTime } from '@/domain/format/formatters';
+import {
+  getBranchCssVariables,
+  getBranchVisual,
+  getCanvasNodeBranch,
+} from '@/domain/canvas/branchVisuals';
+import { commitHashLabel, formatDate } from '@/domain/format/formatters';
 import type { CanvasNodeData } from '@/types/nodes';
 import { cn } from '@/utils/cn';
 import type { CommitAction } from './CommitActionPanel';
+import vividStyles from './StateCanvasVivid.module.css';
 
 type CanvasUnitNode = Node<CanvasNodeData, 'unit'>;
 
 interface CanvasSelectionPanelProps {
-  node: CanvasUnitNode | null;
   actions: CommitAction[];
-  parentHash?: string;
-  canMerge?: boolean;
+  node: CanvasUnitNode | null;
+  parentNodes?: CanvasUnitNode[];
+  onClose?: () => void;
+  transitionState?: {
+    error: string | null;
+    loading: boolean;
+    view: TransitionViewV1 | null;
+  };
 }
 
-function formatBranchLabel(node: CanvasUnitNode): string {
-  if (node.data.branchType !== 'branch') return 'main';
-  const raw = node.data.branchName?.trim();
-  if (!raw) return 'branch';
-  return /^branch\b/i.test(raw) ? raw : `branch ${raw}`;
+function branchLabel(node: CanvasUnitNode): string {
+  return node.data.branchType === 'branch' ? node.data.branchName?.trim() || 'branch' : 'main';
 }
 
-function formatAge(value?: string): string {
-  if (!value) return 'unknown';
-  const timestamp = new Date(value).getTime();
-  return Number.isFinite(timestamp) ? relativeTime(value) : value;
+function authorLabel(node: CanvasUnitNode): string {
+  const author = node.data.commit?.author;
+  return author?.name || author?.id || author?.type || 'Unknown';
 }
 
-function getSummary(node: CanvasUnitNode, firstTree?: string): string {
-  const message = node.data.commit?.message?.trim();
-  if (message && message !== node.data.title) return message;
-  const summary = node.data.summary?.trim();
-  if (summary && summary !== 'No facets') return summary;
-  return firstTree ? `${firstTree} updated in this version` : 'state tree updated';
-}
-
-function treeLabel(count: number): string {
-  return `${count} tree${count === 1 ? '' : 's'}`;
-}
-
-function relationLabel(count: number): string {
-  return `${count} relation${count === 1 ? '' : 's'}`;
-}
-
-function getStatus(node: CanvasUnitNode, hasParent: boolean, canMerge: boolean): string {
-  if (node.data.commitStatus !== 'committed') {
-    return node.data.commitStatus ?? 'pending';
-  }
-  if (!hasParent) {
-    return 'root commit · verified';
-  }
-  if (node.data.branchType === 'branch' && canMerge) {
-    return 'branch head · verified';
-  }
-  if (node.data.branchType === 'branch') {
-    return 'branch commit · verified';
-  }
-  return 'main commit · verified';
-}
-
-function getActionNote(node: CanvasUnitNode, hasParent: boolean, canMerge: boolean): string {
-  const hasLeaf = (node.data.leaves?.length ?? 0) > 0;
-  if (!hasParent) {
-    return hasLeaf
-      ? 'Version context stays on the canvas. Open Leaf opens the saved output for this version.'
-      : 'Version context stays on the canvas. Use State or Commit Export for delivery.';
-  }
-  if (node.data.branchType === 'branch' && canMerge) {
-    return 'Version context stays on the canvas. Review and merge this branch version.';
-  }
-  if (node.data.branchType === 'branch') {
-    return 'Version context stays on the canvas. Use Pull requests for branch review and merge.';
-  }
-  return 'Version context stays on the canvas. Use State or Commit Export for delivery.';
-}
-
-function actionButtonClass(action: CommitAction): string {
-  if (action.tone === 'primary') {
-    return 'bg-[var(--accent-commit)] text-[var(--on-accent)] hover:bg-[var(--accent-commit)]/90';
-  }
-  if (action.tone === 'leaf') {
-    return 'border-[var(--accent-leaf)]/25 bg-[var(--accent-leaf-soft)] text-[var(--accent-leaf)] hover:bg-[var(--accent-leaf)]/15';
-  }
-  if (action.tone === 'merge') {
-    return 'border-[var(--accent-branch)]/25 bg-[var(--accent-branch-soft)] text-[var(--accent-branch)] hover:bg-[var(--accent-branch)]/15';
-  }
-  return 'border-[var(--stroke-default)] bg-[var(--surface-card)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]';
-}
-
-function panelActionLabel(action: CommitAction): string {
-  if (action.label === 'Merge') return 'Start Merge Into Main';
-  return action.label;
-}
-
-function panelActionClass(action: CommitAction): string {
-  return action.label === 'Merge' ? 'col-span-2' : '';
-}
-
-function introTargetForAction(action: CommitAction): string | undefined {
-  if (action.label === 'View Diff') return 'canvas-action-diff';
-  if (action.label === 'Open Leaf') return 'canvas-action-open-leaf';
-  if (action.label === 'Merge') return 'canvas-action-merge';
-  return undefined;
-}
-
-function PanelBlock({
-  children,
-  meta,
-  title,
-}: {
-  children: React.ReactNode;
-  meta?: string;
-  title: string;
-}) {
+function initials(value: string): string {
   return (
-    <section className="rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-card)] shadow-[var(--fx-highlight-inset)]">
-      <div className="flex items-center justify-between border-b border-[var(--stroke-default)] px-2.5 py-1.5">
-        <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-primary)]">
-          {title}
-        </h3>
-        {meta && (
-          <span className="rounded-full border border-[var(--stroke-default)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-tertiary)]">
-            {meta}
-          </span>
-        )}
-      </div>
-      <div className="p-2">{children}</div>
-    </section>
+    value
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join('') || 'U'
   );
 }
 
-function FactRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid grid-cols-[68px_1fr] gap-2 text-[11px]">
-      <span className="text-[var(--text-tertiary)]">{label}</span>
-      <span className="min-w-0 truncate text-right font-semibold text-[var(--text-secondary)]">
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function DeltaRow({
-  badge,
-  children,
+function CheckTile({
   label,
-  tone,
+  observation,
+  outcomes,
 }: {
-  badge: string;
-  children: React.ReactNode;
   label: string;
-  tone: 'leaf' | 'branch';
+  observation?: 'observed' | 'no_statement_observed';
+  outcomes?: string[];
 }) {
-  const toneClass =
-    tone === 'leaf'
-      ? 'bg-[var(--accent-leaf-soft)] text-[var(--accent-leaf)]'
-      : 'bg-[var(--accent-branch-soft)] text-[var(--accent-branch)]';
+  const results = outcomes ?? [];
+  const observed = observation === 'observed';
+  const passed =
+    observed &&
+    results.length > 0 &&
+    results.every((outcome) => ['confirmed', 'passed', 'verified'].includes(outcome));
+  const failed = observed && !passed;
+  const detail = !observed ? 'Not observed' : results.join(', ') || 'Observed';
+
   return (
     <div
       className={cn(
-        'grid grid-cols-[22px_1fr_auto] items-start gap-1.5 rounded-lg px-2 py-1.5',
-        tone === 'leaf' ? 'bg-[var(--accent-leaf-soft)]/60' : 'bg-[var(--accent-branch-soft)]/60'
+        vividStyles.checkTile,
+        'border',
+        passed
+          ? 'border-[var(--status-success)]/25 bg-[var(--status-success-muted)]'
+          : failed
+            ? 'border-[var(--status-error)]/25 bg-[var(--status-error-muted)]'
+            : 'border-[var(--status-warning)]/25 bg-[var(--status-warning-muted)]'
       )}
     >
-      <span
-        className={cn(
-          'flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold',
-          toneClass
+      <div className="flex items-center gap-2 text-[13px] font-semibold text-[var(--text-primary)]">
+        {passed ? (
+          <CheckCircle2 className="size-4 text-[var(--status-success)]" />
+        ) : failed ? (
+          <XCircle className="size-4 text-[var(--status-error)]" />
+        ) : (
+          <AlertTriangle className="size-4 text-[var(--status-warning)]" />
         )}
-      >
-        {badge}
-      </span>
-      <div className="min-w-0">
-        <div className="truncate text-xs font-semibold text-[var(--text-primary)]">{label}</div>
-        <div className="truncate text-[11px] text-[var(--text-tertiary)]">{children}</div>
+        {label}
       </div>
-      <span className="rounded-full border border-[var(--stroke-default)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--text-tertiary)]">
-        {tone === 'leaf' ? 'tree' : 'branch'}
-      </span>
+      <div className="mt-1 truncate text-[11px] text-[var(--text-secondary)]">{detail}</div>
     </div>
   );
 }
 
 export function CanvasSelectionPanel({
   actions,
-  canMerge = false,
   node,
-  parentHash,
+  parentNodes = [],
+  onClose,
+  transitionState,
 }: CanvasSelectionPanelProps) {
-  if (!node) {
-    return null;
-  }
+  const [copied, setCopied] = useState(false);
+  if (!node) return null;
 
-  const branchLabel = formatBranchLabel(node);
-  const hash = node.data.commitHash || node.data.commit?.hash;
+  const hash = node.data.commitHash || node.data.commit?.hash || '';
   const hashLabel = hash ? commitHashLabel(hash) : 'none';
-  const trees = node.data.commit?.content?.trees ?? [];
-  const relations = node.data.commit?.content?.relations ?? [];
-  const firstTree = trees[0]?.key ?? node.data.title;
-  const summary = getSummary(node, firstTree);
-  const source = node.data.sources?.[0]?.label ?? node.data.conversationId ?? 'source not linked';
-  const hasParent = Boolean(parentHash);
-  const hasLeaf = (node.data.leaves?.length ?? 0) > 0;
+  const branch = getCanvasNodeBranch(node.data);
+  const branchCssVariables = getBranchCssVariables(branch) as CSSProperties;
+  const parents = node.data.commit?.parents ?? parentNodes.map((parent) => parent.id);
+  const author = authorLabel(node);
+  const view = transitionState?.view;
+  const decision =
+    view?.decision.observation === 'supplied' ? view.decision.outcome : 'not observed';
+  const verificationChecks = view
+    ? [
+        {
+          label: 'Object integrity',
+          observation:
+            view.checks.objectIntegrity === 'verified'
+              ? ('observed' as const)
+              : ('no_statement_observed' as const),
+          outcomes: [view.checks.objectIntegrity],
+        },
+        { label: 'Replay', ...view.checks.replay },
+        { label: 'Validation', ...view.checks.validation },
+        { label: 'Runner', ...view.checks.runner },
+        {
+          label: 'Human confirmation',
+          observation: view.checks.humanConfirmation.observation,
+          outcomes: view.checks.humanConfirmation.runs.length > 0 ? ['confirmed'] : [],
+        },
+      ]
+    : [];
+
+  const copyHash = () => {
+    if (!hash) return;
+    const write = navigator.clipboard?.writeText(hash);
+    if (!write) return;
+    void write.then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    });
+  };
 
   return (
-    <aside className="hidden w-80 shrink-0 border-l border-[var(--stroke-default)] bg-[var(--surface-panel)] xl:flex xl:flex-col">
-      <div className="border-b border-[var(--stroke-default)] px-3 py-2">
-        <div className="flex items-center justify-between gap-3">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
-            SELECTION
-          </div>
-          <span className="rounded-full border border-[var(--stroke-default)] px-2 py-0.5 font-mono text-[10px] tracking-[0.14em] text-[var(--text-tertiary)]">
-            {hashLabel}
+    <aside className={vividStyles.inspector} data-branch-color={branch} style={branchCssVariables}>
+      <header className={vividStyles.inspectorHeader}>
+        <h2 className={vividStyles.inspectorTitle}>Inspector</h2>
+        <Button
+          aria-label="Close inspector"
+          className={vividStyles.closeButton}
+          onClick={onClose}
+          size="icon-sm"
+          variant="ghost"
+        >
+          <X className="size-4" />
+        </Button>
+      </header>
+
+      <div className={vividStyles.inspectorBody}>
+        <section className={vividStyles.inspectHero}>
+          <span className={vividStyles.inspectIcon}>
+            {parents.length > 1 ? (
+              <GitMerge aria-hidden="true" size={28} strokeWidth={2.5} />
+            ) : (
+              <GitBranch aria-hidden="true" size={28} strokeWidth={2.5} />
+            )}
           </span>
-        </div>
-        <div className="mt-1 truncate text-sm font-semibold text-[var(--text-primary)]">
-          {node.data.title}
-        </div>
-      </div>
-
-      <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-2.5">
-        <PanelBlock meta={branchLabel} title="At a Glance">
-          <div className="space-y-1.5">
-            <FactRow label="status" value={getStatus(node, hasParent, canMerge)} />
-            <FactRow
-              label="content"
-              value={`${treeLabel(trees.length)} · ${relationLabel(relations.length)}`}
-            />
-            <FactRow label="source" value={source} />
-            <FactRow label="age" value={formatAge(node.data.timestamp)} />
+          <div>
+            <h3 className={vividStyles.inspectHeading}>{node.data.title || 'Untitled commit'}</h3>
+            <div className={vividStyles.hashGroup}>
+              <span className={vividStyles.hash}>{hashLabel}</span>
+              <button
+                aria-label={copied ? 'Hash copied' : 'Copy hash'}
+                className="rounded-md p-1.5 text-[var(--text-tertiary)] hover:bg-[var(--accent-commit-soft)] hover:text-[var(--accent-commit)]"
+                onClick={copyHash}
+                type="button"
+              >
+                <Copy className="size-4" />
+              </button>
+              <span className={vividStyles.merged}>
+                <CheckCircle2 className="size-3" fill="currentColor" /> Committed
+              </span>
+            </div>
           </div>
-        </PanelBlock>
+        </section>
+        <span className={vividStyles.separator} />
 
-        <PanelBlock meta={hasParent ? 'vs parent' : 'root'} title="State Delta">
-          <div className="space-y-1.5">
-            <DeltaRow badge={hasParent ? '+' : '•'} label={firstTree} tone="leaf">
-              {summary}
-            </DeltaRow>
-            {node.data.branchType === 'branch' && (
-              <DeltaRow badge="~" label="branch path" tone="branch">
-                commit diverges from main path
-              </DeltaRow>
+        <section className={vividStyles.card}>
+          <h4 className={vividStyles.eyebrow}>Commit flow</h4>
+          <div className={vividStyles.flow}>
+            <div className={vividStyles.flowBranch}>
+              <span
+                className="size-2 rounded-full"
+                style={{
+                  backgroundColor: getBranchVisual(
+                    parentNodes[0] ? getCanvasNodeBranch(parentNodes[0].data) : branch
+                  ).accent,
+                }}
+              />
+              {parentNodes[0] ? branchLabel(parentNodes[0]) : parents.length ? 'parent' : 'root'}
+            </div>
+            <ArrowRight className="size-4 text-[var(--text-tertiary)]" />
+            <div className={vividStyles.flowBranch}>
+              <span className="size-2 rounded-full bg-[var(--branch-accent)]" /> {branch}
+            </div>
+          </div>
+        </section>
+
+        <section className={vividStyles.card}>
+          <h4 className={vividStyles.eyebrow}>Parent commits</h4>
+          <div className={vividStyles.parentList}>
+            {parents.length === 0 ? (
+              <div className="text-xs text-[var(--text-tertiary)]">Root commit has no parent.</div>
+            ) : (
+              parents.map((parentHash, index) => {
+                const parentNode = parentNodes.find(
+                  (candidate) =>
+                    candidate.id === parentHash || candidate.data.commitHash === parentHash
+                );
+                const parentBranch = parentNode ? getCanvasNodeBranch(parentNode.data) : branch;
+                return (
+                  <div
+                    className={vividStyles.parent}
+                    key={parentHash}
+                    style={getBranchCssVariables(parentBranch) as CSSProperties}
+                  >
+                    <span className="flex items-center gap-3">
+                      <span className={vividStyles.parentIcon}>
+                        <GitBranch className="size-3" />
+                      </span>
+                      <span className={vividStyles.parentHash}>{commitHashLabel(parentHash)}</span>
+                    </span>
+                    <span className={vividStyles.parentBranch}>
+                      {parentNode ? branchLabel(parentNode) : index === 0 ? 'parent' : 'merge'}
+                    </span>
+                  </div>
+                );
+              })
             )}
           </div>
-        </PanelBlock>
+        </section>
 
-        <PanelBlock meta="selected" title="Available Actions">
-          <div className="grid grid-cols-2 gap-2">
-            {actions.map((action) => (
-              <Button
-                key={action.label}
-                type="button"
-                data-intro-target={introTargetForAction(action)}
-                variant="canvas-outline"
-                size="sm"
-                className={cn(
-                  'h-7 min-w-0 text-xs',
-                  actionButtonClass(action),
-                  panelActionClass(action)
-                )}
-                onClick={action.onClick}
-              >
-                <span className="shrink-0 opacity-75">{action.icon}</span>
-                <span className="truncate">{panelActionLabel(action)}</span>
-              </Button>
-            ))}
-          </div>
-          <div className="mt-2 rounded-lg bg-[var(--surface-muted)] px-2.5 py-1.5 text-[10px] leading-snug text-[var(--text-tertiary)]">
-            {getActionNote(node, hasParent, canMerge)}
-          </div>
-          {hasLeaf && (
-            <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-[var(--accent-leaf)]">
-              <Leaf size={12} />
-              <span>Existing Leaf output remains available.</span>
+        <section className="flex flex-col gap-3">
+          <h4 className={vividStyles.eyebrow}>Status checks</h4>
+          {transitionState?.loading ? (
+            <div className="mt-3 flex items-center gap-2 rounded-xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 text-xs text-[var(--text-secondary)]">
+              <Loader2 className="size-4 animate-spin text-[var(--text-tertiary)]" />
+              Loading verification data…
+            </div>
+          ) : transitionState?.error ? (
+            <div className="mt-3 rounded-xl border border-[var(--status-warning)]/25 bg-[var(--status-warning-muted)] p-3 text-xs text-[var(--text-secondary)]">
+              Verification data unavailable: {transitionState.error}
+            </div>
+          ) : verificationChecks.length === 0 ? (
+            <div className="mt-3 rounded-xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 text-xs text-[var(--text-secondary)]">
+              No verification projection is available for this commit.
+            </div>
+          ) : (
+            <div className={vividStyles.checkGrid}>
+              {verificationChecks.map((check) => (
+                <CheckTile
+                  key={check.label}
+                  label={check.label}
+                  observation={check.observation}
+                  outcomes={check.outcomes}
+                />
+              ))}
             </div>
           )}
-        </PanelBlock>
+        </section>
 
-        <PanelBlock meta="prototype" title="Action Logic">
-          <div className="space-y-1.5">
-            <div className="grid grid-cols-[58px_1fr] gap-2 rounded-lg bg-[var(--surface-muted)] px-2 py-1.5 text-[10px]">
-              <span className="font-semibold text-[var(--text-primary)]">root</span>
-              <span className="text-[var(--text-tertiary)]">
-                Open a saved Leaf. Diff is hidden because root has no parent.
-              </span>
-            </div>
-            <div className="grid grid-cols-[58px_1fr] gap-2 rounded-lg bg-[var(--surface-muted)] px-2 py-1.5 text-[10px]">
-              <span className="font-semibold text-[var(--text-primary)]">main child</span>
-              <span className="text-[var(--text-tertiary)]">
-                View Diff. Merge is hidden on main.
-              </span>
-            </div>
-            <div className="grid grid-cols-[58px_1fr] gap-2 rounded-lg bg-[var(--surface-muted)] px-2 py-1.5 text-[10px]">
-              <span className="font-semibold text-[var(--text-primary)]">branch head</span>
-              <span className="text-[var(--text-tertiary)]">
-                View Diff and Merge. Merge exists only on the latest branch head.
-              </span>
-            </div>
+        <section className={vividStyles.details}>
+          <div className={vividStyles.detailRow}>
+            <span className="text-[var(--text-tertiary)]">Date</span>
+            <span className="text-right font-medium text-[var(--text-secondary)]">
+              {node.data.commit?.committed_at
+                ? formatDate(node.data.commit.committed_at)
+                : node.data.timestamp}
+            </span>
           </div>
-        </PanelBlock>
+          <div className={vividStyles.detailRow}>
+            <span className="text-[var(--text-tertiary)]">Author</span>
+            <span className="flex items-center gap-2 font-semibold text-[var(--accent-commit)]">
+              <span className="flex size-5 items-center justify-center rounded-full bg-[var(--accent-commit)] text-[9px] text-[var(--on-accent)]">
+                {initials(author)}
+              </span>
+              {author}
+            </span>
+          </div>
+          <div className={vividStyles.detailRow}>
+            <span className="text-[var(--text-tertiary)]">Decision</span>
+            <span className="font-medium capitalize text-[var(--text-secondary)]">{decision}</span>
+          </div>
+        </section>
       </div>
+
+      <footer className={vividStyles.inspectorFooter}>
+        {actions.map((action) => (
+          <Button
+            className={cn('w-full', action.label === 'View Diff' && vividStyles.footerButton)}
+            key={action.label}
+            onClick={action.onClick}
+            variant={action.label === 'View Diff' ? 'default' : 'canvas-outline'}
+          >
+            {action.icon}
+            {action.label === 'View Diff' ? 'View Diff Changes' : action.label}
+            {action.label === 'View Diff' ? <ExternalLink className="size-4" /> : null}
+          </Button>
+        ))}
+      </footer>
     </aside>
   );
 }

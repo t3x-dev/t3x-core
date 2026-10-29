@@ -238,6 +238,7 @@ CREATE TABLE IF NOT EXISTS conversations (
   parent_commit_hash TEXT,
   committed_as TEXT,
   committed_at TIMESTAMPTZ,
+  commit_tracking_started_at TIMESTAMPTZ,
   position_x REAL,
   position_y REAL,
   metadata_json TEXT,

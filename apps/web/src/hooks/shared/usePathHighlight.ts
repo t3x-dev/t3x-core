@@ -45,44 +45,40 @@ export function usePathHighlight({ nodes, edges }: UsePathHighlightOptions) {
       };
     }
 
-    // Directed (source→target) adjacency for branch/main BFS — ensures traversal
-    // only follows edges in commit order and does not traverse upstream
+    // Directed (source→target) adjacency for explicit branch highlighting.
     const forwardAdj = new Map<string, Set<string>>();
-    // Undirected adjacency for 1-hop node highlighting
-    const undirectedAdj = new Map<string, Set<string>>();
+    // Incoming edges let node selection walk every causal parent path back to a root.
+    const incomingEdges = new Map<string, Edge[]>();
     for (const edge of edges) {
       const fwd = forwardAdj.get(edge.source) ?? new Set<string>();
       fwd.add(edge.target);
       forwardAdj.set(edge.source, fwd);
 
-      const out = undirectedAdj.get(edge.source) ?? new Set<string>();
-      out.add(edge.target);
-      undirectedAdj.set(edge.source, out);
-
-      const inbound = undirectedAdj.get(edge.target) ?? new Set<string>();
-      inbound.add(edge.source);
-      undirectedAdj.set(edge.target, inbound);
+      const inbound = incomingEdges.get(edge.target) ?? [];
+      inbound.push(edge);
+      incomingEdges.set(edge.target, inbound);
     }
 
-    // Node-click highlighting: 1-hop neighbors only (undirected — includes both parents and children)
+    // Node-click highlighting: selected node plus every recursive ancestor.
+    // Merge commits intentionally traverse all parents; descendants stay dimmed.
     if (highlight.mode === 'node') {
       const { nodeId } = highlight;
-      const connected = new Set<string>([nodeId]);
-      const neighbors = undirectedAdj.get(nodeId);
-      if (neighbors) {
-        for (const id of neighbors) {
-          connected.add(id);
+      const ancestors = new Set<string>([nodeId]);
+      const causalEdges = new Set<string>();
+      const queue = [nodeId];
+
+      while (queue.length > 0) {
+        const current = queue.shift()!;
+        for (const edge of incomingEdges.get(current) ?? []) {
+          causalEdges.add(edge.id);
+          if (!ancestors.has(edge.source)) {
+            ancestors.add(edge.source);
+            queue.push(edge.source);
+          }
         }
       }
 
-      const connectedEdges = new Set<string>();
-      for (const edge of edges) {
-        if (edge.source === nodeId || edge.target === nodeId) {
-          connectedEdges.add(edge.id);
-        }
-      }
-
-      return { nodes: connected, edges: connectedEdges };
+      return { nodes: ancestors, edges: causalEdges };
     }
 
     // Branch/main highlighting: BFS traversal
@@ -186,7 +182,7 @@ export function usePathHighlight({ nodes, edges }: UsePathHighlightOptions) {
     if (!highlight) {
       return edges;
     }
-    const hasHighlightedEdges = highlightSets.edges.size > 0;
+    const hasHighlightedPath = highlightSets.nodes.size > 0;
     return edges.map((edge) => {
       if (highlightSets.edges.has(edge.id)) {
         return {
@@ -199,7 +195,7 @@ export function usePathHighlight({ nodes, edges }: UsePathHighlightOptions) {
         };
       }
       // Dim non-highlighted edges when a highlight is active
-      if (hasHighlightedEdges) {
+      if (hasHighlightedPath) {
         return {
           ...edge,
           data: {
@@ -211,7 +207,7 @@ export function usePathHighlight({ nodes, edges }: UsePathHighlightOptions) {
       }
       return edge;
     });
-  }, [edges, highlight, highlightSets.edges, highlightTone]);
+  }, [edges, highlight, highlightSets.edges, highlightSets.nodes, highlightTone]);
 
   const toggleHighlight = (mode: PathHighlight) => {
     setHighlight((current) => {

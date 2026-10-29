@@ -14,6 +14,25 @@ export type NodeKind = 'unit' | 'leaf';
 // Unit commit status: staging (editable) or committed (read-only).
 export type CommitStatus = 'staging' | 'committed';
 
+/**
+ * Conversation work that has content but has not produced a commit yet.
+ * Pending conversations are listed outside the immutable version graph.
+ */
+export interface CanvasPendingConversation {
+  conversationId: string;
+  title: string;
+  turnsCount: number;
+  createdAt: string;
+  branch: string;
+  parentCommitHash?: string;
+}
+
+/** Read-only branch summary rendered at the end of a version path. */
+export interface CanvasPendingConversationGroup {
+  branch: string;
+  conversations: CanvasPendingConversation[];
+}
+
 // Leaf node types for output destinations
 // Must match @t3x-dev/core AnyLeafType from V4 schema
 export type LeafType =
@@ -63,12 +82,14 @@ export type { CommitAuthor, CommitSourceRef };
  * Based on ApiCommit (tree-based), with backward-compat fields for components
  * that still read node-derived data.
  *
- * Note: parents field is intentionally omitted as it's not needed for display.
+ * Parent identities are retained so the Canvas inspector can render the exact
+ * commit flow without reconstructing protocol history from visual edges.
  */
 export type CommitDisplay = Pick<
   ApiCommit,
   'hash' | 'schema' | 'author' | 'committed_at' | 'content' | 'message' | 'branch' | 'sources'
 > & {
+  parents?: ApiCommit['parents'];
   position_x?: number;
   position_y?: number;
   /** Backward-compat: node-based view derived from trees (used by older canvas components) */
@@ -480,6 +501,8 @@ export interface CanvasNodeData {
   branchName?: string; // Branch name for branch commits
   pendingBranch?: 'main' | 'branch'; // Branch selection for staging
   pendingBranchName?: string; // Branch name for staging
+  /** Read-only aggregate of every pending conversation assigned to this branch. */
+  pendingConversationGroup?: CanvasPendingConversationGroup;
 
   // Staging commit: source data with free-form text selection
   pendingSource?: PendingCommitSource;

@@ -19,7 +19,7 @@ import type { CanvasNodeData } from '@/types/nodes';
 // Canvas slices now route infrastructure reads/writes through @/queries/* per the
 // doc-aligned L3 layer. Mock the query modules the slices depend on.
 vi.mock('@/queries/conversations', () => ({
-  fetchConversations: vi.fn().mockResolvedValue({ conversations: [], total: 0 }),
+  fetchAllConversations: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('@/infrastructure/commits', () => ({
@@ -336,6 +336,7 @@ describe('Canvas Store - Unit Node Model', () => {
         hasMainCommit: true,
         latestMainCommitId: 'sha256:new',
         hasDbPositions: false,
+        pendingConversations: [],
       });
 
       const state = useCanvasStore.getState();
@@ -366,6 +367,7 @@ describe('Canvas Store - Unit Node Model', () => {
         hasMainCommit: true,
         latestMainCommitId: 'sha256:main',
         hasDbPositions: false,
+        pendingConversations: [],
       });
 
       const state = useCanvasStore.getState();
