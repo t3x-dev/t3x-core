@@ -208,17 +208,6 @@
   display: block;
   overflow-wrap: anywhere;
 }
-.yaml {
-  margin: 0;
-  padding: 12px;
-  max-height: 360px;
-  overflow: auto;
-  background: var(--surface-canvas);
-  border-radius: var(--radius-sm);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.7;
-}
 @media (max-width: 600px) {
   .app {
     padding-inline: 16px;

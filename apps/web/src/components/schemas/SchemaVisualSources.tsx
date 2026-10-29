@@ -38,7 +38,7 @@ function SourceItem({
       style={{ touchAction: 'none', opacity: isDragging ? 0.45 : undefined }}
     >
       <span>{item.row.semanticPath}</span>
-      <small>{item.row.kind === 'node' ? 'Node · subtree' : 'Object'}</small>
+      <small>{item.row.kind === 'node' ? 'Node and its contents' : 'Object field'}</small>
     </button>
   );
 }

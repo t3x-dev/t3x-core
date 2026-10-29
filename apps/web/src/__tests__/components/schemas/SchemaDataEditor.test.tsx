@@ -76,7 +76,7 @@ describe('Schema data editor', () => {
     expect(screen.getByRole('complementary', { name: 'Available Schema sources' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: `Select source ${item}` }));
     fireEvent.change(screen.getByLabelText('Destination node'), { target: { value: destination } });
-    fireEvent.click(screen.getByRole('button', { name: 'Import here' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add here' }));
     expect(handlers.onPreview.mock.lastCall?.[0]).toHaveProperty(path, { type: 'string' });
     const mappings = handlers.onPreview.mock.lastCall?.[1];
     expect(mappings).toHaveLength(item.startsWith('node') ? 4 : 1);
@@ -86,7 +86,7 @@ describe('Schema data editor', () => {
     expect(screen.getByRole('button', { name: `Select source ${item}` })).toBeVisible();
     if (item.startsWith('object'))
       expect(screen.getByLabelText('Required project/profile')).toBeChecked();
-    fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() => expect(handlers.onSave).toHaveBeenCalledOnce());
     expect(handlers.onSave.mock.lastCall?.[2]).toEqual(handlers.onPreview.mock.lastCall?.[1]);
   });
@@ -109,7 +109,7 @@ describe('Schema data editor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(screen.getByLabelText('Name checklist/title')).toBeVisible();
     expect(screen.getByLabelText('Required checklist/title')).toBeChecked();
-    expect(screen.getByRole('button', { name: 'Save edits' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
     expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(false);
   });
 
@@ -117,13 +117,13 @@ describe('Schema data editor', () => {
     const handlers = callbacks();
     render(<SchemaDataEditor initialDefinition={definition} revisionKey="restore" {...handlers} />);
     fireEvent.change(screen.getByLabelText('Type checklist/title'), { target: { value: '' } });
-    expect(screen.getByRole('button', { name: 'Save edits' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
     fireEvent.change(screen.getByLabelText('Type checklist/title'), {
       target: { value: 'string' },
     });
     expect(handlers.onPreview.mock.lastCall?.[0]).toEqual(definition);
     expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(false);
-    expect(screen.getByRole('button', { name: 'Save edits' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
   });
 
   it('clears unsaved changes after a rename is reversed, including its local mapping', () => {
@@ -133,14 +133,14 @@ describe('Schema data editor', () => {
       target: { value: 'heading' },
     });
     fireEvent.blur(screen.getByLabelText('Name checklist/title'));
-    expect(screen.getByRole('button', { name: 'Save edits' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
     fireEvent.change(screen.getByLabelText('Name checklist/heading'), {
       target: { value: 'title' },
     });
     fireEvent.blur(screen.getByLabelText('Name checklist/heading'));
     expect(handlers.onPreview.mock.lastCall?.[0]).toEqual(definition);
     expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(false);
-    expect(screen.getByRole('button', { name: 'Save edits' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
   });
 
   it('clears unsaved changes after adding and deleting a field', async () => {
@@ -149,15 +149,15 @@ describe('Schema data editor', () => {
       <SchemaDataEditor initialDefinition={definition} revisionKey="add-delete" {...handlers} />
     );
     fireEvent.click(screen.getByRole('button', { name: 'Add to checklist', exact: true }));
-    expect(screen.getByRole('button', { name: 'Save edits' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Actions for checklist/new_field' }), {
       button: 0,
       ctrlKey: false,
     });
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete', exact: true }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete field', exact: true }));
     expect(handlers.onPreview.mock.lastCall?.[0]).toEqual(definition);
     expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(false);
-    expect(screen.getByRole('button', { name: 'Save edits' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
   });
 
   it('keeps a changed source origin dirty even when the imported definition is identical', async () => {
@@ -198,10 +198,10 @@ describe('Schema data editor', () => {
       button: 0,
       ctrlKey: false,
     });
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete', exact: true }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete node', exact: true }));
     fireEvent.click(screen.getByRole('button', { name: 'Select source node person', exact: true }));
     fireEvent.change(screen.getByLabelText('Destination node'), { target: { value: 'root' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Import here' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add here' }));
     expect(handlers.onPreview.mock.lastCall?.[0]).toEqual(original);
     expect(handlers.onPreview.mock.lastCall?.[1]).toEqual(
       expect.arrayContaining([
@@ -209,7 +209,7 @@ describe('Schema data editor', () => {
       ])
     );
     expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(true);
-    expect(screen.getByRole('button', { name: 'Save edits' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
   });
 
   it('compares later edits with the successful save rather than the original input', async () => {
@@ -220,16 +220,16 @@ describe('Schema data editor', () => {
     fireEvent.change(screen.getByLabelText('Type checklist/title'), {
       target: { value: 'number' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Save edits' })).toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled());
     fireEvent.change(screen.getByLabelText('Type checklist/title'), {
       target: { value: 'string' },
     });
-    expect(screen.getByRole('button', { name: 'Save edits' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(screen.getByLabelText('Type checklist/title')).toHaveValue('number');
     expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(false);
-    expect(screen.getByRole('button', { name: 'Save edits' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
   });
 
   it('preserves input and the previous saved baseline after a failed save', async () => {
@@ -241,16 +241,16 @@ describe('Schema data editor', () => {
     fireEvent.change(screen.getByLabelText('Type checklist/title'), {
       target: { value: 'number' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Save failed');
     expect(screen.getByLabelText('Type checklist/title')).toHaveValue('number');
     expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(true);
-    expect(screen.getByRole('button', { name: 'Save edits' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
     fireEvent.change(screen.getByLabelText('Type checklist/title'), {
       target: { value: 'string' },
     });
     expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(false);
-    expect(screen.getByRole('button', { name: 'Save edits' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
   });
 
   it('keeps an unsaved blank Schema dirty after undoing its first edit', async () => {
@@ -264,11 +264,11 @@ describe('Schema data editor', () => {
       />
     );
     fireEvent.keyDown(screen.getByRole('button', { name: 'Add', exact: true }), { key: 'Enter' });
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Root node' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Top-level node' }));
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
-    expect(screen.getByRole('button', { name: 'Save edits' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
     expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() => expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(false));
   });
 
@@ -299,7 +299,7 @@ describe('Schema data editor', () => {
     );
     expect(screen.getByRole('alert')).toHaveTextContent('Source unavailable');
     expect(screen.queryByText('Loading Schema definition…')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Retry Schema' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(onRetry).toHaveBeenCalledOnce();
   });
   it('restores the visible name when a referenced node cannot be renamed', () => {
@@ -334,7 +334,7 @@ describe('Schema data editor', () => {
       target: { value: 'string' },
     });
     fireEvent.click(screen.getByLabelText('Required checklist/items/done'));
-    fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() => expect(handlers.onSave).toHaveBeenCalledTimes(1));
     const saved = handlers.onSave.mock.calls[0]![0];
     expect(saved.nodes.checklist.requiredSlots).toEqual(['heading']);
@@ -363,18 +363,18 @@ describe('Schema data editor', () => {
     );
     expect(screen.getByLabelText('Type checklist/title')).toHaveValue('number');
     expect(screen.getByRole('alert')).toHaveTextContent('changed elsewhere');
-    expect(screen.getByRole('button', { name: 'Save edits' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
     expect(handlers.onSave).not.toHaveBeenCalled();
   });
   it('uses shared attribute controls and blocks invalid JSON without losing it', async () => {
     const handlers = callbacks();
     render(<SchemaDataEditor initialDefinition={definition} revisionKey="1" {...handlers} />);
     fireEvent.focus(screen.getByLabelText('Name checklist/title'));
-    fireEvent.change(screen.getByLabelText('Add setting'), { target: { value: 'default' } });
+    fireEvent.change(screen.getByLabelText('Add a setting'), { target: { value: 'default' } });
     fireEvent.change(screen.getByLabelText('Default value for slot checklist/title'), {
       target: { value: '{' },
     });
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Save edits' })).toBeDisabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled());
     fireEvent.change(screen.getByLabelText('Type checklist/items/done'), {
       target: { value: 'string' },
     });
@@ -382,7 +382,7 @@ describe('Schema data editor', () => {
     fireEvent.change(screen.getByLabelText('Default value for slot checklist/title'), {
       target: { value: '"Untitled"' },
     });
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Save edits' })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled());
   });
 });
 
@@ -410,15 +410,15 @@ it('shows exact node sources without selecting or changing the node and marks su
       sourceIdentities={{ [schemaSourceKey(pin)]: { name: 'Checklist', projectId: pin.projectId } }}
     />
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Source for checklist: Checklist @ 1.2.0' }));
-  const link = await screen.findByRole('link', { name: 'View release ↗' });
+  fireEvent.click(screen.getByRole('button', { name: 'Origin for checklist: Checklist @ 1.2.0' }));
+  const link = await screen.findByRole('link', { name: 'View source version' });
   const query = new URL(link.getAttribute('href')!, 'https://example.test').searchParams;
   expect(query.get('catalogHash')).toBe(pin.hash);
   expect(query.get('catalogVersion')).toBe(pin.version);
   expect(query.get('sourceProjectId')).toBe(pin.projectId);
   expect(link).toHaveAttribute('target', '_blank');
   expect(screen.getByText('Original commit unavailable.')).not.toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Technical details' }));
   expect(screen.getByText(pin.hash)).toBeVisible();
   expect(screen.getByText('Original commit unavailable.')).toBeVisible();
   expect(handlers.onPreview).not.toHaveBeenCalled();
@@ -426,7 +426,9 @@ it('shows exact node sources without selecting or changing the node and marks su
   fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
   fireEvent.click(screen.getByLabelText('Required checklist'));
   expect(
-    screen.getByRole('button', { name: 'Source for checklist: Checklist @ 1.2.0 + local edits' })
+    screen.getByRole('button', {
+      name: 'Origin for checklist: Checklist @ 1.2.0 + workspace edits',
+    })
   ).toBeVisible();
 });
 
@@ -469,16 +471,16 @@ it('opens the verified original project and Commit without replacing it with the
     />
   );
   fireEvent.click(
-    screen.getByRole('button', { name: 'Source for checklist: team/released @ 2.0.0' })
+    screen.getByRole('button', { name: 'Origin for checklist: team/released @ 2.0.0' })
   );
-  fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
-  const link = await screen.findByRole('link', { name: 'View source Commit ↗' });
+  fireEvent.click(await screen.findByRole('button', { name: 'Technical details' }));
+  const link = await screen.findByRole('link', { name: 'View source commit' });
   const url = new URL(link.getAttribute('href')!, 'https://example.test');
   expect(url.pathname).toBe('/project/original%2Fproject/history');
   expect(url.searchParams.get('commit')).toBe(commitDigest);
   expect(link).toHaveAttribute('target', '_blank');
   expect(screen.getByText('original/checklist')).toBeVisible();
-  expect(screen.getByRole('link', { name: 'View release ↗' })).toBeVisible();
+  expect(screen.getByRole('link', { name: 'View source version' })).toBeVisible();
   expect(screen.queryByText('Original commit unavailable.')).not.toBeInTheDocument();
 });
 
@@ -492,9 +494,7 @@ it('adds fields through the shared Add menu with an explicit parent and opens co
       {...handlers}
     />
   );
-  expect(
-    screen.queryByRole('complementary', { name: 'Schema properties' })
-  ).not.toBeInTheDocument();
+  expect(screen.getByRole('complementary', { name: 'Schema properties' })).toBeVisible();
   fireEvent.keyDown(screen.getByRole('button', { name: 'Add', exact: true }), { key: 'Enter' });
   fireEvent.click(screen.getByRole('menuitem', { name: 'Field…' }));
   const parent = screen.getByLabelText('Parent node');
@@ -533,16 +533,16 @@ describe('Schema editor lifecycle states', () => {
     const shell = screen.getByRole('region', { name: 'Schema data editor' });
     expect(screen.getByText('Loading Schema definition…')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Add', exact: true })).toBeDisabled();
-    expect(screen.queryByRole('button', { name: 'Create blank Schema' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create schema' })).not.toBeInTheDocument();
     rerender(<SchemaDataEditor {...props} loading={false} previewError="Snapshot missing" />);
     expect(screen.getByRole('region', { name: 'Schema data editor' })).toBe(shell);
     expect(screen.getByRole('alert')).toHaveTextContent('Snapshot missing');
-    fireEvent.click(screen.getByRole('button', { name: 'Retry Schema' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(retry).toHaveBeenCalledOnce();
-    expect(screen.queryByRole('button', { name: 'Create blank Schema' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create schema' })).not.toBeInTheDocument();
     rerender(<SchemaDataEditor {...props} loading={false} />);
     expect(screen.getByRole('region', { name: 'Schema data editor' })).toBe(shell);
-    fireEvent.click(screen.getByRole('button', { name: 'Create blank Schema' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create schema' }));
     expect(create).toHaveBeenCalledOnce();
     expect(handlers.onSave).not.toHaveBeenCalled();
     rerender(
@@ -557,8 +557,10 @@ describe('Schema editor lifecycle states', () => {
       expect(screen.getByRole('button', { name: 'Add', exact: true })).toBeEnabled()
     );
     expect(screen.getByRole('region', { name: 'Schema data editor' })).toBe(shell);
-    expect(screen.getByText('No nodes yet. Add a node or drag one from Sources.')).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
+    expect(
+      screen.getByText('No nodes yet. Add a node or drag one from Schema sources.')
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() =>
       expect(handlers.onSave).toHaveBeenCalledWith(
         { yschema: '0.1', name: 'Blank', nodes: {} },
@@ -583,11 +585,13 @@ it('keeps an edited Schema after deleting its last node', async () => {
     button: 0,
     ctrlKey: false,
   });
-  fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete', exact: true }));
-  expect(screen.getByText('No nodes yet. Add a node or drag one from Sources.')).toBeVisible();
-  expect(screen.queryByRole('button', { name: 'Create blank Schema' })).not.toBeInTheDocument();
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete node', exact: true }));
+  expect(
+    screen.getByText('No nodes yet. Add a node or drag one from Schema sources.')
+  ).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Create schema' })).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Add', exact: true })).toBeEnabled();
-  fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
   await waitFor(() =>
     expect(handlers.onSave).toHaveBeenCalledWith(
       expect.objectContaining({ nodes: {} }),

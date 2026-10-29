@@ -34,9 +34,9 @@ it('requires a decision before rebasing an overlapping field edit', async () => 
       onClose={close}
     />
   );
-  expect(screen.getByRole('button', { name: 'Save combined candidate' })).toBeDisabled();
-  fireEvent.click(screen.getByRole('button', { name: 'Keep my edit' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Save combined candidate' }));
+  expect(screen.getByRole('button', { name: 'Save combined draft' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Keep my changes' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save combined draft' }));
   await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
   expect(save.mock.calls[0]![3]).toEqual({
     name: 'new',
@@ -58,7 +58,7 @@ it('keeps unresolved source checks from saving and supports cancelling without m
       onClose={close}
     />
   );
-  expect(screen.getByRole('button', { name: 'Save combined candidate' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Save combined draft' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
   expect(close).toHaveBeenCalled();
   expect(save).not.toHaveBeenCalled();

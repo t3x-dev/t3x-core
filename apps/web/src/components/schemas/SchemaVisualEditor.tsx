@@ -127,7 +127,7 @@ function SchemaCard({ data }: NodeProps<Node<CardData>>) {
           </DragButton>
         </div>
         <span>
-          {row.definition.repeated ? 'Repeated node' : 'Node'} · Parent:{' '}
+          {row.definition.repeated ? 'Repeatable node' : 'Node'} · Parent:{' '}
           {row.semanticPath.split('/').slice(0, -1).join('/') || 'Root'}
         </span>
       </header>
@@ -372,7 +372,7 @@ export function SchemaVisualEditor({
             <Popover open={moveOpen} onOpenChange={setMoveOpen}>
               <PopoverTrigger asChild>
                 <Button variant="canvas-outline" size="sm" disabled={disabled}>
-                  {sourceItem ? 'Import to…' : 'Move to…'}
+                  {sourceItem ? 'Add to draft…' : 'Move to…'}
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" className={styles.moveMenu}>
@@ -428,7 +428,7 @@ export function SchemaVisualEditor({
                 <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
               </DropdownMenuRadioGroup>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={onRules}>Relations &amp; rules</DropdownMenuItem>
+              <DropdownMenuItem onSelect={onRules}>Relationships &amp; rules</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

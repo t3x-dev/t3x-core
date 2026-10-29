@@ -372,9 +372,9 @@ describe('complete Schema Structure settings', () => {
 
   it('adds, renames, edits and removes every relation setting', () => {
     const { change, saved } = setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Add relation type' }));
-    change('Relation type name new_relation', 'depends_on');
-    fireEvent.blur(screen.getByLabelText('Relation type name new_relation'));
+    fireEvent.click(screen.getByRole('button', { name: 'Add relationship type' }));
+    change('Relationship type name new_relation', 'depends_on');
+    fireEvent.blur(screen.getByLabelText('Relationship type name new_relation'));
     for (const [key, value] of Object.entries({
       from: 'requirements/*',
       to: 'product',
@@ -394,7 +394,7 @@ describe('complete Schema Structure settings', () => {
         },
       },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Remove relation type depends_on' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove relationship type depends_on' }));
     expect(saved().relationTypes).toEqual({});
   });
 
@@ -466,7 +466,7 @@ it('keeps Schema-wide rules collapsed and preserves validation while their setti
     },
     true
   );
-  const name = screen.getByLabelText('Relation type name depends');
+  const name = screen.getByLabelText('Relationship type name depends');
   expect(name).not.toBeVisible();
   fireEvent.click(screen.getByText('depends', { selector: 'strong' }));
   expect(name).toBeVisible();

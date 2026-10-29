@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, CircleHelp, Layers, Pencil } from 'lucide-react';
+import { ArrowUpRight, ChevronDown, CircleHelp, Layers, Pencil } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useId, useState } from 'react';
@@ -32,12 +32,12 @@ export function SchemaSourceBadge({
   const label = provenance.pending
     ? 'Checking source'
     : multiple
-      ? `${provenance.sources.length} sources${provenance.local ? ' + local edits' : ''}`
+      ? `${provenance.sources.length} sources${provenance.local ? ' + workspace edits' : ''}`
       : first
-        ? `${identity?.name ?? first.name} @ ${first.version}${provenance.local ? ' + local edits' : ''}`
+        ? `${identity?.name ?? first.name} @ ${first.version}${provenance.local ? ' + workspace edits' : ''}`
         : provenance.local
-          ? 'Local edit'
-          : 'Source not recorded';
+          ? 'Modified in this workspace'
+          : 'Origin unknown';
   const logo = identity?.logo;
   const renderSourceLinks = (source: SchemaNodeProvenance['sources'][number]) => {
     const info = source.pin ? identities[schemaSourceKey(source.pin)] : undefined;
@@ -46,11 +46,11 @@ export function SchemaSourceBadge({
     return (
       <div className={styles.links}>
         <Link href={schemaSourceReleaseHref(source.pin)} target="_blank" rel="noopener noreferrer">
-          View release ↗
+          View source version <ArrowUpRight size={14} aria-hidden="true" />
         </Link>
         {projectId ? (
           <Link href={getProjectIdRepoPath(projectId)} target="_blank" rel="noopener noreferrer">
-            Source project ↗
+            Open source project <ArrowUpRight size={14} aria-hidden="true" />
           </Link>
         ) : null}
       </div>
@@ -62,7 +62,7 @@ export function SchemaSourceBadge({
         <button
           type="button"
           className={`${styles.badge} nodrag nopan`}
-          aria-label={`Source for ${path}: ${label}`}
+          aria-label={`Origin for ${path}: ${label}`}
           title={label}
           onClick={(event) => event.stopPropagation()}
           onPointerDown={(event) => event.stopPropagation()}
@@ -105,7 +105,7 @@ export function SchemaSourceBadge({
         onKeyDown={(event) => event.stopPropagation()}
       >
         <div className={styles.header}>
-          <h3>Source</h3>
+          <h3>Origin</h3>
           <code>{path}</code>
         </div>
         {provenance.pending ? <p>Checking sources for this definition…</p> : null}
@@ -135,7 +135,7 @@ export function SchemaSourceBadge({
         {provenance.local ? (
           <p className={styles.local}>
             <Pencil aria-hidden="true" />
-            {first ? 'Locally modified' : 'Created or changed locally.'}
+            {first ? 'Modified in this workspace' : 'Created or modified in this workspace.'}
           </p>
         ) : null}
         {provenance.unknown ? (
@@ -156,7 +156,7 @@ export function SchemaSourceBadge({
                 aria-controls={detailsId}
                 onClick={() => setExpanded(!expanded)}
               >
-                Details <ChevronDown aria-hidden="true" />
+                Technical details <ChevronDown aria-hidden="true" />
               </button>
             </div>
             <div id={detailsId} hidden={!expanded} className={styles.expandedDetails}>
@@ -178,7 +178,7 @@ export function SchemaSourceBadge({
                         target="_blank"
                         rel="noopener noreferrer"
                       >
-                        View source Commit ↗
+                        View source commit <ArrowUpRight size={14} aria-hidden="true" />
                       </Link>
                       <code>{source.commitRef.sourcePath}</code>
                     </div>

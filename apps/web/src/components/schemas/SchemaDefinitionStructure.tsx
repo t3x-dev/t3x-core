@@ -73,9 +73,11 @@ export function SchemaDefinitionStructure({
   onChange,
   onValidationChange,
   showNodes = true,
+  embedded = false,
   progressive = false,
 }: {
   showNodes?: boolean;
+  embedded?: boolean;
   progressive?: boolean;
   value: Definition;
   onChange: (value: Definition) => void;
@@ -98,7 +100,7 @@ export function SchemaDefinitionStructure({
   const rules = Array.isArray(value.rules) ? value.rules.map(record) : [];
   return (
     <reportErrorContext.Provider value={reportError}>
-      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4">
+      <div className={embedded ? 'space-y-6' : 'min-h-0 flex-1 space-y-6 overflow-y-auto p-4'}>
         {showNodes && value.yschema !== undefined ? (
           <details className={panelClass}>
             <summary className={disclosureClass}>Schema metadata (read-only)</summary>
@@ -121,10 +123,10 @@ export function SchemaDefinitionStructure({
             onChange={(nodes) => onChange({ ...value, nodes })}
           />
         ) : null}
-        <section aria-label="Relation types" className="space-y-3">
+        <section aria-label="Relationship types" className="space-y-3">
           <SectionHeader
-            title="Relation types"
-            action="Add relation type"
+            title="Relationship types"
+            action="Add relationship type"
             onAdd={() => {
               const name = freshKey(relations, 'new_relation');
               setNewItems((items) => [...items, `relation:${name}`]);
@@ -141,7 +143,7 @@ export function SchemaDefinitionStructure({
             </p>
           ) : null}
           {progressive && !Object.keys(relations).length ? (
-            <p className="text-xs text-[var(--text-secondary)]">No relation types defined.</p>
+            <p className="text-xs text-[var(--text-secondary)]">No relationship types defined.</p>
           ) : null}
           {Object.entries(relations).map(([name, relation]) => (
             <DefinitionDisclosure
@@ -154,7 +156,7 @@ export function SchemaDefinitionStructure({
               <article aria-label={`Relation ${name}`} className={panelClass} key={name}>
                 <div className="flex items-start gap-2">
                   <NameField
-                    label={`Relation type name ${name}`}
+                    label={`Relationship type name ${name}`}
                     name={name}
                     names={Object.keys(relations)}
                     onChange={(next) =>
@@ -162,7 +164,7 @@ export function SchemaDefinitionStructure({
                     }
                   />
                   <RemoveButton
-                    label={`Remove relation type ${name}`}
+                    label={`Remove relationship type ${name}`}
                     onClick={() =>
                       onChange({ ...value, relationTypes: withField(relations, name, undefined) })
                     }
@@ -174,13 +176,13 @@ export function SchemaDefinitionStructure({
                   fields={
                     progressive
                       ? [
-                          { key: 'from', label: 'From objects' },
-                          { key: 'to', label: 'To objects' },
+                          { key: 'from', label: 'From node' },
+                          { key: 'to', label: 'To node' },
                           { key: 'description', label: 'Description', kind: 'text' },
                           { key: 'contentGuidance', label: 'Usage guidance', kind: 'text' },
                           {
                             key: 'acyclic',
-                            label: 'Prevent cycles',
+                            label: 'Prevent circular relationships',
                             hint: 'Disallow chains that lead back to their starting object.',
                             kind: 'boolean',
                           },
@@ -225,9 +227,7 @@ export function SchemaDefinitionStructure({
               key={String(rule.id)}
               enabled={progressive}
               label={String(rule.id)}
-              summary={
-                rule.kind === 'required_relation' ? 'Required connection' : 'Written guideline'
-              }
+              summary={rule.kind === 'required_relation' ? 'Required relationship' : 'Guideline'}
               initiallyOpen={newItems.includes(`rule:${rule.id}`)}
             >
               <RuleEditor
@@ -555,7 +555,7 @@ function NodeEditor({
                   )
                 }
               >
-                <option value="">Not specified</option>
+                <option value="">Not set</option>
                 <option value="defined">Defined child nodes</option>
                 <option value="any">Any children</option>
               </select>
@@ -787,11 +787,11 @@ function RuleEditor({
         >
           <option value="">
             {friendly
-              ? 'Written guideline (not automatically checked)'
+              ? 'Guideline — not automatically checked'
               : 'Reserved rule (description only)'}
           </option>
           <option value="required_relation">
-            {friendly ? 'Required connection' : 'required_relation'}
+            {friendly ? 'Required relationship' : 'required_relation'}
           </option>
         </select>
       </label>
@@ -803,11 +803,11 @@ function RuleEditor({
             ? [
                 {
                   key: 'relationType',
-                  label: friendly ? 'Relation type' : undefined,
+                  label: friendly ? 'Relationship type' : undefined,
                   options: Object.keys(relations),
                 },
-                { key: 'from', label: friendly ? 'From objects' : undefined },
-                { key: 'to', label: friendly ? 'To objects' : undefined },
+                { key: 'from', label: friendly ? 'From node' : undefined },
+                { key: 'to', label: friendly ? 'To node' : undefined },
                 { key: 'description', label: friendly ? 'Description' : undefined, kind: 'text' },
               ]
             : [{ key: 'description', label: friendly ? 'Description' : undefined, kind: 'text' }]
@@ -958,10 +958,10 @@ function DefinitionField({
             )
           }
         >
-          <option value="">Not specified</option>
+          <option value="">Not set</option>
           {(field.options ?? ['true', 'false']).map((option) => (
             <option key={option} value={option}>
-              {option}
+              {field.kind === 'boolean' ? (option === 'true' ? 'Yes' : 'No') : option}
             </option>
           ))}
         </select>
@@ -1093,11 +1093,21 @@ export function SchemaFieldValidation({
 
 export { NameField as SchemaFieldName };
 
+export const schemaFieldTypeLabels: Record<string, string> = {
+  string: 'Text (string)',
+  number: 'Number',
+  integer: 'Integer',
+  boolean: 'True / false (boolean)',
+  array: 'List (array)',
+  object: 'Object',
+  null: 'Null',
+};
+
 const propertyLabels: Record<string, string> = {
   description: 'Description',
-  contentGuidance: 'Writing guidance',
-  contentKind: 'Content form',
-  provenanceRequired: 'Require source evidence',
+  contentGuidance: 'Content guidance',
+  contentKind: 'Content structure',
+  provenanceRequired: 'Require supporting evidence',
   enum: 'Allowed values',
   const: 'Fixed value',
   default: 'Default value',
@@ -1107,24 +1117,24 @@ const propertyLabels: Record<string, string> = {
   minLength: 'Minimum length',
   maxLength: 'Maximum length',
   maxWords: 'Maximum words',
-  pattern: 'Text pattern',
-  format: 'Format label',
-  gapQuestion: 'Question when missing',
+  pattern: 'Text pattern (regex)',
+  format: 'Format hint',
+  gapQuestion: 'Prompt for missing information',
   repeated: 'Allow multiple items',
 };
 const propertyHints: Record<string, string> = {
   enum: 'Only these values are accepted.',
   const: 'Every value must match this exactly.',
-  default: 'A suggested value for review; it does not overwrite existing content.',
+  default: 'Suggested when preparing changes; not filled in automatically.',
   maxWords: 'Counts words separated by whitespace, not individual Chinese characters.',
   pattern: 'A regular expression that the text must match.',
-  format: 'A format label only; it does not enforce validation.',
-  provenanceRequired: 'Require supporting source evidence for this field.',
+  format: 'Describes the expected format; does not validate it.',
+  provenanceRequired: 'Require supporting evidence for this field.',
   gapQuestion: 'The question to ask when required information is missing.',
 };
 const propertyGroups = [
   {
-    label: 'Writing guidance',
+    label: 'Content guidance',
     keys: ['contentGuidance', 'contentKind', 'examples', 'gapQuestion'],
   },
   {
@@ -1142,7 +1152,7 @@ const propertyGroups = [
       'repeated',
     ],
   },
-  { label: 'Source evidence', keys: ['provenanceRequired'] },
+  { label: 'Supporting evidence', keys: ['provenanceRequired'] },
   { label: 'Advanced', keys: ['format'] },
 ];
 
@@ -1185,10 +1195,10 @@ export function SchemaFieldProperties({
       />
       {configured.length ? (
         <section
-          aria-label="Configured field settings"
+          aria-label="Current field settings"
           className="space-y-3 border-t border-[var(--stroke-divider)] pt-3"
         >
-          <h4 className="text-xs font-medium">Configured settings</h4>
+          <h4 className="text-xs font-medium">Current settings</h4>
           <Fields context={context} value={value} fields={configured} onChange={onChange} />
         </section>
       ) : (
@@ -1198,7 +1208,7 @@ export function SchemaFieldProperties({
       )}
       {available.length ? (
         <label className="block space-y-1 text-xs">
-          <span>Add setting</span>
+          <span>Add a setting</span>
           <select
             className={inputClass}
             value=""
@@ -1226,7 +1236,7 @@ export function SchemaFieldProperties({
       {kind === 'slot' ? (
         <details className="space-y-3 border-t border-[var(--stroke-divider)] pt-3">
           <summary className="cursor-pointer text-xs text-[var(--text-secondary)]">
-            Writing operation hints
+            YOps hints (advanced)
             {Object.keys(record(value.yopsHint)).length ? ' · configured' : ''}
           </summary>
           <p className="text-xs text-[var(--text-secondary)]">
@@ -1238,7 +1248,7 @@ export function SchemaFieldProperties({
             fields={[
               {
                 key: 'preferredOp',
-                label: 'Preferred operation',
+                label: 'Preferred YOps operation',
                 options: ['define', 'set', 'populate', 'append'],
               },
               { key: 'path', label: 'Target path' },

@@ -121,10 +121,12 @@ export function SchemaFieldTree({
         {projectId && sourcesOpen ? (
           <aside className={styles.importSources} aria-label="Available Schema sources">
             <div className={styles.sourceHeading}>
-              <strong>Sources</strong>
+              <strong>Schema sources</strong>
             </div>
             {sourceManagement}
-            <p>Drag nodes or objects into the draft.</p>
+            <p>
+              Drag a node or object field into your schema, or select one to choose where to add it.
+            </p>
             {!availableSources.length ? (
               <p>
                 {sourceManagement
@@ -151,7 +153,7 @@ export function SchemaFieldTree({
         ) : null}
         <div className={styles.fieldMain}>
           <div className={styles.columns}>
-            <span>Field</span>
+            <span>Name</span>
             <span>Type</span>
             <span className={styles.requiredColumn}>Required</span>
             <span className="sr-only">Actions</span>
@@ -162,7 +164,7 @@ export function SchemaFieldTree({
               <Popover open={moveOpen} onOpenChange={setMoveOpen}>
                 <PopoverTrigger asChild>
                   <Button variant="canvas-outline" size="sm" disabled={disabled}>
-                    {source ? 'Import to…' : 'Move to…'}
+                    {source ? 'Add to draft…' : 'Move to…'}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent align="start" className={styles.moveMenu}>
@@ -175,7 +177,7 @@ export function SchemaFieldTree({
                       onChange={(event) => setDestination(event.target.value)}
                     >
                       <option value="">Choose a node</option>
-                      {active.row.kind === 'node' ? <option value="root">Root</option> : null}
+                      {active.row.kind === 'node' ? <option value="root">Top level</option> : null}
                       {targets.map((row) => (
                         <option key={row.path} value={row.path}>
                           {row.semanticPath}
@@ -190,7 +192,7 @@ export function SchemaFieldTree({
                       if (canMove) transfer(active, target ?? null);
                     }}
                   >
-                    {source ? 'Import here' : 'Move here'}
+                    {source ? 'Add here' : 'Move here'}
                   </Button>
                 </PopoverContent>
               </Popover>
@@ -198,7 +200,7 @@ export function SchemaFieldTree({
           ) : (
             <div className={styles.moveToolbar}>
               <span className={styles.selectionHint}>
-                {rows.length ? 'Select a field to edit' : 'Schema structure'}
+                {rows.length ? 'Select a node or field to edit' : 'Schema structure'}
               </span>
             </div>
           )}
@@ -233,7 +235,7 @@ export function SchemaFieldTree({
               {emptyContent ??
                 (rows.length
                   ? 'No fields match this search.'
-                  : 'No nodes yet. Add a node or drag one from Sources.')}
+                  : 'No nodes yet. Add a node or drag one from Schema sources.')}
             </div>
           ) : null}
         </div>
@@ -301,7 +303,7 @@ function RootDropTarget({ disabled, importing }: { disabled: boolean; importing:
       className={styles.rootDrop}
       data-drop-target={isOver || undefined}
     >
-      {importing ? 'Drop a node here to add it at the root' : 'Move to root'}
+      {importing ? 'Drop a node here to add it at the top level' : 'Move to top level'}
     </div>
   );
 }

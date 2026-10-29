@@ -116,7 +116,7 @@ export function useSchemaNavigationGuard(options: {
     setError('');
     try {
       if (save && !(await current.current.save())) {
-        setError('The candidate could not be saved. Your edits are still here.');
+        setError('The schema draft could not be saved. Your edits are still here.');
         return;
       }
       if (!save) current.current.discard();
@@ -140,15 +140,13 @@ export function useSchemaNavigationGuard(options: {
       >
         <DialogContent showCloseButton={!saving}>
           <DialogHeader>
-            <DialogTitle>Save Schema edits before leaving?</DialogTitle>
-            <DialogDescription>
-              These edits have not been saved to the Workspace candidate.
-            </DialogDescription>
+            <DialogTitle>Save schema draft before leaving?</DialogTitle>
+            <DialogDescription>Your schema changes have not been saved.</DialogDescription>
           </DialogHeader>
           {!options.canSave ? (
             <p className="text-sm">
-              Resolve invalid fields or a stale candidate before saving. You can stay here or
-              discard the edits.
+              Resolve invalid fields or reload the latest schema draft before saving. You can stay
+              here or discard the edits.
             </p>
           ) : null}
           {error ? (

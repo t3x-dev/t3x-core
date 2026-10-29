@@ -1,0 +1,64 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--stroke-divider);
+}
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 52px;
+  flex: none;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--stroke-divider);
+}
+.header h2 {
+  min-width: 0;
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+}
+.action,
+.action button {
+  width: 28px;
+  height: 28px;
+  flex: none;
+}
+.action button {
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+}
+.action button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.action button:disabled {
+  opacity: 0.5;
+}
+.context {
+  display: flex;
+  align-items: center;
+  height: 56px;
+  flex: none;
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.context p {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.body {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  padding: 0 16px 16px;
+}

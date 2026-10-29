@@ -4,6 +4,7 @@ import {
   StudioPublishInputSchema,
   type StudioPublishResult,
 } from '@t3x-dev/api-client';
+import { ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -118,7 +119,7 @@ export function StudioPublishDialog({
     >
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Publish public Schema</DialogTitle>
+          <DialogTitle>Publish schema to public catalog</DialogTitle>
           <DialogDescription>
             Publish this definition to the shared catalog alongside Starters. Anyone can read and
             reuse it without access to this repository. The immutable release survives repository
@@ -133,13 +134,15 @@ export function StudioPublishDialog({
             <p className="break-all font-mono text-xs">Artifact Hash: {result.source.hash}</p>
             <p className="break-all font-mono text-xs">Schema Hash: {result.schemaHash}</p>
             <Button asChild>
-              <Link href={releaseHref}>Open exact release in Browse</Link>
+              <Link href={releaseHref}>
+                View published version <ArrowUpRight size={14} aria-hidden="true" />
+              </Link>
             </Button>
           </section>
         ) : (
           <form className="grid gap-3" onSubmit={(event) => void submit(event)}>
             <label htmlFor={`${id}-name`} className="grid gap-1 text-sm">
-              Canonical name
+              Schema identifier
               <Input
                 id={`${id}-name`}
                 value={name}
@@ -159,7 +162,7 @@ export function StudioPublishDialog({
               />
             </label>
             <label htmlFor={`${id}-title`} className="grid gap-1 text-sm">
-              Title
+              Display name
               <Input
                 id={`${id}-title`}
                 value={title}
@@ -190,7 +193,7 @@ export function StudioPublishDialog({
               />
             </label>
             <label htmlFor={`${id}-license`} className="grid gap-1 text-sm">
-              Reuse license
+              License
               <select
                 id={`${id}-license`}
                 className="h-9 rounded-md border bg-transparent px-3 text-sm"
@@ -235,7 +238,7 @@ export function StudioPublishDialog({
                 Cancel
               </Button>
               <Button type="submit" disabled={busy || !canPublish}>
-                {busy ? 'Publishing…' : 'Publish public version'}
+                {busy ? 'Publishing…' : 'Publish publicly'}
               </Button>
             </div>
           </form>

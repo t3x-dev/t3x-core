@@ -72,10 +72,10 @@ export function SchemaSourceCompositionDialog({
     >
       <DialogContent className="max-h-[85dvh] max-w-3xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Combine Schema sources</DialogTitle>
+          <DialogTitle>Combine schemas</DialogTitle>
           <DialogDescription>
-            Select pinned Schema and Module versions, resolve ownership conflicts, then save the
-            combined candidate with your current field edits.
+            Choose schema and module versions, resolve conflicting definitions, then save the
+            combined draft with your current field edits.
           </DialogDescription>
         </DialogHeader>
         <fieldset disabled={saving} className="space-y-3">
@@ -176,7 +176,7 @@ export function SchemaSourceCompositionDialog({
                       size="sm"
                       onClick={() => setChoices((value) => ({ ...value, [conflict.path]: side }))}
                     >
-                      Keep {side === 'current' ? 'my edit' : 'new definition'}
+                      {side === 'current' ? 'Keep my changes' : 'Use source definition'}
                     </Button>
                   </div>
                 ))}
@@ -232,7 +232,7 @@ export function SchemaSourceCompositionDialog({
               }
             }}
           >
-            {saving ? 'Saving…' : 'Save combined candidate'}
+            {saving ? 'Saving…' : 'Save combined draft'}
           </Button>
         </div>
       </DialogContent>

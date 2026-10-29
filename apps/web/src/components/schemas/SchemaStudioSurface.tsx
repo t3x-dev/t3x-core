@@ -1,20 +1,11 @@
 'use client';
 import type { StudioPreview } from '@t3x-dev/api-client';
-import { dump } from 'js-yaml';
-import { Box, ChevronDown, GitBranch } from 'lucide-react';
+import { ArrowUpRight, Box, ChevronDown, GitBranch } from 'lucide-react';
 import Link from 'next/link';
-import { type ReactNode, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -28,11 +19,11 @@ export function SchemaStudioSurface({
   hidden = false,
   dataEditor,
   editorInvalid = false,
+  canEditDefinition = false,
   contextLocked = false,
   sourceHref,
   branch,
   draftStatus,
-  bindingStatus,
   workspaceTitle = 'No draft workspace',
   workspaceId = '',
   workspaces = [],
@@ -49,7 +40,7 @@ export function SchemaStudioSurface({
   canSave = false,
   onInspect,
   canReview = false,
-  onDownload,
+  hasUnsavedChanges = false,
   onUndo,
   canUndo = false,
   onRules,
@@ -57,18 +48,16 @@ export function SchemaStudioSurface({
   onDescribe,
   onDiscard,
   canDiscard = false,
-  sourcesOpen = false,
-  onToggleSources,
 }: {
   navigation?: ReactNode;
   hidden?: boolean;
   editorInvalid?: boolean;
+  canEditDefinition?: boolean;
   dataEditor?: () => ReactNode;
   contextLocked?: boolean;
   sourceHref?: string;
   branch?: string;
   draftStatus?: string;
-  bindingStatus?: string;
   workspaceTitle?: string;
   workspaceId?: string;
   workspaces?: Array<{ id: string; title: string }>;
@@ -85,7 +74,7 @@ export function SchemaStudioSurface({
   canSave?: boolean;
   onInspect?: () => void;
   canReview?: boolean;
-  onDownload?: () => void;
+  hasUnsavedChanges?: boolean;
   onUndo?: () => void;
   canUndo?: boolean;
   onRules?: () => void;
@@ -93,16 +82,7 @@ export function SchemaStudioSurface({
   onDescribe?: () => void;
   onDiscard?: () => void;
   canDiscard?: boolean;
-  sourcesOpen?: boolean;
-  onToggleSources?: () => void;
 }) {
-  const [yamlOpen, setYamlOpen] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const yaml = useMemo(
-    () => (data?.schema ? dump(data.schema, { noRefs: true, lineWidth: 100 }) : ''),
-    [data?.schema]
-  );
-
   return (
     <main
       aria-label="Schema editor"
@@ -151,27 +131,49 @@ export function SchemaStudioSurface({
             <div className={s.toolbarActions}>
               <fieldset aria-label="Schema save and review" className={s.saveGroup}>
                 {draftStatus ? <output className={s.draftStatus}>{draftStatus}</output> : null}
-                {onUndo ? (
-                  <Button variant="canvas-outline" size="sm" disabled={!canUndo} onClick={onUndo}>
-                    Undo
-                  </Button>
+                {onUndo || onDiscard ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="canvas-outline"
+                        size="sm"
+                        aria-label="Undo and discard"
+                        disabled={!canUndo && !canDiscard}
+                      >
+                        Undo <ChevronDown size={14} aria-hidden="true" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {onUndo ? (
+                        <DropdownMenuItem disabled={!canUndo} onSelect={onUndo}>
+                          Undo last change
+                        </DropdownMenuItem>
+                      ) : null}
+                      {onUndo && onDiscard ? <DropdownMenuSeparator /> : null}
+                      {onDiscard ? (
+                        <DropdownMenuItem disabled={!canDiscard} onSelect={onDiscard}>
+                          Discard all unsaved changes
+                        </DropdownMenuItem>
+                      ) : null}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 ) : null}
                 <Button variant="canvas-outline" size="sm" disabled={!canSave} onClick={onSave}>
-                  Save edits
+                  Save draft
                 </Button>
                 <Button
                   variant="commit"
                   size="sm"
-                  aria-label="Review Schema changes"
+                  aria-label={hasUnsavedChanges ? 'Save and review' : 'Review changes'}
                   disabled={!canReview}
                   onClick={onReview}
                 >
-                  Review changes
+                  {hasUnsavedChanges ? 'Save and review' : 'Review changes'}
                 </Button>
               </fieldset>
               {sourceHref ? (
                 <Link href={sourceHref} className={s.navLink}>
-                  Back to source
+                  Back to source <ArrowUpRight size={14} aria-hidden="true" />
                 </Link>
               ) : null}
               <DropdownMenu>
@@ -181,43 +183,32 @@ export function SchemaStudioSurface({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  {onToggleSources ? (
-                    <DropdownMenuCheckboxItem
-                      checked={sourcesOpen}
-                      onCheckedChange={onToggleSources}
-                    >
-                      Schema sources
-                    </DropdownMenuCheckboxItem>
-                  ) : null}
                   {onRules ? (
                     <DropdownMenuItem disabled={!canOpenRules} onSelect={onRules}>
-                      Relations & rules
+                      Relationships & rules…
                     </DropdownMenuItem>
                   ) : null}
-                  <DropdownMenuItem onSelect={() => setDetailsOpen(true)}>
-                    Schema details
+                  <DropdownMenuItem disabled={!canEditDefinition} onSelect={onEditDefinition}>
+                    Edit YAML…{editorInvalid ? ' (fix field errors first)' : ''}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setYamlOpen(true)}>View YAML</DropdownMenuItem>
                   {onPublish ? (
                     <DropdownMenuItem onSelect={onPublish} disabled={!canPublish}>
-                      Publish public Schema…
+                      Publish to public catalog…
                     </DropdownMenuItem>
                   ) : null}
                   {onInspect ? (
                     <DropdownMenuItem
                       onSelect={onInspect}
+                      title="Open schema checks and affected content in Workspace Review."
                       disabled={!data || contextLocked || pending}
                     >
-                      Schema checks & impact
+                      View checks and impact <ArrowUpRight size={14} aria-hidden="true" />
                     </DropdownMenuItem>
                   ) : null}
                   <DropdownMenuSeparator />
                   {onDescribe ? (
-                    <DropdownMenuItem onSelect={onDescribe}>Describe changes…</DropdownMenuItem>
-                  ) : null}
-                  {onDiscard ? (
-                    <DropdownMenuItem disabled={!canDiscard} onSelect={onDiscard}>
-                      Discard changes
+                    <DropdownMenuItem onSelect={onDescribe}>
+                      Edit change description…
                     </DropdownMenuItem>
                   ) : null}
                 </DropdownMenuContent>
@@ -237,70 +228,6 @@ export function SchemaStudioSurface({
           <div className={s.dataEditor}>{dataEditor?.()}</div>
         </section>
       </div>
-      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Schema details</DialogTitle>
-            <DialogDescription>Identity of the current Schema candidate.</DialogDescription>
-          </DialogHeader>
-          <p className="break-all text-xs text-[var(--text-secondary)]">
-            {bindingStatus || 'No Schema selected.'}
-          </p>
-          {data ? (
-            <dl className="space-y-2 text-xs">
-              <dt>Definition hash</dt>
-              <dd className="break-all font-mono">{data.schemaHash}</dd>
-            </dl>
-          ) : null}
-        </DialogContent>
-      </Dialog>
-      <Dialog open={yamlOpen} onOpenChange={setYamlOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Schema YAML</DialogTitle>
-            <DialogDescription>
-              View or download the current candidate definition.
-            </DialogDescription>
-          </DialogHeader>
-          <div className={s.sourceToolbar}>
-            <p className={s.feedback}>Read-only preview of the current Schema candidate.</p>
-            {onEditDefinition ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setYamlOpen(false);
-                  onEditDefinition?.();
-                }}
-                disabled={contextLocked || pending}
-              >
-                Edit YAML
-              </Button>
-            ) : null}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onDownload}
-              disabled={!yaml || !onDownload || pending || editorInvalid}
-            >
-              Download YAML
-            </Button>
-          </div>
-          {pending ? <output className={s.feedback}>Updating definition preview…</output> : null}
-          {editorInvalid ? (
-            <p className={s.feedback}>Fix the field errors to update this preview.</p>
-          ) : null}
-          {yaml ? (
-            <pre className={s.yaml}>
-              <code>{yaml}</code>
-            </pre>
-          ) : (
-            <p className={s.feedback}>
-              No definition to preview yet. Choose sources to get started.
-            </p>
-          )}
-        </DialogContent>
-      </Dialog>
     </main>
   );
 }

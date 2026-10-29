@@ -1,7 +1,6 @@
 'use client';
 
 import type { SchemaPreparationTarget, StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
-import { dump } from 'js-yaml';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -38,10 +37,10 @@ import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import { SchemaContentPreparationDialog } from './SchemaContentPreparationDialog';
 import { SchemaDataEditor } from './SchemaDataEditor';
-import { SchemaDefinitionWorkbench } from './SchemaDefinitionWorkbench';
 import { SchemaSourceCompositionDialog } from './SchemaSourceCompositionDialog';
 import { SchemaSourceManager } from './SchemaSourceManager';
 import { SchemaStudioSurface } from './SchemaStudioSurface';
+import { SchemaYamlEditor } from './SchemaYamlEditor';
 import { StudioPublishDialog } from './StudioPublishDialog';
 import type { SchemaEditorNavigation } from './useSchemaNavigationGuard';
 
@@ -191,7 +190,7 @@ export function SchemaStudioExperience({
   const legacyView = params?.get('schemaView') === 'active';
   const [definitionOpen, setDefinitionOpen] = useState(false);
   const [sourceManagerOpen, setSourceManagerOpen] = useState(false);
-  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(true);
   const [editorActions, setEditorActions] = useState({ undo: false, rules: false, discard: false });
   const [sourceError, setSourceError] = useState<string>();
   const [compositionRequest, setCompositionRequest] = useState<{
@@ -223,6 +222,8 @@ export function SchemaStudioExperience({
     candidateId: string;
     revision: number;
   }>();
+  const yamlSavedRef = useRef<{ candidateId: string; revision: number } | undefined>(undefined);
+  const [yamlInitial, setYamlInitial] = useState<Record<string, unknown>>();
   const [publishReview, setPublishReview] = useState<StudioPreview>();
   const [preparation, setPreparation] = useState<{
     workspaceId: string;
@@ -444,7 +445,7 @@ export function SchemaStudioExperience({
     savedEditUsesBinding,
   ]);
   useEffect(() => {
-    if (schemaEdit.loading || candidates.loading || dataDirtyRef.current) return;
+    if (schemaEdit.loading || candidates.loading || dataDirtyRef.current || definitionOpen) return;
     if (recoveredEditIdentity === editIdentity) return;
     if (savedEditIsApplied || savedEditUsesBinding) setSelection([]);
     else if (schemaEdit.candidate?.baseSources?.length) {
@@ -488,6 +489,7 @@ export function SchemaStudioExperience({
     projectId,
     recoveredCandidateKey,
     recoveredEditIdentity,
+    definitionOpen,
     dataDirty,
     schemaEdit.candidate,
     schemaEdit.loading,
@@ -620,7 +622,7 @@ export function SchemaStudioExperience({
     });
   }
 
-  function inspectDefinition() {
+  function inspectDefinition(saved = false) {
     if (!persistedTarget) {
       setError('Select a valid Workspace to inspect Schema checks.');
       return;
@@ -631,7 +633,7 @@ export function SchemaStudioExperience({
       router.push(
         `${schemaReviewHref(projectId, persistedTarget.id, undefined, persistedTarget.targetBranch)}&${diagnosticsParams}`
       );
-    if (navigationRef.current) navigationRef.current.requestNavigation(navigate);
+    if (!saved && navigationRef.current) navigationRef.current.requestNavigation(navigate);
     else navigate();
   }
 
@@ -639,16 +641,16 @@ export function SchemaStudioExperience({
   const activeReviewScope = useRef(reviewScope);
   activeReviewScope.current = reviewScope;
 
-  async function openReview() {
-    if (applying || editorInvalid || !canReview) return;
+  async function openReview(savedEdit?: { candidateId: string; revision: number }) {
+    if (applying || (!savedEdit && (editorInvalid || !canReview))) return;
     if (!persistedTarget) return inspectDefinition();
     setApplying(true);
     setError(undefined);
     const targetId = persistedTarget.id;
     const isCurrent = () => mounted.current && activeReviewScope.current === reviewScope;
     try {
-      let edit = savedCandidateRef;
-      if (dataDirty) {
+      let edit = savedEdit ?? savedCandidateRef;
+      if (!savedEdit && dataDirty) {
         if (!(await navigationRef.current?.save?.())) return;
         const saved = await reviewFlow.readEdit(targetId);
         if (!saved) throw new Error('Saved Schema changes are unavailable. Retry saving.');
@@ -664,7 +666,8 @@ export function SchemaStudioExperience({
       });
       if (!isCurrent()) return;
       if (!fresh.report.valid || !fresh.adoption.allowed || fresh.impact?.status === 'blocked') {
-        inspectDefinition();
+        if (savedEdit) setDefinitionOpen(false);
+        inspectDefinition(!!savedEdit);
         return;
       }
       if (!fresh.workspace) throw new Error('The target Workspace is unavailable.');
@@ -689,6 +692,7 @@ export function SchemaStudioExperience({
         const checked = await reviewFlow.previewContent(targetId, input);
         if (!isCurrent()) return;
         if (!checked.canPrepare) {
+          if (savedEdit) setDefinitionOpen(false);
           setPreparation({ workspaceId: targetId, revision: fresh.workspace.revision, target });
           return;
         }
@@ -701,8 +705,12 @@ export function SchemaStudioExperience({
       }
       if (!isCurrent()) return;
       const href = await reviewFlow.review(targetId);
-      if (isCurrent()) router.push(href);
+      if (isCurrent()) {
+        if (savedEdit) setDefinitionOpen(false);
+        router.push(href);
+      }
     } catch (cause) {
+      if (savedEdit) throw cause;
       if (isCurrent())
         setError(cause instanceof Error ? cause.message : 'Could not prepare Review.');
     } finally {
@@ -712,19 +720,6 @@ export function SchemaStudioExperience({
         preview.refresh();
       }
     }
-  }
-
-  function downloadDefinition() {
-    if (!data?.schema) return;
-    const blob = new Blob([dump(data.schema, { noRefs: true, lineWidth: 100 })], {
-      type: 'application/yaml',
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = 'schema-studio-definition.yaml';
-    anchor.click();
-    URL.revokeObjectURL(url);
   }
 
   async function saveDefinition(
@@ -739,7 +734,7 @@ export function SchemaStudioExperience({
     const saved = await schemaEdit.save({
       workspaceId: persistedTarget.id,
       candidateIds: [...selection],
-      ifRevision: schemaEdit.candidate?.revision ?? 0,
+      ifRevision: savedCandidateRef?.revision ?? schemaEdit.candidate?.revision ?? 0,
       retryKey: `studio:${persistedTarget.id}:${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
       intent,
       origin: 'studio',
@@ -753,14 +748,15 @@ export function SchemaStudioExperience({
           }
         : {}),
     });
+    setUsingSavedCandidate(true);
     setLocalContribution(structuredClone(saved.candidate.localContribution));
     setSchemaDefinition(undefined);
     setSavedCandidateRef({
       candidateId: saved.candidate.candidateId,
       revision: saved.candidate.revision,
     });
-    setDefinitionOpen(false);
     await workspaces.refresh();
+    return { candidateId: saved.candidate.candidateId, revision: saved.candidate.revision };
   }
 
   function changeDefinitionOpen(open: boolean) {
@@ -934,6 +930,7 @@ export function SchemaStudioExperience({
             showSaveAction={false}
             externalActions
             sourcesOpen={sourcesOpen}
+            onToggleSources={() => setSourcesOpen((open) => !open)}
             onActionsAvailabilityChange={setEditorActions}
             onSaveAvailabilityChange={setDataCanSave}
             onValidationChange={setEditorInvalid}
@@ -1049,25 +1046,18 @@ export function SchemaStudioExperience({
           dataDirty
             ? 'Unsaved changes'
             : workflow.rejected
-              ? 'This revision was rejected · Draft retained'
+              ? 'Changes rejected · draft kept'
               : workflow.matchesReview && workflow.hasChanges
-                ? 'Review prepared · awaiting decision'
+                ? 'Ready for review'
                 : (savedCandidateRef || activeCandidate) && workflow.hasChanges
-                  ? 'Changes saved · not committed'
+                  ? 'Draft saved · not committed'
                   : draftView?.hasChanges === false && draftView.basis.refHead
                     ? `Committed · ${draftView.basis.refHead.slice(7, 19)}`
                     : draftView?.hasChanges === true
-                      ? 'Saved to Draft · not committed'
+                      ? 'Draft saved · not committed'
                       : draftView?.hasChanges === false
-                        ? 'No pending changes'
+                        ? 'No changes to review'
                         : undefined
-        }
-        bindingStatus={
-          persistedTarget
-            ? currentBinding
-              ? `Draft Schema: ${currentBinding.schemaName ?? currentBinding.canonicalName} · ${currentBinding.version}`
-              : 'No Schema applied to this Workspace.'
-            : undefined
         }
         workspaceTitle={selectedWorkspaceTitle}
         workspaceId={workspaceId}
@@ -1079,31 +1069,39 @@ export function SchemaStudioExperience({
           candidates.error || schemaEdit.error || preview.error || workspaces.error || undefined
         }
         data={data}
-        onEditDefinition={
-          !dataDirty &&
+        canEditDefinition={Boolean(
           persistedTarget &&
-          (selection.length || currentBinding || creatingBlank || activeCandidate)
-            ? () => {
-                if (!basePreview.data || !data) return;
-                setEditorBase({
-                  schema: structuredClone(
-                    activeCandidate?.baseDefinition ??
-                      basePreview.data.workspace?.boundSchema ??
-                      basePreview.data.schema
-                  ),
-                  hash: activeCandidate?.baseDefinition
-                    ? String(activeCandidate.authoringDraft?.base.schemaHash)
-                    : basePreview.data.schemaHash,
-                  initial: structuredClone(
-                    !hasSchemaEdit && basePreview.data.workspace?.boundSchema
-                      ? basePreview.data.workspace.boundSchema
-                      : data.schema
-                  ),
-                });
-                setDefinitionOpen(true);
-              }
-            : undefined
-        }
+            (schemaDefinition || data) &&
+            (selection.length || currentBinding || creatingBlank || activeCandidate) &&
+            !editorInvalid &&
+            !applying &&
+            !schemaEdit.pending &&
+            !schemaEdit.loading &&
+            !definitionOpen
+        )}
+        onEditDefinition={() => {
+          const initial =
+            schemaDefinition ??
+            (!hasSchemaEdit && basePreview.data?.workspace?.boundSchema
+              ? basePreview.data.workspace.boundSchema
+              : data?.schema);
+          if (!initial || (!editorBase && !basePreview.data)) return;
+          if (!editorBase && basePreview.data)
+            setEditorBase({
+              schema: structuredClone(
+                activeCandidate?.baseDefinition ??
+                  basePreview.data.workspace?.boundSchema ??
+                  basePreview.data.schema
+              ),
+              hash: activeCandidate?.baseDefinition
+                ? String(activeCandidate.authoringDraft?.base.schemaHash)
+                : basePreview.data.schemaHash,
+              initial: structuredClone(initial),
+            });
+          yamlSavedRef.current = undefined;
+          setYamlInitial(structuredClone(initial));
+          setDefinitionOpen(true);
+        }}
         onReview={() => void openReview()}
         onSave={() => void navigationRef.current?.save?.()}
         canSave={dataCanSave && !definitionOpen && !applying && !schemaEdit.pending}
@@ -1122,8 +1120,6 @@ export function SchemaStudioExperience({
             !applying &&
             !preview.loading
         )}
-        sourcesOpen={sourcesOpen}
-        onToggleSources={() => setSourcesOpen((open) => !open)}
         onRules={() => navigationRef.current?.openRules?.()}
         canOpenRules={editorActions.rules && !definitionOpen && !applying}
         onUndo={() => navigationRef.current?.undo?.()}
@@ -1131,9 +1127,9 @@ export function SchemaStudioExperience({
         onDescribe={() => navigationRef.current?.describeChanges?.()}
         onDiscard={() => navigationRef.current?.discard?.()}
         canDiscard={editorActions.discard && !definitionOpen && !applying}
-        onInspect={inspectDefinition}
+        onInspect={() => inspectDefinition()}
         canReview={canReview}
-        onDownload={downloadDefinition}
+        hasUnsavedChanges={dataDirty}
       />
       {draftState.error ? (
         <p role="alert" className="px-4 py-2 text-sm">
@@ -1220,30 +1216,30 @@ export function SchemaStudioExperience({
           }}
         />
       ) : null}
-      <SchemaDefinitionWorkbench
-        baseSchema={definitionOpen ? editorBase?.schema : basePreview.data?.schema}
-        initialContribution={localContribution}
-        initialDefinition={schemaDefinition ?? (definitionOpen ? editorBase?.initial : undefined)}
-        onOpenChange={changeDefinitionOpen}
-        onPreview={(contribution) => {
-          if (contribution.yschema === '0.1') {
-            setSchemaDefinition(contribution);
-            setSourceMappings((current) => pruneSchemaMappings(current, contribution));
-          } else setLocalContribution(contribution);
-          setSavedCandidateRef(undefined);
-        }}
-        onSave={saveDefinition}
+      <SchemaYamlEditor
         open={definitionOpen}
-        pending={schemaEdit.pending}
-        previewError={preview.error}
-        recoveryLabel={
-          activeCandidate
-            ? `Recovered candidate revision ${activeCandidate.revision} · ${activeCandidate.origin.channel}`
-            : schemaEdit.loading
-              ? 'Recovering the Workspace candidate…'
-              : 'New Workspace-local candidate'
-        }
-        resultSchema={data?.schema}
+        onOpenChange={setDefinitionOpen}
+        workspaceTitle={selectedWorkspaceTitle}
+        initialDefinition={yamlInitial}
+        initiallyDirty={dataDirty}
+        onSave={async (definition, intent) => {
+          const saved = await saveDefinition(
+            definition,
+            intent,
+            pruneSchemaMappings(sourceMappings, definition)
+          );
+          yamlSavedRef.current = saved;
+          setEditorBase((current) =>
+            current ? { ...current, initial: structuredClone(definition) } : current
+          );
+          updateDataDirty(false);
+          setEditorInvalid(false);
+          setEditorReset((value) => value + 1);
+        }}
+        onReview={async () => {
+          if (!yamlSavedRef.current) throw new Error('Save the Schema before reviewing.');
+          await openReview(yamlSavedRef.current);
+        }}
       />
       {preparation ? (
         <SchemaContentPreparationDialog

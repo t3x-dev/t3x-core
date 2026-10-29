@@ -35,7 +35,7 @@
 }
 .content {
   display: grid;
-  grid-template-columns: minmax(var(--schema-main-min-width, 440px), 1fr) clamp(240px, 30%, 320px);
+  grid-template-columns: minmax(var(--schema-main-min-width, 440px), 1fr) 320px;
   flex: 1;
   min-height: 0;
   min-width: 0;
@@ -47,9 +47,6 @@
 .content:has(.fieldWorkarea[data-sources]) {
   /* Reserve room for the 200px source rail and readable field names/controls. */
   --schema-main-min-width: 640px;
-}
-.content[data-details="closed"] {
-  grid-template-columns: minmax(var(--schema-main-min-width, 440px), 1fr);
 }
 .list {
   min-height: 0;
@@ -210,28 +207,6 @@
   /* Scroll the header and rows together before field names become unreadable. */
   min-width: 520px;
 }
-.properties {
-  border-left: 1px solid var(--stroke-divider);
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-}
-.closeProperties {
-  display: grid;
-  place-items: center;
-  margin-left: auto;
-  min-width: 28px;
-  min-height: 28px;
-}
-.settings {
-  padding: 16px;
-}
-.settings h3 {
-  font-size: 13px;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-  margin-bottom: 16px;
-}
 .footer {
   border-top: 1px solid var(--stroke-divider);
   border-bottom: 0;
@@ -374,11 +349,6 @@
 .treeGuide {
   top: 0;
 }
-.rulesScope {
-  padding: 12px 16px 0;
-  color: var(--text-secondary);
-  font-size: 12px;
-}
 @media (pointer: coarse) {
   .dragRow [role="treeitem"] {
     min-height: 44px;
@@ -407,30 +377,4 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-}
-
-.panelHeader {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--stroke-divider);
-  font-size: 13px;
-}
-.panelHeader strong {
-  flex: 1;
-  font-weight: 500;
-}
-.panelHeader button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  color: var(--text-secondary);
-}
-
-.panelHeader button:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import type { StudioCandidate } from '@t3x-dev/api-client';
-import { Settings2 } from 'lucide-react';
+import { ArrowUpRight, Settings2 } from 'lucide-react';
 import Link from 'next/link';
 import { useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -66,7 +66,7 @@ export function SchemaSourceManager({
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="sm" aria-label="Manage sources" title="Manage sources">
-          <Settings2 size={14} aria-hidden="true" /> Manage
+          <Settings2 size={14} aria-hidden="true" /> Manage sources…
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -74,9 +74,9 @@ export function SchemaSourceManager({
         className="max-h-[65vh] w-[min(560px,calc(100vw-32px))] overflow-y-auto"
         aria-label="Manage Schema sources"
       >
-        <p className="mb-3 text-sm font-medium">Sources · {modules.length}</p>
+        <p className="mb-3 text-sm font-medium">Schema sources · {modules.length}</p>
         <p className={s.feedback}>
-          Reusable definitions for importing nodes and objects into the draft.
+          Reusable definitions for adding nodes and object fields to your schema.
         </p>
         <div className={s.sourceToolbar}>
           <input
@@ -95,10 +95,10 @@ export function SchemaSourceManager({
             disabled={Boolean(combineReason)}
             aria-describedby={combineReason ? `${id}-combine-reason` : undefined}
           >
-            Combine sources…
+            Combine schemas…
           </Button>
           <Link href={browseHref} className={s.navLink}>
-            Browse source releases
+            Browse schema catalog <ArrowUpRight size={14} aria-hidden="true" />
           </Link>
         </div>
         {combineReason ? (
@@ -130,7 +130,7 @@ export function SchemaSourceManager({
                 </div>
                 <div className={s.sourceMetadata}>
                   <details>
-                    <summary>Source details</summary>
+                    <summary>Source hash</summary>
                     <code>{module.candidate?.source?.hash ?? 'Hash unavailable'}</code>
                   </details>
                   {removalReason ? <span id={removalReasonId}>{removalReason}</span> : null}
@@ -144,7 +144,7 @@ export function SchemaSourceManager({
                     aria-describedby={removalReason ? removalReasonId : undefined}
                     onClick={() => onRemove(module.id)}
                   >
-                    Remove
+                    Remove from sources
                   </Button>
                 ) : null}
               </li>

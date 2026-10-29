@@ -46,8 +46,8 @@ function managerProps() {
 it('lists reusable source materials without controls that switch the current definition', () => {
   const props = managerProps();
   render(<SchemaSourceManager {...props} />);
-  expect(screen.getByText('Sources · 2')).toBeVisible();
-  expect(screen.getByRole('link', { name: 'Browse source releases' })).toHaveAttribute(
+  expect(screen.getByText('Schema sources · 2')).toBeVisible();
+  expect(screen.getByRole('link', { name: 'Browse schema catalog' })).toHaveAttribute(
     'href',
     props.browseHref
   );
@@ -83,7 +83,7 @@ it('keeps source operation failures visible instead of showing an empty library'
 it('opens source combination only through its explicit action', () => {
   const props = managerProps();
   render(<SchemaSourceManager {...props} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Combine sources…' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Combine schemas…' }));
   expect(props.onOpenChange).toHaveBeenCalledExactlyOnceWith(false);
   expect(props.onAdd).toHaveBeenCalledOnce();
   expect(props.onRemove).not.toHaveBeenCalled();
@@ -93,7 +93,7 @@ it('explains why source combination is unavailable without blocking material rem
   const props = managerProps();
   const reason = 'Save or discard the current edits before combining sources.';
   render(<SchemaSourceManager {...props} combineDisabledReason={reason} />);
-  const combine = screen.getByRole('button', { name: 'Combine sources…' });
+  const combine = screen.getByRole('button', { name: 'Combine schemas…' });
   expect(combine).toBeDisabled();
   expect(combine).toHaveAccessibleDescription(reason);
   expect(screen.getByText(reason)).toBeVisible();

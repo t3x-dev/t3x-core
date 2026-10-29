@@ -31,7 +31,7 @@ it('reveals optional settings on request without inventing a value and keeps inv
   const save = setup({ type: 'string' });
   expect(screen.getByLabelText('Description for slot task/title')).toBeVisible();
   expect(screen.queryByLabelText('Default value for slot task/title')).not.toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText('Add setting'), { target: { value: 'default' } });
+  fireEvent.change(screen.getByLabelText('Add a setting'), { target: { value: 'default' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save', exact: true }));
   expect(save).toHaveBeenLastCalledWith({ type: 'string' });
   fireEvent.change(screen.getByLabelText('Default value for slot task/title'), {
@@ -56,7 +56,9 @@ it('shows configured false, zero and null values and preserves untouched attribu
   const save = setup(initial);
   expect(screen.getByLabelText('Default value for slot task/title')).toHaveValue('null');
   expect(screen.getByLabelText('Minimum value for slot task/title')).toHaveValue('0');
-  expect(screen.getByLabelText('Require source evidence for slot task/title')).toHaveValue('false');
+  expect(screen.getByLabelText('Require supporting evidence for slot task/title')).toHaveValue(
+    'false'
+  );
   fireEvent.change(screen.getByLabelText('Description for slot task/title'), {
     target: { value: 'Task title' },
   });
@@ -67,13 +69,13 @@ it('shows configured false, zero and null values and preserves untouched attribu
   });
   fireEvent.click(screen.getByRole('button', { name: 'Save', exact: true }));
   expect(save.mock.lastCall?.[0]).not.toHaveProperty('default');
-  expect(screen.getByLabelText('Add setting')).toHaveTextContent('Default value');
+  expect(screen.getByLabelText('Add a setting')).toHaveTextContent('Default value');
 });
 it('retains configured operation hints inside the advanced disclosure', () => {
   const initial = { type: 'string', yopsHint: { preferredOp: 'set', path: 'task', slot: 'title' } };
   const save = setup(initial);
   expect(screen.getByLabelText('Target path for YOps hint task/title')).not.toBeVisible();
-  fireEvent.click(screen.getByText('Writing operation hints · configured'));
+  fireEvent.click(screen.getByText('YOps hints (advanced) · configured'));
   expect(screen.getByLabelText('Target path for YOps hint task/title')).toHaveValue('task');
   fireEvent.click(screen.getByRole('button', { name: 'Save', exact: true }));
   expect(save).toHaveBeenLastCalledWith(initial);
