@@ -1,6 +1,7 @@
 'use client';
 
 import type { SchemaPreparationTarget, StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
+import { Settings2 } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -8,7 +9,6 @@ import { WorkspaceStageNavigation } from '@/components/workspaces/WorkspaceStage
 import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
 import { schemaFieldRows } from '@/domain/schemas/schemaFieldEditing';
 import {
-  schemaBrowseHref,
   schemaReviewHref,
   schemaSourceHref,
   schemaWorkspaceHref,
@@ -37,7 +37,7 @@ import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import { SchemaContentPreparationDialog } from './SchemaContentPreparationDialog';
 import { SchemaDataEditor } from './SchemaDataEditor';
-import { SchemaSourceCompositionDialog } from './SchemaSourceCompositionDialog';
+import { SchemaSourceComposition } from './SchemaSourceComposition';
 import { SchemaSourceManager } from './SchemaSourceManager';
 import { SchemaStudioSurface } from './SchemaStudioSurface';
 import { SchemaYamlEditor } from './SchemaYamlEditor';
@@ -189,7 +189,9 @@ export function SchemaStudioExperience({
   const query = params?.toString() ?? '';
   const legacyView = params?.get('schemaView') === 'active';
   const [definitionOpen, setDefinitionOpen] = useState(false);
+  const sourceManagerTrigger = useRef<HTMLButtonElement>(null);
   const [sourceManagerOpen, setSourceManagerOpen] = useState(false);
+  const [compositionSaving, setCompositionSaving] = useState(false);
   const [editorActions, setEditorActions] = useState({ undo: false, rules: false, discard: false });
   const [sourceError, setSourceError] = useState<string>();
   const [compositionRequest, setCompositionRequest] = useState<{
@@ -499,6 +501,9 @@ export function SchemaStudioExperience({
 
   useEffect(() => {
     setDefinitionOpen(false);
+    setSourceManagerOpen(false);
+    setCompositionRequest(undefined);
+    setCompositionSaving(false);
     setBlankWorkspace(undefined);
     setEditorBase(undefined);
     setSchemaDefinition(undefined);
@@ -606,9 +611,15 @@ export function SchemaStudioExperience({
     target?.title ??
     (workspaceId || requestedBranch ? 'Workspace unavailable' : 'No draft workspace');
 
-  function composeSources(sourceId?: string) {
+  function composeSources(sourceId?: string | string[]) {
+    const ids = Array.isArray(sourceId)
+      ? sourceId
+      : sourceId
+        ? [...new Set([...selection, sourceId])]
+        : [...selection];
+    setSourceManagerOpen(true);
     setCompositionRequest({
-      ids: sourceId ? [...new Set([...selection, sourceId])] : [...selection],
+      ids,
       revision: schemaEdit.candidate?.revision ?? 0,
       base: structuredClone(
         editorBase?.schema ??
@@ -617,7 +628,10 @@ export function SchemaStudioExperience({
           basePreview.data?.schema
       ),
       current: structuredClone(schemaDefinition ?? data?.schema),
-      choices: sourceId && !selection.includes(sourceId) ? {} : activeCandidate?.composition,
+      choices:
+        ids.length === selection.length && ids.every((id) => selection.includes(id))
+          ? activeCandidate?.composition
+          : {},
     });
   }
 
@@ -809,11 +823,6 @@ export function SchemaStudioExperience({
     if (navigationRef.current) navigationRef.current.requestNavigation(navigate);
     else navigate();
   }
-  const browseHref = schemaBrowseHref(
-    projectId,
-    workspaceId,
-    target?.targetBranch ?? requestedBranch ?? undefined
-  );
   const sourceHref = schemaSourceHref(
     params?.get('returnTo') ?? null,
     projectId,
@@ -834,11 +843,18 @@ export function SchemaStudioExperience({
       )
       .map((candidate) => candidate.id),
   ]);
-  const sourceManagement = (
+  const sourceManager = (
     <SchemaSourceManager
       open={sourceManagerOpen}
-      onOpenChange={setSourceManagerOpen}
-      browseHref={browseHref}
+      key={`${projectId}:${workspaceId}`}
+      onOpenChange={(open) => {
+        setSourceManagerOpen(open);
+        if (!open) setCompositionRequest(undefined);
+      }}
+      projectId={projectId}
+      returnFocusRef={sourceManagerTrigger}
+      selection={compositionRequest?.ids ?? selection}
+      onImport={candidates.add}
       modules={visibleSources.flatMap((source) => source.modules)}
       onRemove={(id) => {
         setSourceError(undefined);
@@ -861,10 +877,85 @@ export function SchemaStudioExperience({
             : 'Used by the current Schema draft. Keep this source available while editing.',
         ])
       )}
-      pending={applying || schemaEdit.pending || schemaEdit.loading || candidates.pending}
+      pending={
+        compositionSaving ||
+        applying ||
+        schemaEdit.pending ||
+        schemaEdit.loading ||
+        candidates.pending
+      }
       loading={candidates.loading}
       error={sourceError || candidates.error || undefined}
-      onAdd={persistedTarget ? () => composeSources() : undefined}
+      composition={
+        compositionRequest ? (
+          <SchemaSourceComposition
+            projectId={projectId}
+            workspaceId={persistedTarget?.id ?? ''}
+            candidates={candidates.items}
+            selection={compositionRequest.ids}
+            initialComposition={compositionRequest.choices}
+            baseDefinition={compositionRequest.base}
+            currentDefinition={compositionRequest.current}
+            onBack={() => setCompositionRequest(undefined)}
+            onSaved={() => {
+              setCompositionRequest(undefined);
+              setSourceManagerOpen(false);
+            }}
+            onSavingChange={setCompositionSaving}
+            onSave={async (ids, composition, combined, definition) => {
+              if (!persistedTarget) throw new Error('Select a saved Workspace.');
+              const retainedMappings = pruneSchemaMappings(sourceMappings, definition);
+              const previousRows = new Map(
+                schemaFieldRows(compositionRequest.base ?? {}).map((row) => [row.path, row])
+              );
+              const nextRows = new Map(
+                schemaFieldRows(combined.schema).map((row) => [row.path, row])
+              );
+              for (const mapping of retainedMappings.filter((entry) => !entry.source)) {
+                const key = JSON.stringify(mapping.from),
+                  previous = previousRows.get(key),
+                  next = nextRows.get(key);
+                if (
+                  !previous ||
+                  !next ||
+                  JSON.stringify(previous.definition) !== JSON.stringify(next.definition) ||
+                  JSON.stringify(basePreview.data?.origins[previous.semanticPath]) !==
+                    JSON.stringify(combined.origins[next.semanticPath])
+                )
+                  throw new Error(
+                    'This combination changes the source of a moved item. Undo that move before changing its source selection. Your draft is preserved.'
+                  );
+              }
+              const saved = await schemaEdit.save({
+                workspaceId: persistedTarget.id,
+                candidateIds: ids,
+                ifRevision: compositionRequest.revision,
+                retryKey: `studio-rebase:${crypto.randomUUID()}`,
+                origin: 'studio',
+                intent: 'Combine pinned Schema sources and preserve local edits.',
+                localContribution: {},
+                schemaDefinition: definition,
+                sourceMappings: retainedMappings,
+                baseSchemaHash: combined.schemaHash,
+                composition,
+                rebase: true,
+              });
+              setEditorReset((value) => value + 1);
+              setSelection(ids);
+              setEditorBase(undefined);
+              setSchemaDefinition(undefined);
+              setLocalContribution({});
+              setSavedCandidateRef({
+                candidateId: saved.candidate.candidateId,
+                revision: saved.candidate.revision,
+              });
+              updateDataDirty(false);
+              await workspaces.refresh();
+            }}
+          />
+        ) : null
+      }
+      onCombine={persistedTarget ? composeSources : undefined}
       combineDisabledReason={
         schemaEdit.loading
           ? 'Wait for the saved Schema to finish loading.'
@@ -937,7 +1028,20 @@ export function SchemaStudioExperience({
             wholeSchemaSource={wholeSchemaSource}
             projectId={projectId}
             sources={candidates.items}
-            sourceManagement={sourceManagement}
+            sourceManagement={
+              <Button
+                ref={sourceManagerTrigger}
+                variant="ghost"
+                size="sm"
+                aria-label="Manage sources"
+                title="Manage sources"
+                aria-haspopup="dialog"
+                aria-expanded={sourceManagerOpen}
+                onClick={() => setSourceManagerOpen(true)}
+              >
+                <Settings2 size={14} aria-hidden="true" /> Manage sources…
+              </Button>
+            }
             baseDefinition={
               editorBase?.schema ??
               activeCandidate?.baseDefinition ??
@@ -1150,68 +1254,7 @@ export function SchemaStudioExperience({
           </Button>
         </p>
       ) : null}
-      {compositionRequest ? (
-        <SchemaSourceCompositionDialog
-          projectId={projectId}
-          workspaceId={persistedTarget?.id ?? ''}
-          candidates={candidates.items}
-          selection={compositionRequest.ids}
-          initialComposition={compositionRequest.choices}
-          baseDefinition={compositionRequest.base}
-          currentDefinition={compositionRequest.current}
-          onClose={() => setCompositionRequest(undefined)}
-          onSave={async (ids, composition, combined, definition) => {
-            if (!persistedTarget) throw new Error('Select a saved Workspace.');
-            const retainedMappings = pruneSchemaMappings(sourceMappings, definition);
-            const previousRows = new Map(
-              schemaFieldRows(compositionRequest.base ?? {}).map((row) => [row.path, row])
-            );
-            const nextRows = new Map(
-              schemaFieldRows(combined.schema).map((row) => [row.path, row])
-            );
-            for (const mapping of retainedMappings.filter((entry) => !entry.source)) {
-              const key = JSON.stringify(mapping.from),
-                previous = previousRows.get(key),
-                next = nextRows.get(key);
-              if (
-                !previous ||
-                !next ||
-                JSON.stringify(previous.definition) !== JSON.stringify(next.definition) ||
-                JSON.stringify(basePreview.data?.origins[previous.semanticPath]) !==
-                  JSON.stringify(combined.origins[next.semanticPath])
-              )
-                throw new Error(
-                  'This combination changes the source of a moved item. Undo that move before changing its source selection. Your draft is preserved.'
-                );
-            }
-            const saved = await schemaEdit.save({
-              workspaceId: persistedTarget.id,
-              candidateIds: ids,
-              ifRevision: compositionRequest.revision,
-              retryKey: `studio-rebase:${crypto.randomUUID()}`,
-              origin: 'studio',
-              intent: 'Combine pinned Schema sources and preserve local edits.',
-              localContribution: {},
-              schemaDefinition: definition,
-              sourceMappings: retainedMappings,
-              baseSchemaHash: combined.schemaHash,
-              composition,
-              rebase: true,
-            });
-            setEditorReset((value) => value + 1);
-            setSelection(ids);
-            setEditorBase(undefined);
-            setSchemaDefinition(undefined);
-            setLocalContribution({});
-            setSavedCandidateRef({
-              candidateId: saved.candidate.candidateId,
-              revision: saved.candidate.revision,
-            });
-            updateDataDirty(false);
-            await workspaces.refresh();
-          }}
-        />
-      ) : null}
+      {sourceManager}
       <SchemaYamlEditor
         open={definitionOpen}
         onOpenChange={setDefinitionOpen}

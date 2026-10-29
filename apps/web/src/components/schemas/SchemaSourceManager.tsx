@@ -1,164 +1,289 @@
 'use client';
 
-import type { StudioCandidate } from '@t3x-dev/api-client';
-import { ArrowUpRight, Settings2 } from 'lucide-react';
-import Link from 'next/link';
-import { useId, useState } from 'react';
+import type { AddStudioCandidate, StudioCandidate } from '@t3x-dev/api-client';
+import { MoreHorizontal, Plus } from 'lucide-react';
+import { type ReactNode, type RefObject, useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ReferenceIcon as Icon } from './DiscoverReference';
-import s from './SchemaStudioExperience.module.css';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { SchemaSourceImport } from './SchemaSourceImport';
+import s from './SchemaSourceManager.module.css';
 
-type SourceOption = {
-  id: string;
-  title: string;
-  source: string;
-  candidate?: StudioCandidate;
-};
+type SourceOption = { id: string; title: string; source: string; candidate?: StudioCandidate };
 
 export function SchemaSourceManager({
   open,
   onOpenChange,
-  browseHref,
+  projectId,
+  returnFocusRef,
   modules,
+  selection,
   onRemove,
   removalBlockers,
   pending,
   loading,
   error,
-  onAdd,
+  onCombine,
   combineDisabledReason,
+  composition,
+  onImport,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  browseHref: string;
+  projectId: string;
+  returnFocusRef?: RefObject<HTMLButtonElement | null>;
   modules: SourceOption[];
+  selection: string[];
   onRemove: (id: string) => void;
   removalBlockers: Record<string, string>;
   pending: boolean;
   loading: boolean;
   error?: string;
-  onAdd?: () => void;
+  onCombine?: (ids: string[]) => void;
   combineDisabledReason?: string;
+  composition?: ReactNode;
+  onImport: (source: AddStudioCandidate) => Promise<StudioCandidate | undefined>;
 }) {
   const id = useId();
   const [query, setQuery] = useState('');
-  const visibleModules = modules.filter((module) =>
-    `${module.title} ${module.source}`.toLowerCase().includes(query.toLowerCase())
+  const [ids, setIds] = useState<string[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [importPending, setImportPending] = useState(false);
+  const [detailsId, setDetailsId] = useState<string>();
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (open && !wasOpen.current) {
+      setIds(selection);
+      setQuery('');
+      setImporting(false);
+      setDetailsId(undefined);
+    }
+    wasOpen.current = open;
+  }, [open, selection]);
+  const selected = ids.filter((sourceId) =>
+    modules.some((item) => item.id === sourceId && item.candidate?.available)
   );
+  const busy = pending || importPending;
   const combineReason =
     combineDisabledReason ||
-    (!onAdd
-      ? 'Combining sources is unavailable.'
-      : pending
-        ? 'Wait for the current operation to finish before combining sources.'
+    (!onCombine
+      ? 'Select a saved Workspace before combining sources.'
+      : busy
+        ? 'Wait for the current operation to finish.'
         : loading
-          ? 'Wait for sources to finish loading before combining them.'
-          : undefined);
-  function moduleIcon(module: SourceOption) {
-    return (
-      <span className={s.mi}>
-        <Icon name={module.candidate?.kind === 'schema' ? 'braces' : 'box'} size={15} />
-      </span>
-    );
-  }
+          ? 'Loading sources…'
+          : !selected.length
+            ? 'Select at least one source to combine.'
+            : undefined);
+  const visible = modules.filter((item) =>
+    `${item.title} ${item.source}`.toLowerCase().includes(query.toLowerCase())
+  );
+  const step = composition ? 'combine' : importing ? 'import' : 'sources';
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>
-        <Button variant="ghost" size="sm" aria-label="Manage sources" title="Manage sources">
-          <Settings2 size={14} aria-hidden="true" /> Manage sources…
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        className="max-h-[65vh] w-[min(560px,calc(100vw-32px))] overflow-y-auto"
-        aria-label="Manage Schema sources"
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!busy) onOpenChange(next);
+      }}
+    >
+      <DialogContent
+        className="flex h-[min(760px,90dvh)] flex-col gap-0 overflow-hidden rounded-[var(--radius-md)] bg-[var(--surface-card)] p-0 sm:max-w-[min(960px,96vw)]"
+        showCloseButton={!busy}
+        onCloseAutoFocus={(event) => {
+          if (returnFocusRef?.current) {
+            event.preventDefault();
+            returnFocusRef.current.focus();
+          }
+        }}
       >
-        <p className="mb-3 text-sm font-medium">Schema sources · {modules.length}</p>
-        <p className={s.feedback}>
-          Reusable definitions for adding nodes and object fields to your schema.
-        </p>
-        <div className={s.sourceToolbar}>
-          <input
-            aria-label="Filter sources"
-            placeholder="Search sources…"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              onOpenChange(false);
-              onAdd?.();
-            }}
-            disabled={Boolean(combineReason)}
-            aria-describedby={combineReason ? `${id}-combine-reason` : undefined}
-          >
-            Combine schemas…
-          </Button>
-          <Link href={browseHref} className={s.navLink}>
-            Browse schema catalog <ArrowUpRight size={14} aria-hidden="true" />
-          </Link>
+        <DialogHeader className="shrink-0 gap-1 border-b border-[var(--stroke-divider)] px-4 py-3 pr-12 text-left">
+          <DialogTitle className="text-sm font-medium">Schema sources</DialogTitle>
+          <DialogDescription className="text-xs">
+            Import reusable schemas, manage sources, and combine them into your draft.
+          </DialogDescription>
+        </DialogHeader>
+        <div className={s.body}>
+          <aside className={s.sidebar} aria-label="Source workflow">
+            <strong>Schema sources</strong>
+            <p>{modules.length} available in this project</p>
+            <ol className={s.steps}>
+              <li aria-current={step === 'sources' ? 'step' : undefined}>Select & manage</li>
+              <li aria-current={step === 'import' ? 'step' : undefined}>Import schema</li>
+              <li aria-current={step === 'combine' ? 'step' : undefined}>Combine & resolve</li>
+            </ol>
+            <p className="mt-6!">
+              Selecting sources does not change your draft. Save the combined draft when it is
+              ready.
+            </p>
+          </aside>
+          <div className={s.main}>
+            {composition ??
+              (importing ? (
+                <SchemaSourceImport
+                  projectId={projectId}
+                  candidates={modules.flatMap((item) => (item.candidate ? [item.candidate] : []))}
+                  onImport={onImport}
+                  onBack={() => setImporting(false)}
+                  onBusyChange={setImportPending}
+                />
+              ) : (
+                <>
+                  <div className={s.toolbar}>
+                    <Input
+                      aria-label="Filter sources"
+                      placeholder="Search sources…"
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                    />
+                    <Button
+                      variant="canvas-outline"
+                      size="sm"
+                      disabled={busy || loading}
+                      onClick={() => setImporting(true)}
+                    >
+                      <Plus size={14} aria-hidden="true" /> Import schema…
+                    </Button>
+                  </div>
+                  <div className={s.scroll}>
+                    {loading ? <output className={s.feedback}>Loading sources…</output> : null}
+                    {error ? (
+                      <p role="alert" className={`${s.feedback} ${s.error}`}>
+                        {error}
+                      </p>
+                    ) : null}
+                    {visible.map((module, index) => {
+                      const reason = removalBlockers[module.id];
+                      const candidate = module.candidate;
+                      const inputId = `${id}-source-${index}`;
+                      return (
+                        <div key={module.id}>
+                          <div className={s.row}>
+                            <input
+                              id={inputId}
+                              type="checkbox"
+                              aria-label={`Select ${module.title} for combination`}
+                              checked={selected.includes(module.id)}
+                              disabled={busy || !candidate?.available}
+                              onChange={() =>
+                                setIds((current) =>
+                                  current.includes(module.id)
+                                    ? current.filter((value) => value !== module.id)
+                                    : [...current, module.id]
+                                )
+                              }
+                            />
+                            <div className={s.identity}>
+                              <label htmlFor={inputId}>{module.title}</label>
+                              <p className={s.meta}>
+                                {candidate?.source?.canonicalName ?? module.source} ·{' '}
+                                {candidate?.source?.version ?? 'Unavailable'}
+                              </p>
+                              {candidate && !candidate.available ? (
+                                <p className={s.meta}>{candidate.reason ?? 'Source unavailable'}</p>
+                              ) : null}
+                              {reason ? (
+                                <p id={`${inputId}-reason`} className={s.meta}>
+                                  {reason}
+                                </p>
+                              ) : null}
+                            </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  aria-label={`Actions for ${module.title}`}
+                                  disabled={busy}
+                                >
+                                  <MoreHorizontal size={16} aria-hidden="true" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onSelect={() =>
+                                    setDetailsId(detailsId === module.id ? undefined : module.id)
+                                  }
+                                >
+                                  View source details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  aria-label={`Remove ${module.title}`}
+                                  disabled={busy || !!reason || !candidate}
+                                  aria-describedby={reason ? `${inputId}-reason` : undefined}
+                                  onSelect={() => onRemove(module.id)}
+                                >
+                                  Remove from sources
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                          {detailsId === module.id ? (
+                            <dl className={s.details} aria-label={`Details for ${module.title}`}>
+                              <dt>Source hash</dt>
+                              <dd>
+                                <code>{candidate?.source?.hash ?? 'Hash unavailable'}</code>
+                              </dd>
+                              <dt>Kind</dt>
+                              <dd>{candidate?.kind ?? 'Unknown'}</dd>
+                              {candidate?.description ? (
+                                <>
+                                  <dt>Description</dt>
+                                  <dd>{candidate.description}</dd>
+                                </>
+                              ) : null}
+                              {candidate?.license ? (
+                                <>
+                                  <dt>License</dt>
+                                  <dd>{candidate.license}</dd>
+                                </>
+                              ) : null}
+                            </dl>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                    {!loading && !error && !visible.length ? (
+                      <p className={s.feedback}>
+                        {modules.length
+                          ? 'No sources match this search.'
+                          : 'No sources yet. Import a schema to get started.'}
+                      </p>
+                    ) : null}
+                  </div>
+                  <footer className={s.footer}>
+                    <span>
+                      {selected.length} {selected.length === 1 ? 'source' : 'sources'} selected
+                    </span>
+                    {combineReason ? (
+                      <span id={`${id}-combine-reason`}>{combineReason}</span>
+                    ) : null}
+                    <Button
+                      variant="commit"
+                      size="sm"
+                      disabled={!!combineReason}
+                      aria-describedby={combineReason ? `${id}-combine-reason` : undefined}
+                      onClick={() => onCombine?.(selected)}
+                    >
+                      Combine selected…
+                    </Button>
+                  </footer>
+                </>
+              ))}
+          </div>
         </div>
-        {combineReason ? (
-          <p id={`${id}-combine-reason`} className={s.feedback}>
-            {combineReason}
-          </p>
-        ) : null}
-        {loading ? <output className={s.feedback}>Loading sources…</output> : null}
-        {error ? (
-          <p role="alert" className={s.feedback}>
-            {error}
-          </p>
-        ) : null}
-        <ul className={s.sourceList}>
-          {visibleModules.map((module, index) => {
-            const removalReason = removalBlockers[module.id];
-            const removalReasonId = `${id}-remove-reason-${index}`;
-            return (
-              <li key={module.id} className={s.sourceRow}>
-                <div className={s.sourceIdentity} style={{ cursor: 'default' }}>
-                  {moduleIcon(module)}
-                  <span>
-                    <b>{module.title}</b>
-                    <small>
-                      {module.candidate?.source?.canonicalName ?? module.source} ·{' '}
-                      {module.candidate?.source?.version ?? 'Unavailable'}
-                    </small>
-                  </span>
-                </div>
-                <div className={s.sourceMetadata}>
-                  <details>
-                    <summary>Source hash</summary>
-                    <code>{module.candidate?.source?.hash ?? 'Hash unavailable'}</code>
-                  </details>
-                  {removalReason ? <span id={removalReasonId}>{removalReason}</span> : null}
-                </div>
-                {module.candidate ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    aria-label={`Remove ${module.title}`}
-                    disabled={pending || Boolean(removalReason)}
-                    aria-describedby={removalReason ? removalReasonId : undefined}
-                    onClick={() => onRemove(module.id)}
-                  >
-                    Remove from sources
-                  </Button>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
-        {!loading && !error && !modules.length ? (
-          <p className={s.feedback}>
-            No sources yet. Browse schemas to add a definition or module.
-          </p>
-        ) : modules.length && !visibleModules.length ? (
-          <p className={s.feedback}>No sources match this search.</p>
-        ) : null}
-      </PopoverContent>
-    </Popover>
+      </DialogContent>
+    </Dialog>
   );
 }

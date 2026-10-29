@@ -251,14 +251,17 @@ beforeEach(() => {
     workspace: { id: 'target', revision: 2, changes: [] },
   };
 });
-it('keeps the selected branch when Studio links to Browse', () => {
-  mocks.query = 'candidate=provider&branch=feature%2Frelease';
+it('keeps the selected branch when opening source management', () => {
+  mocks.query = 'workspace=saved&candidate=provider&branch=feature%2Frelease';
+  mocks.workspaces = [
+    { id: 'saved', revision: 2, status: 'draft', targetBranch: 'feature/release', title: 'Saved' },
+  ];
   render(<SchemaStudioExperience projectId="p" />);
   openSources();
-  expect(screen.getByRole('link', { name: 'Browse schema catalog' })).toHaveAttribute(
-    'href',
-    '/explore?view=browse&type=schemas&studioTarget=p&branch=feature%2Frelease'
-  );
+  expect(screen.getByRole('button', { name: 'Import schema…' })).toBeVisible();
+  expect(mocks.push).not.toHaveBeenCalled();
+  closeSources();
+  expect(screen.getByText('feature/release')).toBeVisible();
 });
 it('synchronizes exact sources and revision when an assistant snapshot replaces the open candidate', async () => {
   mocks.query = 'workspace=saved';
@@ -297,47 +300,40 @@ it('synchronizes exact sources and revision when an assistant snapshot replaces 
 it('does not review another Workspace when the deep-linked target is missing', () => {
   mocks.query = 'candidate=provider&workspace=missing';
   render(<SchemaStudioExperience projectId="p" />);
-  openSources();
   expect(screen.getByRole('alert')).toHaveTextContent(
     'Workspace missing was not found in this project'
   );
   expect(screen.getByRole('button', { name: /^(Review changes|Save and review)$/ })).toBeEnabled();
-  expect(screen.getByRole('link', { name: 'Browse schema catalog' })).toHaveAttribute(
-    'href',
-    '/explore?view=browse&type=schemas&studioTarget=p&workspace=missing'
-  );
-});
-it('keeps a required provider checked and locked while blocking a failed definition review', () => {
-  render(<SchemaStudioExperience projectId="p" />);
   openSources();
+  expect(screen.getByRole('button', { name: 'Import schema…' })).toBeVisible();
+});
+it('protects an in-use source without treating checkbox selection as an applied draft', () => {
+  render(<SchemaStudioExperience projectId="p" />);
   const controls = screen.getByRole('toolbar', { name: 'Studio controls' });
-  const composition = screen.getByRole('main', { name: 'Schema editor' });
+  const editor = screen.getByRole('main', { name: 'Schema editor' });
   const sources = screen.getByRole('complementary', { name: 'Available Schema sources' });
-  expect(composition).toContainElement(controls);
-  expect(composition).toContainElement(sources);
-  expect(composition).toContainElement(screen.getByRole('region', { name: 'Schema definition' }));
-  expect(within(sources).getByRole('button', { name: 'Manage sources' })).toBeVisible();
-  expect(
-    within(controls).getByRole('button', { name: /^(Review changes|Save and review)$/ })
-  ).toBeEnabled();
-  expect(screen.getByLabelText('Target Workspace')).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Zoom out' })).not.toBeInTheDocument();
-  expect(
-    screen.queryByRole('checkbox', { name: 'Select Shared foundation 1.0' })
-  ).not.toBeInTheDocument();
-  expect(
-    screen.queryByRole('checkbox', { name: 'Select Shared foundation 1.0' })
-  ).not.toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Remove Shared foundation' })).toBeDisabled();
-  expect(screen.getByRole('button', { name: /^(Review changes|Save and review)$/ })).toBeEnabled();
+  expect(editor).toContainElement(controls);
+  expect(editor).toContainElement(sources);
+  openSources();
+  const selected = screen.getByRole('checkbox', {
+    name: 'Select Shared foundation for combination',
+  });
+  expect(selected).toBeChecked();
+  fireEvent.click(selected);
+  expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Actions for Shared foundation' }), {
+    key: 'Enter',
+  });
+  expect(screen.getByRole('menuitem', { name: 'Remove Shared foundation' })).toHaveAttribute(
+    'aria-disabled',
+    'true'
+  );
+  fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Remove Shared foundation' }), {
+    key: 'Escape',
+  });
   closeSources();
   fireEvent.click(screen.getByRole('button', { name: /^(Review changes|Save and review)$/ }));
   expect(screen.getByRole('alert')).toHaveTextContent('Select a valid Workspace');
-  openSources();
-  expect(screen.queryByRole('button', { name: 'Clear selection' })).not.toBeInTheDocument();
-  expect(
-    screen.queryByRole('checkbox', { name: 'Select Shared foundation 1.0' })
-  ).not.toBeInTheDocument();
   expect(mocks.apply).not.toHaveBeenCalled();
 });
 
@@ -512,7 +508,6 @@ it('previews a recovered Schema edit by server-managed candidate revision', asyn
     origin: { channel: 'studio' },
   };
   render(<SchemaStudioExperience projectId="p" />);
-  openSources();
   await waitFor(() =>
     expect(mocks.previewInputs).toContainEqual({
       candidateIds: ['provider'],
@@ -527,7 +522,7 @@ it('does not offer the selected candidate as its own comparison', () => {
   render(<SchemaStudioExperience projectId="p" />);
   openSources();
   expect(screen.queryByRole('option', { name: 'Shared foundation · 1.0' })).not.toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Combine schemas…' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Combine selected…' })).toBeDisabled();
 });
 
 it('opens source composition without applying or discarding the current candidate', () => {
@@ -538,11 +533,10 @@ it('opens source composition without applying or discarding the current candidat
     </SchemaStudioExperience>
   );
   openSources();
-  fireEvent.click(screen.getByRole('button', { name: 'Combine schemas…' }));
-  const dialog = screen.getByRole('dialog', { name: 'Combine schemas' });
-  expect(
-    within(dialog).getByRole('checkbox', { name: 'Combine Shared foundation @ 1.0' })
-  ).toBeChecked();
+  fireEvent.click(screen.getByRole('button', { name: 'Combine selected…' }));
+  const dialog = screen.getByRole('dialog', { name: 'Schema sources' });
+  expect(within(dialog).getByText('Shared foundation @ 1.0')).toBeVisible();
+  expect(screen.getAllByRole('dialog')).toHaveLength(1);
   expect(within(dialog).queryByText('Module workbench content')).not.toBeInTheDocument();
   fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -751,7 +745,6 @@ it.each([
     workspace: { id: 'workspace_branch:main', revision: 3, changes: [] },
   };
   render(<SchemaStudioExperience projectId="p" />);
-  openSources();
   expect(screen.getByLabelText('Target Workspace')).toHaveValue('workspace_branch:main');
   await waitFor(() =>
     expect(
@@ -865,7 +858,6 @@ it('prepares an empty first binding and opens full Review without adoption', asy
   };
   mocks.apply.mockResolvedValue({ outcome: 'bound', workspaceRevision: 4, binding: {} });
   render(<SchemaStudioExperience projectId="p" />);
-  openSources();
   expect(screen.queryByRole('button', { name: 'Bind Schema' })).not.toBeInTheDocument();
   await waitFor(() =>
     expect(screen.getByRole('button', { name: /^(Review changes|Save and review)$/ })).toBeEnabled()
@@ -927,7 +919,6 @@ it('opens public publication from the checked saved candidate without applying o
     freshness: { candidateId: 'saved-local', candidateRevision: 3 },
   };
   render(<SchemaStudioExperience projectId="p" />);
-  openSources();
   await waitFor(() =>
     expect(screen.getByRole('button', { name: /^(Review changes|Save and review)$/ })).toBeEnabled()
   );
@@ -1125,15 +1116,16 @@ it.each([
   expect(
     screen.queryByRole('checkbox', { name: 'Select Shared foundation 1.0' })
   ).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Combine schemas…' }));
-  expect(screen.getByRole('dialog', { name: 'Combine schemas' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Combine selected…' }));
+  expect(screen.getByRole('dialog', { name: 'Schema sources' })).toBeVisible();
   expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
   expect(mocks.schemaEditCandidate?.candidateId).toBe('saved-edit');
   fireEvent.click(
-    within(screen.getByRole('dialog', { name: 'Combine schemas' })).getByRole('button', {
-      name: 'Cancel',
+    within(screen.getByRole('dialog', { name: 'Schema sources' })).getByRole('button', {
+      name: 'Back',
     })
   );
+  closeSources();
   if (missing) expect(screen.getByRole('alert')).toHaveTextContent('team/missing @ 1.0');
   else expect(screen.getByLabelText('Type chosen/title')).toBeVisible();
 });
@@ -1164,10 +1156,8 @@ it('uses the resolved branch target in all outbound Studio links and normalizes 
   expect(url.searchParams.get('workspace')).toBe('feature-draft');
   expect(url.searchParams.get('branch')).toBe('feature');
   openSources();
-  expect(screen.getByRole('link', { name: 'Browse schema catalog' })).not.toHaveAttribute(
-    'href',
-    expect.stringContaining('catalogName')
-  );
+  expect(screen.getByRole('button', { name: 'Import schema…' })).toBeVisible();
+  closeSources();
 });
 
 it('discards only the unsaved editor before completing a requested Workspace switch', async () => {
@@ -1203,12 +1193,13 @@ function selectSchemaAction(name: string) {
 }
 
 function openSources() {
+  if (screen.queryByRole('dialog', { name: 'Schema sources' })) return;
   const trigger = screen.getByRole('button', { name: 'Manage sources' });
   if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
 }
 function closeSources() {
-  const trigger = screen.queryByRole('button', { name: 'Manage sources' });
-  if (trigger?.getAttribute('aria-expanded') === 'true') fireEvent.click(trigger);
+  const dialog = screen.queryByRole('dialog', { name: 'Schema sources' });
+  if (dialog) fireEvent.click(within(dialog).getByRole('button', { name: 'Close', exact: true }));
 }
 function openYaml() {
   if (screen.queryByRole('dialog', { name: 'Schema YAML editor' })) return;

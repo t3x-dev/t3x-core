@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
-import { SchemaSourceCompositionDialog } from '@/components/schemas/SchemaSourceCompositionDialog';
+import { SchemaSourceComposition } from '@/components/schemas/SchemaSourceComposition';
 
 const fixture = vi.hoisted(() => ({ valid: true }));
 vi.mock('@/hooks/schemas/useStudioPreview', () => ({
@@ -21,7 +21,7 @@ it('requires a decision before rebasing an overlapping field edit', async () => 
   const save = vi.fn().mockResolvedValue(undefined),
     close = vi.fn();
   render(
-    <SchemaSourceCompositionDialog
+    <SchemaSourceComposition
       projectId="p"
       workspaceId="w"
       candidates={[]}
@@ -31,7 +31,9 @@ it('requires a decision before rebasing an overlapping field edit', async () => 
         nodes: { tasks: { slots: { title: { type: 'number' }, due_date: { type: 'string' } } } },
       }}
       onSave={save}
-      onClose={close}
+      onBack={close}
+      onSaved={close}
+      onSavingChange={vi.fn()}
     />
   );
   expect(screen.getByRole('button', { name: 'Save combined draft' })).toBeDisabled();
@@ -49,17 +51,19 @@ it('keeps unresolved source checks from saving and supports cancelling without m
   const save = vi.fn(),
     close = vi.fn();
   render(
-    <SchemaSourceCompositionDialog
+    <SchemaSourceComposition
       projectId="p"
       workspaceId="w"
       candidates={[]}
       selection={['a']}
       onSave={save}
-      onClose={close}
+      onBack={close}
+      onSaved={close}
+      onSavingChange={vi.fn()}
     />
   );
   expect(screen.getByRole('button', { name: 'Save combined draft' })).toBeDisabled();
-  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Back' }));
   expect(close).toHaveBeenCalled();
   expect(save).not.toHaveBeenCalled();
 });
