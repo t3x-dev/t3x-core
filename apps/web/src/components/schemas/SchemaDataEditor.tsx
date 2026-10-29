@@ -647,12 +647,16 @@ export function SchemaDataEditor({
                       role="presentation"
                     >
                       <span className={styles.fieldSummary}>
-                        {row.kind === 'slot'
-                          ? String(row.definition.type || 'Any type')
-                          : row.definition.repeated
-                            ? 'Repeated node'
-                            : 'Node'}
-                        {row.required ? ' · Required' : ' · Optional'}
+                        <span>
+                          {row.kind === 'slot'
+                            ? String(row.definition.type || 'Any type')
+                            : row.definition.repeated
+                              ? 'Repeated node'
+                              : 'Node'}
+                        </span>
+                        <span className={styles.requiredColumn}>
+                          {row.required ? 'Required' : 'Optional'}
+                        </span>
                       </span>
                       <span className={styles.fieldControls}>
                         {row.kind === 'slot' ? (
@@ -682,14 +686,16 @@ export function SchemaDataEditor({
                         ) : (
                           <span>{row.definition.repeated ? 'Repeated node' : 'Node'}</span>
                         )}
-                        <input
-                          type="checkbox"
-                          aria-label={`Required ${row.semanticPath}`}
-                          checked={row.required}
-                          onChange={(event) =>
-                            update(row, row.name, row.definition, event.target.checked)
-                          }
-                        />
+                        <span className={styles.requiredColumn}>
+                          <input
+                            type="checkbox"
+                            aria-label={`Required ${row.semanticPath}`}
+                            checked={row.required}
+                            onChange={(event) =>
+                              update(row, row.name, row.definition, event.target.checked)
+                            }
+                          />
+                        </span>
                       </span>
                     </span>
                   }

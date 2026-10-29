@@ -35,15 +35,21 @@
 }
 .content {
   display: grid;
-  grid-template-columns: minmax(360px, 1fr) minmax(240px, 320px);
+  grid-template-columns: minmax(var(--schema-main-min-width, 440px), 1fr) clamp(240px, 30%, 320px);
   flex: 1;
   min-height: 0;
   min-width: 0;
+  /* Keep the tree and properties beside each other within this bounded editor. */
+  overflow: auto;
   border: 0;
   padding: 0;
 }
+.content:has(.fieldWorkarea[data-sources]) {
+  /* Reserve room for the 200px source rail and readable field names/controls. */
+  --schema-main-min-width: 640px;
+}
 .content[data-details="closed"] {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(var(--schema-main-min-width, 440px), 1fr);
 }
 .list {
   min-height: 0;
@@ -52,7 +58,9 @@
 }
 .columns {
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) 180px 64px;
+  grid-template-columns: minmax(0, 1fr) var(--field-type-width) var(--field-required-width) var(
+      --field-actions-width
+    );
   gap: 8px;
   padding: 10px;
   border-bottom: 1px solid var(--stroke-divider);
@@ -60,14 +68,12 @@
   color: var(--text-secondary);
 }
 .inline {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 12px;
+  display: block;
+  text-align: left;
 }
 .inline select {
-  min-width: 80px;
-  max-width: 125px;
+  min-width: 0;
+  width: 100%;
   height: 34px;
   border: 1px solid var(--stroke-default);
   border-radius: var(--radius-md);
@@ -95,7 +101,22 @@
   cursor: default;
 }
 .dragRow [role="treeitem"] {
-  grid-template-columns: minmax(150px, 1fr) 180px 64px;
+  grid-template-columns: minmax(0, 1fr) calc(
+      var(--field-type-width) +
+      var(--field-required-width) +
+      8px
+    ) var(--field-actions-width);
+  column-gap: 8px;
+}
+.dragRow [role="treeitem"] > :nth-child(2) {
+  grid-column: 2;
+  grid-row: 1;
+  padding-left: 0;
+  font: inherit;
+}
+.dragRow [role="treeitem"] > .fieldActions {
+  grid-column: 3;
+  grid-row: 1;
 }
 .dragRow[data-drop-target],
 .rootDrop[data-drop-target] {
@@ -176,12 +197,22 @@
   grid-template-columns: 200px minmax(0, 1fr);
 }
 .fieldMain {
+  --field-type-width: 112px;
+  --field-required-width: 72px;
+  --field-actions-width: 56px;
   min-width: 0;
   min-height: 0;
   overflow: auto;
 }
+.columns,
+.fieldTree,
+.moveToolbar {
+  /* Scroll the header and rows together before field names become unreadable. */
+  min-width: 520px;
+}
 .properties {
   border-left: 1px solid var(--stroke-divider);
+  min-width: 0;
   min-height: 0;
   overflow: auto;
 }
@@ -230,32 +261,6 @@
   color: var(--status-error);
   overflow-wrap: anywhere;
 }
-@media (max-width: 1100px) {
-  .content {
-    grid-template-columns: 1fr;
-    overflow: auto;
-  }
-  .list {
-    overflow: visible;
-  }
-  .properties {
-    border-left: 0;
-    border-top: 1px solid var(--stroke-divider);
-    overflow: visible;
-  }
-}
-@media (max-width: 900px) {
-  .fieldWorkarea[data-sources] {
-    grid-template-columns: minmax(0, 1fr);
-    height: auto;
-  }
-  .importSources {
-    max-height: 200px;
-    border-right: 0;
-    border-bottom: 1px solid var(--stroke-divider);
-  }
-}
-
 /* Keep names directly editable while giving the resting tree a text-first hierarchy. */
 .dragRow [role="treeitem"]:not([data-selected="true"])
   .fieldName
@@ -298,20 +303,30 @@
 }
 
 .fieldSummary {
+  display: grid;
   color: var(--text-secondary);
   font-family: inherit;
   font-size: 12px;
 }
 .fieldControls {
   display: none;
+}
+.fieldSummary,
+.fieldControls {
+  grid-template-columns: var(--field-type-width) var(--field-required-width);
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+}
+.requiredColumn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .dragRow [data-selected="true"] .fieldSummary {
   display: none;
 }
 .dragRow [data-selected="true"] .fieldControls {
-  display: inline-flex;
+  display: grid;
 }
 .dragRow [role="treeitem"]:not([data-selected="true"]) .fieldActions,
 .dragRow [role="treeitem"]:not([data-selected="true"]) .dragHandle {
@@ -342,9 +357,6 @@
   padding-block: 8px;
   background: var(--surface-app);
 }
-.columns > span:nth-child(2) {
-  text-align: right;
-}
 .moveToolbar {
   min-height: 44px;
   padding-block: 6px;
@@ -355,6 +367,7 @@
 .fieldTree {
   gap: 0;
   padding-top: 4px;
+  overflow: visible;
 }
 .dragRow [role="treeitem"] {
   min-height: 36px;

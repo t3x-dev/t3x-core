@@ -141,7 +141,8 @@ export function SchemaFieldTree({
         <div className={styles.fieldMain}>
           <div className={styles.columns}>
             <span>Field</span>
-            <span>Type · Required</span>
+            <span>Type</span>
+            <span className={styles.requiredColumn}>Required</span>
             <span className="sr-only">Actions</span>
           </div>
           {active ? (
