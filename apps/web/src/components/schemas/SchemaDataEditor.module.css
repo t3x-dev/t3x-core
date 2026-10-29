@@ -684,6 +684,26 @@
   background: color-mix(in srgb, var(--accent-commit) 4%, var(--surface-card));
   border-color: var(--stroke-divider);
 }
+.editor[data-workbench-footer]
+  .dragRow[data-related]
+  [role="treeitem"]:not([data-selected="true"]) {
+  background: color-mix(in srgb, var(--source) 3%, var(--surface-card));
+  border-color: transparent;
+  border-left-color: color-mix(in srgb, var(--source) 45%, var(--stroke-divider));
+}
+.editor[data-workbench-footer]
+  .dragRow[data-related="contains"]
+  [role="treeitem"]:not([data-selected="true"]) {
+  background: transparent;
+  border-style: dashed;
+}
+.relationSummary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  color: var(--text-secondary);
+}
 .editor[data-workbench-footer] .dragRow [role="treeitem"] :has(> .fieldTypeIcon) {
   width: 22px;
   height: 22px;

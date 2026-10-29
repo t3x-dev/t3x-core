@@ -272,6 +272,33 @@
 .sourceGroup[data-studio] .sourceItem:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--source) 35%, var(--stroke-divider));
 }
+.sourceGroup[data-studio] summary > span:first-of-type {
+  flex: 1;
+  min-width: 0;
+}
+.relatedLabel {
+  display: inline-flex;
+  flex: none;
+  margin-top: 2px;
+  visibility: hidden;
+  color: var(--source);
+}
+.relatedLabel[data-visible] {
+  visibility: visible;
+}
+.sourceGroup[data-studio][data-related] > summary .sourceFamilyIcon {
+  outline: 1px solid color-mix(in srgb, var(--source) 28%, var(--stroke-divider));
+  outline-offset: 2px;
+}
+.sourceGroup[data-studio] .sourceItem[data-related]:not([aria-pressed="true"]) {
+  background: color-mix(in srgb, var(--source) 5%, var(--surface-card));
+  border-color: color-mix(in srgb, var(--source) 30%, var(--stroke-divider));
+  border-left: 2px solid color-mix(in srgb, var(--source) 55%, var(--stroke-divider));
+  padding-left: 9px;
+}
+.sourceGroup[data-studio] .sourceItem[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent-commit) 40%, var(--stroke-divider));
+}
 .fieldRow {
   display: flex;
   align-items: center;

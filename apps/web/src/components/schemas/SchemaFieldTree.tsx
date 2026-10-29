@@ -12,11 +12,16 @@ import {
 } from '@dnd-kit/core';
 import type { StudioCandidate } from '@t3x-dev/api-client';
 import { GripVertical } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import tree from '@/components/structure/StructureTree.module.css';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import type { SchemaFieldRow } from '@/domain/schemas/schemaFieldEditing';
+import type { SchemaDefinition, SchemaFieldRow } from '@/domain/schemas/schemaFieldEditing';
+import {
+  isSourceBase,
+  type SchemaSourceRelation,
+  sourceContainsRelation,
+} from '@/domain/schemas/schemaSourceRelations';
 import styles from './SchemaDataEditor.module.css';
 import { type SchemaSourceItem, SchemaVisualSource } from './SchemaVisualSources';
 
@@ -39,6 +44,9 @@ export function SchemaFieldTree({
   rows,
   visible,
   selected,
+  relations,
+  sourceBase,
+  onReveal,
   disabled,
   projectId,
   sources = [],
@@ -55,6 +63,9 @@ export function SchemaFieldTree({
   rows: SchemaFieldRow[];
   visible: SchemaFieldRow[];
   selected?: string;
+  relations?: Map<string, SchemaSourceRelation[]>;
+  sourceBase?: SchemaDefinition;
+  onReveal?: (row: SchemaFieldRow) => void;
   disabled: boolean;
   projectId?: string;
   sources?: StudioCandidate[];
@@ -73,7 +84,51 @@ export function SchemaFieldTree({
   const [source, setSource] = useState<SchemaSourceItem>();
   const [destination, setDestination] = useState('');
   const [moveOpen, setMoveOpen] = useState(false);
+  const [locating, setLocating] = useState<string>();
+  const fieldScroll = useRef<HTMLDivElement>(null);
   const availableSources = sources.filter((item) => item.available);
+  const sourceCandidate = source && availableSources.find((item) => item.id === source.candidateId);
+  const baseMatchesSource = !!source && isSourceBase(sourceBase, source.preview);
+  const relatedRows =
+    source && sourceCandidate && relations
+      ? rows.filter((row) =>
+          relations
+            .get(row.path)
+            ?.some((relation) =>
+              sourceContainsRelation(
+                relation,
+                sourceCandidate,
+                source.row,
+                source.preview,
+                baseMatchesSource
+              )
+            )
+        )
+      : [];
+  const relatedPaths = new Set(relatedRows.map((row) => row.path));
+  const visiblePaths = new Set(visible.map((row) => row.path));
+  const containingPaths = new Set<string>();
+  for (const row of relatedRows) {
+    if (visiblePaths.has(row.path)) continue;
+    let parent = row.parentPath;
+    while (parent) {
+      if (visiblePaths.has(parent)) {
+        containingPaths.add(parent);
+        break;
+      }
+      parent = rows.find((item) => item.path === parent)?.parentPath ?? null;
+    }
+  }
+  useEffect(() => {
+    if (!locating) return;
+    const element = Array.from(
+      fieldScroll.current?.querySelectorAll<HTMLElement>('[data-schema-path]') ?? []
+    ).find((item) => item.dataset.schemaPath === locating);
+    if (element) {
+      element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      setLocating(undefined);
+    }
+  }, [locating, visible]);
   const selectedRow = rows.find((row) => row.path === selected);
   const active: TransferItem | undefined = source
     ? { row: source.row, source }
@@ -142,6 +197,8 @@ export function SchemaFieldTree({
                 disabled={disabled}
                 defaultOpen
                 studio={studio}
+                relations={!source && selected ? relations?.get(selected) : undefined}
+                sourceBase={sourceBase}
                 onSelect={(item) => {
                   setSource(item);
                   setDestination('');
@@ -152,7 +209,7 @@ export function SchemaFieldTree({
           </aside>
         ) : null}
         <div className={styles.fieldMain}>
-          <div className={styles.fieldScroll}>
+          <div ref={fieldScroll} className={styles.fieldScroll}>
             <div className={styles.columns} hidden={unavailable || !rows.length}>
               <span>Name</span>
               <span>Type</span>
@@ -200,6 +257,30 @@ export function SchemaFieldTree({
                     </Button>
                   </PopoverContent>
                 </Popover>
+                {studio && source ? (
+                  <span className={styles.relationSummary}>
+                    <output>
+                      {relatedRows.length
+                        ? `${relatedRows.length} related items`
+                        : 'No exact matches'}
+                    </output>
+                    {relatedRows.length && onReveal ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const first =
+                            relatedRows.find((row) => !visiblePaths.has(row.path)) ??
+                            relatedRows[0];
+                          onReveal(first);
+                          setLocating(first.path);
+                        }}
+                      >
+                        Locate
+                      </Button>
+                    ) : null}
+                  </span>
+                ) : null}
               </div>
             ) : (
               <div className={styles.moveToolbar} hidden={unavailable || !rows.length}>
@@ -218,6 +299,13 @@ export function SchemaFieldTree({
                   key={row.path}
                   row={row}
                   disabled={disabled}
+                  related={
+                    relatedPaths.has(row.path)
+                      ? 'direct'
+                      : containingPaths.has(row.path)
+                        ? 'contains'
+                        : undefined
+                  }
                   dropDisabled={disabled || !dragging || !canReceive(dragging, row)}
                   render={(handle) =>
                     renderRow(row, handle, () => {
@@ -257,11 +345,13 @@ function DraggableRow({
   row,
   disabled,
   dropDisabled,
+  related,
   render,
 }: {
   row: SchemaFieldRow;
   disabled: boolean;
   dropDisabled: boolean;
+  related?: 'direct' | 'contains';
   render: (handle: ReactNode) => ReactNode;
 }) {
   const drag = useDraggable({ id: `field:${row.path}`, data: { item: { row } }, disabled });
@@ -273,6 +363,15 @@ function DraggableRow({
       data-node={row.kind === 'node' || undefined}
       data-depth={row.depth}
       data-drop-target={drop.isOver || undefined}
+      data-schema-path={row.path}
+      data-related={related}
+      title={
+        related === 'contains'
+          ? 'Contains fields related to the selected source'
+          : related
+            ? 'Related to the selected source'
+            : undefined
+      }
     >
       <span className={styles.treeGuides} aria-hidden="true">
         {[0, 1, 2, 3, 4, 5, 6, 7].slice(0, row.depth).map((level) => (

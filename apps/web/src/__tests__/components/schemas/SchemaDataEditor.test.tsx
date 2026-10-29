@@ -44,6 +44,78 @@ const callbacks = () => ({
   onDiscard: vi.fn(),
 });
 
+it('links both directions without editing the draft or replacing the active details', () => {
+  const handlers = callbacks();
+  const originalScroll = HTMLElement.prototype.scrollIntoView;
+  HTMLElement.prototype.scrollIntoView = vi.fn();
+  try {
+    const { container } = render(
+      <SchemaDataEditor
+        workbenchFooter
+        projectId="p"
+        loading={false}
+        initialDefinition={{
+          nodes: {
+            alpha: { slots: { profile: { type: 'object' } } },
+            beta: { slots: { profile: { type: 'object' }, local: { type: 'string' } } },
+          },
+        }}
+        revisionKey="linked-selection"
+        initialSourceMappings={['alpha', 'beta'].map((name) => ({
+          path: ['nodes', name, 'slots', 'profile'],
+          from: ['nodes', 'person', 'slots', 'profile'],
+          source: { candidateId: 'people', schemaHash: 'sha256:source' },
+        }))}
+        sources={[
+          {
+            id: 'people',
+            projectId: 'p',
+            studioId: 'main',
+            createdAt: '',
+            title: 'People',
+            available: true,
+            source: null,
+            description: null,
+            kind: 'schema',
+            license: null,
+            reason: null,
+          },
+        ]}
+        {...handlers}
+      />
+    );
+    fireEvent.focus(screen.getByLabelText('Name alpha/profile'));
+    const source = screen.getByRole('button', { name: 'Select source object person/profile' });
+    expect(source).toHaveAttribute('data-related', 'true');
+    expect(
+      screen.getByRole('button', { name: 'Select source node person', exact: true })
+    ).not.toHaveAttribute('data-related');
+    expect(source.closest('details')).toHaveAttribute('data-related', 'true');
+    fireEvent.click(source);
+    fireEvent.keyDown(screen.getByLabelText('Destination node'), { key: 'Escape' });
+    expect(container.querySelectorAll('[data-schema-path][data-related="direct"]')).toHaveLength(2);
+    expect(
+      screen.getByLabelText('Name alpha/profile').closest('[role="treeitem"]')
+    ).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse beta', exact: true }));
+    expect(container.querySelector('[data-related="contains"]')).toHaveAttribute(
+      'title',
+      'Contains fields related to the selected source'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Locate', exact: true }));
+    expect(screen.getByLabelText('Name beta/profile')).toBeVisible();
+    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledOnce();
+    fireEvent.focus(screen.getByLabelText('Name beta/local'));
+    expect(source).not.toHaveAttribute('data-related');
+    expect(container.querySelectorAll('[data-schema-path][data-related]')).toHaveLength(0);
+    expect(handlers.onPreview).not.toHaveBeenCalled();
+    expect(handlers.onSave).not.toHaveBeenCalled();
+    expect(handlers.onDirtyChange).not.toHaveBeenCalledWith(true);
+  } finally {
+    HTMLElement.prototype.scrollIntoView = originalScroll;
+  }
+});
+
 describe('Schema data editor', () => {
   it.each([
     ['node person', 'root', 'nodes.person.children.address.slots.city'],

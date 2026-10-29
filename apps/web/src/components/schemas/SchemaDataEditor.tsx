@@ -52,6 +52,7 @@ import {
   type SchemaSourceMappings,
   transferSchemaMappings,
 } from '@/domain/schemas/schemaSourceMappings';
+import { schemaSourceRelations } from '@/domain/schemas/schemaSourceRelations';
 import type { SchemaSourceIdentity } from '@/hooks/schemas/useSchemaSourceIdentities';
 import styles from './SchemaDataEditor.module.css';
 import {
@@ -249,6 +250,13 @@ export function SchemaDataEditor({
     () =>
       new Map((provenance ? schemaFieldRows(provenance.schema) : []).map((row) => [row.path, row])),
     [provenance?.schema]
+  );
+  const sourceRelations = useMemo(
+    () =>
+      workbenchFooter
+        ? schemaSourceRelations(rows, sourceMappings, provenance, baseDefinition, wholeSchemaSource)
+        : undefined,
+    [workbenchFooter, rows, sourceMappings, provenance, baseDefinition, wholeSchemaSource]
   );
   const renderSource = (row: SchemaFieldRow) => (
     <SchemaSourceBadge
@@ -706,6 +714,20 @@ export function SchemaDataEditor({
               rows={rows}
               visible={visible}
               selected={selected}
+              relations={sourceRelations}
+              sourceBase={baseDefinition}
+              onReveal={(row) => {
+                setQuery('');
+                setCollapsed((current) => {
+                  const next = { ...current };
+                  let parent = row.parentPath;
+                  while (parent) {
+                    next[parent] = false;
+                    parent = rows.find((item) => item.path === parent)?.parentPath ?? null;
+                  }
+                  return next;
+                });
+              }}
               disabled={busy || !!disabledReason || !!validationError || stale}
               projectId={projectId}
               sources={view === 'data' ? sources : undefined}
