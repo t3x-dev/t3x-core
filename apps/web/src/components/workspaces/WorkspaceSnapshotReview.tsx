@@ -29,6 +29,7 @@ import {
   WORKSPACE_REVIEW_VIEWS,
   WorkspaceReviewWorkbench,
   workspaceReviewPreferenceKey,
+  workspaceReviewSubjectChanges,
 } from './WorkspaceReviewWorkbench';
 import { WorkspaceSchemaReviewPanel } from './WorkspaceSchemaReviewPanel';
 import stageStyles from './WorkspaceStageHeader.module.css';
@@ -55,12 +56,20 @@ export function WorkspaceSnapshotReview({
   const pane = WORKSPACE_REVIEW_VIEWS.includes(rawPane as typeof preferredPane)
     ? (rawPane as typeof preferredPane)
     : preferredPane;
-  const [subject, setSubject] = useWorkspaceReviewSubject(projectId, workspaceId);
   const { decide, load, retryDecision, overrideReason, setOverrideReason, state } =
     useWorkspaceReviewSnapshot(projectId, workspaceId, snapshotId);
   const snapshot = state.data?.snapshot ?? null;
   const view = snapshot?.transition?.mode === 'transition' ? snapshot.transition : null;
   const schemaReview = state.data?.schema_review;
+  const subjectChanges = workspaceReviewSubjectChanges(schemaReview);
+  if (!schemaReview) {
+    subjectChanges.content = Boolean(
+      view?.change?.base?.digest &&
+        view.change.result?.digest &&
+        view.change.base.digest !== view.change.result.digest
+    );
+  }
+  const [subject, setSubject] = useWorkspaceReviewSubject(projectId, workspaceId, subjectChanges);
   const liveFieldGroups = useReviewedFieldChanges(
     projectId,
     workspaceId,
@@ -149,6 +158,7 @@ export function WorkspaceSnapshotReview({
         Boolean(state.latestUnavailable)
       }
       onDecide={(outcome, reason) => void decide(outcome, reason)}
+      onEdit={() => router.push(context === 'schema' ? schemaHref : composeHref)}
       onOverrideReasonChange={setOverrideReason}
       overrideReason={overrideReason}
       view={view}
@@ -180,6 +190,7 @@ export function WorkspaceSnapshotReview({
         {context === 'schema' ? (
           <WorkspaceStageNavigation
             label="Schema workflow"
+            hidden
             mode="review"
             onModeChange={(mode) => {
               if (mode === 'compose') router.push(schemaHref);
@@ -229,6 +240,7 @@ export function WorkspaceSnapshotReview({
             );
           }}
           subject={subject}
+          subjectChanges={subjectChanges}
           onSubjectChange={setSubject}
           notice={recoveryNotice}
           actions={
@@ -260,11 +272,13 @@ export function WorkspaceSnapshotReview({
           sidebar={
             <>
               {decisionPanel}
-              <div className="mt-4 grid gap-2 text-xs">
-                <Link className="underline" href={historyHref}>
-                  {commit ? 'View commit in History' : 'View History'}
-                </Link>
-              </div>
+              {commit ? (
+                <div className="mt-4 grid gap-2 text-xs">
+                  <Link className="underline" href={historyHref}>
+                    View commit in History
+                  </Link>
+                </div>
+              ) : null}
             </>
           }
           details={

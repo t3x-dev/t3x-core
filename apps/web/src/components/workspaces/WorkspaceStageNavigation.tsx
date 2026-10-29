@@ -6,12 +6,16 @@ export function WorkspaceStageNavigation({
   onModeChange,
   label = 'Workspace stage',
   reviewDisabled = false,
+  hidden = false,
 }: {
   mode?: 'compose' | 'review';
   onModeChange: (mode: 'compose' | 'review') => void;
   label?: string;
   reviewDisabled?: boolean;
+  hidden?: boolean;
 }) {
+  if (hidden) return null;
+
   return (
     <div aria-label={label} className={styles.navigation} role="tablist">
       <button

@@ -1,10 +1,8 @@
 import { useMemo } from 'react';
+import { hasUnappliedSchemaEdit } from '@/domain/workspaces/schemaBindings';
 import { readStudioSchemaEditCandidate } from '@/infrastructure/schemaStudio';
 import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
-import {
-  hasUnappliedSchemaEdit,
-  readWorkspaceSchemaEditing,
-} from '@/infrastructure/workspaceSchemaEditing';
+import { readWorkspaceSchemaEditing } from '@/infrastructure/workspaceSchemaEditing';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
 export type { WorkspaceSchemaEditing } from '@/infrastructure/workspaceSchemaEditing';

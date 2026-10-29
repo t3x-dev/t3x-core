@@ -64,6 +64,7 @@ function ProjectSchemas({ projectId, children }: { projectId: string; children: 
         <main className="flex h-full flex-col gap-4 p-4">
           <WorkspaceStageNavigation
             label="Schema workflow"
+            hidden
             mode="review"
             onModeChange={(mode) => {
               if (mode === 'compose') router.push(composeHref);

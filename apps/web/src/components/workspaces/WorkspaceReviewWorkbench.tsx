@@ -1,13 +1,16 @@
 'use client';
 
+import type { WorkspaceFullSchemaReview } from '@t3x-dev/api-client';
 import { Code2, Eye, GitCompareArrows } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { composeValuesEqual } from '@/domain/workspaces/composeObjectChanges';
 import { useViewPreference } from '@/hooks/shared/useViewPreference';
 import styles from './WorkspaceReviewWorkbench.module.css';
 
 export const WORKSPACE_REVIEW_VIEWS = ['changes', 'rendered', 'yaml'] as const;
 export type WorkspaceReviewPane = (typeof WORKSPACE_REVIEW_VIEWS)[number];
 export type WorkspaceReviewSubject = 'content' | 'schema';
+export type WorkspaceReviewSubjectChanges = Record<WorkspaceReviewSubject, boolean>;
 const SUBJECTS = ['content', 'schema'] as const;
 const VIEWS = [
   { id: 'changes', label: 'Changes', detail: 'Before → After', icon: GitCompareArrows },
@@ -19,12 +22,39 @@ export function workspaceReviewPreferenceKey(projectId: string, workspaceId: str
   return `t3x.workspace-view:${projectId}:${workspaceId}:review`;
 }
 
-export function useWorkspaceReviewSubject(projectId: string, workspaceId: string) {
-  return useViewPreference(
+export function workspaceReviewSubjectChanges(
+  review: WorkspaceFullSchemaReview | null | undefined
+): WorkspaceReviewSubjectChanges {
+  return {
+    content: Boolean(review && !composeValuesEqual(review.baseContent, review.draftContent)),
+    schema: Boolean(
+      review &&
+        review.base.status !== 'unknown' &&
+        review.draft.status !== 'unknown' &&
+        (review.base.status !== review.draft.status ||
+          review.base.schemaHash !== review.draft.schemaHash)
+    ),
+  };
+}
+
+export function useWorkspaceReviewSubject(
+  projectId: string,
+  workspaceId: string,
+  changes: WorkspaceReviewSubjectChanges
+) {
+  const [preferred, remember] = useViewPreference(
     `${workspaceReviewPreferenceKey(projectId, workspaceId)}:subject`,
     SUBJECTS,
     'content'
   );
+  const subject = changes[preferred]
+    ? preferred
+    : changes.content
+      ? 'content'
+      : changes.schema
+        ? 'schema'
+        : preferred;
+  return [subject, remember] as const;
 }
 
 /** Presentation only: the caller owns the current Draft or the immutable Review data. */
@@ -38,6 +68,8 @@ export function WorkspaceReviewWorkbench({
   onPaneChange,
   subject,
   onSubjectChange,
+  subjectChanges,
+  emptyState,
   sidebar,
   children,
 }: {
@@ -50,6 +82,8 @@ export function WorkspaceReviewWorkbench({
   onPaneChange: (pane: WorkspaceReviewPane) => void;
   subject: WorkspaceReviewSubject;
   onSubjectChange: (subject: WorkspaceReviewSubject) => void;
+  subjectChanges: WorkspaceReviewSubjectChanges;
+  emptyState?: ReactNode;
   sidebar: ReactNode;
   children: ReactNode;
 }) {
@@ -71,7 +105,13 @@ export function WorkspaceReviewWorkbench({
                 <button
                   type="button"
                   key={item}
-                  aria-pressed={subject === item}
+                  aria-pressed={subject === item && subjectChanges[item]}
+                  disabled={!subjectChanges[item]}
+                  title={
+                    !subjectChanges[item]
+                      ? `No ${item === 'content' ? 'Content' : 'Schema'} changes available to review`
+                      : undefined
+                  }
                   onClick={() => onSubjectChange(item)}
                 >
                   {item === 'content' ? 'Content' : 'Schema'}
@@ -97,7 +137,11 @@ export function WorkspaceReviewWorkbench({
             </nav>
           </div>
           <div className={styles.content} data-review-pane={pane} data-review-subject={subject}>
-            {children}
+            {subjectChanges.content || subjectChanges.schema
+              ? children
+              : (emptyState ?? (
+                  <p className={styles.empty}>No Content or Schema changes available to review.</p>
+                ))}
           </div>
           {details ? (
             <details className={styles.details}>

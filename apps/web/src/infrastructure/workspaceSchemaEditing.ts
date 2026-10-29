@@ -1,4 +1,4 @@
-import type { StudioSchemaEditCandidate } from '@t3x-dev/api-client';
+import { hasUnappliedSchemaEdit } from '@/domain/workspaces/schemaBindings';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import {
   listStudioCandidates,
@@ -6,17 +6,6 @@ import {
   readStudioSchemaEditCandidate,
 } from './schemaStudio';
 import { getSharedApiClient } from './sharedApiClient';
-
-export function hasUnappliedSchemaEdit(
-  edit: StudioSchemaEditCandidate | null,
-  workspace: WorkspaceCandidate
-) {
-  return Boolean(
-    edit &&
-      (!edit.authoringDraft?.resultSchemaHash ||
-        edit.authoringDraft.resultSchemaHash !== workspace.schemaBindings[0]?.schemaHash)
-  );
-}
 
 /** Resume the existing candidate; never replace Studio work with a new editing base. */
 export async function readWorkspaceSchemaEditing(projectId: string, workspaceId: string) {

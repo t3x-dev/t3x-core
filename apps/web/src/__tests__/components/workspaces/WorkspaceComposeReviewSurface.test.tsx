@@ -311,7 +311,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     };
   }
 
-  it('opens Schema preparation instead of silently excluding a pending candidate from Review', async () => {
+  it('opens Review without checking or applying a saved Schema candidate', () => {
     enableComposeActivity();
     schemaEditingMocks.hasPendingEdit.mockResolvedValue(true);
     const candidate = { ...getProjectWorkspaceStarterCandidate('proj_1'), revision: 4 };
@@ -332,12 +332,9 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
     fireEvent.click(screen.getByRole('tab', { name: 'Review', exact: true }));
-    const dialog = await screen.findByRole('dialog', { name: 'Edit Workspace Draft' });
-    expect(within(dialog).getByRole('button', { name: 'Schema', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'true'
-    );
-    expect(onModeChange).not.toHaveBeenCalledWith('review');
+    expect(onModeChange).toHaveBeenCalledWith('review');
+    expect(schemaEditingMocks.hasPendingEdit).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog', { name: 'Edit Workspace Draft' })).not.toBeInTheDocument();
   });
 
   it('moves Draft structure and commit history into the right-side workspace tools', () => {
@@ -1386,7 +1383,8 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(within(draftSidebar).getByText('30')).toBeVisible();
     expect(within(draftSidebar).getByText(/ungrouped local changes/)).toBeVisible();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Draft' }));
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Advanced tools' }), { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Edit Draft' }));
     const dialog = await screen.findByRole('dialog', { name: 'Edit Workspace Draft' });
     expect(within(dialog).getByText('allocation')).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add inside rollout' }));
@@ -2311,7 +2309,8 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(
       within(draft).queryByRole('button', { name: 'Toggle current Draft' })
     ).not.toBeInTheDocument();
-    expect(within(draft).getByRole('button', { name: 'Edit Draft' })).toBeVisible();
+    expect(within(draft).queryByRole('button', { name: 'Edit Draft' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Advanced tools' })).toBeVisible();
     expect(schema).toHaveValue('default');
     expect(
       within(schema).getByRole('option', { name: 'Default · PRD Schema v2' })
@@ -2608,14 +2607,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.getByText(/No changes to commit/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Prepare review' }));
     expect(controller.prepareReview).not.toHaveBeenCalled();
-    const history = new URL(
-      screen.getByRole('link', { name: 'View History' }).getAttribute('href')!,
-      'http://localhost'
-    );
-    expect(history.searchParams.get('branch')).toBe('dev4');
-    const back = new URL(history.searchParams.get('returnTo')!, 'http://localhost');
-    expect(back.searchParams.get('workspace')).toBe(candidate.id);
-    expect(back.searchParams.get('workspaceMode')).toBe('review');
+    expect(screen.queryByRole('link', { name: 'View History' })).not.toBeInTheDocument();
     expect(
       within(screen.getByRole('table')).getByTitle('prd/requirements/weather')
     ).toBeInTheDocument();

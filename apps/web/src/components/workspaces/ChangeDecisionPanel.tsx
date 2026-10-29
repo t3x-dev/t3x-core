@@ -6,6 +6,7 @@ import {
   CircleDashed,
   GitBranch,
   Loader2,
+  Pencil,
   ShieldAlert,
   Sparkles,
   XCircle,
@@ -29,6 +30,7 @@ export function ChangeDecisionPanel({
   branch,
   busy,
   onDecide,
+  onEdit,
   onOverrideReasonChange,
   overrideReason,
   view,
@@ -40,6 +42,7 @@ export function ChangeDecisionPanel({
   branch: string | null;
   busy: boolean;
   onDecide: (outcome: DecisionOutcome, reason?: string) => void;
+  onEdit?: () => void;
   onOverrideReasonChange: (reason: string) => void;
   overrideReason: string;
   view: TransitionViewV1;
@@ -202,6 +205,12 @@ export function ChangeDecisionPanel({
               Approve and commit
             </Button>
           )}
+          {!acceptAllowed && onEdit ? (
+            <Button disabled={busy} onClick={onEdit} type="button" variant="canvas-outline">
+              <Pencil aria-hidden="true" className="size-4" />
+              Continue editing
+            </Button>
+          ) : null}
           {rejectAllowed ? (
             <Button
               disabled={busy}

@@ -1,9 +1,7 @@
 import type { StudioSchemaEditCandidate } from '@t3x-dev/api-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  hasUnappliedSchemaEdit,
-  readWorkspaceSchemaEditing,
-} from '@/infrastructure/workspaceSchemaEditing';
+import { hasUnappliedSchemaEdit } from '@/domain/workspaces/schemaBindings';
+import { readWorkspaceSchemaEditing } from '@/infrastructure/workspaceSchemaEditing';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), read: vi.fn(), list: vi.fn(), preview: vi.fn() }));

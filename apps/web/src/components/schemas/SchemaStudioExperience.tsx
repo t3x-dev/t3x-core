@@ -927,6 +927,7 @@ export function SchemaStudioExperience({
           <>
             <WorkspaceStageNavigation
               label="Schema workflow"
+              hidden
               mode="compose"
               reviewDisabled={
                 !persistedTarget || applying || reviewStatus.loading || Boolean(reviewStatus.error)

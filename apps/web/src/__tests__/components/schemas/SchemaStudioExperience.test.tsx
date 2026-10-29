@@ -1424,7 +1424,7 @@ it('starts blank explicitly and saves the empty definition before Schema Review'
   expect(mocks.prepareContent).toHaveBeenCalled();
 });
 
-it('opens the rejected Review from navigation without preparing the same Draft again', () => {
+it('keeps rejected Review status visible while hiding Schema Review navigation', () => {
   mocks.query = 'workspace=workspace_branch%3Amain';
   mocks.workspaces = [boundWorkspace()];
   mocks.reviewStatus.latest = {
@@ -1441,8 +1441,8 @@ it('opens the rejected Review from navigation without preparing the same Draft a
   render(<SchemaStudioExperience projectId="p" />);
   expect(screen.getByText('This revision was rejected · Draft retained')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Review Schema changes' })).toBeDisabled();
-  fireEvent.click(screen.getByRole('tab', { name: 'Review', exact: true }));
-  expect(mocks.push.mock.lastCall?.[0]).toContain('reviewSnapshot=rejected-review');
+  expect(screen.queryByRole('tab', { name: 'Review', exact: true })).not.toBeInTheDocument();
+  expect(mocks.push).not.toHaveBeenCalled();
   expect(mocks.fullReview).not.toHaveBeenCalled();
   expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
 });
@@ -1460,7 +1460,7 @@ it.each([
   };
   render(<SchemaStudioExperience projectId="p" />);
   expect(screen.getByRole('button', { name: 'Review Schema changes' })).toBeDisabled();
-  expect(screen.getByRole('tab', { name: 'Review', exact: true })).toBeDisabled();
+  expect(screen.queryByRole('tab', { name: 'Review', exact: true })).not.toBeInTheDocument();
   if (status === 'error')
     expect(screen.getByRole('button', { name: 'Retry Review status' })).toBeVisible();
 });

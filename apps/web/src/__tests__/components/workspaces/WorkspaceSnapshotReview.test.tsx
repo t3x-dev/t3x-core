@@ -152,13 +152,7 @@ describe('WorkspaceSnapshotReview', () => {
     const back = new URL(checks.searchParams.get('returnTo')!, 'http://localhost');
     expect(back.searchParams.get('reviewSnapshot')).toBe('rvs_88888888888888888888888888888888');
     expect(back.searchParams.get('reviewPane')).toBe('yaml');
-    const history = new URL(
-      screen.getByRole('link', { name: 'View History' }).getAttribute('href')!,
-      'http://localhost'
-    );
-    expect(history.pathname).toBe('/project/proj_1/history');
-    expect(history.searchParams.get('branch')).toBe('feature/release');
-    expect(history.searchParams.get('returnTo')).toBe(back.pathname + back.search);
+    expect(screen.queryByRole('link', { name: 'View History' })).not.toBeInTheDocument();
     expect(decide).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('tab', { name: 'Compose' }));
     expect(push).toHaveBeenCalledWith(

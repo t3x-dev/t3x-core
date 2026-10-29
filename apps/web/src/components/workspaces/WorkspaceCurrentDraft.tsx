@@ -1,7 +1,7 @@
 'use client';
 
 import type { WorkspaceAuthoringView } from '@t3x-dev/api-client';
-import { ChevronRight, FileText, Folder, Pencil } from 'lucide-react';
+import { ChevronRight, FileText, Folder } from 'lucide-react';
 import Link from 'next/link';
 import { type ReactNode, useMemo, useState } from 'react';
 import { SchemaDefinitionTree } from '@/components/schemas/SchemaDefinitionWorkbench';
@@ -86,20 +86,7 @@ export function WorkspaceCurrentDraft({
           <h2>Current Draft</h2>
         )}
         {revision !== undefined ? <span title="Current Draft revision">r{revision}</span> : null}
-        {onEdit ? (
-          <button
-            type="button"
-            className={styles.structureEdit}
-            onClick={() =>
-              onEdit(subject, subject === 'schema' ? corresponding?.semanticPath : undefined)
-            }
-            aria-label="Edit Draft"
-          >
-            <Pencil aria-hidden="true" /> Edit
-          </button>
-        ) : (
-          <small>Read-only</small>
-        )}
+        {!onEdit ? <small>Read-only</small> : null}
       </header>
       <div className={styles.currentDraftBody}>
         {stagedCount > 0 ? (

@@ -61,6 +61,15 @@
   font-size: 13px;
   color: var(--text-secondary);
 }
+.subjects button:disabled {
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.empty {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
 .subjects button[aria-pressed="true"] {
   background: var(--accent-commit-soft);
   color: var(--accent-commit);
@@ -107,7 +116,7 @@
   line-height: 1.5;
   color: var(--text-tertiary);
 }
-.toolbar button:hover {
+.toolbar button:not(:disabled):hover {
   background: var(--surface-panel);
 }
 .toolbar button:focus-visible {

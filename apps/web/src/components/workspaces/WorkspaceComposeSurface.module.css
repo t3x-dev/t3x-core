@@ -2563,12 +2563,7 @@
   margin: 0;
 }
 
-.composeBoard > header {
-  max-width: none;
-  margin: 0;
-}
-
-/* Both stages share a stable header, followed by one dedicated tool row. */
+/* The page header is outside the board; its former first grid row stays empty. */
 .composeBoard {
   grid-template-rows: max-content max-content minmax(0, 1fr);
 }
