@@ -1,4 +1,4 @@
-import type { ColorMode, Node } from '@xyflow/react';
+import type { ColorMode, MarkerType, Node } from '@xyflow/react';
 import {
   Background,
   BackgroundVariant,
@@ -7,9 +7,18 @@ import {
   ReactFlowProvider,
   useReactFlow,
 } from '@xyflow/react';
-import { HelpCircle } from 'lucide-react';
+import { Download, Hand, HelpCircle, MousePointer2, RotateCcw } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getLayoutedElements } from '@/components/canvas/elkLayout';
+import { getBranchVisual } from '@/domain/canvas/branchVisuals';
+import { buildStateCanvasSvg } from '@/domain/canvas/stateCanvasExport';
+import { downloadTextFile } from '@/domain/history/historyCanvasExport';
+import {
+  getProjectIdCanvasCommitPath,
+  getProjectIdHistoryPath,
+  getProjectIdWorkspacePath,
+} from '@/domain/project/repoPath';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { useCanvasPositionPersist } from '@/hooks/canvas/useCanvasPositionPersist';
 import { LEAF_CHANGED_EVENT, type LeafChangedDetail } from '@/hooks/leaves/leafEvents';
@@ -24,6 +33,7 @@ import { useContextMenu } from '@/hooks/shared/useContextMenu';
 import { useNodePositionSaver } from '@/hooks/shared/useNodePositionSaver';
 import { usePathHighlight } from '@/hooks/shared/usePathHighlight';
 import { useTerminology } from '@/hooks/shared/useTerminology';
+import { useCommitTransitionView } from '@/hooks/workspaces/useCommitTransitionView';
 import '@xyflow/react/dist/style.css';
 import { useTheme } from 'next-themes';
 import { AnimatedEdge } from './AnimatedEdge';
@@ -47,6 +57,7 @@ import { ZoomSlider } from '@/components/ui/zoom-slider';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
+import type { Conversation } from '@/types/api';
 import type { CanvasNodeData } from '@/types/nodes';
 import { cn } from '@/utils/cn';
 import { glass } from '@/utils/theme';
@@ -56,11 +67,25 @@ import { MergePanel } from '../merge/MergePanel';
 import { CanvasSelectionPanel } from './CanvasSelectionPanel';
 import { DeletionConfirmDialog } from './DeletionConfirmDialog';
 import { NodeModal } from './NodeModal';
+import vividStyles from './StateCanvasVivid.module.css';
 
 const GRID_SIZE = 16;
 const CANVAS_MINIMAP_WIDTH = 176;
 const CANVAS_MINIMAP_HEIGHT = 96;
+const VIRTUALIZE_AFTER = 40;
 type CanvasUnitNode = Node<CanvasNodeData, 'unit'>;
+
+function nodeBranch(node: Node<CanvasNodeData>): string {
+  if (node.data.commitStatus === 'committed') {
+    return (
+      node.data.commit?.branch ||
+      (node.data.branchType === 'branch' ? node.data.branchName || 'branch' : 'main')
+    );
+  }
+  return node.data.pendingBranch === 'branch'
+    ? node.data.pendingBranchName || node.data.branchName || 'branch'
+    : 'main';
+}
 
 interface CanvasWorkspaceProps {
   embedded?: boolean;
@@ -96,7 +121,9 @@ function CanvasWorkspaceInner({
   // Subscribe-based persistence of drag-induced position changes.
   // Canvas store stays pure per v2 §2.5.
   useCanvasPositionPersist();
+  const router = useRouter();
   const [isPanMode, setIsPanMode] = useState(false);
+  const [branchFilter, setBranchFilter] = useState('all');
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showMemoryModal, setShowMemoryModal] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -131,6 +158,7 @@ function CanvasWorkspaceInner({
     openNodeModal,
     closeNodeModal,
   } = useCanvasStore();
+  const pendingConversations = useCanvasStore((state) => state.pendingConversations);
   const { load: loadCanvas, refresh: refreshCanvasLeaves, add: addNode } = useCanvasNodeActions();
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
 
@@ -174,6 +202,9 @@ function CanvasWorkspaceInner({
         if (nodesToRemove.size === 0) return {};
         return {
           nodes: state.nodes.filter((node) => !nodesToRemove.has(node.id)),
+          pendingConversations: state.pendingConversations.filter(
+            (conversation) => conversation.conversationId !== detail.conversationId
+          ),
           edges: state.edges.filter(
             (edge) => !nodesToRemove.has(edge.source) && !nodesToRemove.has(edge.target)
           ),
@@ -201,6 +232,20 @@ function CanvasWorkspaceInner({
 
   const notify = useProjectStore((state) => state.notifyCallback);
 
+  const openCreatedConversation = useCallback(
+    (conversation: Conversation) => {
+      const targetProjectId = projectId || conversation.project_id;
+      if (!targetProjectId) return;
+      router.push(
+        getProjectIdWorkspacePath(targetProjectId, {
+          branch: 'main',
+          sourceConversationId: conversation.conversation_id,
+        })
+      );
+    },
+    [projectId, router]
+  );
+
   // Extracted handlers
   const { handleAddNode, selectAllNodes, deselectAllNodes, navigateToNode } = useCanvasHandlers({
     getNodes,
@@ -220,6 +265,7 @@ function CanvasWorkspaceInner({
       isDeveloperMode,
       notify,
       fitView,
+      onConversationCreated: openCreatedConversation,
     });
 
   // Path highlight (extracted hook)
@@ -227,6 +273,46 @@ function CanvasWorkspaceInner({
     nodes,
     edges,
   });
+
+  const branchOptions = useMemo(
+    () =>
+      [...new Set(nodes.filter((node) => node.data.kind === 'unit').map(nodeBranch))].sort(
+        (left, right) =>
+          Number(right === 'main') - Number(left === 'main') || left.localeCompare(right)
+      ),
+    [nodes]
+  );
+  const visibleNodeIds = useMemo(
+    () =>
+      new Set(
+        nodes
+          .filter((node) => branchFilter === 'all' || nodeBranch(node) === branchFilter)
+          .map((node) => node.id)
+      ),
+    [branchFilter, nodes]
+  );
+  const visibleNodes = useMemo(
+    () => nodesForRender.filter((node) => visibleNodeIds.has(node.id)),
+    [nodesForRender, visibleNodeIds]
+  );
+  const visibleEdges = useMemo(
+    () =>
+      edgesForRender.filter(
+        (edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)
+      ),
+    [edgesForRender, visibleNodeIds]
+  );
+
+  const changeBranchFilter = useCallback(
+    (branch: string) => {
+      setBranchFilter(branch);
+      setActionPanel(null);
+      requestAnimationFrame(() => {
+        void fitView({ padding: compactViewport ? 0.12 : 0.24, maxZoom: 1, duration: 240 });
+      });
+    },
+    [compactViewport, fitView]
+  );
 
   // DAG auto-layout: compute topology fingerprint from node IDs + edge connections.
   // Position changes don't alter this, so ELK only runs when the graph structure changes.
@@ -297,6 +383,7 @@ function CanvasWorkspaceInner({
         setNodes(layouted);
         // Save ELK-computed positions to DB so next reload uses them
         for (const node of layouted) {
+          if ((node.data as CanvasNodeData).pendingConversationGroup) continue;
           saveNodePosition(
             node.id,
             (node.data as import('@/types/nodes').CanvasNodeData).kind,
@@ -382,17 +469,21 @@ function CanvasWorkspaceInner({
 
   const selectedUnitNode = useMemo<CanvasUnitNode | null>(() => {
     const actionNode = actionPanel
-      ? nodes.find((node) => node.id === actionPanel.nodeId)
+      ? nodes.find((node) => node.id === actionPanel.nodeId && visibleNodeIds.has(node.id))
       : undefined;
     const selectedNode = nodes.find(
-      (node) => node.selected && node.data.kind === 'unit' && node.data.commitStatus === 'committed'
+      (node) =>
+        visibleNodeIds.has(node.id) &&
+        node.selected &&
+        node.data.kind === 'unit' &&
+        node.data.commitStatus === 'committed'
     );
     const node = actionNode ?? selectedNode;
     if (!node || node.data.kind !== 'unit' || node.data.commitStatus !== 'committed') {
       return null;
     }
     return node as CanvasUnitNode;
-  }, [actionPanel, nodes]);
+  }, [actionPanel, nodes, visibleNodeIds]);
 
   const buildNodeActionModel = (node: CanvasUnitNode | null) => {
     if (!node) {
@@ -409,14 +500,69 @@ function CanvasWorkspaceInner({
       parentNode?.data.commit?.hash ??
       (parentEdge?.source?.startsWith('sha') ? parentEdge.source : undefined);
 
+    const commitHash = node.data.commitHash ?? node.data.commit?.hash;
+    const branch = node.data.commit?.branch || nodeBranch(node);
     return {
-      actions: buildCommitActions({}),
+      actions: buildCommitActions({
+        onViewDiff:
+          projectId && commitHash
+            ? () =>
+                router.push(
+                  getProjectIdHistoryPath(projectId, {
+                    branch,
+                    commit: commitHash,
+                    returnTo: getProjectIdCanvasCommitPath(projectId, commitHash),
+                  })
+                )
+            : undefined,
+      }),
       canMerge: false,
       parentHash,
     };
   };
 
   const selectionActionModel = buildNodeActionModel(selectedUnitNode);
+  const selectedParentNodes = useMemo(() => {
+    if (!selectedUnitNode) return [];
+    const parentHashes = new Set(
+      selectedUnitNode.data.commit?.parents ??
+        edges.filter((edge) => edge.target === selectedUnitNode.id).map((edge) => edge.source)
+    );
+    return nodes.filter(
+      (node): node is CanvasUnitNode =>
+        node.data.kind === 'unit' &&
+        (parentHashes.has(node.id) ||
+          Boolean(node.data.commitHash && parentHashes.has(node.data.commitHash)))
+    );
+  }, [edges, nodes, selectedUnitNode]);
+  const selectedCommitHash =
+    selectedUnitNode?.data.commitHash ?? selectedUnitNode?.data.commit?.hash ?? null;
+  const selectedCommitBranch = selectedUnitNode
+    ? selectedUnitNode.data.commit?.branch || nodeBranch(selectedUnitNode)
+    : focusedBranch || 'main';
+  const transitionState = useCommitTransitionView(
+    projectId ?? '',
+    selectedCommitBranch,
+    selectedCommitHash
+  );
+
+  const downloadCanvas = useCallback(() => {
+    const internalNodes = getNodes() as Node<CanvasNodeData>[];
+    const positioned = visibleNodes.map(
+      (node) => internalNodes.find((candidate) => candidate.id === node.id) ?? node
+    );
+    downloadTextFile(
+      `state-evolution-${branchFilter === 'all' ? 'all-branches' : branchFilter}.svg`,
+      buildStateCanvasSvg(positioned, visibleEdges),
+      'image/svg+xml;charset=utf-8'
+    );
+  }, [branchFilter, getNodes, visibleEdges, visibleNodes]);
+
+  const closeInspector = useCallback(() => {
+    setActionPanel(null);
+    setHighlight(null);
+    setNodes(getNodes().map((node) => ({ ...node, selected: false })));
+  }, [getNodes, setHighlight, setNodes]);
 
   const showActionPanelForNode = useCallback(
     (event: React.MouseEvent | MouseEvent, nodeId: string) => {
@@ -450,183 +596,283 @@ function CanvasWorkspaceInner({
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col">
-      <CanvasToolbar
-        embedded={embedded}
-        focusedBranch={focusedBranch}
-        projectName={projectName}
-        stateHref={stateHref}
-        onFitView={() =>
-          fitView({ padding: compactViewport ? 0.12 : 0.3, maxZoom: 1, duration: 300 })
-        }
-      />
+      <div
+        className={cn('flex min-h-0 flex-1', vividStyles.workspaceSplit)}
+        data-testid="canvas-inspector-layout"
+      >
+        <div className={vividStyles.canvasColumn} data-testid="canvas-column">
+          <CanvasToolbar
+            embedded={embedded}
+            branchFilter={branchFilter}
+            branchOptions={branchOptions}
+            focusedBranch={focusedBranch}
+            onBranchFilterChange={changeBranchFilter}
+            projectName={projectName}
+            stateHref={stateHref}
+            onFitView={() =>
+              fitView({ padding: compactViewport ? 0.12 : 0.3, maxZoom: 1, duration: 300 })
+            }
+          />
 
-      <div className="flex min-h-0 flex-1">
-        <div
-          ref={canvasRef}
-          data-intro-target="project-canvas"
-          className={cn(
-            'relative min-w-0 flex-1 transition-opacity duration-300',
-            isPanMode && 'cursor-grab active:cursor-grabbing',
-            !initialLayoutDone && nodes.length > 0 && 'opacity-0'
-          )}
-          role="tree"
-          aria-label="State graph canvas"
-          style={{
-            backgroundColor: 'var(--surface-canvas)',
-          }}
-        >
-          <ReactFlow
-            nodes={nodesForRender}
-            edges={edgesForRender}
-            nodeTypes={canvasNodeTypes}
-            edgeTypes={edgeTypes}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onNodeClick={(event, node) => {
-              // Skip node click logic when user is interacting with editable title
-              const target = event.target as HTMLElement;
-              if (target.tagName === 'INPUT' || target.closest('[data-title-editable]')) {
-                return;
-              }
+          <div
+            ref={canvasRef}
+            data-intro-target="project-canvas"
+            className={cn(
+              'relative min-w-0 flex-1 transition-opacity duration-300',
+              vividStyles.canvasPane,
+              isPanMode && 'cursor-grab active:cursor-grabbing',
+              !initialLayoutDone && nodes.length > 0 && 'opacity-0'
+            )}
+            role="tree"
+            aria-label="State graph canvas"
+            style={{
+              backgroundColor: 'var(--surface-canvas)',
+            }}
+          >
+            <ReactFlow
+              nodes={visibleNodes}
+              edges={visibleEdges}
+              nodeTypes={canvasNodeTypes}
+              edgeTypes={edgeTypes}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              onNodeClick={(event, node) => {
+                // Skip node click logic when user is interacting with editable title
+                const target = event.target as HTMLElement;
+                if (target.tagName === 'INPUT' || target.closest('[data-title-editable]')) {
+                  return;
+                }
 
-              const data = node.data as CanvasNodeData;
+                const data = node.data as CanvasNodeData;
 
-              if (data.kind === 'leaf') return;
+                if (data.kind === 'leaf') return;
 
-              // Pending nodes stay on the canvas when selected. Their explicit action
-              // opens the inline workflow; selection must remain available for Delete.
-              if (data.commitStatus !== 'committed') {
-                return;
-              }
+                const branchHighlightTarget =
+                  target.closest<HTMLElement>('[data-branch-highlight]');
+                const requestedBranch = branchHighlightTarget?.dataset.branchHighlight?.trim();
+                if (!compactViewport && requestedBranch) {
+                  setHighlight(
+                    requestedBranch === 'main' || requestedBranch === 'master'
+                      ? { mode: 'main' }
+                      : { branch: requestedBranch, mode: 'branch' }
+                  );
+                  return;
+                }
 
-              // Committed nodes: single click selects the version and exposes
-              // the actions that remain on the Canvas.
-              if (!compactViewport) {
-                if (data.branchType === 'branch') {
-                  setHighlight({ branch: data.branchName, mode: 'branch' });
-                } else {
+                // Every node uses the same causal rule: highlight the selected version,
+                // then recursively follow all parents back to the graph roots.
+                if (!compactViewport) {
                   setHighlight({ mode: 'node', nodeId: node.id });
                 }
-              }
-              showActionPanelForNode(event, node.id);
-            }}
-            onNodeDragStart={(_event, node) => {
-              const data = node.data as CanvasNodeData;
-              reopenActionPanelNodeRef.current =
-                (actionPanel?.nodeId === node.id || selectedUnitNode?.id === node.id) &&
-                data.kind === 'unit' &&
-                data.commitStatus === 'committed'
-                  ? node.id
-                  : null;
-              setActionPanel(null);
-            }}
-            onNodeDragStop={(event, node) => {
-              if (reopenActionPanelNodeRef.current === node.id) {
-                showActionPanelForNode(event, node.id);
-              }
-              reopenActionPanelNodeRef.current = null;
-            }}
-            onNodeContextMenu={handleNodeContextMenu}
-            onPaneContextMenu={handlePaneContextMenu}
-            onPaneClick={() => {
-              // Clear active path highlight and close transient canvas overlays.
-              if (highlight) {
-                setHighlight(null);
-              }
-              closeContextMenu();
-              setActionPanel(null);
-            }}
-            panOnDrag={isPanMode}
-            selectionOnDrag={!isPanMode}
-            snapToGrid
-            snapGrid={[GRID_SIZE, GRID_SIZE]}
-            proOptions={{ hideAttribution: true }}
-            fitView={!initialViewport}
-            fitViewOptions={{ padding: compactViewport ? 0.12 : 0.3, maxZoom: 1 }}
-            defaultViewport={initialViewport ?? { x: 0, y: 0, zoom: 1 }}
-            onMoveStart={() => setActionPanel(null)}
-            onMoveEnd={(_event, viewport) => onViewportChange?.(viewport)}
-            minZoom={canvasMinZoom}
-            maxZoom={2}
-            deleteKeyCode={['Backspace', 'Delete']}
-            selectNodesOnDrag={false}
-            colorMode={colorMode}
-            defaultEdgeOptions={{
-              type: 'animated',
-              style: { strokeWidth: 2 },
-            }}
-          >
-            {!compactViewport && (
-              <MiniMap
-                nodeStrokeWidth={3}
-                pannable
-                zoomable
-                className={cn(
-                  '!bottom-11 !right-16 !overflow-hidden !rounded-xl !border-[var(--stroke-default)] !bg-[var(--surface-elevated)] shadow-[var(--fx-shadow-sm)]'
-                )}
-                style={{
-                  width: CANVAS_MINIMAP_WIDTH,
-                  height: CANVAS_MINIMAP_HEIGHT,
-                  backgroundColor: 'var(--surface-elevated)',
-                }}
-                maskColor={
-                  colorMode === 'dark' ? 'rgba(15, 23, 42, 0.7)' : 'rgba(255, 255, 255, 0.7)'
-                }
-              />
-            )}
-            <ZoomSlider
-              compact={compactViewport}
-              position="bottom-left"
-              className="!bottom-11 !left-4 !rounded-xl !border-[var(--stroke-default)] !bg-[var(--surface-elevated)]/95"
-            />
-            <Background
-              variant={BackgroundVariant.Lines}
-              gap={32}
-              size={1}
-              color={colorMode === 'dark' ? 'var(--stroke-grid)' : 'var(--stroke-grid)'}
-            />
-          </ReactFlow>
 
-          {/* Empty state overlay - guided 3-step onboarding card */}
-          {nodes.length === 0 && !canvasLoading && !onboardingDismissed && (
-            <CanvasOnboarding
-              onAddNode={() => handleAddNode('unit')}
-              onDismiss={() => {
-                setOnboardingDismissed(true);
-                localStorage.setItem('t3x_onboarded', 'true');
+                // Pending nodes stay on the canvas when selected. Their incoming pending
+                // edge is now part of the highlighted causal path, but no commit action
+                // panel is opened for them.
+                if (data.commitStatus !== 'committed') {
+                  return;
+                }
+
+                showActionPanelForNode(event, node.id);
               }}
-              isAdding={isAdding}
-            />
-          )}
-          {nodes.length > 0 && (
-            <div className="pointer-events-none absolute left-8 top-8 z-10 hidden items-center gap-2 text-xs text-[var(--text-tertiary)] md:flex">
-              <span className="font-semibold text-[var(--text-secondary)]">Version Path</span>
-              <span>
-                {selectedUnitNode
-                  ? 'selected commit shows source, diff, leaves, and next actions'
-                  : 'select a commit on the canvas to inspect source, diff, leaves, and next actions'}
-              </span>
-            </div>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setShowShortcuts(true)}
-            title="Keyboard Shortcuts (?)"
-            className={cn(
-              'absolute bottom-10 right-4 z-20 h-8 w-8 rounded-full text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]',
-              glass.cardBase
+              onNodeDragStart={(_event, node) => {
+                const data = node.data as CanvasNodeData;
+                reopenActionPanelNodeRef.current =
+                  (actionPanel?.nodeId === node.id || selectedUnitNode?.id === node.id) &&
+                  data.kind === 'unit' &&
+                  data.commitStatus === 'committed'
+                    ? node.id
+                    : null;
+                setActionPanel(null);
+              }}
+              onNodeDragStop={(event, node) => {
+                if (reopenActionPanelNodeRef.current === node.id) {
+                  showActionPanelForNode(event, node.id);
+                }
+                reopenActionPanelNodeRef.current = null;
+              }}
+              onNodeContextMenu={handleNodeContextMenu}
+              onPaneContextMenu={handlePaneContextMenu}
+              onPaneClick={() => {
+                // Clear active path highlight and close transient canvas overlays.
+                if (highlight) {
+                  setHighlight(null);
+                }
+                closeContextMenu();
+                setActionPanel(null);
+              }}
+              panOnDrag={isPanMode}
+              selectionOnDrag={!isPanMode}
+              snapToGrid
+              snapGrid={[GRID_SIZE, GRID_SIZE]}
+              proOptions={{ hideAttribution: true }}
+              fitView={!initialViewport}
+              fitViewOptions={{ padding: compactViewport ? 0.12 : 0.3, maxZoom: 1 }}
+              defaultViewport={initialViewport ?? { x: 0, y: 0, zoom: 1 }}
+              onMoveStart={() => setActionPanel(null)}
+              onMoveEnd={(_event, viewport) => onViewportChange?.(viewport)}
+              minZoom={canvasMinZoom}
+              maxZoom={2}
+              onlyRenderVisibleElements={visibleNodes.length > VIRTUALIZE_AFTER}
+              deleteKeyCode={['Backspace', 'Delete']}
+              selectNodesOnDrag={false}
+              colorMode={colorMode}
+              defaultEdgeOptions={{
+                type: 'animated',
+                style: { strokeWidth: 2.8 },
+                markerEnd: { type: 'arrowclosed' as MarkerType, width: 22, height: 22 },
+              }}
+            >
+              {!compactViewport && (
+                <MiniMap
+                  nodeStrokeWidth={3}
+                  nodeColor="var(--surface-card)"
+                  nodeStrokeColor={(node) =>
+                    node.data.commitStatus === 'staging' || node.data.pendingConversationGroup
+                      ? 'var(--accent-pending)'
+                      : getBranchVisual(nodeBranch(node as Node<CanvasNodeData>)).accent
+                  }
+                  pannable
+                  zoomable
+                  className={cn(
+                    '!bottom-11 !right-16 !overflow-hidden !rounded-xl !border-[var(--stroke-default)] !bg-[var(--surface-elevated)] shadow-[var(--fx-shadow-sm)]'
+                  )}
+                  style={{
+                    width: CANVAS_MINIMAP_WIDTH,
+                    height: CANVAS_MINIMAP_HEIGHT,
+                    backgroundColor: 'var(--surface-elevated)',
+                  }}
+                  maskColor={
+                    colorMode === 'dark' ? 'rgba(15, 23, 42, 0.7)' : 'rgba(255, 255, 255, 0.7)'
+                  }
+                />
+              )}
+              <ZoomSlider
+                compact={compactViewport}
+                position="bottom-left"
+                className="!bottom-11 !left-4 !rounded-xl !border-[var(--stroke-default)] !bg-[var(--surface-elevated)]/95"
+              />
+              <Background
+                variant={BackgroundVariant.Dots}
+                gap={24}
+                size={1.5}
+                color={colorMode === 'dark' ? 'var(--stroke-grid)' : 'var(--stroke-grid)'}
+              />
+            </ReactFlow>
+
+            {/* Empty state overlay - guided 3-step onboarding card */}
+            {nodes.length === 0 &&
+              pendingConversations.length === 0 &&
+              !canvasLoading &&
+              !onboardingDismissed && (
+                <CanvasOnboarding
+                  onAddNode={() => {
+                    void handleAddNode('unit').then((conversation) => {
+                      if (conversation) openCreatedConversation(conversation);
+                    });
+                  }}
+                  onDismiss={() => {
+                    setOnboardingDismissed(true);
+                    localStorage.setItem('t3x_onboarded', 'true');
+                  }}
+                  isAdding={isAdding}
+                />
+              )}
+            {nodes.length === 0 && pendingConversations.length > 0 && !canvasLoading ? (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div className="rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-card)]/90 px-5 py-4 text-center shadow-[var(--fx-shadow-sm)] backdrop-blur-sm">
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">No commits yet</p>
+                  <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                    {pendingConversations.length} pending conversation
+                    {pendingConversations.length === 1 ? '' : 's'} · open the pending list above to
+                    continue.
+                  </p>
+                </div>
+              </div>
+            ) : null}
+            {visibleNodes.length > 0 && (
+              <div className="pointer-events-none absolute left-8 top-8 z-10 hidden items-center gap-2 text-xs text-[var(--text-tertiary)] md:flex">
+                <span className="font-semibold text-[var(--text-secondary)]">Version Path</span>
+                <span>
+                  {selectedUnitNode
+                    ? 'selected commit shows source, diff, leaves, and next actions'
+                    : 'select a commit on the canvas to inspect source, diff, leaves, and next actions'}
+                </span>
+              </div>
             )}
-          >
-            <HelpCircle className="h-4 w-4" />
-          </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowShortcuts(true)}
+              title="Keyboard Shortcuts (?)"
+              className={cn(
+                'absolute bottom-10 right-4 z-20 h-8 w-8 rounded-full text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]',
+                glass.cardBase
+              )}
+            >
+              <HelpCircle className="h-4 w-4" />
+            </Button>
+            <div
+              aria-label="Canvas tools"
+              role="toolbar"
+              className={cn(
+                'absolute bottom-10 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-[var(--stroke-default)] p-1 shadow-[var(--fx-shadow-hover)]',
+                glass.cardBase
+              )}
+            >
+              <Button
+                aria-label="Select tool"
+                aria-pressed={!isPanMode}
+                className={cn(!isPanMode && 'bg-[var(--accent-commit)] text-[var(--on-accent)]')}
+                onClick={() => setIsPanMode(false)}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <MousePointer2 className="size-4" />
+              </Button>
+              <Button
+                aria-label="Pan tool"
+                aria-pressed={isPanMode}
+                className={cn(isPanMode && 'bg-[var(--accent-commit)] text-[var(--on-accent)]')}
+                onClick={() => setIsPanMode(true)}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <Hand className="size-4" />
+              </Button>
+              <span className="mx-0.5 h-5 w-px bg-[var(--stroke-divider)]" />
+              <Button
+                aria-label="Reset canvas view"
+                onClick={() =>
+                  void fitView({
+                    padding: compactViewport ? 0.12 : 0.24,
+                    maxZoom: 1,
+                    duration: 240,
+                  })
+                }
+                size="icon-sm"
+                variant="ghost"
+              >
+                <RotateCcw className="size-4" />
+              </Button>
+              <Button
+                aria-label="Download canvas"
+                onClick={downloadCanvas}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <Download className="size-4" />
+              </Button>
+            </div>
+          </div>
+          <CanvasStatusBar />
         </div>
         <CanvasSelectionPanel
           actions={selectionActionModel.actions}
-          canMerge={selectionActionModel.canMerge}
           node={selectedUnitNode}
-          parentHash={selectionActionModel.parentHash}
+          onClose={closeInspector}
+          parentNodes={selectedParentNodes}
+          transitionState={transitionState}
         />
       </div>
 
@@ -643,11 +889,10 @@ function CanvasWorkspaceInner({
         <CommitActionPanel
           x={actionPanel.x}
           y={actionPanel.y}
-          actions={selectionActionModel.actions.filter((action) => action.label !== 'View Diff')}
+          actions={selectionActionModel.actions}
           onClose={() => setActionPanel(null)}
         />
       )}
-      <CanvasStatusBar />
       {modalNode &&
         (modalNode.data.commitStatus !== 'committed' || modalViewMode === 'conversation') && (
           <NodeModal
