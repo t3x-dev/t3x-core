@@ -32,7 +32,7 @@ describe('Workspace current Draft sidebar', () => {
       error: undefined,
     };
   });
-  it('shows current content and bound definition as independent read-only foldable trees', () => {
+  it('shows current content and bound definition as read-only trees without a redundant outer collapse', () => {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     const current = {
       domain: 't3x.dev/semantic-content',
@@ -66,12 +66,10 @@ describe('Workspace current Draft sidebar', () => {
     expect(
       within(panel).queryByRole('button', { name: /save|apply|adopt/i })
     ).not.toBeInTheDocument();
-    fireEvent.click(within(panel).getByRole('button', { name: 'Toggle current Draft' }));
-    expect(within(panel).queryByText('Current title')).not.toBeInTheDocument();
-    expect(within(panel).getByRole('button', { name: 'Toggle current Draft' })).toHaveAttribute(
-      'aria-expanded',
-      'false'
-    );
+    expect(
+      within(panel).queryByRole('button', { name: 'Toggle current Draft' })
+    ).not.toBeInTheDocument();
+    expect(within(panel).getByText('Current title')).toBeVisible();
   });
   it('marks local staging and unadopted candidates without mixing them with the bound tree', () => {
     mocks.schema.hasCandidate = true;

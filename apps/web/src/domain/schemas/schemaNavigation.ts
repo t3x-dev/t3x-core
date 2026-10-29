@@ -1,4 +1,5 @@
 import { safeExploreReturn } from '@/domain/project/exploreLocation';
+import { getProjectIdRepoPath } from '@/domain/project/repoPath';
 
 export function schemaBrowseHref(projectId: string, workspace?: string, branch?: string) {
   const params = new URLSearchParams({ view: 'browse', type: 'schemas', studioTarget: projectId });
@@ -43,4 +44,20 @@ export function schemaWorkspaceHref(
     params.delete('mode');
   }
   return `${pathname}?${params}`;
+}
+
+/** Schema uses the same complete, frozen Draft review in its own task context. */
+export function schemaReviewHref(
+  projectId: string,
+  workspaceId: string,
+  snapshotId?: string,
+  branch?: string
+) {
+  return `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({
+    tab: 'schemas',
+    schemaView: 'review',
+    workspace: workspaceId,
+    ...(snapshotId ? { reviewSnapshot: snapshotId } : {}),
+    ...(branch ? { branch } : {}),
+  })}`;
 }

@@ -48,6 +48,7 @@ import {
 import type { CanonicalTimestamp } from '@t3x-dev/transition';
 import type { YSchema, YSchemaRelation } from '@t3x-dev/yschema';
 import { workspaceProvenance } from './workspace-provenance';
+import { isSchemaOnlyWorkspaceReview } from './workspace-schema-content';
 
 export { workspaceProvenance } from './workspace-provenance';
 
@@ -78,7 +79,7 @@ import {
   persistWorkspaceReviewArtifacts,
   reviewSnapshotCreatedAt,
 } from './workspace-review-artifacts';
-import { buildWorkspaceSchemaReview } from './workspace-schema-review';
+import { buildWorkspaceSchemaReview, frozenWorkspaceSchemaReview } from './workspace-schema-review';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
 import { schemaRootKeyFromBinding } from './yschema-registry';
 
@@ -963,26 +964,34 @@ export async function decideWorkspaceTransition(
       )
       .map(({ statement }) => parseYSchemaValidationStatement(statement));
     const nativeCheck = nativeChecks.length === 1 ? nativeChecks[0]!.predicate : null;
+    const frozenSchema = frozenWorkspaceSchemaReview(graph);
     const committedSchemaReview =
-      nativeCheck?.outcome === 'passed'
+      frozenSchema && isSchemaOnlyWorkspaceReview(frozenSchema)
         ? {
             verdict: 'ready',
             summary:
-              'Native YSchema validation passed for this committed result. Execution was not run.',
+              'Schema committed. No business content submitted; content validation is not applicable yet.',
             gaps: [],
           }
-        : {
-            verdict: 'needs_review',
-            summary: 'This commit does not have a passing native YSchema check.',
-            gaps:
-              nativeCheck?.outcome === 'failed'
-                ? [
-                    ...new Set(
-                      [...nativeCheck.errors, ...nativeCheck.gaps].map((finding) => finding.path)
-                    ),
-                  ]
-                : ['Native YSchema validation is unavailable.'],
-          };
+        : nativeCheck?.outcome === 'passed'
+          ? {
+              verdict: 'ready',
+              summary:
+                'Native YSchema validation passed for this committed result. Execution was not run.',
+              gaps: [],
+            }
+          : {
+              verdict: 'needs_review',
+              summary: 'This commit does not have a passing native YSchema check.',
+              gaps:
+                nativeCheck?.outcome === 'failed'
+                  ? [
+                      ...new Set(
+                        [...nativeCheck.errors, ...nativeCheck.gaps].map((finding) => finding.path)
+                      ),
+                    ]
+                  : ['Native YSchema validation is unavailable.'],
+            };
 
     const projectionFacts: ProtocolValue = {
       adapter: 'workspace_transition',

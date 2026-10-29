@@ -1,5 +1,18 @@
+import type { StudioSchemaEditCandidate } from '@t3x-dev/api-client';
 import type { SchemaReleasePreview } from '@/types/schemas';
 import type { WorkspaceCandidate, WorkspaceSchemaBinding } from '@/types/workspaces';
+
+export function hasUnappliedSchemaEdit(
+  edit: StudioSchemaEditCandidate | null,
+  workspace: WorkspaceCandidate,
+  effectiveSchemaHash: string | null | undefined = workspace.schemaBindings[0]?.schemaHash
+) {
+  return Boolean(
+    edit &&
+      (!edit.authoringDraft?.resultSchemaHash ||
+        edit.authoringDraft.resultSchemaHash !== effectiveSchemaHash)
+  );
+}
 
 export interface ProjectWorkspaceSchemaBindings {
   byWorkspaceId: Record<string, WorkspaceSchemaBinding>;

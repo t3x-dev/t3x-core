@@ -23,7 +23,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { WorkspaceYOpsEditor } from '@/components/workspaces/WorkspaceYOpsEditor';
-import { SchemaDefinitionStructure } from './SchemaDefinitionStructure';
 
 type LocalContribution = Record<string, unknown>;
 
@@ -41,7 +40,6 @@ export function SchemaDefinitionWorkbench({
   previewError,
   onPreview,
   onSave,
-  initialMode = 'structure',
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -54,14 +52,10 @@ export function SchemaDefinitionWorkbench({
   previewError?: string;
   onPreview: (contribution: LocalContribution) => void;
   onSave: (contribution: LocalContribution, intent: string) => Promise<void>;
-  initialMode?: 'structure' | 'yaml';
 }) {
-  const [mode, setMode] = useState<'structure' | 'yaml'>('structure');
-  const [contribution, setContribution] = useState<LocalContribution>(EMPTY_CONTRIBUTION);
   const [yaml, setYaml] = useState('nodes: {}\n');
   const [intent, setIntent] = useState('Edit the Workspace-local Schema definition.');
   const [error, setError] = useState<string>();
-  const [structureError, setStructureError] = useState<string>();
   const initialized = useRef(false);
 
   useEffect(() => {
@@ -70,28 +64,17 @@ export function SchemaDefinitionWorkbench({
       return;
     }
     // Preview echoes the edited definition back through these props. Do not
-    // reinitialize an open editor or clear errors in other unfinished fields.
+    // reinitialize an open editor or overwrite unfinished YAML.
     if (initialized.current) return;
     initialized.current = true;
-    setMode(initialMode);
     const next = structuredClone(initialDefinition ?? initialContribution ?? EMPTY_CONTRIBUTION);
-    setContribution(next);
     setYaml(renderYaml(next));
     setError(undefined);
-    setStructureError(undefined);
-  }, [initialDefinition, initialContribution, initialMode, open]);
-
-  function commit(next: LocalContribution) {
-    setContribution(next);
-    setYaml(renderYaml(next));
-    setError(undefined);
-    onPreview(next);
-  }
+  }, [initialDefinition, initialContribution, open]);
 
   function parseYamlDraft() {
     try {
       const next = parseContribution(yaml);
-      setContribution(next);
       setError(undefined);
       onPreview(next);
       return next;
@@ -102,8 +85,7 @@ export function SchemaDefinitionWorkbench({
   }
 
   async function save() {
-    if (structureError) return;
-    const next = mode === 'yaml' ? parseYamlDraft() : contribution;
+    const next = parseYamlDraft();
     if (!next) return;
     try {
       setError(undefined);
@@ -128,8 +110,7 @@ export function SchemaDefinitionWorkbench({
               <DialogTitle>Edit Schema definition</DialogTitle>
               <DialogDescription className="max-w-3xl text-xs leading-relaxed">
                 Edit the complete Workspace-local definition. Changes replay as guarded Schema YOps;
-                published sources and root constraints remain unchanged. Structure and YAML edit the
-                same candidate.
+                published sources and root constraints remain unchanged.
               </DialogDescription>
               {recoveryLabel ? (
                 <p className="inline-flex rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-2 py-0.5 text-[11px] text-[var(--text-tertiary)]">
@@ -143,63 +124,25 @@ export function SchemaDefinitionWorkbench({
         <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(420px,0.9fr)_minmax(520px,1.1fr)]">
           <section className="flex min-h-0 flex-col border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)]">
             <div className="flex shrink-0 items-center gap-2 border-b border-[var(--stroke-divider)] bg-[var(--surface-elevated)] px-4 py-2.5">
-              <div
-                role="tablist"
-                aria-label="Definition editor mode"
-                className="inline-flex rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-0.5"
-              >
-                {(['structure', 'yaml'] as const).map((item) => (
-                  <button
-                    aria-selected={mode === item}
-                    disabled={mode === 'structure' && Boolean(structureError)}
-                    className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${mode === item ? 'bg-[var(--surface-elevated)] text-[var(--text-primary)] shadow-[var(--shadow-xs)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
-                    key={item}
-                    onClick={() => {
-                      if (item === 'structure' && mode === 'yaml' && !parseYamlDraft()) return;
-                      setMode(item);
-                    }}
-                    role="tab"
-                    type="button"
-                  >
-                    {item === 'structure' ? 'Structure' : 'YAML'}
-                  </button>
-                ))}
-              </div>
+              <span className="text-xs font-medium">YAML</span>
               <span className="flex-1" />
-              <Button
-                disabled={Boolean(structureError)}
-                onClick={() => {
-                  const next = mode === 'yaml' ? parseYamlDraft() : contribution;
-                  if (next) onPreview(next);
-                }}
-                size="sm"
-                type="button"
-                variant="canvas-outline"
-              >
+              <Button onClick={parseYamlDraft} size="sm" type="button" variant="canvas-outline">
                 <Eye className="size-3.5" />
                 Preview
               </Button>
             </div>
 
-            {mode === 'yaml' ? (
-              <div className="min-h-0 flex-1 bg-[var(--editor-bg)]">
-                <WorkspaceYOpsEditor
-                  ariaLabel={
-                    initialDefinition
-                      ? 'Schema definition YAML editor'
-                      : 'Local Schema contribution YAML editor'
-                  }
-                  onChange={setYaml}
-                  value={yaml}
-                />
-              </div>
-            ) : (
-              <SchemaDefinitionStructure
-                value={contribution}
-                onChange={commit}
-                onValidationChange={setStructureError}
+            <div className="min-h-0 flex-1 bg-[var(--editor-bg)]">
+              <WorkspaceYOpsEditor
+                ariaLabel={
+                  initialDefinition
+                    ? 'Schema definition YAML editor'
+                    : 'Local Schema contribution YAML editor'
+                }
+                onChange={setYaml}
+                value={yaml}
               />
-            )}
+            </div>
           </section>
 
           <section className="grid min-h-0 grid-rows-2 gap-3 bg-[var(--surface-app)] p-4">
@@ -220,21 +163,17 @@ export function SchemaDefinitionWorkbench({
               placeholder="Why are you changing this Schema?"
               value={intent}
             />
-            {error || structureError || previewError ? (
+            {error || previewError ? (
               <p className="mt-1 text-xs text-[var(--destructive)]" role="alert">
-                {error ?? structureError ?? previewError}
+                {error ?? previewError}
               </p>
             ) : null}
           </div>
           <Button disabled={pending} onClick={() => onOpenChange(false)} variant="ghost">
             Cancel
           </Button>
-          <Button
-            disabled={pending || Boolean(structureError)}
-            onClick={() => void save()}
-            variant="commit"
-          >
-            <Save className="size-4" /> {pending ? 'Saving…' : 'Save candidate'}
+          <Button disabled={pending} onClick={() => void save()} variant="commit">
+            <Save className="size-4" /> {pending ? 'Saving…' : 'Save edits'}
           </Button>
         </div>
       </DialogContent>

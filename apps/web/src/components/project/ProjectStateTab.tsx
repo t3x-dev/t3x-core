@@ -606,7 +606,7 @@ export function ProjectStateTab({
       className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--surface-card)]"
       data-state-view={activeView}
     >
-      <div className="flex min-h-10 shrink-0 flex-wrap items-center border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-1">
+      <div className="hidden min-h-10 shrink-0 flex-wrap items-center border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-1">
         <StateModeTabs
           activeMode={activeView === 'canvas' ? 'canvas' : 'snapshot'}
           onModeChange={(mode) => updateActiveView(mode === 'canvas' ? 'canvas' : lastSnapshotView)}

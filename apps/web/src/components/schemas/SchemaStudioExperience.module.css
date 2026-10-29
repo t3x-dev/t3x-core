@@ -198,7 +198,7 @@
   color: var(--text-secondary);
 }
 .sourceMetadata {
-  flex: 1 1 220px;
+  flex: 0 1 auto;
   min-width: 0;
   color: var(--text-secondary);
   font-size: 12px;

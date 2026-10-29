@@ -81,6 +81,8 @@ export interface WorkspaceAuthoringView {
   currentSchema?: WorkspaceSchemaDefinitionSnapshot;
   /** Net content or effective Schema change. Omitted when the Base contract is unknown. */
   hasChanges?: boolean;
+  /** Net effective Schema change. Omitted when the Base contract is unknown. */
+  schemaHasChanges?: boolean;
   netDiff: WorkspaceAuthoringCard[];
   node: {
     nodeId: string;

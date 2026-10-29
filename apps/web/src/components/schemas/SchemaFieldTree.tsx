@@ -43,6 +43,7 @@ export function SchemaFieldTree({
   projectId,
   sources = [],
   sourceManagement,
+  emptyContent,
   onMove,
   onImport,
   onSelect,
@@ -55,6 +56,7 @@ export function SchemaFieldTree({
   projectId?: string;
   sources?: StudioCandidate[];
   sourceManagement?: ReactNode;
+  emptyContent?: ReactNode;
   onMove: (path: string, target: SchemaFieldRow | null) => void;
   onImport: (item: SchemaSourceItem, target: SchemaFieldRow | null) => void;
   onSelect: (row: SchemaFieldRow) => void;
@@ -104,21 +106,20 @@ export function SchemaFieldTree({
         setDragging(undefined);
       }}
     >
-      <div
-        className={styles.fieldWorkarea}
-        data-sources={
-          Boolean(projectId && (availableSources.length || sourceManagement)) || undefined
-        }
-      >
-        {projectId && (availableSources.length > 0 || sourceManagement) ? (
+      <div className={styles.fieldWorkarea} data-sources={Boolean(projectId) || undefined}>
+        {projectId ? (
           <aside className={styles.importSources} aria-label="Available Schema sources">
             <div className={styles.sourceHeading}>
               <strong>Sources</strong>
-              {sourceManagement}
             </div>
+            {sourceManagement}
             <p>Drag nodes or objects into the draft.</p>
             {!availableSources.length ? (
-              <p>Add a source through Manage sources to get started.</p>
+              <p>
+                {sourceManagement
+                  ? 'No sources added. Use Manage to browse reusable definitions.'
+                  : 'No sources added.'}
+              </p>
             ) : null}
             {availableSources.map((candidate) => (
               <SchemaVisualSource
@@ -141,7 +142,7 @@ export function SchemaFieldTree({
           <div className={styles.columns}>
             <span>Field</span>
             <span>Type · Required</span>
-            <span>Actions</span>
+            <span className="sr-only">Actions</span>
           </div>
           {active ? (
             <div className={styles.moveToolbar}>
@@ -182,8 +183,18 @@ export function SchemaFieldTree({
                 </PopoverContent>
               </Popover>
             </div>
-          ) : null}
-          <div role="tree" aria-label="Schema fields" className={tree.tree}>
+          ) : (
+            <div className={styles.moveToolbar}>
+              <span className={styles.selectionHint}>
+                {rows.length ? 'Select a field to edit' : 'Schema structure'}
+              </span>
+            </div>
+          )}
+          <div
+            role="tree"
+            aria-label="Schema fields"
+            className={`${tree.tree} ${styles.fieldTree}`}
+          >
             {visible.map((row) => (
               <DraggableRow
                 key={row.path}
@@ -206,11 +217,12 @@ export function SchemaFieldTree({
             importing={Boolean(dragging?.source)}
           />
           {!visible.length ? (
-            <p className={styles.feedback}>
-              {rows.length
-                ? 'No fields match this search.'
-                : 'No nodes yet. Add a node or drag one from Sources.'}
-            </p>
+            <div className={styles.feedback}>
+              {emptyContent ??
+                (rows.length
+                  ? 'No fields match this search.'
+                  : 'No nodes yet. Add a node or drag one from Sources.')}
+            </div>
           ) : null}
         </div>
       </div>
@@ -240,6 +252,16 @@ function DraggableRow({
       className={styles.dragRow}
       data-drop-target={drop.isOver || undefined}
     >
+      <span className={styles.treeGuides} aria-hidden="true">
+        {[0, 1, 2, 3, 4, 5, 6, 7].slice(0, row.depth).map((level) => (
+          <span
+            key={level}
+            className={styles.treeGuide}
+            style={{ left: 14 + level * 16 }}
+            data-branch={level === Math.min(row.depth, 8) - 1 || undefined}
+          />
+        ))}
+      </span>
       {render(
         <button
           type="button"

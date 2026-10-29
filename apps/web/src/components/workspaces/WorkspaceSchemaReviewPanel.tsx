@@ -11,7 +11,10 @@ export function WorkspaceSchemaReviewPanel({
 }) {
   if (!review) return null;
   return (
-    <details className="mx-4 my-2 max-h-96 shrink-0 overflow-auto rounded-lg border p-3 text-sm">
+    <details
+      open={review.changes.length > 0}
+      className="mx-4 my-2 max-h-96 shrink-0 overflow-auto rounded-lg border p-3 text-sm"
+    >
       <summary className="cursor-pointer font-medium">
         {historical ? 'Historical complete Review' : 'Complete Workspace Review'} · Schema + content
         {' · '}
@@ -20,6 +23,12 @@ export function WorkspaceSchemaReviewPanel({
       <p className="my-2 text-[var(--text-secondary)]">
         Frozen Base → complete Draft. Studio checks alone do not authorize a commit.
       </p>
+      {review.contentValidation === 'not_applicable' ? (
+        <p className="my-2 text-[var(--text-secondary)]">
+          This review establishes the Schema without business content. Content validation is not
+          applicable yet; required fields will be checked when content is added.
+        </p>
+      ) : null}
       {review.base.status === 'unknown' ? (
         <p role="alert">
           The exact Base Schema is unavailable. Accept and Commit are blocked until it is recovered;

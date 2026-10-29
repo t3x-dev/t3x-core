@@ -54,6 +54,11 @@ const ids = z
   .min(1)
   .max(32)
   .refine((values) => new Set(values).size === values.length, 'Duplicate candidates');
+/** Empty selection resolves the exact binding, or a local empty Base when unbound. */
+const workspaceIds = z
+  .array(z.string().min(1))
+  .max(32)
+  .refine((values) => new Set(values).size === values.length, 'Duplicate candidates');
 /** Bounded JSON only: samples are preview input, never effects or execution requests. */
 export const StudioSampleValueSchema = z
   .record(z.string(), z.unknown())
@@ -117,7 +122,7 @@ export const StudioCompositionConflictSchema = z.object({
 });
 export const StudioPreviewInputSchema = z
   .object({
-    candidateIds: ids,
+    candidateIds: workspaceIds,
     workspaceId: z.string().min(1).optional(),
     compareToCandidateIds: ids.optional(),
     composition: StudioCompositionSchema.optional(),
@@ -143,6 +148,9 @@ export const StudioPreviewInputSchema = z
     schemaEditCandidate: StudioSchemaEditCandidateRefSchema.optional(),
   })
   .strict()
+  .refine((value) => value.candidateIds.length > 0 || !!value.workspaceId, {
+    message: 'Select sources or provide a Workspace with an exact bound Schema.',
+  })
   .refine(
     (value) => !(value.schemaEditCandidate && (value.localContribution || value.schemaDefinition)),
     {
@@ -296,7 +304,7 @@ export const WorkspaceSchemaPendingSchema = z
       z
         .object({
           kind: z.literal('studio'),
-          candidateIds: ids,
+          candidateIds: workspaceIds,
           schemaEditCandidate: StudioSchemaEditCandidateRefSchema.optional(),
         })
         .strict(),
@@ -350,7 +358,7 @@ export const SchemaPreparationTargetSchema = z.discriminatedUnion('kind', [
   z
     .object({
       kind: z.literal('studio'),
-      candidateIds: ids,
+      candidateIds: workspaceIds,
       reviewHash: digest,
       schemaEditCandidate: StudioSchemaEditCandidateRefSchema.optional(),
     })
@@ -377,6 +385,7 @@ export const SchemaPreparationApplyInputSchema = SchemaPreparationInputSchema.sa
   requestId: z.string().min(1).max(200),
 });
 export const SchemaPreparationPreviewSchema = z.object({
+  contentValidation: z.enum(['required', 'not_applicable']).optional(),
   previewHash: digest,
   workspaceRevision: z.number().int().positive(),
   compositionRevision: z.number().int().nonnegative(),
@@ -435,6 +444,8 @@ export const WorkspaceFullSchemaReviewSchema = z
     actionCount: z.number().int().nonnegative(),
     baseContent: schemaJsonValue,
     draftContent: schemaJsonValue,
+    // Absent on historical reviews: never infer an exemption for an old snapshot.
+    contentValidation: z.literal('not_applicable').optional(),
   })
   .strict();
 export type WorkspaceSchemaDefinitionSnapshot = z.infer<
@@ -449,7 +460,7 @@ export const SaveStudioSchemaEditCandidateInputSchema = z
     composition: StudioCompositionSchema.optional(),
     rebase: z.boolean().optional(),
     workspaceId: z.string().min(1),
-    candidateIds: ids,
+    candidateIds: workspaceIds,
     ifRevision: z.number().int().nonnegative(),
     retryKey: z.string().min(1).max(200),
     intent: z.string().min(1).max(2000),
@@ -467,7 +478,7 @@ export const StudioSchemaEditCandidateSchema = z.object({
   candidateId: z.string().min(1),
   workspaceId: z.string().min(1),
   revision: z.number().int().positive(),
-  baseSources: z.array(StudioSourceSchema).min(1),
+  baseSources: z.array(StudioSourceSchema),
   localContribution: StudioSchemaEditLocalContributionSchema,
   /** Read-only exact editing Base, projected by the server; never persisted as client input. */
   baseDefinition: z.record(z.string(), z.unknown()).optional(),

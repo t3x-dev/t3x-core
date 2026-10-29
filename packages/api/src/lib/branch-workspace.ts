@@ -19,8 +19,10 @@ import {
 } from '@t3x-dev/storage';
 import { normalizeYSchemaObject, sha256CompositionValue } from '@t3x-dev/yschema';
 import { initializeWorkspaceAuthoring } from './workspace-authoring';
+import { isSchemaOnlyWorkspaceReview } from './workspace-schema-content';
 import {
   frozenWorkspaceSchemaReview,
+  hasSchemaReviewEvidence,
   recoverCommittedSchema,
   unboundWorkspaceSchema,
 } from './workspace-schema-review';
@@ -77,7 +79,8 @@ export async function createBranchWorkspace(db: AnyDB, input: CreateBranchInput)
       const hashes = new Set<string>(
         view.checks.validation.runs.map((run) => run.predicate.schemaResource.digest)
       );
-      const frozen = graph ? frozenWorkspaceSchemaReview(graph)?.draft : null;
+      const frozenReview = graph ? frozenWorkspaceSchemaReview(graph) : null;
+      const frozen = frozenReview?.draft;
       if (frozen) schema = frozen;
       else if (hashes.size) {
         const recovered = await recoverCommittedSchema(
@@ -100,8 +103,12 @@ export async function createBranchWorkspace(db: AnyDB, input: CreateBranchInput)
           input.projectId
         );
         if (
-          hashes.size !== 1 ||
-          !hashes.has(schema.schemaHash!) ||
+          (!(
+            frozenReview &&
+            isSchemaOnlyWorkspaceReview(frozenReview) &&
+            (await hasSchemaReviewEvidence(committed.proposal, frozenReview))
+          ) &&
+            (hashes.size !== 1 || !hashes.has(schema.schemaHash!))) ||
           !schema.definition ||
           !resolved.schema ||
           (await sha256CompositionValue(normalizeYSchemaObject(schema.definition))) !==

@@ -202,9 +202,9 @@ export function StudioImpactPreview({ impact }: { impact: SchemaEvolutionImpact 
         {impact.status === 'safe'
           ? 'No new content blockers'
           : impact.status === 'needs_input'
-            ? 'New required input — prepare content after adoption'
+            ? 'Required content must be filled before commit'
             : impact.status === 'needs_mapping'
-              ? 'Mapping required before adoption or publication'
+              ? 'Content mapping must be resolved before saving the Draft'
               : 'Content impact could not be approved'}
       </output>
       <p className="text-[var(--text-secondary)]">

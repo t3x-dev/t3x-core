@@ -438,6 +438,13 @@ export async function readWorkspaceAuthoring(
     current: currentComposition(ledger),
     currentSchema,
     hasChanges: schemaReview ? workspaceSchemaReviewHasChanges(schemaReview) : undefined,
+    schemaHasChanges:
+      schemaReview &&
+      schemaReview.base.status !== 'unknown' &&
+      schemaReview.draft.status !== 'unknown'
+        ? schemaReview.base.status !== schemaReview.draft.status ||
+          schemaReview.base.schemaHash !== schemaReview.draft.schemaHash
+        : undefined,
     netDiff: netDiffCards(ledger),
     node: history
       ? {

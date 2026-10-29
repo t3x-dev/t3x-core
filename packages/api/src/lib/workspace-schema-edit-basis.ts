@@ -117,8 +117,8 @@ export async function resolveWorkspaceSchemaEditBasis(
       nodeProvenance = readNodeProvenance(record(view.manifest.registry).nodeProvenance);
     }
   }
-  const parsed = StudioSourceSchema.array().min(1).safeParse(sources);
-  if (!parsed.success)
+  const parsed = StudioSourceSchema.array().safeParse(sources);
+  if (!parsed.success || (!parsed.data.length && !snapshot))
     throw new StudioError(
       'CONFLICT',
       'The bound snapshot has no exact recoverable source provenance.'

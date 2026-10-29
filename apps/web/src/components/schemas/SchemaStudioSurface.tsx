@@ -23,11 +23,11 @@ import { SchemaToolbarSlot } from './SchemaToolbarSlot';
 
 export function SchemaStudioSurface({
   navigation,
+  hidden = false,
   dataEditor,
   editorInvalid = false,
   contextLocked = false,
   sourceHref,
-  workspaceHref,
   branch,
   draftStatus,
   bindingStatus,
@@ -41,15 +41,18 @@ export function SchemaStudioSurface({
   data,
   onEditDefinition,
   onReview,
+  onSave,
+  canSave = false,
+  onInspect,
   canReview = false,
   onDownload,
 }: {
   navigation?: ReactNode;
+  hidden?: boolean;
   editorInvalid?: boolean;
   dataEditor?: () => ReactNode;
   contextLocked?: boolean;
   sourceHref?: string;
-  workspaceHref?: string;
   branch?: string;
   draftStatus?: string;
   bindingStatus?: string;
@@ -63,6 +66,9 @@ export function SchemaStudioSurface({
   data?: StudioPreview;
   onEditDefinition?: () => void;
   onReview?: () => void;
+  onSave?: () => void;
+  canSave?: boolean;
+  onInspect?: () => void;
   canReview?: boolean;
   onDownload?: () => void;
 }) {
@@ -73,76 +79,93 @@ export function SchemaStudioSurface({
   );
 
   return (
-    <main aria-label="Schema editor" className={s.app}>
-      <SchemaToolbarSlot>
-        <div className={s.tool} role="toolbar" aria-label="Studio controls">
-          {navigation}
-          <label className={s.ws}>
-            <Box aria-hidden="true" size={18} />
-            <span>{workspaceTitle}</span>
-            <ChevronDown aria-hidden="true" size={12} />
-            <select
-              aria-label="Target Workspace"
-              value={workspaceId}
-              onChange={(event) => onWorkspace?.(event.target.value)}
-              disabled={!onWorkspace}
-            >
-              {!workspaces.some((item) => item.id === workspaceId) && workspaces.length > 0 ? (
-                <option value={workspaceId}>Workspace unavailable</option>
-              ) : null}
-              {workspaces.length ? (
-                workspaces.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.title}
-                  </option>
-                ))
-              ) : (
-                <option value="">No draft workspace</option>
-              )}
-            </select>
-          </label>
-          {branch ? (
-            <span className={s.branch} title={branch}>
-              <GitBranch aria-hidden="true" size={14} />
-              {branch}
-            </span>
-          ) : null}
-          <div className={s.toolbarActions}>
-            {sourceHref ? (
-              <Link href={sourceHref} className={s.navLink}>
-                Back to source
-              </Link>
-            ) : null}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="canvas-outline" size="sm" aria-label="Schema actions">
-                  More <ChevronDown size={14} aria-hidden="true" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => setYamlOpen(true)}>View YAML</DropdownMenuItem>
-                {workspaceHref ? (
-                  <DropdownMenuItem asChild>
-                    <Link href={workspaceHref}>Open Workspace</Link>
-                  </DropdownMenuItem>
+    <main
+      aria-label="Schema editor"
+      className={s.app}
+      style={hidden ? { display: 'none' } : undefined}
+    >
+      {!hidden ? (
+        <SchemaToolbarSlot>
+          <div
+            className={s.tool}
+            style={hidden ? { display: 'none' } : undefined}
+            role="toolbar"
+            aria-label="Studio controls"
+          >
+            {navigation}
+            <label className={s.ws}>
+              <Box aria-hidden="true" size={18} />
+              <span>{workspaceTitle}</span>
+              <ChevronDown aria-hidden="true" size={12} />
+              <select
+                aria-label="Target Workspace"
+                value={workspaceId}
+                onChange={(event) => onWorkspace?.(event.target.value)}
+                disabled={!onWorkspace}
+              >
+                {!workspaces.some((item) => item.id === workspaceId) && workspaces.length > 0 ? (
+                  <option value={workspaceId}>Workspace unavailable</option>
                 ) : null}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button
-              variant="commit"
-              size="sm"
-              aria-label="Review Schema changes"
-              disabled={!canReview}
-              onClick={onReview}
-            >
-              Review Schema changes
-            </Button>
+                {workspaces.length ? (
+                  workspaces.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.title}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">No draft workspace</option>
+                )}
+              </select>
+            </label>
+            {branch ? (
+              <span className={s.branch} title={branch}>
+                <GitBranch aria-hidden="true" size={14} />
+                {branch}
+              </span>
+            ) : null}
+            <div className={s.toolbarActions}>
+              {draftStatus ? <output className={s.draftStatus}>{draftStatus}</output> : null}
+              <Button variant="canvas-outline" size="sm" disabled={!canSave} onClick={onSave}>
+                Save edits
+              </Button>
+              {sourceHref ? (
+                <Link href={sourceHref} className={s.navLink}>
+                  Back to source
+                </Link>
+              ) : null}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="canvas-outline" size="sm" aria-label="Schema actions">
+                    More <ChevronDown size={14} aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => setYamlOpen(true)}>View YAML</DropdownMenuItem>
+                  {onInspect ? (
+                    <DropdownMenuItem
+                      onSelect={onInspect}
+                      disabled={!data || contextLocked || pending}
+                    >
+                      Schema checks & publishing
+                    </DropdownMenuItem>
+                  ) : null}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button
+                variant="commit"
+                size="sm"
+                aria-label="Review Schema changes"
+                disabled={!canReview}
+                onClick={onReview}
+              >
+                Review changes
+              </Button>
+            </div>
           </div>
-        </div>
-      </SchemaToolbarSlot>
+        </SchemaToolbarSlot>
+      ) : null}
       <div className={s.inspectionToolbar} role="toolbar" aria-label="Schema status and inspection">
         {bindingStatus ? <p className={s.bindingStatus}>{bindingStatus}</p> : null}
-        {draftStatus ? <span className={s.draftStatus}>{draftStatus}</span> : null}
       </div>
       {loading ? <output className={s.feedback}>Loading candidates…</output> : null}
       {error ? (

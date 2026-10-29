@@ -220,3 +220,16 @@
     padding: 20px;
   }
 }
+
+.subject {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+}
+.subject[hidden] {
+  display: none;
+}

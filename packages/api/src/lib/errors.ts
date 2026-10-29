@@ -102,6 +102,7 @@ export const ErrorCodes = {
 
   // Draft errors
   DRAFT_NOT_FOUND: 'DRAFT_NOT_FOUND',
+  AUTHORING_COMMAND_REQUIRED: 'AUTHORING_COMMAND_REQUIRED',
   CONFLICT: 'CONFLICT',
   TOO_MANY_REQUESTS: 'TOO_MANY_REQUESTS',
 
@@ -262,6 +263,7 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
 
   // Draft errors
   DRAFT_NOT_FOUND: 404,
+  AUTHORING_COMMAND_REQUIRED: 409,
   CONFLICT: 409,
   TOO_MANY_REQUESTS: 429,
 

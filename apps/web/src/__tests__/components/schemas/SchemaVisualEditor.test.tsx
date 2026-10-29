@@ -102,7 +102,7 @@ it('moves object fields and whole node subtrees while keeping Fields and Visual 
   );
   expect(screen.getByLabelText('Name tasks/config/nested')).toBeVisible();
   expect(screen.getByLabelText('Required owner/options')).toBeChecked();
-  fireEvent.click(screen.getByRole('button', { name: 'Save candidate' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
   await waitFor(() => expect(handlers.onSave).toHaveBeenCalledOnce());
 });
 it('shares definition and selection across Data/Visual, moves a field, adds a relation and saves once', async () => {
@@ -141,7 +141,7 @@ it('shares definition and selection across Data/Visual, moves a field, adds a re
   fireEvent.change(screen.getByLabelText('to for relation new_relation'), {
     target: { value: 'owner' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Save candidate' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
   await waitFor(() => expect(handlers.onSave).toHaveBeenCalledTimes(1));
   expect(handlers.onSave.mock.calls[0]![0]).toHaveProperty('relationTypes.new_relation', {
     from: 'tasks',
@@ -179,7 +179,7 @@ it('automatically separates tall cards without changing the Schema or offering c
   expect(flow.props.nodesDraggable).toBe(false);
   expect(flow.props.nodesConnectable).toBe(false);
   expect(onPreview).not.toHaveBeenCalled();
-  expect(screen.getByRole('button', { name: 'Save candidate' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Save edits' })).toBeDisabled();
 });
 
 it('uses the same exact source badges in Structure and Visual', () => {
@@ -309,7 +309,7 @@ it.each([
   expect(screen.getByRole('menuitemradio', { name: mode })).toHaveAttribute('aria-checked', 'true');
   fireEvent.click(screen.getByRole('menuitemradio', { name: mode }));
   expect(props.onPreview).not.toHaveBeenCalled();
-  expect(screen.getByRole('button', { name: 'Save candidate' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Save edits' })).toBeDisabled();
 
   fireEvent.click(
     within(screen.getByRole('region', { name: 'Node project', exact: true })).getByRole('button', {
@@ -397,7 +397,7 @@ it('imports source objects with a rename decision, undo, and source mappings in 
   fireEvent.click(screen.getByRole('button', { name: 'Import object' }));
   fireEvent.change(screen.getByLabelText('New name'), { target: { value: 'reviewer' } });
   fireEvent.click(screen.getByRole('button', { name: 'Rename and continue' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Save candidate' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
   await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
   expect(onSave.mock.lastCall?.[2]).toEqual(onPreview.mock.lastCall?.[1]);
 });
