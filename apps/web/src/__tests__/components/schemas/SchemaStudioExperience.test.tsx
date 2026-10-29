@@ -1203,9 +1203,6 @@ function selectSchemaAction(name: string) {
 }
 
 function openSources() {
-  if (!screen.queryByRole('button', { name: 'Manage sources' })) {
-    fireEvent.click(screen.getByRole('button', { name: 'Toggle Schema sources' }));
-  }
   const trigger = screen.getByRole('button', { name: 'Manage sources' });
   if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
 }
@@ -1223,10 +1220,7 @@ it('keeps sources beside the fields and opens YAML directly without nested panel
   mocks.workspaces = [boundWorkspace()];
   render(<SchemaStudioExperience projectId="p" />);
   expect(screen.getByRole('complementary', { name: 'Available Schema sources' })).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Toggle Schema sources' }));
-  expect(
-    screen.queryByRole('complementary', { name: 'Available Schema sources' })
-  ).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Toggle Schema sources' })).not.toBeInTheDocument();
   openSources();
   closeSources();
   expect(screen.getByRole('complementary', { name: 'Available Schema sources' })).toBeVisible();

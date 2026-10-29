@@ -190,7 +190,6 @@ export function SchemaStudioExperience({
   const legacyView = params?.get('schemaView') === 'active';
   const [definitionOpen, setDefinitionOpen] = useState(false);
   const [sourceManagerOpen, setSourceManagerOpen] = useState(false);
-  const [sourcesOpen, setSourcesOpen] = useState(true);
   const [editorActions, setEditorActions] = useState({ undo: false, rules: false, discard: false });
   const [sourceError, setSourceError] = useState<string>();
   const [compositionRequest, setCompositionRequest] = useState<{
@@ -929,8 +928,7 @@ export function SchemaStudioExperience({
             navigationRef={navigationRef}
             showSaveAction={false}
             externalActions
-            sourcesOpen={sourcesOpen}
-            onToggleSources={() => setSourcesOpen((open) => !open)}
+            workbenchFooter
             onActionsAvailabilityChange={setEditorActions}
             onSaveAvailabilityChange={setDataCanSave}
             onValidationChange={setEditorInvalid}
@@ -961,7 +959,6 @@ export function SchemaStudioExperience({
                 : undefined
             }
             onChooseSources={() => {
-              setSourcesOpen(true);
               setSourceManagerOpen(true);
             }}
             initialDefinition={
@@ -1124,7 +1121,6 @@ export function SchemaStudioExperience({
         canOpenRules={editorActions.rules && !definitionOpen && !applying}
         onUndo={() => navigationRef.current?.undo?.()}
         canUndo={editorActions.undo && !definitionOpen && !applying}
-        onDescribe={() => navigationRef.current?.describeChanges?.()}
         onDiscard={() => navigationRef.current?.discard?.()}
         canDiscard={editorActions.discard && !definitionOpen && !applying}
         onInspect={() => inspectDefinition()}

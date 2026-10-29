@@ -71,8 +71,7 @@ export function SchemaDataEditor({
   focusSemanticPath,
   showSaveAction = true,
   externalActions = false,
-  sourcesOpen = true,
-  onToggleSources,
+  workbenchFooter = false,
   onActionsAvailabilityChange,
   onSaveAvailabilityChange,
   view = 'data',
@@ -106,8 +105,7 @@ export function SchemaDataEditor({
   focusSemanticPath?: string;
   showSaveAction?: boolean;
   externalActions?: boolean;
-  sourcesOpen?: boolean;
-  onToggleSources?: () => void;
+  workbenchFooter?: boolean;
   onActionsAvailabilityChange?: (availability: {
     undo: boolean;
     rules: boolean;
@@ -159,6 +157,7 @@ export function SchemaDataEditor({
   const [resetKey, setResetKey] = useState(0);
   const [intent, setIntent] = useState('Edit Schema fields.');
   const [intentOpen, setIntentOpen] = useState(false);
+  const intentInput = useRef<HTMLTextAreaElement>(null);
   const [addKind, setAddKind] = useState<'node' | 'slot'>();
   const [addParent, setAddParent] = useState('');
   const [saving, setSaving] = useState(false);
@@ -448,7 +447,10 @@ export function SchemaDataEditor({
       openRules: () => {
         if (canOpenRules) setPanel('rules');
       },
-      describeChanges: () => setIntentOpen(true),
+      describeChanges: () => {
+        if (workbenchFooter) intentInput.current?.focus();
+        else setIntentOpen(true);
+      },
       discard: () => {
         if (canDiscard) discard();
       },
@@ -507,19 +509,9 @@ export function SchemaDataEditor({
       className={styles.editor}
       data-schema-editor
       data-view={view}
+      data-workbench-footer={workbenchFooter || undefined}
     >
       <header className={styles.toolbar}>
-        {onToggleSources ? (
-          <Button
-            variant="canvas-outline"
-            size="sm"
-            aria-pressed={sourcesOpen}
-            onClick={onToggleSources}
-            aria-label="Toggle Schema sources"
-          >
-            Schema sources
-          </Button>
-        ) : null}
         {view === 'data' ? (
           <input
             aria-label="Find a node or field"
@@ -529,10 +521,12 @@ export function SchemaDataEditor({
             onChange={(event) => setQuery(event.target.value)}
           />
         ) : null}
-        <span>
-          {nodeCount} {nodeCount === 1 ? 'node' : 'nodes'} · {fieldCount}{' '}
-          {fieldCount === 1 ? 'field' : 'fields'}
-        </span>
+        {!workbenchFooter ? (
+          <span>
+            {nodeCount} {nodeCount === 1 ? 'node' : 'nodes'} · {fieldCount}{' '}
+            {fieldCount === 1 ? 'field' : 'fields'}
+          </span>
+        ) : null}
         {!externalActions ? (
           <Button
             variant="ghost"
@@ -597,9 +591,11 @@ export function SchemaDataEditor({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => setIntentOpen(true)}>
-                Edit change description…
-              </DropdownMenuItem>
+              {!workbenchFooter ? (
+                <DropdownMenuItem onSelect={() => setIntentOpen(true)}>
+                  Edit change description…
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem disabled={busy || (!dirty && !validationError)} onSelect={discard}>
                 Discard all unsaved changes
               </DropdownMenuItem>
@@ -618,7 +614,21 @@ export function SchemaDataEditor({
         <SchemaFieldValidation key={resetKey} onValidationChange={setFieldError}>
           <div className={styles.list} hidden={view !== 'data'}>
             <SchemaFieldTree
-              sourcesOpen={sourcesOpen}
+              footer={
+                workbenchFooter ? (
+                  <label className={styles.changeDescription}>
+                    <span>Change description</span>
+                    <textarea
+                      ref={intentInput}
+                      aria-label="Schema change intent"
+                      rows={1}
+                      value={intent}
+                      disabled={busy || !!disabledReason}
+                      onChange={(event) => setIntent(event.target.value)}
+                    />
+                  </label>
+                ) : undefined
+              }
               emptyContent={emptyContent}
               rows={rows}
               visible={visible}
@@ -951,6 +961,14 @@ export function SchemaDataEditor({
           </SchemaDetailsPanel>
         </SchemaFieldValidation>
       </fieldset>
+      {workbenchFooter ? (
+        <footer className={styles.workbenchFooter}>
+          <span>
+            {nodeCount} {nodeCount === 1 ? 'node' : 'nodes'} · {fieldCount}{' '}
+            {fieldCount === 1 ? 'field' : 'fields'}
+          </span>
+        </footer>
+      ) : null}
       {notice ? (
         <output className="sr-only" aria-live="polite">
           {notice}

@@ -6,6 +6,45 @@
   color: var(--text-primary);
   background: var(--surface-card);
 }
+.changeDescription {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  flex: none;
+  padding: 10px 16px;
+  border-top: 1px solid var(--stroke-divider);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.changeDescription textarea {
+  flex: 1;
+  min-width: 200px;
+  min-height: 32px;
+  max-height: 96px;
+  resize: vertical;
+  padding: 6px 10px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  font: inherit;
+}
+.changeDescription textarea:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.workbenchFooter {
+  display: flex;
+  align-items: center;
+  flex: none;
+  min-height: 32px;
+  padding: 6px 16px;
+  border-top: 1px solid var(--stroke-divider);
+  background: var(--surface-app);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
 .toolbar,
 .footer {
   display: flex;
@@ -197,6 +236,14 @@
   --field-type-width: 112px;
   --field-required-width: 72px;
   --field-actions-width: 56px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.fieldScroll {
+  flex: 1;
   min-width: 0;
   min-height: 0;
   overflow: auto;

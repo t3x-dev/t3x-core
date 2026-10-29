@@ -12,7 +12,7 @@ import {
 } from '@dnd-kit/core';
 import type { StudioCandidate } from '@t3x-dev/api-client';
 import { GripVertical } from 'lucide-react';
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import tree from '@/components/structure/StructureTree.module.css';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -43,7 +43,7 @@ export function SchemaFieldTree({
   projectId,
   sources = [],
   sourceManagement,
-  sourcesOpen = true,
+  footer,
   emptyContent,
   onMove,
   onImport,
@@ -57,7 +57,7 @@ export function SchemaFieldTree({
   projectId?: string;
   sources?: StudioCandidate[];
   sourceManagement?: ReactNode;
-  sourcesOpen?: boolean;
+  footer?: ReactNode;
   emptyContent?: ReactNode;
   onMove: (path: string, target: SchemaFieldRow | null) => void;
   onImport: (item: SchemaSourceItem, target: SchemaFieldRow | null) => void;
@@ -69,12 +69,6 @@ export function SchemaFieldTree({
   const [source, setSource] = useState<SchemaSourceItem>();
   const [destination, setDestination] = useState('');
   const [moveOpen, setMoveOpen] = useState(false);
-  useEffect(() => {
-    if (!sourcesOpen) {
-      setSource(undefined);
-      setMoveOpen(false);
-    }
-  }, [sourcesOpen]);
   const availableSources = sources.filter((item) => item.available);
   const selectedRow = rows.find((row) => row.path === selected);
   const active: TransferItem | undefined = source
@@ -114,11 +108,8 @@ export function SchemaFieldTree({
         setDragging(undefined);
       }}
     >
-      <div
-        className={styles.fieldWorkarea}
-        data-sources={(Boolean(projectId) && sourcesOpen) || undefined}
-      >
-        {projectId && sourcesOpen ? (
+      <div className={styles.fieldWorkarea} data-sources={Boolean(projectId) || undefined}>
+        {projectId ? (
           <aside className={styles.importSources} aria-label="Available Schema sources">
             <div className={styles.sourceHeading}>
               <strong>Schema sources</strong>
@@ -152,92 +143,97 @@ export function SchemaFieldTree({
           </aside>
         ) : null}
         <div className={styles.fieldMain}>
-          <div className={styles.columns}>
-            <span>Name</span>
-            <span>Type</span>
-            <span className={styles.requiredColumn}>Required</span>
-            <span className="sr-only">Actions</span>
-          </div>
-          {active ? (
-            <div className={styles.moveToolbar}>
-              <span>{active.row.semanticPath}</span>
-              <Popover open={moveOpen} onOpenChange={setMoveOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="canvas-outline" size="sm" disabled={disabled}>
-                    {source ? 'Add to draft…' : 'Move to…'}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="start" className={styles.moveMenu}>
-                  <label>
-                    Destination
-                    <select
-                      aria-label="Destination node"
-                      value={destination}
-                      disabled={disabled}
-                      onChange={(event) => setDestination(event.target.value)}
+          <div className={styles.fieldScroll}>
+            <div className={styles.columns}>
+              <span>Name</span>
+              <span>Type</span>
+              <span className={styles.requiredColumn}>Required</span>
+              <span className="sr-only">Actions</span>
+            </div>
+            {active ? (
+              <div className={styles.moveToolbar}>
+                <span>{active.row.semanticPath}</span>
+                <Popover open={moveOpen} onOpenChange={setMoveOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="canvas-outline" size="sm" disabled={disabled}>
+                      {source ? 'Add to draft…' : 'Move to…'}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className={styles.moveMenu}>
+                    <label>
+                      Destination
+                      <select
+                        aria-label="Destination node"
+                        value={destination}
+                        disabled={disabled}
+                        onChange={(event) => setDestination(event.target.value)}
+                      >
+                        <option value="">Choose a node</option>
+                        {active.row.kind === 'node' ? (
+                          <option value="root">Top level</option>
+                        ) : null}
+                        {targets.map((row) => (
+                          <option key={row.path} value={row.path}>
+                            {row.semanticPath}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <Button
+                      size="sm"
+                      disabled={disabled || !canMove}
+                      onClick={() => {
+                        if (canMove) transfer(active, target ?? null);
+                      }}
                     >
-                      <option value="">Choose a node</option>
-                      {active.row.kind === 'node' ? <option value="root">Top level</option> : null}
-                      {targets.map((row) => (
-                        <option key={row.path} value={row.path}>
-                          {row.semanticPath}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <Button
-                    size="sm"
-                    disabled={disabled || !canMove}
-                    onClick={() => {
-                      if (canMove) transfer(active, target ?? null);
-                    }}
-                  >
-                    {source ? 'Add here' : 'Move here'}
-                  </Button>
-                </PopoverContent>
-              </Popover>
+                      {source ? 'Add here' : 'Move here'}
+                    </Button>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            ) : (
+              <div className={styles.moveToolbar}>
+                <span className={styles.selectionHint}>
+                  {rows.length ? 'Select a node or field to edit' : 'Schema structure'}
+                </span>
+              </div>
+            )}
+            <div
+              role="tree"
+              aria-label="Schema fields"
+              className={`${tree.tree} ${styles.fieldTree}`}
+            >
+              {visible.map((row) => (
+                <DraggableRow
+                  key={row.path}
+                  row={row}
+                  disabled={disabled}
+                  dropDisabled={disabled || !dragging || !canReceive(dragging, row)}
+                  render={(handle) =>
+                    renderRow(row, handle, () => {
+                      setSource(undefined);
+                      setDestination('');
+                      setMoveOpen(false);
+                      onSelect(row);
+                    })
+                  }
+                />
+              ))}
             </div>
-          ) : (
-            <div className={styles.moveToolbar}>
-              <span className={styles.selectionHint}>
-                {rows.length ? 'Select a node or field to edit' : 'Schema structure'}
-              </span>
-            </div>
-          )}
-          <div
-            role="tree"
-            aria-label="Schema fields"
-            className={`${tree.tree} ${styles.fieldTree}`}
-          >
-            {visible.map((row) => (
-              <DraggableRow
-                key={row.path}
-                row={row}
-                disabled={disabled}
-                dropDisabled={disabled || !dragging || !canReceive(dragging, row)}
-                render={(handle) =>
-                  renderRow(row, handle, () => {
-                    setSource(undefined);
-                    setDestination('');
-                    setMoveOpen(false);
-                    onSelect(row);
-                  })
-                }
-              />
-            ))}
+            <RootDropTarget
+              disabled={disabled || !dragging || !canReceive(dragging, null)}
+              importing={Boolean(dragging?.source)}
+            />
+            {!visible.length ? (
+              <div className={styles.feedback}>
+                {emptyContent ??
+                  (rows.length
+                    ? 'No fields match this search.'
+                    : 'No nodes yet. Add a node or drag one from Schema sources.')}
+              </div>
+            ) : null}
           </div>
-          <RootDropTarget
-            disabled={disabled || !dragging || !canReceive(dragging, null)}
-            importing={Boolean(dragging?.source)}
-          />
-          {!visible.length ? (
-            <div className={styles.feedback}>
-              {emptyContent ??
-                (rows.length
-                  ? 'No fields match this search.'
-                  : 'No nodes yet. Add a node or drag one from Schema sources.')}
-            </div>
-          ) : null}
+          {footer}
         </div>
       </div>
       <DragOverlay>

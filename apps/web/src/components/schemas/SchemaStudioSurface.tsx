@@ -45,7 +45,6 @@ export function SchemaStudioSurface({
   canUndo = false,
   onRules,
   canOpenRules = false,
-  onDescribe,
   onDiscard,
   canDiscard = false,
 }: {
@@ -79,7 +78,6 @@ export function SchemaStudioSurface({
   canUndo?: boolean;
   onRules?: () => void;
   canOpenRules?: boolean;
-  onDescribe?: () => void;
   onDiscard?: () => void;
   canDiscard?: boolean;
 }) {
@@ -128,9 +126,9 @@ export function SchemaStudioSurface({
                 {branch}
               </span>
             ) : null}
+            {draftStatus ? <output className={s.draftStatus}>{draftStatus}</output> : null}
             <div className={s.toolbarActions}>
               <fieldset aria-label="Schema save and review" className={s.saveGroup}>
-                {draftStatus ? <output className={s.draftStatus}>{draftStatus}</output> : null}
                 {onUndo || onDiscard ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -203,12 +201,6 @@ export function SchemaStudioSurface({
                       disabled={!data || contextLocked || pending}
                     >
                       View checks and impact <ArrowUpRight size={14} aria-hidden="true" />
-                    </DropdownMenuItem>
-                  ) : null}
-                  <DropdownMenuSeparator />
-                  {onDescribe ? (
-                    <DropdownMenuItem onSelect={onDescribe}>
-                      Edit change description…
                     </DropdownMenuItem>
                   ) : null}
                 </DropdownMenuContent>

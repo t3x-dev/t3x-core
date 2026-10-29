@@ -7,7 +7,7 @@
   width: 100%;
   max-width: var(--project-page-max-width, 1264px);
   margin-inline: auto;
-  padding: 0 var(--project-page-gutter, 24px) 20px;
+  padding: 12px var(--project-page-gutter, 24px) 20px;
   overflow: auto;
   color: var(--text-primary);
   font-size: 13px;
