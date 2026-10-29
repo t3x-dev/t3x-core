@@ -1115,6 +1115,21 @@ export function SchemaStudioExperience({
         onReview={() => void openReview()}
         onSave={() => void navigationRef.current?.save?.()}
         canSave={dataCanSave && !definitionOpen && !applying && !schemaEdit.pending}
+        onPublish={() => {
+          if (data) setPublishReview(data);
+        }}
+        canPublish={Boolean(
+          data?.workspace &&
+            !data.workspace.canBind &&
+            savedCandidateRef &&
+            data.impact?.canPublish &&
+            data.report.valid &&
+            data.adoption.allowed &&
+            !dataDirty &&
+            !editorInvalid &&
+            !applying &&
+            !preview.loading
+        )}
         onInspect={inspectDefinition}
         canReview={canReview}
         onDownload={downloadDefinition}

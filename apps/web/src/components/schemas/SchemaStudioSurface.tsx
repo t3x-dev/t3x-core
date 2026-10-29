@@ -40,6 +40,8 @@ export function SchemaStudioSurface({
   error,
   data,
   onEditDefinition,
+  onPublish,
+  canPublish = false,
   onReview,
   onSave,
   canSave = false,
@@ -65,6 +67,8 @@ export function SchemaStudioSurface({
   error?: string;
   data?: StudioPreview;
   onEditDefinition?: () => void;
+  onPublish?: () => void;
+  canPublish?: boolean;
   onReview?: () => void;
   onSave?: () => void;
   canSave?: boolean;
@@ -141,6 +145,11 @@ export function SchemaStudioSurface({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onSelect={() => setYamlOpen(true)}>View YAML</DropdownMenuItem>
+                  {onPublish ? (
+                    <DropdownMenuItem onSelect={onPublish} disabled={!canPublish}>
+                      Publish public Schema…
+                    </DropdownMenuItem>
+                  ) : null}
                   {onInspect ? (
                     <DropdownMenuItem
                       onSelect={onInspect}

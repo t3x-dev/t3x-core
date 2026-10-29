@@ -110,7 +110,11 @@ export function StudioDefinitionPreview({
     </div>
   );
 }
-export function StudioChecks({ preview }: { preview: StudioPreview }) {
+export function StudioChecks({
+  preview,
+}: {
+  preview: Pick<StudioPreview, 'report' | 'adoption' | 'impact'>;
+}) {
   const passed =
     preview.report.valid && preview.adoption.allowed && preview.impact?.canAdopt !== false;
   const layers = preview.report.layers ?? [];

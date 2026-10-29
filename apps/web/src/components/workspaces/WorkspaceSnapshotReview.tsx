@@ -31,6 +31,7 @@ import {
   workspaceReviewPreferenceKey,
   workspaceReviewSubjectChanges,
 } from './WorkspaceReviewWorkbench';
+import { WorkspaceSchemaDiagnostics } from './WorkspaceSchemaDiagnostics';
 import { WorkspaceSchemaReviewPanel } from './WorkspaceSchemaReviewPanel';
 import stageStyles from './WorkspaceStageHeader.module.css';
 import { WorkspaceStageNavigation } from './WorkspaceStageNavigation';
@@ -272,6 +273,13 @@ export function WorkspaceSnapshotReview({
           sidebar={
             <>
               {decisionPanel}
+              <WorkspaceSchemaDiagnostics
+                key={activeSnapshotId}
+                projectId={projectId}
+                workspaceId={workspaceId}
+                frozen
+                review={schemaReview}
+              />
               {commit ? (
                 <div className="mt-4 grid gap-2 text-xs">
                   <Link className="underline" href={historyHref}>

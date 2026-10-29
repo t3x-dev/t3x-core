@@ -475,6 +475,18 @@ export async function prepareWorkspaceSchema(
             requestDigest,
             source: prepared.source,
             previewHash: input.previewHash,
+            ...('report' in prepared.target
+              ? {
+                  diagnostics: {
+                    schemaHash: prepared.target.schemaHash,
+                    reviewHash: prepared.target.reviewHash,
+                    sources: prepared.target.sources,
+                    report: prepared.target.report,
+                    adoption: prepared.target.adoption,
+                    impact: prepared.target.impact,
+                  },
+                }
+              : {}),
             actionId,
             actor,
             request: input,

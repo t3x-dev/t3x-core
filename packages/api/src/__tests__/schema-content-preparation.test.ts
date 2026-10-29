@@ -1702,6 +1702,16 @@ it.each([
   expect(prepared.status).toBe(200);
   const reviewed = await fullReview(id);
   expect(reviewed.schemaReview.contentValidation).toBe('not_applicable');
+  expect(reviewed.schemaReview.preparationDiagnostics).toEqual([
+    expect.objectContaining({
+      workspaceRevision: body.ifRevision,
+      diagnostics: expect.objectContaining({
+        schemaHash: plan.schemaHash,
+        impact: plan.impact,
+        report: expect.objectContaining({ layers: expect.any(Array) }),
+      }),
+    }),
+  ]);
   expect(reviewed.view.transition.checks.validation.runs).toEqual([]);
   const graph = await resolveTransitionProposalGraph(db, projectId, reviewed.view.transitionId);
   expect(await hasSchemaReviewEvidence(graph.proposal, reviewed.schemaReview)).toBe(true);
