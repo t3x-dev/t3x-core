@@ -2,10 +2,9 @@
   width: 100%;
   max-width: var(--project-page-max-width, 1264px);
   margin: 0 auto;
-  padding: 10px var(--project-page-gutter, 24px);
-  min-height: 52px;
+  padding: 20px var(--project-page-gutter, 24px) 18px;
+  min-height: 88px;
   flex-shrink: 0;
-  border-bottom: 1px solid var(--stroke-divider);
 }
 .slot {
   min-width: 0;

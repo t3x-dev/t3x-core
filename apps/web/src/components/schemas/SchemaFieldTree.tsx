@@ -45,6 +45,8 @@ export function SchemaFieldTree({
   sourceManagement,
   footer,
   emptyContent,
+  studio = false,
+  unavailable = false,
   onMove,
   onImport,
   onSelect,
@@ -59,6 +61,8 @@ export function SchemaFieldTree({
   sourceManagement?: ReactNode;
   footer?: ReactNode;
   emptyContent?: ReactNode;
+  studio?: boolean;
+  unavailable?: boolean;
   onMove: (path: string, target: SchemaFieldRow | null) => void;
   onImport: (item: SchemaSourceItem, target: SchemaFieldRow | null) => void;
   onSelect: (row: SchemaFieldRow) => void;
@@ -108,14 +112,18 @@ export function SchemaFieldTree({
         setDragging(undefined);
       }}
     >
-      <div className={styles.fieldWorkarea} data-sources={Boolean(projectId) || undefined}>
-        {projectId ? (
+      <div
+        className={styles.fieldWorkarea}
+        data-sources={Boolean(projectId && !unavailable) || undefined}
+      >
+        {projectId && !unavailable ? (
           <aside className={styles.importSources} aria-label="Available Schema sources">
             <div className={styles.sourceHeading}>
               <strong>Schema sources</strong>
+              {studio ? sourceManagement : null}
             </div>
-            {sourceManagement}
-            <p>
+            {!studio ? sourceManagement : null}
+            <p className={styles.sourceHelp} hidden={!availableSources.length}>
               Drag a node or object field into your schema, or select one to choose where to add it.
             </p>
             {!availableSources.length ? (
@@ -133,6 +141,7 @@ export function SchemaFieldTree({
                 selected={source}
                 disabled={disabled}
                 defaultOpen
+                studio={studio}
                 onSelect={(item) => {
                   setSource(item);
                   setDestination('');
@@ -144,7 +153,7 @@ export function SchemaFieldTree({
         ) : null}
         <div className={styles.fieldMain}>
           <div className={styles.fieldScroll}>
-            <div className={styles.columns}>
+            <div className={styles.columns} hidden={unavailable || !rows.length}>
               <span>Name</span>
               <span>Type</span>
               <span className={styles.requiredColumn}>Required</span>
@@ -181,6 +190,7 @@ export function SchemaFieldTree({
                     </label>
                     <Button
                       size="sm"
+                      variant="commit"
                       disabled={disabled || !canMove}
                       onClick={() => {
                         if (canMove) transfer(active, target ?? null);
@@ -192,7 +202,7 @@ export function SchemaFieldTree({
                 </Popover>
               </div>
             ) : (
-              <div className={styles.moveToolbar}>
+              <div className={styles.moveToolbar} hidden={unavailable || !rows.length}>
                 <span className={styles.selectionHint}>
                   {rows.length ? 'Select a node or field to edit' : 'Schema structure'}
                 </span>
@@ -260,6 +270,8 @@ function DraggableRow({
     <div
       ref={drop.setNodeRef}
       className={styles.dragRow}
+      data-node={row.kind === 'node' || undefined}
+      data-depth={row.depth}
       data-drop-target={drop.isOver || undefined}
     >
       <span className={styles.treeGuides} aria-hidden="true">

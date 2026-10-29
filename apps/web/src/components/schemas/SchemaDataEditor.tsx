@@ -2,7 +2,23 @@
 
 import type { StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
 import { canonicalJson, type YValue } from '@t3x-dev/yops';
-import { Box, ChevronDown, FileText, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
+import {
+  Box,
+  Braces,
+  Check,
+  ChevronDown,
+  FileText,
+  Hash,
+  Layers2,
+  List,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Shapes,
+  ToggleRight,
+  Trash2,
+  Type,
+} from 'lucide-react';
 import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from 'react';
 import { StructureTreeRow, visibleTreeRows } from '@/components/structure/StructureTree';
 import tree from '@/components/structure/StructureTree.module.css';
@@ -51,6 +67,26 @@ import { SchemaSourceBadge } from './SchemaSourceBadge';
 import { type ParentLineMode, SchemaVisualEditor } from './SchemaVisualEditor';
 import type { SchemaSourceItem } from './SchemaVisualSources';
 import { type SchemaEditorNavigation, useSchemaNavigationGuard } from './useSchemaNavigationGuard';
+
+/** Field types are visual identities; editing and validation still use the definition. */
+function SchemaFieldTypeIcon({ row }: { row: SchemaFieldRow }) {
+  const type = row.kind === 'node' ? 'node' : String(row.definition.type ?? 'any');
+  const icons: Record<string, typeof Type> = {
+    string: Type,
+    boolean: ToggleRight,
+    number: Hash,
+    integer: Hash,
+    array: List,
+    object: Braces,
+  };
+  const Icon =
+    row.kind === 'node' ? (row.definition.repeated ? Layers2 : Box) : (icons[type] ?? FileText);
+  return (
+    <span className={styles.fieldTypeIcon} data-field-type={type}>
+      <Icon aria-hidden="true" />
+    </span>
+  );
+}
 
 function schemaEditorValueKey(definition: SchemaDefinition, mappings: SchemaSourceMappings) {
   const origins = mappings
@@ -216,6 +252,7 @@ export function SchemaDataEditor({
   );
   const renderSource = (row: SchemaFieldRow) => (
     <SchemaSourceBadge
+      variant={workbenchFooter ? 'label' : 'icon'}
       path={row.semanticPath}
       identities={sourceIdentities}
       provenance={schemaNodeProvenance(
@@ -460,8 +497,16 @@ export function SchemaDataEditor({
     };
   });
 
+  const schemaUnavailable = workbenchFooter && !definition;
+  const schemaEmpty =
+    workbenchFooter && !!definition && !rows.length && view === 'data' && panel === 'properties';
   const emptyContent = !definition ? (
     <div className={styles.emptyState}>
+      {workbenchFooter ? (
+        <span className={styles.emptyIcon}>
+          <Shapes size={22} aria-hidden="true" />
+        </span>
+      ) : null}
       {previewError ? (
         <>
           <strong>Could not load Schema</strong>
@@ -481,7 +526,7 @@ export function SchemaDataEditor({
           <strong>This workspace has no schema</strong>
           <p>Create a schema, or reuse an existing schema from Schema sources.</p>
           <div className={styles.emptyActions}>
-            <Button size="sm" onClick={onCreateBlank}>
+            <Button size="sm" variant="commit" onClick={onCreateBlank}>
               Create schema
             </Button>
             {onChooseSources ? (
@@ -502,6 +547,24 @@ export function SchemaDataEditor({
         </>
       )}
     </div>
+  ) : schemaEmpty ? (
+    <div className={styles.emptyState}>
+      <span className={styles.emptyIcon}>
+        <Shapes size={22} aria-hidden="true" />
+      </span>
+      <strong>No nodes yet</strong>
+      <p>Add a node, or reuse one from Schema sources.</p>
+      <div className={styles.emptyActions}>
+        <Button
+          size="sm"
+          variant="commit"
+          disabled={busy || !!disabledReason || !!validationError || stale}
+          onClick={() => add(null, 'node')}
+        >
+          Add node
+        </Button>
+      </div>
+    </div>
   ) : undefined;
   return (
     <section
@@ -510,16 +573,24 @@ export function SchemaDataEditor({
       data-schema-editor
       data-view={view}
       data-workbench-footer={workbenchFooter || undefined}
+      data-schema-unavailable={schemaUnavailable || undefined}
+      data-schema-empty={schemaEmpty || undefined}
     >
-      <header className={styles.toolbar}>
+      {schemaUnavailable && sourceManagement ? (
+        <div className={styles.emptyToolbar}>{sourceManagement}</div>
+      ) : null}
+      <header className={styles.toolbar} hidden={schemaUnavailable}>
         {view === 'data' ? (
-          <input
-            aria-label="Find a node or field"
-            placeholder="Find a node or field…"
-            value={query}
-            disabled={busy || Boolean(validationError)}
-            onChange={(event) => setQuery(event.target.value)}
-          />
+          <label className={styles.search}>
+            {workbenchFooter ? <Search size={15} aria-hidden="true" /> : null}
+            <input
+              aria-label="Find a node or field"
+              placeholder="Find a node or field…"
+              value={query}
+              disabled={busy || Boolean(validationError)}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
         ) : null}
         {!workbenchFooter ? (
           <span>
@@ -614,8 +685,10 @@ export function SchemaDataEditor({
         <SchemaFieldValidation key={resetKey} onValidationChange={setFieldError}>
           <div className={styles.list} hidden={view !== 'data'}>
             <SchemaFieldTree
+              studio={workbenchFooter}
+              unavailable={schemaUnavailable}
               footer={
-                workbenchFooter ? (
+                workbenchFooter && definition ? (
                   <label className={styles.changeDescription}>
                     <span>Change description</span>
                     <textarea
@@ -655,7 +728,9 @@ export function SchemaDataEditor({
                       setCollapsed((current) => ({ ...current, [row.path]: !current[row.path] }));
                   }}
                   icon={
-                    row.kind === 'node' ? (
+                    workbenchFooter ? (
+                      <SchemaFieldTypeIcon row={row} />
+                    ) : row.kind === 'node' ? (
                       <Box aria-hidden="true" />
                     ) : (
                       <FileText aria-hidden="true" />
@@ -664,32 +739,37 @@ export function SchemaDataEditor({
                   leading={
                     <>
                       {handle}
-                      {row.kind === 'node' || row.definition.type === 'object'
+                      {!workbenchFooter && (row.kind === 'node' || row.definition.type === 'object')
                         ? renderSource(row)
                         : null}
                     </>
                   }
                   iconTitle={row.kind}
                   label={
-                    <span
-                      className={styles.fieldName}
-                      onFocus={selectRow}
-                      onClick={(event) => event.stopPropagation()}
-                      onKeyDown={(event) => event.stopPropagation()}
-                      role="presentation"
-                    >
-                      <SchemaFieldName
-                        label={`Name ${row.semanticPath}`}
-                        name={row.name}
-                        names={rows
-                          .filter(
-                            (item) =>
-                              JSON.stringify(item.location.slice(0, -1)) ===
-                              JSON.stringify(row.location.slice(0, -1))
-                          )
-                          .map((item) => item.name)}
-                        onChange={(name) => update(row, name, row.definition)}
-                      />
+                    <span className={styles.fieldIdentity}>
+                      <span
+                        className={styles.fieldName}
+                        onFocus={selectRow}
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
+                        role="presentation"
+                      >
+                        <SchemaFieldName
+                          label={`Name ${row.semanticPath}`}
+                          name={row.name}
+                          names={rows
+                            .filter(
+                              (item) =>
+                                JSON.stringify(item.location.slice(0, -1)) ===
+                                JSON.stringify(row.location.slice(0, -1))
+                            )
+                            .map((item) => item.name)}
+                          onChange={(name) => update(row, name, row.definition)}
+                        />
+                      </span>
+                      {workbenchFooter && (row.kind === 'node' || row.definition.type === 'object')
+                        ? renderSource(row)
+                        : null}
                     </span>
                   }
                   preview={
@@ -706,14 +786,33 @@ export function SchemaDataEditor({
                       <span className={styles.fieldSummary}>
                         <span>
                           {row.kind === 'slot'
-                            ? (schemaFieldTypeLabels[String(row.definition.type)] ??
-                              String(row.definition.type || 'Any type'))
+                            ? workbenchFooter
+                              ? String(row.definition.type || 'Any type')
+                              : (schemaFieldTypeLabels[String(row.definition.type)] ??
+                                String(row.definition.type || 'Any type'))
                             : row.definition.repeated
                               ? 'Repeatable node'
                               : 'Node'}
                         </span>
                         <span className={styles.requiredColumn}>
-                          {row.required ? 'Required' : 'Optional'}
+                          {workbenchFooter ? (
+                            <>
+                              <span
+                                className={styles.requiredMark}
+                                data-required={row.required}
+                                aria-hidden="true"
+                              >
+                                {row.required ? <Check size={11} /> : null}
+                              </span>
+                              <span className="sr-only">
+                                {row.required ? 'Required' : 'Optional'}
+                              </span>
+                            </>
+                          ) : row.required ? (
+                            'Required'
+                          ) : (
+                            'Optional'
+                          )}
                         </span>
                       </span>
                       <span className={styles.fieldControls}>
@@ -847,6 +946,13 @@ export function SchemaDataEditor({
             />
           ) : null}
           <SchemaDetailsPanel
+            hidden={schemaUnavailable || schemaEmpty}
+            identity={workbenchFooter && panel === 'properties' ? active?.name : undefined}
+            icon={
+              workbenchFooter && panel === 'properties' && active ? (
+                <SchemaFieldTypeIcon row={active} />
+              ) : undefined
+            }
             ariaLabel={panel === 'rules' ? 'Schema relations and rules' : 'Schema properties'}
             title={
               panel === 'rules'
@@ -961,7 +1067,7 @@ export function SchemaDataEditor({
           </SchemaDetailsPanel>
         </SchemaFieldValidation>
       </fieldset>
-      {workbenchFooter ? (
+      {workbenchFooter && !schemaUnavailable ? (
         <footer className={styles.workbenchFooter}>
           <span>
             {nodeCount} {nodeCount === 1 ? 'node' : 'nodes'} · {fieldCount}{' '}
@@ -1020,6 +1126,7 @@ export function SchemaDataEditor({
           ) : null}
           <Button
             disabled={!addParent || busy || !!validationError || stale}
+            variant="commit"
             onClick={() => {
               const parent = rows.find((row) => row.path === addParent);
               if (parent && addKind) {
@@ -1049,7 +1156,9 @@ export function SchemaDataEditor({
               onChange={(event) => setIntent(event.target.value)}
             />
           </label>
-          <Button onClick={() => setIntentOpen(false)}>Done</Button>
+          <Button variant="commit" onClick={() => setIntentOpen(false)}>
+            Done
+          </Button>
         </DialogContent>
       </Dialog>
       {navigation.dialog}
@@ -1091,7 +1200,9 @@ export function SchemaDataEditor({
               <Button type="button" variant="outline" onClick={() => setConflict(undefined)}>
                 Cancel
               </Button>
-              <Button type="submit">Rename and continue</Button>
+              <Button type="submit" variant="commit">
+                Rename and continue
+              </Button>
             </div>
           </form>
         </DialogContent>

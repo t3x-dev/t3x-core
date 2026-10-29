@@ -517,6 +517,56 @@ it('adds fields through the shared Add menu with an explicit parent and opens co
 });
 
 describe('Schema editor lifecycle states', () => {
+  it('shows focused Studio entry actions while preserving separate loading, error and empty-definition states', async () => {
+    const handlers = callbacks();
+    const create = vi.fn();
+    const choose = vi.fn();
+    const props = {
+      ...handlers,
+      revisionKey: 'studio-empty',
+      projectId: 'p',
+      workbenchFooter: true,
+      loading: false,
+      onCreateBlank: create,
+      onChooseSources: choose,
+    };
+    const { rerender } = render(<SchemaDataEditor {...props} loading />);
+    expect(screen.getByText('Loading Schema definition…')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Create schema' })).not.toBeInTheDocument();
+    rerender(<SchemaDataEditor {...props} previewError="Snapshot unavailable" />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Snapshot unavailable');
+    expect(screen.queryByRole('button', { name: 'Create schema' })).not.toBeInTheDocument();
+    rerender(<SchemaDataEditor {...props} />);
+    expect(screen.queryByRole('textbox', { name: 'Find a node or field' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('complementary', { name: 'Available Schema sources' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('complementary', { name: 'Schema properties' })
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Create schema' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Use an existing schema…' }));
+    expect(create).toHaveBeenCalledOnce();
+    expect(choose).toHaveBeenCalledOnce();
+    expect(handlers.onSave).not.toHaveBeenCalled();
+    rerender(
+      <SchemaDataEditor
+        {...props}
+        initialDefinition={{ yschema: '0.1', name: 'Blank', nodes: {} }}
+      />
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Add', exact: true })).toBeEnabled()
+    );
+    expect(screen.queryByRole('button', { name: 'Create schema' })).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Schema change intent' })).toBeVisible();
+    expect(screen.getByText('No nodes yet')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Add node', exact: true }));
+    expect(handlers.onPreview).toHaveBeenLastCalledWith(
+      expect.objectContaining({ nodes: { new_node: expect.any(Object) } }),
+      []
+    );
+  });
   it('keeps the same tree and toolbar for loading, failure, unbound and empty definitions', async () => {
     const handlers = callbacks();
     const create = vi.fn();

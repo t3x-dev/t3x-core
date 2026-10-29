@@ -1,6 +1,6 @@
 'use client';
 import type { StudioPreview } from '@t3x-dev/api-client';
-import { ArrowUpRight, Box, ChevronDown, GitBranch } from 'lucide-react';
+import { ArrowUpRight, Box, ChevronDown, GitBranch, Shapes } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
@@ -100,37 +100,48 @@ export function SchemaStudioSurface({
             aria-label="Studio controls"
           >
             {navigation}
-            <label className={s.ws}>
-              <Box aria-hidden="true" size={18} />
-              <span>{workspaceTitle}</span>
-              <ChevronDown aria-hidden="true" size={12} />
-              <select
-                aria-label="Target Workspace"
-                value={workspaceId}
-                onChange={(event) => onWorkspace?.(event.target.value)}
-                disabled={!onWorkspace}
-              >
-                {!workspaces.some((item) => item.id === workspaceId) && workspaces.length > 0 ? (
-                  <option value={workspaceId}>Workspace unavailable</option>
-                ) : null}
-                {workspaces.length ? (
-                  workspaces.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.title}
-                    </option>
-                  ))
-                ) : (
-                  <option value="">No draft workspace</option>
-                )}
-              </select>
-            </label>
-            {branch ? (
-              <span className={s.branch} title={branch}>
-                <GitBranch aria-hidden="true" size={14} />
-                {branch}
+            <div className={s.heading}>
+              <span className={s.schemaIcon}>
+                <Shapes size={18} aria-hidden="true" />
               </span>
-            ) : null}
-            {draftStatus ? <output className={s.draftStatus}>{draftStatus}</output> : null}
+              <div className={s.headingContent}>
+                <h1>Schema</h1>
+                <div className={s.workspaceContext}>
+                  <label className={s.ws}>
+                    <Box aria-hidden="true" size={18} />
+                    <span>{workspaceTitle}</span>
+                    <ChevronDown aria-hidden="true" size={12} />
+                    <select
+                      aria-label="Target Workspace"
+                      value={workspaceId}
+                      onChange={(event) => onWorkspace?.(event.target.value)}
+                      disabled={!onWorkspace}
+                    >
+                      {!workspaces.some((item) => item.id === workspaceId) &&
+                      workspaces.length > 0 ? (
+                        <option value={workspaceId}>Workspace unavailable</option>
+                      ) : null}
+                      {workspaces.length ? (
+                        workspaces.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.title}
+                          </option>
+                        ))
+                      ) : (
+                        <option value="">No draft workspace</option>
+                      )}
+                    </select>
+                  </label>
+                  {branch ? (
+                    <span className={s.branch} title={branch}>
+                      <GitBranch aria-hidden="true" size={14} />
+                      {branch}
+                    </span>
+                  ) : null}
+                  {draftStatus ? <output className={s.draftStatus}>{draftStatus}</output> : null}
+                </div>
+              </div>
+            </div>
             <div className={s.toolbarActions}>
               <fieldset aria-label="Schema save and review" className={s.saveGroup}>
                 {onUndo || onDiscard || onDiscardSaved ? (
@@ -173,12 +184,14 @@ export function SchemaStudioSurface({
                 </Button>
                 <Button
                   variant="commit"
+                  className={s.reviewButton}
                   size="sm"
                   aria-label={hasUnsavedChanges ? 'Save and review' : 'Review changes'}
                   disabled={!canReview}
                   onClick={onReview}
                 >
                   {hasUnsavedChanges ? 'Save and review' : 'Review changes'}
+                  <ArrowUpRight size={14} aria-hidden="true" />
                 </Button>
               </fieldset>
               {sourceHref ? (

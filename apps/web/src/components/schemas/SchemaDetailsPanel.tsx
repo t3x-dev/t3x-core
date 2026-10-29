@@ -12,6 +12,9 @@ export function SchemaDetailsPanel({
   ariaLabel,
   onClear,
   clearDisabled = false,
+  identity,
+  icon,
+  hidden = false,
   children,
 }: {
   title: string;
@@ -20,6 +23,9 @@ export function SchemaDetailsPanel({
   ariaLabel: string;
   onClear?: () => void;
   clearDisabled?: boolean;
+  identity?: string;
+  icon?: ReactNode;
+  hidden?: boolean;
   children: ReactNode;
 }) {
   const body = useRef<HTMLDivElement>(null);
@@ -29,8 +35,14 @@ export function SchemaDetailsPanel({
   }, [contentKey]);
 
   return (
-    <aside className={styles.panel} aria-label={ariaLabel}>
+    <aside
+      className={styles.panel}
+      aria-label={ariaLabel}
+      data-identity={identity ? true : undefined}
+      hidden={hidden}
+    >
       <header className={styles.header}>
+        {icon}
         <h2>{title}</h2>
         <div className={styles.action}>
           {onClear ? (
@@ -47,6 +59,7 @@ export function SchemaDetailsPanel({
         </div>
       </header>
       <div className={styles.context} title={context}>
+        {identity ? <strong className={styles.identity}>{identity}</strong> : null}
         <p>{context}</p>
       </div>
       <div ref={body} className={styles.body}>

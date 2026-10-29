@@ -1,12 +1,14 @@
 import {
   type AnyDB,
   findWorkspaceDraft,
+  findYSchemaCompositionSnapshot,
   insertProject,
+  saveYSchemaCompositionSnapshot,
   upsertWorkspaceDraft,
   upsertYSchemaArtifactVersion,
 } from '@t3x-dev/storage';
 import { normalizeYSchemaObject, sha256CompositionValue } from '@t3x-dev/yschema';
-import { Hono } from 'hono';
+import { type Context, Hono } from 'hono';
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
 
@@ -17,6 +19,7 @@ vi.mock('../lib/project-access', () => ({
   assertProjectAccess: async () => ({ projectId: project }),
 }));
 
+import { resolveWorkspaceSchemaEditBasis } from '../lib/workspace-schema-edit-basis';
 import { schemaStudioRoutes } from '../routes/schema-studio.openapi';
 
 const app = new Hono().route('/', schemaStudioRoutes);
@@ -87,6 +90,122 @@ beforeAll(async () => {
   });
 });
 afterAll(async () => cleanup?.());
+it('retains a whole Release origin through edits and recovers only a matching legacy receipt', async () => {
+  const workspaceId = 'release-origin';
+  await upsertWorkspaceDraft(db, {
+    project_id: project,
+    workspace_id: workspaceId,
+    target_branch: workspaceId,
+    title: 'Release origin',
+    workspace_state: { targetBranch: workspaceId, schemaBindings: [] },
+  });
+  const initial = (await request('preview', { candidateIds: [a] })).body.data;
+  expect(initial.origins.checklist).toMatchObject({ kind: 'module', source: initial.sources[0] });
+  const definition = structuredClone(initial.schema);
+  definition.nodes.checklist.description = 'Edited in this workspace';
+  definition.nodes.local = { slots: {} };
+  const saved = await request(
+    `edit-candidates/${workspaceId}`,
+    {
+      workspaceId,
+      candidateIds: [a],
+      ifRevision: 0,
+      retryKey: workspaceId,
+      intent: 'Edit a released schema',
+      origin: 'studio',
+      localContribution: {},
+      schemaDefinition: definition,
+      baseSchemaHash: initial.schemaHash,
+      sourceMappings: [],
+    },
+    'PUT'
+  );
+  expect(saved.status, JSON.stringify(saved.body)).toBe(200);
+  const candidate = (await request(`edit-candidates/${workspaceId}`)).body.data;
+  const preview = await request('preview', {
+    workspaceId,
+    candidateIds: [a],
+    schemaEditCandidate: { candidateId: candidate.candidateId, revision: candidate.revision },
+  });
+  expect(preview.status, JSON.stringify(preview.body)).toBe(200);
+  const result = preview.body.data;
+  expect(result.origins.checklist).toMatchObject({
+    kind: 'derived',
+    sources: [{ kind: 'module', source: initial.sources[0] }, { kind: 'local' }],
+  });
+  expect(result.origins['checklist/title']).toMatchObject({
+    kind: 'module',
+    source: initial.sources[0],
+  });
+  expect(result.origins.local).toMatchObject({ kind: 'local' });
+
+  const localOrigin = {
+    kind: 'local',
+    contributionId: candidate.candidateId,
+    revision: candidate.revision,
+  };
+  const legacyOrigins = {
+    checklist: localOrigin,
+    'checklist/title': localOrigin,
+    local: localOrigin,
+  };
+  const compositionHash = `sha256:${'a'.repeat(64)}`;
+  await saveYSchemaCompositionSnapshot(db, {
+    snapshot_id: 'legacy-release-origin',
+    project_id: project,
+    composition_id: 'legacy-release-origin',
+    composition_revision: 1,
+    composition_hash: compositionHash,
+    compiled_schema_hash: result.schemaHash,
+    compiler_version: 'legacy-test',
+    manifest_json: { sources: initial.sources },
+    schema_json: definition,
+    origins_json: legacyOrigins,
+    render_plan_json: [],
+  });
+  const workspace = {
+    schemaEditCandidate: candidate,
+    schemaBindings: [
+      { compositionId: 'legacy-release-origin', compositionRevision: 1, compositionHash },
+    ],
+  };
+  const recovered = await resolveWorkspaceSchemaEditBasis(
+    {} as Context,
+    db,
+    project,
+    workspace,
+    normalizeYSchemaObject(definition)
+  );
+  expect(recovered.origins).toEqual(result.origins);
+  // The projection can recover evidence; the original immutable snapshot is never rewritten.
+  const snapshot = await findYSchemaCompositionSnapshot(db, {
+    project_id: project,
+    composition_id: 'legacy-release-origin',
+    composition_revision: 1,
+    compiled_schema_hash: result.schemaHash,
+  });
+  expect(snapshot?.originsJson).toEqual(legacyOrigins);
+  const unrelated = structuredClone(candidate);
+  unrelated.authoringDraft.resultSchemaHash = `sha256:${'b'.repeat(64)}`;
+  const unchanged = await resolveWorkspaceSchemaEditBasis(
+    {} as Context,
+    db,
+    project,
+    { ...workspace, schemaEditCandidate: unrelated },
+    normalizeYSchemaObject(definition)
+  );
+  expect(unchanged.origins).toEqual(legacyOrigins);
+  const invalidReplay = structuredClone(candidate);
+  invalidReplay.authoringDraft.effect.operations = [{ assert: { path: 'nodes', equals: {} } }];
+  const unverified = await resolveWorkspaceSchemaEditBasis(
+    {} as Context,
+    db,
+    project,
+    { ...workspace, schemaEditCandidate: invalidReplay },
+    normalizeYSchemaObject(definition)
+  );
+  expect(unverified.origins).toEqual(legacyOrigins);
+});
 it('saves an imported object independently of Base selection and restores its exact Release origin', async () => {
   const id = await source('objects', {
     person: { slots: { owner: { type: 'object', default: { name: 'Reviewer' } } } },

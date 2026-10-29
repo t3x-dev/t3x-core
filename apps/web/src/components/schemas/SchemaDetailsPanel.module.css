@@ -62,3 +62,44 @@
   scrollbar-gutter: stable;
   padding: 0 16px 16px;
 }
+.panel[data-identity] .header {
+  height: auto;
+  min-height: 48px;
+  padding: 12px 16px 4px;
+  border-bottom: 0;
+}
+.panel[data-identity] .header h2 {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+.panel[data-identity] .context {
+  height: auto;
+  display: block;
+  padding: 4px 16px 16px;
+  border-bottom: 1px solid var(--stroke-divider);
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.identity {
+  display: block;
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+  font: 600 18px / 1.4 var(--font-mono);
+  color: var(--text-primary);
+}
+.panel[data-identity] .body {
+  padding-top: 18px;
+}
+.panel[data-identity] .body :global(.grid) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.panel[data-identity] .body :global(.grid) > label {
+  grid-column: 1 / -1;
+}
+.panel[data-identity] .action button {
+  border-radius: var(--radius-sm);
+}
+.panel[data-identity] .action button:hover:not(:disabled) {
+  background: var(--hover-bg);
+}

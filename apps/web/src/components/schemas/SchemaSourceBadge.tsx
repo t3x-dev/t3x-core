@@ -18,10 +18,12 @@ export function SchemaSourceBadge({
   path,
   provenance,
   identities,
+  variant = 'icon',
 }: {
   path: string;
   provenance: SchemaNodeProvenance;
   identities: Record<string, SchemaSourceIdentity>;
+  variant?: 'icon' | 'label';
 }) {
   const [failedImage, setFailedImage] = useState<string>();
   const detailsId = useId();
@@ -62,6 +64,8 @@ export function SchemaSourceBadge({
         <button
           type="button"
           className={`${styles.badge} nodrag nopan`}
+          data-variant={variant}
+          data-origin={first ? 'source' : provenance.local ? 'workspace' : 'unknown'}
           aria-label={`Origin for ${path}: ${label}`}
           title={label}
           onClick={(event) => event.stopPropagation()}
@@ -91,6 +95,19 @@ export function SchemaSourceBadge({
           ) : (
             <CircleHelp aria-hidden="true" />
           )}
+          {variant === 'label' ? (
+            <span className={styles.badgeLabel}>
+              {provenance.pending
+                ? 'Checking source'
+                : multiple
+                  ? `${provenance.sources.length} sources`
+                  : first
+                    ? (identity?.name ?? first.name)
+                    : provenance.local
+                      ? 'Workspace'
+                      : 'Unknown'}
+            </span>
+          ) : null}
           {first && provenance.local ? (
             <span className={styles.modified} aria-hidden="true">
               •

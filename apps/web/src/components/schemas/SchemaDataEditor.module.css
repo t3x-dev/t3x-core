@@ -425,3 +425,392 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+.editor[data-workbench-footer][data-schema-unavailable] {
+  min-height: 400px;
+}
+.editor[data-workbench-footer][data-schema-unavailable] .content {
+  grid-template-columns: minmax(0, 1fr);
+}
+.editor[data-workbench-footer][data-schema-unavailable] .fieldWorkarea {
+  height: 100%;
+}
+.editor[data-workbench-footer][data-schema-unavailable] .fieldMain {
+  height: auto;
+}
+.editor[data-workbench-footer][data-schema-unavailable] .fieldScroll {
+  display: grid;
+  place-items: center;
+  min-height: 360px;
+  padding: 24px;
+}
+.editor[data-workbench-footer][data-schema-unavailable] .fieldTree {
+  display: none;
+}
+.editor[data-workbench-footer][data-schema-unavailable] .feedback {
+  min-width: 0;
+  padding: 0;
+}
+.editor[data-workbench-footer][data-schema-unavailable] .emptyState {
+  padding: 24px 0;
+  text-align: center;
+  line-height: 1.7;
+}
+.editor[data-workbench-footer][data-schema-unavailable] .emptyState strong {
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 600;
+}
+.emptyIcon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 16px;
+  border-radius: var(--radius-workbench);
+  background: var(--accent-branch-soft);
+  color: var(--yaml-number);
+}
+.emptyToolbar {
+  display: flex;
+  justify-content: flex-end;
+  flex: none;
+  padding: 12px 16px 0;
+}
+.emptyToolbar button {
+  color: var(--text-secondary);
+  box-shadow: none;
+}
+.editor[data-workbench-footer][data-schema-empty] .content {
+  grid-template-columns: minmax(0, 1fr);
+}
+.editor[data-workbench-footer][data-schema-empty] .fieldWorkarea {
+  height: 360px;
+  min-height: 320px;
+}
+.editor[data-workbench-footer][data-schema-empty] .fieldScroll {
+  display: grid;
+  place-items: center;
+  min-height: 260px;
+}
+.editor[data-workbench-footer][data-schema-empty] .fieldTree {
+  display: none;
+}
+.editor[data-workbench-footer][data-schema-empty] .emptyState {
+  text-align: center;
+}
+.editor[data-workbench-footer][data-schema-empty] .emptyState strong {
+  font-size: 15px;
+  color: var(--text-primary);
+}
+.editor[data-workbench-footer][data-schema-empty] .emptyActions {
+  justify-content: center;
+}
+.editor[data-workbench-footer][data-schema-unavailable] .emptyActions {
+  justify-content: center;
+  margin-top: 20px;
+}
+.editor[data-workbench-footer][data-schema-unavailable] .emptyActions button {
+  box-shadow: none;
+}
+
+.search,
+.fieldIdentity {
+  display: contents;
+}
+.fieldTypeIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  background: var(--surface-app);
+}
+.requiredMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--text-tertiary);
+  border-radius: 3px;
+}
+.requiredMark[data-required="true"] {
+  background: var(--accent-commit);
+  border-color: var(--accent-commit);
+  color: var(--on-accent);
+}
+.fieldTypeIcon svg {
+  width: 15px;
+  height: 15px;
+}
+.fieldTypeIcon[data-field-type="string"] {
+  color: var(--yaml-number);
+  background: var(--accent-branch-soft);
+}
+.fieldTypeIcon[data-field-type="boolean"] {
+  color: var(--accent-leaf);
+  background: var(--accent-leaf-soft);
+}
+.fieldTypeIcon[data-field-type="node"],
+.fieldTypeIcon[data-field-type="array"],
+.fieldTypeIcon[data-field-type="object"] {
+  color: var(--accent-commit);
+  background: var(--accent-commit-soft);
+}
+.fieldTypeIcon[data-field-type="number"],
+.fieldTypeIcon[data-field-type="integer"] {
+  color: var(--slot);
+  background: var(--slot-dim);
+}
+
+/* Schema Studio shares editing behavior with Workspace; its presentation stays scoped here. */
+.editor[data-workbench-footer] {
+  container-type: inline-size;
+}
+.editor[data-workbench-footer] .toolbar {
+  padding: 14px 18px;
+  background: var(--surface-card);
+}
+.editor[data-workbench-footer] .search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  max-width: 460px;
+  min-width: 160px;
+  padding-inline: 10px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+  color: var(--text-tertiary);
+}
+.editor[data-workbench-footer] .search input {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.editor[data-workbench-footer] .search:focus-within {
+  border-color: var(--ring);
+}
+.editor[data-workbench-footer] .content {
+  grid-template-columns: minmax(0, 1fr) 260px;
+  overflow: hidden;
+}
+.editor[data-workbench-footer] .fieldWorkarea[data-sources] {
+  grid-template-columns: 180px minmax(0, 1fr);
+}
+.editor[data-workbench-footer] .importSources {
+  padding: 12px 14px 18px;
+  gap: 12px;
+  scrollbar-width: thin;
+}
+.editor[data-workbench-footer] .sourceHeading {
+  min-height: 30px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.editor[data-workbench-footer] .sourceHeading button {
+  width: 28px;
+  min-height: 28px;
+  padding: 6px;
+  border-color: transparent;
+  background: transparent;
+  font-size: 0;
+  gap: 0;
+}
+.editor[data-workbench-footer] .sourceHeading button:hover {
+  background: var(--hover-bg);
+}
+.editor[data-workbench-footer] .sourceHelp {
+  order: 1;
+  font-size: 11px;
+  line-height: 1.75;
+  color: var(--text-tertiary);
+}
+.editor[data-workbench-footer] .fieldMain {
+  --field-type-width: 120px;
+  --field-required-width: 64px;
+  --field-actions-width: 76px;
+}
+.editor[data-workbench-footer] .fieldScroll {
+  padding: 0 16px 12px;
+  scrollbar-width: thin;
+}
+.editor[data-workbench-footer] .columns,
+.editor[data-workbench-footer] .moveToolbar,
+.editor[data-workbench-footer] .fieldTree {
+  min-width: 480px;
+}
+.editor[data-workbench-footer] .columns {
+  background: var(--surface-card);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  padding: 8px;
+}
+.editor[data-workbench-footer] .moveToolbar {
+  min-height: 38px;
+  padding: 4px 8px;
+  border-bottom: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.editor[data-workbench-footer] .moveToolbar button {
+  min-height: 28px;
+  height: 28px;
+  font-size: 11px;
+  border-color: var(--stroke-divider);
+}
+.editor[data-workbench-footer] .fieldTree {
+  padding: 0;
+}
+.editor[data-workbench-footer] .dragRow[data-node][data-depth="0"] {
+  margin-top: 16px;
+}
+.editor[data-workbench-footer] .dragRow:first-child {
+  margin-top: 2px;
+}
+.editor[data-workbench-footer] .dragRow [role="treeitem"] {
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+.editor[data-workbench-footer] .dragRow [role="treeitem"][data-selected="true"] {
+  background: color-mix(in srgb, var(--accent-commit) 4%, var(--surface-card));
+  border-color: var(--stroke-divider);
+}
+.editor[data-workbench-footer] .dragRow [role="treeitem"] :has(> .fieldTypeIcon) {
+  width: 22px;
+  height: 22px;
+  background: transparent;
+}
+.editor[data-workbench-footer] .fieldIdentity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.editor[data-workbench-footer] .fieldName {
+  min-width: 64px;
+  flex: 1;
+}
+.editor[data-workbench-footer] .fieldName input {
+  width: 100%;
+  min-width: 0;
+  padding-inline: 2px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-primary);
+}
+.editor[data-workbench-footer] .dragRow[data-node] .fieldName input {
+  font-weight: 600;
+}
+.editor[data-workbench-footer] .dragRow:not(:focus-within) .fieldName input {
+  background: transparent;
+  border-color: transparent;
+}
+.editor[data-workbench-footer] .fieldSummary,
+.editor[data-workbench-footer] .inline select {
+  font-size: 12px;
+}
+.editor[data-workbench-footer] .inline input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent-commit);
+}
+.editor[data-workbench-footer] .dragHandle {
+  position: absolute;
+  right: 62px;
+  width: 16px;
+  min-width: 16px;
+}
+.editor[data-workbench-footer] .dragRow [role="treeitem"] .fieldActions,
+.editor[data-workbench-footer] .dragRow:hover .dragHandle,
+.editor[data-workbench-footer] .dragRow:focus-within .dragHandle {
+  visibility: visible;
+}
+.editor[data-workbench-footer] .treeGuide {
+  border-color: color-mix(in srgb, var(--text-tertiary) 12%, transparent);
+}
+.editor[data-workbench-footer] .changeDescription {
+  padding: 12px 16px;
+  font-size: 11px;
+}
+.editor[data-workbench-footer] .changeDescription textarea {
+  background: var(--surface-app);
+  border-color: var(--stroke-divider);
+  font-size: 12px;
+}
+.editor[data-workbench-footer] .workbenchFooter {
+  min-height: 34px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.editor[data-workbench-footer] > fieldset > aside input,
+.editor[data-workbench-footer] > fieldset > aside select,
+.editor[data-workbench-footer] > fieldset > aside textarea {
+  border-color: var(--stroke-divider);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  box-shadow: none;
+}
+@container (max-width: 980px) {
+  .editor[data-workbench-footer] .content {
+    grid-template-columns: minmax(0, 1fr) 230px;
+  }
+  .editor[data-workbench-footer] .fieldWorkarea[data-sources] {
+    grid-template-columns: 156px minmax(0, 1fr);
+  }
+  .editor[data-workbench-footer] .fieldScroll {
+    padding-inline: 10px;
+  }
+  .editor[data-workbench-footer] .sourceHeading {
+    gap: 4px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+}
+@container (max-width: 800px) {
+  .editor[data-workbench-footer] .content {
+    grid-template-columns: minmax(0, 1fr);
+    overflow: auto;
+    display: block;
+  }
+  .editor[data-workbench-footer] .list {
+    overflow: visible;
+  }
+  .editor[data-workbench-footer] .fieldWorkarea {
+    height: clamp(320px, 55vh, 480px);
+  }
+  .editor[data-workbench-footer] .content > aside {
+    border-left: 0;
+    border-top: 1px solid var(--stroke-divider);
+    min-height: 300px;
+  }
+}
+@container (max-width: 560px) {
+  .editor[data-workbench-footer] .fieldWorkarea[data-sources] {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+  }
+  .editor[data-workbench-footer] .fieldMain {
+    flex: none;
+    height: clamp(320px, 55vh, 480px);
+  }
+  .editor[data-workbench-footer] .importSources {
+    flex: none;
+    border-right: 0;
+    border-bottom: 1px solid var(--stroke-divider);
+    max-height: 220px;
+  }
+  .editor[data-workbench-footer] .changeDescription textarea {
+    min-width: 0;
+    flex-basis: 100%;
+  }
+}

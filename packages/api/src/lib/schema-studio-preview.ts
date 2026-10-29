@@ -33,6 +33,7 @@ import { assessWorkspaceSchemaImpact, workspaceContent } from './schema-evolutio
 import {
   accessibleNodeProvenance,
   composeNodeProvenance,
+  publishedSchemaOrigins,
   readNodeProvenance,
 } from './schema-node-provenance';
 import { applySchemaSourceMappings } from './schema-source-mappings';
@@ -188,7 +189,11 @@ export async function compileStudioSelection(
         sources,
         report: { valid: true, issues: [] },
         renderPlan: (registry.renderPlan ?? []) as Record<string, unknown>[],
-        origins: (registry.originsByPath ?? {}) as Record<string, unknown>,
+        origins: publishedSchemaOrigins(
+          schema,
+          sources[0]!,
+          (registry.originsByPath ?? {}) as Record<string, unknown>
+        ),
         nodeProvenance: composeNodeProvenance(
           schema,
           {},

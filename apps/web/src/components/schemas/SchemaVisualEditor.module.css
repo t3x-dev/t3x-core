@@ -209,6 +209,69 @@
 .sourceItem[aria-pressed="true"] {
   background: var(--accent-commit-soft);
 }
+.sourceGroup[data-studio] summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 0 10px;
+  font-size: 12px;
+  font-weight: 500;
+  list-style: none;
+}
+.sourceGroup[data-studio] summary::-webkit-details-marker {
+  display: none;
+}
+.sourceGroup[data-studio] summary::after {
+  content: "›";
+  margin-left: auto;
+  color: var(--text-tertiary);
+  transition: transform var(--motion-fast);
+}
+.sourceGroup[data-studio][open] summary::after {
+  transform: rotate(90deg);
+}
+.sourceFamilyIcon {
+  box-sizing: content-box;
+  flex: none;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  color: var(--source);
+  background: var(--source-dim);
+}
+.sourceGroup[data-studio] small {
+  font-size: 11px;
+  font-weight: 400;
+  margin-top: 4px;
+  color: var(--text-tertiary);
+}
+.sourceItemName {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.sourceItemName > span {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.sourceItemName svg {
+  flex: none;
+  color: var(--source);
+}
+.sourceItemName svg:last-child {
+  color: var(--text-tertiary);
+}
+.sourceGroup[data-studio] .sourceItem {
+  padding: 10px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+}
+.sourceGroup[data-studio] .sourceItem small {
+  padding-left: 22px;
+}
+.sourceGroup[data-studio] .sourceItem:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--source) 35%, var(--stroke-divider));
+}
 .fieldRow {
   display: flex;
   align-items: center;
