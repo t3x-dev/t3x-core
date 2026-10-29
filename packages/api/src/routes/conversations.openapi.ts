@@ -21,6 +21,7 @@ import {
   findConversationsByProject,
   getConversationContext,
   getConversationTurnCount,
+  getConversationTurnCounts,
   insertConversation,
   renameConversation,
   setConversationContext,
@@ -82,6 +83,7 @@ const ConversationSchema = z.object({
 
 const ConversationWithTurnsSchema = ConversationSchema.extend({
   turns_count: z.number(),
+  has_pending_changes: z.boolean(),
 });
 
 const ConversationWithModelSchema = ConversationSchema.extend({
@@ -199,19 +201,23 @@ const ConversationContextManifestSchema = z.object({
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
-const toApiConversation = (conv: {
-  conversationId: string;
-  projectId: string;
-  title: string | null;
-  alias: string | null;
-  parentCommitHash: string | null;
-  committedAs: string | null;
-  committedAt: Date | null;
-  positionX: number | null;
-  positionY: number | null;
-  createdAt: Date;
-  metadataJson: string | null;
-}) => ({
+const toApiConversation = (
+  conv: {
+    conversationId: string;
+    projectId: string;
+    title: string | null;
+    alias: string | null;
+    parentCommitHash: string | null;
+    committedAs: string | null;
+    committedAt: Date | null;
+    commitTrackingStartedAt: Date | null;
+    positionX: number | null;
+    positionY: number | null;
+    createdAt: Date;
+    metadataJson: string | null;
+  },
+  turnsCount?: number
+) => ({
   conversation_id: conv.conversationId,
   project_id: conv.projectId,
   title: conv.title,
@@ -223,6 +229,13 @@ const toApiConversation = (conv: {
   position_y: conv.positionY,
   created_at: conv.createdAt.toISOString(),
   metadata: conv.metadataJson ? JSON.parse(conv.metadataJson) : null,
+  ...(turnsCount === undefined
+    ? {}
+    : {
+        turns_count: turnsCount,
+        has_pending_changes:
+          conv.commitTrackingStartedAt !== null && conv.committedAs === null && turnsCount > 0,
+      }),
 });
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
@@ -249,9 +262,9 @@ const listConversationsRoute = createRoute({
         'application/json': {
           schema: SuccessResponseSchema(
             z.union([
-              CursorPageResponseSchema(ConversationSchema),
+              CursorPageResponseSchema(ConversationWithTurnsSchema),
               z.object({
-                conversations: z.array(ConversationSchema),
+                conversations: z.array(ConversationWithTurnsSchema),
                 project_id: z.string(),
                 limit: z.number(),
                 offset: z.number(),
@@ -285,11 +298,17 @@ conversationRoutes.openapi(listConversationsRoute, async (c) => {
     // Cursor-based pagination mode
     if (cursor !== undefined) {
       const result = await findConversationsByProject(db, { projectId, cursor, limit });
+      const turnCounts = await getConversationTurnCounts(
+        db,
+        result.items.map((conversation) => conversation.conversationId)
+      );
       return c.json(
         {
           success: true as const,
           data: {
-            items: result.items.map(toApiConversation),
+            items: result.items.map((conversation) =>
+              toApiConversation(conversation, turnCounts.get(conversation.conversationId) ?? 0)
+            ),
             next_cursor: result.next_cursor,
             has_more: result.has_more,
           },
@@ -300,11 +319,17 @@ conversationRoutes.openapi(listConversationsRoute, async (c) => {
 
     // Legacy offset/limit mode
     const convs = await findConversationsByProject(db, { projectId, limit, offset });
+    const turnCounts = await getConversationTurnCounts(
+      db,
+      convs.map((conversation) => conversation.conversationId)
+    );
     return c.json(
       {
         success: true as const,
         data: {
-          conversations: convs.map(toApiConversation),
+          conversations: convs.map((conversation) =>
+            toApiConversation(conversation, turnCounts.get(conversation.conversationId) ?? 0)
+          ),
           project_id: projectId,
           limit,
           offset,
@@ -448,6 +473,10 @@ conversationRoutes.openapi(getConversationRoute, async (c) => {
       parent_commit_hash: conversation.parentCommitHash,
       committed_as: conversation.committedAs,
       committed_at: conversation.committedAt?.toISOString() ?? null,
+      has_pending_changes:
+        conversation.commitTrackingStartedAt !== null &&
+        conversation.committedAs === null &&
+        turnsCount > 0,
       position_x: conversation.positionX,
       position_y: conversation.positionY,
       created_at: conversation.createdAt.toISOString(),

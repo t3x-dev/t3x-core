@@ -12,11 +12,14 @@ import { cleanupRoots, renderHook, waitForHook } from './renderHook';
 vi.mock('@/infrastructure/commits', () => ({
   fetchCommits: vi.fn(),
 }));
+vi.mock('@/infrastructure/workspaces', () => ({
+  listProjectWorkspaces: vi.fn(),
+}));
 vi.mock('@/domain/commitAnchors', () => ({
   parseApiCommitAnchors: vi.fn(() => null),
 }));
 vi.mock('@/queries/conversations', () => ({
-  fetchConversations: vi.fn(),
+  fetchAllConversations: vi.fn(),
 }));
 vi.mock('@/commands/conversations', () => ({
   createConversation: vi.fn(),
@@ -31,10 +34,10 @@ vi.mock('@/queries/turns', () => ({
 import { createConversation } from '@/commands/conversations';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { fetchCommits } from '@/infrastructure/commits';
-import { fetchConversations } from '@/queries/conversations';
+import { listProjectWorkspaces } from '@/infrastructure/workspaces';
+import { fetchAllConversations } from '@/queries/conversations';
 import { fetchLeavesByProject } from '@/queries/leaves';
 import { useCanvasStore } from '@/store/canvasStore';
-import { PENDING_UNIT_LIMIT_MESSAGE } from '@/store/canvasStoreUtils';
 import type { CanvasNodeData } from '@/types/nodes';
 
 function stagingNode(id: string): Node<CanvasNodeData> {
@@ -66,6 +69,7 @@ function resetStore() {
     hasMainCommit: false,
     latestMainCommitId: undefined,
     hasDbPositions: false,
+    pendingConversations: [],
     notifyCallback: null,
   });
 }
@@ -73,9 +77,10 @@ function resetStore() {
 beforeEach(() => {
   vi.clearAllMocks();
   resetStore();
-  vi.mocked(fetchConversations).mockResolvedValue({ conversations: [] } as never);
+  vi.mocked(fetchAllConversations).mockResolvedValue([] as never);
   vi.mocked(fetchCommits).mockResolvedValue([] as never);
   vi.mocked(fetchLeavesByProject).mockResolvedValue([] as never);
+  vi.mocked(listProjectWorkspaces).mockResolvedValue([] as never);
 });
 
 afterEach(() => {
@@ -92,11 +97,12 @@ describe('useCanvasNodeActions.load', () => {
     expect(state.projectId).toBe('proj_1');
     expect(state.loading).toBe(false);
     expect(state.loadError).toBeNull();
-    expect(fetchConversations).toHaveBeenCalledWith('proj_1', 100, 0);
+    expect(fetchAllConversations).toHaveBeenCalledWith('proj_1');
+    expect(listProjectWorkspaces).toHaveBeenCalledWith('proj_1');
   });
 
   it('records error state when the fetch rejects', async () => {
-    vi.mocked(fetchConversations).mockRejectedValueOnce(new Error('network boom'));
+    vi.mocked(fetchAllConversations).mockRejectedValueOnce(new Error('network boom'));
     const { result } = renderHook(() => useCanvasNodeActions());
     await result.current.load('proj_1');
     await waitForHook();
@@ -108,7 +114,7 @@ describe('useCanvasNodeActions.load', () => {
 });
 
 describe('useCanvasNodeActions.add', () => {
-  it('creates a unit conversation and appends a staging node via addToNodes', async () => {
+  it('creates a conversation without adding mutable work to the version graph', async () => {
     useCanvasStore.setState({ projectId: 'proj_1' });
     vi.mocked(createConversation).mockResolvedValueOnce({
       conversation_id: 'conv_new',
@@ -117,13 +123,11 @@ describe('useCanvasNodeActions.add', () => {
     } as never);
 
     const { result } = renderHook(() => useCanvasNodeActions());
-    await result.current.add('unit');
+    const conversation = await result.current.add('unit');
     await waitForHook();
 
-    const state = useCanvasStore.getState();
-    expect(state.nodes).toHaveLength(1);
-    expect(state.nodes[0].id).toBe('conv_new');
-    expect(state.nodes[0].data.commitStatus).toBe('staging');
+    expect(conversation?.conversation_id).toBe('conv_new');
+    expect(useCanvasStore.getState().nodes).toHaveLength(0);
   });
 
   it('notifies rather than creating when kind=leaf', async () => {
@@ -139,20 +143,22 @@ describe('useCanvasNodeActions.add', () => {
     expect(createConversation).not.toHaveBeenCalled();
   });
 
-  it('does not create a second pending unit', async () => {
-    const notify = vi.fn();
+  it('allows another conversation while other work is pending', async () => {
     useCanvasStore.setState({
       projectId: 'proj_1',
       nodes: [stagingNode('conv_pending')],
-      notifyCallback: notify,
     });
+    vi.mocked(createConversation).mockResolvedValueOnce({
+      conversation_id: 'conv_second',
+      title: 'Untitled Unit',
+      created_at: '2026-04-12T00:00:00Z',
+    } as never);
 
     const { result } = renderHook(() => useCanvasNodeActions());
     await result.current.add('unit');
     await waitForHook();
 
-    expect(notify).toHaveBeenCalledWith(PENDING_UNIT_LIMIT_MESSAGE, 'warning');
-    expect(createConversation).not.toHaveBeenCalled();
+    expect(createConversation).toHaveBeenCalled();
     expect(useCanvasStore.getState().nodes.map((node) => node.id)).toEqual(['conv_pending']);
   });
 });

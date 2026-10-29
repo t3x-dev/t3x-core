@@ -4,6 +4,7 @@ import type { Node } from '@xyflow/react';
 import { useCallback, useState, useTransition } from 'react';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { useCanvasStore } from '@/store/canvasStore';
+import type { Conversation } from '@/types/api';
 import type { CanvasNodeData, NodeKind } from '@/types/nodes';
 import {
   buildBackgroundMenu,
@@ -18,7 +19,11 @@ export interface ContextMenuState {
 }
 
 interface UseContextMenuOptions {
-  addNode: (kind: NodeKind, position?: { x: number; y: number }) => Promise<void>;
+  addNode: (
+    kind: NodeKind,
+    position?: { x: number; y: number }
+  ) => Promise<Conversation | undefined>;
+  onConversationCreated?: (conversation: Conversation) => void;
   isDeveloperMode: boolean;
   notify: ((message: string, type: 'success' | 'error' | 'warning') => void) | null;
   fitView: (options?: { padding?: number; duration?: number }) => void;
@@ -29,6 +34,7 @@ export function useContextMenu({
   isDeveloperMode,
   notify,
   fitView,
+  onConversationCreated,
 }: UseContextMenuOptions) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [, startTransition] = useTransition();
@@ -52,7 +58,8 @@ export function useContextMenu({
           const position = { x: node.position.x + 320, y: node.position.y };
           startTransition(async () => {
             try {
-              await addNode('unit', position);
+              const conversation = await addNode('unit', position);
+              if (conversation) onConversationCreated?.(conversation);
             } catch (err) {
               notify?.(formatUserFacingError(err, 'Failed to create branch.'), 'error');
             }
@@ -76,7 +83,7 @@ export function useContextMenu({
       });
       setContextMenu({ x: event.clientX, y: event.clientY, groups });
     },
-    [addNode, isDeveloperMode, notify]
+    [addNode, isDeveloperMode, notify, onConversationCreated]
   );
 
   // Pane context menu — inline addNode to avoid forward-declaration of handleAddNode

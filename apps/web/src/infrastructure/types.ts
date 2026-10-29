@@ -65,6 +65,7 @@ export interface Conversation {
   parent_commit_hash?: string;
   committed_as?: string | null;
   committed_at?: string | null;
+  has_pending_changes?: boolean;
   position_x?: number;
   position_y?: number;
   created_at: string;

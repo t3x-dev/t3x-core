@@ -5,7 +5,7 @@
  */
 
 import { generateConversationId } from '@t3x-dev/core';
-import { and, desc, eq, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type Conversation, conversations, type NewConversation, turns } from '../schema';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
@@ -68,6 +68,7 @@ export async function insertConversation(
       positionX: input.positionX ?? null,
       positionY: input.positionY ?? null,
       createdAt,
+      commitTrackingStartedAt: createdAt,
       metadataJson,
     })
     .returning();
@@ -236,6 +237,36 @@ export async function markConversationCommitted(
 }
 
 /**
+ * Mark every still-open source conversation participating in a project commit.
+ * Already committed rows are intentionally left unchanged, making this safe for
+ * workspaces that reuse historical sources.
+ */
+export async function markProjectConversationsCommitted(
+  db: AnyDB,
+  projectId: string,
+  conversationIds: string[],
+  commitHash: string,
+  committedAt = new Date()
+): Promise<string[]> {
+  const uniqueIds = [...new Set(conversationIds.filter(Boolean))];
+  if (uniqueIds.length === 0) return [];
+
+  const updated = await db
+    .update(conversations)
+    .set({ committedAs: commitHash, committedAt })
+    .where(
+      and(
+        eq(conversations.projectId, projectId),
+        inArray(conversations.conversationId, uniqueIds),
+        isNull(conversations.committedAs)
+      )
+    )
+    .returning({ conversationId: conversations.conversationId });
+
+  return updated.map((row) => row.conversationId);
+}
+
+/**
  * Find conversations by project
  *
  * Supports two pagination modes:
@@ -380,4 +411,23 @@ export async function getConversationTurnCount(db: AnyDB, conversationId: string
     .where(eq(turns.conversationId, conversationId));
 
   return Number(result?.count ?? 0);
+}
+
+/** Return turn counts for a page of conversations with one grouped query. */
+export async function getConversationTurnCounts(
+  db: AnyDB,
+  conversationIds: string[]
+): Promise<Map<string, number>> {
+  if (conversationIds.length === 0) return new Map();
+
+  const rows = await db
+    .select({
+      conversationId: turns.conversationId,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(turns)
+    .where(inArray(turns.conversationId, conversationIds))
+    .groupBy(turns.conversationId);
+
+  return new Map(rows.map((row) => [row.conversationId, Number(row.count)]));
 }

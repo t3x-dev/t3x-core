@@ -14,8 +14,10 @@ import {
   findConversationById,
   findConversationsByProject,
   getConversationTurnCount,
+  getConversationTurnCounts,
   insertConversation,
   markConversationCommitted,
+  markProjectConversationsCommitted,
   renameConversation,
   setAliasIfNull,
   updateConversation,
@@ -60,6 +62,7 @@ describe('Conversations Storage', () => {
       expect(result.title).toBe('Test Chat');
       expect(result.projectId).toBe(testProjectId);
       expect(result.createdAt).toBeInstanceOf(Date);
+      expect(result.commitTrackingStartedAt).toEqual(result.createdAt);
     });
 
     it('stores the conversation in the database', async () => {
@@ -76,6 +79,27 @@ describe('Conversations Storage', () => {
       expect(rows).toHaveLength(1);
       expect(rows[0].title).toBe('DB Stored Chat');
       expect(rows[0].projectId).toBe(testProjectId);
+    });
+
+    it('starts Pending tracking when a legacy conversation receives a new turn', async () => {
+      const conversation = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Legacy source' })
+      );
+      await db
+        .update(conversations)
+        .set({ commitTrackingStartedAt: null })
+        .where(eq(conversations.conversationId, conversation.conversationId));
+
+      await insertTurn(
+        db,
+        testData.turn(testProjectId, conversation.conversationId, { content: 'Fresh change' })
+      );
+
+      await expect(findConversationById(db, conversation.conversationId)).resolves.toMatchObject({
+        commitTrackingStartedAt: expect.any(Date),
+        committedAs: null,
+      });
     });
 
     it('allows null title', async () => {
@@ -367,6 +391,37 @@ describe('Conversations Storage', () => {
     });
   });
 
+  describe('markProjectConversationsCommitted', () => {
+    it('marks open project sources together and leaves existing commit links unchanged', async () => {
+      const first = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'First source' })
+      );
+      const second = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Second source' })
+      );
+      const existingHash = `sha256:${'b'.repeat(64)}`;
+      await markConversationCommitted(db, second.conversationId, existingHash);
+      const commitHash = `sha256:${'c'.repeat(64)}`;
+
+      const marked = await markProjectConversationsCommitted(
+        db,
+        testProjectId,
+        [first.conversationId, first.conversationId, second.conversationId],
+        commitHash
+      );
+
+      expect(marked).toEqual([first.conversationId]);
+      await expect(findConversationById(db, first.conversationId)).resolves.toMatchObject({
+        committedAs: commitHash,
+      });
+      await expect(findConversationById(db, second.conversationId)).resolves.toMatchObject({
+        committedAs: existingHash,
+      });
+    });
+  });
+
   describe('deleteConversation', () => {
     it('deletes the conversation from database', async () => {
       const created = await insertConversation(
@@ -478,6 +533,29 @@ describe('Conversations Storage', () => {
       const count = await getConversationTurnCount(db, conv.conversationId);
 
       expect(count).toBe(3);
+    });
+
+    it('returns grouped counts for a conversation page and preserves zeroes at the caller', async () => {
+      const withTurn = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Grouped With Turn' })
+      );
+      const empty = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Grouped Empty' })
+      );
+      await insertTurn(
+        db,
+        testData.turn(testProjectId, withTurn.conversationId, { content: 'Only turn' })
+      );
+
+      const counts = await getConversationTurnCounts(db, [
+        withTurn.conversationId,
+        empty.conversationId,
+      ]);
+
+      expect(counts.get(withTurn.conversationId)).toBe(1);
+      expect(counts.get(empty.conversationId) ?? 0).toBe(0);
     });
   });
 
