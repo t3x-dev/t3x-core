@@ -16,6 +16,20 @@ export function fetchConversations(
   return listConversations(projectId, limit, offset);
 }
 
+/** Load the complete lightweight conversation inventory for aggregate UI counts. */
+export async function fetchAllConversations(projectId: string): Promise<Conversation[]> {
+  const pageSize = 1000;
+  const conversations: Conversation[] = [];
+  let offset = 0;
+
+  for (;;) {
+    const page = await listConversations(projectId, pageSize, offset);
+    conversations.push(...page.conversations);
+    if (page.conversations.length < pageSize) return conversations;
+    offset += page.conversations.length;
+  }
+}
+
 export function fetchConversationForSourceRedirect(conversationId: string): Promise<Conversation> {
   return getConversation(conversationId);
 }

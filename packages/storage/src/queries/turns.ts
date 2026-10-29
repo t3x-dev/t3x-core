@@ -5,9 +5,9 @@
  */
 
 import { type ContentBlock, computeTurnHash } from '@t3x-dev/core';
-import { and, asc, desc, eq, gt, inArray, lt, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull, lt, or } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type Turn, turns } from '../schema';
+import { conversations, type Turn, turns } from '../schema';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
 export interface CreateTurnInput {
@@ -45,6 +45,21 @@ export interface ListTurnsByProjectOptions {
 export async function insertTurn(db: AnyDB, input: CreateTurnInput): Promise<Turn> {
   return db.transaction(async (tx) => {
     const createdAt = new Date();
+
+    // Legacy conversations intentionally start untracked because their old
+    // commit link cannot be proven. The first new turn is objective evidence
+    // of fresh work, so begin Pending tracking in the same transaction.
+    await tx
+      .update(conversations)
+      .set({ commitTrackingStartedAt: createdAt })
+      .where(
+        and(
+          eq(conversations.projectId, input.projectId),
+          eq(conversations.conversationId, input.conversationId),
+          isNull(conversations.commitTrackingStartedAt),
+          isNull(conversations.committedAs)
+        )
+      );
 
     // Get parent turn hash (last turn in conversation) — inside the transaction
     const lastTurn = await findLastTurnInConversation(tx as AnyDB, input.conversationId);
