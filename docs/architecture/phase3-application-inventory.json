@@ -202,6 +202,7 @@
   },
   "reviewSnapshotReferences": [
     "apps/web/e2e/flows/workspace-complex-flow.spec.ts",
+    "apps/web/e2e/smoke/schema-delivery-no-ai.spec.ts",
     "apps/web/e2e/smoke/schema-edit-review-loop.spec.ts",
     "apps/web/src/components/checks/WorkspaceChecksRedirect.tsx",
     "apps/web/src/components/project/ProjectWorkspacesTab.tsx",
