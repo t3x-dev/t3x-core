@@ -13,6 +13,9 @@ test('shared project shell keeps navigation separate from long project names', a
       const title = page.getByRole('heading', { name: projectName, exact: true });
       await expect(nav).toBeVisible();
       await expect(nav.getByRole('link', { name: 'Outputs' })).toHaveCount(0);
+      // The Project ID route remounts the shell at its canonical repository address.
+      await expect(page).toHaveURL(new RegExp(`/${projectName}$`));
+      await expect(title).toBeVisible();
       const titleBox = await title.boundingBox();
       const navBox = await nav.boundingBox();
       expect(titleBox).not.toBeNull();
