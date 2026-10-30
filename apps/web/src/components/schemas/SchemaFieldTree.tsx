@@ -12,12 +12,19 @@ import {
 } from '@dnd-kit/core';
 import type { StudioCandidate } from '@t3x-dev/api-client';
 import { GripVertical } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import tree from '@/components/structure/StructureTree.module.css';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import type { SchemaFieldRow } from '@/domain/schemas/schemaFieldEditing';
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import type { SchemaDefinition, SchemaFieldRow } from '@/domain/schemas/schemaFieldEditing';
+import {
+  isSourceBase,
+  type SchemaSourceRelation,
+  sourceContainsRelation,
+} from '@/domain/schemas/schemaSourceRelations';
 import styles from './SchemaDataEditor.module.css';
+import overlay from './SchemaEditorOverlay.module.css';
+import { SchemaEditorSelect } from './SchemaEditorSelect';
 import { type SchemaSourceItem, SchemaVisualSource } from './SchemaVisualSources';
 
 type TransferItem = { row: SchemaFieldRow; source?: SchemaSourceItem };
@@ -39,10 +46,17 @@ export function SchemaFieldTree({
   rows,
   visible,
   selected,
+  relations,
+  sourceBase,
+  onReveal,
   disabled,
   projectId,
   sources = [],
   sourceManagement,
+  footer,
+  emptyContent,
+  studio = false,
+  unavailable = false,
   onMove,
   onImport,
   onSelect,
@@ -51,21 +65,75 @@ export function SchemaFieldTree({
   rows: SchemaFieldRow[];
   visible: SchemaFieldRow[];
   selected?: string;
+  relations?: Map<string, SchemaSourceRelation[]>;
+  sourceBase?: SchemaDefinition;
+  onReveal?: (row: SchemaFieldRow) => void;
   disabled: boolean;
   projectId?: string;
   sources?: StudioCandidate[];
   sourceManagement?: ReactNode;
+  footer?: ReactNode;
+  emptyContent?: ReactNode;
+  studio?: boolean;
+  unavailable?: boolean;
   onMove: (path: string, target: SchemaFieldRow | null) => void;
   onImport: (item: SchemaSourceItem, target: SchemaFieldRow | null) => void;
   onSelect: (row: SchemaFieldRow) => void;
   renderRow: (row: SchemaFieldRow, handle: ReactNode, select: () => void) => ReactNode;
 }) {
+  const destinationId = useId();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const [dragging, setDragging] = useState<TransferItem>();
   const [source, setSource] = useState<SchemaSourceItem>();
   const [destination, setDestination] = useState('');
   const [moveOpen, setMoveOpen] = useState(false);
+  const sourceAnchor = useRef<HTMLButtonElement | null>(null);
+  const sourcePosition = useRef<{ getBoundingClientRect: () => DOMRect } | null>(null);
+  const [locating, setLocating] = useState<string>();
+  const fieldScroll = useRef<HTMLDivElement>(null);
   const availableSources = sources.filter((item) => item.available);
+  const sourceCandidate = source && availableSources.find((item) => item.id === source.candidateId);
+  const baseMatchesSource = !!source && isSourceBase(sourceBase, source.preview);
+  const relatedRows =
+    source && sourceCandidate && relations
+      ? rows.filter((row) =>
+          relations
+            .get(row.path)
+            ?.some((relation) =>
+              sourceContainsRelation(
+                relation,
+                sourceCandidate,
+                source.row,
+                source.preview,
+                baseMatchesSource
+              )
+            )
+        )
+      : [];
+  const relatedPaths = new Set(relatedRows.map((row) => row.path));
+  const visiblePaths = new Set(visible.map((row) => row.path));
+  const containingPaths = new Set<string>();
+  for (const row of relatedRows) {
+    if (visiblePaths.has(row.path)) continue;
+    let parent = row.parentPath;
+    while (parent) {
+      if (visiblePaths.has(parent)) {
+        containingPaths.add(parent);
+        break;
+      }
+      parent = rows.find((item) => item.path === parent)?.parentPath ?? null;
+    }
+  }
+  useEffect(() => {
+    if (!locating) return;
+    const element = Array.from(
+      fieldScroll.current?.querySelectorAll<HTMLElement>('[data-schema-path]') ?? []
+    ).find((item) => item.dataset.schemaPath === locating);
+    if (element) {
+      element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      setLocating(undefined);
+    }
+  }, [locating, visible]);
   const selectedRow = rows.find((row) => row.path === selected);
   const active: TransferItem | undefined = source
     ? { row: source.row, source }
@@ -106,19 +174,24 @@ export function SchemaFieldTree({
     >
       <div
         className={styles.fieldWorkarea}
-        data-sources={
-          Boolean(projectId && (availableSources.length || sourceManagement)) || undefined
-        }
+        data-sources={Boolean(projectId && !unavailable) || undefined}
       >
-        {projectId && (availableSources.length > 0 || sourceManagement) ? (
+        {projectId && !unavailable ? (
           <aside className={styles.importSources} aria-label="Available Schema sources">
             <div className={styles.sourceHeading}>
-              <strong>Sources</strong>
-              {sourceManagement}
+              <strong>Schema sources</strong>
+              {studio ? sourceManagement : null}
             </div>
-            <p>Drag nodes or objects into the draft.</p>
+            {!studio ? sourceManagement : null}
+            <p className={styles.sourceHelp} hidden={!availableSources.length}>
+              Drag a node or object field into your schema, or select one to choose where to add it.
+            </p>
             {!availableSources.length ? (
-              <p>Add a source through Manage sources to get started.</p>
+              <p>
+                {sourceManagement
+                  ? 'No sources added. Use Manage to browse reusable definitions.'
+                  : 'No sources added.'}
+              </p>
             ) : null}
             {availableSources.map((candidate) => (
               <SchemaVisualSource
@@ -128,7 +201,16 @@ export function SchemaFieldTree({
                 selected={source}
                 disabled={disabled}
                 defaultOpen
-                onSelect={(item) => {
+                studio={studio}
+                relations={!source && selected ? relations?.get(selected) : undefined}
+                sourceBase={sourceBase}
+                onSelect={(item, anchor) => {
+                  sourceAnchor.current = anchor;
+                  const bounds = anchor.getBoundingClientRect();
+                  sourcePosition.current = {
+                    getBoundingClientRect: () =>
+                      anchor.isConnected ? anchor.getBoundingClientRect() : bounds,
+                  };
                   setSource(item);
                   setDestination('');
                   setMoveOpen(true);
@@ -138,80 +220,167 @@ export function SchemaFieldTree({
           </aside>
         ) : null}
         <div className={styles.fieldMain}>
-          <div className={styles.columns}>
-            <span>Field</span>
-            <span>Type · Required</span>
-            <span>Actions</span>
-          </div>
-          {active ? (
-            <div className={styles.moveToolbar}>
-              <span>{active.row.semanticPath}</span>
-              <Popover open={moveOpen} onOpenChange={setMoveOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="canvas-outline" size="sm" disabled={disabled}>
-                    {source ? 'Import to…' : 'Move to…'}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="start" className={styles.moveMenu}>
-                  <label>
-                    Destination
-                    <select
-                      aria-label="Destination node"
-                      value={destination}
+          <div ref={fieldScroll} className={styles.fieldScroll}>
+            <div className={styles.columns} hidden={unavailable || !rows.length}>
+              <span>Name</span>
+              <span>Type</span>
+              <span className={styles.requiredColumn}>Required</span>
+              <span className="sr-only">Actions</span>
+            </div>
+            {active ? (
+              <div className={styles.moveToolbar}>
+                <span>{active.row.semanticPath}</span>
+                <Popover open={moveOpen} onOpenChange={setMoveOpen}>
+                  {source && sourcePosition.current ? (
+                    <PopoverAnchor virtualRef={{ current: sourcePosition.current }} />
+                  ) : null}
+                  {source ? (
+                    <Button
+                      variant="canvas-outline"
+                      size="sm"
                       disabled={disabled}
-                      onChange={(event) => setDestination(event.target.value)}
+                      aria-expanded={moveOpen}
+                      onClick={() => setMoveOpen(!moveOpen)}
                     >
-                      <option value="">Choose a node</option>
-                      {active.row.kind === 'node' ? <option value="root">Root</option> : null}
-                      {targets.map((row) => (
-                        <option key={row.path} value={row.path}>
-                          {row.semanticPath}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <Button
-                    size="sm"
-                    disabled={disabled || !canMove}
-                    onClick={() => {
-                      if (canMove) transfer(active, target ?? null);
+                      Add to draft…
+                    </Button>
+                  ) : (
+                    <PopoverTrigger asChild>
+                      <Button variant="canvas-outline" size="sm" disabled={disabled}>
+                        Move to…
+                      </Button>
+                    </PopoverTrigger>
+                  )}
+                  <PopoverContent
+                    align="start"
+                    side={source ? 'right' : 'bottom'}
+                    sideOffset={8}
+                    collisionPadding={12}
+                    className={overlay.popover}
+                    aria-label={source ? 'Add source to draft' : 'Move to node'}
+                    onCloseAutoFocus={(event) => {
+                      if (source && sourceAnchor.current?.isConnected) {
+                        event.preventDefault();
+                        sourceAnchor.current.focus();
+                      }
                     }}
                   >
-                    {source ? 'Import here' : 'Move here'}
-                  </Button>
-                </PopoverContent>
-              </Popover>
+                    <div>
+                      <h3 className={overlay.heading}>{source ? 'Add to draft' : 'Move to'}</h3>
+                      <p className={overlay.description}>{active.row.semanticPath}</p>
+                    </div>
+                    <label className={overlay.field} htmlFor={destinationId}>
+                      Destination
+                      <SchemaEditorSelect
+                        id={destinationId}
+                        aria-label="Destination node"
+                        value={destination}
+                        disabled={disabled}
+                        onChange={(event) => setDestination(event.target.value)}
+                      >
+                        <option value="">Choose a node</option>
+                        {active.row.kind === 'node' ? (
+                          <option value="root">Top level</option>
+                        ) : null}
+                        {targets.map((row) => (
+                          <option key={row.path} value={row.path}>
+                            {row.semanticPath}
+                          </option>
+                        ))}
+                      </SchemaEditorSelect>
+                    </label>
+                    <div className={overlay.actions}>
+                      <Button size="sm" variant="ghost" onClick={() => setMoveOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="commit"
+                        disabled={disabled || !canMove}
+                        onClick={() => {
+                          if (canMove) transfer(active, target ?? null);
+                        }}
+                      >
+                        {source ? 'Add here' : 'Move here'}
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                {studio && source ? (
+                  <span className={styles.relationSummary}>
+                    <output>
+                      {relatedRows.length
+                        ? `${relatedRows.length} related items`
+                        : 'No exact matches'}
+                    </output>
+                    {relatedRows.length && onReveal ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const first =
+                            relatedRows.find((row) => !visiblePaths.has(row.path)) ??
+                            relatedRows[0];
+                          onReveal(first);
+                          setLocating(first.path);
+                        }}
+                      >
+                        Locate
+                      </Button>
+                    ) : null}
+                  </span>
+                ) : null}
+              </div>
+            ) : (
+              <div className={styles.moveToolbar} hidden={unavailable || !rows.length}>
+                <span className={styles.selectionHint}>
+                  {rows.length ? 'Select a node or field to edit' : 'Schema structure'}
+                </span>
+              </div>
+            )}
+            <div
+              role="tree"
+              aria-label="Schema fields"
+              className={`${tree.tree} ${styles.fieldTree}`}
+            >
+              {visible.map((row) => (
+                <DraggableRow
+                  key={row.path}
+                  row={row}
+                  disabled={disabled}
+                  related={
+                    relatedPaths.has(row.path)
+                      ? 'direct'
+                      : containingPaths.has(row.path)
+                        ? 'contains'
+                        : undefined
+                  }
+                  dropDisabled={disabled || !dragging || !canReceive(dragging, row)}
+                  render={(handle) =>
+                    renderRow(row, handle, () => {
+                      setSource(undefined);
+                      setDestination('');
+                      setMoveOpen(false);
+                      onSelect(row);
+                    })
+                  }
+                />
+              ))}
             </div>
-          ) : null}
-          <div role="tree" aria-label="Schema fields" className={tree.tree}>
-            {visible.map((row) => (
-              <DraggableRow
-                key={row.path}
-                row={row}
-                disabled={disabled}
-                dropDisabled={disabled || !dragging || !canReceive(dragging, row)}
-                render={(handle) =>
-                  renderRow(row, handle, () => {
-                    setSource(undefined);
-                    setDestination('');
-                    setMoveOpen(false);
-                    onSelect(row);
-                  })
-                }
-              />
-            ))}
+            <RootDropTarget
+              disabled={disabled || !dragging || !canReceive(dragging, null)}
+              importing={Boolean(dragging?.source)}
+            />
+            {!visible.length ? (
+              <div className={styles.feedback}>
+                {emptyContent ??
+                  (rows.length
+                    ? 'No fields match this search.'
+                    : 'No nodes yet. Add a node or drag one from Schema sources.')}
+              </div>
+            ) : null}
           </div>
-          <RootDropTarget
-            disabled={disabled || !dragging || !canReceive(dragging, null)}
-            importing={Boolean(dragging?.source)}
-          />
-          {!visible.length ? (
-            <p className={styles.feedback}>
-              {rows.length
-                ? 'No fields match this search.'
-                : 'No nodes yet. Add a node or drag one from Sources.'}
-            </p>
-          ) : null}
+          {footer}
         </div>
       </div>
       <DragOverlay>
@@ -225,11 +394,13 @@ function DraggableRow({
   row,
   disabled,
   dropDisabled,
+  related,
   render,
 }: {
   row: SchemaFieldRow;
   disabled: boolean;
   dropDisabled: boolean;
+  related?: 'direct' | 'contains';
   render: (handle: ReactNode) => ReactNode;
 }) {
   const drag = useDraggable({ id: `field:${row.path}`, data: { item: { row } }, disabled });
@@ -238,8 +409,29 @@ function DraggableRow({
     <div
       ref={drop.setNodeRef}
       className={styles.dragRow}
+      data-node={row.kind === 'node' || undefined}
+      data-depth={row.depth}
       data-drop-target={drop.isOver || undefined}
+      data-schema-path={row.path}
+      data-related={related}
+      title={
+        related === 'contains'
+          ? 'Contains fields related to the selected source'
+          : related
+            ? 'Related to the selected source'
+            : undefined
+      }
     >
+      <span className={styles.treeGuides} aria-hidden="true">
+        {[0, 1, 2, 3, 4, 5, 6, 7].slice(0, row.depth).map((level) => (
+          <span
+            key={level}
+            className={styles.treeGuide}
+            style={{ left: 14 + level * 16 }}
+            data-branch={level === Math.min(row.depth, 8) - 1 || undefined}
+          />
+        ))}
+      </span>
       {render(
         <button
           type="button"
@@ -267,7 +459,7 @@ function RootDropTarget({ disabled, importing }: { disabled: boolean; importing:
       className={styles.rootDrop}
       data-drop-target={isOver || undefined}
     >
-      {importing ? 'Drop a node here to add it at the root' : 'Move to root'}
+      {importing ? 'Drop a node here to add it at the top level' : 'Move to top level'}
     </div>
   );
 }

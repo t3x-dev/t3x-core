@@ -6,6 +6,7 @@ import {
   CircleDashed,
   GitBranch,
   Loader2,
+  Pencil,
   ShieldAlert,
   Sparkles,
   XCircle,
@@ -29,36 +30,46 @@ export function ChangeDecisionPanel({
   branch,
   busy,
   onDecide,
+  onEdit,
   onOverrideReasonChange,
   overrideReason,
   view,
   commitBlocker,
   checksHref,
+  contentValidation,
+  embedded = false,
 }: {
   branch: string | null;
   busy: boolean;
   onDecide: (outcome: DecisionOutcome, reason?: string) => void;
+  onEdit?: () => void;
   onOverrideReasonChange: (reason: string) => void;
   overrideReason: string;
   view: TransitionViewV1;
   commitBlocker?: string;
   checksHref?: string;
+  contentValidation?: 'not_applicable';
+  embedded?: boolean;
 }) {
   const reasonRef = useRef<HTMLTextAreaElement>(null);
   const [reasonError, setReasonError] = useState(false);
-  const checks = changeCheckRows(view);
+  const checks = changeCheckRows(view, contentValidation);
   const blockers = changeDecisionBlockers(view);
   const decided = view.decision.observation === 'supplied';
   const acceptAllowed = !commitBlocker && view.capabilities.accept.disposition === 'allowed';
   const overrideAllowed =
     !commitBlocker && !acceptAllowed && view.capabilities.override.disposition === 'allowed';
   const rejectAllowed = view.capabilities.reject.disposition === 'allowed';
-  const status = panelStatus(view, acceptAllowed, overrideAllowed);
+  const status = panelStatus(view, acceptAllowed, overrideAllowed, contentValidation);
 
   return (
     <section
       aria-label="Decision"
-      className="overflow-hidden rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] shadow-[0_1px_2px_oklch(0_0_0/4%)]"
+      className={
+        embedded
+          ? 'overflow-hidden'
+          : 'overflow-hidden rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] shadow-[0_1px_2px_oklch(0_0_0/4%)]'
+      }
     >
       <header className={`border-b px-4 py-3 ${STATUS_TONE[status.tone].header}`}>
         <div className="flex items-center gap-2">
@@ -104,7 +115,7 @@ export function ChangeDecisionPanel({
             className="mt-2 inline-block text-xs underline text-[var(--text-secondary)]"
             href={checksHref}
           >
-            Run details and evidence
+            {embedded ? 'View run' : 'Run details and evidence'}
           </Link>
         ) : null}
       </section>
@@ -194,6 +205,12 @@ export function ChangeDecisionPanel({
               Approve and commit
             </Button>
           )}
+          {!acceptAllowed && onEdit ? (
+            <Button disabled={busy} onClick={onEdit} type="button" variant="canvas-outline">
+              <Pencil aria-hidden="true" className="size-4" />
+              Continue editing
+            </Button>
+          ) : null}
           {rejectAllowed ? (
             <Button
               disabled={busy}
@@ -299,7 +316,12 @@ const STATUS_TONE: Record<Tone, { header: string; icon: string }> = {
   },
 };
 
-function panelStatus(view: TransitionViewV1, acceptAllowed: boolean, overrideAllowed: boolean) {
+function panelStatus(
+  view: TransitionViewV1,
+  acceptAllowed: boolean,
+  overrideAllowed: boolean,
+  contentValidation?: 'not_applicable'
+) {
   if (view.decision.observation === 'supplied') {
     if (view.decision.outcome === 'rejected')
       return {
@@ -321,7 +343,9 @@ function panelStatus(view: TransitionViewV1, acceptAllowed: boolean, overrideAll
       icon: CheckCircle2,
       title: 'Ready to commit',
       detail:
-        'Checks passed for this snapshot. The Draft and branch are checked again when you commit.',
+        contentValidation === 'not_applicable'
+          ? 'Schema is ready to commit. No business content is being submitted; content validation is not applicable yet.'
+          : 'Checks passed for this snapshot. The Draft and branch are checked again when you commit.',
     };
   if (overrideAllowed)
     return {

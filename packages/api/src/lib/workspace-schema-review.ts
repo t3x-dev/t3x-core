@@ -1,4 +1,5 @@
 import {
+  SchemaPreparationDiagnosticsSchema,
   type WorkspaceFullSchemaReview,
   WorkspaceFullSchemaReviewSchema,
   type WorkspaceSchemaDefinitionSnapshot,
@@ -9,16 +10,38 @@ import { describeTransitionObject } from '@t3x-dev/core';
 import {
   type AnyDB,
   DraftAuthoringConflictError,
+  findTransitionCommitReceipt,
   findYSchemaCompositionSnapshot,
   getTransitionViewForCommit,
+  getVerifiedTransitionCommitGraph,
   type ResolvedTransitionProposalGraph,
+  resolveTransitionProposalGraph,
 } from '@t3x-dev/storage';
-import { canonicalizeProtocolValue, type State } from '@t3x-dev/transition';
+import { canonicalizeProtocolValue, type ProposalStatement, type State } from '@t3x-dev/transition';
 import { diffYSchemas, normalizeYSchemaObject, sha256CompositionValue } from '@t3x-dev/yschema';
+import { isSchemaOnlyWorkspaceReview } from './workspace-schema-content';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
 
-/** Older Commits may predate the local Base cache. Recover only a definition whose
- * bytes match the Schema resource in the verified Commit's validation evidence. */
+export async function workspaceSchemaReviewResource(review: WorkspaceFullSchemaReview) {
+  const digest = (await sha256CompositionValue(review)) as `sha256:${string}`;
+  return { uri: `t3x://workspace-schema-reviews/${digest}`, mediaType: 'application/json', digest };
+}
+
+export async function hasSchemaReviewEvidence(
+  proposal: ProposalStatement,
+  review: WorkspaceFullSchemaReview
+) {
+  const resource = await workspaceSchemaReviewResource(review);
+  return (
+    proposal.predicate.rationale.mode !== 'unspecified' &&
+    proposal.predicate.rationale.evidence.some(
+      (evidence) =>
+        evidence.resource.digest === resource.digest && evidence.resource.uri === resource.uri
+    )
+  );
+}
+
+/** Recover only the exact Schema bound into the verified Commit's Proposal or validation evidence. */
 export async function recoverCommittedSchema(
   db: AnyDB,
   projectId: string,
@@ -28,6 +51,25 @@ export async function recoverCommittedSchema(
 ): Promise<WorkspaceSchemaDefinitionSnapshot | null> {
   const view = await getTransitionViewForCommit(db, { projectId, refName, commitId: refHead });
   if (view?.mode !== 'transition') return null;
+  // A content-free Schema commit has a frozen definition, not instance-validation evidence.
+  const receipt = await findTransitionCommitReceipt(db, projectId, refHead);
+  if (receipt) {
+    const graph = await resolveTransitionProposalGraph(db, projectId, receipt.transitionId);
+    const frozen = graph ? frozenWorkspaceSchemaReview(graph) : null;
+    if (graph && frozen && isSchemaOnlyWorkspaceReview(frozen)) {
+      const committed = await getVerifiedTransitionCommitGraph(db, projectId, refHead);
+      if (
+        committed &&
+        graph.membership.proposalDigest === describeTransitionObject(committed.proposal).digest &&
+        graph.membership.effectDigest === describeTransitionObject(committed.effect).digest &&
+        (await hasSchemaReviewEvidence(committed.proposal, frozen)) &&
+        (await sha256CompositionValue(normalizeYSchemaObject(frozen.draft.definition))) ===
+          frozen.draft.schemaHash
+      )
+        return frozen.draft;
+      return null;
+    }
+  }
   const resources = view.checks.validation.runs.map((run) => run.predicate.schemaResource);
   const hashes = new Set(resources.map((resource) => resource.digest));
   if (hashes.size !== 1) return null;
@@ -159,7 +201,19 @@ export async function buildWorkspaceSchemaReview(
       throw new DraftAuthoringConflictError('The frozen Schema definition has an invalid hash.');
   }
   const empty = normalizeYSchemaObject({ yschema: '0.1', name: 'Unbound', nodes: {} });
-  return WorkspaceFullSchemaReviewSchema.parse({
+  const preparationDiagnostics = (
+    Array.isArray(workspace.schemaPreparations) ? workspace.schemaPreparations : []
+  ).flatMap((receipt) => {
+    if (!receipt.diagnostics) return [];
+    return [
+      SchemaPreparationDiagnosticsSchema.parse({
+        workspaceRevision: receipt.workspaceRevision - 1,
+        diagnostics: receipt.diagnostics,
+      }),
+    ];
+  });
+  const review = WorkspaceFullSchemaReviewSchema.parse({
+    ...(preparationDiagnostics.length ? { preparationDiagnostics } : {}),
     schema: 't3x.application/workspace-schema-review/v1',
     base,
     draft,
@@ -174,6 +228,9 @@ export async function buildWorkspaceSchemaReview(
     baseContent: ledger.base,
     draftContent: currentComposition(ledger),
   });
+  return isSchemaOnlyWorkspaceReview({ ...review, contentValidation: 'not_applicable' })
+    ? { ...review, contentValidation: 'not_applicable' }
+    : review;
 }
 
 export function frozenWorkspaceSchemaReview(

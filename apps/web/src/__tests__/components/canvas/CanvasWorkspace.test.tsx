@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Node } from '@xyflow/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import CanvasWorkspace from '@/components/canvas/CanvasWorkspace';
@@ -14,9 +14,13 @@ const flowMocks = vi.hoisted(() => ({
   getNodes: vi.fn(),
   reactFlowProps: undefined as
     | {
+        defaultEdgeOptions?: unknown;
+        edges?: Array<{ id: string; source: string; target: string }>;
+        nodes?: Node<CanvasNodeData>[];
         onNodeClick?: (...args: unknown[]) => void;
         onNodeDragStart?: (...args: unknown[]) => void;
         onNodeDragStop?: (...args: unknown[]) => void;
+        onlyRenderVisibleElements?: boolean;
       }
     | undefined,
   screenToFlowPosition: vi.fn(),
@@ -60,9 +64,13 @@ vi.mock('@xyflow/react', async () => {
     Position: { Left: 'left', Right: 'right' },
     ReactFlow: (props: {
       children?: React.ReactNode;
+      defaultEdgeOptions?: unknown;
+      edges?: Array<{ id: string; source: string; target: string }>;
+      nodes?: Node<CanvasNodeData>[];
       onNodeClick?: (...args: unknown[]) => void;
       onNodeDragStart?: (...args: unknown[]) => void;
       onNodeDragStop?: (...args: unknown[]) => void;
+      onlyRenderVisibleElements?: boolean;
     }) => {
       flowMocks.reactFlowProps = props;
       return React.createElement('div', { 'data-testid': 'react-flow' }, props.children);
@@ -190,6 +198,10 @@ vi.mock('@/hooks/canvas/useCanvasPositionPersist', () => ({
   useCanvasPositionPersist: () => undefined,
 }));
 
+vi.mock('@/hooks/workspaces/useCommitTransitionView', () => ({
+  useCommitTransitionView: () => ({ error: null, loading: false, view: null }),
+}));
+
 vi.mock('@/hooks/conversations/useConversationContext', () => ({
   useConversationContext: () => ({ contextConfig: null }),
 }));
@@ -263,6 +275,7 @@ describe('CanvasWorkspace initial fit view', () => {
       modalViewMode: null,
       nodes,
       openNodeId: null,
+      pendingConversations: [],
       projectId: 'proj_test',
     } as Partial<ReturnType<typeof useCanvasStore.getState>>);
 
@@ -287,6 +300,7 @@ describe('CanvasWorkspace initial fit view', () => {
       modalViewMode: null,
       nodes: [],
       openNodeId: null,
+      pendingConversations: [],
       projectId: null,
     });
   });
@@ -327,15 +341,65 @@ describe('CanvasWorkspace initial fit view', () => {
     });
   });
 
-  it('renders a line-grid canvas background instead of a decorative radial wash', () => {
+  it('renders the History-style dotted grid instead of a decorative radial wash', () => {
     layoutMocks.getLayoutedElements.mockResolvedValue(useCanvasStore.getState().nodes);
 
     render(<CanvasWorkspace projectName="Trust Gate" />);
 
-    expect(screen.getByTestId('flow-background')).toHaveAttribute('data-variant', 'lines');
-    expect(screen.getByTestId('flow-background')).toHaveAttribute('data-gap', '32');
+    expect(screen.getByTestId('flow-background')).toHaveAttribute('data-variant', 'dots');
+    expect(screen.getByTestId('flow-background')).toHaveAttribute('data-gap', '24');
     const style = screen.getByRole('tree', { name: /state graph canvas/i }).getAttribute('style');
     expect(style).toContain('--surface-canvas');
+  });
+
+  it('shows the real pending conversation count outside the version graph', () => {
+    useCanvasStore.setState({
+      pendingConversations: [
+        {
+          conversationId: 'conv_pending',
+          title: 'Draft requirements',
+          turnsCount: 5,
+          createdAt: '2026-10-29T10:00:00.000Z',
+          branch: 'dev',
+        },
+      ],
+    });
+    layoutMocks.getLayoutedElements.mockResolvedValue(useCanvasStore.getState().nodes);
+
+    render(<CanvasWorkspace projectName="Trust Gate" />);
+
+    const trigger = screen.getByRole('button', { name: '1 pending conversation' });
+    expect(flowMocks.reactFlowProps?.nodes?.map((node) => node.id)).toEqual(['node_1']);
+    fireEvent.click(trigger);
+    expect(screen.getByRole('link', { name: /Draft requirements/i })).toHaveAttribute(
+      'href',
+      '/project/proj_test?branch=dev&tab=workspaces&sourceConversation=conv_pending'
+    );
+  });
+
+  it('uses the branch selector as a real node and edge visibility filter', () => {
+    const mainNode = unitNode('main_commit');
+    const branchNode = {
+      ...unitNode('branch_commit'),
+      data: {
+        ...unitNode('branch_commit').data,
+        branchName: 'feature-x',
+        branchType: 'branch' as const,
+      },
+    };
+    useCanvasStore.setState({
+      edges: [{ id: 'e1', source: mainNode.id, target: branchNode.id }],
+      nodes: [mainNode, branchNode],
+    });
+    layoutMocks.getLayoutedElements.mockResolvedValue([mainNode, branchNode]);
+
+    render(<CanvasWorkspace projectName="Trust Gate" />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Canvas branch filter' }), {
+      target: { value: 'feature-x' },
+    });
+
+    expect(flowMocks.reactFlowProps?.nodes?.map((node) => node.id)).toEqual(['branch_commit']);
+    expect(flowMocks.reactFlowProps?.edges).toEqual([]);
   });
 
   it('links the independent canvas surface back to repository State', () => {
@@ -554,6 +618,12 @@ describe('CanvasWorkspace initial fit view', () => {
     expect(
       screen.queryByRole('button', { name: 'Create Leaf From This Version' })
     ).not.toBeInTheDocument();
+    const splitLayout = screen.getByTestId('canvas-inspector-layout');
+    const canvasColumn = screen.getByTestId('canvas-column');
+    expect(splitLayout.firstElementChild).toBe(canvasColumn);
+    expect(canvasColumn).toContainElement(screen.getByRole('tree', { name: 'State graph canvas' }));
+    expect(canvasColumn).toContainElement(screen.getByTestId('canvas-status-bar'));
+    expect(splitLayout.lastElementChild).toBe(screen.getByRole('complementary'));
   });
 
   it('closes stale commit-mode state for a committed node without rendering the modal', async () => {

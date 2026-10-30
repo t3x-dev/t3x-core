@@ -9,7 +9,7 @@
   "transitionControlPlane": [
     {
       "path": "packages/api/src/lib/transition-control-plane/applicable-policy.ts",
-      "lines": 407
+      "lines": 409
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/index.ts",
@@ -17,7 +17,7 @@
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/lifecycle.ts",
-      "lines": 849
+      "lines": 872
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/materialize.ts",
@@ -202,8 +202,11 @@
   },
   "reviewSnapshotReferences": [
     "apps/web/e2e/flows/workspace-complex-flow.spec.ts",
+    "apps/web/e2e/smoke/schema-delivery-no-ai.spec.ts",
+    "apps/web/e2e/smoke/schema-edit-review-loop.spec.ts",
     "apps/web/src/components/checks/WorkspaceChecksRedirect.tsx",
     "apps/web/src/components/project/ProjectWorkspacesTab.tsx",
+    "apps/web/src/components/schemas/SchemaCatalogExperience.tsx",
     "apps/web/src/components/workspaces/ChangeDecisionHandoff.tsx",
     "apps/web/src/components/workspaces/ProposalGenerationReviewView.tsx",
     "apps/web/src/components/workspaces/SourceTransitionTab.tsx",

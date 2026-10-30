@@ -7,6 +7,7 @@ import {
   repositorySemanticYSchemaTree,
   runRepositorySemanticYSchemaStatementProvider,
   runYSchemaRootStatementProvider,
+  runYSchemaStatementProvider,
   YSCHEMA_VALIDATION_PREDICATE_TYPE,
   yopsStateCodec,
 } from '@t3x-dev/core';
@@ -18,7 +19,10 @@ import {
 import type { ProtocolValue, State } from '@t3x-dev/transition';
 import { normalizeYSchemaObject } from '@t3x-dev/yschema';
 import { createProposalGenerationPostureProvider } from './proposal-generation-posture-provider';
-import { verifyTransition } from './transition-control-plane';
+import {
+  type TransitionNativeStatementProvider,
+  verifyTransition,
+} from './transition-control-plane';
 import { materializeTransitionProposal } from './transition-control-plane/materialize';
 import {
   buildAuthoringEffect,
@@ -30,9 +34,11 @@ import {
   persistWorkspaceReviewArtifacts,
   reviewSnapshotCreatedAt,
 } from './workspace-review-artifacts';
+import { isSchemaOnlyWorkspaceReview } from './workspace-schema-content';
 import {
   assertWorkspaceReviewHasChanges,
   buildWorkspaceSchemaReview,
+  workspaceSchemaReviewResource,
 } from './workspace-schema-review';
 import { resolveWorkspaceTransitionContext, workspaceProvenance } from './workspace-transition';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
@@ -72,12 +78,6 @@ export async function prepareWorkspaceAuthoringReview(input: {
   )
     throw new DraftAuthoringConflictError('Draft changed; refresh before Review');
   const built = buildAuthoringEffect(ledger);
-  const compiled = compileProposalDraft({
-    draft: createHumanProposalDraft({ why: input.reason }),
-    effect: built.effect,
-    actor: input.actor,
-  });
-  if (!compiled.ok) throw new TypeError('Cannot compile complete Draft Review');
   const schema = await resolveWorkspaceYSchema(context.workspace, input.db, input.projectId);
   if (!schema.schema || !schema.canonicalName)
     throw new TypeError('A resolved Workspace schema is required for Review');
@@ -87,6 +87,23 @@ export async function prepareWorkspaceAuthoringReview(input: {
     context.workspace
   );
   assertWorkspaceReviewHasChanges(context.base, built.result, schemaReview);
+  const draft = createHumanProposalDraft({ why: input.reason });
+  if (isSchemaOnlyWorkspaceReview(schemaReview)) {
+    // Bind the exact Schema Review into the immutable Proposal/Commit closure,
+    // without inventing a passing content-validation Statement for an empty project.
+    draft.rationale = {
+      mode: 'authored',
+      value: input.reason ?? 'Establish the Schema before adding business content.',
+      evidence: [
+        {
+          resource: await workspaceSchemaReviewResource(schemaReview),
+          locator: { scheme: 'json-pointer', value: '' },
+        },
+      ],
+    };
+  }
+  const compiled = compileProposalDraft({ draft, effect: built.effect, actor: input.actor });
+  if (!compiled.ok) throw new TypeError('Cannot compile complete Draft Review');
   const frozen = { ...buildAuthoringPreparation(context.workspace), schemaReview };
   const membership = await materializeTransitionProposal({
     db: input.db,
@@ -131,52 +148,69 @@ export async function prepareWorkspaceAuthoringReview(input: {
     options: {
       nativeProviders: [
         createProposalGenerationPostureProvider(),
-        {
-          source: 'native:workspace-authoring-yschema/v1',
-          issuer,
-          predicateTypes: [YSCHEMA_VALIDATION_PREDICATE_TYPE],
-          async verify(verification) {
-            const value = verification.result.value;
-            const semantic =
-              value !== null &&
-              typeof value === 'object' &&
-              !Array.isArray(value) &&
-              value.domain === 't3x.dev/semantic-content';
-            const provenanceByPath = await workspaceProvenance(
-              input.db,
-              input.projectId,
-              context.workspace,
-              validationTree(verification.result, rootKey, semantic)
-            );
-            const options = {
-              state: verification.result,
-              schema: schemaValue,
-              schemaResource: createYSchemaResourceDescriptor(
-                `t3x://schemas/${encodeURIComponent(schema.canonicalName!)}/${schema.version ?? 'unversioned'}`,
-                schemaValue
-              ),
-              context: {
-                mode: 'bound' as const,
-                resource: createYSchemaContextDescriptor(
-                  `t3x://workspaces/${encodeURIComponent(input.workspaceId)}/revisions/${context.workspaceRevision}/validation`,
-                  { provenanceByPath, rootKey }
-                ),
-              },
-              environment: { mode: 'unspecified' as const },
-              provenanceByPath,
-              rootKey,
-              actor: issuer,
-              tool: { name: '@t3x-dev/yschema', version: '1' },
-              run: verification.run,
-            };
-            return {
-              outcome: 'statement',
-              statement: semantic
-                ? runRepositorySemanticYSchemaStatementProvider(options)
-                : runYSchemaRootStatementProvider(options),
-            };
-          },
-        },
+        ...(isSchemaOnlyWorkspaceReview(schemaReview)
+          ? []
+          : [
+              {
+                source: 'native:workspace-authoring-yschema/v1',
+                issuer,
+                predicateTypes: [YSCHEMA_VALIDATION_PREDICATE_TYPE],
+                async verify(verification) {
+                  const value = verification.result.value;
+                  const semantic =
+                    value !== null &&
+                    typeof value === 'object' &&
+                    !Array.isArray(value) &&
+                    value.domain === 't3x.dev/semantic-content';
+                  const provenanceByPath = await workspaceProvenance(
+                    input.db,
+                    input.projectId,
+                    context.workspace,
+                    validationTree(verification.result, rootKey, semantic)
+                  );
+                  const options = {
+                    state: verification.result,
+                    schema: schemaValue,
+                    schemaResource: createYSchemaResourceDescriptor(
+                      `t3x://schemas/${encodeURIComponent(schema.canonicalName!)}/${schema.version ?? 'unversioned'}`,
+                      schemaValue
+                    ),
+                    context: {
+                      mode: 'bound' as const,
+                      resource: createYSchemaContextDescriptor(
+                        `t3x://workspaces/${encodeURIComponent(input.workspaceId)}/revisions/${context.workspaceRevision}/validation`,
+                        { provenanceByPath, rootKey }
+                      ),
+                    },
+                    environment: { mode: 'unspecified' as const },
+                    provenanceByPath,
+                    rootKey,
+                    actor: issuer,
+                    tool: { name: '@t3x-dev/yschema', version: '1' },
+                    run: verification.run,
+                  };
+                  // Preparation treats a truly empty native document as an empty tree.
+                  // Validate those exact bytes against all Schema rules as well. A nonempty
+                  // document with a missing/wrong root must still fail root resolution.
+                  const nativeValue = semantic
+                    ? null
+                    : yopsStateCodec.decode(verification.result.value);
+                  const emptyDocument =
+                    nativeValue !== null &&
+                    typeof nativeValue === 'object' &&
+                    !Array.isArray(nativeValue) &&
+                    Object.keys(nativeValue).length === 0;
+                  return {
+                    outcome: 'statement',
+                    statement: semantic
+                      ? runRepositorySemanticYSchemaStatementProvider(options)
+                      : emptyDocument
+                        ? runYSchemaStatementProvider(options)
+                        : runYSchemaRootStatementProvider(options),
+                  };
+                },
+              } satisfies TransitionNativeStatementProvider,
+            ]),
       ],
     },
   });

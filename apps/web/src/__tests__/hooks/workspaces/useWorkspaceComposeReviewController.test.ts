@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
 import { useWorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
+import { deferred } from '../deferred';
 
 const mocks = vi.hoisted(() => ({
   read: vi.fn(),
@@ -75,6 +76,142 @@ beforeEach(() => {
   });
   mocks.prepare.mockResolvedValue(prepared);
   mocks.latest.mockResolvedValue({ snapshot: { snapshotId: 'rvs_review' } });
+});
+
+it('does not write a saved acknowledgement into a different project with the same Workspace ID', async () => {
+  const old = deferred<ReturnType<typeof candidate>>();
+  const save = vi.fn().mockReturnValue(old.promise);
+  const first = candidate();
+  const second = { ...first, projectId: 'proj_2' };
+  const { result, rerender } = renderHook(
+    ({ workspace }) =>
+      useWorkspaceComposeReviewController({
+        candidate: workspace,
+        onDraftCommand: save,
+      }),
+    { initialProps: { workspace: first } }
+  );
+  let pending!: ReturnType<typeof result.current.updateSourceArtifact>;
+  act(() => {
+    pending = result.current.updateSourceArtifact(undefined);
+  });
+  rerender({ workspace: second });
+  expect(result.current.candidate.projectId).toBe('proj_2');
+  await act(async () => {
+    old.resolve({ ...first, revision: 3 });
+    await expect(pending).rejects.toThrow(/context changed/i);
+  });
+  expect(result.current.candidate.projectId).toBe('proj_2');
+});
+
+it('does not continue preparing Review after the controller unmounts', async () => {
+  const old = deferred<unknown>();
+  mocks.read.mockReturnValueOnce(old.promise);
+  const workspace = candidate();
+  const { result, unmount } = renderHook(() =>
+    useWorkspaceComposeReviewController({ candidate: workspace })
+  );
+  let pending!: ReturnType<typeof result.current.prepareReview>;
+  act(() => {
+    pending = result.current.prepareReview();
+  });
+  unmount();
+  await act(async () => {
+    old.resolve({
+      base: document,
+      current: document,
+      workspaceRevision: 2,
+      compositionRevision: 2,
+      basis: { refHead: null },
+      netDiff: [],
+    });
+    expect(await pending).toBe(false);
+  });
+  expect(mocks.prepare).not.toHaveBeenCalled();
+});
+
+it('locks Review synchronously so two calls in one render issue one command', async () => {
+  const old = deferred<unknown>();
+  mocks.read.mockReturnValueOnce(old.promise);
+  const workspace = candidate();
+  const { result } = renderHook(() =>
+    useWorkspaceComposeReviewController({ candidate: workspace })
+  );
+  let first!: ReturnType<typeof result.current.prepareReview>;
+  let second!: ReturnType<typeof result.current.prepareReview>;
+  act(() => {
+    first = result.current.prepareReview();
+    second = result.current.prepareReview();
+  });
+  expect(mocks.read).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    old.resolve({ hasChanges: false });
+    await Promise.all([first, second]);
+  });
+});
+
+it('a previous Workspace completion cannot unlock the current Review', async () => {
+  const old = deferred<unknown>();
+  const current = deferred<unknown>();
+  mocks.read.mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise);
+  const firstWorkspace = candidate();
+  const { result, rerender } = renderHook(
+    ({ workspace }) => useWorkspaceComposeReviewController({ candidate: workspace }),
+    { initialProps: { workspace: firstWorkspace } }
+  );
+  let first!: ReturnType<typeof result.current.prepareReview>;
+  let second!: ReturnType<typeof result.current.prepareReview>;
+  act(() => {
+    first = result.current.prepareReview();
+  });
+  rerender({ workspace: { ...firstWorkspace, projectId: 'proj_2' } });
+  act(() => {
+    second = result.current.prepareReview();
+  });
+  await act(async () => {
+    old.resolve({ hasChanges: false });
+    await first;
+  });
+  expect(result.current.busyAction).toBe('review.prepare');
+  expect(result.current.error).toBeUndefined();
+  await act(async () => {
+    current.resolve({ hasChanges: false });
+    await second;
+  });
+  expect(result.current.isBusy).toBe(false);
+});
+
+it('a decision from a previous Workspace cannot navigate or replace the current Draft', async () => {
+  const onCommitted = vi.fn();
+  const workspace = candidate();
+  const { result, rerender } = renderHook(
+    ({ selected }) =>
+      useWorkspaceComposeReviewController({ candidate: selected, onYOpsCommitted: onCommitted }),
+    { initialProps: { selected: workspace } }
+  );
+  await act(async () => {
+    await result.current.prepareReview();
+  });
+  const response = deferred<unknown>();
+  mocks.decide.mockReturnValueOnce(response.promise);
+  let pending!: ReturnType<typeof result.current.decide>;
+  act(() => {
+    pending = result.current.decide('accepted');
+  });
+  const next = { ...workspace, projectId: 'proj_2' };
+  rerender({ selected: next });
+  await act(async () => {
+    response.resolve({
+      transition: {
+        mode: 'transition',
+        history: { observation: 'committed', commit: { id: 'old' } },
+      },
+      workspace,
+    });
+    expect(await pending).toBeNull();
+  });
+  expect(onCommitted).not.toHaveBeenCalled();
+  expect(result.current.candidate).toEqual(next);
 });
 it('does not prepare an unchanged Draft even when invoked outside the disabled button', async () => {
   mocks.read.mockResolvedValueOnce({ hasChanges: false, base: document, current: document });

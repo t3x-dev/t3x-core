@@ -23,7 +23,49 @@
 }
 .tool {
   min-height: 32px;
-  gap: 10px;
+  gap: 16px;
+}
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.headingContent {
+  min-width: 0;
+}
+.heading h1 {
+  margin: 0 0 4px;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.schemaIcon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: var(--radius-workbench);
+  background: var(--accent-branch-soft);
+  color: var(--yaml-number);
+}
+.workspaceContext {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.tool button {
+  box-shadow: none;
+}
+.tool .reviewButton {
+  background: var(--accent-commit);
+  border-color: var(--accent-commit);
+  color: var(--on-accent);
+}
+.tool .reviewButton:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-commit) 90%, var(--text-primary));
 }
 .ws {
   position: relative;
@@ -32,9 +74,10 @@
   gap: 8px;
   min-width: 0;
   max-width: 220px;
-  height: 32px;
-  font-size: 13px;
-  font-weight: 600;
+  height: 24px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
 }
 .ws > svg {
   flex: none;
@@ -63,16 +106,16 @@
 .branch {
   flex: none;
   gap: 8px;
-  height: 32px;
+  height: 24px;
   max-width: 180px;
   overflow-wrap: anywhere;
-  padding: 0 10px;
+  padding: 0;
   border-radius: 8px;
-  background: var(--surface-canvas);
-  color: var(--text-primary);
+  background: transparent;
+  color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 400;
 }
 .branch svg {
   flex-shrink: 0;
@@ -116,7 +159,14 @@
   overflow: hidden;
   background: var(--surface-card);
   border: 1px solid var(--stroke-divider);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-workbench);
+}
+.body:has([data-schema-unavailable], [data-schema-empty]) {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+.canvas:has([data-schema-unavailable], [data-schema-empty]) {
+  min-height: 400px;
 }
 .dataEditor {
   min-height: 0;
@@ -198,7 +248,7 @@
   color: var(--text-secondary);
 }
 .sourceMetadata {
-  flex: 1 1 220px;
+  flex: 0 1 auto;
   min-width: 0;
   color: var(--text-secondary);
   font-size: 12px;
@@ -207,17 +257,6 @@
 .sourceMetadata span {
   display: block;
   overflow-wrap: anywhere;
-}
-.yaml {
-  margin: 0;
-  padding: 12px;
-  max-height: 360px;
-  overflow: auto;
-  background: var(--surface-canvas);
-  border-radius: var(--radius-sm);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.7;
 }
 @media (max-width: 600px) {
   .app {
@@ -236,4 +275,15 @@
 .ws:focus-within {
   outline: 2px solid var(--accent-commit);
   outline-offset: 2px;
+}
+
+.saveGroup {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }

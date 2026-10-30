@@ -67,7 +67,7 @@ try {
     T3X_DATA_DIR: dataDir,
   };
 
-  run('npm', ['exec', '--', 't3x-local', 'doctor'], {
+  run('npm', ['exec', '--', 't3x-local', 'doctor', '--api-port', apiPort, '--web-port', webPort], {
     cwd: installDir,
     env: runtimeEnv,
   });
@@ -79,7 +79,7 @@ try {
     cwd: installDir,
     env: runtimeEnv,
   });
-  run('npm', ['exec', '--', 't3x-local', 'doctor'], {
+  run('npm', ['exec', '--', 't3x-local', 'doctor', '--api-port', apiPort, '--web-port', webPort], {
     cwd: installDir,
     env: runtimeEnv,
   });

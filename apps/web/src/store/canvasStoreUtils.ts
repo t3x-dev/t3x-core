@@ -559,6 +559,7 @@ export const unitToNode = (
         ? {
             hash: originalCommit.hash,
             schema: originalCommit.schema,
+            parents: originalCommit.parents,
             author: {
               type: originalCommit.author.type,
               name: originalCommit.author.name,

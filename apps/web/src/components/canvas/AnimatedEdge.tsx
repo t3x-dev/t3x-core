@@ -1,7 +1,9 @@
 import { BaseEdge, type EdgeProps, getSmoothStepPath, useStore } from '@xyflow/react';
 import { useState } from 'react';
+import { getBranchVisual, getCanvasNodeBranch } from '@/domain/canvas/branchVisuals';
+import type { CanvasNodeData } from '@/types/nodes';
 
-export type SemanticEdgeType = 'evolve' | 'merge';
+export type SemanticEdgeType = 'evolve' | 'merge' | 'pending';
 export type EdgeRhythm = 'default' | 'selected' | 'dimmed';
 export type EdgePathTone = 'commit' | 'branch';
 
@@ -21,6 +23,12 @@ const edgeColors: Record<
     hover: 'var(--edge-merge-hover)',
     selected: 'var(--edge-merge-selected)',
     glow: 'var(--edge-merge-glow)',
+  },
+  pending: {
+    base: 'var(--accent-pending)',
+    hover: 'color-mix(in srgb, var(--accent-pending) 86%, var(--text-primary))',
+    selected: 'color-mix(in srgb, var(--accent-pending) 72%, var(--text-primary))',
+    glow: 'color-mix(in srgb, var(--accent-pending) 34%, transparent)',
   },
 };
 
@@ -53,8 +61,7 @@ export function AnimatedEdge({
   sourcePosition,
   targetPosition,
   style,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  markerEnd: _markerEnd,
+  markerEnd,
   selected,
   source,
   target,
@@ -68,6 +75,15 @@ export function AnimatedEdge({
   const isRhythmSelected = selected || edgeRhythm === 'selected';
   const colors = edgeColors[edgeType];
   const pathColors = pathToneColors[edgePathTone];
+
+  const targetBranchName = useStore((state) => {
+    const targetNode = state.nodeLookup?.get(target);
+    return targetNode ? getCanvasNodeBranch(targetNode.data as CanvasNodeData) : undefined;
+  });
+  const branchVisual =
+    edgeType !== 'pending' && typeof targetBranchName === 'string'
+      ? getBranchVisual(targetBranchName)
+      : undefined;
 
   // Detect if connected node is being dragged
   const isDragging = useStore((s) => {
@@ -87,13 +103,16 @@ export function AnimatedEdge({
   });
 
   const getStrokeWidth = () => {
-    if (isRhythmSelected) return 2.5;
-    if (isHovered) return 2.25;
-    if (edgeRhythm === 'dimmed') return 1.25;
-    return 2;
+    if (isRhythmSelected) return 3.6;
+    if (isHovered) return 3.2;
+    if (edgeRhythm === 'dimmed') return 1.8;
+    return 2.8;
   };
 
   const getStrokeColor = () => {
+    if (branchVisual) {
+      return isRhythmSelected || isHovered ? branchVisual.strong : branchVisual.accent;
+    }
     if (isRhythmSelected) return edgeRhythm === 'selected' ? pathColors.selected : colors.selected;
     if (isHovered) return colors.hover;
     return colors.base;
@@ -107,16 +126,49 @@ export function AnimatedEdge({
   };
 
   // Merge edges use a dashed stroke.
-  const dashOverride = isDragging ? '6 4' : edgeType === 'merge' ? '8 5' : undefined;
+  const dashOverride = isDragging
+    ? '6 4'
+    : edgeType === 'merge'
+      ? '8 5'
+      : edgeType === 'pending'
+        ? '7 5'
+        : undefined;
+  const strokeColor = getStrokeColor();
+  const branchMarkerId = `branch-arrow-${id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
 
   return (
     <g
+      data-edge-branch={branchVisual?.key}
       data-edge-path-tone={edgePathTone}
       data-edge-rhythm={edgeRhythm}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{ cursor: 'pointer' }}
     >
+      {branchVisual && (
+        <defs>
+          <marker
+            id={branchMarkerId}
+            markerHeight="15"
+            markerUnits="strokeWidth"
+            markerWidth="15"
+            orient="auto-start-reverse"
+            refX="0"
+            refY="0"
+            viewBox="-10 -10 20 20"
+          >
+            <polyline
+              fill={strokeColor}
+              points="-7,-6 0,0 -7,6 -7,-6"
+              stroke={strokeColor}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="1"
+            />
+          </marker>
+        </defs>
+      )}
+
       {/* Selection glow ring */}
       {isRhythmSelected && (
         <path
@@ -124,7 +176,7 @@ export function AnimatedEdge({
           d={edgePath}
           fill="none"
           strokeWidth={14}
-          stroke={edgeRhythm === 'selected' ? pathColors.glow : colors.glow}
+          stroke={branchVisual?.glow ?? (edgeRhythm === 'selected' ? pathColors.glow : colors.glow)}
           strokeLinecap="round"
           style={{ opacity: 0.12, filter: 'blur(5px)' }}
         />
@@ -136,7 +188,7 @@ export function AnimatedEdge({
           d={edgePath}
           fill="none"
           strokeWidth={8}
-          stroke={colors.hover}
+          stroke={branchVisual?.strong ?? colors.hover}
           strokeLinecap="round"
           style={{ opacity: 0.1, filter: 'blur(3px)' }}
         />
@@ -145,11 +197,12 @@ export function AnimatedEdge({
       {/* Base edge */}
       <BaseEdge
         id={id}
+        markerEnd={branchVisual ? `url(#${branchMarkerId})` : markerEnd}
         path={edgePath}
         style={{
           ...style,
           strokeWidth: getStrokeWidth(),
-          stroke: getStrokeColor(),
+          stroke: strokeColor,
           opacity: getStrokeOpacity(),
           ...(dashOverride ? { strokeDasharray: dashOverride } : {}),
           transition:

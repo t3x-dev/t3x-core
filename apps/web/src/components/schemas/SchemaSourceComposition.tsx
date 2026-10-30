@@ -1,20 +1,14 @@
 'use client';
 
 import type { StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { mergeSchemaDraft } from '@/domain/schemas/schemaDraftMerge';
 import type { SchemaDefinition } from '@/domain/schemas/schemaFieldEditing';
 import { useStudioPreview } from '@/hooks/schemas/useStudioPreview';
+import s from './SchemaSourceManager.module.css';
 
-export function SchemaSourceCompositionDialog({
+export function SchemaSourceComposition({
   projectId,
   workspaceId,
   candidates,
@@ -22,7 +16,9 @@ export function SchemaSourceCompositionDialog({
   initialComposition,
   baseDefinition,
   currentDefinition,
-  onClose,
+  onBack,
+  onSaved,
+  onSavingChange,
   onSave,
 }: {
   projectId: string;
@@ -32,7 +28,9 @@ export function SchemaSourceCompositionDialog({
   initialComposition?: Record<string, string>;
   baseDefinition?: SchemaDefinition;
   currentDefinition?: SchemaDefinition;
-  onClose: () => void;
+  onBack: () => void;
+  onSaved: () => void;
+  onSavingChange: (saving: boolean) => void;
   onSave: (
     ids: string[],
     composition: Record<string, string>,
@@ -40,7 +38,8 @@ export function SchemaSourceCompositionDialog({
     definition: SchemaDefinition
   ) => Promise<void>;
 }) {
-  const [ids, setIds] = useState(selection);
+  const ids = selection;
+  const busy = useRef(false);
   const [composition, setComposition] = useState(initialComposition ?? {});
   const [choices, setChoices] = useState<Record<string, 'current' | 'incoming'>>({});
   const [saving, setSaving] = useState(false);
@@ -64,49 +63,20 @@ export function SchemaSourceCompositionDialog({
     return `${item?.title ?? item?.source?.canonicalName ?? id} @ ${item?.source?.version ?? '?'}`;
   };
   return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open && !saving) onClose();
-      }}
-    >
-      <DialogContent className="max-h-[85dvh] max-w-3xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Combine Schema sources</DialogTitle>
-          <DialogDescription>
-            Select pinned Schema and Module versions, resolve ownership conflicts, then save the
-            combined candidate with your current field edits.
-          </DialogDescription>
-        </DialogHeader>
-        <fieldset disabled={saving} className="space-y-3">
-          <legend className="mb-2 text-sm font-semibold">Sources</legend>
-          {candidates.map((candidate) => (
-            <label key={candidate.id} className="flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                aria-label={`Combine ${name(candidate.id)}`}
-                checked={ids.includes(candidate.id)}
-                disabled={!candidate.available}
-                onChange={() => {
-                  setIds((current) =>
-                    current.includes(candidate.id)
-                      ? current.filter((id) => id !== candidate.id)
-                      : [...current, candidate.id]
-                  );
-                  setComposition({});
-                  setChoices({});
-                  setError('');
-                }}
-              />
-              <span>
-                {name(candidate.id)} · {candidate.kind}
-                <small className="block break-all text-[var(--text-secondary)]">
-                  {candidate.source?.hash}
-                </small>
-              </span>
-            </label>
-          ))}
-          {!ids.length ? <p className="text-sm">Select at least one source.</p> : null}
+    <>
+      <div className={s.scroll}>
+        <h3 className="pt-4 text-sm font-medium">Combine schemas</h3>
+        <p className={s.feedback}>
+          Resolve conflicting definitions, then save the combined draft with your current field
+          edits.
+        </p>
+        <fieldset disabled={saving} className="space-y-3 pb-4">
+          <legend className="sr-only">Combined sources</legend>
+          <ul className="space-y-1 text-xs text-[var(--text-secondary)]">
+            {ids.map((id) => (
+              <li key={id}>{name(id)}</li>
+            ))}
+          </ul>
           {preview.loading ? <output>Checking source definitions…</output> : null}
           {(preview.data?.compositionConflicts ?? []).map((conflict) => (
             <div
@@ -176,7 +146,7 @@ export function SchemaSourceCompositionDialog({
                       size="sm"
                       onClick={() => setChoices((value) => ({ ...value, [conflict.path]: side }))}
                     >
-                      Keep {side === 'current' ? 'my edit' : 'new definition'}
+                      {side === 'current' ? 'Keep my changes' : 'Use source definition'}
                     </Button>
                   </div>
                 ))}
@@ -204,38 +174,47 @@ export function SchemaSourceCompositionDialog({
             </details>
           ) : null}
         </fieldset>
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" disabled={saving} onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            disabled={
-              saving ||
-              !workspaceId ||
-              !preview.data?.report.valid ||
-              !merged ||
-              !!merged.conflicts.length
+      </div>
+      <footer className={s.footer}>
+        <Button variant="ghost" size="sm" disabled={saving} onClick={onBack}>
+          Back
+        </Button>
+        <Button
+          variant="commit"
+          size="sm"
+          disabled={
+            saving ||
+            preview.loading ||
+            !!preview.error ||
+            !ids.length ||
+            !workspaceId ||
+            !preview.data?.report.valid ||
+            !merged ||
+            !!merged.conflicts.length
+          }
+          onClick={async () => {
+            if (busy.current || !preview.data || !merged) return;
+            busy.current = true;
+            setSaving(true);
+            onSavingChange(true);
+            setError('');
+            try {
+              await onSave(ids, composition, preview.data, merged.definition);
+              onSaved();
+            } catch (cause) {
+              setError(
+                cause instanceof Error ? cause.message : 'Could not save the combined candidate.'
+              );
+            } finally {
+              busy.current = false;
+              setSaving(false);
+              onSavingChange(false);
             }
-            onClick={async () => {
-              if (!preview.data || !merged) return;
-              setSaving(true);
-              setError('');
-              try {
-                await onSave(ids, composition, preview.data, merged.definition);
-                onClose();
-              } catch (cause) {
-                setError(
-                  cause instanceof Error ? cause.message : 'Could not save the combined candidate.'
-                );
-              } finally {
-                setSaving(false);
-              }
-            }}
-          >
-            {saving ? 'Saving…' : 'Save combined candidate'}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+          }}
+        >
+          {saving ? 'Saving…' : 'Save combined draft'}
+        </Button>
+      </footer>
+    </>
   );
 }

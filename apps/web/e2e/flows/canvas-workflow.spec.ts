@@ -55,8 +55,8 @@ test.describe('Canvas Workflow', () => {
     // Click the commit node
     await canvas.clickNode(commitHash);
 
-    await expect(page.getByText('SELECTION', { exact: true })).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('Available Actions', { exact: true })).toBeVisible();
+    await expect(canvas.sidebar.getByRole('heading', { name: 'Inspector', exact: true })).toBeVisible();
+    await expect(canvas.sidebar.getByRole('heading', { name: commitMessage, exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Details', exact: true })).toHaveCount(0);
     await expect(page.getByText('V4 Architecture', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('dialog')).toHaveCount(0);

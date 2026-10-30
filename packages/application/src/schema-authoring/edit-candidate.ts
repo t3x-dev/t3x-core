@@ -104,8 +104,7 @@ function detachedDocument(value: unknown, label: string): DraftDocument {
 }
 
 function parseBaseSources(value: unknown): readonly WorkspaceSchemaEditBaseSource[] {
-  if (!Array.isArray(value) || value.length === 0)
-    throw new TypeError('Schema edit baseSources must be a non-empty array');
+  if (!Array.isArray(value)) throw new TypeError('Schema edit baseSources must be an array');
   return value.map((item, index) => {
     if (!item || typeof item !== 'object' || Array.isArray(item))
       throw new TypeError(`Schema edit baseSources[${index}] must be an object`);
@@ -175,6 +174,14 @@ export function parseWorkspaceSchemaEditCandidate(value: unknown): WorkspaceSche
       ].includes(key)
   );
   if (unexpected.length) throw new TypeError('Schema edit candidate contains unsupported field');
+  // A local definition still needs an immutable, replayable Base snapshot.
+  if (
+    Array.isArray(candidate.baseSources) &&
+    !candidate.baseSources.length &&
+    (!candidate.authoringDraft ||
+      parseWorkspaceSchemaAuthoringDraft(candidate.authoringDraft).base.kind !== 'composition')
+  )
+    throw new TypeError('A source-free Schema edit requires a composition Base snapshot');
   if (candidate.schema !== WORKSPACE_SCHEMA_EDIT_CANDIDATE_SCHEMA)
     throw new TypeError('Unsupported Workspace Schema edit candidate');
   return {

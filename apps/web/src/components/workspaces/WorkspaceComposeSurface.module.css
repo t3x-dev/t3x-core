@@ -271,20 +271,31 @@
 
 /* Compose owns its reference styling; shared State/History controls are untouched. */
 .composeBoard {
+  /* Keep the workbench horizontal; constrain saved widths to the available space. */
+  --draft-effective-width: clamp(180px, var(--draft-width, 260px), min(560px, calc(100% - 640px)));
   display: grid;
   flex: 1;
   min-width: 0;
   min-height: 0;
   width: 100%;
-  grid-template-columns: minmax(0, 5fr) minmax(300px, 2fr);
-  grid-template-rows: auto minmax(0, 1fr);
-  overflow: hidden;
+  grid-template-columns: var(--draft-effective-width) minmax(320px, 1fr) clamp(
+      320px,
+      var(--discussion-width, 440px),
+      calc(100% - var(--draft-effective-width) - 320px)
+    );
+  grid-template-rows: max-content max-content minmax(0, 1fr);
+  /* Very narrow windows scroll inside the board, never stack or widen the page. */
+  overflow-x: auto;
+  overflow-y: hidden;
   color: var(--text-primary);
   background: var(--surface-panel);
 }
+.composeBoard[data-draft-collapsed] {
+  --draft-effective-width: 48px;
+}
 .composeMain {
-  grid-column: 1;
-  grid-row: 2;
+  grid-column: 2;
+  grid-row: 3;
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -771,8 +782,8 @@
   white-space: nowrap;
 }
 .discussionSidebar {
-  grid-column: 2;
-  grid-row: 1 / span 2;
+  grid-column: 3;
+  grid-row: 3;
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -1489,26 +1500,10 @@
   .sourcesToolbar {
     grid-template-columns: minmax(0, 1fr);
   }
-  .composeBoard {
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-  }
-  .composeMain {
-    flex: none;
-    overflow: visible;
-    border-right: 0;
-  }
   .panel {
     height: auto;
     flex: none;
     overflow: visible;
-  }
-  .discussionSidebar {
-    flex: none;
-    min-height: 0;
-    height: min(700px, 85dvh);
-    border-top: 1px solid var(--stroke-divider);
   }
   .baseBar,
   .sourcesSection,
@@ -1575,9 +1570,6 @@
   .schemaLabel {
     width: auto;
   }
-  .discussionSidebar {
-    height: min(760px, 90dvh);
-  }
 }
 @media (max-width: 420px) {
   .baseContext .baseBar {
@@ -1591,10 +1583,6 @@
 }
 
 /* Compose direction 1E: calm, dense timeline workbench. Scoped here so Review stays untouched. */
-.composeBoard {
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 456px);
-  background: var(--surface-app);
-}
 .composeIdentity {
   display: flex;
   min-width: 0;
@@ -1878,27 +1866,86 @@
   padding: 12px 16px 4px;
 }
 .discussionComposer {
-  margin: 0 14px 14px;
-  min-height: 110px;
-  border: 0;
-  border-radius: 12px;
-  background: var(--surface-app);
+  margin: 0 16px 16px;
+  min-height: 0;
+  border: 1px solid var(--stroke-default);
+  border-radius: 20px;
+  background: var(--surface-card);
+  box-shadow:
+    0 1px 2px rgba(15, 18, 30, 0.04),
+    0 8px 24px rgba(15, 18, 30, 0.06);
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+.discussionComposer:focus-within {
+  border-color: rgba(15, 18, 30, 0.16);
+  box-shadow:
+    0 1px 2px rgba(15, 18, 30, 0.05),
+    0 10px 28px rgba(15, 18, 30, 0.09);
 }
 .discussionComposer > textarea {
-  min-height: 58px;
-  height: 58px;
-  padding: 12px 14px 6px;
-  font-size: 12px;
-  line-height: 18px;
+  min-height: 52px;
+  height: 52px;
+  padding: 14px 18px 4px;
+  font-size: 14px;
+  line-height: 22px;
   resize: none;
 }
+.discussionComposer > textarea::placeholder {
+  color: var(--text-tertiary);
+}
+.discussionComposer .chatContext {
+  padding: 10px 18px 0;
+  font-size: 11px;
+}
+.discussionComposer .chatContext small {
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-app);
+  padding: 2px 8px;
+}
 .discussionComposerFooter {
-  padding: 6px 10px 8px;
+  padding: 6px 10px 10px 12px;
+}
+.discussionComposer .sourcesButton {
+  height: 30px;
+  min-width: 30px;
+  gap: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  padding: 0 10px 0 7px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.discussionComposer .sourcesButton svg {
+  width: 16px;
+  height: 16px;
+}
+.discussionComposer .sourcesButton:hover,
+.discussionComposer .sourcesButton:focus-visible,
+.discussionComposer .sourcesButton[data-state="open"] {
+  background: var(--surface-app);
+}
+.discussionComposer .send {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--text-primary);
+  color: var(--surface-card);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+.discussionComposer .send:hover:not(:disabled) {
+  transform: scale(1.04);
+}
+.discussionComposer .send:disabled {
+  opacity: 0.2;
 }
 @media (max-width: 1180px) {
-  .composeBoard {
-    grid-template-columns: minmax(0, 1fr) minmax(320px, 38vw);
-  }
   .sourcesSection {
     flex-wrap: wrap;
   }
@@ -2143,10 +2190,6 @@
 }
 
 /* Shared workbench surfaces. */
-.composeBoard {
-  grid-template-columns: minmax(0, 1fr) 440px;
-  background: var(--surface-panel);
-}
 .composeBoard .sourcesSection {
   padding: 0 32px 8px 24px;
 }
@@ -2218,7 +2261,6 @@
   color: var(--text-primary);
 }
 .composeBoard .discussionSidebar {
-  grid-row: 2;
   margin: 0;
   border: 0;
   border-left: 1px solid var(--stroke-divider);
@@ -2266,7 +2308,7 @@
   gap: 5px;
   border-radius: 6px;
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
 }
 .workspaceToolTabs button:hover {
@@ -2349,16 +2391,6 @@
 .composeBoard[data-details-resizing] * {
   cursor: row-resize;
   user-select: none;
-}
-.composeBoard .discussionComposer {
-  margin: 0;
-  border-radius: 0;
-  border-top: 1px solid var(--stroke-divider);
-  background: var(--surface-app);
-  padding-top: 12px;
-}
-.composeBoard .discussionComposer > textarea {
-  font-size: 13.5px;
 }
 .composeBoard .nodeHistoryScroll {
   padding: 0 20px 16px;
@@ -2466,55 +2498,16 @@
   font-size: 13px;
 }
 @media (max-width: 1180px) {
-  .composeBoard {
-    grid-template-columns: minmax(0, 1fr) 360px;
-  }
   .composeBoard .sourcesSection {
     padding-inline: 16px;
   }
 }
 @media (max-width: 1100px) {
-  .composeBoard {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(440px, 1fr) minmax(340px, 1fr);
-    overflow-y: auto;
-  }
-  .composeBoard .composeMain {
-    grid-column: 1;
-    grid-row: 2;
-    overflow-y: auto;
-  }
-  .composeBoard .discussionSidebar {
-    grid-column: 1;
-    grid-row: 3;
-    margin: 0;
-    border-left: 0;
-    border-top: 1px solid var(--stroke-divider);
-    min-height: 340px;
-    height: auto;
-  }
-  .composeBoard .discussionSidebar[data-panel="split"] {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .composeBoard .changeDetailsPanel {
-    min-height: 340px;
-  }
   .composeBoard .proposedHeading {
     flex-basis: 100%;
   }
 }
 
-.composeBoard {
-  width: 100%;
-  max-width: var(--project-page-max-width, 1264px);
-  margin-inline: auto;
-}
-
-/* Both stages share a stable header, followed by one dedicated tool row. */
-.composeBoard {
-  grid-template-rows: max-content max-content minmax(0, 1fr);
-}
 .composeBoard .sourcesSection {
   grid-column: 1 / -1;
   grid-row: 2;
@@ -2588,51 +2581,10 @@
   flex-shrink: 0;
   white-space: nowrap;
 }
-.composeBoard .composeMain {
-  grid-column: 2;
-  grid-row: 3;
-}
-.composeBoard .discussionSidebar {
-  grid-column: 3;
-  grid-row: 3;
-}
-@media (max-width: 1100px) {
-  .composeBoard {
-    grid-template-rows: max-content max-content minmax(180px, 240px) minmax(240px, auto) minmax(
-        380px,
-        1fr
-      );
-  }
-  .composeBoard .composeMain {
-    grid-column: 1;
-    grid-row: 4;
-  }
-  .composeBoard .discussionSidebar {
-    grid-column: 1;
-    grid-row: 5;
-  }
-}
 .composeMain {
   position: relative;
 }
 
-@media (min-width: 1101px) {
-  .composeBoard {
-    --draft-effective-width: clamp(
-      180px,
-      var(--draft-width, 260px),
-      min(560px, calc(100% - 640px))
-    );
-    grid-template-columns: var(--draft-effective-width) minmax(0, 1fr) clamp(
-        320px,
-        var(--discussion-width, 440px),
-        calc(100% - var(--draft-effective-width) - 320px)
-      );
-  }
-  .composeBoard[data-draft-collapsed] {
-    --draft-effective-width: 48px;
-  }
-}
 .discussionResize {
   grid-column: 3;
   grid-row: 3;
@@ -2675,11 +2627,6 @@
   cursor: col-resize !important;
   user-select: none;
 }
-@media (max-width: 1100px) {
-  .discussionResize {
-    display: none;
-  }
-}
 
 .changeList {
   display: grid;
@@ -2713,32 +2660,70 @@
   overflow: hidden;
   border-radius: 8px;
   background: var(--surface-panel);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
 }
 .conversationSidebar > header {
   display: flex;
-  min-height: 44px;
   flex: none;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 8px 8px 12px;
-}
-.conversationSidebar > header > div,
-.conversationSidebar > header > span {
-  display: flex;
-  min-width: 0;
-  align-items: center;
   gap: 4px;
+  padding: 10px 12px 4px 8px;
 }
-.conversationSidebar > header > div {
-  gap: 7px;
+.conversationSidebar > header > .newChatButton {
+  display: flex;
+  width: auto;
+  min-width: 0;
+  height: 34px;
+  flex: 1;
+  place-items: initial;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 0 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
 }
-.conversationSidebar > header h2 {
-  overflow: hidden;
-  font-size: 12px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.conversationSidebar > header > .newChatButton svg {
+  width: 16px;
+  height: 16px;
+}
+.conversationSectionLabel {
+  display: flex;
+  height: 28px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14px;
+  padding: 0 4px 0 8px;
+}
+.conversationSectionLabel h2 {
+  color: var(--text-tertiary);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+}
+.conversationSectionLabel button {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 7px;
+  color: var(--text-tertiary);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.conversationSectionLabel:hover button,
+.conversationSectionLabel button:focus-visible {
+  opacity: 1;
+}
+.conversationSectionLabel button:hover {
+  background: rgba(15, 18, 30, 0.06);
+  color: var(--text-primary);
 }
 .conversationSidebar > header button,
 .conversationFolder > header > button:not(:first-child),
@@ -2748,13 +2733,17 @@
   height: 26px;
   flex: none;
   place-items: center;
-  border-radius: 5px;
+  border-radius: 7px;
   color: var(--text-tertiary);
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    opacity 120ms ease;
 }
 .conversationSidebar > header button:hover,
 .conversationFolder > header > button:not(:first-child):hover,
 .conversationRow > button:last-child:hover {
-  background: var(--surface-app);
+  background: rgba(15, 18, 30, 0.06);
   color: var(--text-primary);
 }
 .conversationSidebar button:disabled {
@@ -2762,58 +2751,64 @@
   opacity: 0.45;
 }
 .conversationSidebar svg {
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
 }
 .conversationList {
   min-height: 0;
   flex: 1;
   overflow-y: auto;
-  padding: 2px 6px 12px;
+  padding: 2px 8px 12px;
   scrollbar-width: thin;
 }
 .conversationList > p {
-  margin: 8px 7px;
+  margin: 2px 8px 6px;
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
 }
 .conversationList > p[role="alert"] {
   color: var(--status-danger);
 }
 .conversationFolder {
-  margin-bottom: 5px;
+  margin-bottom: 4px;
 }
 .conversationFolder > header,
 .conversationRow {
   display: flex;
   min-width: 0;
   align-items: center;
+  border-radius: 8px;
+  padding-right: 4px;
+  transition: background-color 120ms ease;
+}
+.conversationFolder > header:hover,
+.conversationRow:hover {
+  background: rgba(15, 18, 30, 0.04);
 }
 .conversationFolder > header > button:first-child,
 .conversationRow > button:first-child {
   display: flex;
   min-width: 0;
-  height: 30px;
+  height: 32px;
   flex: 1;
   align-items: center;
-  gap: 7px;
-  border-radius: 6px;
-  padding: 0 7px;
-  color: var(--text-secondary);
-  font-size: 11px;
+  gap: 8px;
+  padding: 0 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
   text-align: left;
 }
-.conversationFolder > header > button:first-child {
-  color: var(--text-tertiary);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
+.conversationFolder > header > button:first-child > svg:first-child {
+  display: none;
 }
-.conversationFolder > header > button:first-child:hover,
-.conversationRow > button:first-child:hover {
-  background: var(--surface-app);
-  color: var(--text-primary);
+.conversationFolder > header > button:first-child > svg {
+  color: var(--text-secondary);
+}
+.conversationRow > button:first-child > svg {
+  display: none;
 }
 .conversationFolder > header > button:first-child span,
 .conversationRow > button:first-child span {
@@ -2821,19 +2816,27 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.conversationFolder .conversationRow {
-  padding-left: 14px;
+.conversationFolder .conversationRow > button:first-child {
+  padding-left: 31px;
+}
+.conversationRow:has(> button[aria-current="page"]) {
+  background: rgba(15, 18, 30, 0.07);
 }
 .conversationRow > button:first-child[aria-current="page"] {
-  background: color-mix(in srgb, var(--accent-commit) 10%, var(--surface-panel));
   color: var(--text-primary);
-  font-weight: 500;
+  font-weight: 400;
 }
+.conversationFolder > header > button:not(:first-child),
 .conversationRow > button:last-child {
+  width: 24px;
+  height: 24px;
   opacity: 0;
 }
+.conversationFolder > header:hover > button:not(:first-child),
+.conversationFolder > header:focus-within > button:not(:first-child),
 .conversationRow:hover > button:last-child,
-.conversationRow:focus-within > button:last-child {
+.conversationRow:focus-within > button:last-child,
+.conversationRow > button:last-child[data-state="open"] {
   opacity: 1;
 }
 .currentDraft {
@@ -2932,7 +2935,7 @@
   padding: 0 14px 12px;
   font-size: 13px;
 }
-.currentDraftSection + .currentDraftSection {
+.currentDraftSection:not([hidden]) + .currentDraftSection:not([hidden]) {
   margin-top: 12px;
 }
 .currentDraftSection > summary {
@@ -3013,30 +3016,6 @@ button.currentDraftRow:hover {
   color: var(--status-warning);
   line-height: 1.5;
 }
-@media (max-width: 1100px) {
-  .currentDraftSidebar {
-    grid-column: 1;
-    grid-row: 3;
-    border-right: 0;
-    border-bottom: 1px solid var(--stroke-divider);
-    padding-left: 12px;
-  }
-  .currentDraftSidebar > .currentDraft {
-    max-height: none;
-    flex: none;
-  }
-  .composeBoard[data-draft-collapsed] {
-    grid-template-rows: max-content max-content max-content minmax(240px, auto) minmax(380px, 1fr);
-  }
-  .currentDraftRail {
-    flex-direction: row;
-    justify-content: flex-start;
-    padding: 8px 12px;
-  }
-  .currentDraftRail > span {
-    writing-mode: horizontal-tb;
-  }
-}
 
 .sourcesHeading > h2 {
   flex: none;
@@ -3065,4 +3044,97 @@ button.currentDraftRow:hover {
   min-height: 28px;
   border-radius: var(--radius-sm);
   font-size: 13px;
+}
+
+/* Compose actions live with the tool they affect; only feedback spans the workbench. */
+.composeFeedback {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--stroke-divider);
+  padding: 8px 16px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.composeFeedback[role="alert"] {
+  color: var(--status-error);
+}
+.changesToolbar,
+.structureToolbar {
+  display: flex;
+  flex: none;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 46px;
+  border-bottom: 1px solid var(--stroke-divider);
+  padding: 8px 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.changesToolbar .changeScope,
+.subjectTabs {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  padding: 2px;
+}
+.subjectTabs {
+  margin-right: auto;
+}
+.subjectTabs button,
+.structureEdit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  gap: 6px;
+  border-radius: var(--radius-sm);
+  padding: 0 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.subjectTabs button[aria-pressed="true"] {
+  background: var(--surface-app);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.structureEdit {
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+}
+.structureEdit:hover {
+  background: var(--surface-app);
+}
+.structureEdit svg {
+  width: 14px;
+  height: 14px;
+}
+.structurePanel {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.structurePanel[hidden] {
+  display: none;
+}
+.structurePanel .currentDraftBody {
+  padding-top: 12px;
+}
+
+.schemaBindingControl {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
 }

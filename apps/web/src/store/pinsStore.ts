@@ -24,6 +24,8 @@ interface PinsState {
   initialized: boolean;
   /** Current project ID (for cache invalidation) */
   currentProjectId: string | null;
+  /** Distinguishes separate visits to the same project for async acknowledgements. */
+  scopeVersion: number;
   /** Notification callback */
   notifyCallback: NotifyCallback | null;
 
@@ -52,6 +54,7 @@ export const usePinsStore = create<PinsState>((set, get) => ({
   error: null,
   initialized: false,
   currentProjectId: null,
+  scopeVersion: 0,
   notifyCallback: null,
 
   setNotifyCallback: (cb) => set({ notifyCallback: cb }),
@@ -59,7 +62,19 @@ export const usePinsStore = create<PinsState>((set, get) => ({
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error }),
   setInitialized: (initialized) => set({ initialized }),
-  setCurrentProjectId: (currentProjectId) => set({ currentProjectId }),
+  setCurrentProjectId: (currentProjectId) =>
+    set((state) =>
+      state.currentProjectId === currentProjectId
+        ? state
+        : {
+            currentProjectId,
+            scopeVersion: state.scopeVersion + 1,
+            pins: [],
+            loading: false,
+            error: null,
+            initialized: false,
+          }
+    ),
 
   addToPins: (pin) => set((state) => ({ pins: [...state.pins, pin] })),
   removePinById: (pinId) => {

@@ -509,6 +509,12 @@ export function ProjectStateTab({
     branch: branchFocus,
     returnTo: currentStateReturnTo,
   });
+  const canvasQuery = new URLSearchParams(routeQuery);
+  canvasQuery.set('view', 'canvas');
+  const canvasHref = `${pathname}?${canvasQuery.toString()}`;
+  const snapshotQuery = new URLSearchParams(routeQuery);
+  snapshotQuery.set('view', lastSnapshotView);
+  const snapshotHref = `${pathname}?${snapshotQuery.toString()}`;
   const historicalReturnHref = safeInternalReturnTo(searchParams.get('returnTo'), '');
   const schemaHref = `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ tab: 'schemas', branch: branchFocus }).toString()}`;
   const workspaceHref = getProjectIdWorkspacePath(projectId, { branch: branchFocus });
@@ -606,7 +612,7 @@ export function ProjectStateTab({
       className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--surface-card)]"
       data-state-view={activeView}
     >
-      <div className="flex min-h-10 shrink-0 flex-wrap items-center border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-1">
+      <div className="hidden min-h-10 shrink-0 flex-wrap items-center border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-1">
         <StateModeTabs
           activeMode={activeView === 'canvas' ? 'canvas' : 'snapshot'}
           onModeChange={(mode) => updateActiveView(mode === 'canvas' ? 'canvas' : lastSnapshotView)}
@@ -621,6 +627,7 @@ export function ProjectStateTab({
                 activeView={activeView}
                 branch={branchFocus || 'main'}
                 branchOptions={branchOptions}
+                canvasHref={canvasHref}
                 headCommit={headCommit}
                 headCommitHash={mainHeadCommitHash}
                 historyHref={historyHref}
@@ -816,6 +823,7 @@ export function ProjectStateTab({
               projectId={projectId}
               projectName={projectName}
               snapshotLoading={branchesLoading}
+              stateHref={snapshotHref}
             />
           )}
         </main>
@@ -828,6 +836,7 @@ function StateInspectionToolbar({
   activeView,
   branch,
   branchOptions,
+  canvasHref,
   headCommit,
   headCommitHash,
   historyHref,
@@ -841,6 +850,7 @@ function StateInspectionToolbar({
   activeView: ProjectSnapshotView;
   branch: string;
   branchOptions: string[];
+  canvasHref: string;
   headCommit: ApiCommit | null;
   headCommitHash: string | null;
   historyHref: string;
@@ -896,7 +906,11 @@ function StateInspectionToolbar({
         <div className={overviewStyles.actions}>
           <Link href={historyHref}>
             <History />
-            History
+            History 1
+          </Link>
+          <Link href={canvasHref}>
+            <History />
+            History 2
           </Link>
           <Link href={workspaceHref} className={overviewStyles.primary}>
             <Pencil />
@@ -1022,6 +1036,7 @@ function StateCanvasView({
   projectId,
   projectName,
   snapshotLoading,
+  stateHref,
 }: {
   branch: string;
   branchHeadHash: string | null;
@@ -1029,6 +1044,7 @@ function StateCanvasView({
   projectId: string;
   projectName: string;
   snapshotLoading: boolean;
+  stateHref: string;
 }) {
   const canvasProjectId = useCanvasStore((state) => state.projectId);
   const canvasLoading = useCanvasStore((state) => state.loading);
@@ -1075,6 +1091,7 @@ function StateCanvasView({
           focusedBranch={branch}
           focusedCommitHash={focusedCommitHash}
           projectName={projectName}
+          stateHref={stateHref}
         />
       </div>
     </section>

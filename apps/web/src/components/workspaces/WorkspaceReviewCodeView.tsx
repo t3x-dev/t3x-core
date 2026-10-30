@@ -30,6 +30,7 @@ export function WorkspaceReviewCodeView({
   validationReady,
   yamlText,
   review,
+  statusLabel,
 }: {
   branch: string;
   changeCounts?: { added: number; modified: number; removed: number };
@@ -37,6 +38,7 @@ export function WorkspaceReviewCodeView({
   validationReady: boolean;
   yamlText: string;
   review?: StateCodeReview;
+  statusLabel?: string;
 }) {
   const [codeMode, setCodeMode] = useState<StateCodeMode>('yaml');
   const [copied, setCopied] = useState(false);
@@ -311,7 +313,9 @@ export function WorkspaceReviewCodeView({
                 validationReady ? 'bg-[var(--status-success)]' : 'bg-[var(--text-tertiary)]'
               )}
             />
-            {review?.statusLabel ?? (validationReady ? 'Valid Schema' : 'Schema pending')}
+            {statusLabel ??
+              review?.statusLabel ??
+              (validationReady ? 'Valid Schema' : 'Schema pending')}
           </span>
           <span className="hidden h-4 w-px bg-[var(--stroke-divider)] sm:block" />
           <span>Indentation: 2 spaces</span>

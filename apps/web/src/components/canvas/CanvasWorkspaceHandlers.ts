@@ -2,6 +2,7 @@ import type { Node, ReactFlowInstance } from '@xyflow/react';
 import { useCallback } from 'react';
 import { formatUserFacingError } from '@/domain/format/errors';
 import type { NotifyCallback } from '@/store/canvasStoreTypes';
+import type { Conversation } from '@/types/api';
 import type { NodeKind } from '@/types/nodes';
 
 interface UseCanvasHandlersOptions {
@@ -11,7 +12,10 @@ interface UseCanvasHandlersOptions {
   screenToFlowPosition: ReactFlowInstance['screenToFlowPosition'];
   canvasRef: React.RefObject<HTMLDivElement | null>;
   notify: NotifyCallback | null;
-  addNode: (kind: NodeKind, position?: { x: number; y: number }) => Promise<void>;
+  addNode: (
+    kind: NodeKind,
+    position?: { x: number; y: number }
+  ) => Promise<Conversation | undefined>;
   setIsAdding: (value: boolean) => void;
 }
 
@@ -41,13 +45,14 @@ export function useCanvasHandlers({
       const position = getViewportCenter();
       setIsAdding(true);
       try {
-        await addNode(kind, position);
+        return await addNode(kind, position);
       } catch (err) {
         const message = formatUserFacingError(err, 'Failed to create node.');
         notify?.(message, 'error');
       } finally {
         setIsAdding(false);
       }
+      return undefined;
     },
     [getViewportCenter, addNode, notify, setIsAdding]
   );

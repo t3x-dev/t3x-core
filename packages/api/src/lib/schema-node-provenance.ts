@@ -62,6 +62,38 @@ export function schemaNodes(schema: Pick<YSchema, 'nodes'>) {
   visit(schema.nodes);
   return nodes;
 }
+/** Definitions at exact semantic paths, including nested object fields. */
+export function schemaOriginDefinitions(schema: Pick<YSchema, 'nodes'>) {
+  const definitions = new Map<string, Record<string, unknown>>();
+  const field = (value: unknown, path: string) => {
+    const definition = record(value);
+    definitions.set(path, definition);
+    for (const [name, child] of Object.entries(record(definition.properties)))
+      field(child, `${path}/${name}`);
+  };
+  for (const [path, node] of schemaNodes(schema)) {
+    definitions.set(path, node as Record<string, unknown>);
+    for (const [name, value] of Object.entries(node.slots ?? {})) field(value, `${path}/${name}`);
+  }
+  return definitions;
+}
+
+/** Materialize the verified whole-Release fallback before an edit can replace it with local origin. */
+export function publishedSchemaOrigins(
+  schema: YSchema,
+  source: Source,
+  origins: Record<string, unknown> = {}
+) {
+  const result = { ...origins };
+  const origin = {
+    kind: 'module',
+    artifact: source.canonicalName,
+    version: source.version,
+    source,
+  };
+  for (const path of schemaOriginDefinitions(schema).keys()) result[path] ??= origin;
+  return result;
+}
 function unique(entries: Entry[]) {
   return [...new Map(entries.map((entry) => [canonicalizeProtocolValue(entry), entry])).values()];
 }

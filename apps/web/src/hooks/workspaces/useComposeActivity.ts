@@ -4,7 +4,7 @@ import type {
   WorkspaceAuthoringCard,
   WorkspaceAuthoringView,
 } from '@t3x-dev/api-client';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   activityOperation,
   type ComposeActivitySelection,
@@ -20,6 +20,27 @@ import type { WorkspaceCandidate } from '@/types/workspaces';
 /** Compose-owned adapter over the immutable Draft authoring command and projection APIs. */
 export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverride = false) {
   const enabled = Boolean(candidate.authoringLedger) || enabledOverride;
+  const scopeKey = JSON.stringify([candidate.projectId, candidate.id, enabled]);
+  const scope = useMemo(
+    () => ({
+      key: scopeKey,
+      active: true,
+      epoch: 0,
+      read: 0,
+      poll: 0,
+      node: 0,
+      reconciling: false,
+    }),
+    [scopeKey]
+  );
+  const activeScope = useRef(scope);
+  activeScope.current = scope;
+  const captureScope = useCallback(() => {
+    const epoch = scope.epoch;
+    return () => scope.active && activeScope.current === scope && epoch === scope.epoch;
+  }, [scope]);
+  const [owner, setOwner] = useState(scope);
+  const ownsState = owner === scope;
   const [view, setView] = useState<WorkspaceAuthoringView | null>(null);
   const [actions, setActions] = useState<WorkspaceAuthoringAction[]>([]);
   const [cards, setCards] = useState<Record<string, WorkspaceAuthoringCard[]>>({});
@@ -37,98 +58,125 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
   const [reconciling, setReconciling] = useState(false);
   const [reconciliationError, setReconciliationError] = useState<string | null>(null);
   const reconciliationRequest = useRef<{ facts: string; id: string } | null>(null);
-  const nodeRequestRef = useRef(0);
   const viewRef = useRef(view);
-  viewRef.current = view;
+  viewRef.current = ownsState ? view : null;
   useEffect(() => {
+    scope.active = true;
+    scope.reconciling = false;
+    setOwner(scope);
     setPageCount(1);
-  }, [candidate.id]);
-  const load = useCallback(async () => {
-    if (!enabled) return;
-    const api = getSharedApiClient().workspaces.authoring;
-    const first = await api.read(candidate.projectId, candidate.id);
-    const all = [...first.actions];
-    let before = first.nextBeforeSequence;
-    for (let page = 1; page < pageCount && before !== null; page++) {
-      const older = await api.read(candidate.projectId, candidate.id, {
-        before_sequence: before,
-      });
-      if (older.workspaceRevision !== first.workspaceRevision)
-        throw new Error('Draft changed. Refresh activity to load a consistent history.');
-      all.push(...older.actions);
-      before = older.nextBeforeSequence;
-    }
-    const details: Record<string, WorkspaceAuthoringCard[]> = {};
-    if (first.selected)
-      details[first.selected.action.actionId] = composeObjectChangeCards(
-        first.selected.cards,
-        first.selected.before,
-        first.selected.after
-      );
-    const missing = all.filter((a) => !details[a.actionId]);
-    for (let i = 0; i < missing.length; i += 4) {
-      await Promise.all(
-        missing.slice(i, i + 4).map(async (action) => {
-          const result = await api.read(candidate.projectId, candidate.id, {
-            action_id: action.actionId,
-          });
-          if (result.selected?.action.actionId !== action.actionId)
-            throw new Error('Event details are unavailable. Refresh activity to retry.');
-          if (result.workspaceRevision !== first.workspaceRevision)
-            throw new Error('Draft changed. Refresh activity to load a consistent history.');
-          details[action.actionId] = composeObjectChangeCards(
-            result.selected.cards,
-            result.selected.before,
-            result.selected.after
-          );
-        })
-      );
-    }
-    setView(first);
-    setActions(all);
-    setCards(details);
-    setCursor(before);
-    setNewActivity(null);
-    setError(null);
-    return first;
-  }, [candidate.id, candidate.projectId, enabled, pageCount]);
-  useEffect(() => {
-    // Only a different workspace invalidates the visible projection. Clearing it
-    // on every revision unmounts the assistant and loses its chat/scroll state.
     setView(null);
     setActions([]);
     setCards({});
     setError(null);
-  }, [enabled, candidate.id, candidate.projectId]);
+    setCursor(null);
+    setNode(null);
+    setNodeLoading(false);
+    setNodeError(null);
+    setNodeCursor(null);
+    setNotice(null);
+    setNewActivity(null);
+    setReconciling(false);
+    setReconciliationError(null);
+    reconciliationRequest.current = null;
+    return () => {
+      scope.active = false;
+      ++scope.epoch;
+    };
+  }, [scope]);
+  const load = useCallback(async () => {
+    const isActive = captureScope();
+    if (!enabled || !isActive()) return;
+    const token = ++scope.read;
+    const isCurrent = () => isActive() && token === scope.read;
+    setLoading(true);
+    setError(null);
+    try {
+      const api = getSharedApiClient().workspaces.authoring;
+      const first = await api.read(candidate.projectId, candidate.id);
+      if (!isCurrent()) return;
+      const all = [...first.actions];
+      let before = first.nextBeforeSequence;
+      for (let page = 1; page < pageCount && before !== null; page++) {
+        const older = await api.read(candidate.projectId, candidate.id, {
+          before_sequence: before,
+        });
+        if (!isCurrent()) return;
+        if (older.workspaceRevision !== first.workspaceRevision)
+          throw new Error('Draft changed. Refresh activity to load a consistent history.');
+        all.push(...older.actions);
+        before = older.nextBeforeSequence;
+      }
+      const details: Record<string, WorkspaceAuthoringCard[]> = {};
+      if (first.selected)
+        details[first.selected.action.actionId] = composeObjectChangeCards(
+          first.selected.cards,
+          first.selected.before,
+          first.selected.after
+        );
+      const missing = all.filter((a) => !details[a.actionId]);
+      for (let i = 0; i < missing.length; i += 4) {
+        await Promise.all(
+          missing.slice(i, i + 4).map(async (action) => {
+            const result = await api.read(candidate.projectId, candidate.id, {
+              action_id: action.actionId,
+            });
+            if (!isCurrent()) return;
+            if (result.selected?.action.actionId !== action.actionId)
+              throw new Error('Event details are unavailable. Refresh activity to retry.');
+            if (result.workspaceRevision !== first.workspaceRevision)
+              throw new Error('Draft changed. Refresh activity to load a consistent history.');
+            details[action.actionId] = composeObjectChangeCards(
+              result.selected.cards,
+              result.selected.before,
+              result.selected.after
+            );
+          })
+        );
+        if (!isCurrent()) return;
+      }
+      setView(first);
+      setActions(all);
+      setCards(details);
+      setCursor(before);
+      setNewActivity(null);
+      setError(null);
+      return first;
+    } catch (error) {
+      if (!isCurrent()) return;
+      setError(error instanceof Error ? error.message : 'Cannot load activity');
+      throw error;
+    } finally {
+      if (isCurrent()) setLoading(false);
+    }
+  }, [candidate.id, candidate.projectId, enabled, pageCount, captureScope, scope]);
 
   useEffect(() => {
-    let active = true;
     if (!enabled) {
       setLoading(false);
       return;
     }
-    setLoading(true);
-    void load()
-      .catch((error) => {
-        if (active) setError(error instanceof Error ? error.message : 'Cannot load activity');
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    void load().catch(() => {
+      /* load owns the current error state. */
+    });
     return () => {
-      active = false;
+      ++scope.read;
     };
-  }, [enabled, candidate.id, candidate.revision, retry, load]);
+  }, [enabled, candidate.revision, retry, load, scope]);
 
   useEffect(() => {
     if (!enabled) return;
-    let active = true;
+    const isActive = captureScope();
     const timer = window.setInterval(() => {
+      const token = ++scope.poll;
+      const readVersion = scope.read;
       void getSharedApiClient()
         .workspaces.authoring.read(candidate.projectId, candidate.id, { limit: 1 })
         .then((next) => {
           if (
-            active &&
+            isActive() &&
+            token === scope.poll &&
+            readVersion === scope.read &&
             viewRef.current &&
             (next.workspaceRevision !== viewRef.current.workspaceRevision ||
               next.synchronization?.currentRefHead !==
@@ -141,18 +189,21 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
         });
     }, 5000);
     return () => {
-      active = false;
+      ++scope.poll;
       window.clearInterval(timer);
     };
-  }, [candidate.id, candidate.projectId, enabled]);
+  }, [candidate.id, candidate.projectId, enabled, captureScope, scope]);
 
   const reconcile = useCallback(async () => {
-    if (reconciling) return false;
+    const isCurrent = captureScope();
+    if (!enabled || !isCurrent() || scope.reconciling) return false;
+    scope.reconciling = true;
     setReconciling(true);
     setReconciliationError(null);
     try {
       const api = getSharedApiClient().workspaces.authoring;
       const latest = await api.read(candidate.projectId, candidate.id);
+      if (!isCurrent()) return false;
       if (latest.synchronization?.required) {
         const input = {
           expected_workspace_revision: latest.workspaceRevision,
@@ -169,24 +220,32 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
           request_id: request.id,
         });
       }
+      if (!isCurrent()) return false;
       await load();
+      if (!isCurrent()) return false;
       reconciliationRequest.current = null;
       setNotice(
         'Workspace synced with the branch. Existing edits and earlier history are preserved.'
       );
       return true;
     } catch (cause) {
+      if (!isCurrent()) return false;
       setReconciliationError(cause instanceof Error ? cause.message : 'Could not sync Workspace');
       return false;
     } finally {
-      setReconciling(false);
+      if (isCurrent()) {
+        scope.reconciling = false;
+        setReconciling(false);
+      }
     }
-  }, [candidate.id, candidate.projectId, load, reconciling]);
+  }, [candidate.id, candidate.projectId, load, enabled, captureScope, scope]);
 
   const inspectNode = useCallback(
     async (nodeId: string, actionId?: string) => {
-      if (!enabled) return null;
-      const requestId = ++nodeRequestRef.current;
+      const isActive = captureScope();
+      if (!enabled || !isActive()) return null;
+      const requestId = ++scope.node;
+      const isCurrent = () => isActive() && requestId === scope.node;
       setNode(null);
       setNodeLoading(true);
       setNodeError(null);
@@ -196,22 +255,22 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
           candidate.id,
           { node_id: nodeId, action_id: actionId }
         );
-        if (nodeRequestRef.current === requestId) {
+        if (isCurrent()) {
           setNode(result.node);
           setNodeCursor(
             result.node?.entries.length === 20 ? result.node.entries.at(-1)!.sequence : null
           );
         }
-        return result.node;
+        return isCurrent() ? result.node : null;
       } catch (error) {
-        if (nodeRequestRef.current === requestId)
+        if (isCurrent())
           setNodeError(error instanceof Error ? error.message : 'Cannot load node history');
         return null;
       } finally {
-        if (nodeRequestRef.current === requestId) setNodeLoading(false);
+        if (isCurrent()) setNodeLoading(false);
       }
     },
-    [candidate.id, candidate.projectId, enabled]
+    [candidate.id, candidate.projectId, enabled, captureScope, scope]
   );
 
   const selectActionNode = useCallback(
@@ -220,14 +279,20 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
       nodeId: string,
       path?: string
     ): Promise<ComposeActivitySelection | null> => {
-      if (!enabled) return null;
+      const isActive = captureScope();
+      if (!enabled || !isActive()) return null;
+      const token = ++scope.node;
+      const isCurrent = () => isActive() && token === scope.node;
+      setNode(null);
+      setNodeError(null);
+      setNodeLoading(true);
       try {
         const result = await getSharedApiClient().workspaces.authoring.read(
           candidate.projectId,
           candidate.id,
           { action_id: actionId, node_id: nodeId }
         );
-        if (!result.selected) return null;
+        if (!isCurrent() || !result.selected) return null;
         const projectedCards = composeObjectChangeCards(
           result.selected.cards,
           result.selected.before,
@@ -271,16 +336,22 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
           },
         };
       } catch (error) {
-        setNodeError(error instanceof Error ? error.message : 'Cannot open action');
+        if (isCurrent())
+          setNodeError(error instanceof Error ? error.message : 'Cannot open action');
         return null;
+      } finally {
+        if (isCurrent()) setNodeLoading(false);
       }
     },
-    [actions, candidate.id, candidate.projectId, enabled]
+    [actions, candidate.id, candidate.projectId, enabled, captureScope, scope]
   );
 
   const loadOlderNode = useCallback(
     async (nodeId: string, actionId?: string) => {
-      if (!enabled || nodeCursor === null) return;
+      const isActive = captureScope();
+      if (!enabled || !isActive() || nodeCursor === null) return;
+      const token = ++scope.node;
+      const isCurrent = () => isActive() && token === scope.node;
       setNodeLoading(true);
       setNodeError(null);
       try {
@@ -289,6 +360,7 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
           candidate.id,
           { node_id: nodeId, action_id: actionId, before_sequence: nodeCursor }
         );
+        if (!isCurrent()) return;
         setNode((current) =>
           current && result.node
             ? { ...current, entries: [...current.entries, ...result.node.entries] }
@@ -298,12 +370,13 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
           result.node?.entries.length === 20 ? result.node.entries.at(-1)!.sequence : null
         );
       } catch (error) {
-        setNodeError(error instanceof Error ? error.message : 'Cannot load older node history');
+        if (isCurrent())
+          setNodeError(error instanceof Error ? error.message : 'Cannot load older node history');
       } finally {
-        setNodeLoading(false);
+        if (isCurrent()) setNodeLoading(false);
       }
     },
-    [candidate.id, candidate.projectId, enabled, nodeCursor]
+    [candidate.id, candidate.projectId, enabled, nodeCursor, captureScope, scope]
   );
 
   const publish = useCallback(
@@ -313,7 +386,8 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
         'expected_workspace_revision' | 'expected_revision' | 'expected_ref_head'
       >
     ) => {
-      if (!view) throw new Error('Draft activity is not ready');
+      const isCurrent = captureScope();
+      if (!view || !ownsState || !isCurrent()) throw new Error('Draft activity is not ready');
       setNotice(null);
       const outcome = await getSharedApiClient().workspaces.authoring.publish(
         candidate.projectId,
@@ -325,7 +399,9 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
           expected_ref_head: view.basis.refHead,
         }
       );
+      if (!isCurrent()) throw new Error('Workspace changed. Refresh its Draft activity.');
       await load();
+      if (!isCurrent()) throw new Error('Workspace changed. Refresh its Draft activity.');
       setNotice(
         outcome.kind === 'no_change'
           ? 'The current Draft already has this value. No action was added.'
@@ -333,17 +409,20 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
       );
       return outcome;
     },
-    [candidate.id, candidate.projectId, load, view]
+    [candidate.id, candidate.projectId, load, view, ownsState, captureScope]
   );
 
   const createAssistantConversation = useCallback(async () => {
-    if (!view) throw new Error('Draft activity is not ready');
+    const isCurrent = captureScope();
+    if (!view || !ownsState || !isCurrent()) throw new Error('Draft activity is not ready');
     const api = getSharedApiClient();
     const conversation = await api.sourceThreads.create({
       project_id: candidate.projectId,
       title: 'Compose assistant',
     });
+    if (!isCurrent()) throw new Error('Workspace changed. Refresh its Draft activity.');
     const result = await api.workspaces.get(candidate.projectId, candidate.id);
+    if (!isCurrent()) throw new Error('Workspace changed. Refresh its Draft activity.');
     const current = result.workspace as unknown as WorkspaceCandidate;
     if (current.revision !== view.workspaceRevision)
       throw new Error('Draft changed; refresh before creating the conversation');
@@ -360,19 +439,25 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
         source,
       ],
     });
+    if (!isCurrent()) throw new Error('Workspace changed. Refresh its Draft activity.');
     await load();
+    if (!isCurrent()) throw new Error('Workspace changed. Refresh its Draft activity.');
     return conversation.conversation_id;
-  }, [candidate.id, candidate.projectId, load, view]);
+  }, [candidate.id, candidate.projectId, load, view, ownsState, captureScope]);
 
   const publishCandidate = useCallback(
     async (transitionId: string, requestId: string) => {
+      const isCurrent = captureScope();
+      if (!enabled || !isCurrent()) throw new Error('Draft activity is not ready');
       const outcome = await getSharedApiClient().workspaces.authoring.publishCandidate(
         candidate.projectId,
         candidate.id,
         transitionId,
         { request_id: requestId }
       );
+      if (!isCurrent()) throw new Error('Workspace changed. Refresh its Draft activity.');
       await load();
+      if (!isCurrent()) throw new Error('Workspace changed. Refresh its Draft activity.');
       setNotice(
         outcome.kind === 'no_change'
           ? 'This proposal is already reflected in the current Draft.'
@@ -380,14 +465,16 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
       );
       return outcome;
     },
-    [candidate.id, candidate.projectId, load]
+    [candidate.id, candidate.projectId, load, enabled, captureScope]
   );
 
   return {
     enabled,
     confirmDeletion: async (actionId: string) => {
+      const isCurrent = captureScope();
       const current = viewRef.current;
-      if (!current) throw new Error('Refresh the Draft before confirming deletion.');
+      if (!current || !enabled || !isCurrent())
+        throw new Error('Refresh the Draft before confirming deletion.');
       await getSharedApiClient().workspaces.authoring.confirmDeletion(
         candidate.projectId,
         candidate.id,
@@ -398,27 +485,29 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
           expected_ref_head: current.basis.refHead,
         }
       );
+      if (!isCurrent()) throw new Error('Workspace changed. Refresh its Draft activity.');
       await load();
+      if (!isCurrent()) throw new Error('Workspace changed. Refresh its Draft activity.');
       setNotice('Deletion confirmed by you. Prepare a new Review to include this authorization.');
     },
-    view,
-    actions,
-    cards,
-    error,
-    loading,
-    cursor,
-    node,
-    nodeLoading,
-    nodeError,
-    nodeCursor,
-    notice,
-    newActivity,
-    reconciling,
-    reconciliationError,
+    view: ownsState ? view : null,
+    actions: ownsState ? actions : [],
+    cards: ownsState ? cards : {},
+    error: ownsState ? error : null,
+    loading: ownsState ? loading : enabled,
+    cursor: ownsState ? cursor : null,
+    node: ownsState ? node : null,
+    nodeLoading: ownsState ? nodeLoading : false,
+    nodeError: ownsState ? nodeError : null,
+    nodeCursor: ownsState ? nodeCursor : null,
+    notice: ownsState ? notice : null,
+    newActivity: ownsState ? newActivity : null,
+    reconciling: ownsState ? reconciling : false,
+    reconciliationError: ownsState ? reconciliationError : null,
     reconcile,
-    compositionRevision: view?.compositionRevision,
-    workspaceRevision: view?.workspaceRevision,
-    basis: view?.basis,
+    compositionRevision: ownsState ? view?.compositionRevision : undefined,
+    workspaceRevision: ownsState ? view?.workspaceRevision : undefined,
+    basis: ownsState ? view?.basis : undefined,
     refresh: () => setRetry((value) => value + 1),
     loadOlder: () => setPageCount((value) => value + 1),
     loadLatest: load,

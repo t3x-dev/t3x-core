@@ -58,11 +58,13 @@ vi.mock('@/components/canvas', () => ({
     focusedBranch,
     focusedCommitHash,
     projectName,
+    stateHref,
   }: {
     embedded?: boolean;
     focusedBranch?: string;
     focusedCommitHash?: string;
     projectName: string;
+    stateHref?: string;
   }) => (
     <div
       data-embedded={String(embedded)}
@@ -71,6 +73,7 @@ vi.mock('@/components/canvas', () => ({
       data-testid="state-canvas-workspace"
     >
       {projectName}
+      {stateHref ? <a href={stateHref}>Back to State</a> : null}
     </div>
   ),
 }));
@@ -669,7 +672,8 @@ describe('ProjectStateTab', () => {
       expect(screen.getByRole('tab', { name: /Overview/ })).toHaveAttribute('aria-selected', 'true')
     );
     expect(screen.getByRole('tablist', { name: 'State views' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'History' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'History 1' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'History 2' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Propose change' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Snapshot/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: /Canvas/ })).toHaveAttribute('aria-selected', 'false');
@@ -812,9 +816,13 @@ describe('ProjectStateTab', () => {
     expect(screen.getByPlaceholderText('Find a field or value...')).toBeInTheDocument();
     expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', 'main', 100);
     expect(hookMocks.loadOperations).toHaveBeenCalledWith(PRD_COMMIT.hash, 'proj_test');
-    expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'History 1' })).toHaveAttribute(
       'href',
       '/project/proj_test/history?branch=main&returnTo=%2Ft3x-dev%2Ftest-project'
+    );
+    expect(screen.getByRole('link', { name: 'History 2' })).toHaveAttribute(
+      'href',
+      '/t3x-dev/test-project?view=canvas'
     );
     expect(screen.getByRole('link', { name: 'Propose change' })).toHaveAttribute(
       'href',
@@ -1145,8 +1153,9 @@ describe('ProjectStateTab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Rollout Plan · rollout_plan' }));
     expect(screen.getByText('Seventh rollout field remains visible')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /HEAD evidence 1/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /HEAD YOps 3/ })).toBeInTheDocument();
+    // State content renders before the asynchronous change evidence is ready.
+    expect(await screen.findByRole('button', { name: /HEAD evidence 1/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /HEAD YOps 3/ })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Find food and drinks · 0' }));
     const inspector = screen.getByRole('complementary', { name: 'PRD inspector' });
@@ -1483,6 +1492,10 @@ describe('ProjectStateTab', () => {
     const canvas = await screen.findByTestId('state-canvas-workspace');
     expect(canvas).toHaveAttribute('data-focused-branch', 'main');
     expect(canvas).toHaveAttribute('data-focused-commit', PRD_COMMIT.hash);
+    expect(screen.getByRole('link', { name: 'Back to State' })).toHaveAttribute(
+      'href',
+      `/t3x-dev/test-project?view=structure&branch=main&commit=${encodeURIComponent(PRD_COMMIT.hash)}`
+    );
   });
 
   it('uses committed workspace draft operations when the commit has no stored YOps log', async () => {
@@ -1702,7 +1715,8 @@ describe('ProjectStateTab', () => {
     renderStateTab();
 
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'History' })).toHaveTextContent('History');
+    expect(screen.getByRole('link', { name: 'History 1' })).toHaveTextContent('History 1');
+    expect(screen.getByRole('link', { name: 'History 2' })).toHaveTextContent('History 2');
     expect(screen.queryByText('stale-canvas-branch')).not.toBeInTheDocument();
     expect(screen.queryByText(/stale-canvas-commit/)).not.toBeInTheDocument();
 
@@ -1767,9 +1781,13 @@ describe('ProjectStateTab', () => {
         100
       );
     });
-    expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'History 1' })).toHaveAttribute(
       'href',
       '/project/proj_test/history?branch=feature%2Fprd-audience&returnTo=%2Ft3x-dev%2Ftest-project%3Fbranch%3Dfeature%252Fprd-audience'
+    );
+    expect(screen.getByRole('link', { name: 'History 2' })).toHaveAttribute(
+      'href',
+      '/t3x-dev/test-project?branch=feature%2Fprd-audience&view=canvas'
     );
   });
 
@@ -1804,9 +1822,13 @@ describe('ProjectStateTab', () => {
     expect(screen.getByText('Loading state')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Open commit' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Parent diff' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'History 1' })).toHaveAttribute(
       'href',
       '/project/proj_test/history?branch=feature%2Fprd-audience&returnTo=%2Ft3x-dev%2Ftest-project%3Fbranch%3Dfeature%252Fprd-audience'
+    );
+    expect(screen.getByRole('link', { name: 'History 2' })).toHaveAttribute(
+      'href',
+      '/t3x-dev/test-project?branch=feature%2Fprd-audience&view=canvas'
     );
   });
 });
