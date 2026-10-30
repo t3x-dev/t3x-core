@@ -42,6 +42,7 @@ export const ProjectVisibilitySchema = z.enum(['private', 'unlisted', 'public'])
 export const ProjectSchema = z.object({
   repository_profile: RepositoryProfileSchema.optional(),
   can_edit: z.boolean().optional(),
+  can_delete: z.boolean().optional(),
   deleted_at: z.string().datetime().nullable().optional(),
   can_restore: z.boolean().optional(),
   can_permanently_delete: z.boolean().optional(),
