@@ -28,66 +28,76 @@ test('no-AI definition adoption, native repair, reviewed decision and exact Comm
     await page.getByRole('button', { name: 'Add & open Studio', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Schema Studio', exact: true })).toBeVisible();
     await page.getByLabel('Target Workspace').selectOption(workspaceId);
-    await expect(page.getByRole('button', { name: 'Review Schema changes', exact: true })).toBeEnabled();
-    await page.getByRole('button', { name: 'Review Schema changes', exact: true }).click();
-    const applyDialog = page.getByRole('dialog');
-    await expect(applyDialog).toBeVisible();
-    await applyDialog.getByRole('button', { name: /Confirm & apply|Adopt & return to Workspace/ }).click();
-    await expect(page.getByRole('region', { name: 'Workspace detail' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Review changes', exact: true })).toBeEnabled();
+    await page.getByRole('button', { name: 'Review changes', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Workspace Review', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Approve and commit', exact: true })).toBeEnabled();
     const applied = (await (await request.get(endpoint)).json()).data.workspace;
     expect(applied.schemaBindings[0].rootKey).toBe('candidate');
     expect(applied.schemaReview.verdict).toBe('ready');
     await page.goto(`${path}?tab=workspaces&workspace=${workspaceId}`, { waitUntil: 'networkidle' });
     await page.screenshot({ path: testInfo.outputPath('delivery-workspace.png'), animations: 'disabled' });
 
-    // Browser authoring below uses the real native review. This content helper is only
-    // for the separate adversarial API override qualification at the end.
-    const content = (withTask: boolean) => ({ trees: [{ key: 'candidate', slots: {}, children: [
-      { key: 'checklist', slots: { title: 'Daily dog care' }, children: [] },
-      { key: 'items', slots: {}, children: [{ key: 'water', slots: { done: false, ...(withTask ? { task: 'Refresh the water bowl' } : {}) }, children: [] }] },
-    ] }], relations: [] });
-    await page.getByRole('button', { name: 'Workspace tools', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Edit structured State', exact: true }).click();
-    const editor = page;
-    await expect(editor.getByRole('region', { name: 'Edit structured content' })).toBeVisible();
-    const addNode = async (parent: string, name: string) => {
-      await editor.getByLabel(`Show Child node in ${parent}`, { exact: true }).click();
-      await editor.getByRole('textbox', { name: `Child node in ${parent}`, exact: true }).fill(name);
-      await editor.getByRole('button', { name: `Add Child node in ${parent}`, exact: true }).click();
+    await page.getByRole('tab', { name: 'Compose', exact: true }).click();
+    const openEditor = async () => {
+      await page.getByRole('button', { name: 'Advanced tools', exact: true }).click();
+      await page.getByRole('menuitem', { name: 'Edit Draft', exact: true }).click();
+      return page.getByRole('dialog', { name: 'Edit Workspace Draft' });
     };
-    const addField = async (parent: string, name: string, value: string, type = 'string') => {
-      await editor.getByLabel(`Show Field in ${parent}`, { exact: true }).click();
-      await editor.getByRole('textbox', { name: `Field in ${parent}`, exact: true }).fill(name);
-      await editor.getByLabel(`Field in ${parent} type`, { exact: true }).selectOption(type);
-      await editor.getByRole('button', { name: `Add Field in ${parent}`, exact: true }).click();
-      if (type === 'string') await editor.getByRole('textbox', { name: `${parent}/${name}`, exact: true }).fill(value);
+    const editor = await openEditor();
+    const add = async (parent: string, name: string, value?: string) => {
+      await editor.getByRole('button', { name: `Add inside ${parent}`, exact: true }).click();
+      await editor.getByLabel('New name').fill(name);
+      await editor.getByLabel('What to add').selectOption(value === undefined ? 'node' : 'field');
+      if (value !== undefined) await editor.getByLabel('New value').fill(value);
+      await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+      await expect(editor.getByLabel('New name')).toHaveCount(0);
     };
-    await addNode('candidate', 'checklist');
-    await addField('candidate/checklist', 'title', 'Daily dog care');
-    await addNode('candidate', 'items');
-    await addNode('candidate/items', 'water');
-    await addField('candidate/items/water', 'done', '', 'boolean');
-    const browserReview = async () => {
-      const response = page.waitForResponse((response) => response.url().endsWith(`/workspaces/${workspaceId}/transition/review`) && response.request().method() === 'POST');
-      await editor.getByRole('button', { name: 'Review structured change', exact: true }).click();
+    const save = async () => {
+      await editor.getByRole('button', { name: 'Close', exact: true }).click();
+      const response = page.waitForResponse(response => response.url().endsWith(`/workspaces/${workspaceId}/authoring/actions`) && response.request().method() === 'POST');
+      await page.getByRole('button', { name: /^Save selected as P \(\d+\)$/ }).click();
       const result = await response;
       expect(result.ok(), await result.text()).toBe(true);
-      await expect(editor.getByRole('link', { name: 'Open Review', exact: true })).toBeVisible();
-      return (await result.json()).data;
+    };
+    await add('root', 'candidate');
+    await add('candidate', 'checklist');
+    await add('checklist', 'title', 'Daily dog care');
+    await add('candidate', 'items');
+    await add('items', 'water');
+    await add('water', 'done', 'false');
+    await save();
+    const browserReview = async () => {
+      await page.getByRole('tab', { name: 'Review', exact: true }).click();
+      const response = page.waitForResponse(response => response.url().endsWith(`/workspaces/${workspaceId}/authoring/reviews`) && response.request().method() === 'POST');
+      await page.getByRole('button', { name: 'Prepare review', exact: true }).click();
+      const result = await response;
+      expect(result.ok(), await result.text()).toBe(true);
+      await expect(page).toHaveURL(/reviewSnapshot=/);
+      const snapshotId = new URL(page.url()).searchParams.get('reviewSnapshot');
+      const snapshot = await request.get(`${endpoint}/transition/review-snapshots/${snapshotId}`);
+      expect(snapshot.ok()).toBe(true);
+      const snapshotDigest = (await snapshot.json()).data.snapshot_digest;
+      expect(snapshotDigest).toMatch(/^sha256:[0-9a-f]{64}$/);
+      const { view } = (await result.json()).data;
+      const { workspace_revision, ref_head, effect_digest, proposal_digest, statement_digests, policy_digest } = view.precondition;
+      return { transition_id: view.transition_id, precondition: { workspace_revision, ref_head, effect_digest, proposal_digest, statement_digests, policy_digest: policy_digest ?? '' }, snapshotId, snapshotDigest };
     };
     const incomplete = await browserReview();
     await page.screenshot({ path: testInfo.outputPath('delivery-blocked.png'), animations: 'disabled' });
-    await addField('candidate/items/water', 'task', 'Refresh the water bowl');
-    // Editing invalidates the old review link; only a newly verified snapshot can be decided.
-    await expect(editor.getByRole('link', { name: 'Open Review', exact: true })).toHaveCount(0);
-    const repaired = await browserReview();
-    expect(repaired.precondition.effect_digest).not.toBe(incomplete.precondition.effect_digest);
-    await editor.getByRole('region', { name: 'Edit structured content' }).evaluate((element) => { element.scrollTop = 0; });
+    await page.getByRole('link', { name: 'Edit in Compose', exact: true }).click();
+    await openEditor();
+    await add('water', 'task', 'Refresh the water bowl');
     await page.screenshot({ path: testInfo.outputPath('delivery-editor.png'), animations: 'disabled' });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: testInfo.outputPath('delivery-editor-mobile.png'), animations: 'disabled' });
     await page.setViewportSize({ width: 1480, height: 960 });
-    await editor.getByRole('link', { name: 'Open Review', exact: true }).click();
+    await save();
+    // A saved content edit makes the previous decision precondition stale.
+    const stale = await request.post(`${endpoint}/transition/decide`, { data: { transition_id: incomplete.transition_id, precondition: incomplete.precondition, outcome: 'accepted' } });
+    expect(stale.status(), await stale.text()).toBe(409);
+    const repaired = await browserReview();
+    expect(repaired.precondition.effect_digest).not.toBe(incomplete.precondition.effect_digest);
     await expect(page.getByRole('button', { name: 'Approve and commit', exact: true })).toBeEnabled();
     await page.screenshot({ path: testInfo.outputPath('delivery-review.png'), fullPage: true, animations: 'disabled' });
     const decisionResponse = page.waitForResponse((response) => response.url().endsWith(`/workspaces/${workspaceId}/transition/decide`) && response.request().method() === 'POST');
@@ -100,13 +110,15 @@ test('no-AI definition adoption, native repair, reviewed decision and exact Comm
     expect(commitHash).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect(result.workspace.schemaBindings[0]).toEqual(applied.schemaBindings[0]);
     expect(result.workspace.schemaReview.verdict).toBe('ready');
-    const retained = await request.get(`${endpoint}/transition/review-snapshots/${incomplete.review_snapshot.snapshotId}`);
+    const retained = await request.get(`${endpoint}/transition/review-snapshots/${incomplete.snapshotId}`);
     expect(retained.ok()).toBe(true);
-    expect((await retained.json()).data.snapshot_digest).toBe(incomplete.review_snapshot.snapshotDigest);
+    expect((await retained.json()).data.snapshot_digest).toBe(incomplete.snapshotDigest);
 
     await page.goto(`${path}?tab=workspaces&workspace=${workspaceId}`);
+    await page.getByRole('tab', { name: 'Compose', exact: true }).click();
+    await page.getByRole('navigation', { name: 'Workspace tools' }).getByRole('button', { name: 'Structure', exact: true }).click();
     await expect(page.getByLabel('Workspace schema').locator('option:checked')).toContainText(
-      't3x/care-checklist'
+      applied.schemaBindings[0].schemaName
     );
     await page.screenshot({ path: testInfo.outputPath('delivery-active.png'), animations: 'disabled' });
     const exported = await request.get(`${API_BASE}/commits/${encodeURIComponent(commitHash)}/export?project_id=${projectId}&format=json`);
@@ -115,16 +127,26 @@ test('no-AI definition adoption, native repair, reviewed decision and exact Comm
     expect((await repeatedExport.json()).data.content).toBe(bytes);
     expect(bytes).toContain('Refresh the water bowl');
     await page.screenshot({ path: testInfo.outputPath('delivery-export.png'), animations: 'disabled' });
-    // A separately authorized override must preserve failed-check status even if the
-    // input draft carries a stale Ready flag. It must not alter the earlier export.
-    const overrideEndpoint = `${API_BASE}/projects/${projectId}/workspaces/care-override`;
-    const overrideSaved = await request.patch(overrideEndpoint, { data: { workspace: { ...workspace, id: 'care-override', baseCommitHash: commitHash, schemaBindings: applied.schemaBindings } } });
-    expect(overrideSaved.ok(), await overrideSaved.text()).toBe(true);
-    const overrideRevision = (await overrideSaved.json()).data.workspace.revision;
-    const failedReviewResponse = await request.post(`${overrideEndpoint}/transition/review`, { data: { content: content(false), if_revision: overrideRevision } });
+    // Later invalid content needs an explicit override that preserves failed checks
+    // and cannot alter the earlier Commit export.
+    const beforeOverride = (await (await request.get(`${endpoint}/authoring`)).json()).data;
+    const editedResponse = await request.post(`${endpoint}/authoring/actions`, { data: {
+      request_id: randomUUID(), expected_workspace_revision: beforeOverride.workspaceRevision,
+      expected_revision: beforeOverride.compositionRevision, expected_ref_head: beforeOverride.basis.refHead,
+      operations: [{ unset: { path: 'candidate/items/water/task' } }],
+    } });
+    expect(editedResponse.ok(), await editedResponse.text()).toBe(true);
+    const edited = (await editedResponse.json()).data;
+    const failedReviewResponse = await request.post(`${endpoint}/authoring/reviews`, { data: {
+      request_id: randomUUID(), expected_workspace_revision: edited.workspaceRevision,
+      expected_revision: edited.compositionRevision, expected_ref_head: beforeOverride.basis.refHead,
+    } });
     expect(failedReviewResponse.ok(), await failedReviewResponse.text()).toBe(true);
-    const failedReview = (await failedReviewResponse.json()).data;
-    const overriddenResponse = await request.post(`${overrideEndpoint}/transition/decide`, { data: { transition_id: failedReview.transition_id, precondition: failedReview.precondition, outcome: 'overridden', decision_reason: 'Qualification: preserve a failed native check under an explicit override.' } });
+    const failedReview = (await failedReviewResponse.json()).data.view;
+    const overridePrecondition = { ...failedReview.precondition };
+    delete overridePrecondition.ref_name;
+    delete overridePrecondition.review_digest;
+    const overriddenResponse = await request.post(`${endpoint}/transition/decide`, { data: { transition_id: failedReview.transition_id, precondition: overridePrecondition, outcome: 'overridden', decision_reason: 'Qualification: preserve a failed native check under an explicit override.' } });
     expect(overriddenResponse.ok(), await overriddenResponse.text()).toBe(true);
     const overridden = (await overriddenResponse.json()).data;
     expect(overridden.workspace.schemaReview.verdict).toBe('needs_review');

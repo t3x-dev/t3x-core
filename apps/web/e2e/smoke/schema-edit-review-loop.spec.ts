@@ -50,7 +50,7 @@ test('saved snapshot → edit → Review → commit → edit again, including em
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(`/project/${projectId}?tab=schemas&schemaView=studio&workspace=${workspaceId}&branch=main`);
     await expect(page.getByLabel('Type item/title', { exact: true })).toHaveValue('string');
-    await expect(page.getByText('Saved to Draft · not committed', { exact: true })).toBeVisible();
+    await expect(page.getByText('Draft saved · not committed', { exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('saved-draft-editable.png'), fullPage: true });
 
     const commit = async () => {
@@ -59,31 +59,32 @@ test('saved snapshot → edit → Review → commit → edit again, including em
       await page.getByRole('button', { name: 'Approve and commit', exact: true }).click();
       const result = await data(await response);
       expect(result.commit.schema).toBe('t3x/commit/v2');
-      await page.getByRole('link', { name: 'Continue editing Schema', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Committed', exact: true })).toBeVisible();
+      await page.getByRole('link', { name: 'Schema', exact: true }).click();
       await expect(page.getByText(/^Committed · /)).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Review Schema changes' })).toBeDisabled();
+      await expect(page.getByRole('button', { name: /^(Review changes|Save and review)$/ })).toBeDisabled();
     };
     // Dirty Review saves the exact definition and reviews unchanged empty content.
-    await page.getByRole('treeitem').filter({ has: page.getByLabel('Type item/title', { exact: true }) }).click();
+    await page.getByRole('textbox', { name: 'Name item/title', exact: true }).click();
     await page.getByLabel('Type item/title', { exact: true }).selectOption('number');
-    await page.getByRole('button', { name: 'Review Schema changes' }).click();
+    await page.getByRole('button', { name: /^(Review changes|Save and review)$/ }).click();
     await expect(page).toHaveURL(/reviewSnapshot=/);
-    await expect(page.getByRole('region', { name: 'Change summary', exact: true })).toContainText('Schema definition changes');
-    await expect(page).toHaveURL(/schemaView=review/);
-    await expect(page.getByRole('region', { name: 'Definition changes', exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Schema review', exact: true })).toContainText('nodes.item');
+    await expect(page).toHaveURL(/workspaceMode=review/);
+    await expect(page.getByRole('region', { name: 'Schema review', exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('empty-content-review.png'), fullPage: true });
     await commit();
     await expect(page.getByLabel('Type item/title', { exact: true })).toHaveValue('number');
 
     // Save without committing, then reload and keep editing the saved definition.
-    await page.getByRole('treeitem').filter({ has: page.getByLabel('Type item/title', { exact: true }) }).click();
+    await page.getByRole('textbox', { name: 'Name item/title', exact: true }).click();
     await page.getByLabel('Type item/title', { exact: true }).selectOption('string');
-    await page.getByRole('button', { name: 'Save edits', exact: true }).click();
-    await expect(page.getByText('Changes saved · not committed', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+    await expect(page.getByText('Draft saved · not committed', { exact: true })).toBeVisible();
     await page.reload();
     await expect(page.getByLabel('Type item/title', { exact: true })).toHaveValue('string');
-    await expect(page.getByText('Changes saved · not committed', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Review Schema changes' }).click();
+    await expect(page.getByText('Draft saved · not committed', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: /^(Review changes|Save and review)$/ }).click();
     await commit();
 
     // Once real content exists, new required nodes and slots must be repaired.
@@ -95,25 +96,25 @@ test('saved snapshot → edit → Review → commit → edit again, including em
     } }));
     await page.reload();
     // Required content is explicit: create the missing node, then enter its title.
-    await page.getByRole('treeitem').filter({ has: page.getByLabel('Required item', { exact: true }) }).click();
+    await page.getByRole('textbox', { name: 'Name item', exact: true }).click();
     await page.getByLabel('Required item', { exact: true }).check();
-    await page.getByRole('treeitem').filter({ has: page.getByLabel('Required item/title', { exact: true }) }).click();
+    await page.getByRole('textbox', { name: 'Name item/title', exact: true }).click();
     await page.getByLabel('Required item/title', { exact: true }).check();
-    await page.getByRole('button', { name: 'Review Schema changes' }).click();
-    const repair = page.getByRole('region', { name: 'Adapt content to Schema', exact: true });
+    await page.getByRole('button', { name: /^(Review changes|Save and review)$/ }).click();
+    const repair = page.getByRole('region', { name: 'Update content for this schema', exact: true });
     await expect(repair).toBeVisible();
-    await expect(repair.getByRole('button', { name: 'Continue to Review' })).toBeDisabled();
+    await expect(repair.getByRole('button', { name: 'Save and continue to review' })).toBeDisabled();
     await repair.getByRole('button', { name: 'Add node item', exact: true }).click();
-    await repair.getByRole('button', { name: 'Preview result' }).click();
+    await repair.getByRole('button', { name: 'Preview changes' }).click();
     await repair.getByRole('button', { name: 'Fill item/title', exact: true }).click();
     await repair.getByLabel('Value for item/title', { exact: true }).fill('User supplied title');
-    await repair.getByRole('button', { name: 'Preview result' }).click();
-    await expect(repair.getByRole('button', { name: 'Continue to Review' })).toBeEnabled();
+    await repair.getByRole('button', { name: 'Preview changes' }).click();
+    await expect(repair.getByRole('button', { name: 'Save and continue to review' })).toBeEnabled();
     await page.screenshot({ path: testInfo.outputPath('required-content-repair.png'), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: testInfo.outputPath('required-content-mobile.png'), fullPage: true });
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await repair.getByRole('button', { name: 'Continue to Review' }).click();
+    await repair.getByRole('button', { name: 'Save and continue to review' }).click();
     await commit();
     const final = await data(await request.get(`${endpoint}/authoring`));
     expect(final.hasChanges).toBe(false);
@@ -153,16 +154,17 @@ test('new empty project adopts the unmodified Skill Schema, commits, and stays e
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(`/project/${projectId}?tab=schemas&schemaView=studio&workspace=${workspaceId}&branch=main&candidate=${candidate.id}`);
     await expect(page.getByLabel('Required activation', { exact: true })).toBeChecked();
-    await page.getByRole('button', { name: 'Review Schema changes' }).click();
+    await page.getByRole('button', { name: /^(Review changes|Save and review)$/ }).click();
     await expect(page).toHaveURL(/reviewSnapshot=/);
-    await expect(page.getByRole('region', { name: 'Adapt content to Schema' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Update content for this schema' })).toHaveCount(0);
     await expect(page.getByText('Not applicable: no business content is being submitted. Required fields apply when content is added.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Approve and commit', exact: true })).toBeEnabled();
     await page.screenshot({ path: testInfo.outputPath('initial-skill-review.png'), fullPage: true });
     const response = page.waitForResponse(response => response.url().endsWith(`/workspaces/${workspaceId}/transition/decide`) && response.request().method() === 'POST');
     await page.getByRole('button', { name: 'Approve and commit', exact: true }).click();
     expect((await data(await response)).commit.schema).toBe('t3x/commit/v2');
-    await page.getByRole('link', { name: 'Continue editing Schema', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Committed', exact: true })).toBeVisible();
+    await page.getByRole('link', { name: 'Schema', exact: true }).click();
     await expect(page.getByText(/^Committed · /)).toBeVisible();
     await page.reload();
     await expect(page.getByText(/^Committed · /)).toBeVisible();

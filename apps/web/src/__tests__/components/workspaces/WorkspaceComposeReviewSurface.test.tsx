@@ -1403,7 +1403,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Apply' }));
     await waitFor(() => expect(within(dialog).getByText('regions')).toBeInTheDocument());
     expect(publish).not.toHaveBeenCalled();
-    fireEvent.click(within(dialog).getAllByRole('button', { name: 'Close' })[0]!);
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Close', exact: true }));
     fireEvent.click(
       within(screen.getByRole('navigation', { name: 'Workspace tools' })).getByRole('button', {
         name: 'Changes',
