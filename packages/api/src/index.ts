@@ -23,6 +23,7 @@ export {
   SELF_HOSTED_DEPLOYMENT_CAPABILITIES,
   UNAVAILABLE_DEPLOYMENT_CAPABILITIES,
 } from '@t3x-dev/api-client';
+export type { RequestPrincipal } from '@t3x-dev/application';
 // Standalone runtime database maintenance.
 export { cleanupExpiredRateLimitBuckets, cleanupOldEvents } from '@t3x-dev/storage';
 export type { CreateAppOptions } from './app';
@@ -132,6 +133,13 @@ export {
   type ProjectLifecyclePolicyInput,
   resolveProjectLifecycleActor,
 } from './lib/project-lifecycle-policy';
+export {
+  getRequestPrincipal,
+  localDevelopmentRequestPrincipal,
+  requestPrincipalFromApiKey,
+  runnerRequestPrincipal,
+  setRequestPrincipal,
+} from './lib/request-principal';
 export {
   allowAllProjectVisibilityPolicy,
   PROJECT_VISIBILITY_POLICY_VERSION,
