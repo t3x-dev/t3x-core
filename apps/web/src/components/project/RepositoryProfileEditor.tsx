@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  initialRepositoryReadme,
   type RepositoryProfile,
   type RepositoryProfilePatch,
   RepositoryProfilePatchSchema,
@@ -9,161 +8,133 @@ import {
 import { Pencil } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { cn } from '@/utils/cn';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { NamespaceTagChoices } from './RepositoryTagPicker';
 import { type RepositoryTagsDraft, RepositoryTagsInput } from './RepositoryTagsInput';
 
 export function RepositoryProfileEditor({
-  field,
   profile,
-  projectName,
-  projectDescription,
+  suggestionsNamespace,
   onSave,
 }: {
-  field: 'readme' | 'tags';
   profile: RepositoryProfile;
-  projectName: string;
-  projectDescription?: string;
+  suggestionsNamespace?: string;
   onSave: (patch: RepositoryProfilePatch) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
-  const [value, setValue] = useState('');
-  const [tags, setTags] = useState<RepositoryTagsDraft>({ tags: [], input: '' });
-  const [initialValue, setInitialValue] = useState('');
-  const formRef = useRef<HTMLFormElement>(null);
+  const [draft, setDraft] = useState<RepositoryTagsDraft>({ tags: [], input: '' });
+  const [initial, setInitial] = useState<string[]>([]);
+  const [query, setQuery] = useState('');
+  const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const inFlight = useRef(false);
-  const [error, setError] = useState<string | null>(null);
-  const label = field === 'readme' ? 'README' : 'tags';
-  const hasContent = field === 'readme' ? Boolean(profile.readme.trim()) : profile.tags.length > 0;
+  const pending = useRef(false);
   const dirty =
-    field === 'readme'
-      ? value !== initialValue
-      : Boolean(tags.input.trim()) || JSON.stringify(tags.tags) !== initialValue;
+    Boolean(draft.input.trim()) || JSON.stringify(initial) !== JSON.stringify(draft.tags);
   return (
-    <Dialog
+    <Popover
       open={open}
       onOpenChange={(next) => {
-        if (inFlight.current) return;
+        if (pending.current || (!next && dirty)) return;
         if (next) {
-          setInitialValue(field === 'readme' ? profile.readme : JSON.stringify(profile.tags));
-          setValue(
-            profile.readme.trim()
-              ? profile.readme
-              : initialRepositoryReadme(projectName, projectDescription)
-          );
-          setTags({ tags: profile.tags, input: '' });
-          setError(null);
+          setInitial(profile.tags);
+          setDraft({ tags: profile.tags, input: '' });
+          setError('');
+          setQuery('');
         }
         setOpen(next);
       }}
     >
-      <DialogTrigger asChild>
+      <PopoverTrigger asChild>
         <Button size="sm" variant="ghost" className="h-7 text-xs text-[var(--text-secondary)]">
-          <Pencil aria-hidden="true" className="size-3.5" /> {hasContent ? 'Edit' : 'Add'} {label}
+          <Pencil aria-hidden="true" className="size-3.5" /> {profile.tags.length ? 'Edit' : 'Add'}{' '}
+          tags
         </Button>
-      </DialogTrigger>
-      <DialogContent
-        className={cn(
-          'flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0',
-          field === 'readme' ? 'sm:max-w-3xl' : 'sm:max-w-lg'
-        )}
-        showCloseButton={!busy}
-        onOpenAutoFocus={(event) => {
-          event.preventDefault();
-          formRef.current
-            ?.querySelector<HTMLInputElement | HTMLTextAreaElement>('input, textarea')
-            ?.focus();
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        collisionPadding={12}
+        aria-label="Edit repository tags"
+        className="w-[360px] max-w-[calc(100vw-24px)] overflow-hidden p-0"
+        onEscapeKeyDown={(e) => {
+          if (dirty || pending.current) e.preventDefault();
         }}
-        onInteractOutside={(event) => {
-          if (dirty || inFlight.current) event.preventDefault();
-        }}
-        onEscapeKeyDown={(event) => {
-          if (dirty || inFlight.current) event.preventDefault();
+        onInteractOutside={(e) => {
+          if (dirty || pending.current) e.preventDefault();
         }}
       >
-        <DialogHeader className="shrink-0 border-b border-[var(--stroke-divider)] px-6 py-5 pr-12 text-left">
-          <DialogTitle>
-            {hasContent ? 'Edit' : 'Add'} repository {label}
-          </DialogTitle>
-          <DialogDescription>
-            {field === 'readme'
-              ? 'Introduce your repository with Markdown.'
-              : 'Help others understand what this repository is about.'}
-          </DialogDescription>
-        </DialogHeader>
         <form
-          ref={formRef}
-          className="flex min-h-0 flex-1 flex-col"
-          onSubmit={async (event) => {
-            event.preventDefault();
-            if (inFlight.current) return;
-            setError(null);
-            const parsed = RepositoryProfilePatchSchema.safeParse(
-              field === 'readme' ? { readme: value } : { tags: [...tags.tags, tags.input] }
-            );
-            if (!parsed.success) {
-              setError(parsed.error.issues[0]?.message ?? 'Invalid input.');
+          className="flex max-h-[var(--radix-popover-content-available-height)] flex-col"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (pending.current) return;
+            const patch = RepositoryProfilePatchSchema.safeParse({
+              tags: [...draft.tags, draft.input],
+            });
+            if (!patch.success) {
+              setError(patch.error.issues[0]?.message ?? 'Invalid tags.');
               return;
             }
-            inFlight.current = true;
+            pending.current = true;
             setBusy(true);
+            setError('');
             try {
-              await onSave(parsed.data);
+              await onSave(patch.data);
               setOpen(false);
             } catch (cause) {
-              setError(
-                cause instanceof Error ? cause.message : 'Could not save repository information.'
-              );
+              setError(cause instanceof Error ? cause.message : 'Could not save tags.');
             } finally {
-              inFlight.current = false;
+              pending.current = false;
               setBusy(false);
             }
           }}
         >
-          <div className="min-h-0 space-y-4 overflow-y-auto px-6 py-5">
-            {field === 'readme' ? (
-              <label className="block space-y-2 text-sm">
-                <span className="font-medium">Repository README</span>
-                <textarea
-                  aria-label="Repository README"
-                  rows={14}
-                  value={value}
-                  disabled={busy}
-                  onChange={(event) => setValue(event.target.value)}
-                  className="block min-h-48 w-full resize-y rounded-md border border-[var(--stroke-default)] bg-[var(--surface-base)] p-3 font-mono text-sm leading-6 outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
+          <div className="grid min-h-0 gap-3 overflow-y-auto p-4 [&_fieldset_fieldset]:max-h-none">
+            <RepositoryTagsInput value={draft} onChange={setDraft} disabled={busy} />
+            {suggestionsNamespace && (
+              <fieldset className="min-w-0 space-y-2 border-t pt-3" disabled={busy}>
+                <legend className="text-sm font-semibold">Existing tags</legend>
+                <Input
+                  type="search"
+                  aria-label="Search existing tags"
+                  placeholder="Search existing tags…"
+                  value={query}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.preventDefault();
+                  }}
+                  onChange={(e) => setQuery(e.target.value)}
                 />
-                <span className="block text-xs text-[var(--text-secondary)]">
-                  Markdown · images are not supported. Clear the text to remove the README.
-                </span>
-              </label>
-            ) : (
-              <RepositoryTagsInput value={tags} onChange={setTags} disabled={busy} />
+                <NamespaceTagChoices
+                  namespace={suggestionsNamespace}
+                  query={query}
+                  selected={draft.tags}
+                  onChange={(tags) => setDraft((v) => ({ ...v, tags }))}
+                  maxSelected={32}
+                />
+              </fieldset>
             )}
-            {error ? (
-              <p role="alert" className="text-sm text-[var(--status-error)]">
-                {error}
-              </p>
-            ) : null}
           </div>
-          <DialogFooter className="shrink-0 border-t border-[var(--stroke-divider)] px-6 py-4">
-            <Button disabled={busy} type="button" variant="outline" onClick={() => setOpen(false)}>
+          {error && (
+            <p role="alert" className="text-sm text-[var(--status-error)]">
+              {error}
+            </p>
+          )}
+          <div className="flex shrink-0 justify-end gap-2 border-t border-[var(--stroke-divider)] px-4 py-2">
+            <Button
+              size="sm"
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={() => setOpen(false)}
+            >
               Cancel
             </Button>
-            <Button disabled={busy} type="submit">
-              {busy ? 'Saving…' : `Save ${label}`}
+            <Button size="sm" type="submit" disabled={busy}>
+              {busy ? 'Saving…' : 'Save tags'}
             </Button>
-          </DialogFooter>
+          </div>
         </form>
-      </DialogContent>
-    </Dialog>
+      </PopoverContent>
+    </Popover>
   );
 }

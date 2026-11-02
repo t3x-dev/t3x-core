@@ -1,33 +1,38 @@
 'use client';
 
-import type { RepositoryProfile, RepositoryProfilePatch } from '@t3x-dev/api-client';
+import {
+  initialRepositoryReadme,
+  type RepositoryProfile,
+  type RepositoryProfilePatch,
+} from '@t3x-dev/api-client';
 import {
   ArrowRight,
   ArrowUpRight,
   BookOpen,
   Braces,
-  ChevronRight,
   GitCommitHorizontal,
   Globe2,
-  History,
   List,
   LockKeyhole,
+  Pencil,
   ShieldCheck,
 } from 'lucide-react';
 import Link from 'next/link';
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { StateAuthorReadme } from '@/components/project/StateAuthorReadme';
 import { StateValueReader } from '@/components/project/StateValueReader';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { relativeTime, shortHash } from '@/domain/format/formatters';
 import { buildStatePointRows } from '@/domain/project/stateViewModel';
 import { useStateOverview } from '@/hooks/commits/useStateOverview';
 import type { ApiCommit } from '@/types/api';
 import { RepositoryDescriptionEditor } from './RepositoryDescriptionEditor';
+import { RepositoryTag } from './RepositoryIdentity';
 import { RepositoryProfileEditor } from './RepositoryProfileEditor';
+import { StateHistoryMenu } from './StateHistoryMenu';
 import styles from './StateOverviewView.module.css';
 import { StatePageFooter } from './StatePageFrame';
+import { StateReadmeEditor } from './StateReadmeEditor';
 import { StateStructureSummary } from './StateStructureSummary';
 
 const EMPTY_PROFILE: RepositoryProfile = { readme: '', tags: [] };
@@ -45,6 +50,7 @@ export function StateOverviewView({
   projectName,
   projectDescription,
   projectOwner = 't3x-dev',
+  repositoryNamespace,
   projectVisibility = 'private',
   schemaName,
   schemaHref,
@@ -90,6 +96,7 @@ export function StateOverviewView({
   projectName: string;
   projectDescription?: string;
   projectOwner?: string;
+  repositoryNamespace?: string;
   projectVisibility?: string;
   schemaName?: string;
   schemaHref?: string;
@@ -108,11 +115,13 @@ export function StateOverviewView({
     introductionSource === 'repository' && (headerOnly || hasCommittedContent) ? null : commitDigest
   );
   const [contentsOpen, setContentsOpen] = useState(false);
-  const [readmeHeadings, setReadmeHeadings] = useState<string[]>([]);
+  const [readmeHeadings, setReadmeHeadings] = useState<{ title: string; level: number }[]>([]);
+  const contentsId = useId();
   const readmeRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const readmeHeaderRef = useRef<HTMLElement>(null);
-  const contentsTargetRef = useRef<HTMLElement | null>(null);
+  const [editing, setEditing] = useState(false);
+  useEffect(() => setEditing(false), [projectId, introductionSource]);
   useEffect(() => {
     setContentsOpen(false);
   }, [projectId, commitDigest]);
@@ -126,6 +135,15 @@ export function StateOverviewView({
     version && !introductionLoading && !introductionError ? data?.author?.document : undefined;
   const shownDescription = version ? author?.description?.trim() : projectDescription?.trim();
   const readme = version ? author?.readme : repositoryProfile.readme;
+  useEffect(() => {
+    if (contentsOpen)
+      setReadmeHeadings(
+        Array.from(readmeRef.current?.querySelectorAll('h1,h2,h3,h4,h5,h6') ?? [], (h) => ({
+          title: h.textContent?.trim() || 'Untitled section',
+          level: Number(h.tagName.slice(1)),
+        }))
+      );
+  }, [contentsOpen, readme]);
   const hasReadme = Boolean(readme?.trim());
   const shownTags = version ? (author?.tags ?? []) : repositoryProfile.tags;
   const canEdit = !version && canEditRepository && onSaveRepositoryProfile;
@@ -184,126 +202,130 @@ export function StateOverviewView({
               aria-label={version ? 'Version introduction' : 'Repository information'}
               className={styles.readmeContent}
             >
-              <header ref={readmeHeaderRef} tabIndex={-1} className={styles.readmeHeader}>
-                <h2>
-                  <BookOpen aria-hidden="true" />
-                  {version ? 'Version introduction' : 'README'}
-                </h2>
-                <div className={styles.readmeActions}>
-                  {hasReadme ? (
-                    <Popover
-                      open={contentsOpen}
-                      onOpenChange={(open) => {
-                        if (open)
-                          setReadmeHeadings(
-                            Array.from(readmeRef.current?.querySelectorAll('h1, h2, h3') ?? []).map(
-                              (heading) => heading.textContent?.trim() || 'Untitled section'
-                            )
-                          );
-                        setContentsOpen(open);
-                      }}
-                    >
-                      <PopoverTrigger asChild>
+              {editing && canEdit ? (
+                <StateReadmeEditor
+                  key={projectId}
+                  initial={
+                    hasReadme
+                      ? repositoryProfile.readme
+                      : initialRepositoryReadme(projectName, projectDescription)
+                  }
+                  onSave={canEdit}
+                  onClose={() => {
+                    setEditing(false);
+                    requestAnimationFrame(() =>
+                      readmeHeaderRef.current?.focus({ preventScroll: true })
+                    );
+                  }}
+                />
+              ) : (
+                <>
+                  <header ref={readmeHeaderRef} tabIndex={-1} className={styles.readmeHeader}>
+                    <h2>
+                      <BookOpen aria-hidden="true" />
+                      {version ? 'Version introduction' : 'README'}
+                    </h2>
+                    <div className={styles.readmeActions}>
+                      {hasReadme ? (
                         <Button
                           type="button"
                           size="sm"
                           variant="ghost"
                           aria-expanded={contentsOpen}
+                          aria-controls={contentsOpen ? contentsId : undefined}
+                          onClick={() => setContentsOpen(!contentsOpen)}
                         >
-                          <List aria-hidden="true" />
-                          Contents
+                          <List aria-hidden="true" /> Contents
                         </Button>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        align="end"
-                        className={styles.contents}
-                        onCloseAutoFocus={(event) => {
-                          const target = contentsTargetRef.current;
-                          if (!target) return;
-                          event.preventDefault();
-                          contentsTargetRef.current = null;
-                          target.tabIndex = -1;
-                          target.focus({ preventScroll: true });
-                          target.scrollIntoView({ block: 'start' });
-                        }}
-                      >
-                        <nav aria-label="README contents">
-                          {readmeHeadings.map((heading, index) => (
-                            <button
-                              key={`${index}:${heading}`}
-                              type="button"
-                              onClick={() => {
-                                contentsTargetRef.current =
-                                  readmeRef.current?.querySelectorAll<HTMLElement>('h1, h2, h3')[
-                                    index
-                                  ] ?? null;
-                                setContentsOpen(false);
-                              }}
-                            >
-                              {heading}
-                              <ChevronRight aria-hidden="true" />
-                            </button>
-                          ))}
-                          {!readmeHeadings.length ? <span>No README headings</span> : null}
-                        </nav>
-                      </PopoverContent>
-                    </Popover>
+                      ) : null}
+                      {canEdit && hasReadme ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setContentsOpen(false);
+                            setEditing(true);
+                          }}
+                        >
+                          <Pencil aria-hidden="true" /> Edit README
+                        </Button>
+                      ) : null}
+                    </div>
+                  </header>
+                  {contentsOpen && hasReadme ? (
+                    <nav id={contentsId} aria-label="README contents" className={styles.contents}>
+                      {readmeHeadings.map((heading, index) => (
+                        <button
+                          key={`${index}:${heading.title}`}
+                          style={{ paddingInlineStart: 8 + (heading.level - 1) * 12 }}
+                          type="button"
+                          onClick={() => {
+                            const target =
+                              readmeRef.current?.querySelectorAll<HTMLElement>('h1,h2,h3,h4,h5,h6')[
+                                index
+                              ];
+                            if (target) {
+                              target.tabIndex = -1;
+                              target.focus({ preventScroll: true });
+                              target.scrollIntoView({ block: 'start' });
+                            }
+                          }}
+                        >
+                          {heading.title}
+                        </button>
+                      ))}
+                      {!readmeHeadings.length && <span>No README headings</span>}
+                    </nav>
                   ) : null}
-                  {canEdit && hasReadme ? (
-                    <RepositoryProfileEditor
-                      field="readme"
-                      profile={repositoryProfile}
-                      projectName={projectName}
-                      projectDescription={projectDescription}
-                      onSave={canEdit}
-                    />
-                  ) : null}
-                </div>
-              </header>
-              <div ref={readmeRef} className={styles.readmeBody}>
-                {version && (introductionLoading || introductionError) ? (
-                  <>
-                    <p>
-                      {introductionLoading
-                        ? 'Loading version introduction…'
-                        : 'Version introduction unavailable.'}
-                    </p>
-                    {error && hasCommittedContent ? (
-                      <Button size="sm" variant="outline" onClick={retry}>
-                        Retry introduction
-                      </Button>
-                    ) : null}
-                  </>
-                ) : version ? (
-                  <StateAuthorReadme author={author} embedded markdownClassName={styles.markdown} />
-                ) : hasReadme ? (
-                  <StateAuthorReadme
-                    author={{ readme: repositoryProfile.readme, resources: [] }}
-                    label="Repository README"
-                    emptyMessage="No README added yet."
-                    showUnavailableImages
-                    embedded
-                    markdownClassName={styles.markdown}
-                  />
-                ) : (
-                  <div className={styles.emptyReadme}>
-                    <h3>{canEdit ? 'Introduce your repository' : 'No repository introduction'}</h3>
-                    <p>No README added yet.</p>
-                    {canEdit ? (
+                  <div ref={readmeRef} className={styles.readmeBody}>
+                    {version && (introductionLoading || introductionError) ? (
                       <>
-                        <p>Describe its purpose, how to use it, and where to start.</p>
-                        <RepositoryProfileEditor
-                          field="readme"
-                          profile={repositoryProfile}
-                          projectName={projectName}
-                          projectDescription={projectDescription}
-                          onSave={canEdit}
-                        />
+                        <p>
+                          {introductionLoading
+                            ? 'Loading version introduction…'
+                            : 'Version introduction unavailable.'}
+                        </p>
+                        {error && hasCommittedContent ? (
+                          <Button size="sm" variant="outline" onClick={retry}>
+                            Retry introduction
+                          </Button>
+                        ) : null}
                       </>
-                    ) : null}
+                    ) : version ? (
+                      <StateAuthorReadme
+                        author={author}
+                        embedded
+                        markdownClassName={styles.markdown}
+                      />
+                    ) : hasReadme ? (
+                      <StateAuthorReadme
+                        author={{ readme: repositoryProfile.readme, resources: [] }}
+                        label="Repository README"
+                        emptyMessage="No README added yet."
+                        showUnavailableImages
+                        embedded
+                        markdownClassName={styles.markdown}
+                      />
+                    ) : (
+                      <div className={styles.emptyReadme}>
+                        <h3>
+                          {canEdit ? 'Introduce your repository' : 'No repository introduction'}
+                        </h3>
+                        <p>No README added yet.</p>
+                        {canEdit ? (
+                          <>
+                            <p>Describe its purpose, how to use it, and where to start.</p>
+                            <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+                              Add README
+                            </Button>
+                          </>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </>
+              )}
             </section>
           </div>
           <aside className={styles.sidebar} aria-label="State information">
@@ -325,15 +347,13 @@ export function StateOverviewView({
                 aria-label={version ? 'Version tags' : 'Repository tags'}
               >
                 {shownTags.map((tag) => (
-                  <span key={tag} className={styles.tag}>
-                    {version || tag.startsWith('#') ? tag : `#${tag}`}
-                  </span>
+                  <RepositoryTag key={tag} name={tag} />
                 ))}
                 {canEdit ? (
                   <RepositoryProfileEditor
-                    field="tags"
+                    key={projectId}
+                    suggestionsNamespace={repositoryNamespace}
                     profile={repositoryProfile}
-                    projectName={projectName}
                     onSave={canEdit}
                   />
                 ) : null}
@@ -468,17 +488,7 @@ export function StateOverviewView({
               </dl>
               {historyHref && !embedded ? (
                 <nav aria-label="History navigation" className={styles.historyLinks}>
-                  <Link href={historyHref} className={styles.sidebarLink}>
-                    <History aria-hidden="true" />
-                    {alternateHistoryHref ? 'History 1' : 'History'}
-                    <ArrowUpRight aria-hidden="true" />
-                  </Link>
-                  {alternateHistoryHref ? (
-                    <Link href={alternateHistoryHref} className={styles.sidebarLink}>
-                      <History aria-hidden="true" />
-                      History 2<ArrowUpRight aria-hidden="true" />
-                    </Link>
-                  ) : null}
+                  <StateHistoryMenu href={historyHref} canvasHref={alternateHistoryHref} />
                 </nav>
               ) : null}
             </section>

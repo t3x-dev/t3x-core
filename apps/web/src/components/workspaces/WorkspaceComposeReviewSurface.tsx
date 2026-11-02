@@ -593,6 +593,7 @@ function WorkspaceStageHeader({
             else navigate();
           }}
           onCreateBranch={async () => {}}
+          canCreateFromSearch={false}
           showCreate={false}
         />
       </div>

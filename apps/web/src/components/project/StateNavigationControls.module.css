@@ -71,3 +71,125 @@
 .branch.branch.branch.subtle:hover {
   background: var(--hover-bg);
 }
+
+.switcher.switcher {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 344px;
+  max-width: calc(100vw - 16px);
+  max-height: var(--radix-popover-content-available-height);
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--stroke-default);
+  border-radius: 12px;
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+}
+.switcher svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+.heading,
+.search,
+.tabs,
+.list button,
+.list small {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.heading strong {
+  font-size: 16px;
+}
+.heading > span {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  border-radius: 8px;
+  background: var(--identity-amber-muted);
+  color: var(--identity-amber);
+}
+.heading > button {
+  margin-left: auto;
+  padding: 5px;
+  color: var(--text-secondary);
+}
+.search {
+  border: 1px solid var(--stroke-default);
+  padding: 7px 8px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+}
+.search:focus-within {
+  outline: 2px solid var(--identity-teal);
+  outline-offset: 1px;
+}
+.search input {
+  flex: 1;
+  min-width: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+.tabs button {
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.tabs button[aria-selected="true"] {
+  color: var(--text-primary);
+  background: var(--surface-panel);
+  font-weight: 600;
+}
+.list {
+  max-height: 216px;
+  overflow: auto;
+}
+.list button {
+  width: 100%;
+  min-height: 36px;
+  border-radius: 6px;
+  padding: 5px 8px;
+  text-align: left;
+  font-size: 13px;
+}
+.list button:hover,
+.list button:focus-visible {
+  background: var(--hover-bg);
+}
+.list code,
+.list .create {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.list button[aria-checked="true"] {
+  background: var(--identity-teal-muted);
+  color: var(--identity-teal);
+}
+.list small {
+  margin-left: auto;
+  font: 600 12px var(--font-sans);
+  gap: 3px;
+}
+.list mark {
+  background: var(--identity-amber-muted);
+  color: var(--identity-amber);
+}
+.list .create {
+  border: 1px dashed var(--stroke-default);
+  color: var(--identity-teal);
+}
+.hint,
+.list p {
+  padding: 8px 2px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.hint {
+  border-top: 1px solid var(--stroke-divider);
+}

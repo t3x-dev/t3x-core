@@ -1,14 +1,12 @@
 'use client';
 
 import { RepositoryTagsSchema } from '@t3x-dev/api-client';
-import { X } from 'lucide-react';
 import { useId } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import controls from './RepositoryControls.module.css';
 import { RepositoryTag } from './RepositoryIdentity';
 import { RepositoryTagPicker } from './RepositoryTagPicker';
-import styles from './StateOverviewView.module.css';
 
 export type RepositoryTagsDraft = { tags: string[]; input: string };
 
@@ -31,7 +29,7 @@ export function RepositoryTagsInput({
     if (parsed.success) onChange({ tags: parsed.data, input: '' });
   }
   return (
-    <div className={suggestionsNamespace !== undefined ? controls.tagEditor : 'space-y-3'}>
+    <div className={controls.tagEditor}>
       {suggestionsNamespace !== undefined ? (
         <div className={controls.tagEditorHeading}>
           <label htmlFor={id}>Tags</label>
@@ -48,37 +46,17 @@ export function RepositoryTagsInput({
         </label>
       )}
       {value.tags.length ? (
-        <fieldset
-          className={suggestionsNamespace !== undefined ? controls.selectedTags : styles.tags}
-          aria-label="Selected tags"
-        >
-          {value.tags.map((tag) =>
-            suggestionsNamespace !== undefined ? (
-              <RepositoryTag
-                key={tag}
-                name={tag}
-                disabled={disabled}
-                onRemove={() =>
-                  onChange({ ...value, tags: value.tags.filter((item) => item !== tag) })
-                }
-              />
-            ) : (
-              <span key={tag} className="gap-1.5">
-                {tag.startsWith('#') ? tag : `#${tag}`}
-                <button
-                  type="button"
-                  disabled={disabled}
-                  aria-label={`Remove tag ${tag}`}
-                  className="shrink-0 rounded-full p-1 hover:bg-[var(--hover-bg)] focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
-                  onClick={() =>
-                    onChange({ ...value, tags: value.tags.filter((item) => item !== tag) })
-                  }
-                >
-                  <X aria-hidden="true" className="size-3" />
-                </button>
-              </span>
-            )
-          )}
+        <fieldset className={controls.selectedTags} aria-label="Selected tags">
+          {value.tags.map((tag) => (
+            <RepositoryTag
+              key={tag}
+              name={tag}
+              disabled={disabled}
+              onRemove={() =>
+                onChange({ ...value, tags: value.tags.filter((item) => item !== tag) })
+              }
+            />
+          ))}
         </fieldset>
       ) : null}
       <div className="flex items-center gap-2">

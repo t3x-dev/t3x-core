@@ -75,7 +75,7 @@ function TagChoices({
   );
 }
 
-function NamespaceTagChoices({ namespace, ...props }: ChoicesProps & { namespace: string }) {
+export function NamespaceTagChoices({ namespace, ...props }: ChoicesProps & { namespace: string }) {
   const { projects, loading, error, refresh } = useProjects(100, namespace, true);
   if (loading) return <output className={styles.panelEmpty}>Loading tags…</output>;
   if (error)

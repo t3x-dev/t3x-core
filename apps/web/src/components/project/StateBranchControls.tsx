@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, ChevronDown, GitBranch, Search, X } from 'lucide-react';
+import { Check, ChevronDown, GitBranch, GitFork, Plus, Search, X } from 'lucide-react';
 import { type FormEvent, type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -53,9 +53,11 @@ export function StateBranchControls({
   const baseLabel = headCommitHash ? commitHashLabel(headCommitHash) : 'empty state';
   const filteredBranches = useMemo(() => {
     const search = query.trim().toLowerCase();
-    if (!search) return branchOptions;
-    return branchOptions.filter((option) => option.toLowerCase().includes(search));
-  }, [branchOptions, query]);
+    const matches = branchOptions.filter((option) => option.toLowerCase().includes(search));
+    return matches.includes(branch)
+      ? [branch, ...matches.filter((option) => option !== branch)]
+      : matches;
+  }, [branch, branchOptions, query]);
   const createCandidate = normalizeBranchName(query);
   const canCreateFromQuery =
     canCreateFromSearch &&
@@ -104,15 +106,29 @@ export function StateBranchControls({
     await createNamedBranch(normalizedName);
   }
 
-  function handleSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === 'Escape') {
-      setOpen(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  function handleKeys(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.nativeEvent.isComposing || activeTab !== 'branches') return;
+    const options = Array.from(
+      menuRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? []
+    );
+    if (!options.length) return;
+    if (event.key === 'Enter' && event.target === searchRef.current) {
+      event.preventDefault();
+      options[0].click();
       return;
     }
-    if (event.key === 'Enter' && canCreateFromQuery) {
-      event.preventDefault();
-      void createNamedBranch(createCandidate);
-    }
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    const index = options.indexOf(event.target as HTMLButtonElement);
+    if (index < 0 && event.target !== searchRef.current) return;
+    event.preventDefault();
+    const next =
+      index < 0
+        ? event.key === 'ArrowDown'
+          ? 0
+          : options.length - 1
+        : (index + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
+    options[next].focus();
   }
 
   const control = (
@@ -145,173 +161,113 @@ export function StateBranchControls({
 
         <PopoverContent
           align="start"
-          className="flex h-[320px] max-h-[var(--radix-popover-content-available-height)] w-[276px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-[6px] border border-[var(--stroke-default)] bg-[var(--surface-elevated)] p-0 text-xs text-[var(--text-primary)] shadow-[var(--fx-shadow-lg)]"
-          onOpenAutoFocus={(event) => event.preventDefault()}
+          aria-label="Switch branch"
+          collisionPadding={8}
           sideOffset={6}
+          className={navigationStyles.switcher}
+          onKeyDown={handleKeys}
+          onOpenAutoFocus={(event) => event.preventDefault()}
         >
-          <div className="flex h-10 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] px-3">
-            <div className="min-w-0 truncate pr-2 text-[13px] font-semibold">
-              Switch branches/tags
-            </div>
-            <button
-              aria-label="Close branch switcher"
-              className="inline-flex size-6 items-center justify-center rounded-md text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-commit)]/25"
-              onClick={() => setOpen(false)}
-              type="button"
-            >
-              <X aria-hidden="true" className="size-3.5" />
+          <div className={navigationStyles.heading}>
+            <span>
+              <GitFork aria-hidden="true" />
+            </span>
+            <strong>Switch branch</strong>
+            <button type="button" aria-label="Close branch switcher" onClick={() => setOpen(false)}>
+              <X />
             </button>
           </div>
-
-          <div className="shrink-0 border-b border-[var(--stroke-divider)] p-2">
-            <label className="group relative block h-8 rounded-[6px] bg-[var(--surface-app)] p-[2px] transition-colors focus-within:bg-[var(--accent-commit)]/10">
-              <span className="sr-only">Find or create branch</span>
-              <span className="pointer-events-none absolute left-[9px] top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-[4px] text-[var(--text-tertiary)] transition-colors group-focus-within:text-[var(--accent-commit)]">
-                <Search aria-hidden="true" className="size-3.5" />
-              </span>
+          {activeTab === 'branches' && (
+            <label className={navigationStyles.search}>
+              <Search aria-hidden="true" />
               <input
-                className="h-full w-full rounded-[5px] border border-[var(--stroke-divider)] bg-[var(--surface-card)] pl-8 pr-3 text-xs text-[var(--text-primary)] outline-none shadow-[var(--fx-shadow-sm)] transition-[border-color,box-shadow,color] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-commit)]"
+                aria-label={canCreateFromSearch ? 'Find or create branch' : 'Find a branch'}
+                placeholder={canCreateFromSearch ? 'Find or create branch' : 'Find a branch'}
+                ref={searchRef}
+                value={query}
                 onChange={(event) => {
                   setQuery(event.target.value);
                   setSubmitError(null);
                 }}
-                onKeyDown={handleSearchKeyDown}
-                placeholder="Find or create branch"
-                ref={searchRef}
-                value={query}
               />
             </label>
+          )}
+          <div role="tablist" aria-label="Branch switcher tabs" className={navigationStyles.tabs}>
+            {(['branches', 'tags'] as const).map((tab) => (
+              <button
+                key={tab}
+                role="tab"
+                type="button"
+                aria-selected={activeTab === tab}
+                onClick={() => setActiveTab(tab)}
+              >
+                {tab === 'branches' ? 'Branches' : 'Tags'}
+              </button>
+            ))}
           </div>
-
-          <div
-            aria-label="Branch switcher tabs"
-            className="flex shrink-0 border-b border-[var(--stroke-divider)] px-2"
-            role="tablist"
-          >
-            <button
-              aria-selected={activeTab === 'branches'}
-              className={cn(
-                '-mb-px h-8 border-b-2 px-3 text-xs font-medium transition-colors',
-                activeTab === 'branches'
-                  ? 'border-[var(--accent-commit)] text-[var(--accent-commit)]'
-                  : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              )}
-              onClick={() => setActiveTab('branches')}
-              role="tab"
-              type="button"
-            >
-              Branches
-            </button>
-            <button
-              aria-selected={activeTab === 'tags'}
-              className={cn(
-                '-mb-px h-8 border-b-2 px-3 text-xs font-medium transition-colors',
-                activeTab === 'tags'
-                  ? 'border-[var(--accent-commit)] text-[var(--accent-commit)]'
-                  : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              )}
-              onClick={() => setActiveTab('tags')}
-              role="tab"
-              type="button"
-            >
-              Tags
-            </button>
-          </div>
-
           {activeTab === 'branches' ? (
             <>
               <div
-                aria-label="Switch branches/tags"
-                className="chat-scrollbar min-h-0 flex-1 overflow-y-auto py-1"
+                ref={menuRef}
                 role="menu"
+                aria-label="Switch branches/tags"
+                className={navigationStyles.list}
               >
-                {canCreateFromQuery ? (
-                  <button
-                    className="flex min-h-9 w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-bg)] focus-visible:bg-[var(--hover-bg)] focus-visible:outline-none disabled:opacity-60"
-                    disabled={submitting}
-                    onClick={() => void createNamedBranch(createCandidate)}
-                    role="menuitem"
-                    type="button"
-                  >
-                    <GitBranch
-                      aria-hidden="true"
-                      className="size-3.5 shrink-0 text-[var(--accent-branch)]"
-                    />
-                    <span className="min-w-0 flex-1 leading-5">
-                      Create branch <span className="font-semibold">{createCandidate}</span> from{' '}
-                      <span className="font-semibold">{branch}</span>
-                    </span>
-                  </button>
-                ) : null}
-
                 {filteredBranches.map((option) => {
-                  const selected = option === branch;
+                  const match = query.trim(),
+                    at = option.toLowerCase().indexOf(match.toLowerCase());
                   return (
                     <button
-                      aria-checked={selected}
-                      className="flex h-9 w-full items-center gap-2 px-3 text-left text-xs text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-bg)] focus-visible:bg-[var(--hover-bg)] focus-visible:outline-none"
                       key={option}
-                      onClick={() => handleBranchChange(option)}
-                      role="menuitemradio"
                       type="button"
+                      role="menuitemradio"
+                      aria-checked={option === branch}
+                      disabled={submitting}
+                      onClick={() => handleBranchChange(option)}
                     >
-                      <span className="flex size-3.5 shrink-0 items-center justify-center">
-                        {selected ? (
-                          <Check
-                            aria-hidden="true"
-                            className="size-3.5 text-[var(--accent-commit)]"
-                            strokeWidth={2.5}
-                          />
-                        ) : null}
-                      </span>
-                      <span
-                        className={cn(
-                          'min-w-0 flex-1 truncate',
-                          selected && 'font-medium text-[var(--text-primary)]'
+                      <GitBranch aria-hidden="true" />
+                      <code>
+                        {match && at >= 0 ? (
+                          <>
+                            {option.slice(0, at)}
+                            <mark>{option.slice(at, at + match.length)}</mark>
+                            {option.slice(at + match.length)}
+                          </>
+                        ) : (
+                          option
                         )}
-                      >
-                        {option}
-                      </span>
-                      {option === 'main' ? (
-                        <span className="rounded-full border border-[var(--stroke-default)] bg-[var(--surface-panel)] px-1.5 py-0.5 text-xs font-medium leading-4 text-[var(--text-secondary)]">
-                          default
-                        </span>
-                      ) : null}
+                      </code>
+                      {option === branch && (
+                        <small>
+                          <Check aria-hidden="true" /> Current
+                        </small>
+                      )}
                     </button>
                   );
                 })}
-
-                {filteredBranches.length === 0 && !canCreateFromQuery ? (
-                  <div className="px-3 py-6 text-center text-xs text-[var(--text-tertiary)]">
-                    No matching branches.
-                  </div>
-                ) : null}
-                {submitError && canCreateFromQuery ? (
-                  <p
-                    className="px-3 pb-2 text-xs font-semibold text-[var(--status-warning)]"
-                    role="alert"
+                {canCreateFromQuery && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={submitting}
+                    className={navigationStyles.create}
+                    onClick={() => void createNamedBranch(createCandidate)}
                   >
-                    {submitError}
-                  </p>
-                ) : null}
+                    <Plus aria-hidden="true" />
+                    <span>
+                      Create branch <b>{createCandidate}</b> from {branch}
+                    </span>
+                  </button>
+                )}
+                {!filteredBranches.length && !canCreateFromQuery && <p>No matching branches.</p>}
+                {submitError && <p role="alert">{submitError}</p>}
               </div>
-
-              <button
-                className="flex h-10 w-full shrink-0 items-center justify-center border-t border-[var(--stroke-divider)] bg-[var(--surface-elevated)] px-3 text-center text-xs font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)] focus-visible:bg-[var(--hover-bg)] focus-visible:outline-none"
-                onClick={() => {
-                  setQuery('');
-                  setActiveTab('branches');
-                  window.requestAnimationFrame(() => searchRef.current?.focus());
-                }}
-                type="button"
-              >
-                View all branches
-              </button>
+              <div className={navigationStyles.hint}>
+                ↑ ↓ to browse · Enter to select · Esc to close
+              </div>
             </>
           ) : (
-            <div className="flex min-h-0 flex-1 items-center justify-center px-3 py-6 text-center text-xs text-[var(--text-tertiary)]">
-              No tags in this state project.
-            </div>
+            <p className={navigationStyles.hint}>No tags in this state project.</p>
           )}
         </PopoverContent>
       </Popover>

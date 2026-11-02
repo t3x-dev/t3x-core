@@ -55,3 +55,16 @@ describe('StateBranchControls create-from-search', () => {
     ).not.toBeInTheDocument();
   });
 });
+
+it('prefers an existing match on Enter and navigates results by keyboard', () => {
+  const change = vi.fn();
+  const { onCreateBranch } = renderControls({ onBranchChange: change });
+  fireEvent.click(screen.getByRole('button', { name: /Switch branches/ }));
+  const search = screen.getByRole('textbox', { name: 'Find or create branch' });
+  fireEvent.change(search, { target: { value: 'dev' } });
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  expect(screen.getByRole('menuitemradio', { name: /dev/i })).toHaveFocus();
+  fireEvent.keyDown(search, { key: 'Enter' });
+  expect(change).toHaveBeenCalledWith('develop');
+  expect(onCreateBranch).not.toHaveBeenCalled();
+});

@@ -1,11 +1,12 @@
 'use client';
 
-import { Eye, GitCommit, History, Pencil, TableProperties } from 'lucide-react';
+import { Eye, GitCommit, Pencil, TableProperties } from 'lucide-react';
 import Link from 'next/link';
 import { relativeTime, shortHash } from '@/domain/format/formatters';
 import type { ApiCommit } from '@/types/api';
 import type { ProjectSnapshotView } from './ProjectStateTab';
 import { StateBranchControls } from './StateBranchControls';
+import { StateHistoryMenu } from './StateHistoryMenu';
 import inspectionStyles from './StateInspection.module.css';
 import overviewStyles from './StateOverviewView.module.css';
 import frameStyles from './StatePageFrame.module.css';
@@ -83,14 +84,7 @@ export function StatePageToolbar({
             ) : null}
           </div>
           <div className={overviewStyles.actions}>
-            <Link href={historyHref}>
-              <History />
-              History 1
-            </Link>
-            <Link href={canvasHref}>
-              <History />
-              History 2
-            </Link>
+            <StateHistoryMenu href={historyHref} canvasHref={canvasHref} />
             <Link href={workspaceHref} className={overviewStyles.primary}>
               <Pencil />
               Propose change

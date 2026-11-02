@@ -1,8 +1,9 @@
 'use client';
 import type { StateOverview } from '@t3x-dev/api-client';
-import { FileText } from 'lucide-react';
+import { FileText, ImageOff } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import styles from './StateOverviewView.module.css';
 
 type Resource = NonNullable<StateOverview['author']>['document']['resources'][number];
 export const resourceUrl = (resource: Resource) =>
@@ -39,6 +40,7 @@ export function StateAuthorReadme({
   author?: Pick<NonNullable<StateOverview['author']>['document'], 'readme' | 'resources'>;
 }) {
   const resources = author?.resources ?? [];
+  const unavailableBadges = new WeakMap<object, string>();
   return (
     <section
       aria-label={label}
@@ -74,8 +76,43 @@ export function StateAuthorReadme({
           <ReactMarkdown
             skipHtml
             remarkPlugins={[remarkGfm]}
-            urlTransform={(url, key) => authorUrl(url, key, resources)}
+            urlTransform={(url, key, node) => {
+              const safe = authorUrl(url, key, resources);
+              if (
+                showUnavailableImages &&
+                key === 'src' &&
+                !safe &&
+                /^https?:\/\/(?:img\.shields\.io|badgen\.net)\//i.test(url)
+              ) {
+                unavailableBadges.set(node, String(node.properties.alt || 'Badge'));
+              }
+              return safe;
+            }}
             components={{
+              p: ({ node, children }) => {
+                const items = node?.children.filter(
+                  (child) => child.type !== 'text' || child.value.trim()
+                );
+                if (
+                  items &&
+                  items.length > 1 &&
+                  items.every((child) => unavailableBadges.has(child))
+                ) {
+                  return (
+                    <p>
+                      <span className={styles.mediaFallback}>
+                        <ImageOff aria-hidden="true" /> Badges unavailable
+                        {items.map((item) => (
+                          <span key={item.position?.start.offset} className={styles.badgeLabel}>
+                            {unavailableBadges.get(item)}
+                          </span>
+                        ))}
+                      </span>
+                    </p>
+                  );
+                }
+                return <p>{children}</p>;
+              },
               a: ({ href, children }) =>
                 href ? (
                   <a href={href} target="_blank" rel="noopener noreferrer">
@@ -89,7 +126,10 @@ export function StateAuthorReadme({
                   // biome-ignore lint/performance/noImgElement: README images are remote URLs with unknown size
                   <img src={src} alt={alt ?? ''} loading="lazy" />
                 ) : showUnavailableImages ? (
-                  <span>[Image unavailable{alt ? `: ${alt}` : ''}]</span>
+                  <span className={styles.mediaFallback}>
+                    <ImageOff aria-hidden="true" />
+                    {alt && <strong>{alt}</strong>} Image unavailable
+                  </span>
                 ) : null,
             }}
           >

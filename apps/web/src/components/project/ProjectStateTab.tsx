@@ -107,6 +107,7 @@ interface ProjectStateTabProps {
   projectDescription?: string;
   projectTags?: string[];
   projectOwner?: string;
+  repositoryNamespace?: string;
   projectVisibility?: string;
   validation?: YSchemaValidationSummary | null;
   validationError?: string | null;
@@ -165,6 +166,7 @@ export function ProjectStateTab({
   projectName,
   projectDescription,
   projectOwner,
+  repositoryNamespace,
   projectVisibility,
   repositoryProfile,
   canEditRepository = false,
@@ -739,6 +741,7 @@ export function ProjectStateTab({
                     projectName={projectName}
                     projectDescription={projectDescription}
                     projectOwner={projectOwner}
+                    repositoryNamespace={repositoryNamespace}
                     projectVisibility={projectVisibility}
                     repositoryProfile={repositoryProfile}
                     canEditRepository={canEditRepository}

@@ -55,6 +55,7 @@
   gap: 8px;
   margin-left: auto;
 }
+.historyTrigger,
 .actions a {
   display: inline-flex;
   align-items: center;
@@ -67,6 +68,7 @@
   font-size: 13px;
   white-space: nowrap;
 }
+.historyTrigger:hover,
 .actions a:hover {
   background: var(--hover-bg);
 }
@@ -75,6 +77,7 @@
   border-color: var(--accent-commit);
   color: var(--text-on-accent, #fff);
 }
+.historyTrigger svg,
 .actions svg {
   width: 14px;
   height: 14px;
@@ -213,14 +216,6 @@
 }
 .tags:empty {
   display: none;
-}
-.tag {
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  font-size: 13px;
-  line-height: 1.6;
-  font-weight: 500;
-  color: var(--text-secondary);
 }
 .tags button {
   font-size: 13px;
@@ -454,7 +449,7 @@ a.commitMessage:hover {
 .markdown {
   max-width: 100%;
   font-size: 16px;
-  line-height: 1.85;
+  line-height: 1.7;
   color: var(--text-primary);
   overflow-wrap: anywhere;
 }
@@ -569,28 +564,93 @@ a.commitMessage:hover {
   border-left: 3px solid var(--stroke-default);
   color: var(--text-secondary);
 }
+.markdown hr + h2 {
+  margin-top: 24px;
+}
+.mediaFallback {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  max-width: 100%;
+  vertical-align: middle;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.mediaFallback svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.markdown .mediaFallback strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.badgeLabel {
+  padding: 1px 7px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-sm);
+  line-height: 20px;
+}
 .markdown hr {
-  margin: 32px 0;
+  margin: 24px 0;
   border-color: var(--stroke-divider);
 }
 .contents {
-  max-width: min(320px, calc(100vw - 32px));
-  max-height: min(400px, var(--radix-popover-content-available-height));
-  overflow: auto;
-  padding: 8px;
-  background: var(--surface-elevated);
-  color: var(--text-primary);
-}
-.contents nav {
   display: grid;
   gap: 2px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+  background: var(--surface-panel);
+  padding: 10px;
+  margin-bottom: 24px;
+}
+.readmeEditor .readmeHeader {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-panel);
+}
+.readmeEditor .readmeActions button[type="submit"] {
+  color: var(--text-on-accent, #fff);
+  background: var(--accent-commit);
+}
+.sourceSheet {
+  position: relative;
+  min-width: 0;
+}
+.sourceSheet > span,
+.sourceSheet textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: max(18rem, calc(100dvh - 300px));
+  margin: 0;
+  padding: 12px;
+  border: 1px solid transparent;
+  font: 14px / 1.6 var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.sourceSheet > span {
+  visibility: hidden;
+  pointer-events: none;
+}
+.sourceSheet textarea {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  resize: none;
+  overflow: hidden;
+  border-color: var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+}
+.readmeEditor [role="alert"] {
+  color: var(--status-error);
 }
 .contents button {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px;
+  padding: 4px 8px;
   border-radius: var(--radius-sm);
   font-size: 13px;
   line-height: 1.5;
@@ -600,12 +660,7 @@ a.commitMessage:hover {
 .contents button:hover {
   background: var(--hover-bg);
 }
-.contents svg {
-  width: 14px;
-  height: 14px;
-  flex: none;
-}
-.contents nav > span {
+.contents > span {
   padding: 8px;
   font-size: 13px;
   color: var(--text-secondary);
