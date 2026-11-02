@@ -18,6 +18,7 @@ import { cn } from '@/utils/cn';
 import navigationStyles from './StateNavigationControls.module.css';
 
 interface StateBranchControlsProps {
+  appearance?: 'default' | 'subtle';
   branch: string;
   branchOptions: string[];
   canCreateFromSearch?: boolean;
@@ -29,6 +30,7 @@ interface StateBranchControlsProps {
 }
 
 export function StateBranchControls({
+  appearance = 'default',
   branch,
   branchOptions,
   canCreateFromSearch = true,
@@ -119,7 +121,10 @@ export function StateBranchControls({
         <PopoverTrigger asChild>
           <button
             aria-label={`Switch branches/tags, current branch ${branch}`}
-            className={navigationStyles.branch}
+            className={cn(
+              navigationStyles.branch,
+              appearance === 'subtle' && navigationStyles.subtle
+            )}
             disabled={disabled}
             type="button"
           >

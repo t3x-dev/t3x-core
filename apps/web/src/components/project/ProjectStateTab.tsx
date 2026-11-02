@@ -18,7 +18,6 @@ import {
   Maximize2,
   Minus,
   Network,
-  Pencil,
   Search,
   ShieldCheck,
   TableProperties,
@@ -32,7 +31,6 @@ import { HistoryChangeInspector } from '@/components/history/HistoryChangeInspec
 import historyStyles from '@/components/history/HistoryStructure.module.css';
 import { StateNodeHistoryPanel } from '@/components/history/StateNodeHistoryPanel';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
-import { StateBranchControls } from '@/components/project/StateBranchControls';
 import { StateCodeView } from '@/components/project/StateCodeView';
 import { StateOverviewView } from '@/components/project/StateOverviewView';
 import { StatePrdReader } from '@/components/project/StatePrdReader';
@@ -67,12 +65,17 @@ import {
   workspaceDraftOperationsToStateOperations,
 } from '@/domain/project/stateViewModel';
 import type { YSchemaValidationSummary } from '@/domain/project/yschemaValidation';
+import { schemaFieldRows } from '@/domain/schemas/schemaFieldEditing';
 import { repositoryConversationSourceHref } from '@/domain/sourceEvidenceNavigation';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitOperations } from '@/hooks/commits/useCommitOperations';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
-import { useRepositoryProfile } from '@/hooks/projects/useRepositoryProfile';
+import { type CommittedSchemaState, useCommittedSchema } from '@/hooks/commits/useCommittedSchema';
+import {
+  useRepositoryDescription,
+  useRepositoryProfile,
+} from '@/hooks/projects/useRepositoryProfile';
 import { useSkillArtifact } from '@/hooks/projects/useSkillArtifact';
 import { useSchemaArtifactRegistry } from '@/hooks/schemas/useSchemaArtifactRegistry';
 import { useBranches } from '@/hooks/shared/useBranches';
@@ -84,8 +87,10 @@ import type { ApiCommit } from '@/types/api';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 import { buildReturnTo, safeInternalReturnTo } from '@/utils/navigationReturn';
+import { StateEmptyContent } from './StateEmptyContent';
 import inspectionStyles from './StateInspection.module.css';
-import overviewStyles from './StateOverviewView.module.css';
+import { StatePageFrame } from './StatePageFrame';
+import { StatePageToolbar } from './StatePageToolbar';
 
 export type ProjectSnapshotView = 'overview' | 'structure' | 'code';
 export type ProjectStateView = ProjectSnapshotView | 'canvas';
@@ -168,6 +173,7 @@ export function ProjectStateTab({
   validationRunning = false,
 }: ProjectStateTabProps) {
   const saveRepositoryProfile = useRepositoryProfile(projectId);
+  const saveRepositoryDescription = useRepositoryDescription(projectId);
   const pathname = usePathname();
   const { push: pushRoute, replace: replaceRoute } = useRouter();
   const searchParams = useSearchParams();
@@ -475,6 +481,10 @@ export function ProjectStateTab({
     readerKind === 'skill'
   );
   const isNativeCommit = headCommit?.provenance?.method === 'transition_v2';
+  const committedSchema = useCommittedSchema(
+    projectId,
+    activeView === 'structure' || activeView === 'code' ? (headCommit?.hash ?? null) : null
+  );
   const nativeReview = useCommitTransitionView(
     projectId,
     branchFocus,
@@ -619,7 +629,7 @@ export function ProjectStateTab({
         <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--surface-card)]">
           {activeView !== 'canvas' ? (
             <>
-              <StateInspectionToolbar
+              <StatePageToolbar
                 activeView={activeView}
                 branch={branchFocus || 'main'}
                 branchOptions={branchOptions}
@@ -683,133 +693,141 @@ export function ProjectStateTab({
                   onViewLatest={handleViewLatest}
                 />
               ) : null}
-              {snapshot.primaryError && activeView !== 'overview' ? (
-                <StateEmpty message={snapshot.primaryError} title="No committed state loaded" />
-              ) : null}
-              {!snapshot.primaryError &&
-              !snapshot.loading &&
-              !headCommit &&
-              activeView !== 'overview' ? (
-                <StateEmpty
-                  message="Start in a Workspace, review your changes, and create the first commit."
-                  title="No commit on this branch"
-                />
-              ) : null}
-              {!snapshot.primaryError && snapshot.loading && activeView !== 'overview' ? (
-                <StateEmpty message="Reading this version’s content." title="Loading state" />
-              ) : null}
-              {activeView === 'overview' ? (
-                <StateOverviewView
-                  hideHeader
-                  navigation={null}
-                  historyHref={historyHref}
-                  historyReturnTo={currentStateReturnTo}
-                  workspaceHref={workspaceHref}
-                  commits={snapshot.commits}
-                  commit={headCommit}
-                  projectId={projectId}
-                  commitDigest={
-                    snapshot.loading || snapshot.primaryError ? null : (headCommit?.hash ?? null)
-                  }
-                  stateLoading={snapshot.loading}
-                  stateError={snapshot.primaryError}
-                  projectName={projectName}
-                  projectDescription={projectDescription}
-                  projectOwner={projectOwner}
-                  projectVisibility={projectVisibility}
-                  repositoryProfile={repositoryProfile}
-                  canEditRepository={canEditRepository}
-                  onSaveRepositoryProfile={saveRepositoryProfile}
-                  introductionSource={focusedCommitHash ? 'version' : 'repository'}
-                  schemaName={schemaName}
-                  schemaHref={schemaHref}
-                  onViewStructure={(path) => {
-                    setPathQuery(path ?? '');
-                    updateActiveView('structure');
-                  }}
-                  validationLabel={readinessLabel}
-                  refName={branchFocus}
-                  onAuthorRevision={(digest) => {
-                    void refresh();
-                    const params = new URLSearchParams(routeQueryRef.current);
-                    params.set('commit', digest);
-                    params.set('view', 'overview');
-                    replaceRoute(`${pathname}?${params.toString()}`, { scroll: false });
-                  }}
-                  reader={
-                    skillRenderModel || prdRenderModel || promptRenderModel
-                      ? (expanded, expand) => (
-                          <>
-                            {skillRenderModel ? (
-                              <StateSkillReader
-                                artifact={skillArtifact.artifact}
-                                artifactError={skillArtifact.error?.message ?? null}
-                                artifactLoading={skillArtifact.loading}
-                                model={skillRenderModel}
-                                schemaName={schemaName}
-                                validationGapCount={validationGapCount}
-                                validationReady={validationReady}
-                                yamlText={yamlText}
-                              />
-                            ) : null}
-                            {prdRenderModel ? (
-                              <StatePrdReader
-                                compact={!expanded}
-                                onRequestExpand={expand}
-                                model={prdRenderModel}
-                                schemaArtifacts={prdSchemaRegistry.artifacts}
-                                schemaComposition={schemaCompositionWorkspace?.schemaComposition}
-                                schemaCompositionSource={
-                                  schemaCompositionWorkspace === committedWorkspace
-                                    ? 'committed'
-                                    : 'workspace'
-                                }
-                                schemaName={schemaName}
-                                schemaRegistryHref={schemaHref}
-                                validationGapCount={validationGapCount}
-                                validationReady={validationReady}
-                                yamlText={yamlText}
-                              />
-                            ) : null}
-                            {promptRenderModel ? (
-                              <StatePromptReader
-                                model={promptRenderModel}
-                                schemaName={schemaName}
-                                validationGapCount={validationIssueCount}
-                                validationReady={validationReady}
-                                yamlText={yamlText}
-                              />
-                            ) : null}
-                          </>
-                        )
-                      : undefined
-                  }
-                />
-              ) : null}
-              {!snapshot.primaryError &&
-              !snapshot.loading &&
-              headCommit &&
-              (activeView === 'structure' || activeView === 'code') ? (
-                <StateStructureView
-                  dataMode={activeView}
-                  onDataModeChange={updateActiveView}
-                  yamlText={yamlText}
-                  branch={branchFocus || 'main'}
-                  changeReason={headCommit.message?.trim() ?? ''}
-                  diffChanges={committedDiffChanges}
-                  contextLoading={contextLoading}
-                  contextError={context?.error}
-                  headCommit={headCommit}
-                  modifiedLabel={formatRelativeTime(headCommit.committed_at)}
-                  pathQuery={pathQuery}
-                  onPathQueryChange={setPathQuery}
-                  rows={pointRows}
-                  schemaName={schemaName}
-                  validationIssues={currentValidation?.issues ?? validationGaps}
-                  validationReady={validationReady}
-                  readOnly
-                />
-              ) : null}
+              <StatePageFrame projectName={projectName} branch={branchFocus || 'main'}>
+                {snapshot.primaryError && activeView !== 'overview' ? (
+                  <StateEmpty message={snapshot.primaryError} title="No committed state loaded" />
+                ) : null}
+                {!snapshot.primaryError &&
+                !snapshot.loading &&
+                !headCommit &&
+                activeView !== 'overview' ? (
+                  <StateEmpty
+                    message="Start in a Workspace, review your changes, and create the first commit."
+                    title="No commit on this branch"
+                  />
+                ) : null}
+                {!snapshot.primaryError && snapshot.loading && activeView !== 'overview' ? (
+                  <StateEmpty message="Reading this version’s content." title="Loading state" />
+                ) : null}
+                {activeView === 'overview' ? (
+                  <StateOverviewView
+                    embedded
+                    hideHeader
+                    navigation={null}
+                    historyHref={historyHref}
+                    alternateHistoryHref={canvasHref}
+                    historyReturnTo={currentStateReturnTo}
+                    workspaceHref={workspaceHref}
+                    commits={snapshot.commits}
+                    commit={headCommit}
+                    projectId={projectId}
+                    commitDigest={
+                      snapshot.loading || snapshot.primaryError ? null : (headCommit?.hash ?? null)
+                    }
+                    stateLoading={snapshot.loading}
+                    stateError={snapshot.primaryError}
+                    projectName={projectName}
+                    projectDescription={projectDescription}
+                    projectOwner={projectOwner}
+                    projectVisibility={projectVisibility}
+                    repositoryProfile={repositoryProfile}
+                    canEditRepository={canEditRepository}
+                    onSaveRepositoryProfile={saveRepositoryProfile}
+                    onSaveDescription={saveRepositoryDescription}
+                    introductionSource={focusedCommitHash ? 'version' : 'repository'}
+                    schemaName={schemaName}
+                    schemaHref={schemaHref}
+                    onViewStructure={(path) => {
+                      setPathQuery(path ?? '');
+                      updateActiveView('structure');
+                    }}
+                    validationLabel={readinessLabel}
+                    refName={branchFocus}
+                    onAuthorRevision={(digest) => {
+                      void refresh();
+                      const params = new URLSearchParams(routeQueryRef.current);
+                      params.set('commit', digest);
+                      params.set('view', 'overview');
+                      replaceRoute(`${pathname}?${params.toString()}`, { scroll: false });
+                    }}
+                    reader={
+                      skillRenderModel || prdRenderModel || promptRenderModel
+                        ? (expanded, expand) => (
+                            <>
+                              {skillRenderModel ? (
+                                <StateSkillReader
+                                  artifact={skillArtifact.artifact}
+                                  artifactError={skillArtifact.error?.message ?? null}
+                                  artifactLoading={skillArtifact.loading}
+                                  model={skillRenderModel}
+                                  schemaName={schemaName}
+                                  validationGapCount={validationGapCount}
+                                  validationReady={validationReady}
+                                  yamlText={yamlText}
+                                />
+                              ) : null}
+                              {prdRenderModel ? (
+                                <StatePrdReader
+                                  compact={!expanded}
+                                  onRequestExpand={expand}
+                                  model={prdRenderModel}
+                                  schemaArtifacts={prdSchemaRegistry.artifacts}
+                                  schemaComposition={schemaCompositionWorkspace?.schemaComposition}
+                                  schemaCompositionSource={
+                                    schemaCompositionWorkspace === committedWorkspace
+                                      ? 'committed'
+                                      : 'workspace'
+                                  }
+                                  schemaName={schemaName}
+                                  schemaRegistryHref={schemaHref}
+                                  validationGapCount={validationGapCount}
+                                  validationReady={validationReady}
+                                  yamlText={yamlText}
+                                />
+                              ) : null}
+                              {promptRenderModel ? (
+                                <StatePromptReader
+                                  model={promptRenderModel}
+                                  schemaName={schemaName}
+                                  validationGapCount={validationIssueCount}
+                                  validationReady={validationReady}
+                                  yamlText={yamlText}
+                                />
+                              ) : null}
+                            </>
+                          )
+                        : undefined
+                    }
+                  />
+                ) : null}
+                {!snapshot.primaryError &&
+                !snapshot.loading &&
+                headCommit &&
+                (activeView === 'structure' || activeView === 'code') ? (
+                  <StateStructureView
+                    committedSchema={committedSchema}
+                    workspaceHref={workspaceHref}
+                    schemaHref={schemaHref}
+                    dataMode={activeView}
+                    onDataModeChange={updateActiveView}
+                    yamlText={yamlText}
+                    branch={branchFocus || 'main'}
+                    changeReason={headCommit.message?.trim() ?? ''}
+                    diffChanges={committedDiffChanges}
+                    contextLoading={contextLoading}
+                    contextError={context?.error}
+                    headCommit={headCommit}
+                    modifiedLabel={formatRelativeTime(headCommit.committed_at)}
+                    pathQuery={pathQuery}
+                    onPathQueryChange={setPathQuery}
+                    rows={pointRows}
+                    schemaName={schemaName}
+                    validationIssues={currentValidation?.issues ?? validationGaps}
+                    validationReady={validationReady}
+                    readOnly
+                  />
+                ) : null}
+              </StatePageFrame>
             </>
           ) : (
             <StateCanvasView
@@ -824,113 +842,6 @@ export function ProjectStateTab({
         </main>
       </div>
     </section>
-  );
-}
-
-function StateInspectionToolbar({
-  activeView,
-  branch,
-  branchOptions,
-  canvasHref,
-  headCommit,
-  headCommitHash,
-  historyHref,
-  onBranchChange,
-  onCreateBranch,
-  onViewChange,
-  workspaceHref,
-  historical,
-}: {
-  historical: boolean;
-  activeView: ProjectSnapshotView;
-  branch: string;
-  branchOptions: string[];
-  canvasHref: string;
-  headCommit: ApiCommit | null;
-  headCommitHash: string | null;
-  historyHref: string;
-  onBranchChange: (branch: string) => void;
-  onCreateBranch: (name: string, fromBranch: string) => Promise<void>;
-  onViewChange: (view: ProjectSnapshotView) => void;
-  workspaceHref: string;
-}) {
-  return (
-    <div className={`${inspectionStyles.surface} ${inspectionStyles.toolbar}`}>
-      <div className={inspectionStyles.sub2}>
-        <div className={overviewStyles.toolbar} style={{ margin: 0, minHeight: 32 }}>
-          <div className={overviewStyles.viewTabs} role="tablist" aria-label="State views">
-            {(
-              [
-                { id: 'overview', label: 'Overview', icon: Eye },
-                { id: 'structure', label: 'Structure', icon: TableProperties },
-              ] as const
-            ).map((view) => {
-              const Icon = view.icon;
-              return (
-                <button
-                  key={view.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={
-                    view.id === 'overview' ? activeView === 'overview' : activeView !== 'overview'
-                  }
-                  onClick={() => onViewChange(view.id)}
-                >
-                  <Icon aria-hidden="true" />
-                  {view.label}
-                </button>
-              );
-            })}
-          </div>
-          <StateBranchControls
-            branch={branch}
-            branchOptions={branchOptions}
-            headCommitHash={headCommitHash}
-            onBranchChange={onBranchChange}
-            onCreateBranch={onCreateBranch}
-            showCreate={false}
-          />
-          {headCommit ? (
-            <span className={inspectionStyles.revisionContext}>
-              <GitCommit aria-hidden="true" />
-              <code>{shortHash(headCommit.hash)}</code>
-              <span>{historical ? 'Historical version' : 'Committed'} · Read-only</span>
-            </span>
-          ) : null}
-        </div>
-        <div className={overviewStyles.actions}>
-          <Link href={historyHref}>
-            <History />
-            History 1
-          </Link>
-          <Link href={canvasHref}>
-            <History />
-            History 2
-          </Link>
-          <Link href={workspaceHref} className={overviewStyles.primary}>
-            <Pencil />
-            Propose change
-          </Link>
-        </div>
-      </div>
-      {headCommit ? (
-        <div className={inspectionStyles.commitSummary}>
-          <GitCommit aria-hidden="true" />
-          <Link href={`${historyHref}&commit=${encodeURIComponent(headCommit.hash)}`}>
-            {headCommit.message || 'Committed state'}
-          </Link>
-          <span>
-            {headCommit.author?.name ||
-              headCommit.author?.id ||
-              headCommit.author?.type ||
-              'Author not recorded'}
-          </span>
-          <time dateTime={headCommit.committed_at}>
-            {formatRelativeTime(headCommit.committed_at)}
-          </time>
-        </div>
-      ) : null}
-    </div>
   );
 }
 
@@ -1113,7 +1024,13 @@ export function StateStructureView({
   yamlText,
   contextLoading = false,
   contextError,
+  committedSchema,
+  workspaceHref,
+  schemaHref,
 }: {
+  committedSchema?: CommittedSchemaState;
+  workspaceHref?: string;
+  schemaHref?: string;
   contextLoading?: boolean;
   contextError?: string | null;
   dataMode?: 'structure' | 'code';
@@ -1145,10 +1062,11 @@ export function StateStructureView({
   const [detailsVisible, setDetailsVisible] = useState(false);
   const historyTreeRef = useRef<HTMLDivElement>(null);
   const historyClearingSearch = useRef(false);
-  const structureRows = useMemo(
-    () => buildStateStructureRows(rows, diffChanges),
-    [diffChanges, rows]
-  );
+  const structureRows = useMemo(() => {
+    const built = buildStateStructureRows(rows, diffChanges);
+    return historyPresentation ? built : built.filter((row) => !row.removedFromParent);
+  }, [diffChanges, rows, historyPresentation]);
+
   const expandedChanges = useMemo(() => {
     const expanded = new Set<string>();
     if (!inlineDiff) return expanded;
@@ -1344,6 +1262,15 @@ export function StateStructureView({
             Details
           </label>
         </header>
+        {!rows.length ? (
+          <StateEmptyContent
+            key={`${headCommit.hash}:${dataMode}`}
+            initiallyExpanded={dataMode === 'structure'}
+            schema={committedSchema}
+            workspaceHref={workspaceHref}
+            schemaHref={schemaHref}
+          />
+        ) : null}
         <div className={cn(inspectionStyles.cols2, !detailsVisible && inspectionStyles.single)}>
           {content}
           {detailsVisible ? details : null}
@@ -1362,140 +1289,158 @@ export function StateStructureView({
         />
       );
     return renderWorkspace(
-      <div className={inspectionStyles.dataTable}>
-        <div className={inspectionStyles.tb}>
-          <label className={inspectionStyles.find}>
-            <Search />
-            <input
-              aria-label="Find a field or value"
-              placeholder="Find a field or value..."
-              value={pathQuery}
-              onChange={(event) => onPathQueryChange?.(event.target.value)}
-            />
-          </label>
-          <button
-            className={inspectionStyles.gb}
-            type="button"
-            onClick={() =>
-              setExpansionOverrides(
-                Object.fromEntries(
-                  structureRows.filter((row) => row.expandable).map((row) => [row.id, true])
-                )
-              )
-            }
-          >
-            <Maximize2 />
-            Expand all
-          </button>
-          <button
-            className={inspectionStyles.gb}
-            type="button"
-            onClick={() =>
-              setExpansionOverrides(
-                Object.fromEntries(
-                  structureRows.filter((row) => row.expandable).map((row) => [row.id, false])
-                )
-              )
-            }
-          >
-            <Minus />
-            Collapse all
-          </button>
-        </div>
-        <section
-          className={inspectionStyles.treeScroll}
-          aria-label="State structure rows"
-          // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users must be able to scroll this region.
-          tabIndex={0}
-        >
-          <table className={inspectionStyles.tree}>
-            <thead>
-              <tr className={inspectionStyles.th2}>
-                <th>Field</th>
-                <th>Value</th>
-                <th>Type</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleRows.map((row) => {
-                const expanded =
-                  searching ||
-                  isStateStructureRowExpanded(row, expansionOverrides, expandedChanges.has(row.id));
-                const select = () => {
-                  setSelectedRowId(row.id);
-                  setDetailsVisible(true);
-                  if (row.expandable) toggleRow(row);
-                };
-                return (
-                  <tr
-                    key={row.id}
-                    className={inspectionStyles.rw}
-                    aria-selected={selectedRow?.id === row.id}
-                    tabIndex={0}
-                    onClick={select}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        select();
-                      }
-                    }}
-                  >
-                    <td className={inspectionStyles.k} style={{ paddingLeft: row.depth * 24 }}>
-                      <span className={inspectionStyles.chev}>
-                        {row.expandable ? (
-                          <button
-                            type="button"
-                            aria-label={`${expanded ? 'Collapse' : 'Expand'} ${row.key}`}
-                            aria-expanded={expanded}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              select();
-                            }}
-                          >
-                            {expanded ? <ChevronDown /> : <ChevronRight />}
-                          </button>
-                        ) : null}
-                      </span>
-                      <span
-                        className={cn(
-                          inspectionStyles.ti,
-                          row.type === 'array'
-                            ? inspectionStyles.arr
-                            : row.expandable
-                              ? inspectionStyles.obj
-                              : inspectionStyles.str
-                        )}
-                      >
-                        {row.type === 'array' ? <List /> : row.expandable ? <Box /> : <FileText />}
-                      </span>
-                      <span className={inspectionStyles.nm} title={row.path}>
-                        {row.key}
-                      </span>
-                    </td>
-                    <td
-                      className={cn(
-                        inspectionStyles.val,
-                        (row.value === '' || row.value === 'empty') && inspectionStyles.em
-                      )}
-                      title={row.value}
-                    >
-                      <StateValueCell row={row} />
-                    </td>
-                    <td className={inspectionStyles.ty}>{row.type}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {!visibleRows.length ? (
-            <p className="p-4 text-sm text-[var(--text-tertiary)]">No matching fields.</p>
-          ) : null}
+      !rows.length ? (
+        <section aria-label="State structure rows" className={inspectionStyles.emptyStored}>
+          No stored fields in this version.
         </section>
-        <footer className={inspectionStyles.tnote}>
-          <Eye />
-          Values are shown as stored. Schema details explain their meaning.
-        </footer>
-      </div>,
+      ) : (
+        <div className={inspectionStyles.dataTable}>
+          <div className={inspectionStyles.tb}>
+            <label className={inspectionStyles.find}>
+              <Search />
+              <input
+                aria-label="Find a field or value"
+                placeholder="Find a field or value..."
+                value={pathQuery}
+                onChange={(event) => onPathQueryChange?.(event.target.value)}
+              />
+            </label>
+            <button
+              className={inspectionStyles.gb}
+              type="button"
+              onClick={() =>
+                setExpansionOverrides(
+                  Object.fromEntries(
+                    structureRows.filter((row) => row.expandable).map((row) => [row.id, true])
+                  )
+                )
+              }
+            >
+              <Maximize2 />
+              Expand all
+            </button>
+            <button
+              className={inspectionStyles.gb}
+              type="button"
+              onClick={() =>
+                setExpansionOverrides(
+                  Object.fromEntries(
+                    structureRows.filter((row) => row.expandable).map((row) => [row.id, false])
+                  )
+                )
+              }
+            >
+              <Minus />
+              Collapse all
+            </button>
+          </div>
+          <section
+            className={inspectionStyles.treeScroll}
+            aria-label="State structure rows"
+            // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users must be able to scroll this region.
+            tabIndex={0}
+          >
+            <table className={inspectionStyles.tree}>
+              <thead>
+                <tr className={inspectionStyles.th2}>
+                  <th>Field</th>
+                  <th>Value</th>
+                  <th>Type</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleRows.map((row) => {
+                  const expanded =
+                    searching ||
+                    isStateStructureRowExpanded(
+                      row,
+                      expansionOverrides,
+                      expandedChanges.has(row.id)
+                    );
+                  const select = () => {
+                    setSelectedRowId(row.id);
+                    setDetailsVisible(true);
+                    if (row.expandable) toggleRow(row);
+                  };
+                  return (
+                    <tr
+                      key={row.id}
+                      className={inspectionStyles.rw}
+                      aria-selected={selectedRow?.id === row.id}
+                      tabIndex={0}
+                      onClick={select}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          select();
+                        }
+                      }}
+                    >
+                      <td className={inspectionStyles.k} style={{ paddingLeft: row.depth * 24 }}>
+                        <span className={inspectionStyles.chev}>
+                          {row.expandable ? (
+                            <button
+                              type="button"
+                              aria-label={`${expanded ? 'Collapse' : 'Expand'} ${row.key}`}
+                              aria-expanded={expanded}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                select();
+                              }}
+                            >
+                              {expanded ? <ChevronDown /> : <ChevronRight />}
+                            </button>
+                          ) : null}
+                        </span>
+                        <span
+                          className={cn(
+                            inspectionStyles.ti,
+                            row.type === 'array'
+                              ? inspectionStyles.arr
+                              : row.expandable
+                                ? inspectionStyles.obj
+                                : inspectionStyles.str
+                          )}
+                        >
+                          {row.type === 'array' ? (
+                            <List />
+                          ) : row.expandable ? (
+                            <Box />
+                          ) : (
+                            <FileText />
+                          )}
+                        </span>
+                        <span className={inspectionStyles.nm} title={row.path}>
+                          {row.key}
+                        </span>
+                      </td>
+                      <td
+                        className={cn(
+                          inspectionStyles.val,
+                          (row.value === '' || row.value === 'empty') && inspectionStyles.em
+                        )}
+                        title={row.value}
+                      >
+                        <StateValueCell row={row} />
+                      </td>
+                      <td className={inspectionStyles.ty}>{row.type}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {!visibleRows.length ? (
+              <p className="p-4 text-sm text-[var(--text-secondary)]">
+                {rows.length ? 'No matching fields.' : 'No stored fields in this version.'}
+              </p>
+            ) : null}
+          </section>
+          <footer className={inspectionStyles.tnote}>
+            <Eye />
+            Values are shown as stored. Schema details explain their meaning.
+          </footer>
+        </div>
+      ),
       <StateFieldTracePanel
         branch={branch}
         changeReason={changeReason}
@@ -1504,7 +1449,7 @@ export function StateStructureView({
         modifiedLabel={modifiedLabel}
         onClose={() => setDetailsVisible(false)}
         row={selectedRow}
-        schemaName={schemaName}
+        committedSchema={committedSchema}
       />
     );
   }
@@ -1706,8 +1651,9 @@ function StateFieldTracePanel({
   modifiedLabel,
   onClose,
   row,
-  schemaName,
+  committedSchema,
 }: {
+  committedSchema?: CommittedSchemaState;
   branch: string;
   changeReason: string;
   childCount?: number;
@@ -1715,7 +1661,6 @@ function StateFieldTracePanel({
   modifiedLabel: string;
   onClose: () => void;
   row: StateStructureRow | null;
-  schemaName: string;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -1727,6 +1672,18 @@ function StateFieldTracePanel({
     );
   }
 
+  const definition = committedSchema?.snapshot?.definition;
+  const rootKey = committedSchema?.snapshot?.bindings.find(
+    (binding) => typeof binding.rootKey === 'string'
+  )?.rootKey;
+  const semanticPath = row.path.replace(/^\//, '');
+  const contract = definition
+    ? schemaFieldRows(definition).find(
+        (field) =>
+          field.semanticPath === semanticPath ||
+          (rootKey && `${rootKey}/${field.semanticPath}` === semanticPath)
+      )
+    : undefined;
   const sourceLabel = stateInspectorSourceLabel(row, headCommit);
   const sourceHref = stateInspectorSourceHref(row, headCommit, branch);
   const currentValue = row.expandable
@@ -1764,10 +1721,26 @@ function StateFieldTracePanel({
         <p className={inspectionStyles.v}>{currentValue}</p>
       </section>
       <section className={inspectionStyles.sc}>
-        <h3 className={inspectionStyles.l}>Schema contract</h3>
-        <p className={inspectionStyles.ctr}>
-          {schemaName || 'Unbound schema'} · {row.type}
-        </p>
+        <h3 className={inspectionStyles.l}>Schema</h3>
+        {contract ? (
+          <>
+            <p className={inspectionStyles.ctr}>
+              {typeof contract.definition.type === 'string' ? contract.definition.type : row.type} ·{' '}
+              {contract.required ? 'Required' : 'Optional'}
+            </p>
+            {typeof contract.definition.description === 'string' ? (
+              <p className={inspectionStyles.ctr}>{contract.definition.description}</p>
+            ) : null}
+          </>
+        ) : (
+          <p className={inspectionStyles.ctr}>
+            {committedSchema?.loading
+              ? 'Loading Schema details…'
+              : committedSchema?.error
+                ? 'Schema details unavailable. Stored values remain readable.'
+                : 'No field definition available for this version.'}
+          </p>
+        )}
       </section>
       <section className={inspectionStyles.lc}>
         <h3 className={inspectionStyles.l}>Activity</h3>

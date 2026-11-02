@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectStateTab } from '@/components/project/ProjectStateTab';
 import { PRD_CORE_ARTIFACT, PRD_MODULE_ARTIFACTS } from '@/data/schemaModules';
 import type { YSchemaValidationSummary } from '@/domain/project/yschemaValidation';
+import type { CommittedSchemaState } from '@/hooks/commits/useCommittedSchema';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { ApiCommit, SkillArtifact } from '@/types/api';
 import type { SchemaArtifactPreview } from '@/types/schemaModules';
@@ -15,6 +16,7 @@ const hookMocks = vi.hoisted(() => ({
   branchHeads: {} as Record<string, string | null>,
   branchesLoading: false,
   nativeView: null as unknown,
+  committedSchema: { loading: false, snapshot: null, retry: vi.fn() } as CommittedSchemaState,
   createBranch: vi.fn(),
   loadCanvas: vi.fn(),
   loadCommit: vi.fn(),
@@ -28,6 +30,10 @@ const hookMocks = vi.hoisted(() => ({
   skillArtifact: null as SkillArtifact | null,
 }));
 
+vi.mock('@/hooks/commits/useCommittedSchema', () => ({
+  useCommittedSchema: () => hookMocks.committedSchema,
+}));
+
 vi.mock('@/hooks/workspaces/useCommitTransitionView', () => ({
   useCommitTransitionView: () => ({ view: hookMocks.nativeView, loading: false, error: null }),
 }));
@@ -37,16 +43,23 @@ vi.mock('@/components/project/StateOverviewView', () => ({
     commitDigest,
     reader,
     schemaHref,
+    historyHref,
+    commit,
   }: {
     commitDigest: string | null;
     reader?: (expanded: boolean, expand: () => void) => import('react').ReactNode;
     schemaHref?: string;
+    historyHref?: string;
+    commit?: ApiCommit | null;
   }) =>
     commitDigest === null ? (
       <section aria-label="Overview">No commits yet</section>
     ) : (
       <section aria-label="Overview">
         {schemaHref ? <a href={schemaHref}>View schemas</a> : null}
+        {commit?.hash === commitDigest ? (
+          <a href={`${historyHref}&commit=${encodeURIComponent(commit.hash)}`}>{commit.message}</a>
+        ) : null}
         {reader ? reader(true, () => {}) : 'Structured reader'}
       </section>
     ),
@@ -467,6 +480,7 @@ const PROMPT_VALIDATION: YSchemaValidationSummary = {
 };
 
 function setupHookMocks() {
+  hookMocks.committedSchema = { loading: false, snapshot: null, retry: vi.fn() };
   hookMocks.branchHeads = {};
   hookMocks.branchesLoading = false;
   hookMocks.loadCommit.mockResolvedValue(PRD_COMMIT);
@@ -565,6 +579,72 @@ describe('ProjectStateTab', () => {
     });
     expect(screen.queryByText('Loading change details…')).not.toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'State structure' })).toBe(restoredBody);
+  });
+
+  it('labels expected Schema fields separately from actual empty Content in Tree and Code', async () => {
+    hookMocks.loadCommits.mockResolvedValue([
+      { ...PRD_COMMIT, content: { trees: [], relations: [] } },
+    ]);
+    hookMocks.committedSchema = {
+      loading: false,
+      retry: vi.fn(),
+      snapshot: {
+        status: 'bound',
+        schemaHash: `sha256:${'a'.repeat(64)}`,
+        bindings: [],
+        definition: {
+          nodes: {
+            checklist: {
+              requiredSlots: ['title'],
+              slots: { title: { type: 'string', default: 'Never stored default' } },
+            },
+          },
+        },
+      },
+    };
+    renderStateTab(null);
+    expect(await screen.findByRole('heading', { name: 'No Content yet' })).toBeVisible();
+    expect(screen.getByText('From committed Schema · No stored values')).toBeVisible();
+    expect(screen.getByText('0 fields')).toBeVisible();
+    expect(screen.queryByText('Never stored default')).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: 'State structure rows' })).queryByRole('cell')
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Workspace' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('tab=workspaces')
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Code', exact: true }));
+    const code = await screen.findByRole('region', { name: 'Canonical YAML content' });
+    expect(code).toHaveTextContent('{}');
+    expect(code).not.toHaveTextContent('checklist');
+    expect(screen.getByRole('button', { name: /Expected structure/ })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+  });
+
+  it.each([
+    'loading',
+    'failed',
+  ] as const)('keeps real Tree and Code readable when Schema is %s', async (status) => {
+    hookMocks.committedSchema = {
+      loading: status === 'loading',
+      error: status === 'failed' ? 'Schema unavailable' : undefined,
+      retry: vi.fn(),
+    };
+    renderStateTab();
+    const tree = await screen.findByRole('region', { name: 'State structure rows' });
+    expect(tree).toHaveTextContent('Office workers');
+    fireEvent.click(screen.getByRole('button', { name: 'Code', exact: true }));
+    expect(await screen.findByRole('region', { name: 'Canonical YAML content' })).toHaveTextContent(
+      'Office workers'
+    );
+    expect(screen.getAllByTestId('state-page-footer')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview', exact: true }));
+    expect(screen.getAllByTestId('state-page-footer')).toHaveLength(1);
+    expect(screen.getAllByRole('link', { name: 'History 1', exact: true })).toHaveLength(1);
+    expect(screen.getByTestId('state-page-footer')).toHaveTextContent('Test Project');
   });
 
   it('waits for the initial branch pointer instead of starting a redundant history request', async () => {

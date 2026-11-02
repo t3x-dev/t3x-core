@@ -11,10 +11,9 @@
   padding: 0 24px;
 }
 .page {
-  padding-bottom: 24px;
+  padding: 0 0 24px;
   min-height: 0;
   flex: 1;
-  overflow: auto;
 }
 .toolbar {
   flex: none;
@@ -67,10 +66,10 @@
   align-items: center;
   gap: 16px;
   flex-wrap: wrap;
-  padding: 16px 0 12px;
+  padding: 24px 0 20px;
 }
 .dataHeader h2 {
-  font-size: 14px;
+  font-size: 20px;
   font-weight: 600;
 }
 .dataModes {
@@ -113,7 +112,7 @@
 .cols2 {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 16px;
+  gap: 40px;
   align-items: start;
 }
 .cols2.single {
@@ -121,9 +120,6 @@
 }
 .dataTable {
   min-width: 0;
-  border: 1px solid var(--stroke-default);
-  border-radius: var(--radius-md);
-  overflow: hidden;
 }
 .tb {
   display: flex;
@@ -131,7 +127,10 @@
   flex-wrap: wrap;
   gap: 8px;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--stroke-divider);
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  background: color-mix(in srgb, var(--surface-panel) 35%, var(--surface-card));
 }
 .find {
   display: flex;
@@ -194,7 +193,7 @@
   min-height: 32px;
   font-size: 12px;
   color: var(--text-secondary);
-  background: var(--surface-panel);
+  border-bottom: 1px solid var(--stroke-divider);
 }
 .th2 th {
   font-weight: 500;
@@ -204,8 +203,8 @@
   text-align: right;
 }
 .rw {
-  min-height: 40px;
-  border-top: 1px solid var(--stroke-divider);
+  min-height: 44px;
+  border-bottom: 1px solid var(--stroke-divider);
   font-size: 14px;
   cursor: pointer;
 }
@@ -249,17 +248,10 @@
   width: 13px;
   height: 13px;
 }
-.obj {
-  background: #f3efff;
-  color: #7c5cf0;
-}
-.str {
-  background: rgba(22, 163, 74, 0.1);
-  color: #27834b;
-}
+.obj,
+.str,
 .arr {
-  background: rgba(234, 106, 12, 0.1);
-  color: #ea6a0c;
+  color: var(--text-secondary);
 }
 .nm,
 .val {
@@ -293,9 +285,8 @@
   position: sticky;
   top: 0;
   min-width: 0;
-  padding: 12px;
-  border: 1px solid var(--stroke-default);
-  border-radius: var(--radius-md);
+  padding: 0 0 0 24px;
+  border-left: 1px solid var(--stroke-divider);
   background: var(--surface-card);
 }
 .traceHeader {
@@ -416,9 +407,11 @@
   }
   .trace {
     position: static;
+    padding: 24px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--stroke-divider);
   }
-  .toolbar,
-  .page {
+  .toolbar {
     padding-left: 16px;
     padding-right: 16px;
   }
@@ -432,4 +425,121 @@
     order: 1;
     width: 100%;
   }
+}
+
+.emptyContent {
+  padding: 8px 0 16px;
+}
+.emptyContent h3 {
+  font-size: 26px;
+  font-weight: 650;
+  margin: 0 0 10px;
+}
+.emptyContent p {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.75;
+  margin: 8px 0;
+}
+.emptyActions {
+  display: flex;
+  gap: 20px;
+  margin: 16px 0 24px;
+  font-size: 14px;
+}
+.emptyActions a,
+.emptyContent p button {
+  color: var(--accent-commit);
+}
+.emptyActions a:hover,
+.emptyContent p button:hover {
+  text-decoration: underline;
+}
+.expected {
+  border-top: 1px solid var(--stroke-divider);
+  padding-top: 16px;
+}
+.expectedToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  min-height: 32px;
+}
+.expectedToggle svg {
+  width: 16px;
+  height: 16px;
+}
+.expectedToggle span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+  margin-left: 8px;
+}
+.expectedFields {
+  margin-top: 16px;
+}
+.expectedFields li {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(100px, 2fr) auto;
+  gap: 16px;
+  align-items: baseline;
+  padding: 12px;
+  border-bottom: 1px dashed var(--stroke-divider);
+  font-size: 14px;
+}
+.expectedName {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.expectedDescription {
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.expectedType {
+  color: var(--text-secondary);
+  font: 12px / 1.6 var(--font-mono);
+}
+.schemaNote {
+  font-size: 13px;
+}
+@media (max-width: 760px) {
+  .expectedFields li {
+    grid-template-columns: minmax(100px, 1fr) auto;
+    gap: 8px;
+  }
+  .expectedDescription {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+.expectedName button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+.expectedName svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.emptyContent output {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.emptyContent output button {
+  color: var(--accent-commit);
+}
+
+.emptyStored {
+  padding: 12px 0;
+  border-top: 1px solid var(--stroke-divider);
+  font-size: 13px;
+  color: var(--text-secondary);
 }

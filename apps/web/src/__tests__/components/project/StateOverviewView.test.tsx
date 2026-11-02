@@ -60,7 +60,7 @@ it('keeps author Markdown inert and prevents remote image requests', () => {
   expect(screen.queryByRole('link', { name: 'Blocked' })).toBeNull();
   expect(screen.getByRole('link', { name: 'Good' })).toHaveAttribute('rel', 'noopener noreferrer');
 });
-it('shows README immediately before the complementary State structure', () => {
+it('shows README immediately before the complementary State structure', async () => {
   render(<StateOverviewView {...props} />);
   expect(screen.getByText('Empty-key content')).toBeVisible();
   expect(screen.getByRole('heading', { name: 'Guide' })).toBeVisible();
@@ -72,7 +72,8 @@ it('shows README immediately before the complementary State structure', () => {
   expect(screen.queryByRole('button', { name: 'Expand rendered State' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Contents' }));
   fireEvent.click(screen.getByRole('button', { name: 'Guide' }));
-  expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalled();
+  await waitFor(() => expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalled());
+  expect(screen.getByRole('heading', { name: 'Guide' })).toHaveFocus();
 });
 it('shows a retryable failure without showing old author content', () => {
   const retry = vi.fn();
@@ -419,4 +420,52 @@ it('locates a committed path from the sidebar and retains the complete inspector
   expect(screen.getByRole('button', { name: 'Inspect document/title' })).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: /Open full view/ }));
   expect(inspect).toHaveBeenLastCalledWith();
+});
+
+it('keeps History as sidebar links and omits the separate content preview', () => {
+  const reader = vi.fn(() => <p>Legacy preview</p>);
+  render(
+    <StateOverviewView
+      {...props}
+      introductionSource="repository"
+      commit={{ ...commit, message: 'Actual version' }}
+      historyHref="/history?branch=main"
+      alternateHistoryHref="/canvas"
+      reader={reader}
+    />
+  );
+  const sidebar = screen.getByRole('complementary', { name: 'State information' });
+  expect(within(sidebar).getByRole('link', { name: 'History 1' })).toHaveAttribute(
+    'href',
+    '/history?branch=main'
+  );
+  expect(within(sidebar).getByRole('link', { name: 'History 2' })).toHaveAttribute(
+    'href',
+    '/canvas'
+  );
+  expect(within(sidebar).getByRole('link', { name: 'Actual version' })).toHaveAttribute(
+    'href',
+    `/history?branch=main&commit=${encodeURIComponent(commit.hash)}`
+  );
+  expect(reader).not.toHaveBeenCalled();
+  expect(screen.queryByText('Content preview')).toBeNull();
+});
+
+it('only offers description editing for the current editable repository', () => {
+  const save = vi.fn();
+  const view = render(
+    <StateOverviewView
+      {...props}
+      introductionSource="repository"
+      canEditRepository
+      onSaveDescription={save}
+    />
+  );
+  expect(screen.getByRole('button', { name: 'Add repository description' })).toBeVisible();
+  view.rerender(<StateOverviewView {...props} canEditRepository onSaveDescription={save} />);
+  expect(screen.queryByRole('button', { name: /repository description/ })).toBeNull();
+  view.rerender(
+    <StateOverviewView {...props} introductionSource="repository" onSaveDescription={save} />
+  );
+  expect(screen.queryByRole('button', { name: /repository description/ })).toBeNull();
 });

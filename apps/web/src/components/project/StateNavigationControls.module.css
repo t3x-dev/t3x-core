@@ -63,3 +63,11 @@
 .branch.branch.branch:hover {
   background: #e9eaee;
 }
+.branch.branch.branch.subtle {
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+.branch.branch.branch.subtle:hover {
+  background: var(--hover-bg);
+}

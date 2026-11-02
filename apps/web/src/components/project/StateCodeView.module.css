@@ -356,3 +356,34 @@
   outline: 2px solid var(--ring);
   outline-offset: -2px;
 }
+
+.embeddedCard {
+  border: 0;
+  border-radius: 0;
+}
+.embeddedCard .toolbar {
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-panel) 35%, var(--surface-card));
+  margin-bottom: 16px;
+}
+
+.embeddedCard .codeArea {
+  min-height: 0;
+}
+.embeddedCard .noteRow {
+  display: none;
+}
+.embeddedSide .panel {
+  border: 0;
+  border-left: 1px solid var(--stroke-divider);
+  border-radius: 0;
+  padding: 0 0 0 24px;
+}
+@media (max-width: 800px) {
+  .embeddedSide .panel {
+    border-left: 0;
+    border-top: 1px solid var(--stroke-divider);
+    padding: 24px 0 0;
+  }
+}
