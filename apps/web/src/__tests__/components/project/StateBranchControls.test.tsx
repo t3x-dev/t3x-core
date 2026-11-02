@@ -68,3 +68,24 @@ it('prefers an existing match on Enter and navigates results by keyboard', () =>
   expect(change).toHaveBeenCalledWith('develop');
   expect(onCreateBranch).not.toHaveBeenCalled();
 });
+
+it('waits for the draft navigation guard before creating and keeps failures visible', async () => {
+  let proceed: (() => void) | undefined;
+  const create = vi.fn().mockRejectedValue(new Error('Branch source changed. Try again.'));
+  renderControls({
+    onCreateBranch: create,
+    requestCreateNavigation: (next) => {
+      proceed = next;
+    },
+  });
+  fireEvent.click(screen.getByRole('button', { name: /Switch branches/ }));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Find or create branch' }), {
+    target: { value: 'feature/new' },
+  });
+  expect(screen.getByText(/Your draft stays on main/)).toBeVisible();
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Create branch feature/new from main' }));
+  expect(create).not.toHaveBeenCalled();
+  proceed?.();
+  await waitFor(() => expect(create).toHaveBeenCalledWith('feature/new', 'main'));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Branch source changed. Try again.');
+});

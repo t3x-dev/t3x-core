@@ -234,7 +234,15 @@ interface WorkspaceComposeReviewSurfaceProps {
   candidate: WorkspaceCandidate;
   controller: WorkspaceComposeReviewController;
   mode: WorkspaceSurfaceMode;
-  onBranchChange?: (branch: string) => Promise<void> | void;
+  onBranchChange?: (
+    branch: string,
+    requestNavigation?: (navigate: () => void) => void
+  ) => Promise<void> | void;
+  onCreateBranch?: (
+    name: string,
+    fromBranch: string,
+    requestNavigation?: (navigate: () => void) => void
+  ) => Promise<void>;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
 }
 
@@ -244,6 +252,7 @@ export function WorkspaceComposeReviewSurface({
   controller,
   mode,
   onBranchChange,
+  onCreateBranch,
   onModeChange,
 }: WorkspaceComposeReviewSurfaceProps) {
   const composeControls = useRef<ComposeSurfaceControls | null>(null);
@@ -405,6 +414,7 @@ export function WorkspaceComposeReviewSurface({
             candidate={controller.candidate ?? candidate}
             mode={workspaceTool === 'delivery' ? undefined : workspaceTool ? 'compose' : mode}
             onBranchChange={onBranchChange}
+            onCreateBranch={onCreateBranch}
             onModeChange={setSurfaceMode}
             requestNavigation={(navigate) => {
               if (composeControls.current) composeControls.current.requestNavigation(navigate);
@@ -560,6 +570,7 @@ function WorkspaceStageHeader({
   candidate,
   mode,
   onBranchChange,
+  onCreateBranch,
   onModeChange,
   requestNavigation,
   onEditDraft,
@@ -567,7 +578,15 @@ function WorkspaceStageHeader({
   branchOptions: string[];
   candidate: WorkspaceCandidate;
   mode?: WorkspaceSurfaceMode;
-  onBranchChange?: (branch: string) => Promise<void> | void;
+  onBranchChange?: (
+    branch: string,
+    requestNavigation?: (navigate: () => void) => void
+  ) => Promise<void> | void;
+  onCreateBranch?: (
+    name: string,
+    fromBranch: string,
+    requestNavigation?: (navigate: () => void) => void
+  ) => Promise<void>;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
   requestNavigation?: (navigate: () => void) => void;
   onEditDraft?: () => void;
@@ -587,17 +606,22 @@ function WorkspaceStageHeader({
       }
       <div className={stageHeaderStyles.branch}>
         <StateBranchControls
+          key={`${candidate.projectId}:${candidate.id}:${selectedBranch}`}
           branch={selectedBranch}
           branchOptions={availableBranches}
-          disabled={!onBranchChange || availableBranches.length <= 1}
+          disabled={!onBranchChange}
           headCommitHash={null}
           onBranchChange={(branch) => {
-            const navigate = () => void onBranchChange?.(branch);
+            const navigate = () => void onBranchChange?.(branch, requestNavigation);
             if (requestNavigation) requestNavigation(navigate);
             else navigate();
           }}
-          onCreateBranch={async () => {}}
-          canCreateFromSearch={false}
+          onCreateBranch={
+            onCreateBranch
+              ? (name, fromBranch) => onCreateBranch(name, fromBranch, requestNavigation)
+              : undefined
+          }
+          requestCreateNavigation={requestNavigation}
           showCreate={false}
         />
       </div>

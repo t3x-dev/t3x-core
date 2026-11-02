@@ -27,6 +27,7 @@ interface StateBranchControlsProps {
   onBranchChange: (branch: string) => void;
   onCreateBranch?: (name: string, fromBranch: string) => Promise<void>;
   showCreate?: boolean;
+  requestCreateNavigation?: (create: () => void) => void;
 }
 
 export function StateBranchControls({
@@ -39,6 +40,7 @@ export function StateBranchControls({
   onCreateBranch,
   canCreateFromSearch: allowSearchCreation = true,
   showCreate = true,
+  requestCreateNavigation,
 }: StateBranchControlsProps) {
   const canCreateFromSearch = Boolean(onCreateBranch) && allowSearchCreation;
   const [open, setOpen] = useState(false);
@@ -101,10 +103,16 @@ export function StateBranchControls({
     }
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function requestCreation(nextName: string) {
+    const create = () => void createNamedBranch(nextName);
+    if (requestCreateNavigation) requestCreateNavigation(create);
+    else create();
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (validationError || !normalizedName) return;
-    await createNamedBranch(normalizedName);
+    requestCreation(normalizedName);
   }
 
   const menuRef = useRef<HTMLDivElement>(null);
@@ -254,7 +262,7 @@ export function StateBranchControls({
                     role="menuitem"
                     disabled={submitting}
                     className={navigationStyles.create}
-                    onClick={() => void createNamedBranch(createCandidate)}
+                    onClick={() => requestCreation(createCandidate)}
                   >
                     <Plus aria-hidden="true" />
                     <span>
@@ -265,6 +273,11 @@ export function StateBranchControls({
                 {!filteredBranches.length && !canCreateFromQuery && <p>No matching branches.</p>}
                 {submitError && <p role="alert">{submitError}</p>}
               </div>
+              {canCreateFromSearch && (
+                <p className={navigationStyles.hint}>
+                  Create from the latest commit on {branch}. Your draft stays on {branch}.
+                </p>
+              )}
               <div className={navigationStyles.hint}>
                 ↑ ↓ to browse · Enter to select · Esc to close
               </div>
@@ -281,6 +294,7 @@ export function StateBranchControls({
             setOpen(false);
             setDialogOpen(true);
           }}
+          disabled={disabled || submitting}
           size="sm"
           type="button"
           variant="canvas-outline"
@@ -295,8 +309,8 @@ export function StateBranchControls({
             <DialogHeader>
               <DialogTitle>Create a new branch</DialogTitle>
               <DialogDescription>
-                Start with the same committed content and Schema as {branch}. Future changes stay
-                independent. Uncommitted Draft changes are not copied.
+                Start from the latest commit on {branch}, including its content and Schema. Your
+                current draft stays on {branch}.
               </DialogDescription>
             </DialogHeader>
 
@@ -324,8 +338,10 @@ export function StateBranchControls({
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
                   <span className="font-mono font-bold text-[var(--text-primary)]">{branch}</span>
-                  <span>at</span>
-                  <span className="font-mono text-xs">{baseLabel}</span>
+                  <span>latest commit</span>
+                  {headCommitHash && (
+                    <span className="font-mono text-xs">Last seen {baseLabel}</span>
+                  )}
                 </div>
               </div>
               {name && validationError ? (

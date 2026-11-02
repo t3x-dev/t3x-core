@@ -182,6 +182,19 @@ export function ProjectStateTab({
   const routeQuery = searchParams.toString();
   const routeQueryRef = useRef(routeQuery);
   routeQueryRef.current = routeQuery;
+  const branchCreationScope = useMemo(
+    () => ({ active: true, request: 0 }),
+    [projectId, pathname, routeQuery]
+  );
+  const activeBranchCreation = useRef(branchCreationScope);
+  activeBranchCreation.current = branchCreationScope;
+  useEffect(() => {
+    branchCreationScope.active = true;
+    return () => {
+      branchCreationScope.active = false;
+      ++branchCreationScope.request;
+    };
+  }, [branchCreationScope]);
   const { preferredView, remember } = useStateViewPreference(projectId);
   const routeView = parseStateView(searchParams.get('view'), initialView ?? preferredView);
   const [activeView, setActiveView] = useState<ProjectStateView>(routeView);
@@ -231,6 +244,7 @@ export function ProjectStateTab({
 
   const updateActiveView = useCallback(
     (view: ProjectStateView) => {
+      ++branchCreationScope.request;
       setActiveView(view);
       if (view !== 'canvas') setLastSnapshotView(view);
       const params = new URLSearchParams(routeQueryRef.current);
@@ -239,7 +253,7 @@ export function ProjectStateTab({
       const query = params.toString();
       replaceRoute(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
     },
-    [pathname, replaceRoute, remember]
+    [branchCreationScope, pathname, replaceRoute, remember]
   );
 
   const branchOptions = useMemo(
@@ -255,6 +269,7 @@ export function ProjectStateTab({
 
   const updateBranchFocus = useCallback(
     (focus: BranchFocus) => {
+      ++branchCreationScope.request;
       const params = new URLSearchParams(routeQueryRef.current);
       params.delete('commit');
       if (focus === 'main') params.delete('branch');
@@ -262,7 +277,7 @@ export function ProjectStateTab({
       const query = params.toString();
       replaceRoute(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
     },
-    [pathname, replaceRoute]
+    [branchCreationScope, pathname, replaceRoute]
   );
 
   const snapshotTargetHead = focusedCommitHash ?? branchHeads[branchFocus];
@@ -537,10 +552,17 @@ export function ProjectStateTab({
       : null;
   const handleCreateBranch = useCallback(
     async (name: string, fromBranch = branchFocus) => {
+      const request = ++branchCreationScope.request;
+      const isCurrent = () =>
+        branchCreationScope.active &&
+        activeBranchCreation.current === branchCreationScope &&
+        branchCreationScope.request === request;
+      if (!isCurrent()) return;
       await createBranch(name, fromBranch);
+      if (!isCurrent()) return;
       pushRoute(getProjectIdWorkspacePath(projectId, { branch: name }));
     },
-    [branchFocus, createBranch, projectId, pushRoute]
+    [branchCreationScope, branchFocus, createBranch, projectId, pushRoute]
   );
   const checkCurrentBranchForUpdates = useCallback(async () => {
     setFreshnessChecking(true);
@@ -632,6 +654,7 @@ export function ProjectStateTab({
           {activeView !== 'canvas' ? (
             <>
               <StatePageToolbar
+                key={`${projectId}:${branchFocus}`}
                 activeView={activeView}
                 branch={branchFocus || 'main'}
                 branchOptions={branchOptions}

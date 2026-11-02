@@ -55,7 +55,15 @@ export interface WorkspaceTabsProps {
   onViewCommitInState?: (commitHash: string, branch: string) => void;
   onWorkspacesRefresh?: (workspace?: WorkspaceCandidate) => Promise<void> | void;
   onWorkflowTabChange?: (tab: WorkspaceTabId) => void;
-  onWorkspaceBranchChange?: (branch: string) => Promise<void> | void;
+  onWorkspaceBranchChange?: (
+    branch: string,
+    requestNavigation?: (navigate: () => void) => void
+  ) => Promise<void> | void;
+  onCreateWorkspaceBranch?: (
+    name: string,
+    fromBranch: string,
+    requestNavigation?: (navigate: () => void) => void
+  ) => Promise<void>;
   proposalGeneration?: WorkspaceProposalGenerationView;
   proposalGenerationBusy?: boolean;
   proposalPosture?: WorkspaceProposalPosture;
@@ -89,6 +97,7 @@ export function WorkspaceTabs(props: WorkspaceTabsProps) {
         controller={controller}
         mode={mode}
         onBranchChange={props.onWorkspaceBranchChange}
+        onCreateBranch={props.onCreateWorkspaceBranch}
         onModeChange={(nextMode) =>
           props.onWorkflowTabChange?.(nextMode === 'compose' ? 'chat' : 'validation')
         }

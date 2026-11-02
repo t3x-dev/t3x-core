@@ -1247,7 +1247,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         { name: 'release' }
       )
     );
-    expect(branchChange).toHaveBeenCalledWith('release');
+    expect(branchChange).toHaveBeenCalledWith('release', expect.any(Function));
     expect(modelSelector.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );
@@ -2623,4 +2623,38 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.getByText('No Content or Schema changes available to review.')).toBeVisible();
     expect(screen.queryByText(/天气为晴天/)).not.toBeInTheDocument();
   });
+});
+
+it('allows creating a branch from a single-branch Workspace', async () => {
+  const candidate = getProjectWorkspaceStarterCandidate('proj_1', [], 'main', null);
+  const create = vi.fn().mockResolvedValue(undefined);
+  render(
+    <WorkspaceComposeReviewSurface
+      branchOptions={['main']}
+      candidate={candidate}
+      controller={
+        {
+          busyAction: null,
+          candidate,
+          error: null,
+          hasCollaborationConflict: false,
+          isBusy: false,
+          materialSources: [],
+          notice: null,
+        } as unknown as WorkspaceComposeReviewController
+      }
+      mode="compose"
+      onBranchChange={vi.fn()}
+      onCreateBranch={create}
+      onModeChange={vi.fn()}
+    />
+  );
+  fireEvent.click(screen.getByRole('button', { name: /Switch branches/ }));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Find or create branch' }), {
+    target: { value: 'feature/new' },
+  });
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Create branch feature/new from main' }));
+  await waitFor(() =>
+    expect(create).toHaveBeenCalledWith('feature/new', 'main', expect.any(Function))
+  );
 });

@@ -12,11 +12,17 @@ export function resolveStudioWorkspaceId(
   const drafts = listStudioDraftWorkspaces(workspaces);
   // Explicit targets must never silently fall back to a different Workspace.
   if (requestedId) return requestedId;
-  if (branch) return drafts.find((workspace) => workspace.targetBranch === branch)?.id ?? '';
-  return drafts[0]?.id ?? '';
+  if (branch)
+    return (
+      (
+        drafts.find((workspace) => workspace.targetBranch === branch) ??
+        workspaces.find((workspace) => workspace.targetBranch === branch)
+      )?.id ?? ''
+    );
+  return drafts[0]?.id ?? workspaces[0]?.id ?? '';
 }
 
-/** One open draft per branch. A branch with no saved draft gets a starter. */
+/** Prefer an open draft; retain committed targets for explicit continuation. */
 export function listStudioWorkspacesForBranches(
   workspaces: WorkspaceCandidate[],
   branches: readonly string[],
@@ -28,7 +34,9 @@ export function listStudioWorkspacesForBranches(
   for (const branch of branches) {
     const name = branch.trim();
     if (!name) continue;
-    const existing = drafts.find((workspace) => workspace.targetBranch === name);
+    const existing =
+      drafts.find((workspace) => workspace.targetBranch === name) ??
+      workspaces.find((workspace) => workspace.targetBranch === name);
     if (existing) {
       if (used.has(existing.id)) continue;
       targets.push(existing);

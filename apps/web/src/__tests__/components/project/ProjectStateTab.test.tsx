@@ -743,6 +743,58 @@ describe('ProjectStateTab', () => {
       '/project/proj_test?branch=feature%2Fnew-schema&tab=workspaces'
     );
   });
+  it.each([
+    'route',
+    'project',
+    'unmount',
+    'return',
+    'view',
+  ] as const)('does not follow a late branch creation after a %s context change', async (change) => {
+    const creation = deferred<void>();
+    hookMocks.createBranch.mockReturnValueOnce(creation.promise);
+    const view = renderStateTab();
+    await screen.findByRole('link', { name: 'PRD audience handoff committed' });
+    fireEvent.click(screen.getByRole('button', { name: /Switch branches\/tags/ }));
+    fireEvent.change(screen.getByPlaceholderText('Find or create branch'), {
+      target: { value: 'feature/new-schema' },
+    });
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: /Create branch feature\/new-schema from main/ })
+    );
+    expect(hookMocks.createBranch).toHaveBeenCalledWith('feature/new-schema', 'main');
+    if (change === 'unmount') view.unmount();
+    else if (change === 'view') {
+      fireEvent.click(screen.getByRole('button', { name: 'Close branch switcher' }));
+      fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
+    } else {
+      navigationMocks.search = '?branch=feature%2Fprd-audience';
+      view.rerender(
+        <ProjectStateTab
+          initialView="structure"
+          projectId={change === 'project' ? 'proj_other' : 'proj_test'}
+          projectName="Test Project"
+          validation={VALIDATION}
+        />
+      );
+      if (change === 'return') {
+        navigationMocks.search = '';
+        view.rerender(
+          <ProjectStateTab
+            initialView="structure"
+            projectId="proj_test"
+            projectName="Test Project"
+            validation={VALIDATION}
+          />
+        );
+      }
+    }
+    await act(async () => {
+      creation.resolve();
+      await creation.promise;
+    });
+    expect(navigationMocks.router.push).not.toHaveBeenCalled();
+  });
+
   it('defaults to Overview and keeps legacy Render links on the same revision', async () => {
     navigationMocks.search = `view=render&commit=${encodeURIComponent(PRD_COMMIT.hash)}`;
     hookMocks.loadCommit.mockImplementation(async (hash) =>
