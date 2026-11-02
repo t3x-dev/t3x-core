@@ -25,7 +25,7 @@ interface StateBranchControlsProps {
   disabled?: boolean;
   headCommitHash: string | null;
   onBranchChange: (branch: string) => void;
-  onCreateBranch: (name: string, fromBranch: string) => Promise<void>;
+  onCreateBranch?: (name: string, fromBranch: string) => Promise<void>;
   showCreate?: boolean;
 }
 
@@ -33,13 +33,14 @@ export function StateBranchControls({
   appearance = 'default',
   branch,
   branchOptions,
-  canCreateFromSearch = true,
   disabled = false,
   headCommitHash,
   onBranchChange,
   onCreateBranch,
+  canCreateFromSearch: allowSearchCreation = true,
   showCreate = true,
 }: StateBranchControlsProps) {
+  const canCreateFromSearch = Boolean(onCreateBranch) && allowSearchCreation;
   const [open, setOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -86,7 +87,7 @@ export function StateBranchControls({
   }
 
   async function createNamedBranch(nextName: string) {
-    if (submitting) return;
+    if (submitting || !onCreateBranch) return;
     setSubmitError(null);
     setSubmitting(true);
     try {
@@ -136,7 +137,7 @@ export function StateBranchControls({
       <Popover onOpenChange={setOpen} open={open}>
         <PopoverTrigger asChild>
           <button
-            aria-label={`Switch branches/tags, current branch ${branch}`}
+            aria-label={branch ? `Switch branches/tags, current branch ${branch}` : 'Select branch'}
             className={cn(
               navigationStyles.branch,
               appearance === 'subtle' && navigationStyles.subtle
@@ -148,7 +149,9 @@ export function StateBranchControls({
               aria-hidden="true"
               className="size-3.5 shrink-0 text-[var(--accent-branch)] opacity-90"
             />
-            <span className="min-w-0 flex-1 truncate text-left font-mono">{branch}</span>
+            <span className="min-w-0 flex-1 truncate text-left font-mono">
+              {branch || 'Select branch'}
+            </span>
             <ChevronDown
               aria-hidden="true"
               className={cn(
@@ -271,7 +274,7 @@ export function StateBranchControls({
           )}
         </PopoverContent>
       </Popover>
-      {showCreate ? (
+      {showCreate && onCreateBranch ? (
         <Button
           className="h-7 rounded-[5px] px-2.5 text-xs font-medium shadow-[var(--fx-shadow-sm)]"
           onClick={() => {

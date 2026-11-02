@@ -411,9 +411,9 @@ it('clears restored sources when switching to an unbound Workspace', async () =>
   const { rerender } = render(<SchemaStudioExperience projectId="p" />);
   openSources();
   await expectBoundSnapshot();
-  fireEvent.change(screen.getByLabelText('Target Workspace'), {
-    target: { value: 'workspace_branch:feature' },
-  });
+  closeSources();
+  fireEvent.click(screen.getByRole('button', { name: /Switch branches\/tags/ }));
+  fireEvent.click(screen.getByRole('menuitemradio', { name: 'feature' }));
   mocks.query = new URL(mocks.push.mock.calls[0][0], 'http://local').search.slice(1);
   rerender(<SchemaStudioExperience projectId="p" />);
   await waitFor(() =>
@@ -596,11 +596,13 @@ it('selects the only draft workspace once instead of duplicating Main workspace'
     },
   ];
   render(<SchemaStudioExperience projectId="p" />);
-  openSources();
-  const select = screen.getByLabelText('Target Workspace');
-  expect(select.querySelectorAll('option')).toHaveLength(1);
-  expect(select).toHaveValue('workspace_branch:main');
-  expect(select).toHaveTextContent('Main workspace');
+  expect(screen.queryByLabelText('Target Workspace')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: /current branch main/ }));
+  expect(screen.getAllByRole('menuitemradio')).toHaveLength(1);
+  expect(screen.getByRole('menuitemradio', { name: /main/ })).toHaveAttribute(
+    'aria-checked',
+    'true'
+  );
 });
 
 it('starts a new branch editor from its inherited bound definition, not the original source schema', async () => {
@@ -748,7 +750,7 @@ it.each([
     workspace: { id: 'workspace_branch:main', revision: 3, changes: [] },
   };
   render(<SchemaStudioExperience projectId="p" />);
-  expect(screen.getByLabelText('Target Workspace')).toHaveValue('workspace_branch:main');
+  expect(screen.getByRole('button', { name: /current branch main/ })).toBeInTheDocument();
   await waitFor(() =>
     expect(
       screen.queryByRole('checkbox', { name: 'Select Shared foundation 1.0' })
@@ -941,8 +943,7 @@ it('saves a main branch workspace when none is persisted', async () => {
   mocks.branches = ['main'];
   mocks.refresh.mockResolvedValue(undefined);
   render(<SchemaStudioExperience projectId="p" />);
-  openSources();
-  expect(screen.getByLabelText('Target Workspace')).toHaveValue('workspace_branch:main');
+  expect(screen.getByRole('button', { name: /current branch main/ })).toBeInTheDocument();
   await waitFor(() => expect(mocks.saveDraft).toHaveBeenCalled());
   expect(mocks.saveDraft).toHaveBeenCalledWith(
     'p',
@@ -974,7 +975,7 @@ it('edits Schema fields in the default Data view and saves through the existing 
   render(<SchemaStudioExperience projectId="p" />);
   expect(screen.queryByRole('tablist', { name: 'Studio view' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByLabelText('Required checklist/title'));
-  expect(screen.getByLabelText('Target Workspace')).toBeEnabled();
+  expect(screen.getByRole('button', { name: /Switch branches\/tags/ })).toBeEnabled();
   expect(screen.getByRole('button', { name: /^(Review changes|Save and review)$/ })).toBeEnabled();
   openSources();
   expect(
@@ -1150,7 +1151,7 @@ it('uses the resolved branch target in all outbound Studio links and normalizes 
     { ...boundWorkspace(), id: 'feature-draft', title: 'Feature', targetBranch: 'feature' },
   ];
   render(<SchemaStudioExperience projectId="p" />);
-  expect(screen.getByLabelText('Target Workspace')).toHaveValue('feature-draft');
+  expect(screen.getByRole('button', { name: /current branch feature/ })).toBeVisible();
   expect(mocks.replace).toHaveBeenCalledWith(expect.stringContaining('workspace=feature-draft'), {
     scroll: false,
   });
@@ -1163,7 +1164,7 @@ it('uses the resolved branch target in all outbound Studio links and normalizes 
   closeSources();
 });
 
-it('discards only the unsaved editor before completing a requested Workspace switch', async () => {
+it('protects unsaved edits before switching branches', async () => {
   mocks.query = 'workspace=workspace_branch%3Amain&branch=main&candidate=provider';
   mocks.workspaces = [
     boundWorkspace(),
@@ -1175,9 +1176,8 @@ it('discards only the unsaved editor before completing a requested Workspace swi
   };
   render(<SchemaStudioExperience projectId="p" />);
   fireEvent.click(screen.getByLabelText('Required checklist/title'));
-  fireEvent.change(screen.getByLabelText('Target Workspace'), {
-    target: { value: 'feature-draft' },
-  });
+  fireEvent.click(screen.getByRole('button', { name: /Switch branches\/tags/ }));
+  fireEvent.click(screen.getByRole('menuitemradio', { name: 'feature' }));
   expect(screen.getByRole('dialog')).toHaveTextContent('Save schema draft before leaving?');
   expect(mocks.push).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Discard & continue' }));

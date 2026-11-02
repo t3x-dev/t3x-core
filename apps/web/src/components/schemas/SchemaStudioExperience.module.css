@@ -67,60 +67,12 @@
 .tool .reviewButton:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent-commit) 90%, var(--text-primary));
 }
-.ws {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  max-width: 220px;
-  height: 24px;
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--text-secondary);
-}
-.ws > svg {
-  flex: none;
-  color: var(--text-secondary);
-}
-.ws > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ws select {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  opacity: 0;
-  cursor: pointer;
-}
-.branch,
 .navLink {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   color: var(--text-secondary);
   font-size: 12px;
-}
-.branch {
-  flex: none;
-  gap: 8px;
-  height: 24px;
-  max-width: 180px;
-  overflow-wrap: anywhere;
-  padding: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 400;
-}
-.branch svg {
-  flex-shrink: 0;
-  color: var(--accent-branch);
-  opacity: 0.9;
 }
 .toolbarActions {
   margin-left: auto;
@@ -271,8 +223,7 @@
 .navLink:hover {
   background: var(--surface-canvas);
 }
-.navLink:focus-visible,
-.ws:focus-within {
+.navLink:focus-visible {
   outline: 2px solid var(--accent-commit);
   outline-offset: 2px;
 }

@@ -4,6 +4,7 @@ import type { SchemaPreparationTarget, StudioCandidate, StudioPreview } from '@t
 import { Settings2 } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { StateBranchControls } from '@/components/project/StateBranchControls';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -1244,7 +1245,21 @@ export function SchemaStudioExperience({
           />
         )}
         sourceHref={sourceHref}
-        branch={target?.targetBranch}
+        branchControl={
+          <StateBranchControls
+            branch={target?.targetBranch ?? ''}
+            branchOptions={Array.from(new Set(draftWorkspaces.map((item) => item.targetBranch)))}
+            headCommitHash={
+              target ? (projectBranches.branchHeads[target.targetBranch] ?? null) : null
+            }
+            disabled={
+              !draftWorkspaces.length || applying || workspaces.loading || projectBranches.loading
+            }
+            onBranchChange={(nextBranch) =>
+              changeWorkspace(resolveStudioWorkspaceId(draftWorkspaces, '', nextBranch))
+            }
+          />
+        }
         draftStatus={
           dataDirty
             ? 'Unsaved changes'
@@ -1262,10 +1277,6 @@ export function SchemaStudioExperience({
                         ? 'No changes to review'
                         : undefined
         }
-        workspaceTitle={selectedWorkspaceTitle}
-        workspaceId={workspaceId}
-        workspaces={draftWorkspaces}
-        onWorkspace={changeWorkspace}
         pending={applying || preview.loading || candidates.pending}
         loading={candidates.loading}
         error={

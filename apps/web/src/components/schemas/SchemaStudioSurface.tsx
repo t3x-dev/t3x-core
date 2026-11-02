@@ -1,6 +1,6 @@
 'use client';
 import type { StudioPreview } from '@t3x-dev/api-client';
-import { ArrowUpRight, Box, ChevronDown, GitBranch, Shapes } from 'lucide-react';
+import { ArrowUpRight, ChevronDown, Shapes } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
@@ -22,12 +22,8 @@ export function SchemaStudioSurface({
   canEditDefinition = false,
   contextLocked = false,
   sourceHref,
-  branch,
+  branchControl,
   draftStatus,
-  workspaceTitle = 'No draft workspace',
-  workspaceId = '',
-  workspaces = [],
-  onWorkspace,
   pending = false,
   loading = false,
   error,
@@ -57,12 +53,8 @@ export function SchemaStudioSurface({
   dataEditor?: () => ReactNode;
   contextLocked?: boolean;
   sourceHref?: string;
-  branch?: string;
+  branchControl?: ReactNode;
   draftStatus?: string;
-  workspaceTitle?: string;
-  workspaceId?: string;
-  workspaces?: Array<{ id: string; title: string }>;
-  onWorkspace?: (id: string) => void;
   pending?: boolean;
   loading?: boolean;
   error?: string;
@@ -107,37 +99,7 @@ export function SchemaStudioSurface({
               <div className={s.headingContent}>
                 <h1>Schema</h1>
                 <div className={s.workspaceContext}>
-                  <label className={s.ws}>
-                    <Box aria-hidden="true" size={18} />
-                    <span>{workspaceTitle}</span>
-                    <ChevronDown aria-hidden="true" size={12} />
-                    <select
-                      aria-label="Target Workspace"
-                      value={workspaceId}
-                      onChange={(event) => onWorkspace?.(event.target.value)}
-                      disabled={!onWorkspace}
-                    >
-                      {!workspaces.some((item) => item.id === workspaceId) &&
-                      workspaces.length > 0 ? (
-                        <option value={workspaceId}>Workspace unavailable</option>
-                      ) : null}
-                      {workspaces.length ? (
-                        workspaces.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.title}
-                          </option>
-                        ))
-                      ) : (
-                        <option value="">No draft workspace</option>
-                      )}
-                    </select>
-                  </label>
-                  {branch ? (
-                    <span className={s.branch} title={branch}>
-                      <GitBranch aria-hidden="true" size={14} />
-                      {branch}
-                    </span>
-                  ) : null}
+                  {branchControl}
                   {draftStatus ? <output className={s.draftStatus}>{draftStatus}</output> : null}
                 </div>
               </div>
