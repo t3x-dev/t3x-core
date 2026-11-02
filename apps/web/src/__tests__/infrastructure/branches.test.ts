@@ -10,7 +10,7 @@ vi.mock('@/infrastructure/core', () => ({
   handleResponse: (...args: unknown[]) => handleResponseMock(...args),
 }));
 
-import { switchBranch } from '@/infrastructure/branches';
+import { createBranch, switchBranch } from '@/infrastructure/branches';
 
 describe('branches infrastructure', () => {
   beforeEach(() => {
@@ -30,6 +30,30 @@ describe('branches infrastructure', () => {
         branch_name: 'main',
         create_if_missing: true,
         parent_branch: 'feature/source',
+      }),
+    });
+  });
+
+  it('sends the exact historical head when creating a branch from an old version', async () => {
+    await createBranch(
+      'proj_1',
+      'restore/v1',
+      'main',
+      'Continue from v1',
+      false,
+      'sha256:historical'
+    );
+
+    expect(fetchWithTimeoutMock).toHaveBeenCalledWith('/v1/branches', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project_id: 'proj_1',
+        name: 'restore/v1',
+        head_commit_hash: 'sha256:historical',
+        parent_branch: 'main',
+        description: 'Continue from v1',
+        checkout: false,
       }),
     });
   });

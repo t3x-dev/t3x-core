@@ -11,7 +11,7 @@
 
 import { randomBytes } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { API_KEY_VALUE_PREFIX } from '@t3x-dev/core';
+import { API_KEY_VALUE_PREFIX, type TransitionScope } from '@t3x-dev/core';
 import { createApiKey, createLocalUser, findUserByUsername } from '@t3x-dev/storage';
 import bcrypt from 'bcryptjs';
 import { getDB } from '../lib/db';
@@ -31,6 +31,15 @@ export const authLocalRoutes = new OpenAPIHono({
 });
 
 const BCRYPT_ROUNDS = 10;
+const LOCAL_WEB_SESSION_SCOPES = [
+  'transition:inspect',
+  'transition:propose',
+  'transition:verify',
+  'transition:decide:accept',
+  'transition:decide:reject',
+  'transition:commit:create',
+  'transition:ref:advance',
+] satisfies TransitionScope[];
 
 // ============================================================
 // Schemas
@@ -135,6 +144,7 @@ authLocalRoutes.openapi(registerRoute, async (c) => {
       name: `session:${user.id}`,
       userId: user.id,
       keyValue: rawKey,
+      transitionScopes: LOCAL_WEB_SESSION_SCOPES,
     });
 
     return c.json({
@@ -227,6 +237,7 @@ authLocalRoutes.openapi(loginRoute, async (c) => {
       name: `session:${userRecord.id}`,
       userId: userRecord.id,
       keyValue: rawKey,
+      transitionScopes: LOCAL_WEB_SESSION_SCOPES,
     });
 
     return c.json({

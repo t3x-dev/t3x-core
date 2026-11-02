@@ -4,13 +4,14 @@
  * Login Page (Local Auth)
  *
  * Username + password login/register for self-hosted deployments.
- * On success, stores API key in cookie and redirects to home.
+ * On success, stores the API key in a cookie and redirects to the post-auth destination.
  */
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
-import { safeAuthCallbackUrl } from '@/domain/authCallback';
+import { postAuthDestination, safeAuthCallbackUrl } from '@/domain/authCallback';
 import { useLocalAuth } from '@/hooks/shared/useLocalAuth';
+import { getCurrentPersonalNamespace } from '@/infrastructure/namespaces';
 
 function LoginForm() {
   const router = useRouter();
@@ -55,7 +56,9 @@ function LoginForm() {
 
       // Normal flow: store session and redirect
       persistSession(session);
-      router.push(callbackUrl);
+      const personalNamespace =
+        mode === 'login' && callbackUrl === '/' ? await getCurrentPersonalNamespace() : null;
+      router.push(postAuthDestination(mode, callbackUrl, personalNamespace?.slug));
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {

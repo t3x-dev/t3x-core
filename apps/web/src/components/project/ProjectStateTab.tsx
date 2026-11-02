@@ -524,8 +524,8 @@ export function ProjectStateTab({
       ? latestBranchHeadHash
       : null;
   const handleCreateBranch = useCallback(
-    async (name: string, fromBranch = branchFocus) => {
-      await createBranch(name, fromBranch);
+    async (name: string, fromBranch = branchFocus, headCommitHash?: string) => {
+      await createBranch(name, fromBranch, headCommitHash);
       pushRoute(getProjectIdWorkspacePath(projectId, { branch: name }));
     },
     [branchFocus, createBranch, projectId, pushRoute]
@@ -850,7 +850,7 @@ function StateInspectionToolbar({
   headCommitHash: string | null;
   historyHref: string;
   onBranchChange: (branch: string) => void;
-  onCreateBranch: (name: string, fromBranch: string) => Promise<void>;
+  onCreateBranch: (name: string, fromBranch: string, headCommitHash?: string) => Promise<void>;
   onViewChange: (view: ProjectSnapshotView) => void;
   workspaceHref: string;
 }) {
@@ -885,9 +885,11 @@ function StateInspectionToolbar({
           <StateBranchControls
             branch={branch}
             branchOptions={branchOptions}
-            headCommitHash={headCommitHash}
+            headCommitHash={historical ? (headCommit?.hash ?? null) : headCommitHash}
             onBranchChange={onBranchChange}
-            onCreateBranch={onCreateBranch}
+            onCreateBranch={(name, fromBranch) =>
+              onCreateBranch(name, fromBranch, historical ? headCommit?.hash : undefined)
+            }
             showCreate={false}
           />
           {headCommit ? (

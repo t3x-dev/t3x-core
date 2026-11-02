@@ -16,6 +16,7 @@ export type RealtimeEventType =
   | 'extraction.done' // LLM extraction completed + persisted
   | 'yops.applied'
   | 'commit.created'
+  | 'branch.advanced'
   | 'conversation.renamed'
   | 'presence.join'
   | 'presence.leave';

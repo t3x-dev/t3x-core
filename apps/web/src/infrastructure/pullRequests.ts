@@ -31,6 +31,8 @@ export interface ApiProjectPullRequest {
   merge_commit_id: string | null;
   status: ProjectPullRequestStatus;
   author_id: string;
+  author_kind?: 'human' | 'agent' | 'service';
+  author_delegator_id?: string | null;
   steward_id: string | null;
   review_owner_id: string | null;
   workspace_id: string | null;
@@ -76,6 +78,7 @@ export interface ApiProjectPullRequestActivity {
     | 'merged'
     | 'closed';
   message: string;
+  details?: Record<string, unknown> | null;
   created_at: string;
 }
 

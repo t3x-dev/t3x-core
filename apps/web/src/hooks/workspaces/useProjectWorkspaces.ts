@@ -10,6 +10,7 @@ const REALTIME_RECONNECT_DELAY = 5000;
 const MAX_SEEN_EVENT_IDS = 200;
 const WORKSPACE_INVALIDATION_EVENTS = new Set([
   'commit.created',
+  'branch.advanced',
   'draft.changed',
   'extraction.done',
 ]);

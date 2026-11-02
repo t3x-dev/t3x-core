@@ -73,6 +73,15 @@ describe('Transition API authority', () => {
       id: 'service:api-key:ak_service',
       name: 'service:api-key:ak_service',
     });
+    expect(
+      deriveTrustedTransitionPrincipal(
+        key({ id: 'ak_delegated', principal_kind: 'service', user_id: 'user_one' })
+      ).actor
+    ).toEqual({
+      kind: 'service',
+      id: 'service:api-key:ak_delegated',
+      delegator: { kind: 'human', id: 'user:user_one' },
+    });
   });
 
   it('requires each capability independently', () => {

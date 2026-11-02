@@ -105,7 +105,11 @@ describe('Workspace extraction proposal routes', () => {
         mode: 'bootstrap',
         operations: [],
         result: { trees: [], relations: [] },
-        actor: { kind: 'agent', id: 'agent:api-key:ak_workspace_extract' },
+        actor: {
+          kind: 'agent',
+          id: 'agent:api-key:ak_workspace_extract',
+          delegator: { kind: 'human', id: 'user:user_1' },
+        },
         createdAt: '2026-08-05T00:00:00.000Z',
       },
       workspace: { id: 'workspace_1', projectId: 'proj_1', revision: 3 },
@@ -145,7 +149,11 @@ describe('Workspace extraction proposal routes', () => {
         workspaceId: 'workspace_1',
         expectedRevision: 2,
         source: { type: 'conversation', id: 'conv_1', turnHashes: ['turn_1'] },
-        actor: { kind: 'agent', id: 'agent:api-key:ak_workspace_extract' },
+        actor: {
+          kind: 'agent',
+          id: 'agent:api-key:ak_workspace_extract',
+          delegator: { kind: 'human', id: 'user:user_1' },
+        },
         userId: 'user_1',
         inference: expect.objectContaining({
           scope: {

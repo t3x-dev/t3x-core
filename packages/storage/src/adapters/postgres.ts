@@ -188,7 +188,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-export const POSTGRES_SCHEMA_VERSION = 79;
+export const POSTGRES_SCHEMA_VERSION = 80;
 
 function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
   if (!tableExists) return 'missing';
@@ -496,6 +496,9 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
       status TEXT NOT NULL DEFAULT 'open'
         CHECK (status IN ('draft', 'open', 'checking', 'ready', 'blocked', 'merged', 'closed')),
       author_id TEXT NOT NULL,
+      author_kind TEXT NOT NULL DEFAULT 'human'
+        CHECK (author_kind IN ('human', 'agent', 'service')),
+      author_delegator_id TEXT,
       review_owner_id TEXT,
       linked_work TEXT,
       diff_summary JSONB NOT NULL DEFAULT '{"changed_nodes":0,"yops_operations":0,"output_impacts":0,"source_refs":0}'::jsonb,
@@ -533,6 +536,7 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
       actor_id TEXT NOT NULL,
       type TEXT NOT NULL,
       message TEXT NOT NULL,
+      details JSONB,
       created_at TIMESTAMPTZ NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_pull_request_activity_pr
@@ -2663,6 +2667,57 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
   // Abnormal names and unattributed legacy claims stay untouched.
   await ensureRepositoryPaths(sql as postgres.TransactionSql);
 
+  // Schema v80: principal-private Workspaces. Legacy rows remain explicitly
+  // unowned for AUTH_DISABLED recovery; authenticated access fails closed.
+  await sql.unsafe(`
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS owner_principal_kind TEXT;
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS owner_principal_id TEXT;
+
+    ALTER TABLE drafts DROP CONSTRAINT IF EXISTS drafts_owner_pair_check;
+    ALTER TABLE drafts ADD CONSTRAINT drafts_owner_pair_check CHECK (
+      (owner_principal_kind IS NULL) = (owner_principal_id IS NULL)
+    );
+    ALTER TABLE drafts DROP CONSTRAINT IF EXISTS drafts_owner_kind_check;
+    ALTER TABLE drafts ADD CONSTRAINT drafts_owner_kind_check CHECK (
+      owner_principal_kind IS NULL OR owner_principal_kind IN ('human', 'agent', 'service')
+    );
+
+    DROP INDEX IF EXISTS idx_drafts_open_workspace_branch;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_drafts_open_workspace_branch_owner
+      ON drafts(project_id, target_branch, owner_principal_kind, owner_principal_id)
+      WHERE workspace_id IS NOT NULL
+        AND owner_principal_kind IS NOT NULL
+        AND owner_principal_id IS NOT NULL
+        AND status <> 'abandoned'
+        AND COALESCE(workspace_state_json->>'status', 'draft') <> 'committed';
+    CREATE INDEX IF NOT EXISTS idx_drafts_workspace_owner
+      ON drafts(project_id, owner_principal_kind, owner_principal_id, updated_at DESC)
+      WHERE workspace_id IS NOT NULL;
+
+    -- Workspace realtime notifications carry only the minimum routing label
+    -- needed by the WebSocket relay. The relay removes events whose owner does
+    -- not match the authenticated subscription principal.
+    CREATE OR REPLACE FUNCTION t3x_trg_draft_changed() RETURNS TRIGGER AS $$
+    BEGIN
+      IF NEW.updated_at IS DISTINCT FROM OLD.updated_at THEN
+        PERFORM t3x_emit_event(
+          'draft.changed',
+          NEW.project_id,
+          NULL,
+          jsonb_build_object(
+            'draft_id', NEW.id,
+            'workspace_id', NEW.workspace_id,
+            'revision', NEW.revision,
+            'owner_principal_kind', NEW.owner_principal_kind,
+            'owner_principal_id', NEW.owner_principal_id
+          )
+        );
+      END IF;
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+  `);
+
   // Record schema version so subsequent startups skip the init SQL.
   await sql.unsafe(`
     INSERT INTO _schema_version (singleton, version, applied_at)
@@ -2688,6 +2743,9 @@ async function ensurePullRequestsSchema(sql: postgres.Sql): Promise<void> {
       status TEXT NOT NULL DEFAULT 'open'
         CHECK (status IN ('draft', 'open', 'checking', 'ready', 'blocked', 'merged', 'closed')),
       author_id TEXT NOT NULL,
+      author_kind TEXT NOT NULL DEFAULT 'human'
+        CHECK (author_kind IN ('human', 'agent', 'service')),
+      author_delegator_id TEXT,
       review_owner_id TEXT,
       linked_work TEXT,
       diff_summary JSONB NOT NULL DEFAULT '{"changed_nodes":0,"yops_operations":0,"output_impacts":0,"source_refs":0}'::jsonb,
@@ -2725,10 +2783,26 @@ async function ensurePullRequestsSchema(sql: postgres.Sql): Promise<void> {
       actor_id TEXT NOT NULL,
       type TEXT NOT NULL,
       message TEXT NOT NULL,
+      details JSONB,
       created_at TIMESTAMPTZ NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_pull_request_activity_pr
       ON pull_request_activity(pull_request_id, created_at);
+
+    ALTER TABLE pull_requests
+      ADD COLUMN IF NOT EXISTS author_kind TEXT NOT NULL DEFAULT 'human';
+    ALTER TABLE pull_requests
+      ADD COLUMN IF NOT EXISTS author_delegator_id TEXT;
+    ALTER TABLE pull_request_activity
+      ADD COLUMN IF NOT EXISTS details JSONB;
+    DO $$
+    BEGIN
+      ALTER TABLE pull_requests
+        ADD CONSTRAINT pull_requests_author_kind_valid
+        CHECK (author_kind IN ('human', 'agent', 'service'));
+    EXCEPTION
+      WHEN duplicate_object THEN NULL;
+    END $$;
   `);
 }
 

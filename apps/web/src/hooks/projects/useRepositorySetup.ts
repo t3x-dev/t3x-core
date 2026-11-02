@@ -3,6 +3,7 @@ import { createConversation } from '@/commands/conversations';
 import { createProject } from '@/commands/projects';
 import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
 import { changeProjectVisibility } from '@/infrastructure/projects';
+import { getSessionUser } from '@/infrastructure/session';
 import { saveWorkspaceDraft } from '@/queries/workspaces';
 import { apiProjectToSummary, useProjectStore } from '@/store/projectStore';
 import type { Project } from '@/types/api';
@@ -50,13 +51,14 @@ export function useRepositorySetup() {
       if (!store.projects.some((project) => project.id === id))
         store.addToProjects(apiProjectToSummary(state.project));
       if (!state.workspace) {
-        state.workspace = (
-          await saveWorkspaceDraft(
-            id,
-            'workspace_branch:main',
-            getProjectWorkspaceStarterCandidate(id, [])
-          )
-        ).workspace;
+        const starter = getProjectWorkspaceStarterCandidate(
+          id,
+          [],
+          'main',
+          null,
+          getSessionUser()?.id
+        );
+        state.workspace = (await saveWorkspaceDraft(id, starter.id, starter)).workspace;
       }
       if (!state.conversation) {
         const conversation = await createConversation(

@@ -240,6 +240,9 @@ export interface PrepareRepositoryYOpsMergeWriteInput {
   sourceCommit: CommitV2;
   targetCommit: CommitV2;
   decisions: MergeDecision;
+  /** Actor that opened the reviewed change. Defaults to the deciding actor for direct merges. */
+  proposalActor?: RepositoryWriterActorRef;
+  /** Actor authorizing this exact merge Result and ref advance. */
   actor: RepositoryWriterActorRef;
   message: string;
   policyBinding: RepositoryWriterPolicyBinding;
@@ -470,7 +473,7 @@ export function prepareRepositoryYOpsStateWrite(
     target: preparedTarget,
     proposal: graph.proposal,
     effect: graph.effect,
-    actor: graph.proposal.actor,
+    actor,
     observations,
     policyBinding: input.policyBinding,
     sources: REPOSITORY_STATE_OBSERVATION_SCOPE.sources,
@@ -488,6 +491,7 @@ export function prepareRepositoryYOpsMergeWrite(
   input: PrepareRepositoryYOpsMergeWriteInput
 ): PreparedRepositoryYOpsMergeWrite {
   const actor = immutableSnapshot(input.actor);
+  const proposalActor = immutableSnapshot(input.proposalActor ?? input.actor);
   const mergeInput = {
     target: input.targetState,
     mergeBase: input.mergeBaseState,
@@ -526,7 +530,7 @@ export function prepareRepositoryYOpsMergeWrite(
       review: emptyProposalReview(),
     },
     effect: merged.effect,
-    actor,
+    actor: proposalActor,
   });
   if (!compiled.ok) throw new RepositoryStateProposalError(compiled.issues);
 
@@ -590,7 +594,7 @@ export function prepareRepositoryYOpsMergeWrite(
     target: preparedTarget,
     proposal: graph.proposal,
     effect: graph.effect,
-    actor: graph.proposal.actor,
+    actor,
     observations,
     policyBinding: input.policyBinding,
     sources: REPOSITORY_MERGE_OBSERVATION_SCOPE.sources,

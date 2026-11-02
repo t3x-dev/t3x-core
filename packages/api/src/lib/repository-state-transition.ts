@@ -641,6 +641,8 @@ export async function reviewRepositoryYOpsMerge(
 export interface CommitRepositoryYOpsMergeInput extends PrepareRepositoryYOpsMergeInput {
   refName: string;
   decisions: MergeDecision;
+  /** Reviewed PR author; distinct from actor when another principal approves the merge. */
+  proposalActor?: ActorRef;
   actor: ActorRef;
   message: string;
   /** Exact server-selected policy binding; compatibility callers retain the built-in policy. */
@@ -741,6 +743,7 @@ async function commitRepositoryYOpsMergeInTransaction(
     sourceCommit: context.source.commit,
     targetCommit: context.target.commit,
     decisions: input.decisions,
+    ...(input.proposalActor === undefined ? {} : { proposalActor: input.proposalActor }),
     ...(context.schema
       ? {
           contentMigration: {

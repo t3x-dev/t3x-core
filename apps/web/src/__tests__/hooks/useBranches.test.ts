@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanupRoots, renderHook, waitForHook } from './renderHook';
 
@@ -9,7 +10,7 @@ vi.mock('@/infrastructure/branches', () => ({
 }));
 
 import { useBranches } from '@/hooks/shared/useBranches';
-import { listBranches } from '@/infrastructure/branches';
+import { createBranch, listBranches } from '@/infrastructure/branches';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -48,6 +49,31 @@ describe('shared useBranches', () => {
 
     expect(result.current.branches).toEqual([]);
     expect(result.current.branchHeads).toEqual({});
+    unmount();
+  });
+
+  it('pins a new branch to the requested historical commit', async () => {
+    vi.mocked(listBranches).mockResolvedValue({ branches: [] } as never);
+    vi.mocked(createBranch).mockResolvedValue({
+      name: 'restore/v1',
+      head_commit_hash: 'sha256:historical',
+    } as never);
+
+    const { result, unmount } = renderHook(() => useBranches('proj_1', true));
+    await waitForHook();
+    await act(async () => {
+      await result.current.create('restore/v1', 'main', 'sha256:historical');
+    });
+
+    expect(createBranch).toHaveBeenCalledWith(
+      'proj_1',
+      'restore/v1',
+      'main',
+      undefined,
+      false,
+      'sha256:historical'
+    );
+    expect(result.current.branchHeads).toEqual({ 'restore/v1': 'sha256:historical' });
     unmount();
   });
 });

@@ -27,6 +27,7 @@ repository.
 - [Stability summary](stability.md)
 - [Stability policy](release/stability-policy.md)
 - [Transition application convergence](architecture/transition-application-convergence.md)
+- [Reliable Workspace Gate 1](architecture/reliable-workspace-gate-1.md)
 - [Transition conformance](../packages/transition/conformance/README.md)
 - [Branch protection](contributing/branch-protection.md)
 - [PR and release guards](contributing/pr-and-release-guards.md)

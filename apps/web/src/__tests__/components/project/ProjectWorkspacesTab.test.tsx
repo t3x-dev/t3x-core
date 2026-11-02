@@ -9,6 +9,7 @@ import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates'
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
 const mocks = vi.hoisted(() => ({
+  userId: 'user_test_a',
   query: 'tab=workspaces',
   workspaces: [] as WorkspaceCandidate[],
   branchHeads: { main: null } as Record<string, string | null>,
@@ -37,6 +38,9 @@ vi.mock('@/components/workspaces/WorkspaceSnapshotReview', () => ({
 }));
 vi.mock('@/hooks/materials/useProjectMaterials', () => ({
   useProjectMaterials: () => ({ materials: [], refresh: mocks.refresh }),
+}));
+vi.mock('@/hooks/shared/useSession', () => ({
+  useSession: () => ({ getUser: () => ({ id: mocks.userId }) }),
 }));
 vi.mock('@/hooks/shared/useBranches', () => ({
   useBranches: () => ({
@@ -79,6 +83,7 @@ function draft(id: string, branch = 'main'): WorkspaceCandidate {
 describe('ProjectWorkspacesTab navigation and persisted drafts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.userId = 'user_test_a';
     mocks.query = 'tab=workspaces';
     mocks.workspaces = [];
     mocks.branchHeads = { main: null };
@@ -92,6 +97,10 @@ describe('ProjectWorkspacesTab navigation and persisted drafts', () => {
       schemaBindings: [],
     });
     expect(mocks.props.branchOptions).toEqual(['main']);
+  });
+  it('gives each authenticated user a private starter Workspace ID', () => {
+    render(<ProjectWorkspacesTab projectId="proj_test" />);
+    expect(mocks.props.candidates[0].id).toBe('workspace_branch:main:human:user_test_a');
   });
   it('preserves the explicitly requested draft when several share a branch', () => {
     mocks.workspaces = [draft('first'), draft('requested')];

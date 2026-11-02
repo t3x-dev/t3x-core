@@ -1,6 +1,6 @@
 'use client';
 import { ArrowRight, Box, Plus, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StateSemanticReader, StateValueReader } from '@/components/project/StateValueReader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,16 +18,30 @@ export function WorkspaceContentEditor({ candidate }: { candidate: WorkspaceCand
   const { loadDraftContent, rootKey } = useWorkspaceYOps(candidate);
   const transition = useWorkspaceTransition(candidate);
   const [content, setContent] = useState<WorkspaceTransitionContent>();
+  const [pendingRemote, setPendingRemote] = useState<{
+    content: WorkspaceTransitionContent;
+    revision: number | undefined;
+  }>();
   const [error, setError] = useState<string>();
   const [why, setWhy] = useState('');
+  const dirty = useRef(false);
+  const loadedRevision = useRef<number | undefined>(undefined);
   const busy = transition.state.phase === 'reviewing';
   useEffect(() => {
     let current = true;
     void loadDraftContent()
       .then((result) => {
         if (!current) return;
-        // Realtime draft saves refresh the candidate; never overwrite local author edits.
-        setContent((existing) => existing ?? result);
+        if (dirty.current && loadedRevision.current !== candidate.revision) {
+          // A CLI/MCP/Web write may refresh the candidate while a human still has
+          // unpublished browser input. Keep both versions until the human explicitly
+          // chooses the server Draft; never silently replace the local buffer.
+          setPendingRemote({ content: result, revision: candidate.revision });
+          return;
+        }
+        loadedRevision.current = candidate.revision;
+        setPendingRemote(undefined);
+        setContent(result);
       })
       .catch((cause: unknown) => {
         if (current) setError(String(cause));
@@ -35,9 +49,10 @@ export function WorkspaceContentEditor({ candidate }: { candidate: WorkspaceCand
     return () => {
       current = false;
     };
-  }, [loadDraftContent]);
+  }, [candidate.revision, loadDraftContent]);
   function update(trees: WorkspaceYOpsTreeNode[]) {
     if (!content) return;
+    dirty.current = true;
     transition.reset();
     setError(undefined);
     setContent({ ...content, trees });
@@ -58,12 +73,42 @@ export function WorkspaceContentEditor({ candidate }: { candidate: WorkspaceCand
           </p>
         )}
         {error ? <p role="alert">{error}</p> : null}
+        {pendingRemote ? (
+          <section
+            aria-label="Remote Draft changed"
+            className="mb-4 rounded-md border border-[var(--status-warning)] p-3 text-sm"
+          >
+            <output className="block">
+              This Draft changed in another Web, CLI, or MCP entry. Your unsaved browser edits are
+              preserved, and Review is paused to prevent a silent overwrite.
+            </output>
+            <Button
+              className="mt-3"
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                dirty.current = false;
+                loadedRevision.current = pendingRemote.revision;
+                setContent(pendingRemote.content);
+                setPendingRemote(undefined);
+                setError(undefined);
+                transition.reset();
+              }}
+            >
+              Load remote Draft and discard local edits
+            </Button>
+          </section>
+        ) : null}
         {!content && !error ? <output>Loading current draft…</output> : null}
         <form
           onChange={transition.reset}
           onSubmit={(event) => {
             event.preventDefault();
             if (!content) return;
+            if (pendingRemote) {
+              setError('Resolve the remote Draft update before preparing Review.');
+              return;
+            }
             if (rootKey && (content.trees.length !== 1 || content.trees[0]?.key !== rootKey)) {
               setError(`Keep one ${rootKey} root node and add your content inside it.`);
               return;
@@ -99,6 +144,7 @@ export function WorkspaceContentEditor({ candidate }: { candidate: WorkspaceCand
                 id="content-change-note"
                 value={why}
                 onChange={(event) => {
+                  dirty.current = true;
                   transition.reset();
                   setWhy(event.target.value);
                 }}
@@ -106,7 +152,7 @@ export function WorkspaceContentEditor({ candidate }: { candidate: WorkspaceCand
                 className="mt-2"
               />
             </label>
-            <Button disabled={!content || busy} type="submit">
+            <Button disabled={!content || busy || Boolean(pendingRemote)} type="submit">
               Review structured change <ArrowRight className="size-4" />
             </Button>
           </fieldset>

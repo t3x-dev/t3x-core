@@ -798,6 +798,12 @@ export interface Draft {
   /** Stable Workspace ID when a draft backs the Project Workspaces flow */
   workspace_id?: string;
 
+  /** Server-derived principal that owns this private Workspace. */
+  owner_principal_kind?: ApiKeyPrincipalKind;
+
+  /** Canonical principal ID paired with owner_principal_kind. */
+  owner_principal_id?: string;
+
   /** Current Workspace staged state for the Project Workspaces flow */
   workspace_state?: Record<string, unknown>;
 
@@ -831,6 +837,8 @@ export interface CreateDraftInput {
   target_branch?: string;
   preview_type?: string;
   workspace_id?: string;
+  owner_principal_kind?: ApiKeyPrincipalKind;
+  owner_principal_id?: string;
   workspace_state?: Record<string, unknown>;
 }
 

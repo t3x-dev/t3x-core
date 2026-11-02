@@ -1000,6 +1000,10 @@ export const drafts = pgTable(
     /** Stable Workspace ID for Project Workspaces staged state */
     workspaceId: text('workspace_id'),
 
+    /** Server-derived owner of this private Workspace. Null only for legacy/local rows. */
+    ownerPrincipalKind: text('owner_principal_kind'),
+    ownerPrincipalId: text('owner_principal_id'),
+
     /** Current Workspace staged state */
     workspaceStateJson: jsonb('workspace_state_json').$type<Record<string, unknown>>(),
 
@@ -1027,11 +1031,19 @@ export const drafts = pgTable(
     workspaceIdx: uniqueIndex('idx_drafts_workspace')
       .on(table.projectId, table.workspaceId)
       .where(sql`${table.workspaceId} IS NOT NULL`),
-    openWorkspaceBranchIdx: uniqueIndex('idx_drafts_open_workspace_branch')
-      .on(table.projectId, table.targetBranch)
+    openWorkspaceBranchOwnerIdx: uniqueIndex('idx_drafts_open_workspace_branch_owner')
+      .on(table.projectId, table.targetBranch, table.ownerPrincipalKind, table.ownerPrincipalId)
       .where(
-        sql`${table.workspaceId} IS NOT NULL AND ${table.status} <> 'abandoned' AND COALESCE(${table.workspaceStateJson}->>'status', 'draft') <> 'committed'`
+        sql`${table.workspaceId} IS NOT NULL AND ${table.ownerPrincipalKind} IS NOT NULL AND ${table.ownerPrincipalId} IS NOT NULL AND ${table.status} <> 'abandoned' AND COALESCE(${table.workspaceStateJson}->>'status', 'draft') <> 'committed'`
       ),
+    ownerPairCheck: check(
+      'drafts_owner_pair_check',
+      sql`(${table.ownerPrincipalKind} IS NULL) = (${table.ownerPrincipalId} IS NULL)`
+    ),
+    ownerKindCheck: check(
+      'drafts_owner_kind_check',
+      sql`${table.ownerPrincipalKind} IS NULL OR ${table.ownerPrincipalKind} IN ('human', 'agent', 'service')`
+    ),
   })
 );
 

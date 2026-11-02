@@ -31,7 +31,14 @@ export function useWorkspaceFlow() {
       targetBranch,
     }: StartWorkspaceIterationOptions): Promise<StartWorkspaceIterationResult> => {
       if (createBranchFrom) {
-        await createBranch(candidate.projectId, targetBranch, createBranchFrom);
+        await createBranch(
+          candidate.projectId,
+          targetBranch,
+          createBranchFrom,
+          undefined,
+          false,
+          parentCommitHash
+        );
         const workspaceId = `workspace_branch:${encodeURIComponent(targetBranch)}`;
         const workspaces = await fetchProjectWorkspaces(candidate.projectId);
         const workspace = workspaces.find(

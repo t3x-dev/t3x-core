@@ -84,6 +84,8 @@ describe('Pull Requests Storage', () => {
       sourceCommitHash: 'sha256:ready-source',
       targetBaseCommitHash: 'sha256:target',
       authorId: 'user_1',
+      authorKind: 'agent',
+      authorDelegatorId: 'user_admin',
       status: 'ready',
     });
 
@@ -106,12 +108,37 @@ describe('Pull Requests Storage', () => {
       actorId: 'user_1',
       type: 'created',
       message: 'Pull request created.',
+      details: {
+        actor: {
+          kind: 'agent',
+          id: 'agent:api-key:test',
+          delegator: { kind: 'human', id: 'user_admin' },
+        },
+        source_commit_id: 'sha256:ready-source',
+        target_commit_id: 'sha256:target',
+      },
     });
 
     expect(await listPullRequestChecks(db, pullRequest.pullRequestId)).toHaveLength(2);
     expect(await listPullRequestActivity(db, pullRequest.pullRequestId)).toMatchObject([
-      { type: 'created', message: 'Pull request created.' },
+      {
+        type: 'created',
+        message: 'Pull request created.',
+        details: {
+          actor: {
+            kind: 'agent',
+            id: 'agent:api-key:test',
+            delegator: { kind: 'human', id: 'user_admin' },
+          },
+          source_commit_id: 'sha256:ready-source',
+          target_commit_id: 'sha256:target',
+        },
+      },
     ]);
+    expect(pullRequest).toMatchObject({
+      authorKind: 'agent',
+      authorDelegatorId: 'user_admin',
+    });
 
     const mergedAt = new Date();
     const merged = await updatePullRequest(db, pullRequest.pullRequestId, {

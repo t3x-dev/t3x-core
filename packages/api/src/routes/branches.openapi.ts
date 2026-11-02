@@ -35,6 +35,7 @@ import {
   branchRulesFromBinding,
   planBranchRuleChange,
 } from '../lib/transition-control-plane/applicable-policy';
+import { workspaceOwnerFromContext } from '../middleware/workspace-access';
 import {
   CursorPageResponseSchema,
   ErrorResponseSchema,
@@ -177,6 +178,7 @@ const createBranchRoute = createRoute({
           schema: z.object({
             project_id: z.string().min(1),
             name: z.string().min(1),
+            head_commit_hash: z.string().min(1).optional(),
             parent_branch: z.string().optional(),
             description: z.string().optional(),
           }),
@@ -366,7 +368,7 @@ branchRoutes.openapi(createBranchRoute, async (c) => {
 
     const existing = await findBranchByName(db, body.project_id, body.name);
     if (existing) {
-      if (branchMatchesCreateIntent(existing, body.parent_branch ?? null)) {
+      if (branchMatchesCreateIntent(existing, body.parent_branch ?? null, body.head_commit_hash)) {
         return c.json({ success: true as const, data: await withRules(db, existing) }, 200);
       }
       return errorResponse(
@@ -380,6 +382,9 @@ branchRoutes.openapi(createBranchRoute, async (c) => {
       const branch = await createBranchWorkspace(db, {
         projectId: body.project_id,
         name: body.name,
+        actor: deriveTrustedTransitionPrincipal(authenticatedApiKey(c)).actor,
+        owner: workspaceOwnerFromContext(c) ?? undefined,
+        headCommitHash: body.head_commit_hash,
         parentBranch: body.parent_branch,
         description: body.description,
       });
@@ -388,7 +393,9 @@ branchRoutes.openapi(createBranchRoute, async (c) => {
     } catch (err) {
       const concurrent = await findBranchByName(db, body.project_id, body.name);
       if (concurrent) {
-        if (branchMatchesCreateIntent(concurrent, body.parent_branch ?? null)) {
+        if (
+          branchMatchesCreateIntent(concurrent, body.parent_branch ?? null, body.head_commit_hash)
+        ) {
           return c.json({ success: true as const, data: await withRules(db, concurrent) }, 200);
         }
         return errorResponse(
@@ -408,10 +415,14 @@ branchRoutes.openapi(createBranchRoute, async (c) => {
 });
 
 function branchMatchesCreateIntent(
-  branch: { parentBranch: string | null },
-  parentBranch: string | null
+  branch: { headCommitHash: string | null; parentBranch: string | null },
+  parentBranch: string | null,
+  headCommitHash?: string
 ): boolean {
-  return branch.parentBranch === parentBranch;
+  return (
+    branch.parentBranch === parentBranch &&
+    (headCommitHash === undefined || branch.headCommitHash === headCommitHash)
+  );
 }
 
 // GET /v1/branches/current - Get current branch
@@ -464,6 +475,8 @@ branchRoutes.openapi(switchBranchRoute, async (c) => {
         branch = await createBranchWorkspace(db, {
           projectId: body.project_id,
           name: body.branch_name,
+          actor: deriveTrustedTransitionPrincipal(authenticatedApiKey(c)).actor,
+          owner: workspaceOwnerFromContext(c) ?? undefined,
           parentBranch: body.parent_branch,
         });
       } else {

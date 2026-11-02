@@ -26,6 +26,7 @@ interface BrowserApiResult<T = unknown> {
 
 const authEnabled = process.env.T3X_E2E_AUTH_ENABLED === '1';
 const runId = `${Date.now()}-${process.pid}`;
+const aliceNamespace = `alice-${runId}`;
 const alice: Identity = {
   username: `e2e_alice_${runId}`,
   password: 'alice-password-123',
@@ -64,9 +65,21 @@ test.describe('authenticated browser boundaries', () => {
     expect(payload.success).toBe(true);
     aliceSession = payload.data;
 
-    await expect(page).toHaveURL('/');
-    await expect(page.getByRole('heading', { name: 't3x-dev' })).toBeVisible();
+    await expect(page).toHaveURL('/onboarding/namespace');
     await expect.poll(() => readSessionKey(page)).toBe(aliceSession.api_key);
+
+    await page.getByLabel('Personal namespace').fill(aliceNamespace);
+    const namespaceCreation = page.waitForResponse(
+      (namespaceResponse) =>
+        namespaceResponse.url() === `${API_BASE}/namespaces` &&
+        namespaceResponse.request().method() === 'POST'
+    );
+    await page.getByRole('button', { name: 'Continue' }).click();
+
+    expect((await namespaceCreation).status()).toBe(201);
+    await expect(page).toHaveURL(`/${aliceNamespace}`);
+    await expect(page.getByRole('heading', { name: aliceNamespace })).toBeVisible();
+    await expect(page.getByText('Namespace access denied')).toHaveCount(0);
   });
 
   test('keeps project HTTP and WebSocket access isolated between browser sessions', async ({
@@ -74,10 +87,7 @@ test.describe('authenticated browser boundaries', () => {
     page,
     request,
   }) => {
-    const aliceKey = await loginThroughBrowser(page, alice);
-    expect(
-      (await browserApi(page, aliceKey, 'POST', '/namespaces', { slug: `alice-${runId}` })).status
-    ).toBe(201);
+    const aliceKey = await loginThroughBrowser(page, alice, `/${aliceNamespace}`);
     const aliceProjectName = `Alice-Private-${runId}`;
     const aliceProject = await browserApi<{ project_id: string }>(
       page,
@@ -96,7 +106,7 @@ test.describe('authenticated browser boundaries', () => {
     const bobPage = await bobContext.newPage();
 
     try {
-      const bobKey = await loginThroughBrowser(bobPage, bob);
+      const bobKey = await loginThroughBrowser(bobPage, bob, '/onboarding/namespace');
       expect(
         (await browserApi(bobPage, bobKey, 'POST', '/namespaces', { slug: `bob-${runId}` })).status
       ).toBe(201);
@@ -149,7 +159,7 @@ test.describe('authenticated browser boundaries', () => {
   });
 
   test('rejects a browser session immediately after its API key is revoked', async ({ page }) => {
-    const administratorKey = await loginThroughBrowser(page, alice);
+    const administratorKey = await loginThroughBrowser(page, alice, `/${aliceNamespace}`);
     const created = await browserApi<{ id: string; key: string }>(
       page,
       administratorKey,
@@ -195,14 +205,17 @@ async function registerThroughApi(
   return payload.data as Session;
 }
 
-async function loginThroughBrowser(page: Page, identity: Identity): Promise<string> {
+async function loginThroughBrowser(
+  page: Page,
+  identity: Identity,
+  expectedDestination: string
+): Promise<string> {
   await page.goto('/login');
   await page.getByLabel('Username').fill(identity.username);
   await page.getByLabel('Password').fill(identity.password);
   await page.getByRole('button', { name: 'Sign In' }).click();
 
-  await expect(page).toHaveURL('/');
-  await expect(page.getByRole('heading', { name: 't3x-dev' })).toBeVisible();
+  await expect(page).toHaveURL(expectedDestination);
   const key = await readSessionKey(page);
   expect(key).toBeTruthy();
   return key as string;

@@ -1,11 +1,20 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 
+const mocks = vi.hoisted(() => ({ getCurrentPersonalNamespace: vi.fn() }));
+
+vi.mock('@/infrastructure/namespaces', () => ({
+  getCurrentPersonalNamespace: mocks.getCurrentPersonalNamespace,
+}));
+
 describe('DiscoverHeader navigation', () => {
+  beforeEach(() => {
+    mocks.getCurrentPersonalNamespace.mockResolvedValue({ slug: 'test-b2' });
+  });
   it('preserves the current branch and Workspace on canonical repository tabs', () => {
     const settingsHref = '/orbit/release/settings?returnTo=%2Forbit%2Frelease%3Ftab%3Dworkspaces';
     render(
@@ -61,7 +70,7 @@ describe('DiscoverHeader navigation', () => {
     ).toBe(true);
   });
 
-  it('keeps namespace settings and repository creation under the supplied owner', () => {
+  it('keeps namespace settings and repository creation under the supplied owner', async () => {
     render(
       <DiscoverHeader
         owner="orbit-labs"
@@ -86,6 +95,18 @@ describe('DiscoverHeader navigation', () => {
     expect(screen.getByRole('link', { name: 'Account settings' })).toHaveAttribute(
       'href',
       '/settings/profile'
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: 'T3X home' })).toHaveAttribute('href', '/test-b2')
+    );
+  });
+
+  it('falls back to the visible owner when no personal namespace exists', async () => {
+    mocks.getCurrentPersonalNamespace.mockResolvedValueOnce(null);
+    render(<DiscoverHeader owner="orbit-labs" namespaceTab="repositories" />);
+
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: 'T3X home' })).toHaveAttribute('href', '/orbit-labs')
     );
   });
 

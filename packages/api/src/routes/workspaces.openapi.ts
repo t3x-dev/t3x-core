@@ -28,12 +28,14 @@ import {
   insertYOpsLogEntry,
   listTransitionReviewSnapshots,
   listWorkspaceDrafts,
+  listWorkspaceDraftsForOwner,
   type StoredTransitionReviewSnapshot,
   TransitionHeadConflictError,
   TransitionRefHeadIntegrityError,
   TransitionRefNotFoundError,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
+import { isAuthenticationDisabled } from '../lib/auth-config';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
@@ -55,6 +57,7 @@ import {
   WorkspaceTransitionSchemaUnavailableError,
 } from '../lib/workspace-transition';
 import { resolveWorkspaceTransitionAuthority } from '../lib/workspace-transition-authority';
+import { workspaceOwnerFromContext } from '../middleware/workspace-access';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import { workspaceDeliveryRoutes } from './workspace-deliveries.openapi';
 
@@ -752,7 +755,11 @@ workspaceRoutes.openapi(listWorkspacesRoute, async (c) => {
   const db = await getDB();
   const access = await assertProjectAccess(c, db, projectId);
   if (access instanceof Response) return access;
-  const drafts = await listWorkspaceDrafts(db, projectId);
+  const owner = workspaceOwnerFromContext(c);
+  const drafts =
+    isAuthenticationDisabled() || !owner
+      ? await listWorkspaceDrafts(db, projectId)
+      : await listWorkspaceDraftsForOwner(db, projectId, owner);
   const workspaces = drafts.flatMap((draft) =>
     draft.workspace_state ? [workspaceFromDraft(draft, draft.workspace_id ?? draft.id)] : []
   );
@@ -788,6 +795,7 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
   const access = await assertProjectAccess(c, db, projectId);
   if (access instanceof Response) return access;
   const storedDraft = await findWorkspaceDraft(db, projectId, workspaceId);
+  const owner = workspaceOwnerFromContext(c);
   const storedWorkspace = storedDraft?.workspace_state ?? {};
   const {
     backendCandidateId: _storedBackendCandidateId,
@@ -867,6 +875,7 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
       title: stringFromWorkspace(persistedWorkspace, 'title', workspaceId),
       parent_commit_hash: nullableStringFromWorkspace(persistedWorkspace, 'baseCommitHash'),
       target_branch: stringFromWorkspace(persistedWorkspace, 'targetBranch', 'main'),
+      ...(owner ? { owner } : {}),
       workspace_state: workspaceStateForPersistence(persistedWorkspace),
     },
     ifRevision

@@ -43,9 +43,10 @@ import { Hono } from 'hono';
 import type { UpgradeWebSocket } from 'hono/ws';
 import { getDB } from '../lib/db';
 import { createError } from '../lib/errors';
+import type { RealtimeEvent } from '../lib/event-bus';
 import { replayEventsSince } from '../lib/event-replay';
 import { evaluateProjectAccess } from '../lib/project-access';
-import { type RoomConnection, roomManager } from '../lib/room-manager';
+import { canReceiveRealtimeEvent, type RoomConnection, roomManager } from '../lib/room-manager';
 import { type BearerTokenVerifier, verifyBearerToken } from '../middleware/auth';
 import { pinoLogger } from '../middleware/logger';
 
@@ -62,6 +63,8 @@ export function createWsRoute(
     // presence label. Authenticated connections replace this with the
     // verified principal below.
     let connectionUserId = c.req.query('user_id') ?? 'anonymous';
+    const authenticationDisabled = process.env.AUTH_DISABLED?.toLowerCase() === 'true';
+    let workspaceOwner: RoomConnection['workspaceOwner'];
     const token = c.req.query('token') ?? null;
     const lastEventIdRaw = c.req.query('last_event_id') ?? null;
     const lastEventId = lastEventIdRaw ? safeBigInt(lastEventIdRaw) : null;
@@ -76,7 +79,7 @@ export function createWsRoute(
 
     // Authenticate unless AUTH_DISABLED is explicitly set (case-insensitive).
     // Matches the gate used by authMiddleware.
-    if (process.env.AUTH_DISABLED?.toLowerCase() !== 'true') {
+    if (!authenticationDisabled) {
       if (!token) {
         return c.json(createError('UNAUTHORIZED', 'Missing token'), 401);
       }
@@ -118,6 +121,9 @@ export function createWsRoute(
         connectionUserId =
           principal.userId ??
           `${principal.principalKind}:api-key:${principal.keyId ?? 'ephemeral'}`;
+        workspaceOwner = principal.userId
+          ? { kind: 'human', id: principal.userId }
+          : { kind: principal.principalKind, id: principal.keyId ?? 'ephemeral' };
         // Fire-and-forget: update last_used_at only for persisted credentials.
         // Short-lived credentials such as deployment JWTs have no key row.
         // Errors are swallowed so a DB hiccup during touch doesn't poison the
@@ -149,6 +155,8 @@ export function createWsRoute(
             id: connectionId,
             ws: ws as unknown as RoomConnection['ws'],
             userId: connectionUserId,
+            workspaceOwner,
+            authenticationDisabled,
             joinedAt: Date.now(),
           };
           for (const key of roomKeys) {
@@ -192,18 +200,16 @@ export function createWsRoute(
                   conversationId: conversationId ?? undefined,
                 });
                 for (const row of missed) {
+                  const replayedEvent = {
+                    type: row.type as RealtimeEvent['type'],
+                    conversationId: row.conversationId ?? '',
+                    projectId: row.projectId,
+                    payload: { ...(row.payload ?? {}), event_id: row.id.toString() },
+                    timestamp: row.createdAt.getTime(),
+                  } satisfies RealtimeEvent;
+                  if (!canReceiveRealtimeEvent(conn, replayedEvent)) continue;
                   try {
-                    ws.send(
-                      JSON.stringify({
-                        type: row.type,
-                        conversationId: row.conversationId ?? '',
-                        projectId: row.projectId,
-                        // event_id is owned by the relay — intentionally overwrites
-                        // any same-named key in row.payload. Matches realtime-listener.ts.
-                        payload: { ...(row.payload ?? {}), event_id: row.id.toString() },
-                        timestamp: row.createdAt.getTime(),
-                      })
-                    );
+                    ws.send(JSON.stringify(replayedEvent));
                   } catch {
                     // Socket died mid-replay — stop pushing, live subscription cleanup
                     // handles the rest via onClose/onError.

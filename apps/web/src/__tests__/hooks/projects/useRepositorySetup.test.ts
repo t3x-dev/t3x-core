@@ -19,6 +19,9 @@ vi.mock('@/infrastructure/core', async (importOriginal) => ({
   fetchWithTimeout: mocks.schemaRequest,
 }));
 vi.mock('@/commands/conversations', () => ({ createConversation: mocks.conversation }));
+vi.mock('@/infrastructure/session', () => ({
+  getSessionUser: () => ({ id: 'user_test_a' }),
+}));
 vi.mock('@/infrastructure/projects', () => ({
   updateProject: mocks.update,
   changeProjectVisibility: mocks.visibility,
@@ -67,7 +70,7 @@ it('creates an empty Workspace and conversation without AI defaults, material or
   expect(mocks.save.mock.calls[0]![2].sourceBundle).toEqual([]);
   expect(mocks.conversation).toHaveBeenCalledWith('p', 'Test source chat', undefined, undefined, {
     target_branch: 'main',
-    workspace_id: 'workspace_branch:main',
+    workspace_id: 'workspace_branch:main:human:user_test_a',
   });
 });
 it('resumes after a conversation failure without creating another repository or uploading again', async () => {

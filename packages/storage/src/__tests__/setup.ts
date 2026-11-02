@@ -658,6 +658,9 @@ CREATE TABLE IF NOT EXISTS pull_requests (
   status TEXT NOT NULL DEFAULT 'open'
     CHECK (status IN ('draft', 'open', 'checking', 'ready', 'blocked', 'merged', 'closed')),
   author_id TEXT NOT NULL,
+  author_kind TEXT NOT NULL DEFAULT 'human'
+    CHECK (author_kind IN ('human', 'agent', 'service')),
+  author_delegator_id TEXT,
   review_owner_id TEXT,
   linked_work TEXT,
   diff_summary JSONB NOT NULL DEFAULT '{"changed_nodes":0,"yops_operations":0,"output_impacts":0,"source_refs":0}'::jsonb,
@@ -695,6 +698,7 @@ CREATE TABLE IF NOT EXISTS pull_request_activity (
   actor_id TEXT NOT NULL,
   type TEXT NOT NULL,
   message TEXT NOT NULL,
+  details JSONB,
   created_at TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_pull_request_activity_pr

@@ -1,10 +1,12 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { AssistantSchemaSettingsInputSchema } from '@t3x-dev/api-client';
 import type { DraftDocument } from '@t3x-dev/application';
 import { type DraftYOp, DraftYOpSchema } from '@t3x-dev/application';
 import { ConflictError, DraftAuthoringConflictError, NotFoundError } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
+import { StudioError } from '../lib/schema-studio-preview';
 import {
   requireTransitionAuthority,
   TransitionProjectScopeDeniedError,
@@ -12,7 +14,9 @@ import {
   transitionApiKey,
 } from '../lib/transition-authority';
 import { wireTransitionView } from '../lib/transition-control-plane/wire';
+import { createAssistantSchemaSettingsService } from '../lib/workspace-assistant/schema-settings';
 import {
+  assertWorkspaceAuthoringCommandBasis,
   confirmWorkspaceDeletion,
   initializeWorkspaceAuthoring,
   publishWorkspaceAuthoringAction,
@@ -20,7 +24,13 @@ import {
 } from '../lib/workspace-authoring';
 import { prepareWorkspaceAuthoringReview } from '../lib/workspace-authoring-review';
 import { publishWorkspaceGeneration } from '../lib/workspace-generation-publication';
-import { reconcileWorkspaceAuthoring } from '../lib/workspace-reconciliation';
+import {
+  decideWorkspaceReconciliation,
+  prepareWorkspaceReconciliation,
+  reconcileWorkspaceAuthoring,
+  WorkspaceReconciliationConflictError,
+  WorkspaceReconciliationValidationError,
+} from '../lib/workspace-reconciliation';
 import { ErrorResponseSchema } from '../schemas/common';
 
 const Params = z.object({ projectId: z.string().min(1), workspaceId: z.string().min(1) });
@@ -128,6 +138,32 @@ const publish = createRoute({
   responses,
 });
 
+const publishSchema = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/schema-actions',
+  tags: ['Workspaces'],
+  request: {
+    params: Params,
+    body: {
+      content: {
+        'application/json': {
+          schema: z
+            .object({
+              request_id: Identity,
+              expected_workspace_revision: z.number().int().positive(),
+              expected_revision: z.number().int().nonnegative(),
+              expected_ref_head: RefHead,
+              settings: AssistantSchemaSettingsInputSchema,
+              discard_studio_candidate: z.boolean().optional(),
+            })
+            .strict(),
+        },
+      },
+    },
+  },
+  responses,
+});
+
 const reconcile = createRoute({
   method: 'post',
   path: '/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/reconciliation',
@@ -151,14 +187,121 @@ const reconcile = createRoute({
   responses,
 });
 
+const prepareReconciliation = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/reconciliation/preparations',
+  tags: ['Workspaces'],
+  request: {
+    params: Params,
+    body: {
+      content: {
+        'application/json': {
+          schema: z
+            .object({
+              expected_workspace_revision: z.number().int().positive(),
+              expected_ref_head: RefHead,
+            })
+            .strict(),
+        },
+      },
+    },
+  },
+  responses,
+});
+
+const decideReconciliation = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/reconciliation/decisions',
+  tags: ['Workspaces'],
+  request: {
+    params: Params,
+    body: {
+      content: {
+        'application/json': {
+          schema: z
+            .object({
+              request_id: Identity,
+              expected_workspace_revision: z.number().int().positive(),
+              expected_ref_head: RefHead,
+              preparation_digest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+              action: z.enum(['adopt', 'cancel', 'discard', 'resolve']),
+              resolutions: z
+                .array(
+                  z.discriminatedUnion('choice', [
+                    z
+                      .object({
+                        conflict_id: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+                        choice: z.enum(['base', 'ours', 'theirs']),
+                      })
+                      .strict(),
+                    z
+                      .object({
+                        conflict_id: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+                        choice: z.literal('custom'),
+                        value: z.json(),
+                      })
+                      .strict(),
+                  ])
+                )
+                .max(1000)
+                .optional(),
+            })
+            .strict()
+            .superRefine((value, context) => {
+              if (value.action === 'resolve' && !value.resolutions?.length)
+                context.addIssue({
+                  code: 'custom',
+                  path: ['resolutions'],
+                  message: 'Conflict resolution requires one choice for every conflict',
+                });
+              if (value.action !== 'resolve' && value.resolutions !== undefined)
+                context.addIssue({
+                  code: 'custom',
+                  path: ['resolutions'],
+                  message: 'Resolutions are accepted only for action=resolve',
+                });
+            }),
+        },
+      },
+    },
+  },
+  responses,
+});
+
 export const workspaceAuthoringRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 workspaceAuthoringRoutes.onError((error, c) => {
+  if (error instanceof WorkspaceReconciliationConflictError)
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: error.code,
+          message: error.message,
+          details: { preparation: error.preparation },
+        },
+      },
+      409
+    );
+  if (error instanceof WorkspaceReconciliationValidationError)
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: error.code,
+          message: error.message,
+          details: { issues: error.issues },
+        },
+      },
+      409
+    );
   if (error instanceof ConflictError || error instanceof DraftAuthoringConflictError)
     return c.json(
       { success: false, error: { code: 'DRAFT_CONFLICT', message: error.message } },
       409
     );
   if (error instanceof NotFoundError) return errorResponse(c, 'NOT_FOUND', error.message);
+  if (error instanceof StudioError)
+    return errorResponse(c, error.code, error.message, error.details);
   if (
     error instanceof TransitionScopeDeniedError ||
     error instanceof TransitionProjectScopeDeniedError
@@ -259,6 +402,54 @@ workspaceAuthoringRoutes.openapi(publish, async (c) => {
   );
 });
 
+workspaceAuthoringRoutes.openapi(publishSchema, async (c) => {
+  const { projectId, workspaceId } = c.req.valid('param');
+  const body = c.req.valid('json');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId, 'project:edit');
+  if (access instanceof Response) return access;
+  const principal = requireTransitionAuthority({
+    apiKey: transitionApiKey(c),
+    projectId,
+    scope: 'transition:propose',
+  });
+  if (principal.actor.kind !== 'human')
+    return errorResponse(c, 'FORBIDDEN', 'Saving Schema to Draft requires a human principal.');
+  const definition = body.settings.definition as Record<string, unknown>;
+  if (
+    body.settings.action === 'add_node' &&
+    (definition.slots !== undefined ||
+      (definition.children !== undefined && definition.children !== 'any'))
+  )
+    return errorResponse(
+      c,
+      'INVALID_REQUEST',
+      'Add a Node and each nested Node or Slot as separate confirmed Schema actions.'
+    );
+  await assertWorkspaceAuthoringCommandBasis(db, {
+    projectId,
+    workspaceId,
+    expectedWorkspaceRevision: body.expected_workspace_revision,
+    expectedRevision: body.expected_revision,
+    expectedRefHead: body.expected_ref_head,
+  });
+  const service = createAssistantSchemaSettingsService(
+    c,
+    db,
+    projectId,
+    workspaceId,
+    principal.actor,
+    'workspace-authoring-command'
+  );
+  const staged = await service.show(body.settings, body.request_id);
+  await service.confirm(staged.settingsId, staged.revision, staged.settings, {
+    discardStudioCandidate: body.discard_studio_candidate,
+  });
+  await service.propose(staged.settingsId);
+  const data = await service.applyToDraft(staged.settingsId);
+  return c.json({ success: true as const, data }, 200);
+});
+
 workspaceAuthoringRoutes.openapi(reconcile, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');
   const body = c.req.valid('json');
@@ -282,6 +473,64 @@ workspaceAuthoringRoutes.openapi(reconcile, async (c) => {
     { success: true as const, data: { ...result.value, workspaceRevision: result.draft.revision } },
     200
   );
+});
+
+workspaceAuthoringRoutes.openapi(prepareReconciliation, async (c) => {
+  const { projectId, workspaceId } = c.req.valid('param');
+  const body = c.req.valid('json');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+  requireTransitionAuthority({
+    apiKey: transitionApiKey(c),
+    projectId,
+    scope: 'transition:inspect',
+  });
+  const data: unknown = await prepareWorkspaceReconciliation(db, {
+    projectId,
+    workspaceId,
+    expectedWorkspaceRevision: body.expected_workspace_revision,
+    expectedRefHead: body.expected_ref_head,
+  });
+  return c.json({ success: true as const, data }, 200);
+});
+
+workspaceAuthoringRoutes.openapi(decideReconciliation, async (c) => {
+  const { projectId, workspaceId } = c.req.valid('param');
+  const body = c.req.valid('json');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  if (access instanceof Response) return access;
+  const principal = requireTransitionAuthority({
+    apiKey: transitionApiKey(c),
+    projectId,
+    scope: 'transition:propose',
+  });
+  const result = await decideWorkspaceReconciliation(db, {
+    projectId,
+    workspaceId,
+    actor: principal.actor,
+    requestId: body.request_id,
+    expectedWorkspaceRevision: body.expected_workspace_revision,
+    expectedRefHead: body.expected_ref_head,
+    preparationDigest: body.preparation_digest,
+    action: body.action,
+    ...(body.resolutions
+      ? {
+          resolutions: body.resolutions.map((resolution) =>
+            resolution.choice === 'custom'
+              ? {
+                  conflictId: resolution.conflict_id,
+                  choice: resolution.choice,
+                  value: resolution.value,
+                }
+              : { conflictId: resolution.conflict_id, choice: resolution.choice }
+          ),
+        }
+      : {}),
+  });
+  const data: unknown = { ...result.value, workspaceRevision: result.draft.revision };
+  return c.json({ success: true as const, data }, 200);
 });
 
 const confirmDeletion = createRoute({

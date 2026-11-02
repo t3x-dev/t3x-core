@@ -1210,7 +1210,7 @@
       "method": "POST",
       "path": "/v1/projects/{projectId}/pull-requests",
       "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
+      "rationale": "Project access plus transition:propose for machine principals; creation records exact branch heads and does not grant merge authority."
     },
     {
       "source": "pull-requests.openapi.ts",
@@ -1238,7 +1238,7 @@
       "method": "POST",
       "path": "/v1/projects/{projectId}/pull-requests/{number}/checks/rerun",
       "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
+      "rationale": "Project access plus transition:verify for machine principals; readiness is recomputed from current branch heads and audited separately."
     },
     {
       "source": "pull-requests.openapi.ts",
@@ -1252,7 +1252,7 @@
       "method": "POST",
       "path": "/v1/projects/{projectId}/pull-requests/{number}/merge",
       "policy": "project",
-      "rationale": "Project ownership or project-scoped resource boundary."
+      "rationale": "Project access plus decide, Commit and ref-advance authority for machine principals; server-selected protected-ref policy, exact reviewed heads and independent proposer/decider identities remain authoritative."
     },
     {
       "source": "pull-requests.openapi.ts",
@@ -2205,6 +2205,27 @@
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/reconciliation",
       "policy": "project",
       "rationale": "Requires project access and Transition propose authority; server-owned actor, exact Workspace/ref CAS, immutable archived edits, and deterministic reconciliation without advancing the ref."
+    },
+    {
+      "source": "workspace-authoring.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/reconciliation/decisions",
+      "policy": "project",
+      "rationale": "Requires private Workspace ownership, project access and Transition propose authority; applies an exact preparation-bound adopt, cancel, discard or complete per-conflict resolution with Workspace/ref CAS, full bound-Schema revalidation and server-derived actor audit."
+    },
+    {
+      "source": "workspace-authoring.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/reconciliation/preparations",
+      "policy": "project",
+      "rationale": "Requires private Workspace ownership, project access and Transition inspect authority; returns a read-only Base/Ours/Theirs preview bound to exact Workspace revision and current ref head."
+    },
+    {
+      "source": "workspace-authoring.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/schema-actions",
+      "policy": "project",
+      "rationale": "Requires private Workspace ownership, project edit access and a human Transition propose principal; applies one exact revision-bound Schema action through the shared confirmation service."
     },
     {
       "source": "workspace-authoring.openapi.ts",

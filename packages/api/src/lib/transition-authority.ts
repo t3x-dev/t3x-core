@@ -13,7 +13,11 @@ import {
 import type { Context } from 'hono';
 
 export type TrustedTransitionPrincipal = {
-  actor: { kind: ApiKeyPrincipalKind; id: string };
+  actor: {
+    kind: ApiKeyPrincipalKind;
+    id: string;
+    delegator?: { kind: 'human'; id: string };
+  };
   keyId: string | null;
   projectId: string | null;
   scopes: readonly TransitionScope[];
@@ -89,6 +93,9 @@ export function deriveTrustedTransitionPrincipal(
         apiKey.principal_kind === 'human' && apiKey.user_id
           ? `user:${apiKey.user_id}`
           : `${apiKey.principal_kind}:api-key:${apiKey.id}`,
+      ...(apiKey.principal_kind !== 'human' && apiKey.user_id
+        ? { delegator: { kind: 'human' as const, id: `user:${apiKey.user_id}` } }
+        : {}),
     },
     keyId: apiKey.id,
     projectId: apiKey.project_id,
@@ -157,6 +164,51 @@ export async function resolveTransitionControlPlane(input: {
 }
 
 /**
+ * Authorize one compatibility/product action without weakening the canonical
+ * Transition scopes. Human credentials remain governed by project access, as
+ * existing product routes are, while agent/service credentials need every
+ * explicit scope supplied by the caller. When a ref is supplied, its policy is
+ * resolved from server state and machine callers fail closed if it is absent.
+ */
+export async function resolveCompatibilityTransitionAuthority(input: {
+  db: AnyDB;
+  apiKey: ApiKey | undefined;
+  projectId: string;
+  scopes: readonly TransitionScope[];
+  refName?: string;
+  requireMachinePolicyBinding?: boolean;
+}): Promise<{
+  principal: TrustedTransitionPrincipal;
+  policyBinding: TransitionPolicyBinding | null;
+}> {
+  const principal = deriveTrustedTransitionPrincipal(input.apiKey);
+  if (principal.projectId !== null && principal.projectId !== input.projectId) {
+    throw new TransitionProjectScopeDeniedError(input.projectId);
+  }
+  if (principal.actor.kind !== 'human') {
+    for (const scope of input.scopes) {
+      requireTransitionAuthority({
+        apiKey: input.apiKey,
+        projectId: input.projectId,
+        scope,
+      });
+    }
+  }
+
+  const policyBinding = input.refName
+    ? await getTransitionPolicyBinding(input.db, input.projectId, input.refName)
+    : null;
+  if (
+    principal.actor.kind !== 'human' &&
+    input.requireMachinePolicyBinding === true &&
+    policyBinding === null
+  ) {
+    throw new TransitionPolicyBindingRequiredError(input.projectId, input.refName ?? '<none>');
+  }
+  return { principal, policyBinding };
+}
+
+/**
  * Resolve the complete authority required by a compatibility endpoint that
  * creates an accepted Decision and advances a repository ref in one request.
  *
@@ -177,36 +229,14 @@ export async function resolveCompatibilityTransitionWriteAuthority(input: {
   principal: TrustedTransitionPrincipal;
   policyBinding: TransitionPolicyBinding | null;
 }> {
-  const principal = deriveTrustedTransitionPrincipal(input.apiKey);
-  if (principal.projectId !== null && principal.projectId !== input.projectId) {
-    throw new TransitionProjectScopeDeniedError(input.projectId);
-  }
-  if (principal.actor.kind !== 'human') {
-    requireTransitionAuthority({
-      apiKey: input.apiKey,
-      projectId: input.projectId,
-      scope: 'transition:propose',
-    });
-    requireTransitionAuthority({
-      apiKey: input.apiKey,
-      projectId: input.projectId,
-      scope: 'transition:decide:accept',
-    });
-    requireTransitionAuthority({
-      apiKey: input.apiKey,
-      projectId: input.projectId,
-      scope: 'transition:commit:create',
-    });
-    requireTransitionAuthority({
-      apiKey: input.apiKey,
-      projectId: input.projectId,
-      scope: 'transition:ref:advance',
-    });
-  }
-
-  const policyBinding = await getTransitionPolicyBinding(input.db, input.projectId, input.refName);
-  if (principal.actor.kind !== 'human' && policyBinding === null) {
-    throw new TransitionPolicyBindingRequiredError(input.projectId, input.refName);
-  }
-  return { principal, policyBinding };
+  return resolveCompatibilityTransitionAuthority({
+    ...input,
+    scopes: [
+      'transition:propose',
+      'transition:decide:accept',
+      'transition:commit:create',
+      'transition:ref:advance',
+    ],
+    requireMachinePolicyBinding: true,
+  });
 }

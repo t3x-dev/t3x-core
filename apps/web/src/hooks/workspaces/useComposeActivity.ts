@@ -3,6 +3,8 @@ import type {
   WorkspaceAuthoringAction,
   WorkspaceAuthoringCard,
   WorkspaceAuthoringView,
+  WorkspaceReconciliationPreparation,
+  WorkspaceReconciliationResolution,
 } from '@t3x-dev/api-client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -16,6 +18,20 @@ import { composeObjectChangeCards } from '@/domain/workspaces/composeObjectChang
 import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
 import { saveProjectWorkspace } from '@/infrastructure/workspaces';
 import type { WorkspaceCandidate } from '@/types/workspaces';
+
+function reconciliationFailure(cause: unknown, fallback: string): string {
+  if (!(cause instanceof Error)) return fallback;
+  const details = (cause as Error & { details?: { issues?: unknown } }).details;
+  if (!Array.isArray(details?.issues)) return cause.message;
+  const issues = details.issues.flatMap((issue) => {
+    if (!issue || typeof issue !== 'object' || Array.isArray(issue)) return [];
+    const value = issue as Record<string, unknown>;
+    return typeof value.message === 'string'
+      ? [`${typeof value.path === 'string' ? `${value.path}: ` : ''}${value.message}`]
+      : [];
+  });
+  return issues.length ? `${cause.message} ${issues.slice(0, 3).join('; ')}` : cause.message;
+}
 
 /** Compose-owned adapter over the immutable Draft authoring command and projection APIs. */
 export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverride = false) {
@@ -57,7 +73,11 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
   const [newActivity, setNewActivity] = useState<WorkspaceAuthoringView | null>(null);
   const [reconciling, setReconciling] = useState(false);
   const [reconciliationError, setReconciliationError] = useState<string | null>(null);
+  const [reconciliationPreview, setReconciliationPreview] =
+    useState<WorkspaceReconciliationPreparation | null>(null);
+  const [reconciliationDeciding, setReconciliationDeciding] = useState(false);
   const reconciliationRequest = useRef<{ facts: string; id: string } | null>(null);
+  const reconciliationDecisionRequest = useRef<{ facts: string; id: string } | null>(null);
   const viewRef = useRef(view);
   viewRef.current = ownsState ? view : null;
   useEffect(() => {
@@ -78,7 +98,10 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
     setNewActivity(null);
     setReconciling(false);
     setReconciliationError(null);
+    setReconciliationPreview(null);
+    setReconciliationDeciding(false);
     reconciliationRequest.current = null;
+    reconciliationDecisionRequest.current = null;
     return () => {
       scope.active = false;
       ++scope.epoch;
@@ -239,6 +262,115 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
       }
     }
   }, [candidate.id, candidate.projectId, load, enabled, captureScope, scope]);
+
+  const prepareReconciliation = useCallback(async () => {
+    const isCurrent = captureScope();
+    if (!enabled || !isCurrent() || scope.reconciling) return null;
+    scope.reconciling = true;
+    setReconciling(true);
+    setReconciliationError(null);
+    try {
+      const api = getSharedApiClient().workspaces.authoring;
+      const latest = await api.read(candidate.projectId, candidate.id);
+      if (!isCurrent()) return null;
+      if (!latest.synchronization?.required) {
+        setReconciliationPreview(null);
+        setNotice('Workspace already matches the latest branch head.');
+        return null;
+      }
+      const preview = await api.prepareReconciliation(candidate.projectId, candidate.id, {
+        expected_workspace_revision: latest.workspaceRevision,
+        expected_ref_head: latest.synchronization.currentRefHead,
+      });
+      if (!isCurrent()) return null;
+      setReconciliationPreview(preview);
+      return preview;
+    } catch (cause) {
+      if (!isCurrent()) return null;
+      setReconciliationError(
+        reconciliationFailure(cause, 'Could not preview Workspace synchronization')
+      );
+      return null;
+    } finally {
+      if (isCurrent()) {
+        scope.reconciling = false;
+        setReconciling(false);
+      }
+    }
+  }, [candidate.id, candidate.projectId, enabled, captureScope, scope]);
+
+  const decideReconciliation = useCallback(
+    async (
+      action: 'adopt' | 'cancel' | 'discard' | 'resolve',
+      resolutions?: WorkspaceReconciliationResolution[]
+    ) => {
+      const isCurrent = captureScope();
+      if (!enabled || !isCurrent() || !reconciliationPreview || reconciliationDeciding)
+        return false;
+      setReconciliationDeciding(true);
+      setReconciliationError(null);
+      try {
+        const facts = JSON.stringify([
+          candidate.id,
+          candidate.projectId,
+          reconciliationPreview.workspaceRevision,
+          reconciliationPreview.currentRefHead,
+          reconciliationPreview.preparationDigest,
+          action,
+          resolutions,
+        ]);
+        const request =
+          reconciliationDecisionRequest.current?.facts === facts
+            ? reconciliationDecisionRequest.current
+            : { facts, id: crypto.randomUUID() };
+        reconciliationDecisionRequest.current = request;
+        const outcome = await getSharedApiClient().workspaces.authoring.decideReconciliation(
+          candidate.projectId,
+          candidate.id,
+          {
+            request_id: request.id,
+            expected_workspace_revision: reconciliationPreview.workspaceRevision,
+            expected_ref_head: reconciliationPreview.currentRefHead,
+            preparation_digest: reconciliationPreview.preparationDigest,
+            action,
+            ...(resolutions ? { resolutions } : {}),
+          }
+        );
+        if (!isCurrent()) return false;
+        await load();
+        if (!isCurrent()) return false;
+        reconciliationDecisionRequest.current = null;
+        setReconciliationPreview(null);
+        setNotice(
+          action === 'adopt'
+            ? 'Workspace synced to the latest branch while preserving your non-conflicting edits.'
+            : action === 'resolve'
+              ? 'Every conflict was resolved and the complete result passed Schema validation.'
+              : action === 'discard'
+                ? 'Workspace edits discarded. The Draft now matches the latest branch.'
+                : 'Synchronization cancelled. Your Draft and its original Base are unchanged.'
+        );
+        return outcome.kind !== 'no_change' || action === 'cancel';
+      } catch (cause) {
+        if (!isCurrent()) return false;
+        setReconciliationError(
+          reconciliationFailure(cause, 'Could not apply synchronization decision')
+        );
+        return false;
+      } finally {
+        if (isCurrent()) setReconciliationDeciding(false);
+      }
+    },
+    [
+      candidate.id,
+      candidate.projectId,
+      captureScope,
+      enabled,
+      load,
+      reconciliationDeciding,
+      reconciliationPreview,
+    ]
+  );
 
   const inspectNode = useCallback(
     async (nodeId: string, actionId?: string) => {
@@ -504,7 +636,11 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
     newActivity: ownsState ? newActivity : null,
     reconciling: ownsState ? reconciling : false,
     reconciliationError: ownsState ? reconciliationError : null,
+    reconciliationPreview: ownsState ? reconciliationPreview : null,
+    reconciliationDeciding: ownsState ? reconciliationDeciding : false,
     reconcile,
+    prepareReconciliation,
+    decideReconciliation,
     compositionRevision: ownsState ? view?.compositionRevision : undefined,
     workspaceRevision: ownsState ? view?.workspaceRevision : undefined,
     basis: ownsState ? view?.basis : undefined,

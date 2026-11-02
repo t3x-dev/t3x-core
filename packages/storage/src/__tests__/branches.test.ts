@@ -110,6 +110,25 @@ describe('Branches Storage', () => {
 
       expect(child.parentBranch).toBe('parent-branch');
     });
+
+    it('uses an explicit historical head instead of the parent branch current head', async () => {
+      const parent = await insertBranch(db, {
+        projectId: testProjectId,
+        name: 'historical-parent',
+        headCommitHash: 'sha256:current-parent-head',
+      });
+      expect(parent.headCommitHash).toBe('sha256:current-parent-head');
+
+      const child = await insertBranch(db, {
+        projectId: testProjectId,
+        name: 'historical-child',
+        parentBranch: 'historical-parent',
+        headCommitHash: 'sha256:older-commit',
+      });
+
+      expect(child.parentBranch).toBe('historical-parent');
+      expect(child.headCommitHash).toBe('sha256:older-commit');
+    });
   });
 
   describe('findBranchByName', () => {

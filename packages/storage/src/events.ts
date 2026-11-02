@@ -20,6 +20,7 @@ import { events } from './schema-events';
 // persisted to the outbox (replaying stale presence on reconnect is wrong).
 export const ALLOWED_EVENT_TYPES = [
   'commit.created',
+  'branch.advanced',
   'draft.changed',
   'yops.applied',
   'conversation.renamed',

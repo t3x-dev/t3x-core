@@ -5,6 +5,7 @@ import {
   createMaterial,
   deleteDraft,
   findWorkspaceDraft,
+  getTransitionProposalPreparation,
   insertBranch,
   insertProject,
   resolveTransitionProposalGraph,
@@ -381,21 +382,22 @@ describe('durable Draft authoring commands', () => {
     });
     const state = saved.draft.workspace_state;
     if (!state) throw new Error('Workspace state missing');
+    const sourceBundle = [
+      {
+        id: `material:${material.id}`,
+        type: 'document',
+        title: 'prd.docx',
+        materialId: material.id,
+        contentHash: material.content_hash,
+      },
+    ];
     const sourced = await updateDraft(
       setup.db,
       saved.draft.id,
       {
         workspace_state: {
           ...state,
-          sourceBundle: [
-            {
-              id: `material:${material.id}`,
-              type: 'document',
-              title: 'prd.docx',
-              materialId: material.id,
-              contentHash: material.content_hash,
-            },
-          ],
+          sourceBundle,
         },
       },
       saved.draft.revision
@@ -412,6 +414,11 @@ describe('durable Draft authoring commands', () => {
     });
     expect(schemaGaps(reviewed)).toEqual([]);
     expect(reviewed.view.transition.checks.validation.outcomes).toEqual(['passed']);
+    const preparation = await getTransitionProposalPreparation(
+      setup.db,
+      reviewed.view.transitionId
+    );
+    expect(JSON.parse(preparation!.canonicalJson).sourceBundle).toEqual(sourceBundle);
   });
   it('freezes the full manifest through canonical Review, Decision and Commit', async () => {
     const init = await initialize('review');

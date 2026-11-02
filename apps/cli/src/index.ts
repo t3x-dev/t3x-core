@@ -52,6 +52,7 @@ import { registerShowContent } from './commands/show.js';
 import { registerStatusCommands } from './commands/status.js';
 import { registerTransitionCommands } from './commands/transition.js';
 import { registerValidateCommands } from './commands/validate.js';
+import { registerWorkspaceCommands } from './commands/workspace.js';
 import { registerYopsCommands } from './commands/yops.js';
 
 declare const __T3X_CLI_VERSION__: string | undefined;
@@ -154,6 +155,7 @@ registerSchemaCommands(program);
 registerValidateCommands(program);
 registerYopsCommands(program);
 registerTransitionCommands(program);
+registerWorkspaceCommands(program);
 registerDiffCommand(program);
 registerMergeCommands(program);
 registerComposeCommands(program);

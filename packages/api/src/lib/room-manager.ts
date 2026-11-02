@@ -21,7 +21,32 @@ export interface RoomConnection {
   id: string;
   ws: WSContext;
   userId?: string;
+  workspaceOwner?: { kind: string; id: string };
+  authenticationDisabled?: boolean;
   joinedAt: number;
+}
+
+/**
+ * Workspace events share the project room transport but remain principal
+ * private. Events without a Workspace identity are ordinary project events.
+ * Legacy/unowned Workspace events are visible only in the explicit local
+ * AUTH_DISABLED bypass.
+ */
+export function canReceiveRealtimeEvent(
+  conn: Pick<RoomConnection, 'workspaceOwner' | 'authenticationDisabled'>,
+  event: RealtimeEvent
+): boolean {
+  const workspaceId = event.payload?.workspace_id;
+  if (typeof workspaceId !== 'string' || workspaceId.length === 0) return true;
+  if (conn.authenticationDisabled) return true;
+  const ownerKind = event.payload?.owner_principal_kind;
+  const ownerId = event.payload?.owner_principal_id;
+  return (
+    typeof ownerKind === 'string' &&
+    typeof ownerId === 'string' &&
+    conn.workspaceOwner?.kind === ownerKind &&
+    conn.workspaceOwner.id === ownerId
+  );
 }
 
 /**
@@ -164,6 +189,7 @@ class RoomManager {
 
     for (const [id, conn] of room) {
       if (id === excludeConnectionId) continue;
+      if (!canReceiveRealtimeEvent(conn, event)) continue;
       try {
         conn.ws.send(message);
       } catch {

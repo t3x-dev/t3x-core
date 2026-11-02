@@ -1,7 +1,8 @@
 import { StudioSourceSchema } from '@t3x-dev/api-client';
-import { describeTransitionObject } from '@t3x-dev/core';
+import { type ApiKeyPrincipalKind, describeTransitionObject } from '@t3x-dev/core';
 import {
   type AnyDB,
+  bindTransitionPolicy,
   type CreateBranchInput,
   DraftAuthoringConflictError,
   findBranchByName,
@@ -9,6 +10,7 @@ import {
   findWorkspaceDraft,
   findYSchemaCompositionSnapshot,
   getRepositoryDecisionAuditByDigest,
+  getTransitionPolicyBinding,
   getTransitionRefHead,
   getTransitionViewForCommit,
   getVerifiedTransitionCommitGraph,
@@ -16,6 +18,7 @@ import {
   NotFoundError,
   resolveTransitionProposalGraph,
   upsertWorkspaceDraft,
+  type WorkspaceOwner,
 } from '@t3x-dev/storage';
 import { normalizeYSchemaObject, sha256CompositionValue } from '@t3x-dev/yschema';
 import { initializeWorkspaceAuthoring } from './workspace-authoring';
@@ -28,22 +31,50 @@ import {
 } from './workspace-schema-review';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
 
+interface CreateBranchWorkspaceInput extends CreateBranchInput {
+  actor?: { kind: ApiKeyPrincipalKind; id: string };
+  owner?: WorkspaceOwner;
+}
+
 /** Content and Schema are pinned to one inherited Commit. No mutable parent Draft is consulted. */
-export async function createBranchWorkspace(db: AnyDB, input: CreateBranchInput) {
+export async function createBranchWorkspace(db: AnyDB, input: CreateBranchWorkspaceInput) {
   return db.transaction(async (rawTx) => {
     const tx = rawTx as AnyDB;
     const parent = input.parentBranch
       ? await findBranchByName(tx, input.projectId, input.parentBranch)
       : null;
     if (input.parentBranch && !parent) throw new NotFoundError(input.parentBranch);
+    if (
+      input.headCommitHash !== undefined &&
+      !(await getVerifiedTransitionCommitGraph(tx, input.projectId, input.headCommitHash))
+    ) {
+      throw new NotFoundError(input.headCommitHash);
+    }
     const branch = await insertBranch(tx, input);
-    if (parent && branch.headCommitHash !== parent.headCommitHash)
+    if (
+      input.headCommitHash === undefined &&
+      parent &&
+      branch.headCommitHash !== parent.headCommitHash
+    )
       throw new DraftAuthoringConflictError('Source branch changed while branching. Try again.');
+    if (parent) {
+      const parentPolicy = await getTransitionPolicyBinding(tx, input.projectId, parent.name);
+      if (parentPolicy) {
+        await bindTransitionPolicy(tx, {
+          projectId: input.projectId,
+          refName: branch.name,
+          uri: parentPolicy.resource.uri,
+          policy: parentPolicy.policy,
+          actor: input.actor ?? { kind: 'service', id: 'service:t3x-branch-workspace' },
+        });
+      }
+    }
     const head = await getTransitionRefHead(tx, {
       projectId: input.projectId,
       refName: branch.name,
     });
     let schema = unboundWorkspaceSchema();
+    let sourceBundle: unknown[] = [];
     if (head.format !== 'empty') {
       const committed = await getVerifiedTransitionCommitGraph(tx, input.projectId, head.head);
       if (!committed) throw new DraftAuthoringConflictError('The inherited Commit is unavailable.');
@@ -51,6 +82,15 @@ export async function createBranchWorkspace(db: AnyDB, input: CreateBranchInput)
       const graph = receipt
         ? await resolveTransitionProposalGraph(tx, input.projectId, receipt.transitionId)
         : null;
+      if (graph?.preparation) {
+        const preparation = JSON.parse(graph.preparation.canonicalJson) as Record<string, unknown>;
+        if (
+          preparation.schema === 't3x.application/workspace-authoring-preparation/v1' &&
+          Array.isArray(preparation.sourceBundle)
+        ) {
+          sourceBundle = structuredClone(preparation.sourceBundle);
+        }
+      }
       if (
         graph &&
         (graph.membership.proposalDigest !== describeTransitionObject(committed.proposal).digest ||
@@ -156,7 +196,7 @@ export async function createBranchWorkspace(db: AnyDB, input: CreateBranchInput)
       updatedAt: savedAt,
       baseCommitHash: head.head,
       targetBranch: branch.name,
-      sourceBundle: [],
+      sourceBundle,
       schemaBindings: bindings,
       schemaCandidate: { summary: 'Propose changes to this branch.', fields: [] },
       schemaReview: { verdict: 'needs_review', summary: 'No changes proposed yet.', gaps: [] },
@@ -170,6 +210,7 @@ export async function createBranchWorkspace(db: AnyDB, input: CreateBranchInput)
       title: workspace.title,
       parent_commit_hash: head.head,
       target_branch: branch.name,
+      ...(input.owner ? { owner: input.owner } : {}),
       workspace_state: workspace,
     });
     await initializeWorkspaceAuthoring(tx, {

@@ -149,12 +149,15 @@ export {
   findAutoDraftsByConversation,
   findDraftById,
   findWorkspaceDraft,
+  findWorkspaceDraftForOwner,
+  findWorkspaceDraftOwner,
   forkDraft,
   insertAutoDraft,
   insertDraft,
   type ListDraftOptions,
   listDraftsByProject,
   listWorkspaceDrafts,
+  listWorkspaceDraftsForOwner,
   NotFoundError,
   promoteDraft,
   renewWorkspaceAuthoring,
@@ -167,6 +170,7 @@ export {
   updateDraftPreview,
   upsertWorkspaceDraft,
   type WorkspaceDraftInput,
+  type WorkspaceOwner,
 } from './drafts';
 // Extraction Feedback (Anchoring L4)
 export {
