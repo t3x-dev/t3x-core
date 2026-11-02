@@ -39,6 +39,10 @@ const RefHead = z
   .regex(/^sha256:[a-f0-9]{64}$/)
   .nullable();
 const Identity = z.string().trim().min(1).max(200);
+const JsonValue = z.unknown().superRefine((value, context) => {
+  if (!z.json().safeParse(value).success)
+    context.addIssue({ code: 'custom', message: 'Expected a JSON value' });
+}) as z.ZodType<DraftDocument>;
 const Reply = z.object({ success: z.literal(true), data: z.unknown() });
 const errorReply = {
   description: 'Authoring command rejected',
@@ -238,7 +242,7 @@ const decideReconciliation = createRoute({
                       .object({
                         conflict_id: z.string().regex(/^sha256:[a-f0-9]{64}$/),
                         choice: z.literal('custom'),
-                        value: z.json(),
+                        value: JsonValue,
                       })
                       .strict(),
                   ])
