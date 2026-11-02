@@ -2,7 +2,9 @@
 
 import {
   ArrowUpRight,
+  Braces,
   Check,
+  ChevronRight,
   Copy,
   FileText,
   Loader2,
@@ -29,8 +31,11 @@ import { cn } from '@/utils/cn';
 import {
   type AssistantActivityRecord,
   type AssistantPublication,
+  type PublishedTurnChanges,
   WorkspaceAssistantActivity,
+  WorkspaceTurnReceipt,
 } from './WorkspaceAssistantActivity';
+import receiptStyles from './WorkspaceAssistantActivity.module.css';
 import styles from './WorkspaceComposeChat.module.css';
 
 export interface WorkspaceComposeMessage {
@@ -82,12 +87,19 @@ function discussionText(content: string) {
     .trim();
 }
 
+export interface SchemaReceipt {
+  settingsIds: string[];
+  open: () => void;
+}
+
 interface WorkspaceComposeChatProps {
   chat: WorkspaceComposeChatState;
   variant?: 'default' | 'discussion';
   assistantActivity?: AssistantActivity | null;
   assistantPublication?: AssistantPublication | null;
   assistantPublishing?: boolean;
+  schemaReceipt?: SchemaReceipt;
+  onOpenTurn?: (changes: PublishedTurnChanges) => void;
   assistantRecords?: Record<string, AssistantActivityRecord>;
 }
 
@@ -98,6 +110,8 @@ export function WorkspaceComposeChat({
   assistantPublication,
   assistantPublishing = false,
   assistantRecords,
+  onOpenTurn,
+  schemaReceipt,
 }: WorkspaceComposeChatProps) {
   const [copyError, setCopyError] = useState<string | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
@@ -231,8 +245,34 @@ export function WorkspaceComposeChat({
                     : null,
               }
             : assistantRecords?.[message.id];
+          const hasSchemaReceipt =
+            schemaReceipt &&
+            record?.activity.operations.some(
+              (op) =>
+                op.name === 'showSchemaChangeCard' &&
+                op.status === 'completed' &&
+                schemaReceipt.settingsIds.includes(op.id)
+            );
           return (
             <ComposeChatMessage
+              receipt={
+                onOpenTurn && record?.publication?.action ? (
+                  <WorkspaceTurnReceipt
+                    changes={{ action: record.publication.action, cards: record.publication.cards }}
+                    onOpen={onOpenTurn}
+                  />
+                ) : hasSchemaReceipt ? (
+                  <button
+                    type="button"
+                    className={receiptStyles.receipt}
+                    onClick={schemaReceipt.open}
+                  >
+                    <Braces aria-hidden="true" />
+                    View Schema proposal
+                    <ChevronRight aria-hidden="true" />
+                  </button>
+                ) : undefined
+              }
               copied={copiedMessageId === message.id}
               isStreaming={isStreaming}
               key={message.id}
@@ -242,6 +282,7 @@ export function WorkspaceComposeChat({
             >
               {record ? (
                 <WorkspaceAssistantActivity
+                  compact={Boolean(onOpenTurn)}
                   activity={record.activity}
                   publishing={Boolean(showLiveActivity && assistantPublishing)}
                   publication={record.publication}
@@ -292,6 +333,7 @@ function MessageImage({ image }: { image: ChatMessageImage }) {
 }
 
 function ComposeChatMessage({
+  receipt,
   message,
   isStreaming,
   copied,
@@ -304,6 +346,7 @@ function ComposeChatMessage({
   copied: boolean;
   onCopy: () => void;
   children?: ReactNode;
+  receipt?: ReactNode;
   variant: 'default' | 'discussion';
 }) {
   const isUser = message.role === 'user';
@@ -346,6 +389,7 @@ function ComposeChatMessage({
             )}
           </div>
         ) : null}
+        {receipt}
         {!isUser ? (
           <div className={styles.discussionActions}>
             {isStreaming ? (

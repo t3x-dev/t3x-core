@@ -303,3 +303,11 @@
 .discussionActions button:focus-visible {
   opacity: 1;
 }
+
+.discussion {
+  background: var(--surface-card);
+}
+.discussionContent {
+  max-width: 800px;
+  margin-inline: auto;
+}

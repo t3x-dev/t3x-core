@@ -307,6 +307,10 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     navigationMocks.searchParams = new URLSearchParams();
   });
 
+  function openInspector() {
+    fireEvent.click(screen.getByRole('button', { name: 'Open Draft' }));
+  }
+
   function renderResizableCompose() {
     return {
       ...renderCompose(),
@@ -342,6 +346,8 @@ describe('WorkspaceComposeReviewSurface composer', () => {
 
   it('moves Draft structure and commit history into the right-side workspace tools', () => {
     renderCompose();
+    expect(screen.queryByRole('navigation', { name: 'Workspace tools' })).not.toBeInTheDocument();
+    openInspector();
     const sidebar = screen.getByRole('complementary', { name: 'Workspace conversations' });
     expect(within(sidebar).getByRole('region', { name: 'Workspace chat list' })).toBeVisible();
     expect(
@@ -382,6 +388,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
   it('restores the change scope and stage on return, with explicit URL stages taking priority', () => {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     const first = renderCompose();
+    openInspector();
     fireEvent.click(screen.getByRole('tab', { name: 'All changes' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Review', exact: true }));
     first.unmount();
@@ -401,6 +408,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
     const returned = render(ui);
+    openInspector();
     expect(onModeChange).toHaveBeenLastCalledWith('review');
     expect(screen.getByRole('tab', { name: 'All changes' })).toHaveAttribute(
       'aria-selected',
@@ -811,6 +819,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       },
     };
     renderCompose();
+    openInspector();
     const confirmation = screen.getByRole('button', { name: 'Confirm' });
     const toolbar = screen.getByRole('tablist', { name: 'Change scope' });
     fireEvent.click(screen.getByRole('button', { name: 'History' }));
@@ -858,6 +867,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       },
     };
     renderCompose();
+    openInspector();
     expect(
       within(screen.getByRole('region', { name: 'Event: Schema structure change' })).getByRole(
         'heading',
@@ -896,6 +906,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       },
     };
     renderCompose();
+    openInspector();
     const inspect = screen.getByRole('button', {
       name: 'Inspect Schema change: requirements/advantage',
     });
@@ -926,20 +937,21 @@ describe('WorkspaceComposeReviewSurface composer', () => {
 
   it('resizes the conversation rail with keyboard controls, resets it, and restores its saved width', () => {
     const { splitter, unmount } = renderResizableCompose();
-    expect(splitter).toHaveAttribute('aria-valuenow', '260');
+    expect(splitter).toHaveAttribute('aria-valuenow', '216');
     fireEvent.keyDown(splitter, { key: 'ArrowRight' });
-    expect(splitter).toHaveAttribute('aria-valuenow', '280');
-    expect(localStorage.getItem('t3x-workspace-draft-width')).toBe('280');
-    expect(splitter.parentElement?.style.getPropertyValue('--draft-width')).toBe('280px');
+    expect(splitter).toHaveAttribute('aria-valuenow', '236');
+    expect(localStorage.getItem('t3x-compose-balanced-conversation-width')).toBe('236');
+    expect(splitter.parentElement?.style.getPropertyValue('--draft-width')).toBe('236px');
     fireEvent.keyDown(splitter, { key: 'End' });
     expect(splitter).toHaveAttribute('aria-valuenow', '560');
     fireEvent.keyDown(splitter, { key: 'Home' });
     expect(splitter).toHaveAttribute('aria-valuenow', '180');
     fireEvent.doubleClick(splitter);
-    expect(splitter).toHaveAttribute('aria-valuenow', '260');
+    expect(localStorage.getItem('t3x-compose-balanced-conversation-width')).toBeNull();
+    expect(splitter).toHaveAttribute('aria-valuenow', '216');
     fireEvent.keyDown(splitter, { key: 'ArrowLeft' });
     unmount();
-    expect(renderResizableCompose().splitter).toHaveAttribute('aria-valuenow', '240');
+    expect(renderResizableCompose().splitter).toHaveAttribute('aria-valuenow', '196');
   });
 
   it('collapses the conversation rail to a narrow strip and remembers the choice', () => {
@@ -972,15 +984,15 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       fireEvent.pointerDown(splitter, { button: 0, clientX: 300 });
       expect(splitter.parentElement).toHaveAttribute('data-resizing', 'true');
       fireEvent.pointerMove(splitter, { clientX: 380 });
-      expect(splitter).toHaveAttribute('aria-valuenow', '340');
+      expect(splitter).toHaveAttribute('aria-valuenow', '296');
       fireEvent.pointerUp(splitter, { clientX: 380 });
       expect(splitter.parentElement).not.toHaveAttribute('data-resizing');
       fireEvent.pointerMove(splitter, { clientX: 450 });
-      expect(splitter).toHaveAttribute('aria-valuenow', '340');
+      expect(splitter).toHaveAttribute('aria-valuenow', '296');
       fireEvent.pointerDown(splitter, { button: 0, clientX: 380 });
       fireEvent.pointerCancel(splitter);
       fireEvent.pointerMove(splitter, { clientX: 450 });
-      expect(splitter).toHaveAttribute('aria-valuenow', '340');
+      expect(splitter).toHaveAttribute('aria-valuenow', '296');
       expect(splitter.parentElement).not.toHaveAttribute('data-resizing');
     } finally {
       window.PointerEvent = originalPointerEvent;
@@ -988,23 +1000,24 @@ describe('WorkspaceComposeReviewSurface composer', () => {
   });
 
   it('limits conversation width so changes and Chat retain room, and ignores invalid saved preferences', () => {
-    localStorage.setItem('t3x-workspace-draft-width', 'not-a-width');
+    localStorage.setItem('t3x-compose-balanced-conversation-width', 'not-a-width');
     const { splitter } = renderResizableCompose();
-    expect(splitter).toHaveAttribute('aria-valuenow', '260');
+    openInspector();
+    expect(splitter).toHaveAttribute('aria-valuenow', '216');
     Object.defineProperty(splitter.parentElement, 'clientWidth', {
       value: 1000,
       configurable: true,
     });
     fireEvent.keyDown(splitter, { key: 'End' });
-    expect(splitter).toHaveAttribute('aria-valuenow', '240');
+    expect(splitter).toHaveAttribute('aria-valuenow', '248');
     expect(screen.getByRole('separator', { name: 'Resize discussion panel' })).toHaveAttribute(
       'aria-valuenow',
-      '440'
+      '432'
     );
     expect(screen.getByRole('complementary', { name: 'Generated changes' })).toBeVisible();
   });
 
-  it('keeps AI Chat centered and stacks generated cards above resizable Details', async () => {
+  it('keeps AI Chat mounted while drilling into Draft changes and returning to the list', async () => {
     schemaCardMocks.record = {
       settingsId: 'schema-row',
       revision: 1,
@@ -1122,6 +1135,8 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         onModeChange={vi.fn()}
       />
     );
+    openInspector();
+    fireEvent.click(screen.getByRole('tab', { name: 'Latest' }));
 
     expect(screen.getByRole('tab', { name: 'Compose' })).toBeInTheDocument();
     expect(screen.queryByRole('tablist', { name: 'Change context' })).not.toBeInTheDocument();
@@ -1140,7 +1155,10 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       workspace.compareDocumentPosition(generated) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
     expect(within(chat).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
-    expect(within(chat).getByTitle(candidate.title)).toBeVisible();
+    expect(within(chat).getByRole('button', { name: 'Open Draft' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
     expect(generated).toHaveAttribute('data-panel', 'changes');
     expect(screen.queryByRole('button', { name: 'Chat', exact: true })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Review complete draft' })).not.toBeInTheDocument();
@@ -1175,38 +1193,12 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       name: 'Inspect Schema change: requirements/advantage',
     });
     fireEvent.click(inspectSchema);
-    for (const row of screen.getAllByRole('button', { name: /^Inspect (?!Schema change:)/ })) {
-      expect(row).toHaveAttribute('aria-pressed', 'false');
-    }
     expect(
       within(generated).getByRole('region', { name: 'Selected Schema change details' })
     ).toBeVisible();
-    expect(generated).toHaveAttribute('data-panel', 'split');
-    const detailsSplitter = within(generated).getByRole('separator', {
-      name: 'Resize generated cards and details',
-    });
-    expect(detailsSplitter).toHaveAttribute('aria-orientation', 'horizontal');
-    expect(detailsSplitter).toHaveAttribute('aria-valuenow', '260');
-    const originalPointerEvent = window.PointerEvent;
-    window.PointerEvent = MouseEvent as typeof PointerEvent;
-    try {
-      Object.assign(detailsSplitter, {
-        setPointerCapture: vi.fn(),
-        hasPointerCapture: () => true,
-        releasePointerCapture: vi.fn(),
-      });
-      fireEvent.pointerDown(detailsSplitter, { button: 0, clientY: 260 });
-      expect(generated.parentElement).toHaveAttribute('data-details-resizing', 'true');
-      fireEvent.pointerMove(detailsSplitter, { clientY: 320 });
-      expect(detailsSplitter).toHaveAttribute('aria-valuenow', '320');
-      expect(localStorage.getItem('t3x-workspace-generated-panel-height')).toBe('320');
-      fireEvent.pointerUp(detailsSplitter, { clientY: 320 });
-      expect(generated.parentElement).not.toHaveAttribute('data-details-resizing');
-      fireEvent.keyDown(detailsSplitter, { key: 'ArrowUp' });
-      expect(detailsSplitter).toHaveAttribute('aria-valuenow', '300');
-    } finally {
-      window.PointerEvent = originalPointerEvent;
-    }
+    expect(generated).toHaveAttribute('data-panel', 'details');
+    expect(screen.queryByRole('navigation', { name: 'Workspace tools' })).not.toBeInTheDocument();
+    fireEvent.click(within(generated).getByRole('button', { name: 'Back to changes' }));
     expect(within(chat).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
     expect(activityMocks.value.inspectNode).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Inspect Approval: rollout/approval' }));
@@ -1215,13 +1207,12 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       within(generated).queryByRole('region', { name: 'Selected Schema change details' })
     ).not.toBeInTheDocument();
     expect(within(generated).getByRole('heading', { name: 'Details' })).toBeVisible();
-    expect(
-      screen.getByRole('button', { name: 'Inspect Approval: rollout/approval' })
-    ).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Back to changes' })).toBeVisible();
     fireEvent.click(within(generated).getByRole('button', { name: 'Ask AI' }));
     expect(generated).toHaveAttribute('data-panel', 'changes');
     expect(screen.queryByRole('button', { name: 'Chat', exact: true })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Event evidence' })).not.toBeInTheDocument();
+    openInspector();
     fireEvent.click(allChanges);
     expect(allChanges).toHaveAttribute('aria-selected', 'true');
     fireEvent.click(screen.getByRole('button', { name: 'Inspect Approval: rollout/approval' }));
@@ -1231,6 +1222,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(within(chat).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
     expect(within(chat).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
     expect(screen.queryByText('Before event')).not.toBeInTheDocument();
+    openInspector();
     fireEvent.click(latestAction);
     expect(latestAction).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByText('Action history is not available for this draft.')).toBeNull();
@@ -1355,6 +1347,8 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         onModeChange={vi.fn()}
       />
     );
+    openInspector();
+    fireEvent.click(screen.getByRole('tab', { name: 'Latest' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Inspect Allocation: rollout/allocation' }));
     fireEvent.click(screen.getByRole('button', { name: 'Edit', exact: true }));
@@ -1419,7 +1413,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.getByText('Unsaved change · not yet applied to Draft')).toBeVisible();
     expect(screen.getByLabelText('Selected field details')).toHaveTextContent('us');
     expect(inspectNode).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Close change details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to changes' }));
     expect(screen.queryByLabelText('Selected field details')).not.toBeInTheDocument();
     expect(sourceGenerationMocks.options?.workspaceAssistant?.allowProposal).toBe(false);
     expect(
@@ -1523,6 +1517,8 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         onModeChange={vi.fn()}
       />
     );
+    openInspector();
+    fireEvent.click(screen.getByRole('tab', { name: 'Latest' }));
     const publishedEvent = screen.getByLabelText('Event: Prepare flight');
     fireEvent.click(
       within(publishedEvent).getByRole('button', { name: `Inspect Flight: ${path}` })
@@ -1538,6 +1534,9 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     ).toHaveLength(1);
     expect(within(ungrouped).getAllByRole('checkbox')).toHaveLength(2);
     expect(publish).not.toHaveBeenCalled();
+    fireEvent.click(
+      within(publishedEvent).getByRole('button', { name: `Inspect Flight: ${path}` })
+    );
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Edit', exact: true })).toBeEnabled()
     );
@@ -1545,6 +1544,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.getByRole('textbox', { name: 'goal', exact: true })).toHaveValue('学习飞行');
     expect(screen.getByRole('combobox', { name: 'done', exact: true })).toHaveValue('false');
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to changes' }));
     // Saving the unchecked goal later must remain possible without widening the done operation.
     fireEvent.click(
       within(ungrouped).getByRole('checkbox', { name: 'Include goal in the next P' })
@@ -1698,6 +1698,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         onModeChange={onModeChange}
       />
     );
+    openInspector();
 
     expect(
       screen.queryByRole('navigation', { name: 'Workspace navigation' })
@@ -2305,6 +2306,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         onModeChange={vi.fn()}
       />
     );
+    openInspector();
 
     expect(screen.queryByRole('combobox', { name: 'Workspace schema' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Structure', exact: true }));

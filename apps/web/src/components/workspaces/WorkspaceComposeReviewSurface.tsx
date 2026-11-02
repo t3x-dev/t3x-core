@@ -25,6 +25,7 @@ import {
   Minus,
   MoreHorizontal,
   PanelLeftOpen,
+  PanelRightOpen,
   Pencil,
   Percent,
   Pin,
@@ -163,6 +164,7 @@ import { ComposeAuthoringAssistant } from './ComposeAuthoringAssistant';
 import { ComposeFieldDialog } from './ComposeFieldDialog';
 import { ComposeNodeHistoryPanel } from './ComposeNodeHistoryPanel';
 import { useWorkspaceContentNavigation } from './useWorkspaceContentNavigation';
+import { type PublishedTurnChanges, WorkspaceTurnChanges } from './WorkspaceAssistantActivity';
 import {
   type CommitChangeInspection,
   WorkspaceCommitChangeDetails,
@@ -194,6 +196,8 @@ type ReviewPane = 'rendered' | 'changes' | 'yaml' | 'checks';
 type WorkspaceTool = 'source' | 'edit' | 'delivery';
 type ReviewCheckStatus = 'failed' | 'passed' | 'pending';
 type ComposeChangeFilter = 'all' | 'modified' | 'added' | 'attention';
+const CONVERSATION_WIDTH_KEY = 't3x-compose-balanced-conversation-width';
+const DISCUSSION_WIDTH_KEY = 't3x-compose-balanced-inspector-width';
 const WORKSPACE_MODES = ['compose', 'review'] as const;
 const REVIEW_VIEWS = ['changes', 'rendered', 'yaml'] as const;
 const CHANGE_SCOPES = ['latest', 'all'] as const;
@@ -701,36 +705,66 @@ function ComposeSurface({
   const boardRef = useRef<HTMLDivElement>(null);
   const dragOrigin = useRef<{ x: number; width: number } | null>(null);
   const draftDragOrigin = useRef<{ x: number; width: number } | null>(null);
-  const detailsDragOrigin = useRef<{ y: number; height: number } | null>(null);
-  const [draftWidth, setDraftWidth] = useState(260);
-  const [draftCollapsed, setDraftCollapsed] = useState(false);
-  const [discussionWidth, setDiscussionWidth] = useState(440);
-  const [generatedPanelHeight, setGeneratedPanelHeight] = useState(260);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [turn, setTurn] = useState<PublishedTurnChanges | null>(null);
+  const [mobileChats, setMobileChats] = useState(false);
+  const draftButton = useRef<HTMLButtonElement>(null);
+  const closeDraftButton = useRef<HTMLButtonElement>(null);
+  const [boardWidth, setBoardWidth] = useState(1440);
+  const [customDraftWidth, setCustomDraftWidth] = useState<number | null>(null);
+  const [customDiscussionWidth, setCustomDiscussionWidth] = useState<number | null>(null);
+  const [collapsedPreference, setCollapsedPreference] = useState<boolean | null>(null);
   const [resizing, setResizing] = useState(false);
-  const [detailsResizing, setDetailsResizing] = useState(false);
+  const balancedDraftWidth = Math.max(180, Math.min(240, Math.round(boardWidth * 0.15)));
+  const balancedDiscussionWidth = Math.max(320, Math.min(480, Math.round(boardWidth * 0.3)));
+  const compact =
+    inspectorOpen &&
+    boardWidth > 840 &&
+    boardWidth - balancedDraftWidth - balancedDiscussionWidth < 480;
+  const draftCollapsed = collapsedPreference ?? compact;
+  const draftWidth = Math.max(
+    180,
+    Math.min(customDraftWidth ?? balancedDraftWidth, boardWidth - (inspectorOpen ? 640 : 320))
+  );
+  const discussionWidth = Math.max(
+    320,
+    Math.min(
+      customDiscussionWidth ?? balancedDiscussionWidth,
+      boardWidth - (draftCollapsed ? 48 : draftWidth) - 320
+    )
+  );
+  useEffect(() => {
+    const board = boardRef.current;
+    if (!board) return;
+    const measure = () => {
+      if (board.clientWidth) setBoardWidth(board.clientWidth);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(board);
+    return () => observer.disconnect();
+  }, []);
   useEffect(() => {
     try {
-      const stored = Number(localStorage.getItem('t3x-workspace-discussion-width'));
-      if (stored >= 320 && stored <= 680) setDiscussionWidth(stored);
-      const generatedHeight = Number(localStorage.getItem('t3x-workspace-generated-panel-height'));
-      if (generatedHeight >= 160 && generatedHeight <= 720)
-        setGeneratedPanelHeight(generatedHeight);
-      const draftStored = Number(localStorage.getItem('t3x-workspace-draft-width'));
-      if (draftStored >= 180 && draftStored <= 560) setDraftWidth(draftStored);
-      if (localStorage.getItem('t3x-workspace-draft-collapsed') === 'true') setDraftCollapsed(true);
+      const stored = Number(localStorage.getItem(DISCUSSION_WIDTH_KEY));
+      if (stored >= 320 && stored <= 680) setCustomDiscussionWidth(stored);
+      const draftStored = Number(localStorage.getItem(CONVERSATION_WIDTH_KEY));
+      if (draftStored >= 180 && draftStored <= 560) setCustomDraftWidth(draftStored);
+      if (localStorage.getItem('t3x-workspace-draft-collapsed') === 'true')
+        setCollapsedPreference(true);
     } catch {
       /* Storage can be unavailable in private browser contexts. */
     }
   }, []);
   const toggleDraft = (collapsed: boolean) => {
-    setDraftCollapsed(collapsed);
+    setCollapsedPreference(compact || collapsed ? collapsed : null);
     try {
       localStorage.setItem('t3x-workspace-draft-collapsed', String(collapsed));
     } catch {
       /* Collapsing still works without storage. */
     }
   };
-  const resizeDiscussion = (width: number) => {
+  const resizeDiscussion = (width: number | null) => {
     const actualDraftWidth =
       boardRef.current?.querySelector<HTMLElement>('[aria-label="Workspace conversations"]')
         ?.offsetWidth || draftWidth;
@@ -738,46 +772,37 @@ function ComposeSurface({
       680,
       Math.max(320, (boardRef.current?.clientWidth || 1680) - actualDraftWidth - 320)
     );
-    const next = Math.round(Math.max(320, Math.min(maximum, width)));
-    setDiscussionWidth(next);
+    const next = width === null ? null : Math.round(Math.max(320, Math.min(maximum, width)));
+    setCustomDiscussionWidth(next);
     try {
-      localStorage.setItem('t3x-workspace-discussion-width', String(next));
+      if (next === null) localStorage.removeItem(DISCUSSION_WIDTH_KEY);
+      else localStorage.setItem(DISCUSSION_WIDTH_KEY, String(next));
     } catch {
       /* Resizing still works without storage. */
     }
   };
-  const resizeDraft = (width: number) => {
+  const resizeDraft = (width: number | null) => {
     const measuredDiscussionWidth = boardRef.current
       ?.querySelector('[data-compose-rail]')
       ?.getBoundingClientRect().width;
     const actualDiscussionWidth = measuredDiscussionWidth
       ? measuredDiscussionWidth + 16
-      : discussionWidth;
+      : inspectorOpen
+        ? discussionWidth
+        : 0;
     const maximum = Math.min(
       560,
       Math.max(180, (boardRef.current?.clientWidth || 1680) - actualDiscussionWidth - 320)
     );
-    const next = Math.round(Math.max(180, Math.min(maximum, width)));
-    setDraftWidth(next);
+    const next = width === null ? null : Math.round(Math.max(180, Math.min(maximum, width)));
+    setCustomDraftWidth(next);
     try {
-      localStorage.setItem('t3x-workspace-draft-width', String(next));
+      if (next === null) localStorage.removeItem(CONVERSATION_WIDTH_KEY);
+      else localStorage.setItem(CONVERSATION_WIDTH_KEY, String(next));
     } catch {
       /* Resizing still works without storage. */
     }
   };
-  const resizeGeneratedPanel = (height: number) => {
-    const railHeight =
-      boardRef.current?.querySelector<HTMLElement>('[data-compose-rail]')?.clientHeight || 720;
-    const maximum = Math.max(160, railHeight - 240);
-    const next = Math.round(Math.max(160, Math.min(maximum, height)));
-    setGeneratedPanelHeight(next);
-    try {
-      localStorage.setItem('t3x-workspace-generated-panel-height', String(next));
-    } catch {
-      /* Resizing still works without storage. */
-    }
-  };
-
   const preferenceKey = `t3x.workspace-view:${candidate.projectId}:${candidate.id}`;
   const [sidePanel, setSidePanel] = useState<'history' | 'chat'>('chat');
   const [focusSchemaPath, setFocusSchemaPath] = useState<string>();
@@ -836,13 +861,18 @@ function ComposeSurface({
       try {
         const next = stageDraftOps(workingCurrent, operations, reason);
         setStaged((current) => [...current, ...next.items]);
+        setInspectorOpen(true);
+        setTurn(null);
+        setRightView('changes');
+        setSidePanel('chat');
+        setChangeScope('latest');
         return true;
       } catch (cause) {
         setStructureError(cause instanceof Error ? cause.message : 'Could not apply this change.');
         return false;
       }
     },
-    [workingCurrent]
+    [workingCurrent, setChangeScope]
   );
   const toggleStaged = useCallback((id: string) => {
     setStaged((current) =>
@@ -899,6 +929,9 @@ function ComposeSurface({
     setStaged([]);
     setStructureError(null);
     setFieldDialog(null);
+    setInspectorOpen(false);
+    setMobileChats(false);
+    setTurn(null);
     setDraftSubject('content');
     setFocusSchemaPath(undefined);
     setSidePanel('chat');
@@ -958,8 +991,42 @@ function ComposeSurface({
   const sourceMaterialIds = controller.materialSources
     .filter((source) => source.included)
     .map((source) => source.materialId);
-  const openChat = () => {
+  const conversationsQuery = useWorkspaceConversations(candidate.projectId);
+  const currentChatTitle =
+    conversationsQuery.data?.conversations.find(
+      (item) => item.conversation_id === activeConversationId
+    )?.title ||
+    activeConversationTitle ||
+    'Chat';
+  const contentChangeCount = activity.view
+    ? composeDraftChangeCards(activity.view.netDiff, activity.view.base, activity.view.current)
+        .length
+    : candidate.yopsDraft.operations.length;
+  const openDraft = () => {
+    setTurn(null);
+    setInspectorOpen(true);
+    setMobileChats(false);
+    setRightView('changes');
+    setChangeScope(staged.length ? 'latest' : 'all');
     setSidePanel('chat');
+  };
+  const closeInspector = () => {
+    setInspectorOpen(false);
+    setTurn(null);
+    requestAnimationFrame(() => draftButton.current?.focus());
+  };
+  useEffect(() => {
+    if (inspectorOpen) closeDraftButton.current?.focus();
+  }, [inspectorOpen, turn]);
+  const openChat = () => {
+    setTurn(null);
+    setInspectorOpen(false);
+    setSidePanel('chat');
+    requestAnimationFrame(() =>
+      boardRef.current
+        ?.querySelector<HTMLTextAreaElement>('textarea[aria-label="Workspace instruction"]')
+        ?.focus()
+    );
   };
   const showingDetails = (activity.enabled || Boolean(selectedSchema)) && sidePanel === 'history';
   const createConversation = useCallback(async () => {
@@ -968,6 +1035,8 @@ function ComposeSurface({
     setActiveConversationTitle('Compose assistant');
     setSchemaConversationId(undefined);
     setSidePanel('chat');
+    setTurn(null);
+    setMobileChats(false);
     return conversationId;
   }, [activity.createAssistantConversation]);
 
@@ -995,11 +1064,11 @@ function ComposeSurface({
         {
           '--draft-width': `${draftWidth}px`,
           '--discussion-width': `${discussionWidth}px`,
-          '--generated-panel-height': `${generatedPanelHeight}px`,
         } as CSSProperties
       }
       data-details-open={showingDetails || undefined}
-      data-details-resizing={detailsResizing || undefined}
+      data-inspector-open={inspectorOpen || undefined}
+      data-mobile-chats={mobileChats || undefined}
       data-resizing={resizing || undefined}
       data-draft-collapsed={draftCollapsed || undefined}
       className={composeStyles.composeBoard}
@@ -1016,6 +1085,7 @@ function ComposeSurface({
       {/* biome-ignore lint/a11y/useSemanticElements: This is an interactive window splitter, not a thematic break. */}
       <div
         role="separator"
+        hidden={!inspectorOpen}
         aria-label="Resize discussion panel"
         aria-orientation="vertical"
         aria-valuemin={320}
@@ -1052,7 +1122,8 @@ function ComposeSurface({
           dragOrigin.current = null;
           setResizing(false);
         }}
-        onDoubleClick={() => resizeDiscussion(440)}
+        title="Drag to resize · double-click to restore balanced width"
+        onDoubleClick={() => resizeDiscussion(null)}
         onKeyDown={(event) => {
           if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
             event.preventDefault();
@@ -1104,7 +1175,8 @@ function ComposeSurface({
             draftDragOrigin.current = null;
             setResizing(false);
           }}
-          onDoubleClick={() => resizeDraft(260)}
+          title="Drag to resize · double-click to restore balanced width"
+          onDoubleClick={() => resizeDraft(null)}
           onKeyDown={(event) => {
             if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
               event.preventDefault();
@@ -1117,7 +1189,7 @@ function ComposeSurface({
         />
       )}
       <aside aria-label="Workspace conversations" className={composeStyles.currentDraftSidebar}>
-        {draftCollapsed ? (
+        {draftCollapsed && !mobileChats ? (
           <button
             type="button"
             aria-label="Expand conversation panel"
@@ -1133,11 +1205,17 @@ function ComposeSurface({
           <WorkspaceConversationSidebar
             key={candidate.id}
             candidate={candidate}
+            conversationsQuery={conversationsQuery}
             activeConversationId={activeConversationId}
             canCreate={Boolean(activity.enabled && activity.view)}
-            onCollapse={() => toggleDraft(true)}
+            onCollapse={() => {
+              if (mobileChats) setMobileChats(false);
+              else toggleDraft(true);
+            }}
             onCreate={createConversation}
             onSelect={(conversationId, conversationTitle) => {
+              setMobileChats(false);
+              setTurn(null);
               setActiveConversationId(conversationId);
               setActiveConversationTitle(conversationTitle);
               setSchemaConversationId(undefined);
@@ -1157,7 +1235,10 @@ function ComposeSurface({
               setRightView('changes');
             }}
             selectedId={historicalInspection?.id}
-            onInspect={(value) => setCommitInspection({ scope: commitScope, value })}
+            onInspect={(value) => {
+              setCommitInspection({ scope: commitScope, value });
+              setInspectorOpen(true);
+            }}
           />
         ) : null}
         <section
@@ -1166,11 +1247,34 @@ function ComposeSurface({
           aria-label="Workspace AI chat"
         >
           <header className={composeStyles.discussionHeader}>
+            <button
+              type="button"
+              aria-label="Show conversations"
+              className={composeStyles.mobileChatsButton}
+              onClick={() => {
+                setMobileChats(true);
+              }}
+            >
+              <PanelLeftOpen aria-hidden="true" />
+            </button>
             <MessageSquare aria-hidden="true" />
-            <h2>Chat</h2>
-            <span className={composeStyles.discussionWorkspace} title={candidate.title}>
-              {candidate.title}
-            </span>
+            <h2 title={currentChatTitle}>{currentChatTitle}</h2>
+            <button
+              type="button"
+              className={composeStyles.draftToggle}
+              aria-label="Open Draft"
+              aria-expanded={inspectorOpen}
+              ref={draftButton}
+              onClick={openDraft}
+              title="Inspect Workspace Draft"
+            >
+              <PanelRightOpen aria-hidden="true" /> Draft
+              <span title="Changed Content objects">{contentChangeCount}</span>
+              {schemaSettings.record && schemaSettings.record.status !== 'cancelled' ? (
+                <small>Schema</small>
+              ) : null}
+              {staged.length ? <small>{staged.length} unsaved</small> : null}
+            </button>
           </header>
           {!activity.enabled || !activity.view ? (
             <WorkspaceSourcesMenu candidate={candidate} controller={controller} />
@@ -1205,6 +1309,23 @@ function ComposeSurface({
                 setSchemaConversationId(undefined);
               }}
               onPublishCandidate={activity.publishCandidate}
+              schemaReceipt={
+                schemaSettings.record && schemaSettings.record.status !== 'cancelled'
+                  ? {
+                      settingsIds: (schemaSettings.record.cards ?? [schemaSettings.record]).map(
+                        (card) => card.settingsId
+                      ),
+                      open: openDraft,
+                    }
+                  : undefined
+              }
+              onOpenTurn={(changes) => {
+                setTurn(changes);
+                setInspectorOpen(true);
+                setMobileChats(false);
+                setRightView('changes');
+                setSidePanel('chat');
+              }}
               activityActions={activity.actions}
               activityCards={activity.cards}
               projectId={candidate.projectId}
@@ -1218,7 +1339,7 @@ function ComposeSurface({
               sourcesControl={
                 <WorkspaceSourcesMenu candidate={candidate} controller={controller} />
               }
-              contextLabel={`${candidate.title} · Draft r${activity.compositionRevision ?? 0}`}
+              contextLabel={`Draft r${activity.compositionRevision ?? 0}`}
             />
           ) : (
             <p className={composeStyles.activityStatus} role={activity.error ? 'alert' : 'status'}>
@@ -1231,8 +1352,9 @@ function ComposeSurface({
       <aside
         aria-label={historicalCommit ? 'Discuss change' : 'Generated changes'}
         className={composeStyles.discussionSidebar}
+        hidden={!inspectorOpen}
         data-compose-rail
-        data-panel={historicalCommit ? 'details' : showingDetails ? 'split' : 'changes'}
+        data-panel={historicalCommit || showingDetails ? 'details' : 'changes'}
       >
         {historicalCommit ? (
           <>
@@ -1240,6 +1362,16 @@ function ComposeSurface({
               <Layers aria-hidden="true" />
               <h2>Details</h2>
               <span className={composeStyles.discussionWorkspace}>Commit · Read-only</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setInspectorOpen(false);
+                  setCommitSelection(null);
+                }}
+                aria-label="Return to conversation"
+              >
+                <X aria-hidden="true" />
+              </button>
             </header>
             <WorkspaceCommitChangeDetails
               key={`${commitScope}:${historicalCommit.hash}:${historicalInspection?.id ?? 'empty'}`}
@@ -1251,7 +1383,11 @@ function ComposeSurface({
           hidden={Boolean(historicalCommit)}
           style={historicalCommit ? undefined : { display: 'contents' }}
         >
-          <section className={composeStyles.generatedChangesPanel} aria-label="Generated card list">
+          <section
+            hidden={showingDetails}
+            className={composeStyles.generatedChangesPanel}
+            aria-label="Generated card list"
+          >
             <nav className={composeStyles.workspaceToolTabs} aria-label="Workspace tools">
               {(['changes', 'structure', 'history'] as const).map((view) => (
                 <button
@@ -1259,6 +1395,7 @@ function ComposeSurface({
                   type="button"
                   aria-pressed={rightView === view}
                   onClick={() => {
+                    setTurn(null);
                     setRightView(view);
                     setSidePanel('chat');
                   }}
@@ -1273,6 +1410,14 @@ function ComposeSurface({
                   {view === 'changes' ? 'Changes' : view === 'structure' ? 'Structure' : 'History'}
                 </button>
               ))}
+              <button
+                ref={closeDraftButton}
+                type="button"
+                aria-label="Close Draft"
+                onClick={closeInspector}
+              >
+                <X aria-hidden="true" />
+              </button>
             </nav>
             <div className={composeStyles.structurePanel} hidden={rightView !== 'structure'}>
               <WorkspaceCurrentDraft
@@ -1318,21 +1463,33 @@ function ComposeSurface({
                     contentNavigation.requestNavigation(() => {
                       setCommitInspection(null);
                       setCommitSelection({ scope: commitScope, commit });
+                      if (window.matchMedia?.('(max-width: 840px)').matches)
+                        setInspectorOpen(false);
                     });
                   }
                 }}
               />
+            ) : rightView === 'changes' && turn ? (
+              <section className={composeStyles.turnView} aria-label="This reply’s changes">
+                <button type="button" onClick={openDraft}>
+                  <ArrowLeft aria-hidden="true" /> All draft changes
+                </button>
+                <h3>This reply’s changes</h3>
+                <p>
+                  Draft r{turn.action.beforeRevision} → r{turn.action.afterRevision}
+                </p>
+                <WorkspaceTurnChanges
+                  action={turn.action}
+                  cards={activity.cards[turn.action.actionId] ?? turn.cards}
+                />
+              </section>
             ) : rightView === 'changes' ? (
               <>
                 <ChangesToolbar
                   proposedChangeCount={
                     activity.view
                       ? (changeScope === 'all'
-                          ? composeDraftChangeCards(
-                              activity.view.netDiff,
-                              activity.view.base,
-                              activity.view.current
-                            ).length
+                          ? contentChangeCount
                           : groupComposeActivity(activity.actions).reduce(
                               (count, event) =>
                                 count + composeEventCards(event, activity.cards).length,
@@ -1405,121 +1562,64 @@ function ComposeSurface({
             ) : null}
           </section>
           {showingDetails ? (
-            <>
-              {/* biome-ignore lint/a11y/useSemanticElements: This is an interactive window splitter, not a thematic break. */}
-              <div
-                role="separator"
-                aria-label="Resize generated cards and details"
-                aria-orientation="horizontal"
-                aria-valuemin={160}
-                aria-valuemax={720}
-                aria-valuenow={generatedPanelHeight}
-                tabIndex={0}
-                className={composeStyles.detailsResize}
-                onPointerDown={(event) => {
-                  if (event.button !== 0) return;
-                  event.preventDefault();
-                  const cards = boardRef.current?.querySelector<HTMLElement>(
-                    '[aria-label="Generated card list"]'
-                  );
-                  detailsDragOrigin.current = {
-                    y: event.clientY,
-                    height: cards?.getBoundingClientRect().height || generatedPanelHeight,
-                  };
-                  event.currentTarget.setPointerCapture(event.pointerId);
-                  setDetailsResizing(true);
-                }}
-                onPointerMove={(event) => {
-                  if (detailsDragOrigin.current)
-                    resizeGeneratedPanel(
-                      detailsDragOrigin.current.height + event.clientY - detailsDragOrigin.current.y
-                    );
-                }}
-                onPointerUp={(event) => {
-                  detailsDragOrigin.current = null;
-                  setDetailsResizing(false);
-                  if (event.currentTarget.hasPointerCapture(event.pointerId))
-                    event.currentTarget.releasePointerCapture(event.pointerId);
-                }}
-                onLostPointerCapture={() => {
-                  detailsDragOrigin.current = null;
-                  setDetailsResizing(false);
-                }}
-                onPointerCancel={() => {
-                  detailsDragOrigin.current = null;
-                  setDetailsResizing(false);
-                }}
-                onDoubleClick={() => resizeGeneratedPanel(260)}
-                onKeyDown={(event) => {
-                  if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-                    event.preventDefault();
-                    resizeGeneratedPanel(
-                      generatedPanelHeight + (event.key === 'ArrowDown' ? 20 : -20)
-                    );
-                  } else if (event.key === 'Home') {
-                    event.preventDefault();
-                    resizeGeneratedPanel(160);
-                  } else if (event.key === 'End') {
-                    event.preventDefault();
-                    resizeGeneratedPanel(720);
-                  }
-                }}
-              />
-              <section
-                className={composeStyles.changeDetailsPanel}
-                aria-label="Selected change details"
-              >
-                <header className={composeStyles.discussionHeader}>
-                  <Layers aria-hidden="true" />
-                  <h2>Details</h2>
-                  <button type="button" aria-label="Close change details" onClick={openChat}>
-                    <X aria-hidden="true" />
-                  </button>
-                </header>
-                {selectedSchema ? (
-                  <AssistantSchemaSettingsDetails
-                    key={candidate.id + ':' + selectedSchema.settingsId}
-                    record={selectedSchema}
-                    projectId={candidate.projectId}
-                    workspaceId={candidate.id}
-                    onEdit={() => {
-                      const settings = selectedSchema.settings;
-                      setFocusSchemaPath(
-                        [
-                          settings.targetNodePath ?? settings.nodePath,
-                          settings.newName ?? settings.name,
-                        ]
-                          .filter(Boolean)
-                          .join('/')
-                      );
-                      void openStructure('schema');
-                    }}
-                    onDiscuss={() => {
-                      const settings = selectedSchema.settings;
-                      const path = [
+            <section
+              className={composeStyles.changeDetailsPanel}
+              aria-label="Selected change details"
+            >
+              <header className={composeStyles.discussionHeader}>
+                <Layers aria-hidden="true" />
+                <h2>Details</h2>
+                <button
+                  type="button"
+                  aria-label="Back to changes"
+                  onClick={() => setSidePanel('chat')}
+                >
+                  <ArrowLeft aria-hidden="true" />
+                </button>
+              </header>
+              {selectedSchema ? (
+                <AssistantSchemaSettingsDetails
+                  key={candidate.id + ':' + selectedSchema.settingsId}
+                  record={selectedSchema}
+                  projectId={candidate.projectId}
+                  workspaceId={candidate.id}
+                  onEdit={() => {
+                    const settings = selectedSchema.settings;
+                    setFocusSchemaPath(
+                      [
                         settings.targetNodePath ?? settings.nodePath,
                         settings.newName ?? settings.name,
                       ]
                         .filter(Boolean)
-                        .join('/');
-                      setActivitySelection(null);
-                      controller.prefillAssistant(`修改 Schema 结构 ${path}：`);
-                      openChat();
-                    }}
-                  />
-                ) : (
-                  <ComposeNodeHistoryPanel
-                    activity={activity}
-                    selection={activitySelection}
-                    onOpenAction={openHistoryAction}
-                    onDiscuss={openChat}
-                    onOpenStructure={setFieldDialog}
-                    onSubmit={stageManualOps}
-                    workingCurrent={workingCurrent}
-                  />
-                )}
-              </section>
-            </>
+                        .join('/')
+                    );
+                    void openStructure('schema');
+                  }}
+                  onDiscuss={() => {
+                    const settings = selectedSchema.settings;
+                    const path = [
+                      settings.targetNodePath ?? settings.nodePath,
+                      settings.newName ?? settings.name,
+                    ]
+                      .filter(Boolean)
+                      .join('/');
+                    setActivitySelection(null);
+                    controller.prefillAssistant(`修改 Schema 结构 ${path}：`);
+                    openChat();
+                  }}
+                />
+              ) : (
+                <ComposeNodeHistoryPanel
+                  activity={activity}
+                  selection={activitySelection}
+                  onOpenAction={openHistoryAction}
+                  onDiscuss={openChat}
+                  onOpenStructure={setFieldDialog}
+                  onSubmit={stageManualOps}
+                  workingCurrent={workingCurrent}
+                />
+              )}
+            </section>
           ) : null}
         </div>
       </aside>
@@ -1576,6 +1676,7 @@ function conversationMetadataValue(conversation: Conversation, key: string): str
 }
 
 function WorkspaceConversationSidebar({
+  conversationsQuery,
   activeConversationId,
   candidate,
   canCreate,
@@ -1583,6 +1684,7 @@ function WorkspaceConversationSidebar({
   onCreate,
   onSelect,
 }: {
+  conversationsQuery: ReturnType<typeof useWorkspaceConversations>;
   activeConversationId?: string;
   candidate: WorkspaceCandidate;
   canCreate: boolean;
@@ -1590,7 +1692,6 @@ function WorkspaceConversationSidebar({
   onCreate: () => Promise<string>;
   onSelect: (conversationId?: string, title?: string) => void;
 }) {
-  const conversationsQuery = useWorkspaceConversations(candidate.projectId);
   const conversationRefreshKey = useChatStore((state) => state.refreshKey);
   const previousRefreshKeyRef = useRef(conversationRefreshKey);
   const storageKey = `t3x-workspace-chat-folders:${candidate.projectId}:${candidate.id}`;
@@ -2360,7 +2461,7 @@ function ProposedDraftPanel({
   const operations = candidate.yopsDraft.operations;
   const editRequest = useRef(0);
   useEffect(() => {
-    if (!activity.view || schemaSelected) return;
+    if (!activity.view || !activitySelection || schemaSelected) return;
     if (changeScope === 'all') {
       if (activitySelection?.meta.comparison === 'draft') return;
       const changes = composeDraftChangeCards(

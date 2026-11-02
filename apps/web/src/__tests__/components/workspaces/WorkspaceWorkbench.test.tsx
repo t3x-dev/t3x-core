@@ -304,9 +304,7 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     expect(screen.getByRole('region', { name: 'Workspace detail' })).toHaveAccessibleDescription(
       release.title
     );
-    expect(
-      within(screen.getByRole('region', { name: 'Workspace AI chat' })).getByTitle(release.title)
-    ).toBeVisible();
+    expect(screen.getByText(release.title, { selector: 'header span' })).toBeVisible();
   });
 
   it('waits for the user to enable Draft activity before preparing Chat', () => {
@@ -332,6 +330,7 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     ]);
     render(<WorkspaceWorkbench candidates={[candidate]} projectId="proj_1" />);
 
+    fireEvent.click(screen.getByRole('button', { name: 'Open Draft' }));
     const outcome = screen.getByRole('button', { name: 'Inspect Outcome: prd/summary/outcome' });
     const title = screen.getByRole('button', {
       name: 'Inspect Title: prd/requirements/canary/title',
@@ -389,6 +388,7 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     expect(screen.getByRole('region', { name: 'Workspace detail' })).toHaveAccessibleDescription(
       baseline.title
     );
+    fireEvent.click(screen.getByRole('button', { name: 'Open Draft' }));
     expect(screen.getByText('Baseline')).toBeVisible();
     expect(screen.queryByText('Reduced risk')).not.toBeInTheDocument();
     rerender(
@@ -402,6 +402,7 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     expect(screen.getByRole('region', { name: 'Workspace detail' })).toHaveAccessibleDescription(
       scenario.title
     );
+    fireEvent.click(screen.getByRole('button', { name: 'Open Draft' }));
     expect(screen.getByText('Reduced risk')).toBeVisible();
     expect(screen.queryByText('Baseline')).not.toBeInTheDocument();
     expect(mocks.onSelectedWorkspaceChange).not.toHaveBeenCalled();

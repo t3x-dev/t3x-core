@@ -210,3 +210,60 @@
     animation: none;
   }
 }
+
+.receipt {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  margin-top: 10px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  padding: 4px 9px;
+  color: var(--text-secondary);
+  background: var(--surface-card);
+  font-size: 12px;
+}
+.receipt:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+.receipt svg {
+  width: 14px;
+  height: 14px;
+}
+.receipt svg:first-child {
+  color: var(--accent-commit);
+}
+
+.delta {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+  font: 12px / 1.5 var(--font-mono);
+}
+.delta ins,
+.delta del {
+  overflow: hidden;
+  max-width: 100%;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-radius: var(--radius-sm);
+  padding-inline: 4px;
+}
+.delta ins {
+  color: var(--diff-added-text);
+  background: var(--diff-added-bg);
+  text-decoration: none;
+}
+.delta del {
+  color: var(--diff-removed-text);
+  background: var(--diff-removed-bg);
+}
+.delta > span,
+.delta small {
+  color: var(--text-secondary);
+}
