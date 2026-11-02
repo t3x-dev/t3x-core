@@ -13,6 +13,7 @@ import type { CommitAuthor } from '@t3x-dev/core';
 import { findUserById } from '@t3x-dev/storage';
 import type { Context } from 'hono';
 import { getDB } from './db';
+import { getRequestPrincipal } from './request-principal';
 
 /**
  * Get CommitAuthor from request context.
@@ -24,7 +25,7 @@ export async function getAuthorFromContext(
   c: Context,
   clientAuthor?: CommitAuthor
 ): Promise<CommitAuthor> {
-  const userId = c.get('userId') as string | undefined;
+  const userId = getRequestPrincipal(c)?.userId ?? undefined;
 
   if (userId) {
     const db = await getDB();

@@ -198,6 +198,39 @@ Each later migration PR must record:
 - the last compatible application and schema version;
 - whether rollback is code-only or requires storage restoration.
 
+## Task 16 implementation evidence
+
+Task 16 implements the shared ingress contract in this repository without a
+storage or protocol migration:
+
+- `packages/application/src/identity/request-principal.ts` owns the closed,
+  transport-neutral `RequestPrincipal` contract.
+- `packages/api/src/lib/request-principal.ts` owns the API-key, runner, local
+  development, and trusted-deployment adapter seam.
+- HTTP middleware derives the principal from server-validated credentials;
+  WebSocket derives the same identity once during upgrade; runner routes use a
+  fixed service principal.
+- Shared project, namespace, Workspace, Transition, operator, inference,
+  lifecycle, usage, and commit-author consumers read `RequestPrincipal`
+  instead of transport-specific identity fields.
+- Web, CLI, and MCP remain credential-only clients. The contract inventory test
+  rejects reserved identity headers and prevents new direct API-key identity
+  consumers outside the explicit credential-management allowlist.
+- Adapter, middleware, WebSocket, authorization, route, and full API regression
+  tests cover direct human, delegated machine, unbound machine, forged identity
+  fields, project binding, scopes, and local-development compatibility.
+
+`POSTGRES_SCHEMA_VERSION` remains `80`, and `packages/transition/src` plus the
+Transition conformance bundle remain unchanged from the task-15 baseline.
+Rollback is therefore code-only for task 16.
+
+Cloud runtime authentication is not qualified by this repository. The API
+exports the trusted adapter contract and context setter; a Cloud deployment
+must verify its own Session/Credential and map it to that contract before
+shared authorization runs. During mixed-version rollout, the API retains one
+trusted `apiKey`-context compatibility mapping; remove it only after every
+deployment adapter writes `requestPrincipal` directly.
+
 ## Rollback law
 
 Task 15 itself is documentation-only and is reverted with an ordinary

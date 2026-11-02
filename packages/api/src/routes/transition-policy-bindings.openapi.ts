@@ -1,5 +1,4 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { ApiKey } from '@t3x-dev/core';
 import {
   bindTransitionPolicy,
   getTransitionPolicyBinding,
@@ -11,6 +10,7 @@ import type { Context } from 'hono';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
+import { getRequestPrincipal } from '../lib/request-principal';
 import { deriveTrustedTransitionPrincipal } from '../lib/transition-authority';
 import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -39,13 +39,9 @@ function wireBinding(binding: Awaited<ReturnType<typeof bindTransitionPolicy>>) 
   };
 }
 
-function authenticatedApiKey(c: Context): ApiKey | undefined {
-  return c.get('apiKey') as ApiKey | undefined;
-}
-
 function requireHumanAdministrator(c: Context): Response | null {
-  const apiKey = authenticatedApiKey(c);
-  if (apiKey !== undefined && apiKey.principal_kind !== 'human') {
+  const principal = getRequestPrincipal(c);
+  if (principal !== undefined && principal.subject.kind !== 'human') {
     return errorResponse(c, 'FORBIDDEN', 'Policy administration requires a human principal');
   }
   return null;
@@ -108,7 +104,7 @@ transitionPolicyBindingRoutes.openapi(putRoute, async (c) => {
     const db = await getDB();
     const access = await assertProjectAccess(c, db, projectId);
     if (access instanceof Response) return access;
-    const principal = deriveTrustedTransitionPrincipal(authenticatedApiKey(c));
+    const principal = deriveTrustedTransitionPrincipal(getRequestPrincipal(c));
     const binding = await bindTransitionPolicy(db, {
       projectId,
       refName: body.ref_name,

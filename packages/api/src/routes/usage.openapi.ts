@@ -19,20 +19,12 @@ import { isAuthenticationDisabled } from '../lib/auth-config';
 import { getDB } from '../lib/db';
 import { createError, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
+import { getUserId } from '../lib/usage-tracking';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const usageRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
-
-// ============================================================
-// Helpers
-// ============================================================
-
-function getUserId(c: { get: (key: string) => unknown }): string | null {
-  const apiKey = c.get('apiKey') as { user_id?: string | null } | undefined;
-  return apiKey?.user_id ?? null;
-}
 
 // ============================================================
 // Schemas

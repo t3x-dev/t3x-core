@@ -26,7 +26,7 @@ import {
   type ProjectGrantDto,
   type TrustedNamespaceAuthorityFacts,
 } from '@t3x-dev/application';
-import type { ApiKey, ApiKeyPrincipalKind } from '@t3x-dev/core';
+import type { ApiKeyPrincipalKind } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import {
   findProjectAuthorityFacts,
@@ -40,6 +40,7 @@ import {
 import type { Context } from 'hono';
 import { isAuthenticationDisabled } from './auth-config';
 import { createError, type ErrorCode } from './errors';
+import { getRequestPrincipal } from './request-principal';
 
 export interface ProjectAccessPrincipal {
   userId: string | null | undefined;
@@ -221,13 +222,13 @@ export async function evaluateProjectAccessIncludingDeleted(
 }
 
 export function getProjectAccessPrincipal(c: Context): ProjectAccessPrincipal | undefined {
-  const apiKey = c.get('apiKey') as ApiKey | undefined;
-  if (!apiKey) return undefined;
+  const principal = getRequestPrincipal(c);
+  if (!principal || principal.credential.kind === 'local_dev') return undefined;
   return {
-    userId: apiKey.user_id,
-    projectId: apiKey.project_id,
-    principalKind: apiKey.principal_kind,
-    keyId: apiKey.id,
+    userId: principal.userId,
+    projectId: principal.credential.projectId,
+    principalKind: principal.subject.kind,
+    keyId: principal.subject.principal_id,
   };
 }
 
@@ -326,8 +327,7 @@ export async function assertResourceProjectAccess(
 ) {
   if (projectId) return assertProjectAccess(c, db, projectId);
 
-  const apiKey = c.get('apiKey') as ApiKey | undefined;
-  if (!apiKey) return null;
+  if (!getProjectAccessPrincipal(c)) return null;
 
   return c.json(createError('FORBIDDEN', 'A project-scoped resource is required'), 403);
 }
@@ -363,8 +363,8 @@ export async function resolveProjectResourceAccess<T>(
  * Human principals and AUTH_DISABLED local development may create.
  */
 export function assertProjectCreationAccess(c: Context): Response | undefined {
-  const apiKey = c.get('apiKey') as ApiKey | undefined;
-  if (apiKey?.principal_kind !== undefined && apiKey.principal_kind !== 'human') {
+  const principal = getRequestPrincipal(c);
+  if (principal && principal.subject.kind !== 'human') {
     return c.json(createError('FORBIDDEN', 'Machine credentials cannot create projects'), 403);
   }
   return undefined;
@@ -440,6 +440,5 @@ export async function assertProjectAccessIncludingDeleted(
  * Returns undefined when AUTH_DISABLED (no API key / no user).
  */
 export function getUserId(c: Context): string | undefined {
-  const apiKey = c.get('apiKey') as ApiKey | undefined;
-  return apiKey?.user_id ?? undefined;
+  return getRequestPrincipal(c)?.userId ?? undefined;
 }

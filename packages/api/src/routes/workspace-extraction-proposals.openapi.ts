@@ -1,5 +1,4 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { ApiKey } from '@t3x-dev/core';
 import {
   ConflictError,
   findWorkspaceDraft,
@@ -20,6 +19,7 @@ import {
   resolveInferenceRunId,
 } from '../lib/inference';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
+import { getRequestPrincipal } from '../lib/request-principal';
 import {
   requireTransitionAuthority,
   TransitionProjectScopeDeniedError,
@@ -235,8 +235,7 @@ workspaceExtractionProposalRoutes.openapi(linkRoute, async (c) => {
   if (access instanceof Response) return access;
   try {
     requireTransitionAuthority({
-      // @ts-expect-error - OpenAPI context apiKey typing
-      apiKey: c.get('apiKey') as ApiKey | undefined,
+      apiKey: getRequestPrincipal(c),
       projectId,
       scope: 'transition:inspect',
     });
@@ -282,8 +281,7 @@ workspaceExtractionProposalRoutes.openapi(route, async (c) => {
 
   try {
     const principal = requireTransitionAuthority({
-      // @ts-expect-error - OpenAPI context apiKey typing
-      apiKey: c.get('apiKey') as ApiKey | undefined,
+      apiKey: getRequestPrincipal(c),
       projectId,
       scope: 'transition:propose',
     });

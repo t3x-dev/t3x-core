@@ -10,7 +10,6 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { WorkspaceFullSchemaReviewSchema } from '@t3x-dev/api-client';
 import {
-  type ApiKey,
   type Draft,
   describeTransitionObject,
   type SemanticContent,
@@ -39,6 +38,7 @@ import { isAuthenticationDisabled } from '../lib/auth-config';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
+import { getRequestPrincipal } from '../lib/request-principal';
 import {
   TransitionPolicyBindingRequiredError,
   TransitionProjectScopeDeniedError,
@@ -595,7 +595,7 @@ workspaceRoutes.openapi(reviewWorkspaceTransitionRoute, async (c) => {
   try {
     const authority = await resolveWorkspaceTransitionAuthority({
       db,
-      apiKey: c.get('apiKey') as ApiKey | undefined,
+      apiKey: getRequestPrincipal(c),
       projectId,
       workspaceId,
       operation: { kind: 'review' },
@@ -641,7 +641,7 @@ workspaceRoutes.openapi(decideWorkspaceTransitionRoute, async (c) => {
   try {
     const authority = await resolveWorkspaceTransitionAuthority({
       db,
-      apiKey: c.get('apiKey') as ApiKey | undefined,
+      apiKey: getRequestPrincipal(c),
       projectId,
       workspaceId,
       operation: { kind: 'decide', outcome },
@@ -897,8 +897,7 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
     if (access instanceof Response) return access;
     const authority = await resolveWorkspaceTransitionAuthority({
       db,
-      // @ts-expect-error - OpenAPI context apiKey typing
-      apiKey: c.get('apiKey') as ApiKey | undefined,
+      apiKey: getRequestPrincipal(c),
       projectId,
       workspaceId,
       operation: {

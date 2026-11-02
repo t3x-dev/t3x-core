@@ -11,6 +11,7 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
+import { requestPrincipalFromApiKey } from '../lib/request-principal';
 import { namespaceRoutes } from '../routes/namespaces.openapi';
 import { projectRoutes } from '../routes/projects.openapi';
 
@@ -19,15 +20,25 @@ function createAppWithUser(userId?: string) {
   if (userId) {
     app.use('*', async (c, next) => {
       // biome-ignore lint/suspicious/noExplicitAny: test context mock
-      (c as any).set('apiKey', {
-        id: `ak_${userId}`,
-        user_id: userId,
-        project_id: null,
-        principal_kind: 'human',
-        transition_scopes: [],
-        key_prefix: 'test',
-        name: 'test',
-      });
+      (c as any).set(
+        'requestPrincipal',
+        requestPrincipalFromApiKey(
+          {
+            id: `ak_${userId}`,
+            user_id: userId,
+            project_id: null,
+            principal_kind: 'human',
+            transition_scopes: [],
+            key_prefix: 'test',
+            key_hash: 'test',
+            name: 'test',
+            created_at: '2026-11-02T00:00:00.000Z',
+            last_used_at: null,
+            revoked_at: null,
+          },
+          'http'
+        )
+      );
       return next();
     });
   }

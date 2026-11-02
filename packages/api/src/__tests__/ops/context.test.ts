@@ -1,4 +1,6 @@
+import type { ApiKey } from '@t3x-dev/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { requestPrincipalFromApiKey } from '../../lib/request-principal';
 
 const mockDB = { query: vi.fn() };
 const mockRegistry = { getProvider: vi.fn() };
@@ -22,7 +24,20 @@ import { buildPipelineContext } from '../../ops/context';
 
 function fakeHonoContext(overrides: { userId?: string; ingressChannel?: string } = {}) {
   const store = new Map<string, unknown>();
-  if (overrides.userId) store.set('userId', overrides.userId);
+  if (overrides.userId)
+    store.set(
+      'requestPrincipal',
+      requestPrincipalFromApiKey(
+        {
+          id: 'ak_context',
+          user_id: overrides.userId,
+          project_id: null,
+          principal_kind: 'human',
+          transition_scopes: [],
+        } as ApiKey,
+        'http'
+      )
+    );
   if (overrides.ingressChannel) store.set('inferenceIngressChannel', overrides.ingressChannel);
 
   return {

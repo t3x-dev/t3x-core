@@ -189,6 +189,7 @@ vi.mock('../lib/workspace-transition', async (importOriginal) => {
   };
 });
 
+import { requestPrincipalFromApiKey } from '../lib/request-principal';
 import { workspaceRoutes } from '../routes/workspaces.openapi';
 
 const mockCommitV2 = {
@@ -322,6 +323,7 @@ describe('Workspace routes', () => {
     const authenticatedApp = new Hono();
     authenticatedApp.use('*', async (context, next) => {
       context.set('apiKey', apiKey);
+      context.set('requestPrincipal', requestPrincipalFromApiKey(apiKey, 'http'));
       await next();
     });
     authenticatedApp.route('/', workspaceRoutes);

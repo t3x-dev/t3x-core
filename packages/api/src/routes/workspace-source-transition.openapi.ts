@@ -1,5 +1,4 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { ApiKey } from '@t3x-dev/core';
 import {
   ConflictError,
   TransitionHeadConflictError,
@@ -10,6 +9,7 @@ import { TransitionProtocolError } from '@t3x-dev/transition';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
+import { getRequestPrincipal } from '../lib/request-principal';
 import {
   TransitionPolicyBindingRequiredError,
   TransitionProjectScopeDeniedError,
@@ -518,7 +518,7 @@ export function createWorkspaceSourceTransitionRoutes(
     try {
       const authority = await resolveWorkspaceTransitionAuthority({
         db,
-        apiKey: c.get('apiKey') as ApiKey | undefined,
+        apiKey: getRequestPrincipal(c),
         projectId,
         workspaceId,
         operation: { kind: 'review' },
@@ -563,7 +563,7 @@ export function createWorkspaceSourceTransitionRoutes(
     try {
       const authority = await resolveWorkspaceTransitionAuthority({
         db,
-        apiKey: c.get('apiKey') as ApiKey | undefined,
+        apiKey: getRequestPrincipal(c),
         projectId,
         workspaceId,
         operation: { kind: 'decide', outcome: request.outcome },
@@ -614,7 +614,7 @@ export function createWorkspaceSourceTransitionRoutes(
     try {
       const authority = await resolveWorkspaceTransitionAuthority({
         db,
-        apiKey: c.get('apiKey') as ApiKey | undefined,
+        apiKey: getRequestPrincipal(c),
         projectId,
         workspaceId,
         operation: { kind: 'review' },
@@ -658,7 +658,7 @@ export function createWorkspaceSourceTransitionRoutes(
     try {
       const authority = await resolveWorkspaceTransitionAuthority({
         db,
-        apiKey: c.get('apiKey') as ApiKey | undefined,
+        apiKey: getRequestPrincipal(c),
         projectId,
         workspaceId,
         operation: { kind: 'decide', outcome: request.outcome },

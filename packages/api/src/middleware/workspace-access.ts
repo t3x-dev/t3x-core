@@ -1,9 +1,9 @@
-import type { ApiKey } from '@t3x-dev/core';
 import { findWorkspaceDraftOwner, type WorkspaceOwner } from '@t3x-dev/storage';
 import type { Context, Next } from 'hono';
 import { isAuthenticationDisabled } from '../lib/auth-config';
 import { getDB } from '../lib/db';
 import { createError } from '../lib/errors';
+import { getRequestPrincipal } from '../lib/request-principal';
 
 /**
  * Resolve Workspace ownership from trusted authentication state. A user-bound
@@ -12,10 +12,8 @@ import { createError } from '../lib/errors';
  */
 export function workspaceOwnerFromContext(c: Context): WorkspaceOwner | null {
   if (isAuthenticationDisabled()) return null;
-  const apiKey = c.get('apiKey') as ApiKey | undefined;
-  if (!apiKey) return null;
-  if (apiKey.user_id) return { kind: 'human', id: apiKey.user_id };
-  return { kind: apiKey.principal_kind, id: apiKey.id };
+  const owner = getRequestPrincipal(c)?.workspaceOwner;
+  return owner ? { kind: owner.kind, id: owner.principal_id } : null;
 }
 
 function decoded(value: string): string | null {

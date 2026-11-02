@@ -1,16 +1,12 @@
-import {
-  type ApiKey,
-  type ApiKeyPrincipalKind,
-  type Author,
-  isTransitionScope,
-  type TransitionScope,
-} from '@t3x-dev/core';
+import type { RequestPrincipal } from '@t3x-dev/application';
+import type { ApiKeyPrincipalKind, Author, TransitionScope } from '@t3x-dev/core';
 import {
   type AnyDB,
   getTransitionPolicyBinding,
   type TransitionPolicyBinding,
 } from '@t3x-dev/storage';
 import type { Context } from 'hono';
+import { getRequestPrincipal } from './request-principal';
 
 export type TrustedTransitionPrincipal = {
   actor: {
@@ -24,8 +20,8 @@ export type TrustedTransitionPrincipal = {
 };
 
 /** Read authentication middleware state through Hono's shared context contract. */
-export function transitionApiKey(c: Context): ApiKey | undefined {
-  return c.get('apiKey') as ApiKey | undefined;
+export function transitionApiKey(c: Context): RequestPrincipal | undefined {
+  return getRequestPrincipal(c);
 }
 
 export class TransitionScopeDeniedError extends Error {
@@ -71,9 +67,9 @@ const POLICY_BOUND_SCOPES: ReadonlySet<TransitionScope> = new Set([
  * payloads must never be accepted as an input to this function.
  */
 export function deriveTrustedTransitionPrincipal(
-  apiKey: ApiKey | undefined
+  requestPrincipal: RequestPrincipal | undefined
 ): TrustedTransitionPrincipal {
-  if (apiKey === undefined) {
+  if (requestPrincipal === undefined) {
     return {
       actor: { kind: 'human', id: 'human:local-user' },
       keyId: null,
@@ -82,23 +78,14 @@ export function deriveTrustedTransitionPrincipal(
     };
   }
 
-  const scopes = apiKey.transition_scopes;
-  if (!scopes.every(isTransitionScope)) {
-    throw new TransitionScopeDeniedError('transition:inspect');
-  }
+  const scopes = requestPrincipal.scopes;
   return {
     actor: {
-      kind: apiKey.principal_kind,
-      id:
-        apiKey.principal_kind === 'human' && apiKey.user_id
-          ? `user:${apiKey.user_id}`
-          : `${apiKey.principal_kind}:api-key:${apiKey.id}`,
-      ...(apiKey.principal_kind !== 'human' && apiKey.user_id
-        ? { delegator: { kind: 'human' as const, id: `user:${apiKey.user_id}` } }
-        : {}),
+      ...requestPrincipal.actor,
+      ...(requestPrincipal.delegator ? { delegator: requestPrincipal.delegator } : {}),
     },
-    keyId: apiKey.id,
-    projectId: apiKey.project_id,
+    keyId: requestPrincipal.credential.id,
+    projectId: requestPrincipal.credential.projectId,
     scopes,
   };
 }
@@ -122,7 +109,7 @@ export function toTrustedTransitionAuthor(
  * explicit scope and may never escape their project binding.
  */
 export function requireTransitionAuthority(input: {
-  apiKey: ApiKey | undefined;
+  apiKey: RequestPrincipal | undefined;
   projectId: string;
   scope: TransitionScope;
 }): TrustedTransitionPrincipal {
@@ -143,7 +130,7 @@ export function requireTransitionAuthority(input: {
  */
 export async function resolveTransitionControlPlane(input: {
   db: AnyDB;
-  apiKey: ApiKey | undefined;
+  apiKey: RequestPrincipal | undefined;
   projectId: string;
   refName: string;
   scope: TransitionScope;
@@ -172,7 +159,7 @@ export async function resolveTransitionControlPlane(input: {
  */
 export async function resolveCompatibilityTransitionAuthority(input: {
   db: AnyDB;
-  apiKey: ApiKey | undefined;
+  apiKey: RequestPrincipal | undefined;
   projectId: string;
   scopes: readonly TransitionScope[];
   refName?: string;
@@ -222,7 +209,7 @@ export async function resolveCompatibilityTransitionAuthority(input: {
  */
 export async function resolveCompatibilityTransitionWriteAuthority(input: {
   db: AnyDB;
-  apiKey: ApiKey | undefined;
+  apiKey: RequestPrincipal | undefined;
   projectId: string;
   refName: string;
 }): Promise<{

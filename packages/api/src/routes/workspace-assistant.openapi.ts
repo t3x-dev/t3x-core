@@ -34,6 +34,7 @@ import {
   defaultGenerationProviderRuntime,
   getGenerationProviderRuntime,
 } from '../lib/provider-runtime';
+import { requestPrincipalFromApiKey } from '../lib/request-principal';
 import { StudioError } from '../lib/schema-studio-preview';
 import {
   requireTransitionAuthority,
@@ -171,12 +172,12 @@ workspaceAssistantRoutes.post(
     }
     const authorize = async (capability: 'read' | 'propose') => {
       const initialCredential = transitionApiKey(c);
-      if (initialCredential) {
-        const currentCredential = await findApiKeyById(db, initialCredential.id);
+      if (initialCredential?.credential.kind === 'api_key' && initialCredential.credential.id) {
+        const currentCredential = await findApiKeyById(db, initialCredential.credential.id);
         if (!currentCredential || currentCredential.revoked_at)
           throw new HTTPException(403, { message: 'Credential revoked' });
         requireTransitionAuthority({
-          apiKey: currentCredential,
+          apiKey: requestPrincipalFromApiKey(currentCredential, 'http'),
           projectId,
           scope: capability === 'read' ? 'transition:inspect' : 'transition:propose',
         });

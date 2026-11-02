@@ -13,11 +13,16 @@ import {
 } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { assertResourceProjectAccess } from '../lib/project-access';
 import type {
   ProjectLifecyclePolicy,
   ProjectLifecyclePolicyInput,
 } from '../lib/project-lifecycle-policy';
 import { ProjectLifecyclePolicyDeniedError } from '../lib/project-lifecycle-policy';
+import {
+  localDevelopmentRequestPrincipal,
+  requestPrincipalFromApiKey,
+} from '../lib/request-principal';
 import { setupTestDB } from './setup';
 
 type ApiResponse = Record<string, unknown> & {
@@ -49,15 +54,25 @@ function createApp(input?: {
   if (input) {
     app.use('*', async (c, next) => {
       // biome-ignore lint/suspicious/noExplicitAny: test context mock
-      (c as any).set('apiKey', {
-        id: input.keyId ?? 'ak_test',
-        user_id: input.userId ?? null,
-        project_id: input.projectId ?? null,
-        principal_kind: input.principalKind ?? 'human',
-        transition_scopes: [],
-        key_prefix: 'test',
-        name: 'test',
-      });
+      (c as any).set(
+        'requestPrincipal',
+        requestPrincipalFromApiKey(
+          {
+            id: input.keyId ?? 'ak_test',
+            user_id: input.userId ?? null,
+            project_id: input.projectId ?? null,
+            principal_kind: input.principalKind ?? 'human',
+            transition_scopes: [],
+            key_prefix: 'test',
+            key_hash: 'test',
+            name: 'test',
+            created_at: '2026-11-02T00:00:00.000Z',
+            last_used_at: null,
+            revoked_at: null,
+          },
+          'http'
+        )
+      );
       return next();
     });
   }
@@ -185,6 +200,21 @@ describe('canonical project access', () => {
     const response = await createApp().request('/v1/projects');
     expect(response.status).toBe(403);
     expect(((await response.json()) as ApiResponse).error?.code).toBe('FORBIDDEN');
+  });
+
+  it('keeps null-project compatibility resources available only to local development', async () => {
+    process.env.AUTH_DISABLED = 'true';
+    const app = new Hono();
+    app.use('*', async (c, next) => {
+      c.set('requestPrincipal', localDevelopmentRequestPrincipal());
+      return next();
+    });
+    app.get('/resource', async (c) => {
+      const denied = await assertResourceProjectAccess(c, mockDB, null);
+      return denied ?? c.json({ success: true });
+    });
+
+    expect((await app.request('/resource')).status).toBe(200);
   });
 
   it('never treats historical owner_id as runtime authority', async () => {

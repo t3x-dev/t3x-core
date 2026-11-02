@@ -9,7 +9,6 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { ApiKey } from '@t3x-dev/core';
 import {
   type AnyDB,
   bindTransitionPolicy,
@@ -25,11 +24,11 @@ import {
   type TransitionPolicyBinding,
   unbindTransitionPolicy,
 } from '@t3x-dev/storage';
-import type { Context } from 'hono';
 import { createBranchWorkspace } from '../lib/branch-workspace';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
+import { getRequestPrincipal } from '../lib/request-principal';
 import { deriveTrustedTransitionPrincipal } from '../lib/transition-authority';
 import {
   branchRulesFromBinding,
@@ -382,7 +381,7 @@ branchRoutes.openapi(createBranchRoute, async (c) => {
       const branch = await createBranchWorkspace(db, {
         projectId: body.project_id,
         name: body.name,
-        actor: deriveTrustedTransitionPrincipal(authenticatedApiKey(c)).actor,
+        actor: deriveTrustedTransitionPrincipal(getRequestPrincipal(c)).actor,
         owner: workspaceOwnerFromContext(c) ?? undefined,
         headCommitHash: body.head_commit_hash,
         parentBranch: body.parent_branch,
@@ -475,7 +474,7 @@ branchRoutes.openapi(switchBranchRoute, async (c) => {
         branch = await createBranchWorkspace(db, {
           projectId: body.project_id,
           name: body.branch_name,
-          actor: deriveTrustedTransitionPrincipal(authenticatedApiKey(c)).actor,
+          actor: deriveTrustedTransitionPrincipal(getRequestPrincipal(c)).actor,
           owner: workspaceOwnerFromContext(c) ?? undefined,
           parentBranch: body.parent_branch,
         });
@@ -549,13 +548,9 @@ const updateBranchRulesRoute = createRoute({
   },
 });
 
-function authenticatedApiKey(c: Context): ApiKey | undefined {
-  return c.get('apiKey') as ApiKey | undefined;
-}
-
 branchRoutes.openapi(updateBranchRulesRoute, async (c) => {
-  const apiKey = authenticatedApiKey(c);
-  if (apiKey !== undefined && apiKey.principal_kind !== 'human') {
+  const requestPrincipal = getRequestPrincipal(c);
+  if (requestPrincipal !== undefined && requestPrincipal.subject.kind !== 'human') {
     return errorResponse(c, 'FORBIDDEN', 'Branch rules require a human principal');
   }
   const body = c.req.valid('json');
@@ -587,7 +582,7 @@ branchRoutes.openapi(updateBranchRulesRoute, async (c) => {
           refName: body.branch_name,
           uri: change.uri,
           policy: change.policy,
-          actor: deriveTrustedTransitionPrincipal(apiKey).actor,
+          actor: deriveTrustedTransitionPrincipal(requestPrincipal).actor,
         });
       }
     }

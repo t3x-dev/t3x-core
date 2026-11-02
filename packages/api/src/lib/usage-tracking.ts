@@ -8,7 +8,9 @@
  */
 
 import { type RecordUsageInput, recordUsage } from '@t3x-dev/storage';
+import type { Context } from 'hono';
 import { pinoLogger } from '../middleware/logger';
+import { getRequestPrincipal } from './request-principal';
 
 export type { RecordUsageInput };
 
@@ -28,7 +30,6 @@ export function recordUsageFireAndForget(
 /**
  * Extract user_id from Hono request context (set by auth middleware).
  */
-export function getUserId(c: { get: (key: string) => unknown }): string | null {
-  const apiKey = c.get('apiKey') as { user_id?: string | null } | undefined;
-  return apiKey?.user_id ?? null;
+export function getUserId(c: Context): string | null {
+  return getRequestPrincipal(c)?.userId ?? null;
 }

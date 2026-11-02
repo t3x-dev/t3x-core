@@ -1,3 +1,4 @@
+import type { RequestPrincipal } from '@t3x-dev/application';
 import {
   createMaterial,
   findTurnsByConversation,
@@ -58,7 +59,7 @@ describe('Workspace Assistant streaming boundary', () => {
     await setup?.cleanup();
   });
   async function fixture(name: string) {
-    const project = await insertProject(setup.db, { name });
+    const project = await insertProject(setup.db, { name, ownerId: 'hosted-user' });
     const projectId = project.projectId;
     await insertBranch(setup.db, { projectId, name: 'main' });
     await upsertWorkspaceDraft(setup.db, {
@@ -139,7 +140,18 @@ describe('Workspace Assistant streaming boundary', () => {
     const settle = vi.fn<InferenceAdmissionPolicy['settle']>(async () => {});
     const app = new Hono();
     app.use('*', async (c, next) => {
-      c.set('userId', 'hosted-user');
+      c.set('requestPrincipal', {
+        subject: { kind: 'human', principal_id: 'hosted-user' },
+        actor: { kind: 'human', id: 'user:hosted-user' },
+        delegator: null,
+        workspaceOwner: { kind: 'human', principal_id: 'hosted-user' },
+        userId: 'hosted-user',
+        accountId: 'account-hosted',
+        sessionId: 'session-hosted',
+        credential: { kind: 'session', id: 'session-hosted', projectId: null },
+        scopes: ['transition:inspect'],
+        ingress: 'http',
+      } satisfies RequestPrincipal);
       c.set('inferenceIngressChannel', 'web');
       await next();
     });

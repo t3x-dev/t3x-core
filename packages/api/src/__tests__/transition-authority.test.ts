@@ -7,6 +7,7 @@ import {
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { requestPrincipalFromApiKey } from '../lib/request-principal';
 import {
   deriveTrustedTransitionPrincipal,
   requireTransitionAuthority,
@@ -20,21 +21,24 @@ import {
 import { resolveWorkspaceTransitionAuthority } from '../lib/workspace-transition-authority';
 import { setupTestDB, testData } from './setup';
 
-function key(overrides: Partial<ApiKey> = {}): ApiKey {
-  return {
-    id: 'ak_agent',
-    key_prefix: 't3xk_age',
-    key_hash: 'hash',
-    name: 'Agent',
-    project_id: 'project_one',
-    user_id: null,
-    principal_kind: 'agent',
-    transition_scopes: ['transition:propose'],
-    created_at: '2026-07-31T00:00:00.000Z',
-    last_used_at: null,
-    revoked_at: null,
-    ...overrides,
-  };
+function key(overrides: Partial<ApiKey> = {}) {
+  return requestPrincipalFromApiKey(
+    {
+      id: 'ak_agent',
+      key_prefix: 't3xk_age',
+      key_hash: 'hash',
+      name: 'Agent',
+      project_id: 'project_one',
+      user_id: null,
+      principal_kind: 'agent',
+      transition_scopes: ['transition:propose'],
+      created_at: '2026-07-31T00:00:00.000Z',
+      last_used_at: null,
+      revoked_at: null,
+      ...overrides,
+    },
+    'http'
+  );
 }
 
 describe('Transition API authority', () => {

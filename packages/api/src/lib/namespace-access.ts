@@ -8,7 +8,6 @@ import {
   type NamespaceMembershipDto,
   PRINCIPAL_KINDS,
 } from '@t3x-dev/application';
-import type { ApiKey } from '@t3x-dev/core';
 import {
   type AnyDB,
   findNamespaceMembershipForPrincipal,
@@ -18,6 +17,7 @@ import {
 import type { Context } from 'hono';
 import { isAuthenticationDisabled } from './auth-config';
 import { createError } from './errors';
+import { getRequestPrincipal } from './request-principal';
 
 function includesValue<T extends string>(values: readonly T[], value: string): value is T {
   return values.includes(value as T);
@@ -44,13 +44,8 @@ function membershipDto(record: NamespaceMembershipRecord | null): NamespaceMembe
 }
 
 export function getNamespacePrincipal(c: Context): CanonicalPrincipalDto | null {
-  const apiKey = c.get('apiKey') as ApiKey | undefined;
-  if (!apiKey) return null;
-  const kind = apiKey.principal_kind ?? 'human';
-  const principalId = kind === 'human' ? apiKey.user_id : apiKey.id;
-  return principalId && includesValue(PRINCIPAL_KINDS, kind)
-    ? { kind, principal_id: principalId }
-    : null;
+  const principal = getRequestPrincipal(c);
+  return principal?.credential.kind === 'local_dev' ? null : (principal?.subject ?? null);
 }
 
 export function authorizedNamespaceActionsFromFacts(
