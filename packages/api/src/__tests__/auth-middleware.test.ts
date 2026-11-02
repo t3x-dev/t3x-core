@@ -10,6 +10,7 @@
  * - Invalid/missing key returns 401
  */
 
+import type { ApiKey } from '@t3x-dev/core';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -27,6 +28,7 @@ vi.mock('@t3x-dev/storage', () => ({
 
 import { findApiKeyByValue, touchLastUsed } from '@t3x-dev/storage';
 import { authMiddleware } from '../middleware/auth';
+import type { AppEnv } from '../types';
 
 const mockFindApiKeyByValue = vi.mocked(findApiKeyByValue);
 const mockTouchLastUsed = vi.mocked(touchLastUsed);
@@ -35,20 +37,43 @@ const mockTouchLastUsed = vi.mocked(touchLastUsed);
  * Creates a test Hono app with the auth middleware applied.
  * The /health route is expected to be public (bypasses auth).
  */
+function apiKey(overrides: Partial<ApiKey> = {}): ApiKey {
+  return {
+    id: 'ak_test123',
+    key_prefix: 't3xk_tes',
+    key_hash: 'abc123hash',
+    name: 'Test Key',
+    user_id: null,
+    project_id: null,
+    principal_kind: 'human',
+    transition_scopes: [],
+    created_at: new Date().toISOString(),
+    last_used_at: null,
+    revoked_at: null,
+    ...overrides,
+  };
+}
+
 function createTestApp() {
-  const app = new Hono();
+  const app = new Hono<AppEnv>();
   app.use('*', authMiddleware);
 
   // Protected route
-  app.get('/api/v1/projects', (c) => c.json({ success: true, data: [] }));
+  app.get('/api/v1/projects', (c) =>
+    c.json({ success: true, data: [], principal: c.get('requestPrincipal') ?? null })
+  );
   // Public routes
   app.get('/health', (c) => c.json({ status: 'ok' }));
   app.get('/api/docs', (c) => c.json({ docs: true }));
   app.get('/api/openapi.json', (c) => c.json({ openapi: '3.0' }));
   app.get('/api/v1/deployment/capabilities', (c) => c.json({ version: 1 }));
   app.get('/api/v1/share/:token', (c) => c.json({ shared: true }));
-  app.post('/api/v1/runs/ingest', (c) => c.json({ ingested: true }));
-  app.get('/api/v1/runs/by-runner-id/:id', (c) => c.json({ run: c.req.param('id') }));
+  app.post('/api/v1/runs/ingest', (c) =>
+    c.json({ ingested: true, principal: c.get('requestPrincipal') ?? null })
+  );
+  app.get('/api/v1/runs/by-runner-id/:id', (c) =>
+    c.json({ run: c.req.param('id'), principal: c.get('requestPrincipal') ?? null })
+  );
 
   return app;
 }
@@ -58,7 +83,7 @@ describe('Auth Middleware', () => {
   const originalNodeEnv = process.env.NODE_ENV;
   const originalAllowProductionAuthDisabled = process.env.T3X_ALLOW_AUTH_DISABLED_IN_PRODUCTION;
   const originalRunnerServiceToken = process.env.RUNNER_SERVICE_TOKEN;
-  let app: Hono;
+  let app: Hono<AppEnv>;
 
   beforeEach(() => {
     app = createTestApp();
@@ -95,14 +120,16 @@ describe('Auth Middleware', () => {
       process.env.RUNNER_SERVICE_TOKEN = 'runner-test-secret';
 
       expect((await app.request('/api/v1/runs/ingest', { method: 'POST' })).status).toBe(401);
-      expect(
-        (
-          await app.request('/api/v1/runs/ingest', {
-            method: 'POST',
-            headers: { Authorization: 'Bearer runner-test-secret' },
-          })
-        ).status
-      ).toBe(200);
+      const authenticated = await app.request('/api/v1/runs/ingest', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer runner-test-secret' },
+      });
+      expect(authenticated.status).toBe(200);
+      expect((await authenticated.json()).principal).toMatchObject({
+        subject: { kind: 'service', principal_id: 'service:runner' },
+        actor: { kind: 'service', id: 'service:runner' },
+        ingress: 'runner',
+      });
     });
 
     it('does not treat the Runner token as a general API key', async () => {
@@ -134,6 +161,11 @@ describe('Auth Middleware', () => {
       expect(res.status).toBe(200);
       const data = await res.json();
       expect(data.success).toBe(true);
+      expect(data.principal).toMatchObject({
+        subject: { kind: 'human', principal_id: 'local-user' },
+        actor: { kind: 'human', id: 'human:local-user' },
+        ingress: 'local',
+      });
 
       // Should NOT call findApiKeyByValue
       expect(mockFindApiKeyByValue).not.toHaveBeenCalled();
@@ -260,20 +292,53 @@ describe('Auth Middleware', () => {
   });
 
   describe('valid API key', () => {
+    it('sets the complete server-derived principal', async () => {
+      process.env.AUTH_DISABLED = 'false';
+      mockFindApiKeyByValue.mockResolvedValueOnce(
+        apiKey({
+          id: 'ak_service',
+          user_id: 'user_a',
+          project_id: 'proj_a',
+          principal_kind: 'service',
+          transition_scopes: ['transition:inspect'],
+        })
+      );
+
+      const response = await app.request('/api/v1/projects', {
+        headers: { Authorization: 'Bearer service-key' },
+      });
+
+      expect(response.status).toBe(200);
+      expect((await response.json()).principal).toMatchObject({
+        subject: { kind: 'service', principal_id: 'ak_service' },
+        actor: { kind: 'service', id: 'service:api-key:ak_service' },
+        delegator: { kind: 'human', id: 'user:user_a' },
+        workspaceOwner: { kind: 'human', principal_id: 'user_a' },
+        credential: { kind: 'api_key', id: 'ak_service', projectId: 'proj_a' },
+        scopes: ['transition:inspect'],
+        ingress: 'http',
+      });
+    });
+
+    it.each(['Actor', 'Owner', 'Role', 'Namespace', 'Scopes']) (
+      'rejects the reserved X-T3X-%s identity override header',
+      async (header) => {
+        process.env.AUTH_DISABLED = 'false';
+        mockFindApiKeyByValue.mockResolvedValueOnce(apiKey());
+
+        const response = await app.request('/api/v1/projects', {
+          headers: { Authorization: 'Bearer valid-key', [`X-T3X-${header}`]: 'forged' },
+        });
+
+        expect(response.status).toBe(400);
+        expect((await response.json()).error.code).toBe('INVALID_REQUEST');
+      }
+    );
+
     it('passes through with valid API key', async () => {
       process.env.AUTH_DISABLED = 'false';
 
-      const mockApiKey = {
-        id: 'ak_test123',
-        key_prefix: 't3xk_tes',
-        key_hash: 'abc123hash',
-        name: 'Test Key',
-        user_id: null,
-        project_id: null,
-        created_at: new Date().toISOString(),
-        last_used_at: null,
-        revoked_at: null,
-      };
+      const mockApiKey = apiKey();
 
       mockFindApiKeyByValue.mockResolvedValueOnce(mockApiKey);
 
@@ -290,17 +355,12 @@ describe('Auth Middleware', () => {
     it('extracts key value from Bearer token', async () => {
       process.env.AUTH_DISABLED = 'false';
 
-      const mockApiKey = {
+      const mockApiKey = apiKey({
         id: 'ak_extract123',
         key_prefix: 't3xk_ext',
         key_hash: 'def456hash',
         name: 'Extract Key',
-        user_id: null,
-        project_id: null,
-        created_at: new Date().toISOString(),
-        last_used_at: null,
-        revoked_at: null,
-      };
+      });
 
       mockFindApiKeyByValue.mockResolvedValueOnce(mockApiKey);
 
@@ -320,17 +380,12 @@ describe('Auth Middleware', () => {
     it('calls touchLastUsed after successful auth', async () => {
       process.env.AUTH_DISABLED = 'false';
 
-      const mockApiKey = {
+      const mockApiKey = apiKey({
         id: 'ak_touch123',
         key_prefix: 't3xk_tou',
         key_hash: 'ghi789hash',
         name: 'Touch Key',
-        user_id: null,
-        project_id: null,
-        created_at: new Date().toISOString(),
-        last_used_at: null,
-        revoked_at: null,
-      };
+      });
 
       mockFindApiKeyByValue.mockResolvedValueOnce(mockApiKey);
       mockTouchLastUsed.mockResolvedValueOnce(undefined);
