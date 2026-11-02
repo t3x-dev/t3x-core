@@ -176,7 +176,7 @@ export {
   createWorkspaceSourceRunnerProvider,
   WORKSPACE_SOURCE_RUNNER_PROVIDER_SOURCE,
 } from './lib/workspace-source-transition';
-export type { BearerTokenPrincipal, BearerTokenVerifier } from './middleware/auth';
+export type { BearerTokenVerifier } from './middleware/auth';
 // Logger
 export { pinoLogger } from './middleware/logger';
 export {

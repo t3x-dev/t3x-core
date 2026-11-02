@@ -13,7 +13,7 @@
  * @see packages/api/src/lib/errors.ts for error codes
  */
 
-import type { ApiKeyPrincipalKind, TransitionScope } from '@t3x-dev/core';
+import type { RequestPrincipal } from '@t3x-dev/application';
 import { type AnyDB, findApiKeyByValue, touchLastUsed } from '@t3x-dev/storage';
 import type { Context, Next } from 'hono';
 import { isAuthenticationDisabled } from '../lib/auth-config';
@@ -29,21 +29,11 @@ import { isRunnerServiceRoute, runnerServiceAuthenticationError } from '../lib/r
 import type { AppEnv } from '../types';
 import { pinoLogger } from './logger';
 
-/** Normalized authority returned by raw-token entry points such as WebSocket. */
-export interface BearerTokenPrincipal {
-  userId: string | null;
-  projectId: string | null;
-  /** Null for short-lived or otherwise non-persisted credentials. */
-  keyId: string | null;
-  principalKind: ApiKeyPrincipalKind;
-  transitionScopes: readonly TransitionScope[];
-}
-
 /** Extension point for deployments that accept more than persisted API keys. */
 export type BearerTokenVerifier = (
   db: AnyDB,
   token: string | null
-) => Promise<BearerTokenPrincipal | null>;
+) => Promise<RequestPrincipal | null>;
 
 /** Paths that never require authentication */
 const PUBLIC_PATHS = [
@@ -208,15 +198,9 @@ export async function authMiddleware(c: Context<AppEnv>, next: Next) {
 export async function verifyBearerToken(
   db: AnyDB,
   token: string | null
-): Promise<BearerTokenPrincipal | null> {
+): Promise<RequestPrincipal | null> {
   if (!token) return null;
   const apiKey = await findApiKeyByValue(db, token);
   if (!apiKey) return null;
-  return {
-    userId: apiKey.user_id,
-    projectId: apiKey.project_id,
-    keyId: apiKey.id,
-    principalKind: apiKey.principal_kind,
-    transitionScopes: apiKey.transition_scopes,
-  };
+  return requestPrincipalFromApiKey(apiKey, 'websocket');
 }

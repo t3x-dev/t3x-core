@@ -1,3 +1,4 @@
+import type { RequestPrincipal } from '@t3x-dev/application';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestRateLimitStore } from './setup';
 
@@ -78,6 +79,40 @@ import { createWsRoute } from '../routes/ws';
  */
 // biome-ignore lint/suspicious/noExplicitAny: test helper needs flexibility
 type UpgradeHandlers = any;
+
+function wsPrincipal(options: {
+  userId?: string | null;
+  projectId?: string | null;
+  credentialId?: string | null;
+  kind?: 'human' | 'agent' | 'service';
+} = {}): RequestPrincipal {
+  const userId = options.userId === undefined ? 'u1' : options.userId;
+  const credentialId = options.credentialId === undefined ? 'k_abc' : options.credentialId;
+  const kind = options.kind ?? 'human';
+  const subject =
+    kind === 'human' && userId
+      ? { kind: 'human' as const, principal_id: userId }
+      : { kind, principal_id: credentialId ?? 'ephemeral' };
+  return {
+    subject,
+    actor: {
+      kind,
+      id: kind === 'human' && userId ? `user:${userId}` : `${kind}:api-key:${credentialId ?? 'ephemeral'}`,
+    },
+    delegator: kind !== 'human' && userId ? { kind: 'human', id: `user:${userId}` } : null,
+    workspaceOwner: userId ? { kind: 'human', principal_id: userId } : subject,
+    userId,
+    accountId: null,
+    sessionId: null,
+    credential: {
+      kind: credentialId ? 'api_key' : 'deployment',
+      id: credentialId,
+      projectId: options.projectId ?? null,
+    },
+    scopes: [],
+    ingress: 'websocket',
+  };
+}
 
 function makeFakeUpgrade() {
   let capturedHandlers: UpgradeHandlers = null;
@@ -211,12 +246,12 @@ describe('ws route — query parameter validation', () => {
 
   it('passes through to upgrade handler on valid token', async () => {
     delete process.env.AUTH_DISABLED;
-    mockVerify.mockResolvedValue({ userId: 'u1', projectId: null, keyId: 'k_abc' });
+    mockVerify.mockResolvedValue(wsPrincipal());
     const { fakeUpgrade } = makeFakeUpgrade();
     const route = createWsRoute(fakeUpgrade as never);
 
     const req = new Request(
-      'http://localhost/ws?conversation_id=conv_x&user_id=u1&token=good_token'
+      'http://localhost/ws?conversation_id=conv_x&token=good_token'
     );
     const res = await route.fetch(req);
     expect(res.status).toBe(200);
@@ -231,19 +266,15 @@ describe('ws route — query parameter validation', () => {
 
   it('uses an injected verifier, binds presence to its principal, and skips touch for ephemeral credentials', async () => {
     delete process.env.AUTH_DISABLED;
-    const injectedVerifier = vi.fn().mockResolvedValue({
-      userId: 'verified-user',
-      projectId: null,
-      keyId: null,
-      principalKind: 'human',
-      transitionScopes: [],
-    });
+    const injectedVerifier = vi
+      .fn()
+      .mockResolvedValue(wsPrincipal({ userId: 'verified-user', credentialId: null }));
     findProjectSpy.mockResolvedValue({ projectId: 'proj_owned', ownerId: 'verified-user' });
     const { fakeUpgrade, getHandlers } = makeFakeUpgrade();
     const route = createWsRoute(fakeUpgrade as never, injectedVerifier);
 
     const response = await route.fetch(
-      new Request('http://localhost/ws?project_id=proj_owned&user_id=spoofed-user&token=cloud-jwt')
+      new Request('http://localhost/ws?project_id=proj_owned&token=cloud-jwt')
     );
 
     expect(response.status).toBe(200);
@@ -253,20 +284,14 @@ describe('ws route — query parameter validation', () => {
     const handlers = getHandlers();
     handlers.onOpen({} as never, { send: vi.fn() } as never);
     expect(joinSpy).toHaveBeenCalledTimes(1);
-    expect(joinSpy.mock.calls[0][1].userId).toBe('verified-user');
+    expect(joinSpy.mock.calls[0][1].userId).toBe('user:verified-user');
     await Promise.resolve();
     expect(touchSpy).not.toHaveBeenCalled();
   });
 
   it('rejects a human token subscribing to a conversation owned by another user', async () => {
     delete process.env.AUTH_DISABLED;
-    mockVerify.mockResolvedValue({
-      userId: 'u1',
-      projectId: null,
-      keyId: 'k_user',
-      principalKind: 'human',
-      transitionScopes: [],
-    });
+    mockVerify.mockResolvedValue(wsPrincipal({ credentialId: 'k_user' }));
     findConversationSpy.mockResolvedValue({
       conversationId: 'conv_private',
       projectId: 'proj_private',
@@ -285,13 +310,7 @@ describe('ws route — query parameter validation', () => {
 
   it('rejects a conversation and project pair that do not share ownership', async () => {
     delete process.env.AUTH_DISABLED;
-    mockVerify.mockResolvedValue({
-      userId: 'u1',
-      projectId: null,
-      keyId: 'k_user',
-      principalKind: 'human',
-      transitionScopes: [],
-    });
+    mockVerify.mockResolvedValue(wsPrincipal({ credentialId: 'k_user' }));
     findConversationSpy.mockResolvedValue({
       conversationId: 'conv_private',
       projectId: 'proj_actual',
@@ -312,13 +331,14 @@ describe('ws route — query parameter validation', () => {
 
   it('rejects a project-scoped agent key subscribing to another project', async () => {
     delete process.env.AUTH_DISABLED;
-    mockVerify.mockResolvedValue({
-      userId: null,
-      projectId: 'proj_allowed',
-      keyId: 'k_agent',
-      principalKind: 'agent',
-      transitionScopes: [],
-    });
+    mockVerify.mockResolvedValue(
+      wsPrincipal({
+        userId: null,
+        projectId: 'proj_allowed',
+        credentialId: 'k_agent',
+        kind: 'agent',
+      })
+    );
     const { fakeUpgrade } = makeFakeUpgrade();
     const route = createWsRoute(fakeUpgrade as never);
 
@@ -330,6 +350,25 @@ describe('ws route — query parameter validation', () => {
     expect(fakeUpgrade).not.toHaveBeenCalled();
     expect(findProjectSpy).not.toHaveBeenCalled();
   });
+
+  it.each(['user_id', 'actor', 'owner', 'delegator', 'role', 'namespace', 'scopes', 'principal'])(
+    'rejects authenticated identity override query %s',
+    async (field) => {
+      delete process.env.AUTH_DISABLED;
+      mockVerify.mockResolvedValue(wsPrincipal());
+      const { fakeUpgrade } = makeFakeUpgrade();
+      const route = createWsRoute(fakeUpgrade as never);
+
+      const response = await route.fetch(
+        new Request(
+          `http://localhost/ws?project_id=proj_owned&token=good_token&${field}=spoofed`
+        )
+      );
+
+      expect(response.status).toBe(400);
+      expect(fakeUpgrade).not.toHaveBeenCalled();
+    }
+  );
 });
 
 describe('ws route — multi-room join/leave', () => {

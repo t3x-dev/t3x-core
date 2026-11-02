@@ -50,6 +50,17 @@ import { canReceiveRealtimeEvent, type RoomConnection, roomManager } from '../li
 import { type BearerTokenVerifier, verifyBearerToken } from '../middleware/auth';
 import { pinoLogger } from '../middleware/logger';
 
+const RESERVED_IDENTITY_QUERY_FIELDS = [
+  'user_id',
+  'actor',
+  'owner',
+  'delegator',
+  'role',
+  'namespace',
+  'scopes',
+  'principal',
+] as const;
+
 export function createWsRoute(
   upgradeWebSocket: UpgradeWebSocket,
   verifyToken: BearerTokenVerifier = verifyBearerToken
@@ -89,6 +100,15 @@ export function createWsRoute(
         if (!principal) {
           return c.json(createError('UNAUTHORIZED', 'Invalid token'), 401);
         }
+        const identityOverride = RESERVED_IDENTITY_QUERY_FIELDS.find(
+          (field) => c.req.query(field) !== undefined
+        );
+        if (identityOverride) {
+          return c.json(
+            createError('INVALID_REQUEST', `${identityOverride} is server-controlled`),
+            400
+          );
+        }
 
         let authorizedProjectId = projectId;
         if (conversationId) {
@@ -107,29 +127,32 @@ export function createWsRoute(
 
         if (authorizedProjectId) {
           if (
-            principal.principalKind !== 'human' &&
-            principal.projectId !== null &&
-            principal.projectId !== authorizedProjectId
+            principal.subject.kind !== 'human' &&
+            principal.credential.projectId !== null &&
+            principal.credential.projectId !== authorizedProjectId
           ) {
             return c.json(createError('FORBIDDEN', 'Access denied'), 403);
           }
-          const decision = await evaluateProjectAccess(db, authorizedProjectId, principal);
+          const decision = await evaluateProjectAccess(db, authorizedProjectId, {
+            userId: principal.userId,
+            projectId: principal.credential.projectId,
+            principalKind: principal.subject.kind,
+            keyId: principal.subject.principal_id,
+          });
           if (!decision.allowed) {
             return c.json(createError(decision.code, decision.message), decision.status);
           }
         }
-        connectionUserId =
-          principal.userId ??
-          `${principal.principalKind}:api-key:${principal.keyId ?? 'ephemeral'}`;
-        workspaceOwner = principal.userId
-          ? { kind: 'human', id: principal.userId }
-          : { kind: principal.principalKind, id: principal.keyId ?? 'ephemeral' };
+        connectionUserId = principal.actor.id;
+        workspaceOwner = principal.workspaceOwner
+          ? { kind: principal.workspaceOwner.kind, id: principal.workspaceOwner.principal_id }
+          : undefined;
         // Fire-and-forget: update last_used_at only for persisted credentials.
         // Short-lived credentials such as deployment JWTs have no key row.
         // Errors are swallowed so a DB hiccup during touch doesn't poison the
         // handshake.
-        if (principal.keyId) {
-          touchLastUsed(db, principal.keyId).catch(() => {});
+        if (principal.credential.kind === 'api_key' && principal.credential.id) {
+          touchLastUsed(db, principal.credential.id).catch(() => {});
         }
       } catch (err) {
         pinoLogger.error({ err }, 'ws auth failed');

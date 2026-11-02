@@ -1,5 +1,6 @@
 import type { AddressInfo } from 'node:net';
 import { serve } from '@hono/node-server';
+import type { RequestPrincipal } from '@t3x-dev/application';
 import type { AnyDB } from '@t3x-dev/storage';
 import { createApiKey, createUser, insertConversation, insertProject } from '@t3x-dev/storage';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -82,12 +83,17 @@ describe('authenticated WebSocket boundary smoke', () => {
       websocketTokenVerifier: async (db, token) => {
         if (token === cloudShortToken) {
           return {
+            subject: { kind: 'human', principal_id: ownerUserId },
+            actor: { kind: 'human', id: `user:${ownerUserId}` },
+            delegator: null,
+            workspaceOwner: { kind: 'human', principal_id: ownerUserId },
             userId: ownerUserId,
-            projectId: null,
-            keyId: null,
-            principalKind: 'human',
-            transitionScopes: [],
-          };
+            accountId: null,
+            sessionId: null,
+            credential: { kind: 'deployment', id: null, projectId: null },
+            scopes: [],
+            ingress: 'websocket',
+          } satisfies RequestPrincipal;
         }
         return verifyBearerToken(db, token);
       },
@@ -195,7 +201,6 @@ describe('authenticated WebSocket boundary smoke', () => {
       conversation_id: ownerConversationId,
       project_id: ownerProjectId,
       token: ownerKeyValue,
-      user_id: 'browser-owner',
     });
 
     expect(message).toMatchObject({
@@ -210,7 +215,6 @@ describe('authenticated WebSocket boundary smoke', () => {
     const { socket, message } = await openAndReadWelcome({
       project_id: ownerProjectId,
       token: cloudShortToken,
-      user_id: 'spoofed-browser-label',
     });
 
     expect(message).toMatchObject({ type: 'connected', projectId: ownerProjectId });
@@ -245,9 +249,17 @@ describe('authenticated WebSocket boundary smoke', () => {
     const { socket, message } = await openAndReadWelcome({
       project_id: ownerProjectId,
       token: agentKeyValue,
-      user_id: 'project-agent',
     });
     expect(message).toMatchObject({ type: 'connected', projectId: ownerProjectId });
     await closeSocket(socket);
   });
+
+  it.each(['user_id', 'actor', 'owner', 'delegator', 'role', 'namespace', 'scopes', 'principal'])(
+    'rejects authenticated identity override query %s',
+    async (field) => {
+      await expect(
+        handshakeStatus({ project_id: ownerProjectId, token: ownerKeyValue, [field]: 'spoofed' })
+      ).resolves.toBe(400);
+    }
+  );
 });
