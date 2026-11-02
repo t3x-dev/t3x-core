@@ -197,7 +197,7 @@
 
 .columns {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-columns: var(--repo-main-with-inspector);
   align-items: start;
   gap: 40px;
   padding-top: 24px;
@@ -633,7 +633,6 @@
 
 @media (max-width: 1000px) {
   .columns {
-    grid-template-columns: minmax(0, 1fr) 240px;
     gap: 24px;
   }
   .sidebar {

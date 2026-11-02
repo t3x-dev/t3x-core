@@ -6,6 +6,16 @@
   color: var(--text-primary);
   font-size: 13px;
 }
+.activity[data-compact] {
+  margin-bottom: 0;
+  font-size: 12px;
+}
+.completedMark {
+  order: -1;
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
 .process {
   min-width: 0;
 }
@@ -212,17 +222,33 @@
 }
 
 .receipt {
-  align-self: flex-start;
-  display: inline-flex;
+  align-self: stretch;
+  display: flex;
   align-items: center;
-  gap: 7px;
-  min-height: 30px;
-  margin-top: 10px;
+  gap: 10px;
+  min-width: 0;
+  min-height: 54px;
   border: 1px solid var(--stroke-default);
   border-radius: var(--radius-md);
-  padding: 4px 9px;
+  padding: 10px 14px;
   color: var(--text-secondary);
-  background: var(--surface-card);
+  background: var(--surface-panel);
+  font-size: 12px;
+  text-align: left;
+}
+.receiptBody {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+.receiptBody strong {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+.receiptBody small {
   font-size: 12px;
 }
 .receipt:hover {
@@ -230,6 +256,7 @@
   color: var(--text-primary);
 }
 .receipt svg {
+  flex: none;
   width: 14px;
   height: 14px;
 }

@@ -78,7 +78,7 @@ vi.mock('@/components/workspaces/WorkspaceCommitHistoryPanel', () => ({
         Inspect committed owner
       </button>
       <button type="button" onClick={onReturn}>
-        Return to current Draft
+        Back to History
       </button>
     </section>
   ),
@@ -826,8 +826,8 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open earlier Commit' }));
     expect(screen.getByRole('region', { name: 'Committed changes' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Inspect committed owner' }));
-    const details = within(screen.getByRole('complementary', { name: 'Discuss change' }));
-    expect(details.getByRole('heading', { name: 'Details' })).toBeVisible();
+    const details = within(screen.getByRole('complementary', { name: 'Generated changes' }));
+    expect(details.getByRole('heading', { name: 'Commit details' })).toBeVisible();
     expect(details.getByText('Value at this Commit')).toBeVisible();
     expect(details.getByText('Archived owner')).toBeVisible();
     expect(details.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
@@ -835,11 +835,21 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(toolbar).not.toBeVisible();
     expect(screen.queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tablist', { name: 'Change scope' })).not.toBeInTheDocument();
-    fireEvent.click(
-      within(screen.getByRole('region', { name: 'Committed changes' })).getByRole('button', {
-        name: 'Return to current Draft',
-      })
+    const chat = screen.getByRole('region', { name: 'Workspace AI chat' });
+    expect(chat).toBeVisible();
+    expect(chat).not.toContainElement(
+      screen.getByRole('region', { name: 'Committed change details' })
     );
+    expect(screen.getByRole('button', { name: 'History', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Back to committed changes' }));
+    expect(screen.getByRole('region', { name: 'Committed changes' })).toBeVisible();
+    expect(chat).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to History' }));
+    expect(screen.getByRole('region', { name: 'Commit graph' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Changes', exact: true }));
     expect(screen.queryByRole('region', { name: 'Committed changes' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Confirm' })).toBeVisible();
     expect(schemaCardMocks.generate).not.toHaveBeenCalled();
@@ -1197,7 +1207,12 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       within(generated).getByRole('region', { name: 'Selected Schema change details' })
     ).toBeVisible();
     expect(generated).toHaveAttribute('data-panel', 'details');
-    expect(screen.queryByRole('navigation', { name: 'Workspace tools' })).not.toBeInTheDocument();
+    expect(within(generated).getByRole('navigation', { name: 'Workspace tools' })).toBeVisible();
+    expect(within(generated).getByRole('button', { name: 'Changes', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    expect(chat).toBeVisible();
     fireEvent.click(within(generated).getByRole('button', { name: 'Back to changes' }));
     expect(within(chat).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
     expect(activityMocks.value.inspectNode).not.toHaveBeenCalled();
@@ -1769,10 +1784,13 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     expect(screen.getByLabelText('Rendered result')).toBeInTheDocument();
-    expect(screen.getByText('No rollout plan recorded.')).toBeInTheDocument();
-    expect(
-      screen.getByText('No rollback detail is present in the current draft.')
-    ).toBeInTheDocument();
+    expect(screen.getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
+      'Field',
+      'Value',
+      'Type',
+    ]);
+    expect(screen.getAllByText('Auditable rollout outcome').length).toBeGreaterThan(0);
+    expect(screen.queryByText('No rollout plan recorded.')).not.toBeInTheDocument();
     expect(screen.queryByText('internal-preview')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('navigation', { name: 'Workspace navigation' })
@@ -2165,7 +2183,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       within(screen.getByRole('navigation', { name: 'Review views' }))
         .getAllByRole('button')
         .map((button) => button.getAttribute('aria-label'))
-    ).toEqual(['Changes', 'Preview', 'YAML']);
+    ).toEqual(['Changes', 'YAML', 'Preview']);
     expect(navigationMocks.replace).toHaveBeenCalledWith(
       '/t3x-dev/test-project/workspaces?workspaceMode=review',
       { scroll: false }
@@ -2474,7 +2492,11 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.getByLabelText('Rendered result')).toBeInTheDocument();
     expect(screen.getAllByText('天气为晴天').length).toBeGreaterThan(0);
     expect(screen.getByRole('region', { name: 'Content result preview' })).toBeInTheDocument();
-    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
+      'Field',
+      'Value',
+      'Type',
+    ]);
     expect(screen.queryByText('Selected action only')).not.toBeInTheDocument();
     expect(screen.queryByText('No outcome has been recorded.')).not.toBeInTheDocument();
     expect(screen.queryByText(candidate.summary)).not.toBeInTheDocument();

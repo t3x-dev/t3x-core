@@ -1,24 +1,18 @@
 'use client';
 
 import {
-  Box,
   ChevronDown,
   ChevronRight,
   CircleHelp,
   Code2,
   Copy,
   ExternalLink,
-  Eye,
   FileText,
   GitCommit,
   History,
   Link2,
-  List,
   type LucideIcon,
-  Maximize2,
-  Minus,
   Network,
-  Search,
   ShieldCheck,
   TableProperties,
   X,
@@ -52,6 +46,11 @@ import {
   getProjectIdRepoPath,
   getProjectIdWorkspacePath,
 } from '@/domain/project/repoPath';
+import {
+  filterCollapsedStateRows,
+  filterStateStructureRows,
+  isStateStructureRowExpanded,
+} from '@/domain/project/stateFieldTable';
 import {
   buildCanonicalStateYaml,
   buildStatePointRows,
@@ -88,6 +87,11 @@ import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 import { buildReturnTo, safeInternalReturnTo } from '@/utils/navigationReturn';
 import { StateEmptyContent } from './StateEmptyContent';
+import {
+  StateFieldTable,
+  StateValueCell,
+  stateStructureValueTypographyClass,
+} from './StateFieldTable';
 import inspectionStyles from './StateInspection.module.css';
 import { StatePageFrame } from './StatePageFrame';
 import { StatePageToolbar } from './StatePageToolbar';
@@ -1346,145 +1350,35 @@ export function StateStructureView({
           No stored fields in this version.
         </section>
       ) : (
-        <div className={inspectionStyles.dataTable}>
-          <div className={inspectionStyles.tb}>
-            <label className={inspectionStyles.find}>
-              <Search />
-              <input
-                aria-label="Find a field or value"
-                placeholder="Find a field or value..."
-                value={pathQuery}
-                onChange={(event) => onPathQueryChange?.(event.target.value)}
-              />
-            </label>
-            <button
-              className={inspectionStyles.gb}
-              type="button"
-              onClick={() =>
-                setExpansionOverrides(
-                  Object.fromEntries(
-                    structureRows.filter((row) => row.expandable).map((row) => [row.id, true])
-                  )
-                )
-              }
-            >
-              <Maximize2 />
-              Expand all
-            </button>
-            <button
-              className={inspectionStyles.gb}
-              type="button"
-              onClick={() =>
-                setExpansionOverrides(
-                  Object.fromEntries(
-                    structureRows.filter((row) => row.expandable).map((row) => [row.id, false])
-                  )
-                )
-              }
-            >
-              <Minus />
-              Collapse all
-            </button>
-          </div>
-          <section
-            className={inspectionStyles.treeScroll}
-            aria-label="State structure rows"
-            // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users must be able to scroll this region.
-            tabIndex={0}
-          >
-            <table className={inspectionStyles.tree}>
-              <thead>
-                <tr className={inspectionStyles.th2}>
-                  <th>Field</th>
-                  <th>Value</th>
-                  <th>Type</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleRows.map((row) => {
-                  const isContainer =
-                    row.expandable || row.type === 'object' || row.type === 'array';
-                  const expanded =
-                    searching ||
-                    isStateStructureRowExpanded(
-                      row,
-                      expansionOverrides,
-                      expandedChanges.has(row.id)
-                    );
-                  const select = () => {
-                    setSelectedRowId(row.id);
-                    setDetailsVisible(true);
-                    if (row.expandable) toggleRow(row);
-                  };
-                  return (
-                    <tr
-                      key={row.id}
-                      className={cn(
-                        inspectionStyles.rw,
-                        isContainer && inspectionStyles.containerRow
-                      )}
-                      aria-selected={selectedRow?.id === row.id}
-                      tabIndex={0}
-                      onClick={select}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
-                          select();
-                        }
-                      }}
-                    >
-                      <td
-                        className={inspectionStyles.k}
-                        style={{ paddingLeft: `min(${row.depth} * var(--tree-indent), 45%)` }}
-                      >
-                        <span className={inspectionStyles.chev}>
-                          {row.expandable ? (
-                            <button
-                              type="button"
-                              aria-label={`${expanded ? 'Collapse' : 'Expand'} ${row.key}`}
-                              aria-expanded={expanded}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                select();
-                              }}
-                            >
-                              {expanded ? <ChevronDown /> : <ChevronRight />}
-                            </button>
-                          ) : null}
-                        </span>
-                        <span className={inspectionStyles.ti}>
-                          {row.type === 'array' ? <List /> : isContainer ? <Box /> : <FileText />}
-                        </span>
-                        <span className={inspectionStyles.nm} title={row.path}>
-                          {row.key}
-                        </span>
-                      </td>
-                      <td
-                        className={cn(
-                          inspectionStyles.val,
-                          (row.value === '' || row.value === 'empty') && inspectionStyles.em
-                        )}
-                        title={row.value}
-                      >
-                        <StateValueCell row={row} />
-                      </td>
-                      <td className={inspectionStyles.ty}>{row.type}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {!visibleRows.length ? (
-              <p className="p-4 text-sm text-[var(--text-secondary)]">
-                {rows.length ? 'No matching fields.' : 'No stored fields in this version.'}
-              </p>
-            ) : null}
-          </section>
-          <footer className={inspectionStyles.tnote}>
-            <Eye />
-            Values are shown as stored. Schema details explain their meaning.
-          </footer>
-        </div>
+        <StateFieldTable
+          rows={visibleRows}
+          query={pathQuery}
+          onQueryChange={(query) => onPathQueryChange?.(query)}
+          selectedRowId={selectedRow?.id}
+          isExpanded={(row) =>
+            searching ||
+            isStateStructureRowExpanded(row, expansionOverrides, expandedChanges.has(row.id))
+          }
+          onSelectRow={(row) => {
+            setSelectedRowId(row.id);
+            setDetailsVisible(true);
+            if (row.expandable) toggleRow(row);
+          }}
+          onExpandAll={() =>
+            setExpansionOverrides(
+              Object.fromEntries(
+                structureRows.filter((row) => row.expandable).map((row) => [row.id, true])
+              )
+            )
+          }
+          onCollapseAll={() =>
+            setExpansionOverrides(
+              Object.fromEntries(
+                structureRows.filter((row) => row.expandable).map((row) => [row.id, false])
+              )
+            )
+          }
+        />
       ),
       <StateFieldTracePanel
         branch={branch}
@@ -2066,54 +1960,6 @@ function StateInlineDiffValue({
   );
 }
 
-function StateValueCell({ row }: { row: StateStructureRow }) {
-  if (row.status === 'missing') {
-    return (
-      <span className="inline-flex h-5 w-fit items-center rounded-[5px] bg-[var(--status-warning-muted)] px-1.5 font-sans text-xs font-semibold leading-4 text-[var(--status-warning)]">
-        Missing
-      </span>
-    );
-  }
-
-  const value = row.diff?.kind === 'removed' ? row.diff.beforeValue : row.value;
-  const title =
-    row.diff?.exact && row.diff.kind === 'modified'
-      ? `${row.diff.beforeValue} -> ${row.diff.afterValue}`
-      : value;
-
-  if (value === '-') {
-    return null;
-  }
-
-  return (
-    <span
-      className={cn(
-        'inline-flex max-w-full truncate font-normal leading-5 text-[var(--text-primary)]',
-        stateStructureValueTypographyClass(value),
-        stateStructureValueToneClass(row.diff?.kind),
-        !row.diff && value.toLowerCase() === 'empty' && 'text-[var(--text-tertiary)]'
-      )}
-      title={title}
-    >
-      {value}
-    </span>
-  );
-}
-
-function stateStructureValueTypographyClass(value: string): string {
-  const normalizedValue = value.trim().toLowerCase();
-  if (normalizedValue === 'empty') {
-    return 'font-sans text-xs italic tracking-normal';
-  }
-  if (!/\s/.test(value.trim())) {
-    return 'font-mono text-[13px] tracking-normal';
-  }
-  if (/^-?\d+(?:\.\d+)?\s+items?$/i.test(value.trim())) {
-    return 'font-mono text-[13px] tracking-normal tabular-nums';
-  }
-  return 'font-sans text-[13px] tracking-normal';
-}
-
 function StateDiffGutter({ diff }: { diff?: StateStructureDiffMeta }) {
   if (!diff || (diff.kind === 'modified' && !diff.exact)) return null;
   return (
@@ -2174,15 +2020,6 @@ function stateStructureRowToneClass(row: StateStructureRow): string {
     return 'bg-[var(--diff-modified-bg)] hover:bg-[var(--diff-modified-bg)]';
   }
   return 'hover:bg-[var(--surface-hover)]';
-}
-
-function stateStructureValueToneClass(kind: StructuredDiffKind | undefined): string {
-  if (kind === 'added') {
-    return 'text-[var(--diff-added-text)]';
-  }
-  if (kind === 'removed') return 'text-[var(--diff-removed-text)]';
-  if (kind === 'modified') return 'text-[var(--diff-modified-text)]';
-  return 'text-[var(--text-primary)]';
 }
 
 function stateStructureDiffGutterClass(kind: StructuredDiffKind): string {
@@ -3649,53 +3486,6 @@ function summarizeBooleanGroup(
       : `${String(booleanChildren.length)} rules · ${String(enabledCount)} enabled`;
   }
   return `${String(children.length)} fields · ${String(enabledCount)}/${String(booleanChildren.length)} rules enabled`;
-}
-
-function filterStateStructureRows(rows: StateStructureRow[], query: string): StateStructureRow[] {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized) return rows;
-
-  const rowById = new Map(rows.map((row) => [row.id, row]));
-  const includedIds = new Set<string>();
-  for (const row of rows) {
-    const matches = [row.path, row.key, row.type, row.value, row.statusLabel].some((value) =>
-      value.toLowerCase().includes(normalized)
-    );
-    if (!matches) continue;
-
-    includedIds.add(row.id);
-    let ancestorPath = row.parentPath;
-    while (ancestorPath) {
-      includedIds.add(ancestorPath);
-      ancestorPath = rowById.get(ancestorPath)?.parentPath ?? null;
-    }
-  }
-
-  return rows.filter((row) => includedIds.has(row.id));
-}
-
-function filterCollapsedStateRows(
-  rows: StateStructureRow[],
-  isExpanded: (row: StateStructureRow) => boolean
-): StateStructureRow[] {
-  const rowById = new Map(rows.map((row) => [row.id, row]));
-  return rows.filter((row) => {
-    let ancestorPath = row.parentPath;
-    while (ancestorPath) {
-      const ancestor = rowById.get(ancestorPath);
-      if (ancestor?.expandable && !isExpanded(ancestor)) return false;
-      ancestorPath = ancestor?.parentPath ?? null;
-    }
-    return true;
-  });
-}
-
-function isStateStructureRowExpanded(
-  row: StateStructureRow,
-  overrides: Record<string, boolean>,
-  expandChanged = false
-): boolean {
-  return overrides[row.id] ?? (expandChanged || !row.collapseByDefault);
 }
 
 function parentStatePath(path: string): string | null {

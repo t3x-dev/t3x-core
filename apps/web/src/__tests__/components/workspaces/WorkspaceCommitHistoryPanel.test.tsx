@@ -88,7 +88,7 @@ it('selects archived values into the shared right-hand Details without expanding
   expect(
     screen.queryByRole('button', { name: /Confirm|Edit|Apply|Ask AI/ })
   ).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Return to current Draft' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Back to History' }));
   expect(back).toHaveBeenCalledOnce();
 });
 it('reads the value at the selected Commit, separately from the earlier action delta', () => {
@@ -156,6 +156,6 @@ it.each([
   mocks.history.mockReturnValue(state);
   const back = vi.fn();
   render(<HistoryWorkspace onReturn={back} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Return to current Draft' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Back to History' }));
   expect(back).toHaveBeenCalledOnce();
 });

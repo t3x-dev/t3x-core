@@ -5,8 +5,20 @@ import type {
   WorkspaceSchemaDefinitionSnapshot,
 } from '@t3x-dev/api-client';
 import { dump } from 'js-yaml';
+import { useMemo, useState } from 'react';
+import { StateFieldTable } from '@/components/project/StateFieldTable';
 import { SchemaDefinitionTree } from '@/components/schemas/SchemaDefinitionTree';
-import { CurrentDraftContentTree } from './WorkspaceCurrentDraft';
+import {
+  filterCollapsedStateRows,
+  filterStateStructureRows,
+  isStateStructureRowExpanded,
+  type StateFieldTreeRow,
+} from '@/domain/project/stateFieldTable';
+import {
+  formatDraftValue,
+  isSemanticEnvelope,
+  walkDraftStructure,
+} from '@/domain/workspaces/draftStructure';
 import { WorkspaceReviewCodeView } from './WorkspaceReviewCodeView';
 import type { WorkspaceReviewPane } from './WorkspaceReviewWorkbench';
 import styles from './WorkspaceReviewWorkbench.module.css';
@@ -63,13 +75,71 @@ export function WorkspaceReviewContentPreview({
   frozen?: boolean;
   onSelect?: (path: string) => void;
 }) {
+  const rows = useMemo((): StateFieldTreeRow[] => {
+    const semantic = isSemanticEnvelope(value);
+    const nodes = walkDraftStructure(value).filter(
+      (node) => !semantic || node.path !== 'content/trees'
+    );
+    if (isSemanticEnvelope(value) && value.content.relations.length)
+      nodes.push(...walkDraftStructure({ relations: value.content.relations }));
+    return nodes.map((node) => ({
+      id: node.path,
+      path: node.path,
+      parentPath: node.parentPath === 'content/trees' ? null : node.parentPath,
+      depth: Math.max(0, node.depth - (semantic && node.path.startsWith('content/trees/') ? 1 : 0)),
+      key: node.key,
+      expandable: node.expandable,
+      type:
+        node.kind === 'sequence'
+          ? 'array'
+          : node.kind !== 'scalar'
+            ? 'object'
+            : node.value === null
+              ? 'null'
+              : typeof node.value,
+      value: node.kind === 'scalar' ? formatDraftValue(node.value) : '-',
+      issueCount: 0,
+      sourceOp: '-',
+      status: 'unchanged',
+      statusLabel: 'unchanged',
+    }));
+  }, [value]);
+  const [query, setQuery] = useState('');
+  const [expansion, setExpansion] = useState<Record<string, boolean>>({});
+  const [selectedId, setSelectedId] = useState<string>();
+  const expanded = (row: StateFieldTreeRow) =>
+    query.trim().length > 0 || isStateStructureRowExpanded(row, expansion);
+  const visible = query.trim()
+    ? filterStateStructureRows(rows, query)
+    : filterCollapsedStateRows(rows, expanded);
+  const expandAll = (open: boolean) =>
+    setExpansion(
+      Object.fromEntries(rows.filter((row) => row.expandable).map((row) => [row.id, open]))
+    );
   return (
     <section className={styles.preview} aria-label="Content result preview">
       <h2>{frozen ? 'Reviewed content' : 'Draft content'}</h2>
       {value === undefined ? (
         <p>The complete content is unavailable for this revision.</p>
       ) : (
-        <CurrentDraftContentTree current={value} onSelect={onSelect} />
+        <StateFieldTable
+          rows={visible}
+          query={query}
+          onQueryChange={setQuery}
+          onExpandAll={() => expandAll(true)}
+          onCollapseAll={() => expandAll(false)}
+          selectedRowId={selectedId}
+          isExpanded={expanded}
+          onSelectRow={(row) => {
+            setSelectedId(row.id);
+            if (row.expandable)
+              setExpansion((current) => ({
+                ...current,
+                [row.id]: !isStateStructureRowExpanded(row, current),
+              }));
+            onSelect?.(row.path);
+          }}
+        />
       )}
     </section>
   );

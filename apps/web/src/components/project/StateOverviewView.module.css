@@ -110,25 +110,18 @@
 }
 
 .informationLayout {
-  --sidebar-width: 264px;
-  --column-gap: 48px;
   position: relative;
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--sidebar-width);
+  grid-template-columns: var(--repo-main-with-inspector);
   align-items: start;
-  gap: var(--column-gap);
+  gap: var(--repo-frame-gap);
   padding: 24px 0 32px;
 }
-.informationLayout::after {
-  content: "";
-  position: absolute;
-  top: 24px;
-  bottom: 24px;
-  right: calc(var(--sidebar-width) + var(--column-gap) / 2);
-  width: 1px;
-  background: var(--stroke-divider);
-  pointer-events: none;
+.mainColumn {
+  composes: primary from "./RepositoryWorkbench.module.css";
+  --readme-inset: clamp(12px, 2vw, 24px);
+  padding: 0 var(--readme-inset) var(--readme-inset);
 }
 .mainColumn,
 .sidebar {
@@ -141,7 +134,7 @@
   contain: size;
   overflow: auto;
   gap: 32px;
-  padding-top: 7px;
+  padding: 7px 0 0 12px;
 }
 .about {
   display: grid;
@@ -409,10 +402,10 @@ a.commitMessage:hover {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 24px;
+  margin: 0 calc(-1 * var(--readme-inset)) 20px;
   padding: 5px 12px;
-  border: 1px solid var(--stroke-divider);
-  border-radius: var(--radius-md);
+  border-bottom: 1px solid var(--stroke-divider);
+  border-radius: var(--repo-frame-radius) var(--repo-frame-radius) 0 0;
   background: color-mix(in srgb, var(--surface-panel) 35%, var(--surface-card));
 }
 .readmeHeader h2 {
@@ -720,12 +713,6 @@ a.commitMessage:hover {
   outline: 2px solid var(--ring);
   outline-offset: 3px;
 }
-@media (max-width: 1100px) {
-  .informationLayout {
-    --sidebar-width: 232px;
-    --column-gap: 32px;
-  }
-}
 @media (max-width: 760px) {
   .page {
     padding: 0 20px 16px;
@@ -740,10 +727,7 @@ a.commitMessage:hover {
     overflow: visible;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 28px;
-    padding-top: 0;
-  }
-  .informationLayout::after {
-    display: none;
+    padding: 0;
   }
   .about {
     grid-column: 1 / -1;

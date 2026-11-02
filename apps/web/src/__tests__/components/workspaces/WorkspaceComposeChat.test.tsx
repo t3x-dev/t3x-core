@@ -136,14 +136,27 @@ describe('WorkspaceComposeChat', () => {
     }
   });
 
-  it('renders assistant markdown through the AI Elements response surface', async () => {
+  it.each([
+    'default',
+    'discussion',
+  ] as const)('preserves Markdown structure in the %s conversation', async (variant) => {
     render(
       <WorkspaceComposeChat
+        variant={variant}
         chat={chatState({
           messages: [
             {
               author: 'Assistant',
-              content: ['## Source draft', '', '- Keep the audit trail readable.'].join('\n'),
+              content: [
+                '## Source draft',
+                '',
+                '- Keep the audit trail readable.',
+                '- Edit the `title` field.',
+                '',
+                '```yaml',
+                'title: Example',
+                '```',
+              ].join('\n'),
               id: 'turn-assistant-1',
               role: 'assistant',
             },
@@ -154,6 +167,9 @@ describe('WorkspaceComposeChat', () => {
 
     expect(await screen.findByRole('heading', { name: 'Source draft' })).toBeInTheDocument();
     expect(screen.getByText('Keep the audit trail readable.')).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+    expect(screen.getByText('title', { selector: 'code' })).toBeInTheDocument();
+    expect(document.querySelector('pre')).toHaveTextContent('title: Example');
   });
 
   it('keeps streaming text in one assistant message and shows real stream metadata', async () => {

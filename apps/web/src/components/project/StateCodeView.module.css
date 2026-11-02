@@ -1,6 +1,6 @@
 .root {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: var(--repo-main-with-inspector);
   gap: 16px;
   width: 100%;
   max-width: var(--project-page-max-width, 1264px);
@@ -333,7 +333,6 @@
 }
 @media (max-width: 1100px) {
   .root {
-    grid-template-columns: minmax(0, 1fr) 260px;
     gap: 24px;
   }
 }
@@ -358,14 +357,10 @@
 }
 
 .embeddedCard {
-  border: 0;
-  border-radius: 0;
+  border-radius: var(--repo-frame-radius);
 }
 .embeddedCard .toolbar {
-  border: 1px solid var(--stroke-divider);
-  border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--surface-panel) 35%, var(--surface-card));
-  margin-bottom: 16px;
 }
 
 .embeddedCard .codeArea {
@@ -388,9 +383,8 @@
 }
 .embeddedSide .panel {
   border: 0;
-  border-left: 1px solid var(--stroke-divider);
   border-radius: 0;
-  padding: 0 0 0 24px;
+  padding: 0 0 0 12px;
 }
 @media (max-width: 800px) {
   .embeddedSide {

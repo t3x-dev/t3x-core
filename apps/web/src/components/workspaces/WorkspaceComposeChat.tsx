@@ -76,17 +76,6 @@ const STREAM_ANIMATION = {
   stagger: 1,
 } as const;
 
-function discussionText(content: string) {
-  return content
-    .replace(/```[^\n]*\n?([\s\S]*?)```/g, '$1')
-    .replace(/```[^\n]*\n?/g, '')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/`/g, '')
-    .replace(/^#{1,6}\s+/gm, '')
-    .replace(/^\s*[-*]\s+/gm, '• ')
-    .trim();
-}
-
 export interface SchemaReceipt {
   settingsIds: string[];
   open: () => void;
@@ -268,7 +257,10 @@ export function WorkspaceComposeChat({
                     onClick={schemaReceipt.open}
                   >
                     <Braces aria-hidden="true" />
-                    View Schema proposal
+                    <span className={receiptStyles.receiptBody}>
+                      <strong>View Schema proposal</strong>
+                      <small>Review the proposed definition before confirming</small>
+                    </span>
                     <ChevronRight aria-hidden="true" />
                   </button>
                 ) : undefined
@@ -384,7 +376,7 @@ function ComposeChatMessage({
                 parseIncompleteMarkdown={isStreaming}
                 skipHtml
               >
-                {discussionText(message.content)}
+                {message.content}
               </MessageResponse>
             )}
           </div>

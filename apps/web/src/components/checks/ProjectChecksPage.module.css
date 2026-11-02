@@ -228,7 +228,7 @@
 }
 .workbench {
   display: grid;
-  grid-template-columns: 245px minmax(0, 1fr);
+  grid-template-columns: var(--repo-navigation-with-main);
   gap: 24px;
   align-items: start;
 }

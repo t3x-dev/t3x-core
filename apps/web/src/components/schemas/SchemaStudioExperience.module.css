@@ -110,8 +110,6 @@
   min-width: 0;
   overflow: hidden;
   background: var(--surface-card);
-  border: 1px solid var(--stroke-divider);
-  border-radius: var(--radius-workbench);
 }
 .body:has([data-schema-unavailable], [data-schema-empty]) {
   flex: 0 0 auto;

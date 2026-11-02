@@ -108,15 +108,17 @@
 }
 .cols2 {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 40px;
+  grid-template-columns: var(--repo-main-with-inspector);
+  gap: var(--repo-frame-gap);
   align-items: start;
 }
 .cols2.single {
   grid-template-columns: minmax(0, 1fr);
 }
 .dataTable {
+  composes: primary from "./RepositoryWorkbench.module.css";
   min-width: 0;
+  padding: var(--repo-frame-gap);
   container-type: inline-size;
 }
 .tb {
@@ -286,8 +288,7 @@
   position: sticky;
   top: 0;
   min-width: 0;
-  padding: 0 0 0 24px;
-  border-left: 1px solid var(--stroke-divider);
+  padding: 0 0 0 12px;
   background: var(--surface-card);
 }
 .traceHeader {

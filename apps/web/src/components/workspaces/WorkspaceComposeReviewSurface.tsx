@@ -1,11 +1,10 @@
-import type { SchemaPreparationTarget, WorkspaceAuthoringCard } from '@t3x-dev/api-client';
+import type { SchemaPreparationTarget } from '@t3x-dev/api-client';
 import type { SemanticContent } from '@t3x-dev/core';
 import type { LucideIcon } from 'lucide-react';
 import {
   ArrowLeft,
   Box as BoxIcon,
   Check,
-  CheckCircle2,
   ChevronDown,
   ChevronRight,
   CircleDot,
@@ -45,6 +44,7 @@ import type { ChangeEvent, CSSProperties, FormEvent, RefObject } from 'react';
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { WorkspaceChecksRedirect } from '@/components/checks/WorkspaceChecksRedirect';
 import { DOCUMENT_SOURCE_ACCEPTED_TYPES } from '@/components/import/documentAcceptTypes';
+import { balancedRailWidth } from '@/components/project/repositoryWorkbenchLayout';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { SchemaContentPreparationDialog } from '@/components/schemas/SchemaContentPreparationDialog';
@@ -81,10 +81,8 @@ import {
   type ComposeActivityMeta,
   type ComposeActivitySelection,
   composeEventCards,
-  expandAuthoringCards,
   groupComposeActivity,
 } from '@/domain/composeActivity';
-import { composePathLabel, composeValueLabel } from '@/domain/composePresentation';
 import { buildStateYamlReview } from '@/domain/diff/stateYamlReview';
 import {
   buildStructuredStateDiff,
@@ -96,14 +94,12 @@ import {
   buildCanonicalStateYaml,
   buildStatePointRows,
   type StatePointRow,
-  selectPrdRenderModel,
   workspaceDraftOperationsToStateOperations,
 } from '@/domain/project/stateViewModel';
 import { mergePublishedSchemaVersions } from '@/domain/schemas/publishedSchemaVersions';
 import { repositoryConversationSourceHref } from '@/domain/sourceEvidenceNavigation';
 import {
   authoringSemanticPath,
-  authoringVisibleCards,
   buildAuthoringReviewProjection,
 } from '@/domain/workspaces/authoringReview';
 import { EMPTY_WORKSPACE_REVIEW } from '@/domain/workspaces/changeDecision';
@@ -739,8 +735,8 @@ function ComposeSurface({
   const [customDiscussionWidth, setCustomDiscussionWidth] = useState<number | null>(null);
   const [collapsedPreference, setCollapsedPreference] = useState<boolean | null>(null);
   const [resizing, setResizing] = useState(false);
-  const balancedDraftWidth = Math.max(180, Math.min(240, Math.round(boardWidth * 0.15)));
-  const balancedDiscussionWidth = Math.max(320, Math.min(480, Math.round(boardWidth * 0.3)));
+  const balancedDraftWidth = balancedRailWidth('navigation', boardWidth);
+  const balancedDiscussionWidth = balancedRailWidth('inspector', boardWidth);
   const compact =
     inspectorOpen &&
     boardWidth > 840 &&
@@ -965,6 +961,7 @@ function ComposeSurface({
     (selection: ComposeActivitySelection, panel: 'history' | 'chat' | 'preserve' = 'history') => {
       setActivitySelection(selection);
       if (panel !== 'preserve') {
+        setRightView('changes');
         setSchemaSelection(null);
         setSidePanel(panel);
       }
@@ -1097,14 +1094,7 @@ function ComposeSurface({
       data-draft-collapsed={draftCollapsed || undefined}
       className={composeStyles.composeBoard}
     >
-      {!historicalCommit ? (
-        <ComposeFeedback controller={controller} publishError={structureError} />
-      ) : null}
-      {historicalCommit ? (
-        <section className={composeStyles.sourcesSection}>
-          <span>Commit history · Read-only</span>
-        </section>
-      ) : null}
+      <ComposeFeedback controller={controller} publishError={structureError} />
 
       {/* biome-ignore lint/a11y/useSemanticElements: This is an interactive window splitter, not a thematic break. */}
       <div
@@ -1249,27 +1239,7 @@ function ComposeSurface({
         )}
       </aside>
       <main className={composeStyles.composeMain}>
-        {historicalCommit ? (
-          <WorkspaceCommitHistoryPanel
-            key={`${commitScope}:${historicalCommit.hash}`}
-            projectId={candidate.projectId}
-            commit={historicalCommit}
-            onReturn={() => {
-              setCommitSelection(null);
-              setRightView('changes');
-            }}
-            selectedId={historicalInspection?.id}
-            onInspect={(value) => {
-              setCommitInspection({ scope: commitScope, value });
-              setInspectorOpen(true);
-            }}
-          />
-        ) : null}
-        <section
-          hidden={Boolean(historicalCommit)}
-          className={composeStyles.chatPanel}
-          aria-label="Workspace AI chat"
-        >
+        <section className={composeStyles.chatPanel} aria-label="Workspace AI chat">
           <header className={composeStyles.discussionHeader}>
             <button
               type="button"
@@ -1374,218 +1344,77 @@ function ComposeSurface({
       </main>
 
       <aside
-        aria-label={historicalCommit ? 'Discuss change' : 'Generated changes'}
+        aria-label="Generated changes"
         className={composeStyles.discussionSidebar}
         hidden={!inspectorOpen}
         data-compose-rail
-        data-panel={historicalCommit || showingDetails ? 'details' : 'changes'}
+        data-panel={showingDetails && rightView === 'changes' ? 'details' : 'changes'}
       >
-        {historicalCommit ? (
-          <>
-            <header className={composeStyles.discussionHeader}>
-              <Layers aria-hidden="true" />
-              <h2>Details</h2>
-              <span className={composeStyles.discussionWorkspace}>Commit · Read-only</span>
+        <section className={composeStyles.generatedChangesPanel} aria-label="Generated card list">
+          <nav className={composeStyles.workspaceToolTabs} aria-label="Workspace tools">
+            {(['changes', 'structure', 'history'] as const).map((view) => (
               <button
+                key={view}
                 type="button"
+                aria-pressed={rightView === view}
                 onClick={() => {
-                  setInspectorOpen(false);
-                  setCommitSelection(null);
+                  setTurn(null);
+                  setRightView(view);
+                  setSidePanel('chat');
                 }}
-                aria-label="Return to conversation"
               >
-                <X aria-hidden="true" />
+                {view === 'changes' ? (
+                  <Sparkles aria-hidden="true" />
+                ) : view === 'structure' ? (
+                  <ListTree aria-hidden="true" />
+                ) : (
+                  <GitBranch aria-hidden="true" />
+                )}
+                {view === 'changes' ? 'Changes' : view === 'structure' ? 'Structure' : 'History'}
               </button>
-            </header>
-            <WorkspaceCommitChangeDetails
-              key={`${commitScope}:${historicalCommit.hash}:${historicalInspection?.id ?? 'empty'}`}
-              inspection={historicalInspection}
-            />
-          </>
-        ) : null}
-        <div
-          hidden={Boolean(historicalCommit)}
-          style={historicalCommit ? undefined : { display: 'contents' }}
-        >
-          <section
-            hidden={showingDetails}
-            className={composeStyles.generatedChangesPanel}
-            aria-label="Generated card list"
-          >
-            <nav className={composeStyles.workspaceToolTabs} aria-label="Workspace tools">
-              {(['changes', 'structure', 'history'] as const).map((view) => (
-                <button
-                  key={view}
-                  type="button"
-                  aria-pressed={rightView === view}
-                  onClick={() => {
-                    setTurn(null);
-                    setRightView(view);
-                    setSidePanel('chat');
-                  }}
-                >
-                  {view === 'changes' ? (
-                    <Sparkles aria-hidden="true" />
-                  ) : view === 'structure' ? (
-                    <ListTree aria-hidden="true" />
-                  ) : (
-                    <GitBranch aria-hidden="true" />
-                  )}
-                  {view === 'changes' ? 'Changes' : view === 'structure' ? 'Structure' : 'History'}
-                </button>
-              ))}
-              <button
-                ref={closeDraftButton}
-                type="button"
-                aria-label="Close Draft"
-                onClick={closeInspector}
-              >
-                <X aria-hidden="true" />
-              </button>
-            </nav>
-            <div className={composeStyles.structurePanel} hidden={rightView !== 'structure'}>
-              <WorkspaceCurrentDraft
-                key={candidate.id}
-                candidate={candidate}
-                current={workingCurrent}
-                revision={activity.compositionRevision}
-                loading={activity.loading}
-                error={activity.error}
-                enabled={activity.enabled}
-                stagedCount={staged.length}
-                authoring={activity.view}
-                subject={draftSubject}
-                onSubjectChange={setDraftSubject}
-                schemaControl={
-                  <WorkspaceSchemaSelect
-                    candidate={candidate}
-                    controller={controller}
-                    requestNavigation={contentNavigation.requestNavigation}
-                  />
-                }
-                onEdit={(subject, path) => {
-                  setFocusSchemaPath(path);
-                  void openStructure(subject === 'schema' ? 'schema' : 'structure');
-                }}
-                onDiscuss={(subject, path) => {
-                  controller.prefillAssistant(
-                    `修改 ${subject === 'schema' ? 'Schema 定义' : 'Content'} ${path}：`
-                  );
-                  openChat();
-                }}
-              />
-            </div>
-            {rightView === 'history' ? (
-              <WorkspaceCommitGraph
-                key={`graph:${candidate.id}`}
-                projectId={candidate.projectId}
-                branch={candidate.targetBranch}
-                refreshKey={candidate.baseCommitHash ?? undefined}
-                selectedCommitHash={historicalCommit?.hash}
-                onSelectCommit={(commit) => {
-                  if (commit.project_id === candidate.projectId) {
-                    contentNavigation.requestNavigation(() => {
-                      setCommitInspection(null);
-                      setCommitSelection({ scope: commitScope, commit });
-                      if (window.matchMedia?.('(max-width: 840px)').matches)
-                        setInspectorOpen(false);
-                    });
-                  }
-                }}
-              />
-            ) : rightView === 'changes' && turn ? (
-              <section className={composeStyles.turnView} aria-label="This reply’s changes">
-                <button type="button" onClick={openDraft}>
-                  <ArrowLeft aria-hidden="true" /> All draft changes
-                </button>
-                <h3>This reply’s changes</h3>
-                <p>
-                  Draft r{turn.action.beforeRevision} → r{turn.action.afterRevision}
-                </p>
-                <WorkspaceTurnChanges
-                  action={turn.action}
-                  cards={activity.cards[turn.action.actionId] ?? turn.cards}
-                />
-              </section>
-            ) : rightView === 'changes' ? (
-              <>
-                <ChangesToolbar
-                  proposedChangeCount={
-                    activity.view
-                      ? (changeScope === 'all'
-                          ? contentChangeCount
-                          : groupComposeActivity(activity.actions).reduce(
-                              (count, event) =>
-                                count + composeEventCards(event, activity.cards).length,
-                              0
-                            )) + stagedObjectGroups(staged, publishedCurrent).length
-                      : candidate.yopsDraft.operations.length
-                  }
-                  changeScope={changeScope}
-                  onChangeScope={setChangeScope}
-                />
-                {schemaSettings.error && !schemaSettings.record ? (
-                  <p role="alert">{schemaSettings.error}</p>
-                ) : null}
-                {activity.newActivity ? (
-                  <output className={composeStyles.newActivity}>
-                    <span>
-                      New activity · Draft r{activity.newActivity.compositionRevision}. Your
-                      inspected node remains open.
-                    </span>
-                    <button onClick={() => void activity.loadLatest()} type="button">
-                      Load latest
-                    </button>
-                  </output>
-                ) : null}
-                <ProposedDraftPanel
-                  activity={activity}
-                  activitySelection={activitySelection}
-                  schemaSelected={Boolean(showingDetails && selectedSchema)}
-                  onActivitySelect={selectActivity}
+            ))}
+            <button
+              ref={closeDraftButton}
+              type="button"
+              aria-label="Close Draft"
+              onClick={closeInspector}
+            >
+              <X aria-hidden="true" />
+            </button>
+          </nav>
+          <div className={composeStyles.structurePanel} hidden={rightView !== 'structure'}>
+            <WorkspaceCurrentDraft
+              key={candidate.id}
+              candidate={candidate}
+              current={workingCurrent}
+              revision={activity.compositionRevision}
+              loading={activity.loading}
+              error={activity.error}
+              enabled={activity.enabled}
+              stagedCount={staged.length}
+              authoring={activity.view}
+              subject={draftSubject}
+              onSubjectChange={setDraftSubject}
+              schemaControl={
+                <WorkspaceSchemaSelect
                   candidate={candidate}
-                  changeFilter="all"
-                  changeScope={changeScope}
-                  staging={stagingControls}
-                  schemaEvent={
-                    schemaSettings.record
-                      ? {
-                          id:
-                            schemaSettings.record.cards?.[0]?.settingsId ??
-                            schemaSettings.record.settingsId,
-                          timestamp:
-                            schemaSettings.record.cards?.[0]?.createdAt ??
-                            schemaSettings.record.createdAt ??
-                            candidate.updatedAt,
-                          content: (
-                            <AssistantSchemaSettingsTimeline
-                              projectId={candidate.projectId}
-                              workspaceId={candidate.id}
-                              state={schemaSettings}
-                              selectedId={showingDetails ? selectedSchema?.settingsId : undefined}
-                              onInspect={(record) => {
-                                setActivitySelection(null);
-                                setSchemaSelection({
-                                  workspaceId: candidate.id,
-                                  settingsId: record.settingsId,
-                                });
-                                setSidePanel('history');
-                              }}
-                              disabled={staged.length > 0}
-                              onChanged={() => {
-                                setSchemaCandidateEpoch((value) => value + 1);
-                                activity.refresh();
-                              }}
-                            />
-                          ),
-                        }
-                      : undefined
-                  }
+                  controller={controller}
+                  requestNavigation={contentNavigation.requestNavigation}
                 />
-              </>
-            ) : null}
-          </section>
-          {showingDetails ? (
+              }
+              onEdit={(subject, path) => {
+                setFocusSchemaPath(path);
+                void openStructure(subject === 'schema' ? 'schema' : 'structure');
+              }}
+              onDiscuss={(subject, path) => {
+                controller.prefillAssistant(
+                  `修改 ${subject === 'schema' ? 'Schema 定义' : 'Content'} ${path}：`
+                );
+                openChat();
+              }}
+            />
+          </div>
+          {rightView === 'changes' && showingDetails ? (
             <section
               className={composeStyles.changeDetailsPanel}
               aria-label="Selected change details"
@@ -1645,10 +1474,143 @@ function ComposeSurface({
               )}
             </section>
           ) : null}
-        </div>
+          {rightView === 'history' ? (
+            historicalCommit ? (
+              historicalInspection ? (
+                <section
+                  className={composeStyles.changeDetailsPanel}
+                  aria-label="Committed change details"
+                >
+                  <header className={composeStyles.discussionHeader}>
+                    <button
+                      type="button"
+                      aria-label="Back to committed changes"
+                      onClick={() => setCommitInspection(null)}
+                    >
+                      <ArrowLeft aria-hidden="true" />
+                    </button>
+                    <h2>Commit details</h2>
+                  </header>
+                  <WorkspaceCommitChangeDetails inspection={historicalInspection} />
+                </section>
+              ) : (
+                <WorkspaceCommitHistoryPanel
+                  key={`${commitScope}:${historicalCommit.hash}`}
+                  projectId={candidate.projectId}
+                  commit={historicalCommit}
+                  onReturn={() => setCommitSelection(null)}
+                  onInspect={(value) => setCommitInspection({ scope: commitScope, value })}
+                />
+              )
+            ) : (
+              <WorkspaceCommitGraph
+                key={`graph:${candidate.id}`}
+                projectId={candidate.projectId}
+                branch={candidate.targetBranch}
+                refreshKey={candidate.baseCommitHash ?? undefined}
+                onSelectCommit={(commit) => {
+                  if (commit.project_id === candidate.projectId) {
+                    setCommitInspection(null);
+                    setCommitSelection({ scope: commitScope, commit });
+                  }
+                }}
+              />
+            )
+          ) : rightView === 'changes' && turn ? (
+            <section className={composeStyles.turnView} aria-label="This reply’s changes">
+              <button type="button" onClick={openDraft}>
+                <ArrowLeft aria-hidden="true" /> All draft changes
+              </button>
+              <h3>This reply’s changes</h3>
+              <p>
+                Draft r{turn.action.beforeRevision} → r{turn.action.afterRevision}
+              </p>
+              <WorkspaceTurnChanges
+                action={turn.action}
+                cards={activity.cards[turn.action.actionId] ?? turn.cards}
+              />
+            </section>
+          ) : rightView === 'changes' ? (
+            <div className={composeStyles.changesBody} hidden={showingDetails}>
+              <ChangesToolbar
+                proposedChangeCount={
+                  activity.view
+                    ? (changeScope === 'all'
+                        ? contentChangeCount
+                        : groupComposeActivity(activity.actions).reduce(
+                            (count, event) =>
+                              count + composeEventCards(event, activity.cards).length,
+                            0
+                          )) + stagedObjectGroups(staged, publishedCurrent).length
+                    : candidate.yopsDraft.operations.length
+                }
+                changeScope={changeScope}
+                onChangeScope={setChangeScope}
+              />
+              {schemaSettings.error && !schemaSettings.record ? (
+                <p role="alert">{schemaSettings.error}</p>
+              ) : null}
+              {activity.newActivity ? (
+                <output className={composeStyles.newActivity}>
+                  <span>
+                    New activity · Draft r{activity.newActivity.compositionRevision}. Your inspected
+                    node remains open.
+                  </span>
+                  <button onClick={() => void activity.loadLatest()} type="button">
+                    Load latest
+                  </button>
+                </output>
+              ) : null}
+              <ProposedDraftPanel
+                activity={activity}
+                activitySelection={activitySelection}
+                schemaSelected={Boolean(showingDetails && selectedSchema)}
+                onActivitySelect={selectActivity}
+                candidate={candidate}
+                changeFilter="all"
+                changeScope={changeScope}
+                staging={stagingControls}
+                schemaEvent={
+                  schemaSettings.record
+                    ? {
+                        id:
+                          schemaSettings.record.cards?.[0]?.settingsId ??
+                          schemaSettings.record.settingsId,
+                        timestamp:
+                          schemaSettings.record.cards?.[0]?.createdAt ??
+                          schemaSettings.record.createdAt ??
+                          candidate.updatedAt,
+                        content: (
+                          <AssistantSchemaSettingsTimeline
+                            projectId={candidate.projectId}
+                            workspaceId={candidate.id}
+                            state={schemaSettings}
+                            selectedId={showingDetails ? selectedSchema?.settingsId : undefined}
+                            onInspect={(record) => {
+                              setActivitySelection(null);
+                              setSchemaSelection({
+                                workspaceId: candidate.id,
+                                settingsId: record.settingsId,
+                              });
+                              setSidePanel('history');
+                            }}
+                            disabled={staged.length > 0}
+                            onChanged={() => {
+                              setSchemaCandidateEpoch((value) => value + 1);
+                              activity.refresh();
+                            }}
+                          />
+                        ),
+                      }
+                    : undefined
+                }
+              />
+            </div>
+          ) : null}
+        </section>
       </aside>
       {contentNavigation.dialog}
-      {fieldDialog && !historicalCommit ? (
+      {fieldDialog ? (
         <ComposeFieldDialog
           key={candidate.id}
           activity={activity}
@@ -3013,7 +2975,7 @@ function ReviewSurface({
           ) : undefined
         }
         actions={
-          <Button size="sm" variant="outline" onClick={() => onModeChange('compose')}>
+          <Button size="sm" variant="canvas-outline" onClick={() => onModeChange('compose')}>
             <Pencil aria-hidden="true" /> Edit in Compose
           </Button>
         }
@@ -3060,13 +3022,10 @@ function ReviewSurface({
           />
         ) : pane === 'rendered' ? (
           <WorkspaceRenderedReview
-            authoringCards={authoringVisibleCards(expandAuthoringCards(authoring?.netDiff ?? []))}
-            authoringPreview={Boolean(authoringReview)}
             candidate={candidate}
             review={comparisonReview}
             controller={controller}
             onModeChange={onModeChange}
-            onStructureDiff={() => setPane('changes')}
           />
         ) : comparisonStatus ? (
           comparisonStatus
@@ -3215,13 +3174,14 @@ function WorkspaceReviewSummary({
       <div className={workbenchStyles.draftActions}>
         <Button
           size="sm"
+          variant="commit"
           disabled={controller.isBusy || preparing || schemaLoading || hasChanges === false}
           onClick={onPrepare}
           type="button"
         >
           {preparing ? 'Preparing…' : 'Prepare review'}
         </Button>
-        <Button size="sm" variant="outline" onClick={onOpenChecks} type="button">
+        <Button size="sm" variant="canvas-outline" onClick={onOpenChecks} type="button">
           Open Run <ExternalLink aria-hidden="true" />
         </Button>
       </div>
@@ -3378,187 +3338,67 @@ interface WorkspaceReviewDiffMeta {
 type WorkspaceReviewDiffChange = StructuredDiffChange & { path: string };
 
 function WorkspaceRenderedReview({
-  authoringCards = [],
-  authoringPreview = false,
   candidate,
   review,
   controller,
   onModeChange,
-  onStructureDiff,
 }: {
-  authoringCards?: WorkspaceAuthoringCard[];
-  authoringPreview?: boolean;
   candidate: WorkspaceCandidate;
   review: WorkspaceComposeReviewController['review'];
   controller: WorkspaceComposeReviewController;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
-  onStructureDiff: () => void;
 }) {
   const structure = useMemo(
     () => buildWorkspaceReviewStructureModel(candidate, review),
     [candidate, review]
   );
-  const rendered = useMemo(() => selectPrdRenderModel(structure.head), [structure.head]);
-  const rolloutSection = rendered.sections.find(
-    (section) => section.key === 'rollout_plan' || section.key === 'rollout'
-  );
-  const rolloutRows = reviewSectionRows(rolloutSection?.value);
-  const rollback = rolloutRows.find(([label]) => /rollback/i.test(label))?.[1];
-  const notes = rendered.sections.find(
-    (section) => section.key === 'notes' || section.key === 'handoff_notes'
-  );
-  const changedRows = useMemo(
-    () => structure.rows.filter((row) => row.diff?.exact),
-    [structure.rows]
-  );
-  const proposedChanges = authoringPreview ? authoringVisibleCards(authoringCards) : [];
-  const authoringTitle =
-    rendered.requirements[0]?.title?.trim() ||
-    (proposedChanges[0]
-      ? composeValueLabel(proposedChanges[0].after, composePathLabel(proposedChanges[0].path))
-      : '');
-  const renderTitle = authoringPreview
-    ? authoringTitle || rendered.title || candidate.title
-    : rendered.title || candidate.title;
-  const priorTitle = authoringPreview
-    ? selectPrdRenderModel(structure.baseline).requirements.find(
-        (entry) => entry.key === rendered.requirements[0]?.key
-      )?.title
-    : selectPrdRenderModel(structure.baseline).title;
-  const renderLede = authoringPreview
-    ? rendered.audience || rendered.problem || rendered.lede
-    : rendered.audience || rendered.problem || candidate.summary;
-  const showPrdBoilerplate = !authoringPreview;
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const selectedRow =
     structure.rows.find((row) => row.path === selectedPath) ??
-    changedRows[0] ??
+    structure.rows.find((row) => !row.expandable) ??
     structure.rows[0] ??
     null;
-  const selectPath = (path: string) => {
-    const exact = structure.rows.find((row) => row.path === path);
-    const child = changedRows.find((row) => row.path.startsWith(`${path}/`));
-    setSelectedPath((exact ?? child)?.path ?? path);
-  };
   const selectedKind = selectedRow?.diff?.kind;
   const copyPath = () => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      void navigator.clipboard.writeText(selectedRow?.path ?? 'prd');
-    }
+    if (typeof navigator !== 'undefined' && navigator.clipboard)
+      void navigator.clipboard.writeText(selectedRow?.path ?? '');
   };
   const revise = () => {
-    controller.prefillAssistant(`Revise ${selectedRow?.path ?? 'prd'}: `);
+    controller.prefillAssistant(`Revise ${selectedRow?.path ?? ''}: `);
     onModeChange('compose');
   };
-
   return (
-    <div className={reviewStyles.renderSurface}>
+    <section aria-label="Rendered result">
       {controller.error ? <p role="alert">{controller.error}</p> : null}
-      <main className={reviewStyles.previewColumn}>
-        <section aria-label="Rendered result" className={reviewStyles.document}>
-          <h1>{renderTitle}</h1>
-          {priorTitle && priorTitle !== renderTitle ? (
-            <p className={reviewStyles.lead}>
-              Replaces <span className={reviewStyles.previousTitle}>{priorTitle}</span>
-            </p>
-          ) : renderLede ? (
-            <p className={reviewStyles.lead}>{renderLede}</p>
-          ) : null}
-          <div className={reviewStyles.documentMeta}>
-            Preview generated from draft r{candidate.revision ?? 1}
-            <button onClick={onStructureDiff} type="button">
-              Open structure diff <ExternalLink aria-hidden="true" />
-            </button>
-          </div>
-          {showPrdBoilerplate ? (
-            <>
-              <h3>Summary</h3>
-              <p>{rendered.outcome || 'No outcome has been recorded.'}</p>
-              <h3>Purpose</h3>
-              <p>{rendered.problem || candidate.summary}</p>
-              <h3>Rollout plan</h3>
-              {rolloutRows.length ? (
-                <dl>
-                  {rolloutRows.map(([label, value]) => (
-                    <div key={label}>
-                      <dt>{label}</dt>
-                      <dd>{value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              ) : (
-                <p>No rollout plan recorded.</p>
-              )}
-              <h3>Rollback readiness</h3>
-              <p>{rollback || 'No rollback detail is present in the current draft.'}</p>
-            </>
-          ) : null}
-          {authoringPreview ? (
-            <WorkspaceReviewContentPreview
-              onSelect={(path) => selectPath(authoringSemanticPath(path) ?? path)}
-              value={{ domain: 't3x.dev/semantic-content', version: 1, content: structure.head }}
-            />
-          ) : null}
-          {rendered.requirements.length > 0 ? (
-            <section>
-              <h3>
-                Requirements <span>{rendered.requirements.length}</span>
-              </h3>
-              <div className={reviewStyles.requirements}>
-                {rendered.requirements.map((requirement) => {
-                  const row = structure.rows.find(
-                    (entry) =>
-                      entry.path.split('/').includes(requirement.key) && entry.key === 'title'
-                  );
-                  return (
-                    <button
-                      key={requirement.key}
-                      type="button"
-                      data-selected={Boolean(row && selectedRow?.path === row.path)}
-                      disabled={!row}
-                      onClick={() => row && setSelectedPath(row.path)}
-                    >
-                      <CheckCircle2 aria-hidden="true" />
-                      <span>{requirement.title}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          ) : null}
-          {showPrdBoilerplate || notes ? (
-            <section>
-              <h3>Notes</h3>
-              <p>{notes ? formatOperationValue(notes.value) : 'No notes recorded.'}</p>
-            </section>
-          ) : null}
-        </section>
-        <details className={workbenchStyles.selection}>
-          <summary>Selected change · actions</summary>
-          <section aria-label="Review details">
-            <section aria-label="Selected section" className={reviewStyles.panel}>
-              <header>
-                <h2>
-                  <Pencil aria-hidden="true" /> Selected change
-                </h2>
-                <button onClick={copyPath} type="button">
-                  <Copy aria-hidden="true" /> Copy path
-                </button>
-              </header>
-              <code className={reviewStyles.path}>
-                {selectedRow?.path.split('/').join(' / ') ?? 'Current draft'}
-              </code>
-              <span className={reviewStyles.kind} data-kind={selectedKind}>
-                {selectedRow ? workspaceReviewKindLabel(selectedRow) : 'Unchanged'}
-              </span>
-              <button className={reviewStyles.primary} onClick={revise} type="button">
-                <Sparkles aria-hidden="true" /> Ask AI to revise
+      <WorkspaceReviewContentPreview
+        value={{ domain: 't3x.dev/semantic-content', version: 1, content: structure.head }}
+        onSelect={(path) => setSelectedPath(authoringSemanticPath(path) ?? path)}
+      />
+      <details className={workbenchStyles.selection}>
+        <summary>Selected change · actions</summary>
+        <section aria-label="Review details">
+          <section aria-label="Selected section" className={reviewStyles.panel}>
+            <header>
+              <h2>
+                <Pencil aria-hidden="true" /> Selected change
+              </h2>
+              <button onClick={copyPath} type="button">
+                <Copy aria-hidden="true" /> Copy path
               </button>
-            </section>
+            </header>
+            <code className={reviewStyles.path}>
+              {selectedRow?.path.split('/').join(' / ') ?? 'Current draft'}
+            </code>
+            <span className={reviewStyles.kind} data-kind={selectedKind}>
+              {selectedRow ? workspaceReviewKindLabel(selectedRow) : 'Unchanged'}
+            </span>
+            <button className={reviewStyles.primary} onClick={revise} type="button">
+              <Sparkles aria-hidden="true" /> Ask AI to revise
+            </button>
           </section>
-        </details>
-      </main>
-    </div>
+        </section>
+      </details>
+    </section>
   );
 }
 
@@ -3770,47 +3610,54 @@ export function WorkspaceReviewStructureTree({
     );
   }, [expansionRequest, rows]);
 
-  return (
-    <StateScrollArea className={diffStyles.treePane} label="Workspace structure rows">
-      <table className={cn(diffStyles.tree, reference && diffStyles.referenceTree)}>
-        {reference ? (
-          <>
-            <colgroup>
-              <col style={{ width: '40%' }} />
-              <col style={{ width: '30%' }} />
-              <col style={{ width: '30%' }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th>Field</th>
-                <th>Before</th>
-                <th>After</th>
-              </tr>
-            </thead>
-          </>
-        ) : (
+  const table = (
+    <table className={cn(diffStyles.tree, reference && diffStyles.referenceTree)}>
+      {reference ? (
+        <>
           <colgroup>
-            <col className="w-[29%]" />
-            <col className="w-[34%]" />
-            <col className="w-[25%]" />
-            <col className="w-[12%]" />
+            <col style={{ width: '40%' }} />
+            <col style={{ width: '30%' }} />
+            <col style={{ width: '30%' }} />
           </colgroup>
-        )}
-        <tbody>
-          {visibleRows.map((row) => (
-            <WorkspaceReviewStructureTableRow
-              reference={reference}
-              expanded={filtering || isWorkspaceReviewRowExpanded(row, expansionOverrides)}
-              key={row.id}
-              modifiedLabel={modifiedLabel}
-              onSelect={() => onSelectRow(row.id)}
-              onToggle={() => toggleRow(row)}
-              row={row}
-              selected={activeRowId === row.id}
-            />
-          ))}
-        </tbody>
-      </table>
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Before</th>
+              <th>After</th>
+            </tr>
+          </thead>
+        </>
+      ) : (
+        <colgroup>
+          <col className="w-[29%]" />
+          <col className="w-[34%]" />
+          <col className="w-[25%]" />
+          <col className="w-[12%]" />
+        </colgroup>
+      )}
+      <tbody>
+        {visibleRows.map((row) => (
+          <WorkspaceReviewStructureTableRow
+            reference={reference}
+            expanded={filtering || isWorkspaceReviewRowExpanded(row, expansionOverrides)}
+            key={row.id}
+            modifiedLabel={modifiedLabel}
+            onSelect={() => onSelectRow(row.id)}
+            onToggle={() => toggleRow(row)}
+            row={row}
+            selected={activeRowId === row.id}
+          />
+        ))}
+      </tbody>
+    </table>
+  );
+  return reference ? (
+    <section className={diffStyles.treePane} aria-label="Workspace structure rows">
+      {table}
+    </section>
+  ) : (
+    <StateScrollArea className={diffStyles.treePane} label="Workspace structure rows">
+      {table}
     </StateScrollArea>
   );
 }
@@ -4790,36 +4637,6 @@ function findWorkspaceReviewOperation(
 function aggregateWorkspaceReviewValue(values: Array<string | undefined>): string | undefined {
   const unique = Array.from(new Set(values.map((value) => value?.trim()).filter(Boolean)));
   return unique.length === 1 ? unique[0] : undefined;
-}
-
-function reviewSectionRows(value: unknown): Array<[string, string]> {
-  if (value === undefined || value === null) return [];
-  if (typeof value !== 'object' || Array.isArray(value)) {
-    return [['Detail', formatOperationValue(value)]];
-  }
-  return Object.entries(value).flatMap(([key, entry]) => {
-    const label = key.replace(/[_-]+/g, ' ');
-    if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
-      return Object.entries(entry).map(
-        ([field, fieldValue]) =>
-          [`${label} · ${field.replace(/[_-]+/g, ' ')}`, formatOperationValue(fieldValue)] as [
-            string,
-            string,
-          ]
-      );
-    }
-    return [[label, formatOperationValue(entry)] as [string, string]];
-  });
-}
-
-function formatOperationValue(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (value === undefined) return 'Not set';
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
 }
 
 function isRemovalOperation(operation: string): boolean {

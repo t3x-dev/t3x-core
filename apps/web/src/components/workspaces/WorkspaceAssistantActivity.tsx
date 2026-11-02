@@ -121,9 +121,17 @@ export function WorkspaceAssistantActivity({
   const label = phaseLabel(activity, publication, publishing);
 
   return (
-    <section className={styles.activity} aria-label="Assistant activity" aria-live="polite">
+    <section
+      className={styles.activity}
+      data-compact={compact || undefined}
+      aria-label="Assistant activity"
+      aria-live="polite"
+    >
       <details className={styles.process} open={running ? true : undefined}>
         <summary className={styles.processToggle}>
+          {!running && activity.phase !== 'error' ? (
+            <Check className={styles.completedMark} aria-hidden="true" />
+          ) : null}
           <span className={styles.chevron}>
             <ChevronDown aria-hidden="true" />
           </span>
@@ -201,11 +209,17 @@ export function WorkspaceTurnReceipt({
   return (
     <button type="button" className={styles.receipt} onClick={() => onOpen(changes)}>
       <GitPullRequest aria-hidden="true" />
-      <span>
-        This reply · {paths[0] ? changeLabel(paths[0].path, paths[0].after) : 'Draft'} ·{' '}
-        {paths.length
-          ? `${paths.length} changed ${paths.length === 1 ? 'path' : 'paths'}`
-          : 'Draft update'}
+      <span className={styles.receiptBody}>
+        <strong>
+          This reply ·{' '}
+          {paths.length
+            ? `${paths.length} changed ${paths.length === 1 ? 'path' : 'paths'}`
+            : 'Draft update'}
+        </strong>
+        <small>
+          {paths[0] ? changeLabel(paths[0].path, paths[0].after) : 'Draft'} · Draft r
+          {changes.action.beforeRevision} → r{changes.action.afterRevision}
+        </small>
       </span>
       <ChevronRight aria-hidden="true" />
     </button>

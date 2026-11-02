@@ -3,7 +3,7 @@
   max-width: 1040px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 184px minmax(0, 1fr);
+  grid-template-columns: var(--repo-navigation-with-main);
   align-items: start;
   gap: 32px;
   padding: 24px 24px 64px;
@@ -174,7 +174,6 @@
 }
 @media (max-width: 1000px) {
   .layout {
-    grid-template-columns: 180px minmax(0, 1fr);
     gap: 28px;
     padding-inline: 24px;
   }

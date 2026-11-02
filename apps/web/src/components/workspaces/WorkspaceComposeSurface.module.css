@@ -289,6 +289,7 @@
   --draft-effective-width: 48px;
 }
 .composeMain {
+  composes: primary from "../project/RepositoryWorkbench.module.css";
   grid-column: 2;
   grid-row: 3;
   display: flex;
@@ -297,10 +298,7 @@
   flex-direction: column;
   overflow-y: auto;
   scrollbar-width: none;
-  margin: 8px 12px 12px 0;
-  border: 1px solid var(--stroke-default);
-  border-radius: 12px;
-  background: var(--surface-card);
+  margin: var(--repo-frame-top) var(--repo-frame-gap) var(--repo-frame-gap) 0;
 }
 .newActivity {
   display: flex;
@@ -2254,7 +2252,8 @@
   color: var(--text-primary);
 }
 .composeBoard .discussionSidebar {
-  margin: 8px 16px 12px 0;
+  container: compose-inspector / inline-size;
+  margin: var(--repo-frame-top) 16px var(--repo-frame-gap) 0;
   border: 0;
   border-radius: 0;
   background: var(--surface-panel);
@@ -2321,8 +2320,7 @@
   flex: 1;
 }
 .changeDetailsPanel {
-  overflow: hidden;
-  border-top: 1px solid var(--stroke-divider);
+  overflow: visible;
   background: var(--surface-panel);
 }
 .composeBoard .discussionSidebar[data-panel="changes"] .generatedChangesPanel {
@@ -2332,15 +2330,6 @@
   min-height: 42px;
   padding: 10px 16px;
   border-bottom: 1px solid var(--stroke-divider);
-}
-.composeBoard .discussionSidebar[data-panel="details"] {
-  align-self: start;
-  max-height: 100%;
-}
-.composeBoard .discussionSidebar[data-panel="details"] .discussionHeader {
-  min-height: 48px;
-  padding-block: 12px 0;
-  border-bottom: 0;
 }
 .composeBoard .changeDetailsPanel .discussionHeader {
   min-height: 48px;
@@ -3105,6 +3094,12 @@ button.currentDraftRow:hover {
 .changeDetailsPanel {
   flex: 1;
 }
+.changesBody {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
 .workspaceToolTabs {
   grid-template-columns: repeat(3, minmax(0, 1fr)) 30px;
 }
@@ -3113,7 +3108,7 @@ button.currentDraftRow:hover {
   background: var(--surface-card);
 }
 .discussionComposer {
-  width: min(calc(100% - 32px), 768px);
+  width: min(calc(100% - 64px), 816px);
   margin-inline: auto;
 }
 .chatPanel .discussionHeader h2 {
@@ -3178,11 +3173,14 @@ button.currentDraftRow:hover {
   margin-bottom: 14px;
 }
 @media (max-width: 840px) {
+  .discussionComposer {
+    width: calc(100% - 40px);
+  }
   .composeMain,
   .composeBoard .discussionSidebar {
     margin: 4px 5px 7px;
     border: 1px solid var(--stroke-default);
-    border-radius: 9px;
+    border-radius: var(--repo-frame-radius);
   }
   .composeBoard,
   .composeBoard:not([data-inspector-open]) {

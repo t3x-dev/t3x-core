@@ -151,7 +151,7 @@
 }
 .overviewGrid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  grid-template-columns: var(--repo-main-with-inspector);
   gap: 40px;
 }
 .overviewMain {
@@ -321,7 +321,7 @@
 }
 .changesLayout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: var(--repo-main-with-inspector);
   align-items: start;
   gap: 24px;
 }
