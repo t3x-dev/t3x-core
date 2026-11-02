@@ -694,20 +694,30 @@ export function ProjectStateTab({
                 />
               ) : null}
               <StatePageFrame projectName={projectName} branch={branchFocus || 'main'}>
-                {snapshot.primaryError && activeView !== 'overview' ? (
-                  <StateEmpty message={snapshot.primaryError} title="No committed state loaded" />
-                ) : null}
-                {!snapshot.primaryError &&
-                !snapshot.loading &&
-                !headCommit &&
-                activeView !== 'overview' ? (
-                  <StateEmpty
-                    message="Start in a Workspace, review your changes, and create the first commit."
-                    title="No commit on this branch"
-                  />
-                ) : null}
-                {!snapshot.primaryError && snapshot.loading && activeView !== 'overview' ? (
-                  <StateEmpty message="Reading this version’s content." title="Loading state" />
+                {activeView !== 'overview' &&
+                (snapshot.primaryError || snapshot.loading || !headCommit) ? (
+                  <section
+                    aria-label="State version status"
+                    className={`${inspectionStyles.surface} ${inspectionStyles.page}`}
+                  >
+                    <StateStructureHeader
+                      dataMode={activeView}
+                      onDataModeChange={updateActiveView}
+                    />
+                    {snapshot.primaryError ? (
+                      <StateEmpty
+                        message={snapshot.primaryError}
+                        title="No committed state loaded"
+                      />
+                    ) : snapshot.loading ? (
+                      <output className={inspectionStyles.pending}>Loading state</output>
+                    ) : (
+                      <StateEmpty
+                        message="Start in a Workspace, review your changes, and create the first commit."
+                        title="No commit on this branch"
+                      />
+                    )}
+                  </section>
                 ) : null}
                 {activeView === 'overview' ? (
                   <StateOverviewView
@@ -1001,6 +1011,35 @@ function StateCanvasView({
   );
 }
 
+function StateStructureHeader({
+  dataMode,
+  onDataModeChange,
+  children,
+}: {
+  dataMode: 'structure' | 'code';
+  onDataModeChange?: (mode: 'structure' | 'code') => void;
+  children?: ReactNode;
+}) {
+  return (
+    <header className={inspectionStyles.dataHeader}>
+      <h2>Structure</h2>
+      <fieldset aria-label="Structure format" className={inspectionStyles.dataModes}>
+        {(['structure', 'code'] as const).map((mode) => (
+          <button
+            type="button"
+            key={mode}
+            aria-pressed={dataMode === mode}
+            onClick={() => onDataModeChange?.(mode)}
+          >
+            {mode === 'structure' ? 'Tree' : 'Code'}
+          </button>
+        ))}
+      </fieldset>
+      {children}
+    </header>
+  );
+}
+
 export function StateStructureView({
   branch,
   changeReason,
@@ -1233,20 +1272,7 @@ export function StateStructureView({
         aria-label="State structure"
         className={`${inspectionStyles.surface} ${inspectionStyles.page}`}
       >
-        <header className={inspectionStyles.dataHeader}>
-          <h2>Structure</h2>
-          <fieldset aria-label="Structure format" className={inspectionStyles.dataModes}>
-            {(['structure', 'code'] as const).map((mode) => (
-              <button
-                type="button"
-                key={mode}
-                aria-pressed={dataMode === mode}
-                onClick={() => onDataModeChange?.(mode)}
-              >
-                {mode === 'structure' ? 'Tree' : 'Code'}
-              </button>
-            ))}
-          </fieldset>
+        <StateStructureHeader dataMode={dataMode} onDataModeChange={onDataModeChange}>
           <div className={inspectionStyles.stats}>
             <span>{structureRows.length} fields</span>
             <span>{structureRows.filter((row) => row.type === 'object').length} objects</span>
@@ -1261,7 +1287,7 @@ export function StateStructureView({
             />
             Details
           </label>
-        </header>
+        </StateStructureHeader>
         {!rows.length ? (
           <StateEmptyContent
             key={`${headCommit.hash}:${dataMode}`}
@@ -1350,6 +1376,8 @@ export function StateStructureView({
               </thead>
               <tbody>
                 {visibleRows.map((row) => {
+                  const isContainer =
+                    row.expandable || row.type === 'object' || row.type === 'array';
                   const expanded =
                     searching ||
                     isStateStructureRowExpanded(
@@ -1365,7 +1393,10 @@ export function StateStructureView({
                   return (
                     <tr
                       key={row.id}
-                      className={inspectionStyles.rw}
+                      className={cn(
+                        inspectionStyles.rw,
+                        isContainer && inspectionStyles.containerRow
+                      )}
                       aria-selected={selectedRow?.id === row.id}
                       tabIndex={0}
                       onClick={select}
@@ -1376,7 +1407,10 @@ export function StateStructureView({
                         }
                       }}
                     >
-                      <td className={inspectionStyles.k} style={{ paddingLeft: row.depth * 24 }}>
+                      <td
+                        className={inspectionStyles.k}
+                        style={{ paddingLeft: `min(${row.depth} * var(--tree-indent), 45%)` }}
+                      >
                         <span className={inspectionStyles.chev}>
                           {row.expandable ? (
                             <button
@@ -1392,23 +1426,8 @@ export function StateStructureView({
                             </button>
                           ) : null}
                         </span>
-                        <span
-                          className={cn(
-                            inspectionStyles.ti,
-                            row.type === 'array'
-                              ? inspectionStyles.arr
-                              : row.expandable
-                                ? inspectionStyles.obj
-                                : inspectionStyles.str
-                          )}
-                        >
-                          {row.type === 'array' ? (
-                            <List />
-                          ) : row.expandable ? (
-                            <Box />
-                          ) : (
-                            <FileText />
-                          )}
+                        <span className={inspectionStyles.ti}>
+                          {row.type === 'array' ? <List /> : isContainer ? <Box /> : <FileText />}
                         </span>
                         <span className={inspectionStyles.nm} title={row.path}>
                           {row.key}

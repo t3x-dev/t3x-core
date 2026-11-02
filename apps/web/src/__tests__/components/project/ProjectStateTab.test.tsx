@@ -650,6 +650,10 @@ describe('ProjectStateTab', () => {
   it('waits for the initial branch pointer instead of starting a redundant history request', async () => {
     hookMocks.branchesLoading = true;
     const view = renderStateTab();
+    const pending = screen.getByRole('region', { name: 'State version status' });
+    expect(within(pending).getByRole('heading', { name: 'Structure' })).toBeVisible();
+    expect(within(pending).getByRole('button', { name: 'Tree', pressed: true })).toBeVisible();
+    expect(within(pending).getByRole('status')).toHaveTextContent('Loading state');
     expect(hookMocks.loadCommits).not.toHaveBeenCalled();
     expect(hookMocks.loadCommit).not.toHaveBeenCalled();
     hookMocks.branchesLoading = false;

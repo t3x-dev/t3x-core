@@ -374,6 +374,18 @@
 .embeddedCard .noteRow {
   display: none;
 }
+.embeddedSide {
+  position: sticky;
+  top: 0;
+}
+.embeddedSide .panel h3 {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+}
 .embeddedSide .panel {
   border: 0;
   border-left: 1px solid var(--stroke-divider);
@@ -381,6 +393,9 @@
   padding: 0 0 0 24px;
 }
 @media (max-width: 800px) {
+  .embeddedSide {
+    position: static;
+  }
   .embeddedSide .panel {
     border-left: 0;
     border-top: 1px solid var(--stroke-divider);

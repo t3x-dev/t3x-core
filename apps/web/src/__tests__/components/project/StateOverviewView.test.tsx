@@ -109,6 +109,14 @@ it('keeps historical State readable while its introduction loads or fails', () =
   expect(retry).toHaveBeenCalledOnce();
 });
 
+it('keeps the version introduction in its loading state while resolving the commit', () => {
+  overview.mockReturnValue({ data: undefined, loading: false });
+  render(<StateOverviewView {...props} commitDigest={null} stateLoading />);
+  const readme = screen.getByRole('region', { name: 'Version introduction' });
+  expect(within(readme).getByText('Loading version introduction…')).toBeVisible();
+  expect(within(readme).queryByText('No README published for this revision.')).toBeNull();
+});
+
 it.each([
   { ...commit, hash: 'different-version' },
   { ...commit, project_id: 'other-project' },

@@ -118,9 +118,12 @@ export function StateOverviewView({
   }, [projectId, commitDigest]);
 
   const version = introductionSource === 'version';
+  const introductionLoading = stateLoading || loading;
+  const introductionError = stateError || error;
   const empty = !commitDigest;
   // Historical introductions belong to this revision; never borrow current repository metadata.
-  const author = version && !loading && !error ? data?.author?.document : undefined;
+  const author =
+    version && !introductionLoading && !introductionError ? data?.author?.document : undefined;
   const shownDescription = version ? author?.description?.trim() : projectDescription?.trim();
   const readme = version ? author?.readme : repositoryProfile.readme;
   const hasReadme = Boolean(readme?.trim());
@@ -258,10 +261,10 @@ export function StateOverviewView({
                 </div>
               </header>
               <div ref={readmeRef} className={styles.readmeBody}>
-                {version && (loading || error) ? (
+                {version && (introductionLoading || introductionError) ? (
                   <>
                     <p>
-                      {loading
+                      {introductionLoading
                         ? 'Loading version introduction…'
                         : 'Version introduction unavailable.'}
                     </p>

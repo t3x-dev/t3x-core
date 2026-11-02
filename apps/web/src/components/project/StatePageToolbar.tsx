@@ -8,6 +8,7 @@ import type { ProjectSnapshotView } from './ProjectStateTab';
 import { StateBranchControls } from './StateBranchControls';
 import inspectionStyles from './StateInspection.module.css';
 import overviewStyles from './StateOverviewView.module.css';
+import frameStyles from './StatePageFrame.module.css';
 
 export function StatePageToolbar({
   activeView,
@@ -37,79 +38,81 @@ export function StatePageToolbar({
   workspaceHref: string;
 }) {
   return (
-    <div className={`${inspectionStyles.surface} ${inspectionStyles.toolbar} `}>
-      <div className={inspectionStyles.sub2}>
-        <div className={overviewStyles.toolbar} style={{ margin: 0, minHeight: 32 }}>
-          <div className={overviewStyles.viewTabs} role="tablist" aria-label="State views">
-            {(
-              [
-                { id: 'overview', label: 'Overview', icon: Eye },
-                { id: 'structure', label: 'Structure', icon: TableProperties },
-              ] as const
-            ).map((view) => {
-              const Icon = view.icon;
-              return (
-                <button
-                  key={view.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={
-                    view.id === 'overview' ? activeView === 'overview' : activeView !== 'overview'
-                  }
-                  onClick={() => onViewChange(view.id)}
-                >
-                  <Icon aria-hidden="true" />
-                  {view.label}
-                </button>
-              );
-            })}
+    <div className={`${inspectionStyles.surface} ${frameStyles.toolbarViewport}`}>
+      <div className={frameStyles.bounds}>
+        <div className={inspectionStyles.sub2}>
+          <div className={overviewStyles.toolbar} style={{ margin: 0, minHeight: 32 }}>
+            <div className={overviewStyles.viewTabs} role="tablist" aria-label="State views">
+              {(
+                [
+                  { id: 'overview', label: 'Overview', icon: Eye },
+                  { id: 'structure', label: 'Structure', icon: TableProperties },
+                ] as const
+              ).map((view) => {
+                const Icon = view.icon;
+                return (
+                  <button
+                    key={view.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={
+                      view.id === 'overview' ? activeView === 'overview' : activeView !== 'overview'
+                    }
+                    onClick={() => onViewChange(view.id)}
+                  >
+                    <Icon aria-hidden="true" />
+                    {view.label}
+                  </button>
+                );
+              })}
+            </div>
+            <StateBranchControls
+              branch={branch}
+              branchOptions={branchOptions}
+              headCommitHash={headCommitHash}
+              onBranchChange={onBranchChange}
+              onCreateBranch={onCreateBranch}
+              showCreate={false}
+            />
+            {headCommit ? (
+              <span className={inspectionStyles.revisionContext}>
+                <GitCommit aria-hidden="true" />
+                <code>{shortHash(headCommit.hash)}</code>
+                <span>{historical ? 'Historical version' : 'Committed'} · Read-only</span>
+              </span>
+            ) : null}
           </div>
-          <StateBranchControls
-            branch={branch}
-            branchOptions={branchOptions}
-            headCommitHash={headCommitHash}
-            onBranchChange={onBranchChange}
-            onCreateBranch={onCreateBranch}
-            showCreate={false}
-          />
-          {headCommit ? (
-            <span className={inspectionStyles.revisionContext}>
-              <GitCommit aria-hidden="true" />
-              <code>{shortHash(headCommit.hash)}</code>
-              <span>{historical ? 'Historical version' : 'Committed'} · Read-only</span>
+          <div className={overviewStyles.actions}>
+            <Link href={historyHref}>
+              <History />
+              History 1
+            </Link>
+            <Link href={canvasHref}>
+              <History />
+              History 2
+            </Link>
+            <Link href={workspaceHref} className={overviewStyles.primary}>
+              <Pencil />
+              Propose change
+            </Link>
+          </div>
+        </div>
+        {headCommit && activeView !== 'overview' ? (
+          <div className={inspectionStyles.commitSummary}>
+            <GitCommit aria-hidden="true" />
+            <Link href={`${historyHref}&commit=${encodeURIComponent(headCommit.hash)}`}>
+              {headCommit.message || 'Committed state'}
+            </Link>
+            <span>
+              {headCommit.author?.name ||
+                headCommit.author?.id ||
+                headCommit.author?.type ||
+                'Author not recorded'}
             </span>
-          ) : null}
-        </div>
-        <div className={overviewStyles.actions}>
-          <Link href={historyHref}>
-            <History />
-            History 1
-          </Link>
-          <Link href={canvasHref}>
-            <History />
-            History 2
-          </Link>
-          <Link href={workspaceHref} className={overviewStyles.primary}>
-            <Pencil />
-            Propose change
-          </Link>
-        </div>
+            <time dateTime={headCommit.committed_at}>{relativeTime(headCommit.committed_at)}</time>
+          </div>
+        ) : null}
       </div>
-      {headCommit && activeView !== 'overview' ? (
-        <div className={inspectionStyles.commitSummary}>
-          <GitCommit aria-hidden="true" />
-          <Link href={`${historyHref}&commit=${encodeURIComponent(headCommit.hash)}`}>
-            {headCommit.message || 'Committed state'}
-          </Link>
-          <span>
-            {headCommit.author?.name ||
-              headCommit.author?.id ||
-              headCommit.author?.type ||
-              'Author not recorded'}
-          </span>
-          <time dateTime={headCommit.committed_at}>{relativeTime(headCommit.committed_at)}</time>
-        </div>
-      ) : null}
     </div>
   );
 }

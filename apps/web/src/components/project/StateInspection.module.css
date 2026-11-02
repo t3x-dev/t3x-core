@@ -3,20 +3,10 @@
   font-size: 14px;
   line-height: 1.5;
 }
-.page,
-.toolbar {
-  width: 100%;
-  max-width: var(--project-page-max-width, 1264px);
-  margin: 0 auto;
-  padding: 0 24px;
-}
 .page {
-  padding: 0 0 24px;
-  min-height: 0;
+  min-width: 0;
+  padding-bottom: 24px;
   flex: 1;
-}
-.toolbar {
-  flex: none;
 }
 .sub2 {
   display: flex;
@@ -60,6 +50,13 @@
 }
 .commitSummary time {
   margin-left: auto;
+}
+.pending {
+  display: block;
+  padding: 12px;
+  color: var(--text-secondary);
+  background: var(--surface-panel);
+  font-size: 13px;
 }
 .dataHeader {
   display: flex;
@@ -120,6 +117,7 @@
 }
 .dataTable {
   min-width: 0;
+  container-type: inline-size;
 }
 .tb {
   display: flex;
@@ -130,7 +128,7 @@
   border: 1px solid var(--stroke-divider);
   border-radius: var(--radius-md);
   margin-bottom: 16px;
-  background: color-mix(in srgb, var(--surface-panel) 35%, var(--surface-card));
+  background: var(--surface-panel);
 }
 .find {
   display: flex;
@@ -177,6 +175,8 @@
   overflow: auto;
 }
 .tree {
+  --tree-indent: 22px;
+  --tree-columns: 280px minmax(0, 1fr) 72px;
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
@@ -184,7 +184,7 @@
 .th2,
 .rw {
   display: grid;
-  grid-template-columns: minmax(180px, 300px) minmax(0, 1fr) 64px;
+  grid-template-columns: var(--tree-columns);
   gap: 12px;
   align-items: center;
   padding: 0 12px;
@@ -203,10 +203,16 @@
   text-align: right;
 }
 .rw {
-  min-height: 44px;
+  min-height: 38px;
   border-bottom: 1px solid var(--stroke-divider);
   font-size: 14px;
   cursor: pointer;
+}
+.containerRow {
+  background: var(--surface-panel);
+}
+.containerRow .nm {
+  font-weight: 600;
 }
 .rw:hover {
   background: var(--hover-bg);
@@ -237,9 +243,9 @@
   height: 14px;
 }
 .ti {
-  width: 20px;
-  height: 20px;
-  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  width: 14px;
+  height: 14px;
   display: grid;
   place-items: center;
   flex: none;
@@ -247,11 +253,6 @@
 .ti svg {
   width: 13px;
   height: 13px;
-}
-.obj,
-.str,
-.arr {
-  color: var(--text-secondary);
 }
 .nm,
 .val {
@@ -394,11 +395,23 @@
 .find input:focus-visible {
   outline: none;
 }
-@media (max-width: 1050px) {
+@container (max-width: 680px) {
+  .tree {
+    --tree-indent: 14px;
+    --tree-columns: minmax(0, 1.3fr) minmax(0, 1fr) 52px;
+  }
   .th2,
   .rw {
-    grid-template-columns: minmax(180px, 1fr) minmax(120px, 1fr) 60px;
     gap: 8px;
+    padding-inline: 8px;
+  }
+  .k {
+    gap: 4px;
+  }
+}
+@media (pointer: coarse) {
+  .rw {
+    min-height: 44px;
   }
 }
 @media (max-width: 800px) {
@@ -410,13 +423,6 @@
     padding: 24px 0 0;
     border-left: 0;
     border-top: 1px solid var(--stroke-divider);
-  }
-  .toolbar {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-  .tree {
-    min-width: 550px;
   }
   .dataHeader {
     gap: 8px;

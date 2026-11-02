@@ -49,7 +49,7 @@ export function StatePageFrame({
   const topRef = useRef<HTMLDivElement>(null);
   return (
     <div className={styles.scroll} ref={scrollRef} data-testid="state-page-scroll">
-      <div className={styles.page}>
+      <div className={`${styles.bounds} ${styles.page}`}>
         <div className={styles.content} ref={topRef} tabIndex={-1}>
           {children}
         </div>

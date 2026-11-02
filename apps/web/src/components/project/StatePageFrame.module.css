@@ -4,14 +4,25 @@
   overflow: auto;
   color: var(--text-primary);
 }
+.scroll,
+.toolbarViewport {
+  scrollbar-gutter: stable;
+}
+.toolbarViewport {
+  flex: none;
+  overflow: hidden;
+}
+.bounds {
+  width: 100%;
+  max-width: var(--project-page-max-width, 1264px);
+  margin-inline: auto;
+  padding-inline: 24px;
+}
 .page {
   display: flex;
   flex-direction: column;
   min-height: 100%;
-  width: 100%;
-  max-width: var(--project-page-max-width, 1264px);
-  margin: 0 auto;
-  padding: 0 24px 16px;
+  padding-bottom: 16px;
 }
 .content {
   display: flex;
@@ -74,7 +85,7 @@
   outline-offset: 3px;
 }
 @media (max-width: 760px) {
-  .page {
+  .bounds {
     padding-right: 20px;
     padding-left: 20px;
   }
