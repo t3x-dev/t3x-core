@@ -41,7 +41,6 @@ import {
 } from '@/domain/diff/structuredStateDiff';
 import { shortHash } from '@/domain/format/formatters';
 import {
-  getProjectIdCanvasPath,
   getProjectIdHistoryPath,
   getProjectIdRepoPath,
   getProjectIdWorkspacePath,
@@ -541,7 +540,12 @@ export function ProjectStateTab({
     branch: branchFocus,
     returnTo: currentStateReturnTo,
   });
-  const canvasHref = getProjectIdCanvasPath(projectId);
+  const canvasQuery = new URLSearchParams(routeQuery);
+  canvasQuery.set('view', 'canvas');
+  const canvasHref = `${pathname}?${canvasQuery.toString()}`;
+  const snapshotQuery = new URLSearchParams(routeQuery);
+  snapshotQuery.set('view', lastSnapshotView);
+  const snapshotHref = `${pathname}?${snapshotQuery.toString()}`;
   const historicalReturnHref = safeInternalReturnTo(searchParams.get('returnTo'), '');
   const schemaHref = `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ tab: 'schemas', branch: branchFocus }).toString()}`;
   const workspaceHref = getProjectIdWorkspacePath(projectId, { branch: branchFocus });
@@ -877,6 +881,7 @@ export function ProjectStateTab({
               projectId={projectId}
               projectName={projectName}
               snapshotLoading={branchesLoading}
+              stateHref={snapshotHref}
             />
           )}
         </main>
@@ -982,6 +987,7 @@ function StateCanvasView({
   projectId,
   projectName,
   snapshotLoading,
+  stateHref,
 }: {
   branch: string;
   branchHeadHash: string | null;
@@ -989,6 +995,7 @@ function StateCanvasView({
   projectId: string;
   projectName: string;
   snapshotLoading: boolean;
+  stateHref: string;
 }) {
   const canvasProjectId = useCanvasStore((state) => state.projectId);
   const canvasLoading = useCanvasStore((state) => state.loading);
@@ -1035,6 +1042,7 @@ function StateCanvasView({
           focusedBranch={branch}
           focusedCommitHash={focusedCommitHash}
           projectName={projectName}
+          stateHref={stateHref}
         />
       </div>
     </section>

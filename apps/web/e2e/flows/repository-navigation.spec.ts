@@ -49,7 +49,7 @@ test('State opens History and Commit with its inline parent Diff and a complete 
     await expect(page.getByRole('button', { name: 'Switch branches/tags, current branch main' })).toBeVisible();
     await expect(page.getByText('Repository navigation revision', { exact: true })).toBeVisible();
 
-    await page.getByRole('link', { name: 'History', exact: true }).click();
+    await page.getByRole('link', { name: 'History 1', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'History', exact: true })).toBeVisible();
     await expect(page).toHaveURL((url) => url.searchParams.get('branch') === 'main');
 

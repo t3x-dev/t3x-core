@@ -71,11 +71,13 @@ vi.mock('@/components/canvas', () => ({
     focusedBranch,
     focusedCommitHash,
     projectName,
+    stateHref,
   }: {
     embedded?: boolean;
     focusedBranch?: string;
     focusedCommitHash?: string;
     projectName: string;
+    stateHref?: string;
   }) => (
     <div
       data-embedded={String(embedded)}
@@ -84,6 +86,7 @@ vi.mock('@/components/canvas', () => ({
       data-testid="state-canvas-workspace"
     >
       {projectName}
+      {stateHref ? <a href={stateHref}>Back to State</a> : null}
     </div>
   ),
 }));
@@ -957,7 +960,7 @@ describe('ProjectStateTab', () => {
     );
     expect(screen.getByRole('link', { name: 'History canvas' })).toHaveAttribute(
       'href',
-      '/project/proj_test?view=canvas'
+      '/t3x-dev/test-project?view=canvas'
     );
     expect(screen.getByRole('link', { name: 'Propose change' })).toHaveAttribute(
       'href',
@@ -1627,6 +1630,10 @@ describe('ProjectStateTab', () => {
     const canvas = await screen.findByTestId('state-canvas-workspace');
     expect(canvas).toHaveAttribute('data-focused-branch', 'main');
     expect(canvas).toHaveAttribute('data-focused-commit', PRD_COMMIT.hash);
+    expect(screen.getByRole('link', { name: 'Back to State' })).toHaveAttribute(
+      'href',
+      `/t3x-dev/test-project?view=structure&branch=main&commit=${encodeURIComponent(PRD_COMMIT.hash)}`
+    );
   });
 
   it('uses committed workspace draft operations when the commit has no stored YOps log', async () => {
@@ -1924,7 +1931,7 @@ describe('ProjectStateTab', () => {
     );
     expect(screen.getByRole('link', { name: 'History canvas' })).toHaveAttribute(
       'href',
-      '/project/proj_test?view=canvas'
+      '/t3x-dev/test-project?branch=feature%2Fprd-audience&view=canvas'
     );
   });
 
@@ -1966,7 +1973,7 @@ describe('ProjectStateTab', () => {
     );
     expect(screen.getByRole('link', { name: 'History canvas' })).toHaveAttribute(
       'href',
-      '/project/proj_test?view=canvas'
+      '/t3x-dev/test-project?branch=feature%2Fprd-audience&view=canvas'
     );
   });
 });

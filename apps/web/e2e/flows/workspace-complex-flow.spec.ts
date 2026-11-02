@@ -80,12 +80,18 @@ async function includeMaterial(
   expect(response.status(), JSON.stringify(payload)).toBe(201);
 }
 
-function watchRelevantBrowserErrors(page: Page): string[] {
+function watchRelevantBrowserErrors(page: Page, projectId: string, workspaceId: string): string[] {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
   page.on('response', (response) => {
     if (response.status() < 400) return;
     const url = response.url();
+    // An unbound Workspace has no optional saved Schema edit candidate.
+    if (
+      response.status() === 404 &&
+      response.request().method() === 'GET' &&
+      url === `${API_BASE}/projects/${projectId}/schema-studio/edit-candidates/${encodeURIComponent(workspaceId)}`
+    ) return;
     if (!/\/api\/v1\/(projects|materials|pins|workspaces|yops|branches|commits)/.test(url)) {
       return;
     }
@@ -136,7 +142,7 @@ test('complex workspace: multiple sources flow through authoring and a safe revi
   const projectName = `Workspace complex flow ${token}`;
   const { projectId } = await createTestProject(request, projectName);
   const workspaceId = 'workspace_branch:main';
-  const browserErrors = watchRelevantBrowserErrors(page);
+  const browserErrors = watchRelevantBrowserErrors(page, projectId, workspaceId);
 
   try {
     for (const source of COMPLEX_SOURCES) {
