@@ -22,7 +22,7 @@ export function useStudioPreview(
     const current = ++epoch.current;
     setResult(undefined);
     const [target, selection] = JSON.parse(key) as [string, StudioPreviewInput];
-    if (!selection.candidateIds.length) return;
+    if (!selection.candidateIds.length && !selection.workspaceId) return;
     void previewStudioSelection(target, selection).then(
       (data) => {
         if (current === epoch.current) setResult({ key, data });
@@ -43,7 +43,7 @@ export function useStudioPreview(
   return {
     data: current?.data,
     error: current?.error,
-    loading: input.candidateIds.length > 0 && !current,
+    loading: (input.candidateIds.length > 0 || !!input.workspaceId) && !current,
     refresh: () => setRetry((value) => value + 1),
   };
 }

@@ -42,6 +42,7 @@ import { resolveStudioSource } from './schema-studio';
 import { previewStudio, StudioError } from './schema-studio-preview';
 import { buildAuthoringEffect, workspaceAuthoringState } from './workspace-authoring';
 import { workspaceProvenance } from './workspace-provenance';
+import { hasNoWorkspaceBusinessContent } from './workspace-schema-content';
 import {
   resolveCompositionArtifacts,
   resolveCompositionArtifactsV2,
@@ -214,17 +215,23 @@ export async function previewWorkspaceSchemaPreparation(
     rootKey
   );
   const beforeContent = schemaContentFromDocument(before as Record<string, unknown>, rootKey);
-  const report = validateTree({
-    schema: target.schema,
-    tree: afterContent.tree as never,
-    relations: afterContent.relations,
-    provenanceByPath: await workspaceProvenance(
-      db,
-      projectId,
-      workspace,
-      afterContent.tree as never
-    ),
-  });
+  const schemaOnly =
+    hasNoWorkspaceBusinessContent(ledger.base, rootKey) &&
+    hasNoWorkspaceBusinessContent(before, rootKey) &&
+    hasNoWorkspaceBusinessContent(migration.document, rootKey);
+  const report = schemaOnly
+    ? { valid: true, ready: true, errors: [], gaps: [] }
+    : validateTree({
+        schema: target.schema,
+        tree: afterContent.tree as never,
+        relations: afterContent.relations,
+        provenanceByPath: await workspaceProvenance(
+          db,
+          projectId,
+          workspace,
+          afterContent.tree as never
+        ),
+      });
   const issues: Array<{ code: string; path: string; message: string }> = [
     ...report.errors,
     ...report.gaps,
@@ -273,6 +280,7 @@ export async function previewWorkspaceSchemaPreparation(
     operations: migration.operations,
   });
   const view = SchemaPreparationPreviewSchema.parse({
+    contentValidation: schemaOnly ? 'not_applicable' : 'required',
     previewHash,
     workspaceRevision: draft.revision,
     compositionRevision: ledger.compositionRevision,
@@ -467,6 +475,18 @@ export async function prepareWorkspaceSchema(
             requestDigest,
             source: prepared.source,
             previewHash: input.previewHash,
+            ...('report' in prepared.target
+              ? {
+                  diagnostics: {
+                    schemaHash: prepared.target.schemaHash,
+                    reviewHash: prepared.target.reviewHash,
+                    sources: prepared.target.sources,
+                    report: prepared.target.report,
+                    adoption: prepared.target.adoption,
+                    impact: prepared.target.impact,
+                  },
+                }
+              : {}),
             actionId,
             actor,
             request: input,

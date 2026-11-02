@@ -14,7 +14,7 @@ vi.mock('@/commands/conversations', () => ({
 }));
 
 vi.mock('@/queries/conversations', () => ({
-  fetchConversations: vi.fn().mockResolvedValue({ conversations: [], total: 0 }),
+  fetchAllConversations: vi.fn().mockResolvedValue([]),
 }));
 
 const nodeActionMocks = vi.hoisted(() => ({

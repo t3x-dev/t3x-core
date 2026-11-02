@@ -284,6 +284,13 @@ function CheckDetails({
             </Link>
           ) : null}
           {view.workspace ? (
+            <Link
+              href={`${workspaceReviewHref(projectId, view.workspace, { snapshotId: view.snapshot || undefined, branch: view.branch })}&schemaDiagnostics=1`}
+            >
+              Schema checks & impact <ArrowRight size={14} />
+            </Link>
+          ) : null}
+          {view.workspace ? (
             <Link href={`${base}?${workspaceQuery}`}>
               Open current Workspace <ArrowRight size={14} />
             </Link>

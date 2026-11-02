@@ -43,6 +43,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
     hasMainCommit: false,
     latestMainCommitId: undefined,
     hasDbPositions: false,
+    pendingConversations: [],
     projectId: null,
     loading: false,
     loadError: null,

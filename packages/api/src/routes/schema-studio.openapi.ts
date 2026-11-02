@@ -46,6 +46,7 @@ import {
   previewStudio,
   readStudioComposition,
   StudioError,
+  workspaceStudioSelection,
 } from '../lib/schema-studio-preview';
 import { workspaceAuthoringState } from '../lib/workspace-authoring';
 import { resolveWorkspaceSchemaEditBasis } from '../lib/workspace-schema-edit-basis';
@@ -347,6 +348,16 @@ schemaStudioRoutes.openapi(saveSchemaEditCandidateRoute, async (c) => {
 
   try {
     let composition = input.composition;
+    if (
+      !input.candidateIds.length &&
+      (!input.schemaDefinition ||
+        input.composition ||
+        Object.keys(input.localContribution ?? {}).length)
+    )
+      throw new StudioError(
+        'INVALID_REQUEST',
+        'Snapshot editing requires the complete Schema definition without a new source composition.'
+      );
     if (!input.rebase && !composition) {
       const draft = await findWorkspaceDraft(db, projectId, workspaceId);
       const stored = draft?.workspace_state?.schemaEditCandidate;
@@ -356,15 +367,25 @@ schemaStudioRoutes.openapi(saveSchemaEditCandidateRoute, async (c) => {
       if (base?.kind === 'composition')
         composition = await readStudioComposition(db, projectId, base);
     }
-    let selection = await compileStudioSelection(
-      c,
-      db,
-      projectId,
-      input.candidateIds,
-      undefined,
-      undefined,
-      composition
-    );
+    const boundDraft = !input.candidateIds.length
+      ? await findWorkspaceDraft(db, projectId, workspaceId)
+      : null;
+    if (!input.candidateIds.length && !boundDraft?.workspace_state)
+      throw new StudioError('NOT_FOUND', 'Target Workspace is unavailable.');
+    const bound = boundDraft?.workspace_state
+      ? await workspaceStudioSelection(c, db, projectId, boundDraft.workspace_state)
+      : null;
+    let selection =
+      bound?.selection ??
+      (await compileStudioSelection(
+        c,
+        db,
+        projectId,
+        input.candidateIds,
+        undefined,
+        undefined,
+        composition
+      ));
     const principal = getProjectAccessPrincipal(c);
     const origin: WorkspaceSchemaEditOrigin = principal
       ? {
@@ -375,7 +396,18 @@ schemaStudioRoutes.openapi(saveSchemaEditCandidateRoute, async (c) => {
           },
         }
       : { channel: input.origin, actor: { kind: 'local', id: 'auth-disabled-local' } };
-    let guard: Parameters<typeof saveStudioEditCandidate>[5];
+    let guard: Parameters<typeof saveStudioEditCandidate>[5] = boundDraft?.workspace_state
+      ? {
+          workspaceRevision: boundDraft.revision,
+          assistantSchemaSettings: boundDraft.workspace_state.assistantSchemaSettings,
+        }
+      : undefined;
+    if (bound?.basis && input.baseSchemaHash === bound.basis.schemaHash)
+      guard = {
+        workspaceRevision: boundDraft!.revision,
+        assistantSchemaSettings: boundDraft!.workspace_state!.assistantSchemaSettings,
+        basis: bound.basis,
+      };
     if (!input.rebase && input.schemaDefinition && input.baseSchemaHash !== selection.schemaHash) {
       const draft = await findWorkspaceDraft(db, projectId, workspaceId);
       if (!draft?.workspace_state)

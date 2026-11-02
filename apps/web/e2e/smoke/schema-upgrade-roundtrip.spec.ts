@@ -171,19 +171,18 @@ test('reviews a real published upgrade and retains the exact target Workspace th
     });
     await page.getByLabel('Target Workspace').selectOption(targetWorkspaceId);
     await expect(page.getByLabel('Target Workspace')).toHaveValue(targetWorkspaceId);
-    await expect(page.getByRole('button', { name: 'Review Schema changes', exact: true })).toBeEnabled();
-    await page.getByRole('button', { name: 'Review Schema changes', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'Review Schema changes' });
-    await expect(dialog).toContainText('Branch workspace: target');
-    await expect(dialog).toContainText('system_architecture');
-    await page.screenshot({
-      path: testInfo.outputPath('upgrade-review.png'),
-      animations: 'disabled',
-    });
-    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.getByRole('button', { name: 'Review changes', exact: true })).toBeEnabled();
+    await page.getByRole('button', { name: 'Review changes', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Workspace Review' })).toBeVisible();
+    await expect(page).toHaveURL((url) => url.searchParams.get('workspace') === targetWorkspaceId && url.searchParams.get('branch') === 'target');
+    await expect(page.getByRole('region', { name: 'Schema review' })).toContainText('system_architecture');
+    await page.screenshot({ path: testInfo.outputPath('upgrade-review.png'), animations: 'disabled' });
+    await page.getByRole('link', { name: 'Edit in Compose', exact: true }).click();
     const current = await workspace(targetWorkspaceId);
-    expect(current.schemaBindings[0].studioSources[0].version).toBe('1.0.0');
-    expect(current.schemaReview.verdict).toBe('needs_review');
+    // Review prepares the upgraded Draft but cannot advance committed history.
+    expect(current.schemaBindings[0]).toMatchObject({ mode: 'pinned', canonicalName, version: '2.0.0' });
+    expect(current.baseCommitHash).toBeNull();
+    expect(current.lastCommitHash ?? null).toBeNull();
     expect((await workspace(unrelatedWorkspaceId)).schemaBindings).toEqual([]);
     const candidates = (await (await request.get(`${root}/schema-studio/candidates`)).json()).data
       .items;
@@ -196,6 +195,7 @@ test('reviews a real published upgrade and retains the exact target Workspace th
     await expect(page.getByRole('region', { name: 'Workspace detail' })).toContainText(
       'Branch workspace: target'
     );
+    await page.getByRole('navigation', { name: 'Workspace tools' }).getByRole('button', { name: 'Structure', exact: true }).click();
     await expect(page.getByLabel('Workspace schema')).not.toHaveValue('');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({

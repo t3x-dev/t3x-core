@@ -83,3 +83,30 @@ describe('Workspace Schema edit candidate use case', () => {
     expect(recovered.localContribution).toEqual({ nodes: {} });
   });
 });
+
+it('requires an immutable composition Base for source-free authoring', () => {
+  expect(() => saveWorkspaceSchemaEditCandidate(null, { ...createInput, baseSources: [] })).toThrow(
+    'composition Base snapshot'
+  );
+  const created = saveWorkspaceSchemaEditCandidate(null, {
+    ...createInput,
+    baseSources: [],
+    localContribution: {},
+    authoringDraft: {
+      schema: 't3x.application/workspace-schema-authoring-draft/v1',
+      revision: 1,
+      base: {
+        kind: 'composition',
+        compositionId: 'blank',
+        compositionRevision: 1,
+        compositionHash: source.hash,
+        schemaHash: source.hash,
+      },
+      effect: { profile: 'yops.ops.v1', operations: [] },
+      resultSchemaHash: source.hash,
+    },
+  });
+  expect(created.kind).toBe('created');
+  if (created.kind === 'conflict') throw new Error(created.message);
+  expect(parseWorkspaceSchemaEditCandidate(created.candidate).baseSources).toEqual([]);
+});

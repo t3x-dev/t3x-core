@@ -6,6 +6,17 @@ import { previewStudioSelection } from '@/infrastructure/schemaStudio';
 
 vi.mock('@/infrastructure/schemaStudio', () => ({ previewStudioSelection: vi.fn() }));
 describe('Studio preview ownership', () => {
+  it('loads a bound Workspace definition without any picker sources', async () => {
+    vi.mocked(previewStudioSelection).mockResolvedValueOnce({ schemaHash: 'snapshot' } as never);
+    const { result } = renderHook(() =>
+      useStudioPreview('p', { candidateIds: [], workspaceId: 'w' }, 4)
+    );
+    await waitFor(() => expect(result.current.data?.schemaHash).toBe('snapshot'));
+    expect(previewStudioSelection).toHaveBeenLastCalledWith('p', {
+      candidateIds: [],
+      workspaceId: 'w',
+    });
+  });
   it('discards an old selection response and invalidates a review on Workspace revision change', async () => {
     let finishOld: (value: unknown) => void = () => {};
     vi.mocked(previewStudioSelection)

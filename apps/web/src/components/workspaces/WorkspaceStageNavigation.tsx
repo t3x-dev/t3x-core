@@ -4,12 +4,20 @@ import styles from './WorkspaceStageHeader.module.css';
 export function WorkspaceStageNavigation({
   mode,
   onModeChange,
+  label = 'Workspace stage',
+  reviewDisabled = false,
+  hidden = false,
 }: {
   mode?: 'compose' | 'review';
   onModeChange: (mode: 'compose' | 'review') => void;
+  label?: string;
+  reviewDisabled?: boolean;
+  hidden?: boolean;
 }) {
+  if (hidden) return null;
+
   return (
-    <div aria-label="Workspace stage" className={styles.navigation} role="tablist">
+    <div aria-label={label} className={styles.navigation} role="tablist">
       <button
         aria-selected={mode === 'compose'}
         onClick={() => onModeChange('compose')}
@@ -20,6 +28,7 @@ export function WorkspaceStageNavigation({
       </button>
       <button
         aria-selected={mode === 'review'}
+        disabled={reviewDisabled}
         onClick={() => onModeChange('review')}
         role="tab"
         type="button"

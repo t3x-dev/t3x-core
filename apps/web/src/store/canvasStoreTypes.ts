@@ -2,6 +2,7 @@ import type { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/rea
 import type { MergeState } from '../types/merge';
 import type {
   CanvasNodeData,
+  CanvasPendingConversation,
   ConversationConstraints,
   DraftConstraintOverrides,
   EmbeddedLeaf,
@@ -53,6 +54,7 @@ export interface NodeSlice {
     hasMainCommit: boolean;
     latestMainCommitId: string | undefined;
     hasDbPositions: boolean;
+    pendingConversations: CanvasPendingConversation[];
   }) => void;
   mergeProjectData: (input: {
     nodes: Node<CanvasNodeData>[];
@@ -60,6 +62,7 @@ export interface NodeSlice {
     hasMainCommit: boolean;
     latestMainCommitId: string | undefined;
     hasDbPositions: boolean;
+    pendingConversations: CanvasPendingConversation[];
   }) => void;
   setLeavesByCommit: (leavesByCommit: Map<string, EmbeddedLeaf[]>) => void;
   addToNodes: (node: Node<CanvasNodeData>) => void;
@@ -89,6 +92,7 @@ export type CanvasState = MergeSlice &
     // True when at least one node was loaded with a DB-saved position.
     // Used by auto-layout effect: skip ELK if user/ELK has previously set positions.
     hasDbPositions: boolean;
+    pendingConversations: CanvasPendingConversation[];
     // Project data loading state
     projectId: string | null;
     loading: boolean;

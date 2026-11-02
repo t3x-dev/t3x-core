@@ -2,8 +2,11 @@
 /**
  * Tests for useApi hooks (useApiCall generic + specific hooks)
  */
+
+import { renderHook as renderChangingHook, waitFor } from '@testing-library/react';
 import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from './deferred';
 import { cleanupRoots, renderHook, waitForHook } from './renderHook';
 
 // Mock the api module before importing hooks
@@ -307,6 +310,42 @@ describe('useApiCall error handling', () => {
 });
 
 describe('useApiCall refetch', () => {
+  it('does not expose or restore data from a previous project', async () => {
+    const old = deferred<never>();
+    vi.mocked(api.getProject)
+      .mockResolvedValueOnce({ project_id: 'a' } as never)
+      .mockReturnValueOnce(old.promise)
+      .mockResolvedValueOnce({ project_id: 'b' } as never);
+    const { result, rerender, unmount } = renderChangingHook(({ id }) => useProject(id), {
+      initialProps: { id: 'a' },
+    });
+    await waitFor(() => expect(result.current.data?.project_id).toBe('a'));
+    act(() => {
+      result.current.refetch();
+    });
+    rerender({ id: 'b' });
+    expect(result.current.data).toBeNull();
+    await waitFor(() => expect(result.current.data?.project_id).toBe('b'));
+    await act(async () => old.resolve({ project_id: 'a' } as never));
+    expect(result.current.data?.project_id).toBe('b');
+    unmount();
+  });
+
+  it('does not finish loading when a superseded refresh settles', async () => {
+    const old = deferred<never>();
+    const latest = deferred<never>();
+    vi.mocked(api.getProject).mockReturnValueOnce(old.promise).mockReturnValueOnce(latest.promise);
+    const { result } = renderHook(() => useProject('a'));
+    act(() => {
+      result.current.refetch();
+    });
+    await act(async () => old.reject(new Error('old failure')));
+    expect(result.current.loading).toBe(true);
+    expect(result.current.error).toBeNull();
+    await act(async () => latest.resolve({ project_id: 'a' } as never));
+    expect(result.current.loading).toBe(false);
+  });
+
   it('re-fetches data when refetch is called', async () => {
     vi.mocked(api.checkHealth).mockResolvedValue({ status: 'ok', version: '1.0.0', uptime: 1 });
 

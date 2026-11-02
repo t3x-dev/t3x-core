@@ -130,6 +130,63 @@ function preparation(posture: 'source_only' | 'guided' | 'recommend' = 'guided')
 }
 
 describe('resolveApplicableTransitionPolicy', () => {
+  it.each([
+    'optional',
+    'required',
+  ] as const)('preserves the branch %s validation rule when only establishing Schema', (requirement) => {
+    const original = refPolicyBinding({ allowSelfApproval: false, runner: 'required' });
+    const ref = createAcceptancePolicyResource({
+      uri: 't3x://policies/initial-schema',
+      policy: {
+        ...original.policy,
+        checks: {
+          ...original.policy.checks,
+          validation: { ...original.policy.checks.validation, requirement },
+        },
+      },
+    });
+    const review = {
+      schema: 't3x.application/workspace-schema-review/v1',
+      contentValidation: 'not_applicable',
+      base: { status: 'unbound', schemaHash: null, definition: null, bindings: [] },
+      draft: { status: 'bound', schemaHash: DIGEST, definition: { nodes: {} }, bindings: [] },
+      changes: [],
+      actionCount: 0,
+      baseContent: {},
+      draftContent: {},
+    };
+    const resolve = (schemaReview: unknown) =>
+      resolveApplicableTransitionPolicy({
+        refPolicyBinding: ref,
+        requestKind: 'structured_yops',
+        preparationFacts: {
+          schema: 't3x.application/workspace-authoring-preparation/v1',
+          ledger: { actions: [] },
+          schemaReview,
+        } as unknown as ProtocolValue,
+      });
+    expect(resolve(review)).toEqual({
+      mode: 'ref_policy',
+      policy: ref.policy,
+      resource: ref.resource,
+      refPolicyResource: ref.resource,
+    });
+    // The marker alone is not authority to waive validation of real content.
+    for (const changed of [
+      { baseContent: { candidate: { record: {} } } },
+      { draftContent: { candidate: { record: {} } } },
+      { draftContent: { unrelated: {} } },
+      { base: { ...review.base, status: 'unknown' } },
+      { base: review.draft },
+      { contentValidation: undefined },
+    ]) {
+      const result = resolve({ ...review, ...changed });
+      expect(result.mode).toBe('workspace_schema_overlay');
+      expect(result.policy.checks.validation.requirement).toBe('required');
+      expect(result.policy.authorization).toEqual(ref.policy.authorization);
+      expect(result.policy.checks.runner).toEqual(ref.policy.checks.runner);
+    }
+  });
   it('requires Schema evidence for a complete bound Workspace Review without weakening branch rules', () => {
     const original = refPolicyBinding({ allowSelfApproval: false });
     const ref = createAcceptancePolicyResource({

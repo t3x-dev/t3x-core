@@ -5,6 +5,7 @@ import {
   ArrowRight,
   ChevronDown,
   ChevronRight,
+  Clock3,
   FileText,
   GitBranch,
   GitCommit,
@@ -13,11 +14,18 @@ import {
   MessageSquarePlus,
   Plus,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { memo, useEffect, useRef, useState } from 'react';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { commitHashLabel } from '@/domain/format/formatters';
+import {
+  getBranchCssVariables,
+  getBranchVisual,
+  getCanvasNodeBranch,
+} from '@/domain/canvas/branchVisuals';
+import { commitHashLabel, shortHash } from '@/domain/format/formatters';
+import { getProjectIdWorkspacePath } from '@/domain/project/repoPath';
 import { useConversationContext } from '@/hooks/conversations/useConversationContext';
 import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
 import { useTerminology } from '@/hooks/shared/useTerminology';
@@ -27,7 +35,7 @@ import { useProjectStore } from '@/store/projectStore';
 import type { CanvasNodeData } from '@/types/nodes';
 import { cn } from '@/utils/cn';
 import { nodeEnter, reducedMotion } from '@/utils/motion';
-import { glass, toneAccent, toneGlow } from '@/utils/theme';
+import { toneAccent } from '@/utils/theme';
 
 import { constellationColors, useSemanticZoom } from './CanvasNodeUtils';
 import { NodeLeavesSection } from './NodeLeavesSection';
@@ -38,6 +46,7 @@ import {
   type NodeSemanticKind,
   NodeSourcesHeader,
 } from './node-parts';
+import vividStyles from './StateCanvasVivid.module.css';
 
 // Re-export LEAF_TYPES for backward compatibility
 export { LEAF_TYPES } from './CanvasNodeUtils';
@@ -75,49 +84,6 @@ function formatBranchLabel(branchType: CanvasNodeData['branchType'], branchName?
   const raw = branchName?.trim();
   if (!raw) return 'branch';
   return /^branch\b/i.test(raw) ? raw : `branch ${raw}`;
-}
-
-type TreeSummaryNode = {
-  children?: TreeSummaryNode[];
-  key?: string;
-  slots?: Record<string, unknown>;
-};
-
-function flattenTrees(trees: TreeSummaryNode[] = []): TreeSummaryNode[] {
-  const flattened: TreeSummaryNode[] = [];
-  const visit = (tree: TreeSummaryNode) => {
-    flattened.push(tree);
-    for (const child of tree.children ?? []) visit(child);
-  };
-  for (const tree of trees) visit(tree);
-  return flattened;
-}
-
-function findTree(trees: TreeSummaryNode[], key: string): TreeSummaryNode | undefined {
-  return flattenTrees(trees).find((tree) => tree.key === key);
-}
-
-function inferSemanticSummary(data: CanvasNodeData): { label: string; meta: string } | null {
-  const trees = (data.commit?.content?.trees ?? []) as TreeSummaryNode[];
-  if (trees.length === 0) return null;
-
-  const rootKey = trees[0]?.key ?? 'state tree';
-  const nodeCount = flattenTrees(trees).length;
-  const destination = trees[0]?.slots?.destination;
-  if (
-    data.branchType === 'branch' &&
-    typeof destination === 'string' &&
-    destination.toLowerCase().includes('hawaii')
-  ) {
-    return { label: 'destination adds Hawaii', meta: '~1' };
-  }
-  if (findTree(trees, 'food_ideas')) {
-    return { label: '+ food_ideas subtree', meta: '+1' };
-  }
-  return {
-    label: `initial ${rootKey} tree`,
-    meta: `${nodeCount} node${nodeCount === 1 ? '' : 's'}`,
-  };
 }
 
 // Unit Node - 3-Section Layout: Sources → Commit → Leaves
@@ -168,7 +134,8 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const semanticKind: NodeSemanticKind = isCommitted ? 'committed' : 'pending';
 
   const branchLabel = formatBranchLabel(data.branchType, data.branchName);
-  const semanticSummary = inferSemanticSummary(data);
+  const branchName = getCanvasNodeBranch(data);
+  const branchCssVariables = isCommitted ? getBranchCssVariables(branchName) : undefined;
   const commitHash = data.commit?.hash || data.commitHash || '';
   const hashDisplay = commitHash ? commitHashLabel(commitHash) : '';
 
@@ -236,8 +203,20 @@ const UnitNode = memo(function UnitNode(props: Props) {
 
   // Constellation mode — render minified dot at low zoom
   if (isConstellation) {
-    const dotType = isStaging ? 'staging' : isCommitted ? 'committed' : 'conversation';
-    const color = constellationColors[dotType] || constellationColors.committed;
+    const dotType =
+      isStaging || data.pendingConversationGroup
+        ? 'staging'
+        : isCommitted
+          ? 'committed'
+          : 'conversation';
+    const color = isCommitted
+      ? getBranchVisual(branchName).accent
+      : constellationColors[dotType] || constellationColors.committed;
+    const constellationLabel = commitHash
+      ? shortHash(commitHash)
+      : data.pendingConversationGroup
+        ? `${data.pendingConversationGroup.conversations.length} pending`
+        : (data.entryId?.slice(0, 7) ?? 'pending');
     return (
       <>
         <Handle
@@ -248,23 +227,135 @@ const UnitNode = memo(function UnitNode(props: Props) {
         <div
           className="constellation-dot"
           style={{
-            width: 16,
-            height: 16,
+            width: 50,
+            height: 50,
             borderRadius: '50%',
             backgroundColor: color,
-            boxShadow: `0 0 8px color-mix(in srgb, ${color} 28%, transparent), 0 0 2px color-mix(in srgb, ${color} 55%, transparent)`,
+            boxShadow: `0 0 0 4px var(--surface-card), 0 0 0 8px ${color}, 0 0 16px color-mix(in srgb, ${color} 32%, transparent)`,
+            position: 'relative',
             transition: 'box-shadow 0.3s ease',
           }}
           role="treeitem"
           tabIndex={0}
           aria-label={`${data.title} (minified)`}
           aria-selected={selected}
-        />
+        >
+          <span
+            aria-hidden="true"
+            style={{
+              color: 'var(--text-secondary)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 28,
+              fontWeight: 700,
+              left: '50%',
+              lineHeight: 1,
+              position: 'absolute',
+              textShadow: '0 1px 3px var(--surface-card), 0 -1px 3px var(--surface-card)',
+              top: 68,
+              transform: 'translateX(-50%)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {constellationLabel}
+          </span>
+        </div>
         <Handle
           type="source"
           position={Position.Right}
           style={{ opacity: 0, width: 1, height: 1 }}
         />
+      </>
+    );
+  }
+
+  if (data.pendingConversationGroup) {
+    const { branch, conversations } = data.pendingConversationGroup;
+    const pendingBranchLabel = branch.toUpperCase();
+    return (
+      <>
+        <Handle type="target" position={Position.Left} style={targetHandleStyle} />
+        <motion.div
+          variants={prefersReducedMotion ? reducedMotion.scaleIn : nodeEnter}
+          initial="initial"
+          animate="animate"
+          whileHover={
+            prefersReducedMotion
+              ? undefined
+              : { y: -1, transition: { duration: 0.15, ease: [0.16, 1, 0.3, 1] } }
+          }
+          className={cn(
+            'relative group w-72 overflow-hidden border border-[var(--stroke-default)] elevation-1',
+            vividStyles.commitCard,
+            vividStyles.pendingCard,
+            vividStyles.pendingGroupCard,
+            selected && 'ring-2 ring-[var(--accent-pending)]/45'
+          )}
+          role="treeitem"
+          aria-label={`${conversations.length} pending conversation${conversations.length === 1 ? '' : 's'} on ${branch}`}
+          aria-selected={selected}
+          data-node-type="pending-group"
+          data-node-semantic-kind="pending"
+          data-branch-color="pending"
+          tabIndex={0}
+        >
+          <div className={vividStyles.nodeBody}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                <span className={vividStyles.pendingGroupIcon}>
+                  <Clock3 size={20} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h4 className={vividStyles.nodeMessage}>
+                    {conversations.length} pending conversation
+                    {conversations.length === 1 ? '' : 's'}
+                  </h4>
+                  <span className={vividStyles.nodeSubtitle}>Waiting on {branch}</span>
+                </div>
+              </div>
+              <span
+                className={cn(vividStyles.pendingGroupBranch, 'nodrag cursor-pointer')}
+                data-branch-highlight={branch}
+                title={`Highlight ${branch} branch`}
+              >
+                {pendingBranchLabel}
+              </span>
+            </div>
+
+            <div className={vividStyles.pendingConversationList}>
+              {conversations.map((conversation) => {
+                const content = (
+                  <>
+                    <span className="min-w-0 flex-1 truncate font-semibold">
+                      {conversation.title}
+                    </span>
+                    <span className="shrink-0 text-[10px] text-[var(--text-tertiary)]">
+                      {conversation.turnsCount} turn{conversation.turnsCount === 1 ? '' : 's'}
+                    </span>
+                  </>
+                );
+                return projectId ? (
+                  <Link
+                    className={vividStyles.pendingConversationRow}
+                    href={getProjectIdWorkspacePath(projectId, {
+                      branch,
+                      sourceConversationId: conversation.conversationId,
+                    })}
+                    key={conversation.conversationId}
+                  >
+                    {content}
+                  </Link>
+                ) : (
+                  <div
+                    className={vividStyles.pendingConversationRow}
+                    key={conversation.conversationId}
+                  >
+                    {content}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </motion.div>
       </>
     );
   }
@@ -295,22 +386,19 @@ const UnitNode = memo(function UnitNode(props: Props) {
         }
         whileTap={prefersReducedMotion ? undefined : { scale: 0.995 }}
         className={cn(
-          'relative group w-72 rounded-xl overflow-visible elevation-1',
-          glass.cardNode,
-          glass.highlight,
-          // Hover
-          'hover:shadow-[var(--fx-shadow-hover)]',
+          'relative group w-72 overflow-visible border border-[var(--stroke-default)] elevation-1',
+          vividStyles.commitCard,
+          isStaging && vividStyles.pendingCard,
           // Selected state
-          selected && cn('ring-2', toneAccent.commit.ring),
+          selected && cn(vividStyles.commitCardSelected, 'ring-2', toneAccent.commit.ring),
           // Highlight overrides
           data.highlightMode === 'main' && 'ring-2 ring-[var(--accent-commit)]/50',
           data.highlightMode === 'branch' && 'ring-2 ring-[var(--accent-commit)]/35',
-          data.highlightMode === 'node' && 'ring-2 ring-[var(--accent-commit)]/50',
           nodeGlowClass
         )}
         style={{
+          ...branchCssVariables,
           willChange: 'transform',
-          ...(selected ? { boxShadow: toneGlow.commit } : {}),
           ...(data.dimmed
             ? { opacity: 0.3, transition: 'opacity 200ms ease' }
             : { transition: 'opacity 200ms ease' }),
@@ -320,6 +408,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
         aria-selected={selected}
         data-node-type={isStaging ? 'conversation' : 'commit'}
         data-node-semantic-kind={semanticKind}
+        data-branch-color={isCommitted ? branchName.toLowerCase() : 'pending'}
         data-intro-target={
           isCommitted
             ? data.leaves && data.leaves.length > 0
@@ -363,66 +452,74 @@ const UnitNode = memo(function UnitNode(props: Props) {
         {/* ═══════════════════════════════════════════
             SECTION 2: COMMIT (main content)
             ═══════════════════════════════════════════ */}
-        <div className="px-3 py-3">
+        <div className={vividStyles.nodeBody}>
           {/* Row 1: Title + Branch Badge */}
-          <div className="flex items-start justify-between gap-2 mb-[var(--space-item)]">
-            <div className="flex items-center gap-1 flex-1 min-w-0">
-              <NodeKindIcon kind={semanticKind} />
-              <h4 className="m-0 text-sm font-semibold text-[var(--text-primary)] leading-snug flex-1 min-w-0 truncate">
-                {data.title}
-              </h4>
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <span
+                data-kind-shape={isCommitted ? 'solid-circle' : undefined}
+                data-testid={isCommitted ? 'node-kind-committed' : undefined}
+                title={isCommitted ? 'Commit marker' : undefined}
+                className={cn(isCommitted && vividStyles.nodeIcon)}
+              >
+                {isCommitted ? <GitCommit size={20} /> : <NodeKindIcon kind={semanticKind} />}
+              </span>
+              <div className="min-w-0 flex-1">
+                <h4 className={vividStyles.nodeMessage}>{data.title}</h4>
+                {isCommitted ? (
+                  <span className={vividStyles.nodeSubtitle}>Committed to {branchLabel}</span>
+                ) : null}
+              </div>
             </div>
-            <TooltipProvider delayDuration={200}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    className={cn(
-                      'flex-shrink-0 max-w-[80px] truncate text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-transparent inline-flex items-center gap-0.5',
-                      data.branchType === 'main'
-                        ? cn(toneAccent.commit.border, toneAccent.commit.text)
-                        : cn(toneAccent.branch.border, toneAccent.branch.text)
-                    )}
-                  >
-                    {data.branchType === 'main' ? <GitCommit size={10} /> : <GitBranch size={10} />}
+            {!isCommitted ? (
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      className={cn(
+                        'nodrag cursor-pointer flex-shrink-0 max-w-[80px] truncate text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-transparent inline-flex items-center gap-0.5',
+                        data.branchType === 'main'
+                          ? cn(toneAccent.commit.border, toneAccent.commit.text)
+                          : cn(toneAccent.branch.border, toneAccent.branch.text)
+                      )}
+                      data-branch-highlight={branchName}
+                      title={`Highlight ${branchName} branch`}
+                    >
+                      {data.branchType === 'main' ? (
+                        <GitCommit size={10} />
+                      ) : (
+                        <GitBranch size={10} />
+                      )}
+                      {branchLabel}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">
                     {branchLabel}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">
-                  {branchLabel}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : null}
           </div>
 
           {/* Row 2: Commit identity (committed only, intentionally non-interactive) */}
           {isCommitted && commitHash && (
-            <span
-              className="nodrag mb-1 inline-flex max-w-full items-center gap-1 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-1.5 py-0.5 text-[11px] text-[var(--text-tertiary)]"
-              title={`Commit ${hashDisplay}`}
-            >
-              <span className="truncate font-mono">{hashDisplay}</span>
-            </span>
-          )}
-
-          {/* B-8: Stats line (always visible in collapsed view) */}
-          {semanticSummary ? (
-            <div className="mb-[var(--space-item)] flex items-center justify-between gap-2 rounded-md bg-[var(--surface-muted)] px-2 py-1.5 text-xs text-[var(--text-secondary)]">
-              <span className="min-w-0 truncate">{semanticSummary.label}</span>
-              <span className="shrink-0 font-mono text-[11px] text-[var(--text-tertiary)]">
-                {semanticSummary.meta}
+            <div className="nodrag flex items-center justify-between gap-3">
+              <span className={vividStyles.hash} title={`Commit ${hashDisplay}`}>
+                <span className="truncate font-mono font-semibold">{hashDisplay}</span>
+              </span>
+              <span
+                className={cn(vividStyles.branchBadge, 'nodrag cursor-pointer')}
+                data-branch-highlight={branchName}
+                title={`Highlight ${branchName} branch`}
+              >
+                <span className="size-2 rounded-full bg-current" /> {branchLabel}
               </span>
             </div>
-          ) : (
-            nodeCount > 0 && (
-              <div className="mb-[var(--space-item)] text-xs text-[var(--text-secondary)]">
-                {nodeCount} tree{nodeCount !== 1 ? 's' : ''}
-              </div>
-            )
           )}
 
           {/* Import source badge */}
           {data.importSource && (
-            <div className="flex items-center gap-1 mb-[var(--space-item)]">
+            <div className="flex items-center gap-1">
               <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-[var(--status-info)]/30 text-[var(--status-info)] bg-[var(--status-info-muted)]">
                 {data.importSource.source_type === 'url' ? (
                   <Globe size={10} />
@@ -447,7 +544,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
               data-action="next-step"
               data-intro-target={!isCommitted ? 'canvas-create-commit' : undefined}
               className={cn(
-                'w-full flex items-center justify-center gap-1.5 px-3 py-1.5 mb-[var(--space-item)] rounded-md text-xs font-medium transition-colors nodrag',
+                'w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors nodrag',
                 nextStepToneClass
               )}
               onClick={(e) => {
@@ -517,11 +614,6 @@ const UnitNode = memo(function UnitNode(props: Props) {
             isDetail={isDetail}
             prefersReducedMotion={prefersReducedMotion}
           />
-        )}
-        {isCommitted && (!data.leaves || data.leaves.length === 0) && (
-          <div className="flex items-center border-t border-[var(--stroke-divider)] px-3 py-2 text-[11px] text-[var(--text-tertiary)]">
-            <span>No leaf yet</span>
-          </div>
         )}
       </motion.div>
 

@@ -27,7 +27,7 @@ export function NodeSourcesHeader({
 }: NodeSourcesHeaderProps) {
   return (
     <div
-      className="px-3 py-2 border-b border-[var(--stroke-divider)] rounded-t-[11px] cursor-pointer hover:bg-[var(--hover-bg)] transition-colors nodrag"
+      className="px-3 py-1.5 border-b border-[var(--stroke-divider)] rounded-t-[11px] cursor-pointer hover:bg-[var(--hover-bg)] transition-colors nodrag"
       onClick={(e) => {
         e.stopPropagation();
         onOpenModal();

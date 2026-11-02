@@ -6,6 +6,45 @@
   color: var(--text-primary);
   background: var(--surface-card);
 }
+.changeDescription {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  flex: none;
+  padding: 10px 16px;
+  border-top: 1px solid var(--stroke-divider);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.changeDescription textarea {
+  flex: 1;
+  min-width: 200px;
+  min-height: 32px;
+  max-height: 96px;
+  resize: vertical;
+  padding: 6px 10px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  font: inherit;
+}
+.changeDescription textarea:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.workbenchFooter {
+  display: flex;
+  align-items: center;
+  flex: none;
+  min-height: 32px;
+  padding: 6px 16px;
+  border-top: 1px solid var(--stroke-divider);
+  background: var(--surface-app);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
 .toolbar,
 .footer {
   display: flex;
@@ -35,15 +74,18 @@
 }
 .content {
   display: grid;
-  grid-template-columns: minmax(360px, 1fr) minmax(240px, 320px);
+  grid-template-columns: minmax(var(--schema-main-min-width, 440px), 1fr) 320px;
   flex: 1;
   min-height: 0;
   min-width: 0;
+  /* Keep the tree and properties beside each other within this bounded editor. */
+  overflow: auto;
   border: 0;
   padding: 0;
 }
-.content[data-details="closed"] {
-  grid-template-columns: minmax(0, 1fr);
+.content:has(.fieldWorkarea[data-sources]) {
+  /* Reserve room for the 200px source rail and readable field names/controls. */
+  --schema-main-min-width: 640px;
 }
 .list {
   min-height: 0;
@@ -52,7 +94,9 @@
 }
 .columns {
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) 180px 44px;
+  grid-template-columns: minmax(0, 1fr) var(--field-type-width) var(--field-required-width) var(
+      --field-actions-width
+    );
   gap: 8px;
   padding: 10px;
   border-bottom: 1px solid var(--stroke-divider);
@@ -60,14 +104,12 @@
   color: var(--text-secondary);
 }
 .inline {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 12px;
+  display: block;
+  text-align: left;
 }
 .inline select {
-  min-width: 80px;
-  max-width: 125px;
+  min-width: 0;
+  width: 100%;
   height: 34px;
   border: 1px solid var(--stroke-default);
   border-radius: var(--radius-md);
@@ -95,7 +137,22 @@
   cursor: default;
 }
 .dragRow [role="treeitem"] {
-  grid-template-columns: minmax(150px, 1fr) 180px 44px;
+  grid-template-columns: minmax(0, 1fr) calc(
+      var(--field-type-width) +
+      var(--field-required-width) +
+      8px
+    ) var(--field-actions-width);
+  column-gap: 8px;
+}
+.dragRow [role="treeitem"] > :nth-child(2) {
+  grid-column: 2;
+  grid-row: 1;
+  padding-left: 0;
+  font: inherit;
+}
+.dragRow [role="treeitem"] > .fieldActions {
+  grid-column: 3;
+  grid-row: 1;
 }
 .dragRow[data-drop-target],
 .rootDrop[data-drop-target] {
@@ -121,20 +178,6 @@
 .moveToolbar > span {
   overflow-wrap: anywhere;
   min-width: 0;
-}
-.moveMenu,
-.moveMenu label {
-  display: grid;
-  gap: 12px;
-}
-.moveMenu select {
-  min-width: 0;
-  width: 100%;
-  padding: 8px;
-  border: 1px solid var(--stroke-default);
-  border-radius: var(--radius-md);
-  background: var(--surface-card);
-  color: var(--text-primary);
 }
 .importSources {
   display: flex;
@@ -173,44 +216,29 @@
   height: 100%;
 }
 .fieldWorkarea[data-sources] {
-  grid-template-columns: 180px minmax(0, 1fr);
+  grid-template-columns: 200px minmax(0, 1fr);
 }
 .fieldMain {
+  --field-type-width: 112px;
+  --field-required-width: 72px;
+  --field-actions-width: 56px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.fieldScroll {
+  flex: 1;
   min-width: 0;
   min-height: 0;
   overflow: auto;
 }
-.properties {
-  border-left: 1px solid var(--stroke-divider);
-  min-height: 0;
-  overflow: auto;
-}
-.tabs {
-  display: flex;
-  gap: 12px;
-  padding: 12px;
-  border-bottom: 1px solid var(--stroke-divider);
-  font-size: 13px;
-}
-.tabs button[aria-pressed="true"] {
-  font-weight: 600;
-  color: var(--accent-commit);
-}
-.closeProperties {
-  display: grid;
-  place-items: center;
-  margin-left: auto;
-  min-width: 28px;
-  min-height: 28px;
-}
-.settings {
-  padding: 16px;
-}
-.settings h3 {
-  font-size: 13px;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-  margin-bottom: 16px;
+.columns,
+.fieldTree,
+.moveToolbar {
+  /* Scroll the header and rows together before field names become unreadable. */
+  min-width: 520px;
 }
 .footer {
   border-top: 1px solid var(--stroke-divider);
@@ -230,28 +258,565 @@
   color: var(--status-error);
   overflow-wrap: anywhere;
 }
-@media (max-width: 1100px) {
-  .content {
-    grid-template-columns: 1fr;
-    overflow: auto;
+/* Keep names directly editable while giving the resting tree a text-first hierarchy. */
+.dragRow [role="treeitem"]:not([data-selected="true"])
+  .fieldName
+  input:not(:focus):not([aria-invalid="true"]) {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+.fieldName input:focus {
+  background: var(--surface-card);
+  border-color: var(--ring);
+}
+.dragRow [data-kind="mapping"] .fieldName input {
+  font-weight: 600;
+}
+.dragRow {
+  position: relative;
+}
+.dragRow [role="treeitem"][data-selected="true"] {
+  background: var(--surface-app);
+  box-shadow: inset 2px 0 var(--accent-commit);
+}
+.treeGuides {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.treeGuide {
+  position: absolute;
+  top: -2px;
+  bottom: 0;
+  border-left: 1px solid var(--stroke-divider);
+}
+.treeGuide[data-branch]::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 9px;
+  border-top: 1px solid var(--stroke-divider);
+}
+
+.fieldSummary {
+  display: grid;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 12px;
+}
+.fieldControls {
+  display: none;
+}
+.fieldSummary,
+.fieldControls {
+  grid-template-columns: var(--field-type-width) var(--field-required-width);
+  align-items: center;
+  gap: 8px;
+}
+.requiredColumn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dragRow [data-selected="true"] .fieldSummary {
+  display: none;
+}
+.dragRow [data-selected="true"] .fieldControls {
+  display: grid;
+}
+.dragRow [role="treeitem"]:not([data-selected="true"]) .fieldActions,
+.dragRow [role="treeitem"]:not([data-selected="true"]) .dragHandle {
+  visibility: hidden;
+}
+.dragRow [role="treeitem"]:not([data-selected="true"]) .fieldName input {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+.dragRow [data-selected="true"] .fieldName input {
+  background: var(--surface-card);
+}
+
+/* Field workbench: stable headers, compact rows, and quiet control surfaces. */
+.editor[data-view="data"] .toolbar,
+.editor[data-view="data"] .footer {
+  gap: 8px;
+  padding: 10px 12px;
+}
+.editor[data-view="data"] .toolbar button,
+.editor[data-view="data"] .moveToolbar button,
+.editor[data-view="data"] .sourceHeading button {
+  box-shadow: none;
+}
+.columns {
+  min-height: 40px;
+  align-items: center;
+  padding-block: 8px;
+  background: var(--surface-app);
+}
+.moveToolbar {
+  min-height: 44px;
+  padding-block: 6px;
+}
+.selectionHint {
+  color: var(--text-secondary);
+}
+.fieldTree {
+  gap: 0;
+  padding-top: 4px;
+  overflow: visible;
+}
+.dragRow [role="treeitem"] {
+  min-height: 36px;
+  border-radius: var(--radius-sm);
+}
+.fieldName input,
+.inline select {
+  height: 30px;
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+}
+.fieldName input {
+  font-size: 13px;
+}
+.treeGuide {
+  top: 0;
+}
+@media (pointer: coarse) {
+  .dragRow [role="treeitem"] {
+    min-height: 44px;
   }
-  .list {
-    overflow: visible;
-  }
-  .properties {
-    border-left: 0;
-    border-top: 1px solid var(--stroke-divider);
-    overflow: visible;
+  .fieldName input,
+  .inline select {
+    height: 36px;
   }
 }
-@media (max-width: 900px) {
-  .fieldWorkarea[data-sources] {
+
+.toolbarSpacer {
+  margin-left: auto;
+}
+.editor [hidden] {
+  display: none;
+}
+
+.emptyState {
+  padding: 20px 12px;
+  max-width: 560px;
+}
+.emptyState p {
+  margin: 8px 0 12px;
+}
+.emptyActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.editor[data-workbench-footer][data-schema-unavailable] {
+  min-height: 400px;
+}
+.editor[data-workbench-footer][data-schema-unavailable] .content {
+  grid-template-columns: minmax(0, 1fr);
+}
+.editor[data-workbench-footer][data-schema-unavailable] .fieldWorkarea {
+  height: 100%;
+}
+.editor[data-workbench-footer][data-schema-unavailable] .fieldMain {
+  height: auto;
+}
+.editor[data-workbench-footer][data-schema-unavailable] .fieldScroll {
+  display: grid;
+  place-items: center;
+  min-height: 360px;
+  padding: 24px;
+}
+.editor[data-workbench-footer][data-schema-unavailable] .fieldTree {
+  display: none;
+}
+.editor[data-workbench-footer][data-schema-unavailable] .feedback {
+  min-width: 0;
+  padding: 0;
+}
+.editor[data-workbench-footer][data-schema-unavailable] .emptyState {
+  padding: 24px 0;
+  text-align: center;
+  line-height: 1.7;
+}
+.editor[data-workbench-footer][data-schema-unavailable] .emptyState strong {
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 600;
+}
+.emptyIcon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 16px;
+  border-radius: var(--radius-workbench);
+  background: var(--accent-branch-soft);
+  color: var(--yaml-number);
+}
+.emptyToolbar {
+  display: flex;
+  justify-content: flex-end;
+  flex: none;
+  padding: 12px 16px 0;
+}
+.emptyToolbar button {
+  color: var(--text-secondary);
+  box-shadow: none;
+}
+.editor[data-workbench-footer][data-schema-empty] .content {
+  grid-template-columns: minmax(0, 1fr);
+}
+.editor[data-workbench-footer][data-schema-empty] .fieldWorkarea {
+  height: 360px;
+  min-height: 320px;
+}
+.editor[data-workbench-footer][data-schema-empty] .fieldScroll {
+  display: grid;
+  place-items: center;
+  min-height: 260px;
+}
+.editor[data-workbench-footer][data-schema-empty] .fieldTree {
+  display: none;
+}
+.editor[data-workbench-footer][data-schema-empty] .emptyState {
+  text-align: center;
+}
+.editor[data-workbench-footer][data-schema-empty] .emptyState strong {
+  font-size: 15px;
+  color: var(--text-primary);
+}
+.editor[data-workbench-footer][data-schema-empty] .emptyActions {
+  justify-content: center;
+}
+.editor[data-workbench-footer][data-schema-unavailable] .emptyActions {
+  justify-content: center;
+  margin-top: 20px;
+}
+.editor[data-workbench-footer][data-schema-unavailable] .emptyActions button {
+  box-shadow: none;
+}
+
+.search,
+.fieldIdentity {
+  display: contents;
+}
+.fieldTypeIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  background: var(--surface-app);
+}
+.requiredMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--text-tertiary);
+  border-radius: 3px;
+}
+.requiredMark[data-required="true"] {
+  background: var(--accent-commit);
+  border-color: var(--accent-commit);
+  color: var(--on-accent);
+}
+.fieldTypeIcon svg {
+  width: 15px;
+  height: 15px;
+}
+.fieldTypeIcon[data-field-type="string"] {
+  color: var(--yaml-number);
+  background: var(--accent-branch-soft);
+}
+.fieldTypeIcon[data-field-type="boolean"] {
+  color: var(--accent-leaf);
+  background: var(--accent-leaf-soft);
+}
+.fieldTypeIcon[data-field-type="node"],
+.fieldTypeIcon[data-field-type="array"],
+.fieldTypeIcon[data-field-type="object"] {
+  color: var(--accent-commit);
+  background: var(--accent-commit-soft);
+}
+.fieldTypeIcon[data-field-type="number"],
+.fieldTypeIcon[data-field-type="integer"] {
+  color: var(--slot);
+  background: var(--slot-dim);
+}
+
+/* Schema Studio shares editing behavior with Workspace; its presentation stays scoped here. */
+.editor[data-workbench-footer] {
+  container-type: inline-size;
+}
+.editor[data-workbench-footer] .toolbar {
+  padding: 14px 18px;
+  background: var(--surface-card);
+}
+.editor[data-workbench-footer] .search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  max-width: 460px;
+  min-width: 160px;
+  padding-inline: 10px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+  color: var(--text-tertiary);
+}
+.editor[data-workbench-footer] .search input {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.editor[data-workbench-footer] .search:focus-within {
+  border-color: var(--ring);
+}
+.editor[data-workbench-footer] .content {
+  grid-template-columns: minmax(0, 1fr) 260px;
+  overflow: hidden;
+}
+.editor[data-workbench-footer] .fieldWorkarea[data-sources] {
+  grid-template-columns: 180px minmax(0, 1fr);
+}
+.editor[data-workbench-footer] .importSources {
+  padding: 12px 14px 18px;
+  gap: 12px;
+  scrollbar-width: thin;
+}
+.editor[data-workbench-footer] .sourceHeading {
+  min-height: 30px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.editor[data-workbench-footer] .sourceHeading button {
+  width: 28px;
+  min-height: 28px;
+  padding: 6px;
+  border-color: transparent;
+  background: transparent;
+  font-size: 0;
+  gap: 0;
+}
+.editor[data-workbench-footer] .sourceHeading button:hover {
+  background: var(--hover-bg);
+}
+.editor[data-workbench-footer] .sourceHelp {
+  order: 1;
+  font-size: 11px;
+  line-height: 1.75;
+  color: var(--text-tertiary);
+}
+.editor[data-workbench-footer] .fieldMain {
+  --field-type-width: 120px;
+  --field-required-width: 64px;
+  --field-actions-width: 76px;
+}
+.editor[data-workbench-footer] .fieldScroll {
+  padding: 0 16px 12px;
+  scrollbar-width: thin;
+}
+.editor[data-workbench-footer] .columns,
+.editor[data-workbench-footer] .moveToolbar,
+.editor[data-workbench-footer] .fieldTree {
+  min-width: 480px;
+}
+.editor[data-workbench-footer] .columns {
+  background: var(--surface-card);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  padding: 8px;
+}
+.editor[data-workbench-footer] .moveToolbar {
+  min-height: 38px;
+  padding: 4px 8px;
+  border-bottom: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.editor[data-workbench-footer] .moveToolbar button {
+  min-height: 28px;
+  height: 28px;
+  font-size: 11px;
+  border-color: var(--stroke-divider);
+}
+.editor[data-workbench-footer] .fieldTree {
+  padding: 0;
+}
+.editor[data-workbench-footer] .dragRow[data-node][data-depth="0"] {
+  margin-top: 16px;
+}
+.editor[data-workbench-footer] .dragRow:first-child {
+  margin-top: 2px;
+}
+.editor[data-workbench-footer] .dragRow [role="treeitem"] {
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+.editor[data-workbench-footer] .dragRow [role="treeitem"][data-selected="true"] {
+  background: color-mix(in srgb, var(--accent-commit) 4%, var(--surface-card));
+  border-color: var(--stroke-divider);
+}
+.editor[data-workbench-footer]
+  .dragRow[data-related]
+  [role="treeitem"]:not([data-selected="true"]) {
+  background: color-mix(in srgb, var(--source) 3%, var(--surface-card));
+  border-color: transparent;
+  border-left-color: color-mix(in srgb, var(--source) 45%, var(--stroke-divider));
+}
+.editor[data-workbench-footer]
+  .dragRow[data-related="contains"]
+  [role="treeitem"]:not([data-selected="true"]) {
+  background: transparent;
+  border-style: dashed;
+}
+.relationSummary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  color: var(--text-secondary);
+}
+.editor[data-workbench-footer] .dragRow [role="treeitem"] :has(> .fieldTypeIcon) {
+  width: 22px;
+  height: 22px;
+  background: transparent;
+}
+.editor[data-workbench-footer] .fieldIdentity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.editor[data-workbench-footer] .fieldName {
+  min-width: 64px;
+  flex: 1;
+}
+.editor[data-workbench-footer] .fieldName input {
+  width: 100%;
+  min-width: 0;
+  padding-inline: 2px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-primary);
+}
+.editor[data-workbench-footer] .dragRow[data-node] .fieldName input {
+  font-weight: 600;
+}
+.editor[data-workbench-footer] .dragRow:not(:focus-within) .fieldName input {
+  background: transparent;
+  border-color: transparent;
+}
+.editor[data-workbench-footer] .fieldSummary,
+.editor[data-workbench-footer] .inline select {
+  font-size: 12px;
+}
+.editor[data-workbench-footer] .inline input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent-commit);
+}
+.editor[data-workbench-footer] .dragHandle {
+  position: absolute;
+  right: 62px;
+  width: 16px;
+  min-width: 16px;
+}
+.editor[data-workbench-footer] .dragRow [role="treeitem"] .fieldActions,
+.editor[data-workbench-footer] .dragRow:hover .dragHandle,
+.editor[data-workbench-footer] .dragRow:focus-within .dragHandle {
+  visibility: visible;
+}
+.editor[data-workbench-footer] .treeGuide {
+  border-color: color-mix(in srgb, var(--text-tertiary) 12%, transparent);
+}
+.editor[data-workbench-footer] .changeDescription {
+  padding: 12px 16px;
+  font-size: 11px;
+}
+.editor[data-workbench-footer] .changeDescription textarea {
+  background: var(--surface-app);
+  border-color: var(--stroke-divider);
+  font-size: 12px;
+}
+.editor[data-workbench-footer] .workbenchFooter {
+  min-height: 34px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.editor[data-workbench-footer] > fieldset > aside input,
+.editor[data-workbench-footer] > fieldset > aside select,
+.editor[data-workbench-footer] > fieldset > aside textarea {
+  border-color: var(--stroke-divider);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  box-shadow: none;
+}
+@container (max-width: 980px) {
+  .editor[data-workbench-footer] .content {
+    grid-template-columns: minmax(0, 1fr) 230px;
+  }
+  .editor[data-workbench-footer] .fieldWorkarea[data-sources] {
+    grid-template-columns: 156px minmax(0, 1fr);
+  }
+  .editor[data-workbench-footer] .fieldScroll {
+    padding-inline: 10px;
+  }
+  .editor[data-workbench-footer] .sourceHeading {
+    gap: 4px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+}
+@container (max-width: 800px) {
+  .editor[data-workbench-footer] .content {
     grid-template-columns: minmax(0, 1fr);
+    overflow: auto;
+    display: block;
+  }
+  .editor[data-workbench-footer] .list {
+    overflow: visible;
+  }
+  .editor[data-workbench-footer] .fieldWorkarea {
+    height: clamp(320px, 55vh, 480px);
+  }
+  .editor[data-workbench-footer] .content > aside {
+    border-left: 0;
+    border-top: 1px solid var(--stroke-divider);
+    min-height: 300px;
+  }
+}
+@container (max-width: 560px) {
+  .editor[data-workbench-footer] .fieldWorkarea[data-sources] {
+    display: flex;
+    flex-direction: column;
     height: auto;
   }
-  .importSources {
-    max-height: 200px;
+  .editor[data-workbench-footer] .fieldMain {
+    flex: none;
+    height: clamp(320px, 55vh, 480px);
+  }
+  .editor[data-workbench-footer] .importSources {
+    flex: none;
     border-right: 0;
     border-bottom: 1px solid var(--stroke-divider);
+    max-height: 220px;
+  }
+  .editor[data-workbench-footer] .changeDescription textarea {
+    min-width: 0;
+    flex-basis: 100%;
   }
 }

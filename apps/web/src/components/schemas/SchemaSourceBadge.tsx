@@ -1,9 +1,9 @@
 'use client';
 
-import { CircleHelp, Layers, Pencil } from 'lucide-react';
+import { ArrowUpRight, ChevronDown, CircleHelp, Layers, Pencil } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { getProjectIdHistoryPath, getProjectIdRepoPath } from '@/domain/project/repoPath';
 import {
@@ -18,32 +18,55 @@ export function SchemaSourceBadge({
   path,
   provenance,
   identities,
+  variant = 'icon',
 }: {
   path: string;
   provenance: SchemaNodeProvenance;
   identities: Record<string, SchemaSourceIdentity>;
+  variant?: 'icon' | 'label';
 }) {
   const [failedImage, setFailedImage] = useState<string>();
+  const detailsId = useId();
+  const [expanded, setExpanded] = useState(false);
   const first = provenance.sources[0];
   const identity = first?.pin ? identities[schemaSourceKey(first.pin)] : undefined;
   const multiple = provenance.sources.length > 1;
   const label = provenance.pending
     ? 'Checking source'
     : multiple
-      ? `${provenance.sources.length} sources${provenance.local ? ' + local edits' : ''}`
+      ? `${provenance.sources.length} sources${provenance.local ? ' + workspace edits' : ''}`
       : first
-        ? `${identity?.name ?? first.name} @ ${first.version}${provenance.local ? ' + local edits' : ''}`
+        ? `${identity?.name ?? first.name} @ ${first.version}${provenance.local ? ' + workspace edits' : ''}`
         : provenance.local
-          ? 'Local edit'
-          : 'Source not recorded';
+          ? 'Modified in this workspace'
+          : 'Origin unknown';
   const logo = identity?.logo;
+  const renderSourceLinks = (source: SchemaNodeProvenance['sources'][number]) => {
+    const info = source.pin ? identities[schemaSourceKey(source.pin)] : undefined;
+    const projectId = source.commitRef?.projectId ?? info?.projectId ?? source.pin?.projectId;
+    if (!source.pin || info?.unavailable) return null;
+    return (
+      <div className={styles.links}>
+        <Link href={schemaSourceReleaseHref(source.pin)} target="_blank" rel="noopener noreferrer">
+          View source version <ArrowUpRight size={14} aria-hidden="true" />
+        </Link>
+        {projectId ? (
+          <Link href={getProjectIdRepoPath(projectId)} target="_blank" rel="noopener noreferrer">
+            Open source project <ArrowUpRight size={14} aria-hidden="true" />
+          </Link>
+        ) : null}
+      </div>
+    );
+  };
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button
           type="button"
           className={`${styles.badge} nodrag nopan`}
-          aria-label={`Source for ${path}: ${label}`}
+          data-variant={variant}
+          data-origin={first ? 'source' : provenance.local ? 'workspace' : 'unknown'}
+          aria-label={`Origin for ${path}: ${label}`}
           title={label}
           onClick={(event) => event.stopPropagation()}
           onPointerDown={(event) => event.stopPropagation()}
@@ -72,6 +95,19 @@ export function SchemaSourceBadge({
           ) : (
             <CircleHelp aria-hidden="true" />
           )}
+          {variant === 'label' ? (
+            <span className={styles.badgeLabel}>
+              {provenance.pending
+                ? 'Checking source'
+                : multiple
+                  ? `${provenance.sources.length} sources`
+                  : first
+                    ? (identity?.name ?? first.name)
+                    : provenance.local
+                      ? 'Workspace'
+                      : 'Unknown'}
+            </span>
+          ) : null}
           {first && provenance.local ? (
             <span className={styles.modified} aria-hidden="true">
               •
@@ -85,54 +121,28 @@ export function SchemaSourceBadge({
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => event.stopPropagation()}
       >
-        <h3>Node source</h3>
-        <code>{path}</code>
+        <div className={styles.header}>
+          <h3>Origin</h3>
+          <code>{path}</code>
+        </div>
         {provenance.pending ? <p>Checking sources for this definition…</p> : null}
         {provenance.sources.map((source) => {
           const info = source.pin ? identities[schemaSourceKey(source.pin)] : undefined;
-          const projectId = source.commitRef?.projectId ?? info?.projectId ?? source.pin?.projectId;
           return (
             <section key={source.key} className={styles.source}>
-              <strong>{info?.name ?? source.name}</strong>
-              <span>
-                {source.name} · {source.version}
-              </span>
-              {source.pin ? <code>{source.pin.hash}</code> : null}
-              {source.commitRef ? (
-                <div className={styles.links}>
-                  <Link
-                    href={getProjectIdHistoryPath(source.commitRef.projectId, {
-                      commit: source.commitRef.commitDigest,
-                    })}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    View source Commit ↗
-                  </Link>
-                  <code>{source.commitRef.sourcePath}</code>
-                </div>
-              ) : null}
+              <div className={styles.identity}>
+                <strong>{info?.name ?? source.name}</strong>
+                <span className={styles.version}>
+                  {source.version.startsWith('v') ? source.version : `v${source.version}`}
+                </span>
+              </div>
+              <span className={styles.sourceName}>{source.name}</span>
               {info?.unavailable ? (
                 <p>Source unavailable or access restricted.</p>
               ) : source.pin ? (
-                <div className={styles.links}>
-                  <Link
-                    href={schemaSourceReleaseHref(source.pin)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    View exact release ↗
-                  </Link>
-                  {projectId ? (
-                    <Link
-                      href={getProjectIdRepoPath(projectId)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Source project ↗
-                    </Link>
-                  ) : null}
-                </div>
+                multiple ? (
+                  renderSourceLinks(source)
+                ) : null
               ) : !source.commitRef ? (
                 <p>The exact source identity is unavailable.</p>
               ) : null}
@@ -140,8 +150,9 @@ export function SchemaSourceBadge({
           );
         })}
         {provenance.local ? (
-          <p>
-            {first ? 'Includes local changes to this definition.' : 'Created or changed locally.'}
+          <p className={styles.local}>
+            <Pencil aria-hidden="true" />
+            {first ? 'Modified in this workspace' : 'Created or modified in this workspace.'}
           </p>
         ) : null}
         {provenance.unknown ? (
@@ -151,8 +162,50 @@ export function SchemaSourceBadge({
               : 'No reliable source was recorded for this node.'}
           </p>
         ) : null}
-        {!provenance.pending && first && !provenance.sources.some((source) => source.commitRef) ? (
-          <p className={styles.note}>Original Commit link unavailable for this source.</p>
+        {first ? (
+          <div className={styles.traceability}>
+            <div className={styles.actions}>
+              {!multiple ? renderSourceLinks(first) : null}
+              <button
+                type="button"
+                className={styles.detailsToggle}
+                aria-expanded={expanded}
+                aria-controls={detailsId}
+                onClick={() => setExpanded(!expanded)}
+              >
+                Technical details <ChevronDown aria-hidden="true" />
+              </button>
+            </div>
+            <div id={detailsId} hidden={!expanded} className={styles.expandedDetails}>
+              {provenance.sources.map((source) => (
+                <div key={source.key} className={styles.traceSource}>
+                  {multiple ? <strong>{source.name}</strong> : null}
+                  {source.pin ? (
+                    <div>
+                      <span>Release hash</span>
+                      <code>{source.pin.hash}</code>
+                    </div>
+                  ) : null}
+                  {source.commitRef ? (
+                    <div className={styles.links}>
+                      <Link
+                        href={getProjectIdHistoryPath(source.commitRef.projectId, {
+                          commit: source.commitRef.commitDigest,
+                        })}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        View source commit <ArrowUpRight size={14} aria-hidden="true" />
+                      </Link>
+                      <code>{source.commitRef.sourcePath}</code>
+                    </div>
+                  ) : !provenance.pending ? (
+                    <p>Original commit unavailable.</p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
         ) : null}
       </PopoverContent>
     </Popover>

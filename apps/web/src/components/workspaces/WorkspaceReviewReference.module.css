@@ -1,5 +1,10 @@
 .workspace {
-  background: var(--surface-panel);
+  background: var(--surface-card);
+}
+.previewColumn {
+  display: block;
+  min-width: 0;
+  padding: 8px 0 24px;
 }
 .views {
   width: 100%;

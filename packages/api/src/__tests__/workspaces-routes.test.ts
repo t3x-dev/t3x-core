@@ -834,6 +834,41 @@ describe('Workspace routes', () => {
     expect(body.data.workspace.lastCommitHash).toBeUndefined();
   });
 
+  it('keeps commit state unchanged when saving metadata on an authoring-managed Draft', async () => {
+    const stored = {
+      id: 'workspace_prd_handoff',
+      projectId: 'proj_sources',
+      title: 'Authoring workspace',
+      targetBranch: 'main',
+      status: 'committed',
+      lastCommitHash: 'sha256:server-commit',
+      authoringLedger: { compositionRevision: 0, actions: [] },
+      sourceBundle: [],
+    };
+    storageMock.seedWorkspaceDraft(stored);
+    const chat = { id: 'chat:c1', type: 'chat', title: 'Compose assistant', conversationId: 'c1' };
+    const response = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff',
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          if_revision: 1,
+          workspace: {
+            ...stored,
+            lastCommitHash: 'sha256:client-forged-commit',
+            sourceBundle: [chat],
+          },
+        }),
+      }
+    );
+
+    expect(response.status).toBe(200);
+    const { updatedAt: _updatedAt, ...saved } =
+      storageMock.upsertWorkspaceDraft.mock.calls.at(-1)?.[1].workspace_state ?? {};
+    expect(saved).toEqual({ ...stored, sourceBundle: [chat] });
+  });
+
   it('does not let generic Workspace saves replace server-managed Schema candidates or pending tasks', async () => {
     const serverCandidate = {
       candidateId: 'schema-edit:server',

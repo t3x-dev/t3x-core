@@ -228,34 +228,40 @@ export function PreparationChangeForm({
   );
 }
 
-function PreparationValueEditor({
+export function PreparationValueEditor({
   label,
   value,
   onChange,
+  fixedType = false,
 }: {
   label: string;
   value: PreparationValue;
   onChange: (value: PreparationValue) => void;
+  fixedType?: boolean;
 }) {
   const id = useId();
   return (
     <div className="min-w-0 space-y-2 rounded border bg-[var(--surface-panel)] p-3">
       <label className="flex items-center justify-between gap-3 text-xs" htmlFor={id}>
-        Type of {label}
-        <select
-          id={id}
-          aria-label={`Type of ${label}`}
-          className={`${selectClass} max-w-40`}
-          value={value.type}
-          onChange={(event) => onChange(emptyValue(event.target.value as ValueType))}
-        >
-          <option value="text">Text</option>
-          <option value="number">Number</option>
-          <option value="boolean">True / false</option>
-          <option value="null">Empty value</option>
-          <option value="object">Object / fields</option>
-          <option value="array">List</option>
-        </select>
+        {fixedType ? label : `Type of ${label}`}
+        {fixedType ? (
+          <span className="text-[var(--text-secondary)]">{value.type}</span>
+        ) : (
+          <select
+            id={id}
+            aria-label={`Type of ${label}`}
+            className={`${selectClass} max-w-40`}
+            value={value.type}
+            onChange={(event) => onChange(emptyValue(event.target.value as ValueType))}
+          >
+            <option value="text">Text</option>
+            <option value="number">Number</option>
+            <option value="boolean">True / false</option>
+            <option value="null">Empty value</option>
+            <option value="object">Object / fields</option>
+            <option value="array">List</option>
+          </select>
+        )}
       </label>
       {value.type === 'object' || value.type === 'array' ? (
         <div className="space-y-2">

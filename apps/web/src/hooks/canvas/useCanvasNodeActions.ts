@@ -8,23 +8,18 @@
  * calls after the I/O resolves.
  */
 
-import type { Node } from '@xyflow/react';
 import { useCallback } from 'react';
 import { createConversation } from '@/commands/conversations';
 import { toEmbeddedLeaf } from '@/hooks/canvas/leafEmbedding';
 import { composeCanvasFromFetches } from '@/hooks/canvas/useCanvasNodeActions.compose';
 import { fetchCommits } from '@/infrastructure/commits';
-import { fetchConversations } from '@/queries/conversations';
+import { listProjectWorkspaces } from '@/infrastructure/workspaces';
+import { fetchAllConversations } from '@/queries/conversations';
 import { fetchLeavesByProject } from '@/queries/leaves';
 import { fetchTurn } from '@/queries/turns';
 import { useCanvasStore } from '@/store/canvasStore';
-import {
-  hasPendingUnitNode,
-  PENDING_UNIT_LIMIT_MESSAGE,
-  snapPosition,
-} from '@/store/canvasStoreUtils';
-import type { Leaf } from '@/types/api';
-import type { CanvasNodeData, EmbeddedLeaf, NodeKind } from '@/types/nodes';
+import type { Conversation, Leaf } from '@/types/api';
+import type { EmbeddedLeaf, NodeKind } from '@/types/nodes';
 
 export function useCanvasNodeActions() {
   const load = useCallback(
@@ -42,18 +37,20 @@ export function useCanvasNodeActions() {
       useCanvasStore.setState({ projectId });
 
       try {
-        const [convResponse, apiCommits, projectLeaves] = await Promise.all([
-          fetchConversations(projectId, 100, 0),
+        const [conversations, apiCommits, projectLeaves, workspaces] = await Promise.all([
+          fetchAllConversations(projectId),
           fetchCommits(projectId, undefined, 100),
           fetchLeavesByProject(projectId).catch((err) => {
             console.warn('[useCanvasNodeActions] Failed to load leaves:', err);
             return [] as Leaf[];
           }),
+          listProjectWorkspaces(projectId).catch((err) => {
+            console.warn('[useCanvasNodeActions] Failed to load workspaces:', err);
+            return [];
+          }),
         ]);
 
         if (useCanvasStore.getState().projectId !== projectId) return;
-
-        const conversations = convResponse.conversations;
 
         // Resolve turn → conversation for commits that have turn_window
         const turnHashesToLookup = new Set<string>();
@@ -98,7 +95,8 @@ export function useCanvasNodeActions() {
           apiCommits,
           projectLeaves,
           turnToConvMap,
-          existingNodePositions
+          existingNodePositions,
+          workspaces
         );
 
         if (options?.merge) {
@@ -133,46 +131,17 @@ export function useCanvasNodeActions() {
   }, []);
 
   const add = useCallback(
-    async (kind: NodeKind, position?: { x: number; y: number }): Promise<void> => {
+    async (
+      kind: NodeKind,
+      position?: { x: number; y: number }
+    ): Promise<Conversation | undefined> => {
       const store = useCanvasStore.getState();
-      const total = store.nodes.length;
-      const basePosition = position ?? {
-        x: 140 + (total % 3) * 220,
-        y: 100 + Math.floor(total / 3) * 180,
-      };
-      const snappedPosition = snapPosition(basePosition);
 
       if (kind === 'unit') {
         if (!store.projectId) {
           throw new Error('Cannot create unit: no project selected');
         }
-        if (hasPendingUnitNode(store.nodes)) {
-          store.notifyCallback?.(PENDING_UNIT_LIMIT_MESSAGE, 'warning');
-          return;
-        }
-        const conversation = await createConversation(store.projectId, 'Untitled Unit', undefined, {
-          x: snappedPosition.x,
-          y: snappedPosition.y,
-        });
-        const newNode: Node<CanvasNodeData> = {
-          id: conversation.conversation_id,
-          type: 'unit',
-          position: snappedPosition,
-          data: {
-            entryId: conversation.conversation_id.replace(/^conv_/, '').slice(0, 8),
-            title: conversation.title || 'Untitled Unit',
-            summary: '0 turns',
-            status: 'staging',
-            timestamp: conversation.created_at,
-            tags: ['unit'],
-            kind: 'unit',
-            conversationId: conversation.conversation_id,
-            commitStatus: 'staging',
-            sourceConversationId: conversation.conversation_id,
-          },
-        };
-        useCanvasStore.getState().addToNodes(newNode);
-        return;
+        return createConversation(store.projectId, 'Untitled Unit', undefined, position);
       }
 
       if (kind === 'leaf') {

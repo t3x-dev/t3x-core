@@ -1,15 +1,25 @@
 import { StudioSourceSchema } from '@t3x-dev/api-client';
-import type { WorkspaceSchemaCompositionBase } from '@t3x-dev/application';
+import {
+  parseWorkspaceSchemaEditCandidate,
+  type WorkspaceSchemaCompositionBase,
+} from '@t3x-dev/application';
+import { applyWorkspaceSchemaYOps } from '@t3x-dev/core';
 import {
   type AnyDB,
   findSchemaStudioCandidate,
   findYSchemaArtifactVersion,
   findYSchemaCompositionSnapshot,
 } from '@t3x-dev/storage';
+import { canonicalizeProtocolValue, type ProtocolValue } from '@t3x-dev/transition';
 import { normalizeYSchemaObject, sha256CompositionValue, type YSchema } from '@t3x-dev/yschema';
 import type { Context } from 'hono';
 import type { z } from 'zod';
-import { readNodeProvenance, schemaOriginSources } from './schema-node-provenance';
+import {
+  publishedSchemaOrigins,
+  readNodeProvenance,
+  schemaOriginDefinitions,
+  schemaOriginSources,
+} from './schema-node-provenance';
 import { resolveStudioSource, schemaSourceAdoptionReason } from './schema-studio';
 import { StudioError } from './schema-studio-preview';
 import { ensureBuiltInYSchemaArtifacts } from './yschema-artifact-registry';
@@ -29,6 +39,85 @@ const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+
+/** Recover only the old whole-Release fallback bug, from the matching replayable receipt. */
+async function recoverPublishedOrigins(
+  c: Context,
+  db: AnyDB,
+  workspace: Record<string, unknown>,
+  schema: YSchema,
+  schemaHash: string,
+  origins: Record<string, unknown>
+) {
+  if (!workspace.schemaEditCandidate) return origins;
+  let candidate: ReturnType<typeof parseWorkspaceSchemaEditCandidate>;
+  try {
+    candidate = parseWorkspaceSchemaEditCandidate(workspace.schemaEditCandidate);
+  } catch {
+    return origins;
+  }
+  const authoring = candidate.authoringDraft;
+  if (
+    authoring?.base.kind !== 'published_schema' ||
+    authoring.resultSchemaHash !== schemaHash ||
+    authoring.sourceMappings?.length ||
+    !Object.values(origins).some((value) => {
+      const origin = record(value);
+      return (
+        origin.kind === 'local' &&
+        origin.contributionId === candidate.candidateId &&
+        origin.revision === candidate.revision
+      );
+    })
+  )
+    return origins;
+  const base = authoring.base;
+  const view = await resolveStudioSource(c, db, {
+    sourceProjectId: base.projectId,
+    canonicalName: base.canonicalName,
+    version: base.version,
+    artifactHash: base.artifactHash,
+  });
+  if (
+    !view ||
+    view.artifactVersionId !== base.artifactVersionId ||
+    Object.keys(record(record(view.manifest.registry).originsByPath)).length
+  )
+    return origins;
+  const before = normalizeYSchemaObject(view.manifest.schema);
+  if ((await sha256CompositionValue(before)) !== base.schemaHash) return origins;
+  const replayed = await applyWorkspaceSchemaYOps(before, authoring.effect.operations).catch(
+    () => null
+  );
+  if (!replayed || replayed.schemaHash !== schemaHash) return origins;
+  const source = {
+    projectId: base.projectId,
+    canonicalName: base.canonicalName,
+    version: base.version,
+    artifactVersionId: base.artifactVersionId,
+    hash: base.artifactHash,
+  };
+  const inherited = publishedSchemaOrigins(before, source);
+  const baseDefinitions = schemaOriginDefinitions(before);
+  const result = { ...origins };
+  for (const [path, definition] of schemaOriginDefinitions(schema)) {
+    const origin = record(origins[path]);
+    const previous = baseDefinitions.get(path);
+    if (
+      !previous ||
+      origin.kind !== 'local' ||
+      origin.contributionId !== candidate.candidateId ||
+      origin.revision !== candidate.revision
+    )
+      continue;
+    result[path] =
+      canonicalizeProtocolValue(previous as ProtocolValue) ===
+      canonicalizeProtocolValue(definition as ProtocolValue)
+        ? inherited[path]
+        : { kind: 'derived', sources: [inherited[path], origin] };
+  }
+  return result;
+}
 
 /** Recover provenance from the bound snapshot/its matching receipt, never the latest edit. */
 export async function resolveWorkspaceSchemaEditBasis(
@@ -117,8 +206,8 @@ export async function resolveWorkspaceSchemaEditBasis(
       nodeProvenance = readNodeProvenance(record(view.manifest.registry).nodeProvenance);
     }
   }
-  const parsed = StudioSourceSchema.array().min(1).safeParse(sources);
-  if (!parsed.success)
+  const parsed = StudioSourceSchema.array().safeParse(sources);
+  if (!parsed.success || (!parsed.data.length && !snapshot))
     throw new StudioError(
       'CONFLICT',
       'The bound snapshot has no exact recoverable source provenance.'
@@ -169,7 +258,14 @@ export async function resolveWorkspaceSchemaEditBasis(
       schemaHash: schemaHash as `sha256:${string}`,
     },
     renderPlan: (snapshot?.renderPlanJson ?? []) as Record<string, unknown>[],
-    origins: (snapshot?.originsJson ?? {}) as Record<string, unknown>,
+    origins: await recoverPublishedOrigins(
+      c,
+      db,
+      workspace,
+      schema,
+      schemaHash,
+      (snapshot?.originsJson ?? {}) as Record<string, unknown>
+    ),
     nodeProvenance,
   };
 }

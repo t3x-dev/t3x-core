@@ -12,6 +12,7 @@ import {
   type ProtocolValue,
   type ResourceDescriptor,
 } from '@t3x-dev/transition';
+import { isSchemaOnlyWorkspaceReview } from '../workspace-schema-content';
 
 export const PROPOSAL_POSTURE_VERIFIER_ACTOR = Object.freeze({
   kind: 'service' as const,
@@ -368,7 +369,8 @@ export function resolveApplicableTransitionPolicy(input: {
   // Keep every branch authorization, issuer/profile constraint and runner rule.
   const ref = input.refPolicyBinding;
   const effective =
-    workspaceSchemaReview?.draft.status === 'bound'
+    workspaceSchemaReview?.draft.status === 'bound' &&
+    !isSchemaOnlyWorkspaceReview(workspaceSchemaReview)
       ? createAcceptancePolicyResource({
           uri: `t3x://policies/workspace-schema-overlay/v1/${ref.resource.digest.slice('sha256:'.length)}`,
           policy: {

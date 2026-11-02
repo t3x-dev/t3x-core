@@ -18,6 +18,7 @@ import {
 import { schemaChangeTarget } from './schema-change-contract';
 import { workspaceAuthoringState } from './workspace-authoring';
 import { workspaceProvenance } from './workspace-provenance';
+import { hasNoWorkspaceBusinessContent } from './workspace-schema-content';
 import { resolveWorkspaceYSchema } from './workspace-yschema';
 import { schemaRootKeyFromBinding } from './yschema-registry';
 
@@ -73,6 +74,8 @@ export function schemaContentFromDocument(
   document: Record<string, unknown>,
   rootKey: string
 ): Content {
+  if (hasNoWorkspaceBusinessContent(document, rootKey))
+    return { source: 'authoring_ledger', tree: {}, relations: [] };
   if (document.domain === 't3x.dev/semantic-content') {
     const state = createRepositorySemanticState(document.content as never);
     return {

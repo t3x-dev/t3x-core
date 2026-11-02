@@ -1,6 +1,6 @@
 import type { Edge, Node } from '@xyflow/react';
 import type { StateCreator } from 'zustand';
-import type { CanvasNodeData, EmbeddedLeaf } from '../types/nodes';
+import type { CanvasNodeData, CanvasPendingConversation, EmbeddedLeaf } from '../types/nodes';
 import type { CanvasState, NodeSlice } from './canvasStoreTypes';
 import {
   filterEdgesForNodes,
@@ -32,6 +32,7 @@ interface ProjectDataInput {
   hasMainCommit: boolean;
   latestMainCommitId: string | undefined;
   hasDbPositions: boolean;
+  pendingConversations: CanvasPendingConversation[];
 }
 
 function leafFingerprint(leaf: EmbeddedLeaf): string {
@@ -51,7 +52,14 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
   setLoading: (loading) => set({ loading }),
   setLoadError: (loadError) => set({ loadError }),
 
-  setProjectData: ({ nodes, edges, hasMainCommit, latestMainCommitId, hasDbPositions }) =>
+  setProjectData: ({
+    nodes,
+    edges,
+    hasMainCommit,
+    latestMainCommitId,
+    hasDbPositions,
+    pendingConversations,
+  }) =>
     set(() => {
       const nextNodes = limitPendingUnitNodes(nodes, 'latest');
       return {
@@ -60,6 +68,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
         hasMainCommit,
         latestMainCommitId,
         hasDbPositions,
+        pendingConversations,
         loading: false,
         loadError: null,
       };
@@ -69,20 +78,39 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
    * Merge-mode update: append new nodes/edges by id, preserve existing
    * positions + flags. Called from polling refreshes.
    */
-  mergeProjectData: ({ nodes, edges, hasMainCommit, latestMainCommitId, hasDbPositions }) =>
+  mergeProjectData: ({
+    nodes,
+    edges,
+    hasMainCommit,
+    latestMainCommitId,
+    hasDbPositions,
+    pendingConversations,
+  }) =>
     set((state) => {
       const existingNodeIds = new Set(state.nodes.map((n) => n.id));
       const incomingNodeIds = new Set(nodes.map((n) => n.id));
       const newNodes = nodes.filter((n) => !existingNodeIds.has(n.id));
-      const retainedNodes = state.nodes.filter(
-        (node) =>
-          incomingNodeIds.has(node.id) ||
-          (node.data.kind === 'unit' && node.data.commitStatus === 'committed') ||
-          node.data.kind === 'leaf' ||
-          (node.data.kind === 'unit' &&
-            node.data.commitStatus !== 'committed' &&
-            !node.data.conversationId)
-      );
+      const incomingNodesById = new Map(nodes.map((node) => [node.id, node]));
+      const retainedNodes = state.nodes
+        .filter(
+          (node) =>
+            incomingNodeIds.has(node.id) ||
+            (node.data.kind === 'unit' && node.data.commitStatus === 'committed') ||
+            node.data.kind === 'leaf' ||
+            (node.data.kind === 'unit' &&
+              node.data.commitStatus !== 'committed' &&
+              !node.data.conversationId &&
+              !node.data.pendingConversationGroup)
+        )
+        .map((node) => {
+          const incomingNode = incomingNodesById.get(node.id);
+          if (!incomingNode || !node.data.pendingConversationGroup) return node;
+          return {
+            ...incomingNode,
+            position: node.position,
+            measured: node.measured,
+          };
+        });
       const retainedNodeIds = new Set(retainedNodes.map((n) => n.id));
       const incomingEdgeIds = new Set(edges.map((e) => e.id));
       const retainedEdges = state.edges.filter(
@@ -104,6 +132,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
           hasMainCommit,
           latestMainCommitId,
           hasDbPositions: state.hasDbPositions || hasDbPositions,
+          pendingConversations,
         };
       }
 
@@ -115,6 +144,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
         hasMainCommit,
         latestMainCommitId,
         hasDbPositions: state.hasDbPositions || hasDbPositions,
+        pendingConversations,
       };
     }),
 
@@ -151,6 +181,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
       hasMainCommit: false,
       latestMainCommitId: undefined,
       hasDbPositions: false,
+      pendingConversations: [],
     });
   },
 

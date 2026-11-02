@@ -10,6 +10,25 @@
   color: var(--text-primary);
   font-family: var(--font-geist-sans), var(--font-sans), sans-serif;
 }
+.reference .reviewBody {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.reference:has(> .reviewBody) {
+  height: auto;
+  overflow: visible;
+  padding: 0;
+}
+.reviewBody .mainColumn {
+  min-height: 420px;
+}
+.reference .reviewBody .inspector {
+  max-height: none;
+  overflow: visible;
+  padding: 12px 0;
+  background: transparent;
+}
 .toolbar {
   display: flex;
   min-height: 52px;
@@ -861,4 +880,11 @@
 }
 .reference .inspector::-webkit-scrollbar {
   display: none;
+}
+.reference:has(> .reviewBody) {
+  max-width: none;
+}
+.reference .reviewBody .mainColumn {
+  height: 64vh;
+  min-height: 420px;
 }

@@ -2,7 +2,6 @@
 
 import {
   ArrowUpRight,
-  Bot,
   Check,
   Copy,
   FileText,
@@ -10,7 +9,6 @@ import {
   Search,
   Sparkles,
   Terminal,
-  UserRound,
 } from 'lucide-react';
 import Image from 'next/image';
 import { type ReactNode, useCallback, useState } from 'react';
@@ -325,25 +323,9 @@ function ComposeChatMessage({
     ) : null;
 
   if (variant === 'discussion') {
-    const Avatar = isUser ? UserRound : Bot;
     return (
       <div className={styles.discussionMessage} data-author={isUser ? 'user' : 'assistant'}>
-        <div className={styles.discussionMessageHeader}>
-          <span className={styles.discussionAvatar}>
-            <Avatar aria-hidden="true" />
-          </span>
-          <strong>{isUser ? 'You' : 'Assistant'}</strong>
-          {isStreaming ? <span>Working…</span> : null}
-          {!isUser && !isStreaming ? (
-            <button
-              aria-label={copied ? 'Message copied' : 'Copy message'}
-              onClick={onCopy}
-              type="button"
-            >
-              {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-            </button>
-          ) : null}
-        </div>
+        <span className="sr-only">{isUser ? 'You' : 'Assistant'}</span>
         {children}
         {images}
         {isUser || message.content.trim() ? (
@@ -361,6 +343,25 @@ function ComposeChatMessage({
               >
                 {discussionText(message.content)}
               </MessageResponse>
+            )}
+          </div>
+        ) : null}
+        {!isUser ? (
+          <div className={styles.discussionActions}>
+            {isStreaming ? (
+              <span>
+                <Loader2 aria-hidden="true" className="size-3 animate-spin" />
+                Working…
+              </span>
+            ) : (
+              <button
+                aria-label={copied ? 'Message copied' : 'Copy message'}
+                onClick={onCopy}
+                title={copied ? 'Copied' : 'Copy'}
+                type="button"
+              >
+                {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+              </button>
             )}
           </div>
         ) : null}

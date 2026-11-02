@@ -188,7 +188,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-export const POSTGRES_SCHEMA_VERSION = 78;
+export const POSTGRES_SCHEMA_VERSION = 79;
 
 function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
   if (!tableExists) return 'missing';
@@ -296,8 +296,9 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
     return;
   }
 
-  // First run or version bump — execute full schema init. v78 combines both v77
-  // branches: public publisher ownership and permanent-deletion path cleanup.
+  // First run or version bump — execute full schema init. v79 adds explicit
+  // conversation commit tracking and evidence-backed historical reconciliation.
+  // v78 combined both v77 branches: public publisher ownership and permanent-deletion path cleanup.
   // It also repairs early v76 tables missing resolvable through ensureRepositoryPaths.
   await sql.unsafe(`
     -- Projects table
@@ -316,6 +317,7 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
       parent_commit_hash TEXT,
       committed_as TEXT,
       committed_at TIMESTAMPTZ,
+      commit_tracking_started_at TIMESTAMPTZ,
       position_x REAL,
       position_y REAL,
       created_at TIMESTAMPTZ NOT NULL,
@@ -1800,6 +1802,7 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
   await sql.unsafe(`
     ALTER TABLE conversations ADD COLUMN IF NOT EXISTS committed_as TEXT;
     ALTER TABLE conversations ADD COLUMN IF NOT EXISTS committed_at TIMESTAMPTZ;
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS commit_tracking_started_at TIMESTAMPTZ;
   `);
 
   // ── Schema v48: Soft archive support for reusable project materials ──
@@ -2137,6 +2140,45 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
     ALTER TABLE transition_yops_log_consumptions
       ADD CONSTRAINT transition_yops_log_consumptions_pkey
       PRIMARY KEY (project_id, yops_log_id);
+
+    -- Recover only commit links backed by one unambiguous Transition YOps
+    -- consumption. Historical rows without proof stay untracked rather than
+    -- being guessed from timestamps and falsely reported as Pending.
+    WITH proven_links AS (
+      SELECT yl.conversation_id,
+             MIN(consumption.commit_digest) AS commit_digest,
+             MAX(consumption.created_at) AS committed_at
+      FROM yops_log yl
+      JOIN transition_yops_log_consumptions consumption
+        ON consumption.project_id = yl.project_id
+       AND consumption.yops_log_id = yl.id
+      GROUP BY yl.conversation_id
+      HAVING COUNT(DISTINCT consumption.commit_digest) = 1
+    )
+    UPDATE conversations conversation
+    SET committed_as = proven_links.commit_digest,
+        committed_at = proven_links.committed_at
+    FROM proven_links
+    WHERE conversation.conversation_id = proven_links.conversation_id
+      AND conversation.committed_as IS NULL;
+
+    -- Preserve legacy work that has objective, still-unconsumed operations.
+    UPDATE conversations conversation
+    SET commit_tracking_started_at = conversation.created_at
+    WHERE conversation.commit_tracking_started_at IS NULL
+      AND conversation.committed_as IS NULL
+      AND EXISTS (
+        SELECT 1
+        FROM yops_log yl
+        WHERE yl.conversation_id = conversation.conversation_id
+          AND yl.superseded_at IS NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM transition_yops_log_consumptions consumption
+            WHERE consumption.project_id = yl.project_id
+              AND consumption.yops_log_id = yl.id
+          )
+      );
   `);
 
   // ── Schema v61: resolved Proposal preparation and Verify operation receipts ──

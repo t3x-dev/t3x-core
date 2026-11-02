@@ -4,11 +4,123 @@ import { expect, it, vi } from 'vitest';
 import { composeDraftChangeCards } from '@/domain/workspaces/composeDraftChanges';
 import { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import type { WorkspaceCandidate } from '@/types/workspaces';
+import { deferred } from './deferred';
 
 const { read, reconcile } = vi.hoisted(() => ({ read: vi.fn(), reconcile: vi.fn() }));
 vi.mock('@/infrastructure/sharedApiClient', () => ({
   getSharedApiClient: () => ({ workspaces: { authoring: { read, reconcile } } }),
 }));
+
+it('does not let an old Workspace activity load replace the selected Workspace', async () => {
+  read.mockReset();
+  const old = deferred<unknown>();
+  const next = {
+    actions: [],
+    netDiff: [],
+    selected: null,
+    nextBeforeSequence: null,
+    workspaceRevision: 9,
+  };
+  read.mockReturnValueOnce(old.promise).mockResolvedValueOnce(next);
+  const candidate = { id: 'same-id', projectId: 'a', revision: 1 } as WorkspaceCandidate;
+  const { result, rerender, unmount } = renderHook(
+    ({ workspace }) => useComposeActivity(workspace, true),
+    {
+      initialProps: { workspace: candidate },
+    }
+  );
+  rerender({ workspace: { ...candidate, projectId: 'b' } });
+  await waitFor(() => expect(result.current.view).toEqual(next));
+  await act(async () => old.resolve({ ...next, workspaceRevision: 1 }));
+  expect(result.current.view).toEqual(next);
+  unmount();
+});
+
+it('only the latest activity refresh can finish loading or update the projection', async () => {
+  read.mockReset();
+  const old = deferred<unknown>();
+  const latest = deferred<unknown>();
+  read.mockReturnValueOnce(old.promise).mockReturnValueOnce(latest.promise);
+  const candidate = { id: 'ws', projectId: 'p', revision: 1 } as WorkspaceCandidate;
+  const { result, unmount } = renderHook(() => useComposeActivity(candidate, true));
+  let pending!: ReturnType<typeof result.current.loadLatest>;
+  act(() => {
+    pending = result.current.loadLatest();
+  });
+  const view = {
+    actions: [],
+    netDiff: [],
+    selected: null,
+    nextBeforeSequence: null,
+    workspaceRevision: 1,
+  };
+  await act(async () => old.resolve(view));
+  expect(result.current.view).toBeNull();
+  expect(result.current.loading).toBe(true);
+  await act(async () => {
+    latest.resolve({ ...view, workspaceRevision: 2 });
+    await pending;
+  });
+  expect(result.current.view?.workspaceRevision).toBe(2);
+  expect(result.current.loading).toBe(false);
+  unmount();
+});
+
+it('invalidates node pagination when a different node is selected', async () => {
+  read.mockReset();
+  const view = { actions: [], selected: null, nextBeforeSequence: null, workspaceRevision: 1 };
+  read.mockResolvedValueOnce(view);
+  const { result, unmount } = renderHook(() =>
+    useComposeActivity({ id: 'ws', projectId: 'p' } as WorkspaceCandidate, true)
+  );
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  const entries = Array.from({ length: 20 }, (_, sequence) => ({ sequence }));
+  read.mockResolvedValueOnce({ ...view, node: { id: 'a', entries } });
+  await act(async () => result.current.inspectNode('a'));
+  const older = deferred<unknown>();
+  read
+    .mockReturnValueOnce(older.promise)
+    .mockResolvedValueOnce({ ...view, node: { id: 'b', entries: [{ sequence: 40 }] } });
+  let pending!: ReturnType<typeof result.current.loadOlderNode>;
+  act(() => {
+    pending = result.current.loadOlderNode('a');
+  });
+  await act(async () => result.current.inspectNode('b'));
+  await act(async () => {
+    older.resolve({ ...view, node: { id: 'a', entries: [{ sequence: -1 }] } });
+    await pending;
+  });
+  expect(result.current.node).toEqual({ id: 'b', entries: [{ sequence: 40 }] });
+  unmount();
+});
+
+it('clears node selection and ignores its late response when switching Workspace', async () => {
+  read.mockReset();
+  const view = { actions: [], selected: null, nextBeforeSequence: null, workspaceRevision: 1 };
+  read.mockResolvedValue(view);
+  const candidate = { id: 'a', projectId: 'p' } as WorkspaceCandidate;
+  const { result, rerender, unmount } = renderHook(
+    ({ workspace }) => useComposeActivity(workspace, true),
+    {
+      initialProps: { workspace: candidate },
+    }
+  );
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  const node = deferred<unknown>();
+  read.mockReturnValueOnce(node.promise);
+  let pending!: ReturnType<typeof result.current.inspectNode>;
+  act(() => {
+    pending = result.current.inspectNode('node-a');
+  });
+  rerender({ workspace: { ...candidate, id: 'b' } });
+  expect(result.current.nodeLoading).toBe(false);
+  await act(async () => {
+    node.resolve({ ...view, node: { entries: [] } });
+    expect(await pending).toBeNull();
+  });
+  expect(result.current.node).toBeNull();
+  unmount();
+});
 
 it('syncs using fresh preconditions and preserves the visible Draft if reconciliation conflicts', async () => {
   read.mockReset();

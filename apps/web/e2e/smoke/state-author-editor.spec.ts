@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { getProjectIdRepoPath } from '../../src/domain/project/repoPath';
+import { getProjectRepoPath } from '../../src/domain/project/repoPath';
 import { expect, test } from '../fixtures/test';
 import {
   API_BASE,
@@ -19,7 +19,7 @@ test('repository README authoring preserves exact State and keeps cancelled edit
   );
   try {
     const owned = (await (await request.get(`${API_BASE}/projects/${projectId}`)).json()).data;
-    const projectPath = getProjectIdRepoPath(owned.project_id);
+    const projectPath = getProjectRepoPath(owned);
     const commit = await createTestCommitFromTrees(request, projectId, [
       {
         key: 'services',

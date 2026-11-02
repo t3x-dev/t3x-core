@@ -49,6 +49,7 @@ import styles from './WorkspaceComposeSurface.module.css';
 export function ComposeAuthoringAssistant({
   projectId,
   conversationId: initialConversationId,
+  title,
   context,
   onCreateConversation,
   onPublishCandidate,
@@ -70,6 +71,7 @@ export function ComposeAuthoringAssistant({
   onConversationChange?: (conversationId: string) => void;
   beforeComposer?: ReactNode;
   conversationId?: string;
+  title?: string;
   context: WorkspaceAssistantContext;
   onCreateConversation: () => Promise<string>;
   onPublishCandidate: (
@@ -179,6 +181,7 @@ export function ComposeAuthoringAssistant({
   const chat = useSourceThreadGeneration({
     projectId,
     conversationId,
+    title,
     provider: model.selectedProvider ?? undefined,
     model: model.selectedModel ?? undefined,
     workspaceAssistant: {

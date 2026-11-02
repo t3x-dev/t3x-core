@@ -44,6 +44,28 @@ const boundReview = {
   draftContent: {},
 } as WorkspaceFullSchemaReview;
 
+it('shows content validation as not applicable for a server-scoped Schema-only review', () => {
+  const ready = view({ accept: { disposition: 'allowed', reasons: [] } });
+  ready.checks.validation = { observation: 'no_statement_observed', outcomes: [], runs: [] };
+  const review = { ...boundReview, contentValidation: 'not_applicable' as const };
+  expect(workspaceCommitBlocker(review, ready)).toBeUndefined();
+  expect(
+    changeCheckRows(ready, review.contentValidation).find((row) => row.id === 'validation')
+  ).toMatchObject({
+    label: 'Content validation',
+    status: 'not_applicable',
+    summary: expect.stringContaining('no business content'),
+  });
+  ready.checks.validation.observation = 'observed';
+  ready.checks.validation.outcomes = ['failed'];
+  ready.checks.validation.runs = [
+    { predicate: { outcome: 'failed', errors: [], gaps: [] } },
+  ] as never;
+  expect(
+    changeCheckRows(ready, review.contentValidation).find((row) => row.id === 'validation')?.status
+  ).toBe('failed');
+});
+
 it.each([
   'missing',
   'wrong-schema',

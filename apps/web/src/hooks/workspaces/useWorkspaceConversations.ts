@@ -1,6 +1,11 @@
 import { useCallback } from 'react';
-import { type UpdateConversationInput, updateConversation } from '@/commands/conversations';
+import {
+  deleteConversation,
+  type UpdateConversationInput,
+  updateConversation,
+} from '@/commands/conversations';
 import { useConversations } from '@/hooks/shared/useApi';
+import { fetchConversation } from '@/queries/conversations';
 
 export function useWorkspaceConversations(projectId: string) {
   const query = useConversations(projectId, 100, 0);
@@ -13,5 +18,15 @@ export function useWorkspaceConversations(projectId: string) {
     [query.refetch]
   );
 
-  return { ...query, update };
+  const get = useCallback((conversationId: string) => fetchConversation(conversationId), []);
+
+  const remove = useCallback(
+    async (conversationId: string) => {
+      await deleteConversation(conversationId);
+      await query.refetch();
+    },
+    [query.refetch]
+  );
+
+  return { ...query, get, remove, update };
 }

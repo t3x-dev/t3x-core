@@ -203,6 +203,23 @@ export async function getWorkspaceTransitionReviewSnapshot(
   }
 }
 
+export async function getLatestWorkspaceTransitionReviewSnapshot(
+  projectId: string,
+  workspaceId: string,
+  transitionId?: string
+): Promise<WorkspaceTransitionReviewSnapshotResponse> {
+  try {
+    return await getSharedApiClient().workspaces.getLatestReviewSnapshot(
+      projectId,
+      workspaceId,
+      transitionId ? { transition_id: transitionId } : undefined
+    );
+  } catch (error) {
+    if (error instanceof T3xApiError) throw new ApiError(error.code, error.message, error.details);
+    throw error;
+  }
+}
+
 export async function saveProjectWorkspace(
   projectId: string,
   workspaceId: string,

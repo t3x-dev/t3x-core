@@ -42,6 +42,7 @@ import {
   getTransitionPolicyBinding,
   getTransitionRefHead,
   getTransitionViewForCommit,
+  markProjectConversationsCommitted,
   type ResolvedTransitionProposalGraph,
   recordRepositoryDecision,
   recordRepositoryDecisionAuthorization,
@@ -811,6 +812,13 @@ export async function commitTransition(input: {
             currentWorkspace.revision
           );
       committedWorkspace = { ...(draft.workspace_state ?? {}), revision: draft.revision };
+      await markProjectConversationsCommitted(
+        tx,
+        input.projectId,
+        workspaceSourceConversationIds(currentWorkspace.workspace_state ?? {}),
+        commitDigest,
+        new Date(committedAt)
+      );
       await recordTransitionCommandReceipt(tx, {
         transitionId: input.transitionId,
         projectId: input.projectId,
@@ -846,4 +854,19 @@ export async function commitTransition(input: {
     reused: false,
     ...(committedWorkspace === undefined ? {} : { workspace: committedWorkspace }),
   };
+}
+
+function workspaceSourceConversationIds(workspace: Record<string, unknown>): string[] {
+  if (!Array.isArray(workspace.sourceBundle)) return [];
+
+  return workspace.sourceBundle.flatMap((source) => {
+    if (source === null || typeof source !== 'object' || Array.isArray(source)) return [];
+    const record = source as Record<string, unknown>;
+    if (typeof record.conversationId === 'string' && record.conversationId.trim()) {
+      return [record.conversationId.trim()];
+    }
+    if (record.type !== 'chat' || typeof record.id !== 'string') return [];
+    const match = record.id.match(/(?:^|:)(conv_[A-Za-z0-9_-]+)$/);
+    return match?.[1] ? [match[1]] : [];
+  });
 }

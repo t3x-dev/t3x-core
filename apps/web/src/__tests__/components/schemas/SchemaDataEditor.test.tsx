@@ -44,6 +44,78 @@ const callbacks = () => ({
   onDiscard: vi.fn(),
 });
 
+it('links both directions without editing the draft or replacing the active details', () => {
+  const handlers = callbacks();
+  const originalScroll = HTMLElement.prototype.scrollIntoView;
+  HTMLElement.prototype.scrollIntoView = vi.fn();
+  try {
+    const { container } = render(
+      <SchemaDataEditor
+        workbenchFooter
+        projectId="p"
+        loading={false}
+        initialDefinition={{
+          nodes: {
+            alpha: { slots: { profile: { type: 'object' } } },
+            beta: { slots: { profile: { type: 'object' }, local: { type: 'string' } } },
+          },
+        }}
+        revisionKey="linked-selection"
+        initialSourceMappings={['alpha', 'beta'].map((name) => ({
+          path: ['nodes', name, 'slots', 'profile'],
+          from: ['nodes', 'person', 'slots', 'profile'],
+          source: { candidateId: 'people', schemaHash: 'sha256:source' },
+        }))}
+        sources={[
+          {
+            id: 'people',
+            projectId: 'p',
+            studioId: 'main',
+            createdAt: '',
+            title: 'People',
+            available: true,
+            source: null,
+            description: null,
+            kind: 'schema',
+            license: null,
+            reason: null,
+          },
+        ]}
+        {...handlers}
+      />
+    );
+    fireEvent.focus(screen.getByLabelText('Name alpha/profile'));
+    const source = screen.getByRole('button', { name: 'Select source object person/profile' });
+    expect(source).toHaveAttribute('data-related', 'true');
+    expect(
+      screen.getByRole('button', { name: 'Select source node person', exact: true })
+    ).not.toHaveAttribute('data-related');
+    expect(source.closest('details')).toHaveAttribute('data-related', 'true');
+    fireEvent.click(source);
+    fireEvent.keyDown(screen.getByLabelText('Destination node'), { key: 'Escape' });
+    expect(container.querySelectorAll('[data-schema-path][data-related="direct"]')).toHaveLength(2);
+    expect(
+      screen.getByLabelText('Name alpha/profile').closest('[role="treeitem"]')
+    ).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse beta', exact: true }));
+    expect(container.querySelector('[data-related="contains"]')).toHaveAttribute(
+      'title',
+      'Contains fields related to the selected source'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Locate', exact: true }));
+    expect(screen.getByLabelText('Name beta/profile')).toBeVisible();
+    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledOnce();
+    fireEvent.focus(screen.getByLabelText('Name beta/local'));
+    expect(source).not.toHaveAttribute('data-related');
+    expect(container.querySelectorAll('[data-schema-path][data-related]')).toHaveLength(0);
+    expect(handlers.onPreview).not.toHaveBeenCalled();
+    expect(handlers.onSave).not.toHaveBeenCalled();
+    expect(handlers.onDirtyChange).not.toHaveBeenCalledWith(true);
+  } finally {
+    HTMLElement.prototype.scrollIntoView = originalScroll;
+  }
+});
+
 describe('Schema data editor', () => {
   it.each([
     ['node person', 'root', 'nodes.person.children.address.slots.city'],
@@ -76,7 +148,7 @@ describe('Schema data editor', () => {
     expect(screen.getByRole('complementary', { name: 'Available Schema sources' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: `Select source ${item}` }));
     fireEvent.change(screen.getByLabelText('Destination node'), { target: { value: destination } });
-    fireEvent.click(screen.getByRole('button', { name: 'Import here' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add here' }));
     expect(handlers.onPreview.mock.lastCall?.[0]).toHaveProperty(path, { type: 'string' });
     const mappings = handlers.onPreview.mock.lastCall?.[1];
     expect(mappings).toHaveLength(item.startsWith('node') ? 4 : 1);
@@ -86,7 +158,7 @@ describe('Schema data editor', () => {
     expect(screen.getByRole('button', { name: `Select source ${item}` })).toBeVisible();
     if (item.startsWith('object'))
       expect(screen.getByLabelText('Required project/profile')).toBeChecked();
-    fireEvent.click(screen.getByRole('button', { name: 'Save candidate' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() => expect(handlers.onSave).toHaveBeenCalledOnce());
     expect(handlers.onSave.mock.lastCall?.[2]).toEqual(handlers.onPreview.mock.lastCall?.[1]);
   });
@@ -109,6 +181,167 @@ describe('Schema data editor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(screen.getByLabelText('Name checklist/title')).toBeVisible();
     expect(screen.getByLabelText('Required checklist/title')).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+    expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it('clears unsaved changes when a field is restored, regardless of object key order', () => {
+    const handlers = callbacks();
+    render(<SchemaDataEditor initialDefinition={definition} revisionKey="restore" {...handlers} />);
+    fireEvent.change(screen.getByLabelText('Type checklist/title'), { target: { value: '' } });
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
+    fireEvent.change(screen.getByLabelText('Type checklist/title'), {
+      target: { value: 'string' },
+    });
+    expect(handlers.onPreview.mock.lastCall?.[0]).toEqual(definition);
+    expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+  });
+
+  it('clears unsaved changes after a rename is reversed, including its local mapping', () => {
+    const handlers = callbacks();
+    render(<SchemaDataEditor initialDefinition={definition} revisionKey="rename" {...handlers} />);
+    fireEvent.change(screen.getByLabelText('Name checklist/title'), {
+      target: { value: 'heading' },
+    });
+    fireEvent.blur(screen.getByLabelText('Name checklist/title'));
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
+    fireEvent.change(screen.getByLabelText('Name checklist/heading'), {
+      target: { value: 'title' },
+    });
+    fireEvent.blur(screen.getByLabelText('Name checklist/heading'));
+    expect(handlers.onPreview.mock.lastCall?.[0]).toEqual(definition);
+    expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+  });
+
+  it('clears unsaved changes after adding and deleting a field', async () => {
+    const handlers = callbacks();
+    render(
+      <SchemaDataEditor initialDefinition={definition} revisionKey="add-delete" {...handlers} />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Add to checklist', exact: true }));
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Actions for checklist/new_field' }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete field', exact: true }));
+    expect(handlers.onPreview.mock.lastCall?.[0]).toEqual(definition);
+    expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+  });
+
+  it('keeps a changed source origin dirty even when the imported definition is identical', async () => {
+    const handlers = callbacks();
+    const original = {
+      nodes: {
+        person: {
+          slots: { profile: { type: 'object', properties: { name: { type: 'string' } } } },
+          requiredSlots: ['profile'],
+          children: { address: { slots: { city: { type: 'string' } } } },
+        },
+      },
+    };
+    render(
+      <SchemaDataEditor
+        projectId="p"
+        initialDefinition={original}
+        revisionKey="origin-change"
+        sources={[
+          {
+            id: 'people',
+            projectId: 'p',
+            studioId: 'main',
+            createdAt: '',
+            title: 'People',
+            available: true,
+            source: null,
+            description: null,
+            kind: 'schema',
+            license: null,
+            reason: null,
+          },
+        ]}
+        {...handlers}
+      />
+    );
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Actions for person', exact: true }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete node', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select source node person', exact: true }));
+    fireEvent.change(screen.getByLabelText('Destination node'), { target: { value: 'root' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add here' }));
+    expect(handlers.onPreview.mock.lastCall?.[0]).toEqual(original);
+    expect(handlers.onPreview.mock.lastCall?.[1]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: { candidateId: 'people', schemaHash: 'sha256:source' } }),
+      ])
+    );
+    expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(true);
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
+  });
+
+  it('compares later edits with the successful save rather than the original input', async () => {
+    const handlers = callbacks();
+    render(
+      <SchemaDataEditor initialDefinition={definition} revisionKey="save-baseline" {...handlers} />
+    );
+    fireEvent.change(screen.getByLabelText('Type checklist/title'), {
+      target: { value: 'number' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled());
+    fireEvent.change(screen.getByLabelText('Type checklist/title'), {
+      target: { value: 'string' },
+    });
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(screen.getByLabelText('Type checklist/title')).toHaveValue('number');
+    expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+  });
+
+  it('preserves input and the previous saved baseline after a failed save', async () => {
+    const handlers = callbacks();
+    handlers.onSave.mockRejectedValueOnce(new Error('Save failed'));
+    render(
+      <SchemaDataEditor initialDefinition={definition} revisionKey="save-failure" {...handlers} />
+    );
+    fireEvent.change(screen.getByLabelText('Type checklist/title'), {
+      target: { value: 'number' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Save failed');
+    expect(screen.getByLabelText('Type checklist/title')).toHaveValue('number');
+    expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(true);
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
+    fireEvent.change(screen.getByLabelText('Type checklist/title'), {
+      target: { value: 'string' },
+    });
+    expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+  });
+
+  it('keeps an unsaved blank Schema dirty after undoing its first edit', async () => {
+    const handlers = callbacks();
+    render(
+      <SchemaDataEditor
+        initialDefinition={{ yschema: '0.1', name: 'Blank', nodes: {} }}
+        initiallyDirty
+        revisionKey="unsaved-blank"
+        {...handlers}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Add', exact: true }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Top-level node' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
+    expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(false));
   });
 
   it('keeps node operations in the row menu and excludes invalid move destinations', () => {
@@ -138,7 +371,7 @@ describe('Schema data editor', () => {
     );
     expect(screen.getByRole('alert')).toHaveTextContent('Source unavailable');
     expect(screen.queryByText('Loading Schema definition…')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Retry Schema' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(onRetry).toHaveBeenCalledOnce();
   });
   it('restores the visible name when a referenced node cannot be renamed', () => {
@@ -173,7 +406,7 @@ describe('Schema data editor', () => {
       target: { value: 'string' },
     });
     fireEvent.click(screen.getByLabelText('Required checklist/items/done'));
-    fireEvent.click(screen.getByRole('button', { name: 'Save candidate' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() => expect(handlers.onSave).toHaveBeenCalledTimes(1));
     const saved = handlers.onSave.mock.calls[0]![0];
     expect(saved.nodes.checklist.requiredSlots).toEqual(['heading']);
@@ -202,29 +435,26 @@ describe('Schema data editor', () => {
     );
     expect(screen.getByLabelText('Type checklist/title')).toHaveValue('number');
     expect(screen.getByRole('alert')).toHaveTextContent('changed elsewhere');
-    expect(screen.getByRole('button', { name: 'Save candidate' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
     expect(handlers.onSave).not.toHaveBeenCalled();
   });
   it('uses shared attribute controls and blocks invalid JSON without losing it', async () => {
     const handlers = callbacks();
     render(<SchemaDataEditor initialDefinition={definition} revisionKey="1" {...handlers} />);
     fireEvent.focus(screen.getByLabelText('Name checklist/title'));
-    fireEvent.change(screen.getByLabelText('default for slot checklist/title'), {
+    fireEvent.change(screen.getByLabelText('Add a setting'), { target: { value: 'default' } });
+    fireEvent.change(screen.getByLabelText('Default value for slot checklist/title'), {
       target: { value: '{' },
     });
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Save candidate' })).toBeDisabled()
-    );
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled());
     fireEvent.change(screen.getByLabelText('Type checklist/items/done'), {
       target: { value: 'string' },
     });
-    expect(screen.getByLabelText('default for slot checklist/title')).toHaveValue('{');
-    fireEvent.change(screen.getByLabelText('default for slot checklist/title'), {
+    expect(screen.getByLabelText('Default value for slot checklist/title')).toHaveValue('{');
+    fireEvent.change(screen.getByLabelText('Default value for slot checklist/title'), {
       target: { value: '"Untitled"' },
     });
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Save candidate' })).toBeEnabled()
-    );
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled());
   });
 });
 
@@ -252,20 +482,25 @@ it('shows exact node sources without selecting or changing the node and marks su
       sourceIdentities={{ [schemaSourceKey(pin)]: { name: 'Checklist', projectId: pin.projectId } }}
     />
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Source for checklist: Checklist @ 1.2.0' }));
-  const link = await screen.findByRole('link', { name: 'View exact release ↗' });
+  fireEvent.click(screen.getByRole('button', { name: 'Origin for checklist: Checklist @ 1.2.0' }));
+  const link = await screen.findByRole('link', { name: 'View source version' });
   const query = new URL(link.getAttribute('href')!, 'https://example.test').searchParams;
   expect(query.get('catalogHash')).toBe(pin.hash);
   expect(query.get('catalogVersion')).toBe(pin.version);
   expect(query.get('sourceProjectId')).toBe(pin.projectId);
   expect(link).toHaveAttribute('target', '_blank');
-  expect(screen.getByText('Original Commit link unavailable for this source.')).toBeVisible();
+  expect(screen.getByText('Original commit unavailable.')).not.toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Technical details' }));
+  expect(screen.getByText(pin.hash)).toBeVisible();
+  expect(screen.getByText('Original commit unavailable.')).toBeVisible();
   expect(handlers.onPreview).not.toHaveBeenCalled();
   expect(handlers.onSave).not.toHaveBeenCalled();
   fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
   fireEvent.click(screen.getByLabelText('Required checklist'));
   expect(
-    screen.getByRole('button', { name: 'Source for checklist: Checklist @ 1.2.0 + local edits' })
+    screen.getByRole('button', {
+      name: 'Origin for checklist: Checklist @ 1.2.0 + workspace edits',
+    })
   ).toBeVisible();
 });
 
@@ -308,16 +543,203 @@ it('opens the verified original project and Commit without replacing it with the
     />
   );
   fireEvent.click(
-    screen.getByRole('button', { name: 'Source for checklist: team/released @ 2.0.0' })
+    screen.getByRole('button', { name: 'Origin for checklist: team/released @ 2.0.0' })
   );
-  const link = await screen.findByRole('link', { name: 'View source Commit ↗' });
+  fireEvent.click(await screen.findByRole('button', { name: 'Technical details' }));
+  const link = await screen.findByRole('link', { name: 'View source commit' });
   const url = new URL(link.getAttribute('href')!, 'https://example.test');
   expect(url.pathname).toBe('/project/original%2Fproject/history');
   expect(url.searchParams.get('commit')).toBe(commitDigest);
   expect(link).toHaveAttribute('target', '_blank');
   expect(screen.getByText('original/checklist')).toBeVisible();
-  expect(screen.getByRole('link', { name: 'View exact release ↗' })).toBeVisible();
+  expect(screen.getByRole('link', { name: 'View source version' })).toBeVisible();
+  expect(screen.queryByText('Original commit unavailable.')).not.toBeInTheDocument();
+});
+
+it('adds fields through the shared Add menu with an explicit parent and opens contextual properties', async () => {
+  const handlers = callbacks();
+  render(
+    <SchemaDataEditor
+      initialDefinition={definition}
+      revisionKey="r1"
+      loading={false}
+      {...handlers}
+    />
+  );
+  expect(screen.getByRole('complementary', { name: 'Schema properties' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Add', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Field…' }));
+  const parent = screen.getByLabelText('Parent node');
+  expect(screen.getByRole('button', { name: 'Add field', exact: true })).toBeDisabled();
+  fireEvent.change(parent, { target: { value: '["nodes","checklist"]' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Add field', exact: true }));
+  await waitFor(() =>
+    expect(handlers.onPreview).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        nodes: expect.objectContaining({
+          checklist: expect.objectContaining({
+            slots: expect.objectContaining({ new_field: { type: 'string' } }),
+          }),
+        }),
+      }),
+      expect.any(Array)
+    )
+  );
+  expect(screen.getByRole('complementary', { name: 'Schema properties' })).toBeVisible();
+});
+
+describe('Schema editor lifecycle states', () => {
+  it('shows focused Studio entry actions while preserving separate loading, error and empty-definition states', async () => {
+    const handlers = callbacks();
+    const create = vi.fn();
+    const choose = vi.fn();
+    const props = {
+      ...handlers,
+      revisionKey: 'studio-empty',
+      projectId: 'p',
+      workbenchFooter: true,
+      loading: false,
+      onCreateBlank: create,
+      onChooseSources: choose,
+    };
+    const { rerender } = render(<SchemaDataEditor {...props} loading />);
+    expect(screen.getByText('Loading Schema definition…')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Create schema' })).not.toBeInTheDocument();
+    rerender(<SchemaDataEditor {...props} previewError="Snapshot unavailable" />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Snapshot unavailable');
+    expect(screen.queryByRole('button', { name: 'Create schema' })).not.toBeInTheDocument();
+    rerender(<SchemaDataEditor {...props} />);
+    expect(screen.queryByRole('textbox', { name: 'Find a node or field' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('complementary', { name: 'Available Schema sources' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('complementary', { name: 'Schema properties' })
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Create schema' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Use an existing schema…' }));
+    expect(create).toHaveBeenCalledOnce();
+    expect(choose).toHaveBeenCalledOnce();
+    expect(handlers.onSave).not.toHaveBeenCalled();
+    rerender(
+      <SchemaDataEditor
+        {...props}
+        initialDefinition={{ yschema: '0.1', name: 'Blank', nodes: {} }}
+      />
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Add', exact: true })).toBeEnabled()
+    );
+    expect(screen.queryByRole('button', { name: 'Create schema' })).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Schema change intent' })).toBeVisible();
+    expect(screen.getByText('No nodes yet')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Add node', exact: true }));
+    expect(handlers.onPreview).toHaveBeenLastCalledWith(
+      expect.objectContaining({ nodes: { new_node: expect.any(Object) } }),
+      []
+    );
+  });
+  it('keeps the same tree and toolbar for loading, failure, unbound and empty definitions', async () => {
+    const handlers = callbacks();
+    const create = vi.fn();
+    const retry = vi.fn();
+    const props = {
+      ...handlers,
+      revisionKey: 'empty',
+      sources: [],
+      sourceManagement: <button type="button">Manage sources</button>,
+      onCreateBlank: create,
+      onRetry: retry,
+    };
+    const { rerender } = render(<SchemaDataEditor {...props} loading />);
+    const shell = screen.getByRole('region', { name: 'Schema data editor' });
+    expect(screen.getByText('Loading Schema definition…')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Add', exact: true })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Create schema' })).not.toBeInTheDocument();
+    rerender(<SchemaDataEditor {...props} loading={false} previewError="Snapshot missing" />);
+    expect(screen.getByRole('region', { name: 'Schema data editor' })).toBe(shell);
+    expect(screen.getByRole('alert')).toHaveTextContent('Snapshot missing');
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(retry).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('button', { name: 'Create schema' })).not.toBeInTheDocument();
+    rerender(<SchemaDataEditor {...props} loading={false} />);
+    expect(screen.getByRole('region', { name: 'Schema data editor' })).toBe(shell);
+    fireEvent.click(screen.getByRole('button', { name: 'Create schema' }));
+    expect(create).toHaveBeenCalledOnce();
+    expect(handlers.onSave).not.toHaveBeenCalled();
+    rerender(
+      <SchemaDataEditor
+        {...props}
+        loading={false}
+        initiallyDirty
+        initialDefinition={{ yschema: '0.1', name: 'Blank', nodes: {} }}
+      />
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Add', exact: true })).toBeEnabled()
+    );
+    expect(screen.getByRole('region', { name: 'Schema data editor' })).toBe(shell);
+    expect(
+      screen.getByText('No nodes yet. Add a node or drag one from Schema sources.')
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() =>
+      expect(handlers.onSave).toHaveBeenCalledWith(
+        { yschema: '0.1', name: 'Blank', nodes: {} },
+        expect.any(String),
+        []
+      )
+    );
+  });
+});
+
+it('keeps an edited Schema after deleting its last node', async () => {
+  const handlers = callbacks();
+  render(
+    <SchemaDataEditor
+      {...handlers}
+      loading={false}
+      revisionKey="delete-last"
+      initialDefinition={{ yschema: '0.1', name: 'Local', nodes: { note: { slots: {} } } }}
+    />
+  );
+  fireEvent.pointerDown(await screen.findByRole('button', { name: 'Actions for note' }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete node', exact: true }));
   expect(
-    screen.queryByText('Original Commit link unavailable for this source.')
-  ).not.toBeInTheDocument();
+    screen.getByText('No nodes yet. Add a node or drag one from Schema sources.')
+  ).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Create schema' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Add', exact: true })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+  await waitFor(() =>
+    expect(handlers.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ nodes: {} }),
+      expect.any(String),
+      []
+    )
+  );
+});
+
+it('keeps the parent picker focused after the Add menu closes and cancels without editing', async () => {
+  const handlers = callbacks();
+  render(
+    <SchemaDataEditor
+      initialDefinition={definition}
+      revisionKey="picker"
+      loading={false}
+      {...handlers}
+    />
+  );
+  const add = screen.getByRole('button', { name: 'Add', exact: true });
+  fireEvent.click(add);
+  fireEvent.click(screen.getByRole('button', { name: 'Field…' }));
+  await waitFor(() => expect(screen.getByLabelText('Parent node')).toHaveFocus());
+  expect(document.querySelector('[data-slot="dialog-overlay"]')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel', exact: true }));
+  await waitFor(() => expect(add).toHaveFocus());
+  expect(screen.queryByLabelText('Parent node')).not.toBeInTheDocument();
+  expect(handlers.onPreview).not.toHaveBeenCalled();
 });

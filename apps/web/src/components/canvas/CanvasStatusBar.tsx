@@ -25,11 +25,11 @@ function Segment({ children, border = true }: { children: React.ReactNode; borde
 
 export function CanvasStatusBar() {
   const nodes = useCanvasStore((s) => s.nodes);
+  const pendingCount = useCanvasStore((s) => s.pendingConversations.length);
   const { t } = useTerminology();
 
   const stats = useMemo(() => {
     let commits = 0;
-    let staging = 0;
     let leaves = 0;
     const branches = new Set<string>();
 
@@ -40,8 +40,6 @@ export function CanvasStatusBar() {
       if (node.data.kind === 'unit') {
         if (node.data.commitStatus === 'committed') {
           commits++;
-        } else {
-          staging++;
         }
         if (node.data.branchType === 'branch' && node.data.branchName) {
           branches.add(node.data.branchName);
@@ -52,7 +50,7 @@ export function CanvasStatusBar() {
       }
     }
 
-    return { commits, staging, branches: branches.size, leaves };
+    return { commits, branches: branches.size, leaves };
   }, [nodes]);
 
   return (
@@ -69,10 +67,10 @@ export function CanvasStatusBar() {
           {stats.commits} {t(stats.commits === 1 ? 'commit' : 'commits').toLowerCase()}
         </span>
       </Segment>
-      {stats.staging > 0 && (
+      {pendingCount > 0 && (
         <Segment>
           <span className="text-[var(--accent-pending)]">
-            {stats.staging} {t('pending').toLowerCase()}
+            {pendingCount} {t('pending').toLowerCase()}
           </span>
         </Segment>
       )}

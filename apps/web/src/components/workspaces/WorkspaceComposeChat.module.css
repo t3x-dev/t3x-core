@@ -134,65 +134,11 @@
   min-width: 0;
   margin-top: -8px;
 }
-.discussionMessageHeader {
-  display: flex;
-  height: 24px;
-  align-items: center;
-  gap: 7px;
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-.discussionMessageHeader strong {
-  font-size: 12px;
-  font-weight: 600;
-}
-.discussionAvatar {
-  display: grid;
-  width: 24px;
-  height: 24px;
-  place-items: center;
-  border-radius: 50%;
-  color: var(--accent-commit);
-  background: var(--accent-commit-soft);
-}
-.discussionAvatar svg {
-  width: 14px;
-  height: 14px;
-}
-.discussionMessageHeader button {
-  margin-left: auto;
-  opacity: 0;
-}
-.discussionMessageHeader button svg {
-  width: 12px;
-  height: 12px;
-}
-.discussionMessage:hover .discussionMessageHeader button,
-.discussionMessageHeader button:focus-visible {
-  opacity: 1;
-}
 .discussionBubble {
-  margin-top: 8px;
-  border-radius: 4px;
-  background: #eef2ff;
-  padding: 16px;
   color: var(--text-primary);
   font-size: 14px;
-  line-height: 21px;
+  line-height: 1.7;
   overflow-wrap: anywhere;
-}
-.discussionMessage[data-author="user"] .discussionBubble {
-  border-radius: 4px;
-  background: #f8f9fa;
-  padding: 12px;
-}
-.discussionMessage[data-author="assistant"] .discussionBubble {
-  background: transparent;
-  padding: 0;
-}
-.discussionMessage[data-author="assistant"] .discussionAvatar {
-  background: #dbeafe;
-  color: #2563eb;
 }
 .discussionBubble p {
   margin-block: 0 8px;
@@ -287,37 +233,73 @@
   background: var(--surface-panel);
 }
 .discussionContent {
-  padding: 24px 20px;
-  gap: 24px;
+  padding: 24px 24px 32px;
+  gap: 28px;
+}
+.discussionMessage {
+  display: flex;
+  flex-direction: column;
 }
 .discussionMessage[data-author="user"] {
-  margin-left: 22px;
-}
-.discussionMessage[data-author="user"] .discussionMessageHeader {
-  color: var(--text-tertiary);
-}
-.discussionMessage[data-author="user"] .discussionAvatar {
-  display: none;
+  align-items: flex-end;
 }
 .discussionMessage[data-author="user"] .discussionBubble {
-  border: 1px solid var(--stroke-divider);
-  border-radius: var(--radius-md);
+  max-width: min(85%, 560px);
+  border-radius: 18px;
   background: var(--surface-app);
-  padding: 12px 14px;
-  color: var(--text-secondary);
-  font-size: 13px;
+  padding: 9px 16px;
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.6;
 }
-.discussionMessage[data-author="assistant"] .discussionAvatar {
-  border-radius: var(--radius-md);
-  background: var(--accent-conversation-soft);
-  color: var(--accent-conversation);
+.discussionMessage[data-author="user"] .discussionBubble p {
+  white-space: pre-wrap;
 }
 .discussionMessage[data-author="assistant"] .discussionBubble {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.75;
-  margin-left: 0;
 }
 .discussionMessage[data-author="user"] .messageImages {
-  justify-content: flex-start;
-  max-width: 100%;
+  justify-content: flex-end;
+  max-width: 85%;
+  margin: 0 0 6px;
+}
+.discussionActions {
+  display: flex;
+  min-height: 26px;
+  align-items: center;
+  gap: 2px;
+  margin-top: 6px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.discussionActions > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.discussionActions button {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--text-tertiary);
+  opacity: 0;
+  transition:
+    opacity 120ms ease,
+    background-color 120ms ease;
+}
+.discussionActions button svg {
+  width: 14px;
+  height: 14px;
+}
+.discussionActions button:hover {
+  background: var(--surface-app);
+  color: var(--text-primary);
+}
+.discussionMessage:hover .discussionActions button,
+.discussionMessage:last-child .discussionActions button,
+.discussionActions button:focus-visible {
+  opacity: 1;
 }

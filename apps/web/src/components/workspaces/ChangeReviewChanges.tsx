@@ -14,12 +14,34 @@ type ChangeTab = 'fields' | 'operations';
 export function ChangeReviewChanges({
   groups,
   operations,
+  operationsAsDetails = false,
 }: {
   groups: readonly FieldChangeGroup[] | null;
   operations: readonly unknown[];
+  operationsAsDetails?: boolean;
 }) {
   const [tab, setTab] = useState<ChangeTab | null>(null);
   const activeTab = groups ? (tab ?? 'fields') : 'operations';
+
+  if (operationsAsDetails) {
+    return (
+      <section aria-label="Changes" className="space-y-4">
+        {groups ? (
+          <FieldGroups groups={groups} />
+        ) : (
+          <p className="text-xs text-[var(--text-secondary)]">
+            Field comparison unavailable. Inspect the recorded operations below.
+          </p>
+        )}
+        <details className="border-t border-[var(--stroke-divider)] pt-3 text-xs">
+          <summary className="cursor-pointer text-[var(--text-secondary)]">
+            Operations · {operations.length}
+          </summary>
+          <OperationList operations={operations} />
+        </details>
+      </section>
+    );
+  }
 
   return (
     <section

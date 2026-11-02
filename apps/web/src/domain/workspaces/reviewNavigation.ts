@@ -20,7 +20,7 @@ export function workspaceReviewHref(
   });
   if (options.branch) params.set('branch', options.branch);
   if (options.snapshotId) params.set('reviewSnapshot', options.snapshotId);
-  if (options.pane === 'rendered' || options.pane === 'yaml')
+  if (options.pane === 'changes' || options.pane === 'rendered' || options.pane === 'yaml')
     params.set('reviewPane', options.pane);
   if (options.tool) params.set('workspaceTool', options.tool);
   if (options.returnTo) params.set('returnTo', options.returnTo);

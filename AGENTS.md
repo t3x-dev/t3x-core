@@ -174,8 +174,23 @@ Match verification to the change:
   include an adversarial case; and run `pnpm test` before review. A retry does
   not erase the first failure—classify assertion, teardown/resource, environment,
   and flaky failures separately.
-- WebUI changes: run the relevant WebUI test/build and inspect in a browser when
-  layout or interaction changes.
+- WebUI changes: run code checks and relevant automated tests/builds appropriate
+  to the change. For layout changes, use rendered screenshots to check the
+  affected page; report when visual verification is unavailable. Screenshot
+  inspection is not manual business-flow testing or product acceptance.
+- Manual browser business-flow testing is a separate acceptance phase, normally
+  after the page and interactions are reasonably complete. Run it when the user
+  requests it against a user-provided or user-approved business-flow test
+  document. An ordinary UI change does not automatically trigger exploratory
+  clicking, a self-invented test journey, or a full business-flow regression.
+  Without that testing scope, continue implementation and report acceptance as
+  pending; do not block routine changes waiting for a test document.
+- When business-flow testing is requested, follow the documented scenarios and
+  expected results, report passes, failures and untested cases, and raise blockers
+  promptly. Do not equate individual working controls with business acceptance.
+- For browser inspection or testing, use an agent-created background browser
+  tab/session rather than the user's active tab. Verify that the preview serves
+  the intended checkout/worktree before drawing conclusions about its changes.
 
 The pre-push hook runs `pnpm check` and `pnpm build`. It runs tests only when
 `T3X_RUN_TESTS=1` is set.

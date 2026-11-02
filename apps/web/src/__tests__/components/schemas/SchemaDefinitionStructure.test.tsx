@@ -3,25 +3,7 @@ import '@testing-library/jest-dom';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { SchemaDefinitionWorkbench } from '@/components/schemas/SchemaDefinitionWorkbench';
-
-vi.mock('@/components/workspaces/WorkspaceYOpsEditor', () => ({
-  WorkspaceYOpsEditor: ({
-    ariaLabel,
-    value,
-    onChange,
-  }: {
-    ariaLabel: string;
-    value: string;
-    onChange: (value: string) => void;
-  }) => (
-    <textarea
-      aria-label={ariaLabel}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-    />
-  ),
-}));
+import { SchemaDefinitionStructure } from '@/components/schemas/SchemaDefinitionStructure';
 
 const definition = {
   yschema: '0.1',
@@ -39,119 +21,39 @@ const definition = {
   },
 };
 
-function setup(initial: Record<string, unknown> = structuredClone(definition)) {
-  const save = vi.fn().mockResolvedValue(undefined);
-  const preview = vi.fn();
+function setup(
+  initial: Record<string, unknown> = structuredClone(definition),
+  progressive = false
+) {
+  const save = vi.fn();
   function Harness() {
-    const [echo, setEcho] = useState(initial);
+    const [value, setValue] = useState(initial);
+    const [error, setError] = useState<string>();
     return (
-      <SchemaDefinitionWorkbench
-        open
-        onOpenChange={() => {}}
-        baseSchema={initial}
-        resultSchema={echo}
-        initialDefinition={echo}
-        onPreview={(value) => {
-          preview(value);
-          setEcho(value);
-        }}
-        onSave={save}
-      />
+      <>
+        <SchemaDefinitionStructure
+          progressive={progressive}
+          value={value}
+          onChange={setValue}
+          onValidationChange={setError}
+        />
+        <button type="button" disabled={!!error} onClick={() => save(value)}>
+          Save candidate
+        </button>
+      </>
     );
   }
   const view = render(<Harness />);
-  // The dialog footer survives editor updates. Reuse its control rather than
-  // recomputing accessible names across every (including collapsed) field.
-  const saveButton = screen.getByRole('button', { name: 'Save candidate' });
   const change = (label: string, value: string) =>
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
   const saved = () => {
-    fireEvent.click(saveButton);
+    fireEvent.click(screen.getByRole('button', { name: 'Save candidate' }));
     return save.mock.lastCall?.[0] as Record<string, unknown>;
   };
-  return { ...view, change, saved, save, preview };
+  return { ...view, change, saved, save };
 }
 
 describe('complete Schema Structure settings', () => {
-  it('previews only nodes as collapsible folders with inline Slot and node attribute tags', () => {
-    setup({
-      ...definition,
-      nodes: {
-        product: {
-          required: true,
-          children: { item: { repeated: true, slots: { count: { type: 'number', minimum: 0 } } } },
-          requiredSlots: ['title'],
-          slots: { title: { type: 'string', minLength: 1, default: '' } },
-        },
-      },
-      rules: [{ kind: 'reserved', id: 'not-in-tree' }],
-      relationTypes: { links: { from: 'product', to: 'product' } },
-    });
-    const base = screen.getByRole('region', { name: 'Base (immutable)' });
-    const result = screen.getByRole('region', { name: 'Result preview' });
-    const folder = within(base).getByRole('button', { name: 'Node product' });
-    expect(folder).toHaveAttribute('aria-expanded', 'false');
-    expect(within(folder).getByText('required')).toBeVisible();
-    expect(within(base).queryByText('title')).not.toBeInTheDocument();
-    for (const text of ['team/example', 'strict', 'rules', 'not-in-tree', 'links']) {
-      expect(within(base).queryByText(text)).not.toBeInTheDocument();
-    }
-    fireEvent.click(folder);
-    const slot = within(base).getByLabelText('Slot product/title');
-    expect(slot).toHaveClass('whitespace-nowrap');
-    for (const text of ['title', 'type: "string"', 'minLength: 1', 'default: ""', 'required']) {
-      expect(within(slot).getByText(text)).toBeVisible();
-    }
-    const child = within(base).getByRole('button', { name: 'Node product/item' });
-    expect(within(child).getByText('repeated')).toBeVisible();
-    fireEvent.click(child);
-    expect(within(base).getByText('minimum: 0')).toBeVisible();
-    // Each preview has its own disclosure state and remains read-only.
-    expect(within(result).getByRole('button', { name: 'Node product' })).toHaveAttribute(
-      'aria-expanded',
-      'false'
-    );
-    expect(within(base).queryByRole('textbox')).not.toBeInTheDocument();
-    fireEvent.click(folder);
-    expect(within(base).queryByLabelText('Slot product/title')).not.toBeInTheDocument();
-  });
-
-  it('refreshes Result tree tags after editing without changing the Base or losing expanded nodes', () => {
-    const { change } = setup();
-    const base = screen.getByRole('region', { name: 'Base (immutable)' });
-    const result = screen.getByRole('region', { name: 'Result preview' });
-    fireEvent.click(within(base).getByRole('button', { name: 'Node product' }));
-    fireEvent.click(within(result).getByRole('button', { name: 'Node product' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Expand settings for slot product/title' }));
-    change('minLength for slot product/title', '3');
-    expect(within(result).getByText('minLength: 3')).toBeVisible();
-    expect(within(base).queryByText('minLength: 3')).not.toBeInTheDocument();
-    expect(within(result).getByRole('button', { name: 'Node product' })).toHaveAttribute(
-      'aria-expanded',
-      'true'
-    );
-  });
-
-  it('distinguishes unavailable previews from schemas with no nodes', () => {
-    render(
-      <SchemaDefinitionWorkbench
-        open
-        onOpenChange={() => {}}
-        resultSchema={{ nodes: {} }}
-        onPreview={() => {}}
-        onSave={async () => {}}
-      />
-    );
-    expect(
-      within(screen.getByRole('region', { name: 'Base (immutable)' })).getByText(
-        'Preview unavailable'
-      )
-    ).toBeVisible();
-    expect(
-      within(screen.getByRole('region', { name: 'Result preview' })).getByText('No nodes defined')
-    ).toBeVisible();
-  });
-
   it('keeps a collapsed Slot in one header row with its name, type and delete action', () => {
     const { change } = setup();
     const slot = screen.getByRole('region', { name: 'Slot product/title' });
@@ -336,8 +238,6 @@ describe('complete Schema Structure settings', () => {
     change('description for node product', 'Keep this edit');
     expect(screen.getByLabelText('default for slot product/title')).toHaveValue('{');
     expect(screen.getByRole('button', { name: 'Save candidate' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Preview' })).toBeDisabled();
-    expect(screen.getByRole('tab', { name: 'YAML' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Save candidate' }));
     expect(save).not.toHaveBeenCalled();
     change('default for slot product/title', 'false');
@@ -472,9 +372,9 @@ describe('complete Schema Structure settings', () => {
 
   it('adds, renames, edits and removes every relation setting', () => {
     const { change, saved } = setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Add relation type' }));
-    change('Relation type name new_relation', 'depends_on');
-    fireEvent.blur(screen.getByLabelText('Relation type name new_relation'));
+    fireEvent.click(screen.getByRole('button', { name: 'Add relationship type' }));
+    change('Relationship type name new_relation', 'depends_on');
+    fireEvent.blur(screen.getByLabelText('Relationship type name new_relation'));
     for (const [key, value] of Object.entries({
       from: 'requirements/*',
       to: 'product',
@@ -494,7 +394,7 @@ describe('complete Schema Structure settings', () => {
         },
       },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Remove relation type depends_on' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove relationship type depends_on' }));
     expect(saved().relationTypes).toEqual({});
   });
 
@@ -534,23 +434,6 @@ describe('complete Schema Structure settings', () => {
     ]);
   });
 
-  it('round-trips advanced fields through YAML without losing settings', () => {
-    const { change, saved } = setup();
-    change('default for slot product/title', '"hello"');
-    fireEvent.click(screen.getByRole('tab', { name: 'YAML' }));
-    const yaml = screen.getByLabelText('Schema definition YAML editor');
-    expect((yaml as HTMLTextAreaElement).value).toContain('default: hello');
-    fireEvent.change(yaml, {
-      target: {
-        value: `${(yaml as HTMLTextAreaElement).value}\nrelationTypes: {}\nrules:\n  - id: documented\n    description: Human review\n`,
-      },
-    });
-    fireEvent.click(screen.getByRole('tab', { name: 'Structure' }));
-    expect(screen.getByLabelText('description for rule documented')).toHaveValue('Human review');
-    expect(screen.getByLabelText('default for slot product/title')).toHaveValue('"hello"');
-    expect(saved()).toMatchObject({ rules: [{ id: 'documented', description: 'Human review' }] });
-  });
-
   it('clears validation errors when an invalid Slot is removed', () => {
     const { change } = setup();
     change('default for slot product/title', '{');
@@ -564,4 +447,34 @@ describe('complete Schema Structure settings', () => {
     expect(screen.getByRole('heading', { name: 'Rules' })).toBeInTheDocument();
     expect(saved().rules).toEqual([null]);
   });
+});
+
+it('keeps Schema-wide rules collapsed and preserves validation while their settings are hidden', () => {
+  const { save, saved } = setup(
+    {
+      ...definition,
+      relationTypes: { depends: { from: 'product', to: 'requirements' } },
+      rules: [
+        {
+          id: 'connection',
+          kind: 'required_relation',
+          relationType: 'depends',
+          from: 'product',
+          to: 'requirements',
+        },
+      ],
+    },
+    true
+  );
+  const name = screen.getByLabelText('Relationship type name depends');
+  expect(name).not.toBeVisible();
+  fireEvent.click(screen.getByText('depends', { selector: 'strong' }));
+  expect(name).toBeVisible();
+  fireEvent.change(name, { target: { value: 'invalid name' } });
+  fireEvent.click(screen.getByText('depends', { selector: 'strong' }));
+  expect(screen.getByRole('button', { name: 'Save candidate' })).toBeDisabled();
+  expect(save).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText('depends', { selector: 'strong' }));
+  fireEvent.change(name, { target: { value: 'depends' } });
+  expect(saved()).toHaveProperty('rules.0.relationType', 'depends');
 });

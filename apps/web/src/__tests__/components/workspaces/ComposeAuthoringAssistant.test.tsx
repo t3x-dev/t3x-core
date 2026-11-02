@@ -70,6 +70,26 @@ describe('ComposeAuthoringAssistant first message', () => {
     fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
     expect(mocks.send).toHaveBeenCalledTimes(2);
   });
+
+  it('passes the selected conversation title to first-message title generation', () => {
+    render(
+      <ComposeAuthoringAssistant
+        projectId="project-1"
+        conversationId="conversation-1"
+        title="New conversation"
+        context={{ workspaceId: 'workspace-1', workspaceRevision: 1, sourceMaterialIds: [] }}
+        onCreateConversation={vi.fn(async () => 'conversation-1')}
+        onPublishCandidate={vi.fn()}
+      />
+    );
+
+    expect(mocks.generation).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        conversationId: 'conversation-1',
+        title: 'New conversation',
+      })
+    );
+  });
 });
 
 describe('ComposeAuthoringAssistant attachments', () => {

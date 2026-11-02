@@ -229,7 +229,8 @@ test.describe('DiffDisplayView Full E2E', () => {
     await nodes.first().click();
     const sidebar = page.locator('aside').first();
     await sidebar.waitFor({ state: 'visible', timeout: 10000 });
-    await expect(page.getByText('Available Actions', { exact: true })).toBeVisible();
+    await expect(sidebar.getByRole('heading', { name: 'Inspector', exact: true })).toBeVisible();
+    await expect(sidebar.getByRole('button', { name: 'View Diff Changes', exact: true })).toBeEnabled();
     await expect(page.getByText('View full', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Details', exact: true })).toHaveCount(0);
     await expect(page.getByText('V4 Architecture', { exact: true })).toHaveCount(0);

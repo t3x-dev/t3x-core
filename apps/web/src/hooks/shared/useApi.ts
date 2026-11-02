@@ -34,46 +34,63 @@ function useApiCall<T, D extends unknown[]>(
   fetcherFactory: (...deps: D) => () => Promise<T>,
   deps: D
 ): UseApiState<T> {
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-  const mountedRef = useRef(true);
-
-  // Store the current fetcher in a ref to always have the latest version
-  const fetcherRef = useRef<() => Promise<T>>(null as unknown as () => Promise<T>);
+  // All callers use primitive resource/pagination dependencies. Own the result
+  // by that identity, not merely by whether this component is still mounted.
+  const key = JSON.stringify(deps);
+  const [snapshot, setSnapshot] = useState<{
+    key: string;
+    data: T | null;
+    loading: boolean;
+    error: Error | null;
+  }>();
+  const mountedRef = useRef(false);
+  const activeKeyRef = useRef(key);
+  activeKeyRef.current = key;
+  const requestRef = useRef(0);
+  const fetcherRef = useRef(fetcherFactory(...deps));
   fetcherRef.current = fetcherFactory(...deps);
 
   const doFetch = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    if (!mountedRef.current || activeKeyRef.current !== key) return;
+    const request = ++requestRef.current;
+    const isCurrent = () =>
+      mountedRef.current && activeKeyRef.current === key && requestRef.current === request;
+    setSnapshot((current) => ({
+      key,
+      data: current?.key === key ? current.data : null,
+      loading: true,
+      error: null,
+    }));
     try {
-      const result = await fetcherRef.current!();
-      if (mountedRef.current) {
-        setData(result);
-      }
+      const data = await fetcherRef.current();
+      if (isCurrent()) setSnapshot({ key, data, loading: false, error: null });
     } catch (err) {
-      if (mountedRef.current) {
-        setError(err instanceof Error ? err : new Error(String(err)));
-      }
-    } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-      }
+      if (isCurrent())
+        setSnapshot((current) => ({
+          key,
+          data: current?.key === key ? current.data : null,
+          loading: false,
+          error: err instanceof Error ? err : new Error(String(err)),
+        }));
     }
-  }, []);
+  }, [key]);
 
-  // Refetch when deps change; reset mountedRef on re-mount (StrictMode safe)
   useEffect(() => {
     mountedRef.current = true;
-    doFetch();
+    void doFetch();
     return () => {
       mountedRef.current = false;
+      ++requestRef.current;
     };
-    // deps are passed explicitly here
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [doFetch]);
 
-  return { data, loading, error, refetch: doFetch };
+  const current = snapshot?.key === key ? snapshot : undefined;
+  return {
+    data: current?.data ?? null,
+    loading: current?.loading ?? true,
+    error: current?.error ?? null,
+    refetch: doFetch,
+  };
 }
 
 // ============================================================================

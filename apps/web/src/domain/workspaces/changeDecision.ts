@@ -31,6 +31,7 @@ export function workspaceSchemaCommitBlocker(
     return 'Recover the exact Base Schema before accepting or committing.';
   if (
     review?.draft.status === 'bound' &&
+    review.contentValidation !== 'not_applicable' &&
     view &&
     !view.checks.validation.runs.some(
       (run) => run.predicate.schemaResource?.digest === review.draft.schemaHash
@@ -40,7 +41,7 @@ export function workspaceSchemaCommitBlocker(
   return undefined;
 }
 
-export type ChangeCheckStatus = 'passed' | 'failed' | 'missing';
+export type ChangeCheckStatus = 'passed' | 'failed' | 'missing' | 'not_applicable';
 
 export interface ChangeCheckFinding {
   code: string;
@@ -68,7 +69,10 @@ export function isGeneratedChange(view: TransitionGraphViewV1): boolean {
   return view.checks.runner.runs.some((run) => run.predicate.tool.name === POSTURE_TOOL);
 }
 
-export function changeCheckRows(view: TransitionGraphViewV1): ChangeCheckRow[] {
+export function changeCheckRows(
+  view: TransitionGraphViewV1,
+  contentValidation?: 'not_applicable'
+): ChangeCheckRow[] {
   const { checks } = view;
   const rows: ChangeCheckRow[] = [
     {
@@ -93,9 +97,15 @@ export function changeCheckRows(view: TransitionGraphViewV1): ChangeCheckRow[] {
     },
     {
       id: 'validation',
-      label: 'Schema validation',
-      status: outcomeStatus(checks.validation.observation, checks.validation.outcomes, ['passed']),
-      summary: validationSummary(view),
+      label: contentValidation ? 'Content validation' : 'Schema validation',
+      status:
+        contentValidation && checks.validation.runs.length === 0
+          ? 'not_applicable'
+          : outcomeStatus(checks.validation.observation, checks.validation.outcomes, ['passed']),
+      summary:
+        contentValidation && checks.validation.runs.length === 0
+          ? 'Not applicable: no business content is being submitted. Required fields apply when content is added.'
+          : validationSummary(view),
       findings: groupFindings(
         checks.validation.runs.flatMap((run) =>
           run.predicate.outcome === 'failed'
