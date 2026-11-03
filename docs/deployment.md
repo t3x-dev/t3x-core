@@ -81,7 +81,7 @@ Common deployment variables:
 - `DATABASE_URL` for Postgres-backed API and WebUI storage.
 - `T3X_POSTGRES_STARTUP_MODE` selects `runtime` (read-only schema validation) or
   `bootstrap` (schema migration and built-in seed work) for external Postgres.
-- `NEXT_PUBLIC_API_URL` for the browser-facing API URL.
+- `T3X_API_URL` for the WebUI server-side BFF and WebSocket rewrite target.
 - `AUTH_DISABLED=false` to keep auth enabled explicitly.
 - `WEBUI_PORT` and `POSTGRES_PORT` to override Docker Compose host ports.
 
@@ -200,7 +200,7 @@ checks are:
 docker build -f apps/api/Dockerfile -t t3x-api:staging .
 docker build \
   -f apps/web/Dockerfile \
-  --build-arg NEXT_PUBLIC_API_URL=https://api.example.invalid \
+  --build-arg T3X_API_URL=http://t3x-api:8000 \
   --build-arg NEXT_PUBLIC_AUTH_DISABLED=false \
   -t t3x-webui:staging .
 ```

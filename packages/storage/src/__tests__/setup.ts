@@ -25,12 +25,20 @@ CREATE TABLE IF NOT EXISTS users (
   email_verified BOOLEAN NOT NULL DEFAULT FALSE,
   name TEXT,
   avatar_url TEXT,
-  username TEXT UNIQUE,
+  username TEXT,
   password_hash TEXT,
   default_extraction_style JSONB,
   default_provider TEXT,
   default_model TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL;
+ALTER TABLE users ADD CONSTRAINT users_email_canonical_check CHECK (
+  email IS NULL OR (email = lower(btrim(email)) AND length(email) > 0)
+);
+ALTER TABLE users ADD CONSTRAINT users_username_canonical_check CHECK (
+  username IS NULL OR (username = lower(btrim(username)) AND length(username) > 0)
 );
 
 -- Projects
@@ -658,6 +666,9 @@ CREATE TABLE IF NOT EXISTS pull_requests (
   status TEXT NOT NULL DEFAULT 'open'
     CHECK (status IN ('draft', 'open', 'checking', 'ready', 'blocked', 'merged', 'closed')),
   author_id TEXT NOT NULL,
+  author_kind TEXT NOT NULL DEFAULT 'human'
+    CHECK (author_kind IN ('human', 'agent', 'service')),
+  author_delegator_id TEXT,
   review_owner_id TEXT,
   linked_work TEXT,
   diff_summary JSONB NOT NULL DEFAULT '{"changed_nodes":0,"yops_operations":0,"output_impacts":0,"source_refs":0}'::jsonb,
@@ -695,6 +706,7 @@ CREATE TABLE IF NOT EXISTS pull_request_activity (
   actor_id TEXT NOT NULL,
   type TEXT NOT NULL,
   message TEXT NOT NULL,
+  details JSONB,
   created_at TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_pull_request_activity_pr
@@ -1150,6 +1162,21 @@ CREATE TABLE IF NOT EXISTS api_keys (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
 CREATE INDEX IF NOT EXISTS idx_api_keys_project ON api_keys(project_id);
 
+-- Browser Sessions
+CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY,
+  token_hash TEXT NOT NULL UNIQUE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  auth_method TEXT NOT NULL CHECK (auth_method IN ('local_password')),
+  user_agent TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  revoked_at TIMESTAMPTZ,
+  CONSTRAINT sessions_expiry_check CHECK (expires_at > created_at)
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_user_active ON sessions(user_id, expires_at);
+
 -- Device Codes (OAuth Device Flow - RFC 8628)
 CREATE TABLE IF NOT EXISTS device_codes (
   id TEXT PRIMARY KEY,
@@ -1181,7 +1208,7 @@ CREATE INDEX IF NOT EXISTS idx_token_usage_project_created ON token_usage(projec
 -- Accounts (OAuth Provider Records)
 CREATE TABLE IF NOT EXISTS accounts (
   id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   provider TEXT NOT NULL,
   provider_account_id TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

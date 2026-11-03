@@ -166,7 +166,7 @@ test.describe('Open-source workbench visual smoke', () => {
           name: 'repository-directory',
           path: () => '/',
           ready: async (p) => {
-            await expect(p.getByRole('heading', { name: 't3x-dev' })).toBeVisible();
+            await expect(p.getByRole('heading', { name: /^Repositories/ })).toBeVisible();
           },
         },
         {

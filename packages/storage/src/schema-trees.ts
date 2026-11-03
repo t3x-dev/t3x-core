@@ -39,48 +39,96 @@ import { conversations, namespaces, projects } from './schema';
  * In AUTH_DISABLED mode, no users exist. Projects with owner_id=null
  * are public/legacy data accessible to everyone.
  */
-export const users = pgTable('users', {
-  /** Unique ID: "user_" + nanoid(12) */
-  id: text('id').primaryKey(),
+export const users = pgTable(
+  'users',
+  {
+    /** Unique ID: "user_" + nanoid(12) */
+    id: text('id').primaryKey(),
 
-  /** Email address (may be null if provider doesn't expose it) */
-  email: text('email'),
+    /** Email address (may be null if provider doesn't expose it) */
+    email: text('email'),
 
-  /** True when at least one provider has confirmed the email */
-  emailVerified: boolean('email_verified').notNull().default(false),
+    /** True when at least one provider has confirmed the email */
+    emailVerified: boolean('email_verified').notNull().default(false),
 
-  /** Display name */
-  name: text('name'),
+    /** Display name */
+    name: text('name'),
 
-  /** Avatar URL */
-  avatarUrl: text('avatar_url'),
+    /** Avatar URL */
+    avatarUrl: text('avatar_url'),
 
-  /** Username for local auth (null for OAuth-only users) */
-  username: text('username').unique(),
+    /** Username for local auth (null for OAuth-only users) */
+    username: text('username'),
 
-  /** Bcrypt password hash for local auth (null for OAuth-only users) */
-  passwordHash: text('password_hash'),
+    /** Bcrypt password hash for local auth (null for OAuth-only users) */
+    passwordHash: text('password_hash'),
 
-  /** User's default extraction style (null = system default) */
-  defaultExtractionStyle: jsonb('default_extraction_style').$type<{
-    granularity: 'concise' | 'balanced' | 'detailed';
-    quote_length: 'minimal' | 'contextual';
-    update_stance: 'conservative' | 'balanced' | 'aggressive';
-    tier3: 'skip' | 'extract';
-  }>(),
+    /** User's default extraction style (null = system default) */
+    defaultExtractionStyle: jsonb('default_extraction_style').$type<{
+      granularity: 'concise' | 'balanced' | 'detailed';
+      quote_length: 'minimal' | 'contextual';
+      update_stance: 'conservative' | 'balanced' | 'aggressive';
+      tier3: 'skip' | 'extract';
+    }>(),
 
-  /** User's default generation provider (null = inherit global role order) */
-  defaultProvider: text('default_provider'),
+    /** User's default generation provider (null = inherit global role order) */
+    defaultProvider: text('default_provider'),
 
-  /** User's default generation model (null = provider default model) */
-  defaultModel: text('default_model'),
+    /** User's default generation model (null = provider default model) */
+    defaultModel: text('default_model'),
 
-  /** Creation time */
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+    /** Creation time */
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('idx_users_email').on(table.email).where(sql`${table.email} IS NOT NULL`),
+    uniqueIndex('idx_users_username').on(table.username).where(sql`${table.username} IS NOT NULL`),
+    check(
+      'users_email_canonical_check',
+      sql`${table.email} IS NULL OR (${table.email} = lower(btrim(${table.email})) AND length(${table.email}) > 0)`
+    ),
+    check(
+      'users_username_canonical_check',
+      sql`${table.username} IS NULL OR (${table.username} = lower(btrim(${table.username})) AND length(${table.username}) > 0)`
+    ),
+  ]
+);
 
 export type UserRecord = typeof users.$inferSelect;
 export type UserInsert = typeof users.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// sessions: Browser authentication lifecycle
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const sessions = pgTable(
+  'sessions',
+  {
+    id: text('id').primaryKey(),
+    tokenHash: text('token_hash').notNull(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    authMethod: text('auth_method').notNull(),
+    userAgent: text('user_agent'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (table) => ({
+    tokenHashIdx: uniqueIndex('idx_sessions_token_hash').on(table.tokenHash),
+    userActiveIdx: index('idx_sessions_user_active').on(table.userId, table.expiresAt),
+    authMethodCheck: check(
+      'sessions_auth_method_check',
+      sql`${table.authMethod} IN ('local_password')`
+    ),
+    expiryCheck: check('sessions_expiry_check', sql`${table.expiresAt} > ${table.createdAt}`),
+  })
+);
+
+export type SessionRecord = typeof sessions.$inferSelect;
+export type SessionInsert = typeof sessions.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // namespace_memberships / project_grants / collaboration_invitations:
@@ -305,7 +353,9 @@ export const accounts = pgTable(
     id: text('id').primaryKey(),
 
     /** The user this account belongs to */
-    userId: text('user_id').notNull(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
 
     /** OAuth provider name (e.g., 'github', 'google') */
     provider: text('provider').notNull(),
@@ -749,11 +799,22 @@ export const apiKeys = pgTable(
       onDelete: 'cascade',
     }),
 
+    /** Human Credential namespace scope (mutually exclusive with projectId). */
+    namespaceId: text('namespace_id').references(() => namespaces.namespaceId, {
+      onDelete: 'cascade',
+    }),
+
     /** Owner user ID. null = legacy key (AUTH_DISABLED era) */
     userId: text('user_id'),
 
     /** Trusted principal kind; legacy credentials migrate to human. */
     principalKind: text('principal_kind').notNull().default('human'),
+
+    /** Authenticator/purpose kind; Session credentials live in the sessions table. */
+    credentialKind: text('credential_kind').notNull().default('api_key'),
+
+    /** Stored human delegation for machine actors. */
+    delegatorUserId: text('delegator_user_id'),
 
     /** Closed Transition capabilities; no implicit grants for legacy credentials. */
     transitionScopes: jsonb('transition_scopes').$type<string[]>().notNull().default([]),
@@ -764,15 +825,34 @@ export const apiKeys = pgTable(
     /** Last usage time */
     lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
 
+    /** Optional hard expiry. */
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+
     /** Revocation time (soft delete) */
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
+
+    /** Stable reason captured on first revocation. */
+    revocationReason: text('revocation_reason'),
   },
   (table) => ({
     keyHashIdx: uniqueIndex('idx_api_keys_hash').on(table.keyHash),
     projectIdx: index('idx_api_keys_project').on(table.projectId),
+    namespaceIdx: index('idx_api_keys_namespace').on(table.namespaceId),
     principalKindCheck: check(
       'api_keys_principal_kind_check',
       sql`${table.principalKind} IN ('human', 'agent', 'service')`
+    ),
+    credentialKindCheck: check(
+      'api_keys_credential_kind_check',
+      sql`${table.credentialKind} IN ('api_key', 'pat', 'mcp', 'agent', 'service')`
+    ),
+    resourceScopeCheck: check(
+      'api_keys_resource_scope_check',
+      sql`${table.projectId} IS NULL OR ${table.namespaceId} IS NULL`
+    ),
+    machineProjectScopeCheck: check(
+      'api_keys_machine_project_scope_check',
+      sql`${table.principalKind} = 'human' OR ${table.projectId} IS NOT NULL OR ${table.revokedAt} IS NOT NULL`
     ),
     transitionScopesArrayCheck: check(
       'api_keys_transition_scopes_array_check',
@@ -1000,6 +1080,10 @@ export const drafts = pgTable(
     /** Stable Workspace ID for Project Workspaces staged state */
     workspaceId: text('workspace_id'),
 
+    /** Server-derived owner of this private Workspace. Null only for legacy/local rows. */
+    ownerPrincipalKind: text('owner_principal_kind'),
+    ownerPrincipalId: text('owner_principal_id'),
+
     /** Current Workspace staged state */
     workspaceStateJson: jsonb('workspace_state_json').$type<Record<string, unknown>>(),
 
@@ -1027,11 +1111,19 @@ export const drafts = pgTable(
     workspaceIdx: uniqueIndex('idx_drafts_workspace')
       .on(table.projectId, table.workspaceId)
       .where(sql`${table.workspaceId} IS NOT NULL`),
-    openWorkspaceBranchIdx: uniqueIndex('idx_drafts_open_workspace_branch')
-      .on(table.projectId, table.targetBranch)
+    openWorkspaceBranchOwnerIdx: uniqueIndex('idx_drafts_open_workspace_branch_owner')
+      .on(table.projectId, table.targetBranch, table.ownerPrincipalKind, table.ownerPrincipalId)
       .where(
-        sql`${table.workspaceId} IS NOT NULL AND ${table.status} <> 'abandoned' AND COALESCE(${table.workspaceStateJson}->>'status', 'draft') <> 'committed'`
+        sql`${table.workspaceId} IS NOT NULL AND ${table.ownerPrincipalKind} IS NOT NULL AND ${table.ownerPrincipalId} IS NOT NULL AND ${table.status} <> 'abandoned' AND COALESCE(${table.workspaceStateJson}->>'status', 'draft') <> 'committed'`
       ),
+    ownerPairCheck: check(
+      'drafts_owner_pair_check',
+      sql`(${table.ownerPrincipalKind} IS NULL) = (${table.ownerPrincipalId} IS NULL)`
+    ),
+    ownerKindCheck: check(
+      'drafts_owner_kind_check',
+      sql`${table.ownerPrincipalKind} IS NULL OR ${table.ownerPrincipalKind} IN ('human', 'agent', 'service')`
+    ),
   })
 );
 

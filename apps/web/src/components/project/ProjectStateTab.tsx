@@ -566,11 +566,12 @@ export function ProjectStateTab({
         activeBranchCreation.current === branchCreationScope &&
         branchCreationScope.request === request;
       if (!isCurrent()) return;
-      await createBranch(name, fromBranch);
+      if (focusedCommitHash) await createBranch(name, fromBranch, focusedCommitHash);
+      else await createBranch(name, fromBranch);
       if (!isCurrent()) return;
       pushRoute(getProjectIdWorkspacePath(projectId, { branch: name }));
     },
-    [branchCreationScope, branchFocus, createBranch, projectId, pushRoute]
+    [branchCreationScope, branchFocus, createBranch, focusedCommitHash, projectId, pushRoute]
   );
   const checkCurrentBranchForUpdates = useCallback(async () => {
     setFreshnessChecking(true);

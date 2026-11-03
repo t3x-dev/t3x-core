@@ -1,27 +1,27 @@
-import {
-  type ApiKey,
-  type ApiKeyPrincipalKind,
-  type Author,
-  isTransitionScope,
-  type TransitionScope,
-} from '@t3x-dev/core';
+import type { RequestPrincipal } from '@t3x-dev/application';
+import type { ApiKeyPrincipalKind, Author, TransitionScope } from '@t3x-dev/core';
 import {
   type AnyDB,
   getTransitionPolicyBinding,
   type TransitionPolicyBinding,
 } from '@t3x-dev/storage';
 import type { Context } from 'hono';
+import { getRequestPrincipal } from './request-principal';
 
 export type TrustedTransitionPrincipal = {
-  actor: { kind: ApiKeyPrincipalKind; id: string };
+  actor: {
+    kind: ApiKeyPrincipalKind;
+    id: string;
+    delegator?: { kind: 'human'; id: string };
+  };
   keyId: string | null;
   projectId: string | null;
   scopes: readonly TransitionScope[];
 };
 
 /** Read authentication middleware state through Hono's shared context contract. */
-export function transitionApiKey(c: Context): ApiKey | undefined {
-  return c.get('apiKey') as ApiKey | undefined;
+export function transitionApiKey(c: Context): RequestPrincipal | undefined {
+  return getRequestPrincipal(c);
 }
 
 export class TransitionScopeDeniedError extends Error {
@@ -67,9 +67,9 @@ const POLICY_BOUND_SCOPES: ReadonlySet<TransitionScope> = new Set([
  * payloads must never be accepted as an input to this function.
  */
 export function deriveTrustedTransitionPrincipal(
-  apiKey: ApiKey | undefined
+  requestPrincipal: RequestPrincipal | undefined
 ): TrustedTransitionPrincipal {
-  if (apiKey === undefined) {
+  if (requestPrincipal === undefined) {
     return {
       actor: { kind: 'human', id: 'human:local-user' },
       keyId: null,
@@ -78,20 +78,14 @@ export function deriveTrustedTransitionPrincipal(
     };
   }
 
-  const scopes = apiKey.transition_scopes;
-  if (!scopes.every(isTransitionScope)) {
-    throw new TransitionScopeDeniedError('transition:inspect');
-  }
+  const scopes = requestPrincipal.scopes;
   return {
     actor: {
-      kind: apiKey.principal_kind,
-      id:
-        apiKey.principal_kind === 'human' && apiKey.user_id
-          ? `user:${apiKey.user_id}`
-          : `${apiKey.principal_kind}:api-key:${apiKey.id}`,
+      ...requestPrincipal.actor,
+      ...(requestPrincipal.delegator ? { delegator: requestPrincipal.delegator } : {}),
     },
-    keyId: apiKey.id,
-    projectId: apiKey.project_id,
+    keyId: requestPrincipal.credential.id,
+    projectId: requestPrincipal.credential.projectId,
     scopes,
   };
 }
@@ -115,7 +109,7 @@ export function toTrustedTransitionAuthor(
  * explicit scope and may never escape their project binding.
  */
 export function requireTransitionAuthority(input: {
-  apiKey: ApiKey | undefined;
+  apiKey: RequestPrincipal | undefined;
   projectId: string;
   scope: TransitionScope;
 }): TrustedTransitionPrincipal {
@@ -136,7 +130,7 @@ export function requireTransitionAuthority(input: {
  */
 export async function resolveTransitionControlPlane(input: {
   db: AnyDB;
-  apiKey: ApiKey | undefined;
+  apiKey: RequestPrincipal | undefined;
   projectId: string;
   refName: string;
   scope: TransitionScope;
@@ -157,6 +151,51 @@ export async function resolveTransitionControlPlane(input: {
 }
 
 /**
+ * Authorize one compatibility/product action without weakening the canonical
+ * Transition scopes. Human credentials remain governed by project access, as
+ * existing product routes are, while agent/service credentials need every
+ * explicit scope supplied by the caller. When a ref is supplied, its policy is
+ * resolved from server state and machine callers fail closed if it is absent.
+ */
+export async function resolveCompatibilityTransitionAuthority(input: {
+  db: AnyDB;
+  apiKey: RequestPrincipal | undefined;
+  projectId: string;
+  scopes: readonly TransitionScope[];
+  refName?: string;
+  requireMachinePolicyBinding?: boolean;
+}): Promise<{
+  principal: TrustedTransitionPrincipal;
+  policyBinding: TransitionPolicyBinding | null;
+}> {
+  const principal = deriveTrustedTransitionPrincipal(input.apiKey);
+  if (principal.projectId !== null && principal.projectId !== input.projectId) {
+    throw new TransitionProjectScopeDeniedError(input.projectId);
+  }
+  if (principal.actor.kind !== 'human') {
+    for (const scope of input.scopes) {
+      requireTransitionAuthority({
+        apiKey: input.apiKey,
+        projectId: input.projectId,
+        scope,
+      });
+    }
+  }
+
+  const policyBinding = input.refName
+    ? await getTransitionPolicyBinding(input.db, input.projectId, input.refName)
+    : null;
+  if (
+    principal.actor.kind !== 'human' &&
+    input.requireMachinePolicyBinding === true &&
+    policyBinding === null
+  ) {
+    throw new TransitionPolicyBindingRequiredError(input.projectId, input.refName ?? '<none>');
+  }
+  return { principal, policyBinding };
+}
+
+/**
  * Resolve the complete authority required by a compatibility endpoint that
  * creates an accepted Decision and advances a repository ref in one request.
  *
@@ -170,43 +209,21 @@ export async function resolveTransitionControlPlane(input: {
  */
 export async function resolveCompatibilityTransitionWriteAuthority(input: {
   db: AnyDB;
-  apiKey: ApiKey | undefined;
+  apiKey: RequestPrincipal | undefined;
   projectId: string;
   refName: string;
 }): Promise<{
   principal: TrustedTransitionPrincipal;
   policyBinding: TransitionPolicyBinding | null;
 }> {
-  const principal = deriveTrustedTransitionPrincipal(input.apiKey);
-  if (principal.projectId !== null && principal.projectId !== input.projectId) {
-    throw new TransitionProjectScopeDeniedError(input.projectId);
-  }
-  if (principal.actor.kind !== 'human') {
-    requireTransitionAuthority({
-      apiKey: input.apiKey,
-      projectId: input.projectId,
-      scope: 'transition:propose',
-    });
-    requireTransitionAuthority({
-      apiKey: input.apiKey,
-      projectId: input.projectId,
-      scope: 'transition:decide:accept',
-    });
-    requireTransitionAuthority({
-      apiKey: input.apiKey,
-      projectId: input.projectId,
-      scope: 'transition:commit:create',
-    });
-    requireTransitionAuthority({
-      apiKey: input.apiKey,
-      projectId: input.projectId,
-      scope: 'transition:ref:advance',
-    });
-  }
-
-  const policyBinding = await getTransitionPolicyBinding(input.db, input.projectId, input.refName);
-  if (principal.actor.kind !== 'human' && policyBinding === null) {
-    throw new TransitionPolicyBindingRequiredError(input.projectId, input.refName);
-  }
-  return { principal, policyBinding };
+  return resolveCompatibilityTransitionAuthority({
+    ...input,
+    scopes: [
+      'transition:propose',
+      'transition:decide:accept',
+      'transition:commit:create',
+      'transition:ref:advance',
+    ],
+    requireMachinePolicyBinding: true,
+  });
 }

@@ -1,5 +1,5 @@
-import type { ApiKey } from '@t3x-dev/core';
 import type { Context } from 'hono';
+import { getRequestPrincipal } from './request-principal';
 
 export const OPERATOR_USER_IDS_ENV = 'T3X_OPERATOR_USER_IDS';
 export const OPERATOR_KEY_IDS_ENV = 'T3X_OPERATOR_KEY_IDS';
@@ -27,11 +27,14 @@ function isAuthenticationDisabled(env: NodeJS.ProcessEnv): boolean {
 export function hasOperatorAccess(c: Context, env: NodeJS.ProcessEnv = process.env): boolean {
   if (isAuthenticationDisabled(env)) return true;
 
-  const apiKey = c.get('apiKey') as ApiKey | undefined;
-  if (!apiKey || apiKey.principal_kind !== 'human') return false;
+  const principal = getRequestPrincipal(c);
+  if (!principal || principal.subject.kind !== 'human') return false;
 
   const operatorUsers = configuredIds(env[OPERATOR_USER_IDS_ENV]);
-  if (apiKey.user_id && operatorUsers.has(apiKey.user_id)) return true;
+  if (principal.userId && operatorUsers.has(principal.userId)) return true;
 
-  return configuredIds(env[OPERATOR_KEY_IDS_ENV]).has(apiKey.id);
+  return (
+    principal.credential.id !== null &&
+    configuredIds(env[OPERATOR_KEY_IDS_ENV]).has(principal.credential.id)
+  );
 }

@@ -26,6 +26,7 @@ import {
 } from '@t3x-dev/core';
 import { and, desc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
+import { recordEvent } from '../events';
 import { branches } from '../schema';
 import {
   transitionCommits,
@@ -992,6 +993,15 @@ export async function createTransitionCommit(
       }
       throw new TransitionHeadConflictError(input.expectedHead, actual.head);
     }
+    await recordEvent(tx, {
+      type: 'branch.advanced',
+      projectId: input.projectId,
+      payload: {
+        ref_name: input.refName,
+        previous_head: input.expectedHead,
+        head: descriptor.digest,
+      },
+    });
     return { commit: verified.commit, digest: descriptor.digest, mediaType: COMMIT_V2_MEDIA_TYPE };
   });
   return result as CreatedTransitionCommit;

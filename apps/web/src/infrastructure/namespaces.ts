@@ -8,6 +8,12 @@ export interface NamespaceProfile {
   created_at: string;
 }
 
+export async function getCurrentPersonalNamespace(): Promise<NamespaceProfile | null> {
+  const res = await fetchWithTimeout(`${API_V1}/namespaces/me`, { cache: 'no-store' });
+  if (res.status === 404) return null;
+  return handleResponse<NamespaceProfile>(res);
+}
+
 export async function createPersonalNamespace(slug: string): Promise<NamespaceProfile> {
   const res = await fetchWithTimeout(`${API_V1}/namespaces`, {
     method: 'POST',

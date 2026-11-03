@@ -12,6 +12,7 @@ import {
   resolveInferenceProjectScope,
   resolveInferenceRunId,
 } from '../lib/inference';
+import { getUserId } from '../lib/project-access';
 import { getProviderRegistry } from '../lib/provider-registry';
 
 /**
@@ -35,7 +36,7 @@ export async function buildPipelineContext(
 ): Promise<ApiPipelineContext> {
   const db = await getDB();
   const providerRegistry = await getProviderRegistry();
-  const userId = c.get('userId') as string | undefined;
+  const userId = getUserId(c);
   const project = await findProjectById(db, projectId);
   if (!project) {
     throw new Error(`Cannot build pipeline context for missing project: ${projectId}`);

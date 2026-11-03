@@ -298,12 +298,13 @@ export async function createTestBranch(
   request: APIRequestContext,
   projectId: string,
   name: string,
-  options?: { parentBranch?: string; description?: string }
+  options?: { parentBranch?: string; description?: string; headCommitHash?: string }
 ): Promise<{ branchId: string; name: string }> {
   const response = await request.post(`${API_BASE}/branches`, {
     data: {
       project_id: projectId,
       name,
+      head_commit_hash: options?.headCommitHash,
       parent_branch: options?.parentBranch,
       description: options?.description,
     },

@@ -65,7 +65,7 @@ export function buildWebEnv(
     HOSTNAME: LOCAL_RUNTIME_HOST,
     AUTH_DISABLED: 'true',
     NEXT_PUBLIC_AUTH_DISABLED: 'true',
-    NEXT_PUBLIC_API_URL: `http://${LOCAL_RUNTIME_HOST}:${options.apiPort}`,
+    T3X_API_URL: `http://${LOCAL_RUNTIME_HOST}:${options.apiPort}`,
   };
 }
 

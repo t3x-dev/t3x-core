@@ -158,4 +158,62 @@ describe('Workspace authoring HTTP boundary', () => {
     );
     expect((await post(target, body)).status).toBe(409);
   });
+  it('exposes an exact reconciliation preview and requires its digest for a decision', async () => {
+    const view = await (await app.request(url)).json();
+    const prepared = await post(`${url}/reconciliation/preparations`, {
+      expected_workspace_revision: view.data.workspaceRevision,
+      expected_ref_head: null,
+    });
+    expect(prepared.status).toBe(200);
+    const preview = (await prepared.json()).data;
+    expect(preview).toMatchObject({
+      workspaceRevision: view.data.workspaceRevision,
+      baseHead: null,
+      currentRefHead: null,
+      conflicts: [],
+    });
+    expect(preview.preparationDigest).toMatch(/^sha256:[0-9a-f]{64}$/);
+    const decided = await post(`${url}/reconciliation/decisions`, {
+      request_id: 'explicit-sync-decision',
+      expected_workspace_revision: view.data.workspaceRevision,
+      expected_ref_head: null,
+      preparation_digest: preview.preparationDigest,
+      action: 'cancel',
+    });
+    expect(decided.status).toBe(200);
+    expect((await decided.json()).data.kind).toBe('no_change');
+    expect(
+      (
+        await post(`${url}/reconciliation/decisions`, {
+          request_id: 'missing-preparation',
+          expected_workspace_revision: view.data.workspaceRevision,
+          expected_ref_head: null,
+          action: 'adopt',
+        })
+      ).status
+    ).toBe(400);
+    expect(
+      (
+        await post(`${url}/reconciliation/decisions`, {
+          request_id: 'missing-conflict-choices',
+          expected_workspace_revision: view.data.workspaceRevision,
+          expected_ref_head: null,
+          preparation_digest: preview.preparationDigest,
+          action: 'resolve',
+        })
+      ).status
+    ).toBe(400);
+    expect(
+      (
+        await post(`${url}/reconciliation/decisions`, {
+          request_id: 'choices-on-cancel',
+          expected_workspace_revision: view.data.workspaceRevision,
+          expected_ref_head: null,
+          preparation_digest: preview.preparationDigest,
+          action: 'cancel',
+          resolutions: [{ conflict_id: `sha256:${'0'.repeat(64)}`, choice: 'theirs' }],
+        })
+      ).status
+    ).toBe(400);
+  });
 });

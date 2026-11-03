@@ -304,6 +304,31 @@ it('discards a delayed snapshot after a concurrent edit of the same Workspace', 
   expect(onPrepared).not.toHaveBeenCalled();
   expect(result.current.review.transitionId).toBeNull();
 });
+it('keeps a prepared Review when its server precondition matches the refreshed revision', async () => {
+  const reviewResponse = deferred<typeof prepared>();
+  mocks.prepare.mockReturnValueOnce(reviewResponse.promise);
+  const { result, rerender } = renderHook(
+    ({ workspace }) => useWorkspaceComposeReviewController({ candidate: workspace }),
+    { initialProps: { workspace: candidate() } }
+  );
+  let pending!: Promise<boolean>;
+  act(() => {
+    pending = result.current.prepareReview();
+  });
+  await waitFor(() => expect(mocks.prepare).toHaveBeenCalled());
+  rerender({ workspace: candidate(3) });
+  await act(async () => {
+    reviewResponse.resolve({
+      ...prepared,
+      view: {
+        ...prepared.view,
+        precondition: { ...prepared.view.precondition, workspace_revision: 3 },
+      },
+    });
+    expect(await pending).toBe(true);
+  });
+  expect(result.current.review.transitionId).toBe('trn_review');
+});
 it('does not silently fall back to legacy Studio-style Review when the managed Draft read fails', async () => {
   mocks.read.mockRejectedValueOnce(new Error('Authoring unavailable'));
   const fallback = vi.fn();

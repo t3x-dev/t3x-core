@@ -1,5 +1,5 @@
 import { createClient, type T3xClient } from '@t3x-dev/api-client';
-import { API_BASE, DEFAULT_TIMEOUT, fetchWithTimeout } from './core';
+import { DEFAULT_TIMEOUT, fetchWithTimeout } from './core';
 
 let sharedClient: T3xClient | undefined;
 
@@ -13,8 +13,7 @@ const sharedClientFetch: typeof fetch = (input, init) =>
   fetchWithTimeout(requestUrl(input), init, DEFAULT_TIMEOUT, init?.signal ?? undefined);
 
 function sharedClientBaseUrl(): string {
-  const origin =
-    API_BASE || (typeof window === 'undefined' ? 'http://localhost:3000' : window.location.origin);
+  const origin = typeof window === 'undefined' ? 'http://localhost:3000' : window.location.origin;
   return `${origin.replace(/\/$/, '')}/api`;
 }
 

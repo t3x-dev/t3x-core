@@ -60,7 +60,7 @@ const runtimeEnv = {
   API_URL: apiUrl,
   AUTH_DISABLED: authEnabled ? 'false' : 'true',
   HOST: '127.0.0.1',
-  NEXT_PUBLIC_API_URL: apiUrl,
+  T3X_API_URL: apiUrl,
   NEXT_PUBLIC_AUTH_DISABLED: authEnabled ? 'false' : 'true',
   PORT: apiPort,
   RUNNER_HOST: '127.0.0.1',
@@ -73,6 +73,7 @@ const runtimeEnv = {
   T3X_E2E_FULL: '1',
   T3X_E2E_AUTH_ENABLED: authEnabled ? '1' : '0',
   T3X_PG_PORT: pgPort,
+  TRUST_PROXY: '1',
   WEBUI_PORT: webPort,
   WEBUI_URL: webUrl,
 };

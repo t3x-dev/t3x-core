@@ -219,6 +219,18 @@ export class T3xClient {
       authoring: Object.freeze({
         reconcile: (projectId, workspaceId, input) =>
           this.request('POST', `${authoringPath(projectId, workspaceId)}/reconciliation`, input),
+        prepareReconciliation: (projectId, workspaceId, input) =>
+          this.request(
+            'POST',
+            `${authoringPath(projectId, workspaceId)}/reconciliation/preparations`,
+            input
+          ),
+        decideReconciliation: (projectId, workspaceId, input) =>
+          this.request(
+            'POST',
+            `${authoringPath(projectId, workspaceId)}/reconciliation/decisions`,
+            input
+          ),
         prepareReview: (projectId, workspaceId, input) =>
           this.request('POST', `${authoringPath(projectId, workspaceId)}/reviews`, input),
         read: (projectId, workspaceId, query) =>
@@ -232,6 +244,8 @@ export class T3xClient {
           this.request('POST', authoringPath(projectId, workspaceId), input),
         publish: (projectId, workspaceId, input) =>
           this.request('POST', `${authoringPath(projectId, workspaceId)}/actions`, input),
+        publishSchema: (projectId, workspaceId, input) =>
+          this.request('POST', `${authoringPath(projectId, workspaceId)}/schema-actions`, input),
         publishCandidate: (projectId, workspaceId, transitionId, input) =>
           this.request(
             'POST',

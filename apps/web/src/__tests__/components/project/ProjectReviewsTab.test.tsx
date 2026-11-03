@@ -140,6 +140,62 @@ describe('ProjectReviewsTab', () => {
     );
     expect(await screen.findByText('Linked review')).toBeInTheDocument();
   });
+
+  it('shows exact actor and revision facts in the pull request audit trail', async () => {
+    pullRequestApi.fetchMergeReview.mockReturnValue(new Promise(() => {}));
+    pullRequestApi.fetchPullRequest.mockResolvedValue({
+      id: 'pr-9',
+      number: 9,
+      project_id: 'proj_real',
+      title: 'Audited review',
+      description: '',
+      source_branch: 'feature/audit',
+      target_branch: 'main',
+      source_commit_id: 'sha256:source',
+      target_base_commit_id: 'sha256:target',
+      merge_draft_id: 'draft-9',
+      merge_commit_id: null,
+      status: 'ready',
+      author_id: 'user:test-a',
+      steward_id: null,
+      review_owner_id: null,
+      workspace_id: null,
+      release_lane_id: null,
+      linked_work: null,
+      created_at: '2026-10-30T00:00:00Z',
+      updated_at: '2026-10-30T00:01:00Z',
+      merged_at: null,
+      closed_at: null,
+      checks: [],
+      diff_summary: { changed_nodes: 1, yops_operations: 2, output_impacts: 0, source_refs: 0 },
+      activity: [
+        {
+          id: 'activity-1',
+          pull_request_id: 'pr-9',
+          actor_id: 'user:test-b',
+          type: 'checks_reran',
+          message: 'Readiness prepared from the reviewed heads.',
+          created_at: '2026-10-30T00:01:00Z',
+          details: {
+            source_commit_id: 'sha256:source',
+            target_commit_id: 'sha256:target',
+            decision_revision: 2,
+            outcome: 'ready',
+          },
+        },
+      ],
+    });
+    render(<ProjectReviewsTab projectId="proj_real" initialPullRequestNumber={9} />);
+
+    expect(await screen.findByText('Audited review')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Activity' }));
+    expect(screen.getByText('Readiness prepared from the reviewed heads.')).toBeVisible();
+    expect(screen.getByText(/user:test-b/)).toBeVisible();
+    fireEvent.click(screen.getByText('View exact audit facts'));
+    expect(screen.getByText(/"decision_revision": 2/)).toBeVisible();
+    expect(screen.getByText(/"outcome": "ready"/)).toBeVisible();
+  });
+
   it('renders the pull request list with the State page visual constitution', () => {
     render(<ProjectReviewsTab />);
 
@@ -909,6 +965,9 @@ describe('ProjectReviewsTab', () => {
     expect(within(overview).getByText('Running')).toBeInTheDocument();
 
     fireEvent.keyDown(screen.getByRole('tab', { name: 'Overview' }), { key: 'End' });
+    expect(screen.getByRole('tab', { name: 'Activity' })).toHaveFocus();
+    expect(screen.getByRole('tab', { name: 'Activity' })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Activity' }), { key: 'ArrowLeft' });
     expect(screen.getByRole('tab', { name: 'Checks' })).toHaveFocus();
     expect(screen.getByRole('tab', { name: 'Checks' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('No CommitV2 Statement constraint provider configured.')).toBeVisible();

@@ -22,7 +22,8 @@ export async function createBranch(
   name: string,
   parentBranch?: string,
   description?: string,
-  checkout = false
+  checkout = false,
+  headCommitHash?: string
 ): Promise<Branch> {
   const res = await fetchWithTimeout(`${API_V1}/branches`, {
     method: 'POST',
@@ -30,6 +31,7 @@ export async function createBranch(
     body: JSON.stringify({
       project_id: projectId,
       name,
+      head_commit_hash: headCommitHash,
       parent_branch: parentBranch, // Fixed: was 'from_branch', backend expects 'parent_branch'
       description,
       checkout,

@@ -26,6 +26,7 @@ import {
   projectTabKeepsWorkspace,
 } from '@/components/project/projectTabModel';
 import { Button } from '@/components/ui/button';
+import { usePersonalNamespace } from '@/hooks/accounts/usePersonalNamespace';
 import palette from '@/styles/management-palette.module.css';
 import styles from './DiscoverHeader.module.css';
 
@@ -82,6 +83,8 @@ export function DiscoverHeader({
   const exploreLabel = exploreView === 'browse' ? 'Browse' : 'Discover';
   const ExploreIcon = exploreView === 'browse' ? BookOpen : Compass;
   const ownerHref = owner ? `/${encodeURIComponent(owner)}` : '/';
+  const personalNamespace = usePersonalNamespace();
+  const homeHref = personalNamespace ? `/${encodeURIComponent(personalNamespace.slug)}` : ownerHref;
   const createLabel = newProjectHref === '/' ? 'Browse repositories' : 'New repository';
   const OwnerIcon =
     contextLabel === 'Organization'
@@ -110,7 +113,7 @@ export function DiscoverHeader({
     >
       <div className={styles.topRow}>
         <div className={styles.identity}>
-          <Link className={styles.brand} href="/" aria-label="T3X home">
+          <Link className={styles.brand} href={homeHref} aria-label="T3X home">
             <svg aria-hidden="true" width="28" height="28" viewBox="0 0 26 26">
               <rect width="26" height="26" rx="7" fill="var(--text-primary)" />
               <path

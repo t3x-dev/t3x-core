@@ -27,7 +27,7 @@ test.describe('Home Page', () => {
     });
 
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 't3x-dev', exact: true })).toBeVisible({
+    await expect(page.getByRole('heading', { name: /^Repositories/ })).toBeVisible({
       timeout: 15000,
     });
 
@@ -117,11 +117,12 @@ test.describe('Home Page', () => {
     });
 
     await page.goto('/');
-    await page.getByPlaceholder('Find a repository...').fill(projectName);
+    await page.getByRole('searchbox', { name: 'Find a repository' }).fill(projectName);
     const repositoryCard = page.locator('article').filter({ hasText: projectName }).first();
     await expect(repositoryCard).toBeVisible();
 
-    await repositoryCard.getByRole('button', { name: `Rename repository ${projectName}` }).click();
+    await repositoryCard.getByRole('button', { name: `Actions for ${projectName}` }).click();
+    await page.getByRole('menuitem', { name: `Rename repository ${projectName}` }).click();
     await page.getByLabel('Repository name').fill(renamedProjectName);
     const renamedResponse = page.waitForResponse(
       (response) =>
@@ -131,12 +132,11 @@ test.describe('Home Page', () => {
     );
     await page.getByRole('button', { name: 'Save' }).click();
     await renamedResponse;
-    await page.getByPlaceholder('Find a repository...').fill('');
+    await page.getByRole('searchbox', { name: 'Find a repository' }).fill('');
     await expect(page.getByText(renamedProjectName).first()).toBeVisible();
-    await page
-      .getByRole('button', { name: `Delete repository ${renamedProjectName}` })
-      .first()
-      .click();
+    const renamedCard = page.locator('article').filter({ hasText: renamedProjectName }).first();
+    await renamedCard.getByRole('button', { name: `Actions for ${renamedProjectName}` }).click();
+    await page.getByRole('menuitem', { name: `Delete repository ${renamedProjectName}` }).click();
     const deletedResponse = page.waitForResponse(
       (response) =>
         response.request().method() === 'DELETE' &&
@@ -181,7 +181,7 @@ test.describe('Home Page', () => {
     ).toHaveCount(0);
     await expect(
       page
-        .getByRole('heading', { name: 'Repositories', exact: true })
+        .getByRole('heading', { name: /^Repositories/ })
         .or(page.getByRole('heading', { name: 'No repositories yet', exact: true }))
     ).toBeVisible();
   });

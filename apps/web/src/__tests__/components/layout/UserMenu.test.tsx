@@ -33,7 +33,6 @@ vi.hoisted(() => {
 });
 
 const sessionState = {
-  getKey: vi.fn(),
   getUser: vi.fn(),
   setUser: vi.fn(),
   clear: vi.fn(),
@@ -59,8 +58,8 @@ describe('UserMenu', () => {
         localWorkspaceAvatarColor: 'blue',
       });
     });
-    sessionState.getKey.mockReturnValue(null);
     sessionState.getUser.mockReturnValue(null);
+    loadAuthMe.mockRejectedValue(new Error('Not authenticated'));
   });
 
   it('shows a local profile menu when auth is disabled', async () => {

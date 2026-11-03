@@ -527,6 +527,71 @@ describe('Transition Decision and Commit routes', () => {
     });
   });
 
+  it('recovers a lost Commit response without re-running Workspace projection', async () => {
+    const project = await insertProject(mockDB, testData.project({ name: 'Commit lost response' }));
+    await createWorkspace(project.projectId, 'ws_commit_lost_response');
+    await bindPolicy(project.projectId, 'commit-lost-response/v1');
+    const writer = key(project.projectId, 'lost-response-writer', 'agent', [
+      'transition:propose',
+      'transition:verify',
+    ]);
+    const reviewer = key(project.projectId, 'lost-response-reviewer', 'human', [
+      'transition:decide:accept',
+    ]);
+    const actor = { kind: 'service' as const, id: 'service:lost-response-committer' };
+    const proposed = await propose({
+      projectId: project.projectId,
+      workspaceId: 'ws_commit_lost_response',
+      requestId: 'proposal:commit-lost-response',
+      apiKey: writer,
+    });
+    const precondition = await verify({
+      projectId: project.projectId,
+      transitionId: proposed.transitionId,
+      requestId: 'verify:commit-lost-response',
+      apiKey: writer,
+    });
+    const accepted = await decide({
+      projectId: project.projectId,
+      transitionId: proposed.transitionId,
+      requestId: 'decision:commit-lost-response',
+      outcome: 'accepted',
+      precondition,
+      apiKey: reviewer,
+    });
+    expect(accepted.status).toBe(200);
+    const acceptedPayload = (await accepted.json()) as { data: { decision_digest: string } };
+    let projectionCalls = 0;
+    const command = {
+      db: mockDB,
+      projectId: project.projectId,
+      transitionId: proposed.transitionId,
+      actor,
+      requestId: 'commit:lost-response',
+      decisionDigest: acceptedPayload.data.decision_digest,
+      expectedHead: null,
+      workspaceProjection: {
+        requestFacts: { kind: 'test:lost-response-projection', version: 1 },
+        apply(input: { workspace: Record<string, unknown> }) {
+          projectionCalls += 1;
+          return { ...input.workspace, projectionMarker: 'applied-once' };
+        },
+      },
+    };
+
+    const first = await commitTransition(command);
+    // Treat the first result as a response lost after the transaction committed.
+    const recovered = await commitTransition(command);
+
+    expect(recovered).toMatchObject({
+      reused: true,
+      commitDigest: first.commitDigest,
+      workspace: expect.objectContaining({ projectionMarker: 'applied-once' }),
+    });
+    expect(projectionCalls).toBe(1);
+    await expect(listTransitionCommits(mockDB, project.projectId)).resolves.toHaveLength(1);
+  });
+
   it('commits canonical exact-source import, edit, and revert with trusted projections', async () => {
     const project = await insertProject(mockDB, testData.project({ name: 'Exact Source Commit' }));
     const draft = await createWorkspace(project.projectId, 'ws_exact_source_commit');
@@ -1156,5 +1221,136 @@ describe('Transition Decision and Commit routes', () => {
     expect(head.head).toMatch(/^sha256:[0-9a-f]{64}$/);
     const workspace = await findWorkspaceDraft(mockDB, project.projectId, 'ws_race');
     expect(workspace?.workspace_state?.status).toBe('committed');
+  });
+
+  it('qualifies r5/r6/r7-style Web CLI and MCP Commit contention without mutating losers', async () => {
+    const project = await insertProject(mockDB, testData.project({ name: 'Mixed Commit gate' }));
+    await ensureMainBranch(mockDB, project.projectId);
+    await bindPolicy(project.projectId, 'mixed-commit-gate/v1');
+    const writer = key(project.projectId, 'mixed-writer', 'agent', [
+      'transition:propose',
+      'transition:verify',
+    ]);
+    const reviewer = key(project.projectId, 'mixed-reviewer', 'human', [
+      'transition:decide:accept',
+    ]);
+    const committer = key(project.projectId, 'mixed-committer', 'service', [
+      'transition:commit:create',
+      'transition:ref:advance',
+    ]);
+    const surfaces = ['web', 'cli', 'mcp'] as const;
+    const prepared = [] as Array<{
+      surface: (typeof surfaces)[number];
+      workspaceId: string;
+      transitionId: string;
+      decisionDigest: string;
+      requestId: string;
+      before: Awaited<ReturnType<typeof findWorkspaceDraft>>;
+    }>;
+
+    for (const surface of surfaces) {
+      const workspaceId = `ws_mixed_${surface}`;
+      await createWorkspace(project.projectId, workspaceId);
+      const proposed = await propose({
+        projectId: project.projectId,
+        workspaceId,
+        requestId: `proposal:mixed:${surface}`,
+        apiKey: writer,
+      });
+      const review = await verify({
+        projectId: project.projectId,
+        transitionId: proposed.transitionId,
+        requestId: `verify:mixed:${surface}`,
+        apiKey: writer,
+      });
+      const decision = await decide({
+        projectId: project.projectId,
+        transitionId: proposed.transitionId,
+        requestId: `decision:mixed:${surface}`,
+        outcome: 'accepted',
+        precondition: review,
+        apiKey: reviewer,
+      });
+      expect(decision.status).toBe(200);
+      const payload = (await decision.json()) as { data: { decision_digest: string } };
+      prepared.push({
+        surface,
+        workspaceId,
+        transitionId: proposed.transitionId,
+        decisionDigest: payload.data.decision_digest,
+        requestId: `commit:mixed:${surface}`,
+        before: await findWorkspaceDraft(mockDB, project.projectId, workspaceId),
+      });
+    }
+
+    const responses = await Promise.all(
+      prepared.map(async (entry) => ({
+        entry,
+        response: await commit({
+          projectId: project.projectId,
+          transitionId: entry.transitionId,
+          requestId: entry.requestId,
+          decisionDigest: entry.decisionDigest,
+          expectedHead: null,
+          apiKey: committer,
+        }),
+      }))
+    );
+    const winners = responses.filter(({ response }) => response.status === 200);
+    const losers = responses.filter(({ response }) => response.status === 409);
+    expect(winners).toHaveLength(1);
+    expect(losers).toHaveLength(2);
+
+    const winnerPayload = (await winners[0]!.response.json()) as {
+      data: { commit_digest: string; reused: boolean };
+    };
+    expect(winnerPayload.data.reused).toBe(false);
+    await expect(
+      getTransitionRefHead(mockDB, { projectId: project.projectId, refName: 'main' })
+    ).resolves.toMatchObject({ head: winnerPayload.data.commit_digest });
+    await expect(listTransitionCommits(mockDB, project.projectId)).resolves.toHaveLength(1);
+
+    for (const loser of losers) {
+      const failure = (await loser.response.json()) as {
+        error: { code: string; details?: { protocol_code?: string } };
+      };
+      expect(failure.error).toMatchObject({
+        code: 'CONFLICT',
+        details: { protocol_code: 'STALE_BASE' },
+      });
+      await expect(
+        findWorkspaceDraft(mockDB, project.projectId, loser.entry.workspaceId)
+      ).resolves.toEqual(loser.entry.before);
+    }
+
+    const winner = winners[0]!.entry;
+    const exactRetry = await commit({
+      projectId: project.projectId,
+      transitionId: winner.transitionId,
+      requestId: winner.requestId,
+      decisionDigest: winner.decisionDigest,
+      expectedHead: null,
+      apiKey: committer,
+    });
+    expect(exactRetry.status).toBe(200);
+    await expect(exactRetry.json()).resolves.toMatchObject({
+      data: { reused: true, commit_digest: winnerPayload.data.commit_digest },
+    });
+
+    const changedRetry = await commit({
+      projectId: project.projectId,
+      transitionId: winner.transitionId,
+      requestId: winner.requestId,
+      decisionDigest: winner.decisionDigest,
+      expectedHead: winnerPayload.data.commit_digest,
+      apiKey: committer,
+    });
+    expect(changedRetry.status).toBe(409);
+    await expect(changedRetry.json()).resolves.toMatchObject({
+      error: {
+        code: 'CONFLICT',
+        details: { protocol_code: 'TRANSITION_COMMAND_CONFLICT' },
+      },
+    });
   });
 });

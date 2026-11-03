@@ -66,9 +66,11 @@ vi.mock('../lib/project-access', () => ({
 import { resolveWorkspaceYSchema } from '../lib/workspace-yschema';
 import { schemaStudioRoutes } from '../routes/schema-studio.openapi';
 import { workspaceAssistantRoutes } from '../routes/workspace-assistant.openapi';
+import { workspaceAuthoringRoutes } from '../routes/workspace-authoring.openapi';
 
 const app = new Hono().route('/', schemaStudioRoutes);
 app.route('/', workspaceAssistantRoutes);
+app.route('/', workspaceAuthoringRoutes);
 const base = normalizeYSchemaObject({
   yschema: '0.1',
   name: 'team/assistant-test',
@@ -99,6 +101,32 @@ const slot: AssistantSchemaSettingsInput = {
   required: false,
   intent: 'Add an advantage Slot',
 };
+
+it('applies the same exact Schema action through the shared Workspace authoring API', async () => {
+  const ws = await fixture();
+  const before = (await findWorkspaceDraft(db, projectId, ws))!;
+  const response = await app.request(
+    `/v1/projects/${projectId}/workspaces/${ws}/authoring/schema-actions`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        request_id: `schema-command-${ws}`,
+        expected_workspace_revision: before.revision,
+        expected_revision: workspaceAuthoringState(before.workspace_state!).ledger
+          .compositionRevision,
+        expected_ref_head: null,
+        settings: slot,
+      }),
+    }
+  );
+  expect(response.status, await response.clone().text()).toBe(200);
+  expect((await response.json()).data.status).toBe('applied');
+  const after = (await findWorkspaceDraft(db, projectId, ws))!;
+  const schema = (await resolveWorkspaceYSchema(after.workspace_state!, db, projectId)).schema!;
+  expect(schema.nodes.product.slots!.advantage).toMatchObject({ type: 'string', maxWords: 40 });
+  expect(after.workspace_state!.authoringLedger).toEqual(before.workspace_state!.authoringLedger);
+});
 
 it('applies a human-edited confirmation without any model call, preserving content and replay guards', async () => {
   const ws = await fixture();

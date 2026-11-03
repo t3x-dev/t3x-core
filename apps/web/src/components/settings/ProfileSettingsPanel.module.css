@@ -59,6 +59,7 @@
 }
 .identityCard,
 .detailsCard,
+.accountsCard,
 .sessionsCard {
   width: 100%;
   background: var(--surface-card);
@@ -134,12 +135,50 @@
   margin-bottom: 32px;
 }
 .detailsCard h2,
+.accountsCard h2,
 .sessionsCard h2 {
   margin: 0;
   color: var(--text-primary);
   font-size: 16px;
   font-weight: 700;
   line-height: 22px;
+}
+.accountsCard {
+  padding: 0 0 24px;
+  margin-bottom: 32px;
+}
+.accountRow {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--stroke-default);
+}
+.accountRow div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.accountRow strong {
+  text-transform: capitalize;
+}
+.accountRow span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.accountRow button {
+  min-width: 72px;
+  height: 34px;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--surface-card);
+  border: 1px solid var(--stroke-default);
+  border-radius: 7px;
+  cursor: pointer;
 }
 .formGrid {
   display: grid;

@@ -9,7 +9,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { type ApiKey, getDefaultTemplate, LEAF_TYPES, type LeafType } from '@t3x-dev/core';
+import { getDefaultTemplate, LEAF_TYPES, type LeafType } from '@t3x-dev/core';
 import {
   createTemplate,
   deleteTemplate,
@@ -22,6 +22,7 @@ import { nanoid } from 'nanoid';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { hasOperatorAccess } from '../lib/operator-access';
+import { getRequestPrincipal } from '../lib/request-principal';
 import {
   CursorPageResponseSchema,
   ErrorResponseSchema,
@@ -128,11 +129,11 @@ function templateMutationIdentity(c: Context): {
   ownerId: string | null;
   actor: { kind: 'human' | 'local'; id: string };
 } {
-  const apiKey = c.get('apiKey') as ApiKey | undefined;
-  if (!apiKey) {
+  const principal = getRequestPrincipal(c);
+  if (!principal) {
     return { ownerId: null, actor: { kind: 'local', id: 'auth-disabled-local' } };
   }
-  const actorId = apiKey.user_id ?? apiKey.id;
+  const actorId = principal.userId ?? principal.subject.principal_id;
   return { ownerId: actorId, actor: { kind: 'human', id: actorId } };
 }
 

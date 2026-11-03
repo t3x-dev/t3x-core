@@ -1,7 +1,7 @@
 import type { ProjectVisibility, ProjectVisibilityActorKind } from '@t3x-dev/storage';
 import type { Context } from 'hono';
 import { isAuthenticationDisabled } from './auth-config';
-import { getProjectAccessPrincipal } from './project-access';
+import { getRequestPrincipal } from './request-principal';
 
 /** Versioned host seam for operations that can admit projects into a namespace. */
 export const PROJECT_LIFECYCLE_POLICY_VERSION = 1 as const;
@@ -57,11 +57,9 @@ export function getProjectLifecyclePolicy(context: Context): ProjectLifecyclePol
 export function resolveProjectLifecycleActor(
   context: Context
 ): { kind: ProjectVisibilityActorKind; id: string } | null {
-  const principal = getProjectAccessPrincipal(context);
-  if (!principal) {
+  const principal = getRequestPrincipal(context);
+  if (!principal || principal.credential.kind === 'local_dev') {
     return isAuthenticationDisabled() ? { kind: 'local', id: 'auth-disabled' } : null;
   }
-  const kind = principal.principalKind ?? 'human';
-  const id = kind === 'human' ? principal.userId : principal.keyId;
-  return id ? { kind, id } : null;
+  return { kind: principal.subject.kind, id: principal.subject.principal_id };
 }

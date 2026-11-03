@@ -34,6 +34,7 @@ import {
   updateMergeDraft,
   updatePullRequest,
 } from '@t3x-dev/storage';
+import type { ActorRef } from '@t3x-dev/transition';
 import { getAuthorFromContext } from '../lib/auth';
 import { getDB } from '../lib/db';
 import { computeMergeChecks } from '../lib/merge-checks';
@@ -52,7 +53,7 @@ import {
   TransitionReviewStaleError,
 } from '../lib/repository-state-transition';
 import {
-  resolveCompatibilityTransitionWriteAuthority,
+  resolveCompatibilityTransitionAuthority,
   TransitionPolicyBindingRequiredError,
   TransitionProjectScopeDeniedError,
   TransitionScopeDeniedError,
@@ -102,6 +103,8 @@ const PullRequestSchema = z.object({
   merge_commit_id: z.string().nullable(),
   status: PullRequestStatusSchema,
   author_id: z.string(),
+  author_kind: z.enum(['human', 'agent', 'service']),
+  author_delegator_id: z.string().nullable(),
   steward_id: z.string().nullable(),
   review_owner_id: z.string().nullable(),
   workspace_id: z.string().nullable(),
@@ -149,6 +152,7 @@ const PullRequestActivitySchema = z.object({
     'closed',
   ]),
   message: z.string(),
+  details: z.record(z.string(), z.unknown()).nullable(),
   created_at: z.string(),
 });
 
@@ -220,6 +224,8 @@ function toApiPullRequest(pullRequest: StoredPullRequest): ApiPullRequest {
     merge_commit_id: pullRequest.mergeCommitHash,
     status: pullRequest.status as ApiPullRequest['status'],
     author_id: pullRequest.authorId,
+    author_kind: pullRequest.authorKind as ApiPullRequest['author_kind'],
+    author_delegator_id: pullRequest.authorDelegatorId,
     steward_id: null,
     review_owner_id: pullRequest.reviewOwnerId,
     workspace_id: null,
@@ -252,6 +258,7 @@ function toApiActivity(activity: StoredPullRequestActivity): ApiPullRequestActiv
     actor_id: activity.actorId,
     type: activity.type as ApiPullRequestActivity['type'],
     message: activity.message,
+    details: activity.details,
     created_at: activity.createdAt.toISOString(),
   };
 }
@@ -273,6 +280,25 @@ function errorBody(code: string, message: string, details?: Record<string, unkno
   return {
     success: false as const,
     error: { code, message, ...(details === undefined ? {} : { details }) },
+  };
+}
+
+function actorAudit(
+  actor: ActorRef & { delegator?: { kind: 'human'; id: string } }
+): Record<string, unknown> {
+  return {
+    actor: {
+      kind: actor.kind,
+      id: actor.id,
+      ...(actor.delegator === undefined ? {} : { delegator: actor.delegator }),
+    },
+  };
+}
+
+function pullRequestAuthorActor(pullRequest: StoredPullRequest): ActorRef {
+  return {
+    kind: pullRequest.authorKind as ActorRef['kind'],
+    id: pullRequest.authorId,
   };
 }
 
@@ -694,6 +720,10 @@ const createPullRequestRoute = createRoute({
       description: 'Project, branch, or commit not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    403: {
+      description: 'Credential lacks pull request proposal authority',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     409: {
       description: 'A pull request already exists or a compared branch head moved',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -701,7 +731,6 @@ const createPullRequestRoute = createRoute({
   },
 });
 
-// @ts-expect-error - OpenAPI handler return type
 pullRequestRoutes.openapi(createPullRequestRoute, async (c) => {
   const { projectId } = c.req.valid('param');
   const body = c.req.valid('json');
@@ -792,7 +821,24 @@ pullRequestRoutes.openapi(createPullRequestRoute, async (c) => {
     );
   }
 
-  const actorId = getUserId(c) ?? 'current-user';
+  let createAuthority: Awaited<ReturnType<typeof resolveCompatibilityTransitionAuthority>>;
+  try {
+    createAuthority = await resolveCompatibilityTransitionAuthority({
+      db,
+      apiKey: transitionApiKey(c),
+      projectId,
+      scopes: ['transition:propose'],
+    });
+  } catch (error) {
+    if (
+      error instanceof TransitionScopeDeniedError ||
+      error instanceof TransitionProjectScopeDeniedError
+    ) {
+      return c.json(errorBody(error.code, error.message), 403);
+    }
+    throw error;
+  }
+  const actor = createAuthority.principal.actor;
   const pullRequest = await createPullRequest(db, {
     projectId,
     title: body.title,
@@ -802,7 +848,9 @@ pullRequestRoutes.openapi(createPullRequestRoute, async (c) => {
     sourceCommitHash: sourceCommit.hash,
     targetBaseCommitHash: targetCommit.hash,
     status: body.draft ? 'draft' : 'open',
-    authorId: actorId,
+    authorId: actor.id,
+    authorKind: actor.kind,
+    ...(actor.delegator === undefined ? {} : { authorDelegatorId: actor.delegator.id }),
     reviewOwnerId: body.review_owner_id,
     linkedWork: body.linked_work,
     diffSummary: {
@@ -839,12 +887,22 @@ pullRequestRoutes.openapi(createPullRequestRoute, async (c) => {
     },
   ]);
   await addPullRequestActivity(db, pullRequest.pullRequestId, {
-    actorId,
+    actorId: actor.id,
     type: 'created',
     message: 'Pull request created. Merge readiness checks are queued.',
+    details: {
+      ...actorAudit(actor),
+      source_branch: sourceBranch.name,
+      source_commit_id: sourceCommit.hash,
+      target_branch: targetBranch.name,
+      target_commit_id: targetCommit.hash,
+    },
     createdAt: pullRequest.createdAt,
   });
-  if (body.draft) {
+  if (
+    body.draft ||
+    (actor.kind !== 'human' && !createAuthority.principal.scopes.includes('transition:verify'))
+  ) {
     return c.json({ success: true as const, data: await toApiDetail(db, pullRequest) }, 201);
   }
   let readied = pullRequest;
@@ -852,7 +910,7 @@ pullRequestRoutes.openapi(createPullRequestRoute, async (c) => {
     readied = await runPullRequestReadiness(db, {
       projectId,
       number: pullRequest.number,
-      actorId,
+      actor,
       pipelineContext: await buildPipelineContext(c, projectId),
     });
   } catch {
@@ -932,11 +990,11 @@ async function runPullRequestReadiness(
   input: {
     projectId: string;
     number: number;
-    actorId: string;
+    actor: ActorRef;
     pipelineContext: Awaited<ReturnType<typeof buildPipelineContext>>;
   }
 ) {
-  const { projectId, number, actorId, pipelineContext } = input;
+  const { projectId, number, actor, pipelineContext } = input;
   return db.transaction(async (tx) => {
     await acquirePullRequestLock(tx, projectId, number);
     let pullRequest = await findPullRequestByNumber(tx, projectId, number);
@@ -978,9 +1036,16 @@ async function runPullRequestReadiness(
       });
       if (!refreshed) throw new MergeError('PULL_REQUEST_NOT_FOUND', 'Pull request not found.');
       await addPullRequestActivity(tx, refreshed.pullRequestId, {
-        actorId,
+        actorId: actor.id,
         type: 'base_updated',
         message: `Refreshed reviewed commits to ${sourceCommit.hash} -> ${targetCommit.hash}.`,
+        details: {
+          ...actorAudit(actor),
+          previous_source_commit_id: pullRequest.sourceCommitHash,
+          previous_target_commit_id: pullRequest.targetBaseCommitHash,
+          source_commit_id: sourceCommit.hash,
+          target_commit_id: targetCommit.hash,
+        },
         createdAt: refreshed.updatedAt,
       });
       pullRequest = refreshed;
@@ -1169,16 +1234,29 @@ async function runPullRequestReadiness(
           : []),
       ]);
       await addPullRequestActivity(tx, preparedPullRequest.pullRequestId, {
-        actorId,
+        actorId: actor.id,
         type: 'checks_reran',
         message: `Deterministic merge readiness prepared in draft ${draft.draftId}.`,
+        details: {
+          ...actorAudit(actor),
+          source_commit_id: preparedPullRequest.sourceCommitHash,
+          target_commit_id: preparedPullRequest.targetBaseCommitHash,
+          merge_draft_id: draft.draftId,
+          decision_revision: draft.decisionRevision,
+          outcome: preparedPullRequest.status,
+        },
         createdAt: now,
       });
       if (previousStatus !== preparedPullRequest.status) {
         await addPullRequestActivity(tx, preparedPullRequest.pullRequestId, {
-          actorId,
+          actorId: actor.id,
           type: 'status_changed',
           message: `Pull request moved from ${previousStatus} to ${preparedPullRequest.status}.`,
+          details: {
+            ...actorAudit(actor),
+            previous_status: previousStatus,
+            status: preparedPullRequest.status,
+          },
           createdAt: now,
         });
       }
@@ -1233,16 +1311,28 @@ async function runPullRequestReadiness(
           : []),
       ]);
       await addPullRequestActivity(tx, failed.pullRequestId, {
-        actorId,
+        actorId: actor.id,
         type: 'checks_reran',
         message: 'Deterministic merge readiness failed and the PR was returned to blocked.',
+        details: {
+          ...actorAudit(actor),
+          source_commit_id: failed.sourceCommitHash,
+          target_commit_id: failed.targetBaseCommitHash,
+          outcome: 'blocked',
+          error: failureMessage,
+        },
         createdAt: now,
       });
       if (previousStatus !== failed.status) {
         await addPullRequestActivity(tx, failed.pullRequestId, {
-          actorId,
+          actorId: actor.id,
           type: 'status_changed',
           message: `Pull request moved from ${previousStatus} to blocked.`,
+          details: {
+            ...actorAudit(actor),
+            previous_status: previousStatus,
+            status: 'blocked',
+          },
           createdAt: now,
         });
       }
@@ -1422,6 +1512,10 @@ const rerunChecksRoute = createRoute({
       description: 'Project, pull request, branch, or commit not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    403: {
+      description: 'Credential lacks readiness verification authority',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     409: {
       description: 'Pull request is no longer active',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -1433,24 +1527,34 @@ const rerunChecksRoute = createRoute({
   },
 });
 
-// @ts-expect-error OpenAPI cannot narrow the transaction error response union.
 pullRequestRoutes.openapi(rerunChecksRoute, async (c) => {
   const { number, projectId } = c.req.valid('param');
   const { access, db } = await requireProject(c, projectId);
   if (access instanceof Response) return access;
-  const actorId = getUserId(c) ?? 'current-user';
   const pipelineContext = await buildPipelineContext(c, projectId);
 
   try {
+    const readinessAuthority = await resolveCompatibilityTransitionAuthority({
+      db,
+      apiKey: transitionApiKey(c),
+      projectId,
+      scopes: ['transition:verify'],
+    });
     const updated = await runPullRequestReadiness(db, {
       projectId,
       number,
-      actorId,
+      actor: readinessAuthority.principal.actor,
       pipelineContext,
     });
 
     return c.json({ success: true as const, data: await toApiDetail(db, updated) }, 200);
   } catch (error) {
+    if (
+      error instanceof TransitionScopeDeniedError ||
+      error instanceof TransitionProjectScopeDeniedError
+    ) {
+      return c.json(errorBody(error.code, error.message), 403);
+    }
     if (error instanceof MergeError) {
       if (
         error.code === 'PULL_REQUEST_NOT_FOUND' ||
@@ -1591,7 +1695,6 @@ pullRequestRoutes.openapi(mergePullRequestRoute, async (c) => {
   const { access, db } = await requireProject(c, projectId);
   if (access instanceof Response) return access;
   const contextAuthor = await getAuthorFromContext(c);
-  const contextActorId = getUserId(c) ?? contextAuthor.id ?? 'current-user';
   const pipelineContext = await buildPipelineContext(c, projectId);
 
   try {
@@ -1599,17 +1702,16 @@ pullRequestRoutes.openapi(mergePullRequestRoute, async (c) => {
       await acquirePullRequestLock(tx, projectId, number);
       const pullRequest = await findPullRequestByNumber(tx, projectId, number);
       if (!pullRequest) throw new MergeError('PULL_REQUEST_NOT_FOUND', 'Pull request not found.');
-      const writeAuthority = await resolveCompatibilityTransitionWriteAuthority({
+      const writeAuthority = await resolveCompatibilityTransitionAuthority({
         db: tx,
         apiKey: transitionApiKey(c),
         projectId,
         refName: pullRequest.targetBranch,
+        scopes: ['transition:decide:accept', 'transition:commit:create', 'transition:ref:advance'],
+        requireMachinePolicyBinding: true,
       });
       const author = toTrustedTransitionAuthor(writeAuthority.principal, contextAuthor);
-      const actorId =
-        writeAuthority.principal.actor.kind === 'human'
-          ? contextActorId
-          : writeAuthority.principal.actor.id;
+      const actorId = writeAuthority.principal.actor.id;
       const recordedChecks = await listPullRequestChecks(tx, pullRequest.pullRequestId);
       const conflictDecisionCanUnblock =
         pullRequest.status === 'blocked' &&
@@ -1697,6 +1799,14 @@ pullRequestRoutes.openapi(mergePullRequestRoute, async (c) => {
           actorId,
           type: 'status_changed',
           message: 'Pull request moved to blocked because a reviewed branch head changed.',
+          details: {
+            ...actorAudit(writeAuthority.principal.actor),
+            source_commit_id: pullRequest.sourceCommitHash,
+            target_commit_id: pullRequest.targetBaseCommitHash,
+            source_fresh: sourceFresh,
+            target_fresh: targetFresh,
+            outcome: 'blocked',
+          },
           createdAt: now,
         });
         return { kind: 'stale' as const };
@@ -1760,6 +1870,7 @@ pullRequestRoutes.openapi(mergePullRequestRoute, async (c) => {
             author,
             writeAuthority: {
               actor: writeAuthority.principal.actor,
+              proposalActor: pullRequestAuthorActor(pullRequest),
               ...(writeAuthority.policyBinding === null
                 ? {}
                 : { policyBinding: writeAuthority.policyBinding }),
@@ -1788,6 +1899,17 @@ pullRequestRoutes.openapi(mergePullRequestRoute, async (c) => {
         actorId,
         type: 'merged',
         message: `Merged ${updated.sourceBranch} into ${updated.targetBranch} as ${result.commit.hash}.`,
+        details: {
+          ...actorAudit(writeAuthority.principal.actor),
+          proposal_actor: pullRequestAuthorActor(pullRequest),
+          source_commit_id: pullRequest.sourceCommitHash,
+          target_commit_id: pullRequest.targetBaseCommitHash,
+          merge_draft_id: draft.draftId,
+          decision_revision: draft.decisionRevision,
+          decisions,
+          merge_commit_id: result.commit.hash,
+          outcome: 'merged',
+        },
         createdAt: mergedAt,
       });
       return { kind: 'merged' as const, pullRequest: updated };

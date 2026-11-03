@@ -176,6 +176,60 @@ describe('Branches Routes', () => {
       ).toBeNull();
     });
 
+    it('rejects an unknown historical head without creating a branch Workspace', async () => {
+      const res = await app.request('/v1/branches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: testProjectId,
+          name: 'invalid-historical-head',
+          parent_branch: 'main',
+          head_commit_hash: 'sha256:missing-historical-commit',
+        }),
+      });
+
+      expect(res.status).toBe(404);
+      expect(
+        await findWorkspaceDraft(mockDB, testProjectId, 'workspace_branch:invalid-historical-head')
+      ).toBeNull();
+    });
+
+    it('inherits the parent branch decision policy for an immediately usable Workspace', async () => {
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Inherited branch policy' })
+      );
+      await app.request(`/v1/branches?project_id=${project.projectId}`);
+      const parentPolicy = await bindTransitionPolicy(mockDB, {
+        projectId: project.projectId,
+        refName: 'main',
+        uri: 't3x://policies/test-parent/v1',
+        policy: customPolicy(),
+        actor: { kind: 'human', id: 'human:test' },
+      });
+
+      const res = await app.request('/v1/branches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: project.projectId,
+          name: 'feature/inherited-policy',
+          parent_branch: 'main',
+        }),
+      });
+
+      expect(res.status).toBe(201);
+      const data: ApiResponse = await res.json();
+      expect(data.data.rules.commit).toEqual({
+        require_independent_review: true,
+        source: 'custom',
+      });
+      expect(
+        (await getTransitionPolicyBinding(mockDB, project.projectId, 'feature/inherited-policy'))
+          ?.resource.digest
+      ).toBe(parentPolicy.resource.digest);
+    });
+
     it('returns 400 for invalid JSON', async () => {
       const res = await app.request('/v1/branches', {
         method: 'POST',

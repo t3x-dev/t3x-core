@@ -57,7 +57,7 @@ function createApp(apiKey?: ApiKey) {
     });
   }
   app.use('/v1/projects/:projectId/*', projectAccessMiddleware);
-  app.get('/v1/projects/:projectId/probe', (c) => c.json({ success: true }));
+  app.get('/v1/projects/:projectId/workspaces', (c) => c.json({ success: true }));
   return app;
 }
 
@@ -85,24 +85,24 @@ describe('project access middleware adapter', () => {
     const owner = createApp(humanKey('user_owner'));
     const other = createApp(humanKey('user_other'));
 
-    expect((await owner.request(`/v1/projects/${ownedProjectId}/probe`)).status).toBe(200);
-    expect((await other.request(`/v1/projects/${ownedProjectId}/probe`)).status).toBe(403);
-    expect((await owner.request(`/v1/projects/${unownedProjectId}/probe`)).status).toBe(403);
+    expect((await owner.request(`/v1/projects/${ownedProjectId}/workspaces`)).status).toBe(200);
+    expect((await other.request(`/v1/projects/${ownedProjectId}/workspaces`)).status).toBe(403);
+    expect((await owner.request(`/v1/projects/${unownedProjectId}/workspaces`)).status).toBe(403);
   });
 
   it('allows only an exactly bound machine principal', async () => {
     const bound = createApp(agentKey(unownedProjectId));
     const global = createApp(agentKey(null));
 
-    expect((await bound.request(`/v1/projects/${unownedProjectId}/probe`)).status).toBe(200);
-    expect((await bound.request(`/v1/projects/${ownedProjectId}/probe`)).status).toBe(403);
-    expect((await global.request(`/v1/projects/${ownedProjectId}/probe`)).status).toBe(403);
+    expect((await bound.request(`/v1/projects/${unownedProjectId}/workspaces`)).status).toBe(200);
+    expect((await bound.request(`/v1/projects/${ownedProjectId}/workspaces`)).status).toBe(403);
+    expect((await global.request(`/v1/projects/${ownedProjectId}/workspaces`)).status).toBe(403);
   });
 
   it('preserves explicit AUTH_DISABLED access and missing-project errors', async () => {
     const local = createApp();
 
-    expect((await local.request(`/v1/projects/${ownedProjectId}/probe`)).status).toBe(200);
-    expect((await local.request('/v1/projects/project_missing/probe')).status).toBe(404);
+    expect((await local.request(`/v1/projects/${ownedProjectId}/workspaces`)).status).toBe(200);
+    expect((await local.request('/v1/projects/project_missing/workspaces')).status).toBe(404);
   });
 });

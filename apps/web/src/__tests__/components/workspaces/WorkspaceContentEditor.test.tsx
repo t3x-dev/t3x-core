@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { WorkspaceContentEditor } from '@/components/workspaces/WorkspaceContentEditor';
 import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
@@ -29,6 +29,13 @@ vi.mock('@/hooks/workspaces/useWorkspaceTransition', () => ({
 }));
 beforeEach(() => {
   mocks.rootKey = '';
+  mocks.content = {
+    trees: [
+      { key: 'Services', slots: { replicas: 2 }, children: [] },
+      { key: 'Settings', slots: { enabled: false }, children: [] },
+    ],
+    relations: [],
+  };
   mocks.review.mockReset();
 });
 
@@ -57,4 +64,33 @@ it('retains the declared-root restriction for a bound editor', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Review structured change' }));
   expect(mocks.review).not.toHaveBeenCalled();
   expect(screen.getByRole('alert')).toHaveTextContent('Keep one prd root');
+});
+
+it('preserves unsaved browser input when another entry advances the Draft revision', async () => {
+  const first = { ...getProjectWorkspaceStarterCandidate('test'), revision: 1 };
+  const rendered = render(<WorkspaceContentEditor candidate={first} />);
+  const replicas = await screen.findByRole('spinbutton', { name: 'Services/replicas' });
+  fireEvent.change(replicas, { target: { value: '3' } });
+
+  mocks.content = {
+    trees: [
+      { key: 'Services', slots: { replicas: 4 }, children: [] },
+      { key: 'Settings', slots: { enabled: false }, children: [] },
+    ],
+    relations: [],
+  };
+  rendered.rerender(<WorkspaceContentEditor candidate={{ ...first, revision: 2 }} />);
+
+  await screen.findByRole('status');
+  expect(screen.getByRole('spinbutton', { name: 'Services/replicas' })).toHaveValue(3);
+  expect(screen.getByRole('button', { name: 'Review structured change' })).toBeDisabled();
+
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Load remote Draft and discard local edits' })
+  );
+  await waitFor(() =>
+    expect(screen.getByRole('spinbutton', { name: 'Services/replicas' })).toHaveValue(4)
+  );
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Review structured change' })).toBeEnabled();
 });

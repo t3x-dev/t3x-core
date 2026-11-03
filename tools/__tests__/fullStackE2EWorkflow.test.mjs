@@ -15,6 +15,10 @@ test('full-stack E2E qualifies exact dev pushes, supports reruns, and produces a
   assert.match(workflow, /pnpm check$/m);
   assert.match(workflow, /pnpm build$/m);
   assert.match(workflow, /pnpm test$/m);
+  assert.match(workflow, /pnpm test:workspace-concurrency-gate$/m);
+  assert.match(workflow, /pnpm test:workspace-reconciliation-gate$/m);
+  assert.match(workflow, /pnpm test:workspace-structured-conflict-gate$/m);
+  assert.match(workflow, /pnpm test:workspace-protected-ref-gate$/m);
   assert.match(workflow, /pnpm build:local-runtime$/m);
   assert.match(workflow, /pnpm smoke:local-install$/m);
   assert.match(workflow, /playwright install --with-deps chromium/);
@@ -31,6 +35,7 @@ test('full-stack E2E qualifies exact dev pushes, supports reruns, and produces a
   assert.match(workflow, /expected pushed SHA/);
   assert.match(workflow, /t3x\.dev\/qualification-attestation\/v1/);
   assert.match(workflow, /test-results\/qualification\/attestation\.json/);
+  assert.match(workflow, /test-results\/qualification\//);
   assert.match(workflow, /test-results\/full-e2e\//);
   assert.match(workflow, /test-results\/full-e2e-auth\//);
 });
@@ -41,7 +46,7 @@ test('authenticated browser qualification uses a fail-closed isolated profile', 
 
   assert.equal(
     packageJson.scripts['e2e:auth'],
-    'node tools/full-e2e.mjs --auth-enabled -- e2e/security/auth-boundaries.spec.ts e2e/security/schema-studio-auth.spec.ts'
+    'node tools/full-e2e.mjs --auth-enabled -- e2e/security/auth-boundaries.spec.ts e2e/security/schema-studio-auth.spec.ts e2e/security/two-account-collaboration.spec.ts'
   );
   assert.match(runner, /const authEnabled = runnerArgs\.includes\('--auth-enabled'\)/);
   assert.match(runner, /AUTH_DISABLED: authEnabled \? 'false' : 'true'/);

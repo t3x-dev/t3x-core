@@ -188,7 +188,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-export const POSTGRES_SCHEMA_VERSION = 79;
+export const POSTGRES_SCHEMA_VERSION = 83;
 
 function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
   if (!tableExists) return 'missing';
@@ -496,6 +496,9 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
       status TEXT NOT NULL DEFAULT 'open'
         CHECK (status IN ('draft', 'open', 'checking', 'ready', 'blocked', 'merged', 'closed')),
       author_id TEXT NOT NULL,
+      author_kind TEXT NOT NULL DEFAULT 'human'
+        CHECK (author_kind IN ('human', 'agent', 'service')),
+      author_delegator_id TEXT,
       review_owner_id TEXT,
       linked_work TEXT,
       diff_summary JSONB NOT NULL DEFAULT '{"changed_nodes":0,"yops_operations":0,"output_impacts":0,"source_refs":0}'::jsonb,
@@ -533,6 +536,7 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
       actor_id TEXT NOT NULL,
       type TEXT NOT NULL,
       message TEXT NOT NULL,
+      details JSONB,
       created_at TIMESTAMPTZ NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_pull_request_activity_pr
@@ -1042,6 +1046,21 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
       avatar_url TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    -- Browser Sessions
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      token_hash TEXT NOT NULL UNIQUE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      auth_method TEXT NOT NULL CHECK (auth_method IN ('local_password')),
+      user_agent TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL,
+      revoked_at TIMESTAMPTZ,
+      CONSTRAINT sessions_expiry_check CHECK (expires_at > created_at)
+    );
+    CREATE INDEX IF NOT EXISTS idx_sessions_user_active ON sessions(user_id, expires_at);
     -- Note: idx_users_provider_unique removed — Phase 2 migration drops provider/provider_id columns
     -- and moves them to accounts table. Index is no longer needed.
 
@@ -2663,6 +2682,179 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
   // Abnormal names and unattributed legacy claims stay untouched.
   await ensureRepositoryPaths(sql as postgres.TransactionSql);
 
+  // Schema v81 replaces browser-shaped API keys with independently revocable Sessions.
+  // Revoking legacy browser credentials forces a one-time login without touching real API keys.
+  if ((rows[0]?.version ?? 0) < 81) {
+    await sql.unsafe(`
+      UPDATE api_keys
+      SET revoked_at = NOW()
+      WHERE revoked_at IS NULL AND name LIKE 'session:%'
+    `);
+  }
+
+  // Schema v82 makes api_keys the compatibility-backed Credential store.
+  // Browser Sessions remain isolated in sessions and never use these rows.
+  if ((rows[0]?.version ?? 0) < 82) {
+    await sql.unsafe(`
+      ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS credential_kind TEXT NOT NULL DEFAULT 'api_key';
+      ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS namespace_id TEXT
+        REFERENCES namespaces(namespace_id) ON DELETE CASCADE;
+      ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS delegator_user_id TEXT;
+      ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+      ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS revocation_reason TEXT;
+
+      UPDATE api_keys
+      SET credential_kind = principal_kind
+      WHERE credential_kind = 'api_key' AND principal_kind IN ('agent', 'service');
+
+      UPDATE api_keys
+      SET delegator_user_id = user_id
+      WHERE principal_kind <> 'human'
+        AND delegator_user_id IS NULL
+        AND user_id IS NOT NULL;
+
+      UPDATE api_keys
+      SET revoked_at = COALESCE(revoked_at, NOW()),
+          revocation_reason = COALESCE(
+            revocation_reason,
+            'migration: machine credential missing project scope'
+          )
+      WHERE principal_kind <> 'human' AND project_id IS NULL;
+
+      DO $$
+      BEGIN
+        ALTER TABLE api_keys
+          ADD CONSTRAINT api_keys_credential_kind_check
+          CHECK (credential_kind IN ('api_key', 'pat', 'mcp', 'agent', 'service'));
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+      DO $$
+      BEGIN
+        ALTER TABLE api_keys
+          ADD CONSTRAINT api_keys_resource_scope_check
+          CHECK (project_id IS NULL OR namespace_id IS NULL);
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+      DO $$
+      BEGIN
+        ALTER TABLE api_keys
+          ADD CONSTRAINT api_keys_machine_project_scope_check
+          CHECK (principal_kind = 'human' OR project_id IS NOT NULL OR revoked_at IS NOT NULL);
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+      DO $$
+      BEGIN
+        ALTER TABLE api_keys
+          ADD CONSTRAINT api_keys_expiry_check
+          CHECK (expires_at IS NULL OR expires_at > created_at);
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+
+      CREATE INDEX IF NOT EXISTS idx_api_keys_namespace ON api_keys(namespace_id);
+      CREATE INDEX IF NOT EXISTS idx_api_keys_active_expiry ON api_keys(expires_at)
+        WHERE revoked_at IS NULL;
+    `);
+  }
+
+  // Schema v80: principal-private Workspaces. Legacy rows remain explicitly
+  // unowned for AUTH_DISABLED recovery; authenticated access fails closed.
+  await sql.unsafe(`
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS owner_principal_kind TEXT;
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS owner_principal_id TEXT;
+
+    ALTER TABLE drafts DROP CONSTRAINT IF EXISTS drafts_owner_pair_check;
+    ALTER TABLE drafts ADD CONSTRAINT drafts_owner_pair_check CHECK (
+      (owner_principal_kind IS NULL) = (owner_principal_id IS NULL)
+    );
+    ALTER TABLE drafts DROP CONSTRAINT IF EXISTS drafts_owner_kind_check;
+    ALTER TABLE drafts ADD CONSTRAINT drafts_owner_kind_check CHECK (
+      owner_principal_kind IS NULL OR owner_principal_kind IN ('human', 'agent', 'service')
+    );
+
+    DROP INDEX IF EXISTS idx_drafts_open_workspace_branch;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_drafts_open_workspace_branch_owner
+      ON drafts(project_id, target_branch, owner_principal_kind, owner_principal_id)
+      WHERE workspace_id IS NOT NULL
+        AND owner_principal_kind IS NOT NULL
+        AND owner_principal_id IS NOT NULL
+        AND status <> 'abandoned'
+        AND COALESCE(workspace_state_json->>'status', 'draft') <> 'committed';
+    CREATE INDEX IF NOT EXISTS idx_drafts_workspace_owner
+      ON drafts(project_id, owner_principal_kind, owner_principal_id, updated_at DESC)
+      WHERE workspace_id IS NOT NULL;
+
+    -- Workspace realtime notifications carry only the minimum routing label
+    -- needed by the WebSocket relay. The relay removes events whose owner does
+    -- not match the authenticated subscription principal.
+    CREATE OR REPLACE FUNCTION t3x_trg_draft_changed() RETURNS TRIGGER AS $$
+    BEGIN
+      IF NEW.updated_at IS DISTINCT FROM OLD.updated_at THEN
+        PERFORM t3x_emit_event(
+          'draft.changed',
+          NEW.project_id,
+          NULL,
+          jsonb_build_object(
+            'draft_id', NEW.id,
+            'workspace_id', NEW.workspace_id,
+            'revision', NEW.revision,
+            'owner_principal_kind', NEW.owner_principal_kind,
+            'owner_principal_id', NEW.owner_principal_id
+          )
+        );
+      END IF;
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+  `);
+
+  // Schema v83: canonical human identifiers and account ownership integrity.
+  // Abort instead of guessing when legacy case-folding would merge two users.
+  await sql.unsafe(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM users
+        WHERE email IS NOT NULL AND btrim(email) <> ''
+        GROUP BY lower(btrim(email)) HAVING count(*) > 1
+      ) THEN
+        RAISE EXCEPTION 'canonical email collision requires operator resolution';
+      END IF;
+      IF EXISTS (
+        SELECT 1 FROM users
+        WHERE username IS NOT NULL AND btrim(username) <> ''
+        GROUP BY lower(btrim(username)) HAVING count(*) > 1
+      ) THEN
+        RAISE EXCEPTION 'canonical username collision requires operator resolution';
+      END IF;
+    END $$;
+
+    UPDATE users SET email = NULL WHERE email IS NOT NULL AND btrim(email) = '';
+    UPDATE users SET username = NULL WHERE username IS NOT NULL AND btrim(username) = '';
+    UPDATE users SET email = lower(btrim(email)) WHERE email IS NOT NULL;
+    UPDATE users SET username = lower(btrim(username)) WHERE username IS NOT NULL;
+
+    DROP INDEX IF EXISTS idx_users_email;
+    DROP INDEX IF EXISTS idx_users_username;
+    CREATE UNIQUE INDEX idx_users_email ON users(email) WHERE email IS NOT NULL;
+    CREATE UNIQUE INDEX idx_users_username ON users(username) WHERE username IS NOT NULL;
+
+    ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_canonical_check;
+    ALTER TABLE users ADD CONSTRAINT users_email_canonical_check CHECK (
+      email IS NULL OR (email = lower(btrim(email)) AND length(email) > 0)
+    );
+    ALTER TABLE users DROP CONSTRAINT IF EXISTS users_username_canonical_check;
+    ALTER TABLE users ADD CONSTRAINT users_username_canonical_check CHECK (
+      username IS NULL OR (username = lower(btrim(username)) AND length(username) > 0)
+    );
+
+    DO $$
+    BEGIN
+      ALTER TABLE accounts ADD CONSTRAINT accounts_user_id_fkey
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
+  `);
+
   // Record schema version so subsequent startups skip the init SQL.
   await sql.unsafe(`
     INSERT INTO _schema_version (singleton, version, applied_at)
@@ -2688,6 +2880,9 @@ async function ensurePullRequestsSchema(sql: postgres.Sql): Promise<void> {
       status TEXT NOT NULL DEFAULT 'open'
         CHECK (status IN ('draft', 'open', 'checking', 'ready', 'blocked', 'merged', 'closed')),
       author_id TEXT NOT NULL,
+      author_kind TEXT NOT NULL DEFAULT 'human'
+        CHECK (author_kind IN ('human', 'agent', 'service')),
+      author_delegator_id TEXT,
       review_owner_id TEXT,
       linked_work TEXT,
       diff_summary JSONB NOT NULL DEFAULT '{"changed_nodes":0,"yops_operations":0,"output_impacts":0,"source_refs":0}'::jsonb,
@@ -2725,10 +2920,26 @@ async function ensurePullRequestsSchema(sql: postgres.Sql): Promise<void> {
       actor_id TEXT NOT NULL,
       type TEXT NOT NULL,
       message TEXT NOT NULL,
+      details JSONB,
       created_at TIMESTAMPTZ NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_pull_request_activity_pr
       ON pull_request_activity(pull_request_id, created_at);
+
+    ALTER TABLE pull_requests
+      ADD COLUMN IF NOT EXISTS author_kind TEXT NOT NULL DEFAULT 'human';
+    ALTER TABLE pull_requests
+      ADD COLUMN IF NOT EXISTS author_delegator_id TEXT;
+    ALTER TABLE pull_request_activity
+      ADD COLUMN IF NOT EXISTS details JSONB;
+    DO $$
+    BEGIN
+      ALTER TABLE pull_requests
+        ADD CONSTRAINT pull_requests_author_kind_valid
+        CHECK (author_kind IN ('human', 'agent', 'service'));
+    EXCEPTION
+      WHEN duplicate_object THEN NULL;
+    END $$;
   `);
 }
 

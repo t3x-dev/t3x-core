@@ -39,6 +39,7 @@ export function NewRepositoryPage() {
   const nameCheck = useRepositoryName(owner, name);
   const [description, setDescription] = useState('');
   const [initializeReadme, setInitializeReadme] = useState(false);
+  const [initializePrdStarter, setInitializePrdStarter] = useState(false);
   const [tags, setTags] = useState<RepositoryTagsDraft>({ tags: [], input: '' });
   const parsedTags = RepositoryTagsSchema.safeParse([...tags.tags, tags.input]);
   const parsedReadme = RepositoryReadmeSchema.safeParse(
@@ -64,6 +65,7 @@ export function NewRepositoryPage() {
       owner,
       visibility,
       initializeReadme,
+      starter: initializePrdStarter ? 'prd-v1' : undefined,
       tags: parsedTags.success ? parsedTags.data : [],
     });
     if (result && returnTo) {
@@ -236,6 +238,26 @@ export function NewRepositoryPage() {
                       {parsedReadme.error.issues[0]?.message}
                     </p>
                   ) : null}
+                </div>
+                <div className={styles.readmeOption}>
+                  <label htmlFor="repo-prd-starter">
+                    Initialize PRD starter <span className={styles.optional}>Optional</span>
+                  </label>
+                  <input
+                    id="repo-prd-starter"
+                    role="switch"
+                    aria-checked={initializePrdStarter}
+                    aria-label="Initialize PRD starter"
+                    type="checkbox"
+                    checked={initializePrdStarter}
+                    disabled={locked}
+                    aria-describedby="repository-prd-starter-help"
+                    onChange={(event) => setInitializePrdStarter(event.target.checked)}
+                  />
+                  <p id="repository-prd-starter-help">
+                    Create an initial semantic PRD commit on main so branches can open pull
+                    requests.
+                  </p>
                 </div>
                 <div className={styles.tagsField}>
                   <RepositoryTagsInput

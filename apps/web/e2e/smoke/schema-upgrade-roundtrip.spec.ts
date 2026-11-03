@@ -169,8 +169,6 @@ test('reviews a real published upgrade and retains the exact target Workspace th
       path: testInfo.outputPath('upgrade-active.png'),
       animations: 'disabled',
     });
-    await page.getByLabel('Target Workspace').selectOption(targetWorkspaceId);
-    await expect(page.getByLabel('Target Workspace')).toHaveValue(targetWorkspaceId);
     await expect(page.getByRole('button', { name: 'Review changes', exact: true })).toBeEnabled();
     await page.getByRole('button', { name: 'Review changes', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Workspace Review' })).toBeVisible();
@@ -195,6 +193,7 @@ test('reviews a real published upgrade and retains the exact target Workspace th
     await expect(page.getByRole('region', { name: 'Workspace detail' })).toContainText(
       'Branch workspace: target'
     );
+    await page.getByRole('button', { name: 'Open Draft', exact: true }).click();
     await page.getByRole('navigation', { name: 'Workspace tools' }).getByRole('button', { name: 'Structure', exact: true }).click();
     await expect(page.getByLabel('Workspace schema')).not.toHaveValue('');
     await page.setViewportSize({ width: 390, height: 844 });

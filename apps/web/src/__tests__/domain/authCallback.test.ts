@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { safeAuthCallbackUrl } from '@/domain/authCallback';
+import { postAuthDestination, safeAuthCallbackUrl } from '@/domain/authCallback';
 
 describe('safeAuthCallbackUrl', () => {
   it('preserves local paths and their query and fragment state', () => {
@@ -21,5 +21,27 @@ describe('safeAuthCallbackUrl', () => {
 
   it('uses the requested local fallback', () => {
     expect(safeAuthCallbackUrl('https://attacker.example', '/chat')).toBe('/chat');
+  });
+});
+
+describe('postAuthDestination', () => {
+  it('sends a newly registered user from the default home to namespace onboarding', () => {
+    expect(postAuthDestination('register', '/')).toBe('/onboarding/namespace');
+  });
+
+  it('sends a login without a personal namespace to namespace onboarding', () => {
+    expect(postAuthDestination('login', '/', null)).toBe('/onboarding/namespace');
+  });
+
+  it('sends a login with a personal namespace to that namespace', () => {
+    expect(postAuthDestination('login', '/', 'test-a')).toBe('/test-a');
+  });
+
+  it('preserves an explicit local callback after registration', () => {
+    expect(postAuthDestination('register', '/invite#token')).toBe('/invite#token');
+  });
+
+  it('preserves an explicit local callback after login', () => {
+    expect(postAuthDestination('login', '/invite#token', 'test-a')).toBe('/invite#token');
   });
 });

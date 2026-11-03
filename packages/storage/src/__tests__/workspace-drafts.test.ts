@@ -3,7 +3,11 @@ import type { AnyDB } from '../adapters';
 import {
   ConflictError,
   findWorkspaceDraft,
+  findWorkspaceDraftForOwner,
+  findWorkspaceDraftOwner,
   listWorkspaceDrafts,
+  listWorkspaceDraftsForOwner,
+  NotFoundError,
   upsertWorkspaceDraft,
 } from '../queries/drafts';
 import { insertProject } from '../queries/projects';
@@ -46,12 +50,15 @@ describe('workspace drafts', () => {
   });
 
   it('upserts, lists, and finds persisted workspace staged state', async () => {
+    const ownerA = { kind: 'human' as const, id: 'test-a' };
+    const ownerB = { kind: 'human' as const, id: 'test-b' };
     const first = await upsertWorkspaceDraft(db, {
       project_id: projectId,
       workspace_id: 'workspace_prd_handoff',
       title: 'PRD audience handoff',
       parent_commit_hash: 'sha256:base',
       target_branch: 'feature/prd-audience',
+      owner: ownerA,
       workspace_state: workspaceState('draft', projectId),
     });
 
@@ -60,6 +67,14 @@ describe('workspace drafts', () => {
     expect(first.workspace_state?.status).toBe('draft');
     expect(first.parent_commit_hash).toBe('sha256:base');
     expect(first.target_branch).toBe('feature/prd-audience');
+    expect(first.owner_principal_kind).toBe('human');
+    expect(first.owner_principal_id).toBe('test-a');
+    await expect(findWorkspaceDraftOwner(db, projectId, 'workspace_prd_handoff')).resolves.toEqual(
+      ownerA
+    );
+    await expect(
+      findWorkspaceDraftForOwner(db, projectId, 'workspace_prd_handoff', ownerB)
+    ).resolves.toBeNull();
 
     const second = await upsertWorkspaceDraft(
       db,
@@ -69,6 +84,7 @@ describe('workspace drafts', () => {
         title: 'PRD audience handoff',
         parent_commit_hash: 'sha256:base',
         target_branch: 'feature/prd-audience',
+        owner: ownerA,
         workspace_state: workspaceState('ready_for_yops', projectId),
       },
       first.revision
@@ -97,6 +113,8 @@ describe('workspace drafts', () => {
 
     const list = await listWorkspaceDrafts(db, projectId);
     expect(list.map((draft) => draft.workspace_id)).toEqual(['workspace_prd_handoff']);
+    await expect(listWorkspaceDraftsForOwner(db, projectId, ownerA)).resolves.toHaveLength(1);
+    await expect(listWorkspaceDraftsForOwner(db, projectId, ownerB)).resolves.toHaveLength(0);
 
     await expect(
       upsertWorkspaceDraft(db, {
@@ -104,9 +122,35 @@ describe('workspace drafts', () => {
         workspace_id: 'workspace_b',
         title: 'Workspace B',
         target_branch: 'feature/prd-audience',
+        owner: ownerA,
         workspace_state: { ...workspaceState('schema_review', projectId), id: 'workspace_b' },
       })
     ).rejects.toThrow();
+
+    const privateWorkspaceB = await upsertWorkspaceDraft(db, {
+      project_id: projectId,
+      workspace_id: 'workspace_b',
+      title: 'Workspace B',
+      target_branch: 'feature/prd-audience',
+      owner: ownerB,
+      workspace_state: { ...workspaceState('schema_review', projectId), id: 'workspace_b' },
+    });
+    expect(privateWorkspaceB.owner_principal_id).toBe('test-b');
+    await expect(listWorkspaceDraftsForOwner(db, projectId, ownerB)).resolves.toHaveLength(1);
+    await expect(
+      upsertWorkspaceDraft(
+        db,
+        {
+          project_id: projectId,
+          workspace_id: 'workspace_b',
+          title: 'Attacker update',
+          target_branch: 'feature/prd-audience',
+          owner: ownerA,
+          workspace_state: { ...workspaceState('draft', projectId), id: 'workspace_b' },
+        },
+        privateWorkspaceB.revision
+      )
+    ).rejects.toBeInstanceOf(NotFoundError);
 
     await upsertWorkspaceDraft(
       db,
@@ -115,6 +159,7 @@ describe('workspace drafts', () => {
         workspace_id: 'workspace_prd_handoff',
         title: 'Committed workspace',
         target_branch: 'feature/prd-audience',
+        owner: ownerA,
         workspace_state: {
           ...workspaceState('committed', projectId),
           id: 'workspace_prd_handoff',
@@ -130,6 +175,7 @@ describe('workspace drafts', () => {
       title: 'Next workspace',
       parent_commit_hash: 'sha256:committed',
       target_branch: 'feature/prd-audience',
+      owner: ownerA,
       workspace_state: {
         ...workspaceState('draft', projectId),
         id: 'workspace_next',
