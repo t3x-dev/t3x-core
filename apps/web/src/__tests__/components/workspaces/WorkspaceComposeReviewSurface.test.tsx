@@ -192,6 +192,8 @@ const modelSelectionMocks = vi.hoisted(() => ({
   handleModelChange: vi.fn(),
 }));
 const sourceGenerationMocks = vi.hoisted(() => ({
+  input: '',
+  send: vi.fn(),
   options: null as null | {
     conversationId?: string;
     title?: string;
@@ -225,7 +227,7 @@ vi.mock('@/hooks/sourceThreads/useSourceThreadGeneration', () => ({
       streamingContent: '',
       error: null,
       warning: null,
-      input: '',
+      input: sourceGenerationMocks.input,
       isLoading: false,
       isStreaming: false,
       citations: [],
@@ -233,7 +235,7 @@ vi.mock('@/hooks/sourceThreads/useSourceThreadGeneration', () => ({
       searchQuery: null,
       thinkingContent: '',
       setInput: vi.fn(),
-      sendMessage: vi.fn(),
+      sendMessage: sourceGenerationMocks.send,
       stopGenerating: vi.fn(),
     };
   },
@@ -294,6 +296,8 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     bootstrapMocks.value.cancel.mockReset();
     modelSelectionMocks.handleModelChange.mockReset();
     sourceGenerationMocks.options = null;
+    sourceGenerationMocks.input = '';
+    sourceGenerationMocks.send.mockClear();
     conversationMocks.value.data.conversations = [];
     conversationMocks.value.loading = false;
     conversationMocks.value.error = null;
@@ -367,6 +371,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
   });
 
   function renderCompose() {
+    if (!activityMocks.value) enableComposeActivity();
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     return render(
       <WorkspaceComposeReviewSurface
@@ -422,6 +427,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
   });
 
   it('remembers the selected Review view, including when the Review URL has no pane', () => {
+    enableComposeActivity();
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     const key = `t3x.workspace-view:proj_1:${candidate.id}:review`;
     const controller = {
@@ -1579,7 +1585,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(activityMocks.value.inspectNode).not.toHaveBeenCalled();
   });
 
-  it('waits in Chat until the user enables Draft activity', () => {
+  it('initializes on first send and waits for the authoring view before dispatch', () => {
     bootstrapMocks.value.start.mockClear();
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     const controller = {
@@ -1593,7 +1599,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       scenarios: { options: [], selectedId: candidate.id },
       sourceBusy: false,
     } as unknown as WorkspaceComposeReviewController;
-    render(
+    const surface = () => (
       <WorkspaceComposeReviewSurface
         candidate={candidate}
         controller={controller}
@@ -1602,13 +1608,26 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
 
-    expect(screen.queryByRole('button', { name: 'Send message' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Generate changes/ })).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Upload source material')).toBeInTheDocument();
-    expect(screen.getByText('Add source')).toBeInTheDocument();
+    const { rerender } = render(surface());
+    expect(screen.getByRole('textbox', { name: 'Workspace instruction' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+    expect(screen.getByText('Add source')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Enable Draft activity' })).toBeNull();
     expect(bootstrapMocks.value.start).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: /Enable Draft activity/ }));
+    sourceGenerationMocks.input = 'Update the title';
+    rerender(surface());
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
     expect(bootstrapMocks.value.start).toHaveBeenCalledOnce();
+    expect(sourceGenerationMocks.send).not.toHaveBeenCalled();
+    enableComposeActivity();
+    rerender(surface());
+    expect(sourceGenerationMocks.send).toHaveBeenCalledExactlyOnceWith(
+      'Update the title',
+      undefined
+    );
+    expect(sourceGenerationMocks.options?.workspaceAssistant).toMatchObject({
+      workspaceRevision: 1,
+    });
   });
 
   it('wires artifact, changed-node, and evidence controls to real review interactions', async () => {
@@ -2119,6 +2138,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
   });
 
   it('normalizes a stale validation review pane to Changes', () => {
+    enableComposeActivity();
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     navigationMocks.searchParams = new URLSearchParams(
       'workspaceMode=review&reviewPane=validation'
@@ -2282,6 +2302,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
   });
 
   it('lets Compose keep the default Schema or pin another published Schema', () => {
+    enableComposeActivity();
     const bindSchema = vi.fn();
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     render(
@@ -2620,30 +2641,33 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       sourceBusy: false,
     } as unknown as WorkspaceComposeReviewController;
 
+    const onModeChange = vi.fn();
     render(
       <WorkspaceComposeReviewSurface
         candidate={candidate}
         controller={controller}
         mode="review"
-        onModeChange={vi.fn()}
+        onModeChange={onModeChange}
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
-    expect(screen.queryByLabelText('Workspace review structure')).not.toBeInTheDocument();
-    expect(screen.getByText('No Content or Schema changes available to review.')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Content', exact: true })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Schema', exact: true })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Prepare review' })).toBeDisabled();
-    expect(screen.getByText(/No changes to commit/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Prepare review' }));
-    expect(controller.prepareReview).not.toHaveBeenCalled();
-    expect(screen.queryByRole('link', { name: 'View History' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('table')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'YAML' }));
-    expect(screen.getByText('No Content or Schema changes available to review.')).toBeVisible();
+    const review = screen.getByRole('region', { name: 'Workspace Review' });
+    expect(within(review).getByRole('status')).toHaveTextContent(
+      'This draft has no Content or Schema changes to review.'
+    );
+    const changes = within(review).getByRole('table', { name: 'Draft changes' });
+    expect(
+      within(changes)
+        .getAllByRole('columnheader')
+        .map((item) => item.textContent)
+    ).toEqual(['Field', 'Before', 'After']);
+    expect(within(review).getByRole('button', { name: 'YAML' })).toBeDisabled();
+    expect(within(review).getByRole('region', { name: 'Check summary' })).toBeVisible();
+    expect(within(review).queryByRole('button', { name: 'Edit in Compose' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Prepare review' })).not.toBeInTheDocument();
     expect(screen.queryByText(/天气为晴天/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Compose' }));
+    expect(onModeChange).toHaveBeenCalledWith('compose');
   });
 });
 

@@ -103,7 +103,7 @@ describe('Workspace current Draft sidebar', () => {
     const { rerender } = render(
       <WorkspaceCurrentDraft candidate={candidate} current={undefined} enabled={false} />
     );
-    expect(screen.getByText(/Enable Draft activity in Chat/)).toBeVisible();
+    expect(screen.getByText(/Send a message or edit the Draft/)).toBeVisible();
     expect(screen.getByText('No Schema bound.')).toBeVisible();
     rerender(<WorkspaceCurrentDraft candidate={candidate} current={{}} enabled />);
     expect(screen.getByText('No content yet.')).toBeVisible();

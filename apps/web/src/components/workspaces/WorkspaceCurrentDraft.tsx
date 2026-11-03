@@ -112,7 +112,7 @@ export function WorkspaceCurrentDraft({
               {loading
                 ? 'Loading current Draft…'
                 : !enabled
-                  ? 'Enable Draft activity in Chat to load the content.'
+                  ? 'Send a message or edit the Draft to load its content.'
                   : 'Current Draft is unavailable.'}
             </p>
           )}
