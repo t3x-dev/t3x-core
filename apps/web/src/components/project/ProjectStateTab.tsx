@@ -566,7 +566,8 @@ export function ProjectStateTab({
         activeBranchCreation.current === branchCreationScope &&
         branchCreationScope.request === request;
       if (!isCurrent()) return;
-      await createBranch(name, fromBranch, focusedCommitHash);
+      if (focusedCommitHash) await createBranch(name, fromBranch, focusedCommitHash);
+      else await createBranch(name, fromBranch);
       if (!isCurrent()) return;
       pushRoute(getProjectIdWorkspacePath(projectId, { branch: name }));
     },
