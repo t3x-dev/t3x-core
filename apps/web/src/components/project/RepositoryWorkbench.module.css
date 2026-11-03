@@ -1,0 +1,23 @@
+.shell {
+  --repo-main-with-inspector: minmax(0, 1fr) var(--repo-inspector-track);
+  --repo-navigation-with-main: var(--repo-navigation-track) minmax(0, 1fr);
+  --repo-frame-radius: 12px;
+  --repo-frame-gap: 12px;
+  --repo-frame-top: 8px;
+}
+
+/* Only the working pane gets a frame; navigation and context sit on the page. */
+.primary {
+  min-width: 0;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--repo-frame-radius);
+  background: var(--surface-card);
+}
+
+@media (max-width: 840px) {
+  .shell {
+    --repo-frame-radius: 9px;
+    --repo-frame-gap: 7px;
+    --repo-frame-top: 4px;
+  }
+}

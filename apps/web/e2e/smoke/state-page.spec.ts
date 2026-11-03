@@ -118,7 +118,8 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     await page.setViewportSize({ width: 1280, height: 720 });
 
 
-    await page.getByRole('link', { name: 'History 2', exact: true }).click();
+    await page.getByRole('button', { name: 'History', exact: true }).click();
+    await page.getByRole('link', { name: 'History canvas', exact: true }).click();
     await expect(page).toHaveURL((url) => url.searchParams.get('view') === 'canvas');
     const canvasRegion = page.getByRole('region', { name: 'Multi-commit state canvas' });
     await expect(canvasRegion).toBeVisible();
@@ -136,13 +137,11 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
       )
     ).toBeLessThanOrEqual(2);
 
-    await page.locator('[data-intro-target="canvas-back-to-state"]').click();
-    await expect(page.getByRole('tab', { name: 'Overview', exact: true })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
+    await page.locator('[data-intro-target="canvas-back-to-state"]:visible').click();
+    await expect(page.getByRole('region', { name: 'State structure' })).toBeVisible();
+    await expect(page).toHaveURL((url) => url.searchParams.get('branch') === 'feature/prd-audience');
 
-    await page.getByRole('link', { name: 'Propose change', exact: true }).first().click();
+    await page.getByRole('link', { name: 'Propose change' }).click();
     await expect(page).toHaveURL((url) => {
       return (
         (url.pathname.endsWith('/workspaces') || url.searchParams.get('tab') === 'workspaces') &&

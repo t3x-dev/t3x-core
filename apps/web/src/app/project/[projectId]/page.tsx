@@ -453,6 +453,7 @@ export function ProjectDetailPageContent({
         projectName={project.name}
         projectDescription={project.description}
         projectOwner={project.owner}
+        repositoryNamespace={project.namespace ?? ownerSlugOverride}
         projectVisibility={project.visibility}
         repositoryProfile={project.repositoryProfile}
         canEditRepository={project.canEdit}

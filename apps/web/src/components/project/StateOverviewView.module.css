@@ -1,3 +1,4 @@
+/* The repository introduction reads as a document, with a quiet information rail. */
 .root {
   min-height: 0;
   flex: 1;
@@ -6,10 +7,15 @@
   color: var(--text-primary);
 }
 .page {
+  display: flex;
+  flex-direction: column;
   width: 100%;
   max-width: var(--project-page-max-width, 1264px);
   margin: 0 auto;
-  padding: 0 24px 32px;
+  padding: 0 24px 16px;
+}
+.root > .page {
+  min-height: 100%;
 }
 .projectHeader {
   display: flex;
@@ -17,12 +23,12 @@
   align-items: center;
   gap: 12px;
   padding: 16px 0;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-secondary);
 }
 .projectHeader h1 {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 22px;
+  font-weight: 650;
   color: var(--text-primary);
 }
 .visibility {
@@ -44,10 +50,12 @@
 }
 .actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin-left: auto;
 }
+.historyTrigger,
 .actions a {
   display: inline-flex;
   align-items: center;
@@ -60,6 +68,7 @@
   font-size: 13px;
   white-space: nowrap;
 }
+.historyTrigger:hover,
 .actions a:hover {
   background: var(--hover-bg);
 }
@@ -68,6 +77,7 @@
   border-color: var(--accent-commit);
   color: var(--text-on-accent, #fff);
 }
+.historyTrigger svg,
 .actions svg {
   width: 14px;
   height: 14px;
@@ -98,12 +108,20 @@
   width: 14px;
   height: 14px;
 }
+
 .informationLayout {
+  position: relative;
+  flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 288px;
+  grid-template-columns: var(--repo-main-with-inspector);
   align-items: start;
-  gap: 32px;
-  padding-top: 20px;
+  gap: var(--repo-frame-gap);
+  padding: 24px 0 32px;
+}
+.mainColumn {
+  composes: primary from "./RepositoryWorkbench.module.css";
+  --readme-inset: clamp(12px, 2vw, 24px);
+  padding: 0 var(--readme-inset) var(--readme-inset);
 }
 .mainColumn,
 .sidebar {
@@ -111,57 +129,136 @@
 }
 .sidebar {
   display: grid;
-  gap: 24px;
+  align-content: start;
+  align-self: stretch;
+  contain: size;
+  overflow: auto;
+  gap: 32px;
+  padding: 7px 0 0 12px;
 }
 .about {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
-.about h2 {
-  font-size: 14px;
-  font-weight: 600;
+.about:has(.tags:empty):not(:has(.descriptionRow, .description)) {
+  display: none;
 }
-.metadata {
-  display: grid;
-  gap: 12px;
-  font-size: 12px;
-  line-height: 1.5;
+.descriptionRow {
+  position: relative;
+  padding-right: 26px;
 }
-.metadata div {
-  display: grid;
-  gap: 2px;
-}
-.metadata dt {
-  color: var(--text-tertiary);
-}
-.metadata dd {
-  margin: 0;
-  color: var(--text-secondary);
+.description {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-primary);
   overflow-wrap: anywhere;
 }
-.metadata a:hover {
-  text-decoration: underline;
+.descriptionEdit {
+  position: absolute;
+  top: -3px;
+  right: -5px;
+  padding: 5px;
+  width: 28px;
+  height: 28px;
+  color: var(--text-secondary);
 }
-.stateContent {
+.descriptionRow:has(.addDescription) {
+  padding: 0;
+}
+.addDescription {
+  padding: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+.descriptionEditor {
+  display: grid;
+  gap: 10px;
+  font-size: 13px;
+}
+.descriptionEditor label {
+  display: grid;
+  gap: 8px;
+  font-weight: 500;
+}
+.descriptionInput {
+  width: 100%;
+  min-height: 110px;
+  padding: 10px;
+  resize: vertical;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.6;
+  font-weight: 400;
+}
+.descriptionEditor [role="alert"] {
+  color: var(--status-error);
+  overflow-wrap: anywhere;
+}
+.tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
   min-width: 0;
-  border-top: 1px solid var(--stroke-divider);
-  padding-top: 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.tags:empty {
+  display: none;
+}
+.tags button {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.stateContent,
+.version {
+  min-width: 0;
+}
+.contentHeading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.contentHeading h2,
+.version h2 {
+  font-size: 15px;
+  line-height: 24px;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+.rootCount {
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 .sidebarLink {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  min-height: 28px;
-  margin-left: auto;
-  font-size: 12px;
+  gap: 6px;
+  min-height: 32px;
+  font-size: 13px;
   color: var(--accent-commit);
+  font-weight: 500;
+}
+.sidebarLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .sidebarLink svg {
   width: 14px;
   height: 14px;
+  flex: none;
+}
+.stateContent > .sidebarLink {
+  margin-top: 8px;
 }
 .structureTree {
-  max-height: 380px;
+  max-height: 340px;
   overflow: auto;
   overscroll-behavior: contain;
 }
@@ -170,18 +267,19 @@
   align-items: center;
   gap: 4px;
   min-height: 32px;
-  font-size: 12px;
+  font-size: 13px;
 }
 .structureToggle,
 .structureSpacer {
-  flex: 0 0 24px;
-  width: 24px;
+  flex: 0 0 20px;
+  width: 20px;
   height: 28px;
 }
 .structureToggle {
   display: grid;
   place-items: center;
   border-radius: var(--radius-sm);
+  color: var(--text-secondary);
 }
 .structureToggle:hover,
 .structureKey:is(button):hover {
@@ -200,69 +298,115 @@
   padding: 4px 0;
   text-align: left;
   overflow-wrap: anywhere;
+  color: var(--text-primary);
 }
 .structureValue {
-  max-width: 45%;
+  max-width: 42%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 .sidebarHint {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+.version h2 {
+  margin-bottom: 12px;
+}
+.commitMessage {
+  display: block;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+a.commitMessage:hover {
+  color: var(--accent-commit);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.commitMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 6px;
   font-size: 12px;
   line-height: 1.6;
   color: var(--text-secondary);
 }
-.contentHeading {
+.commitHash {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  min-height: 32px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
 }
-.contentHeading h2 {
-  font-size: 14px;
-  font-weight: 600;
+.commitHash svg {
+  width: 14px;
+  height: 14px;
 }
-.specializedReader {
+.metadata {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.metadata:empty {
+  display: none;
+}
+.metadata > div {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 10px;
+}
+.metadata dt {
   display: flex;
-  flex-direction: column;
-  height: 60vh;
-  min-height: 320px;
-  overflow: hidden;
-  border: 1px solid var(--stroke-divider);
-  border-radius: var(--radius-md);
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+.metadata dt svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.metadata dd {
+  margin: 0;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.metadata a {
+  color: var(--accent-commit);
+}
+.metadata a:hover {
+  text-decoration: underline;
+}
+.historyLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 16px;
 }
 .readmeContent {
   min-width: 0;
-  overflow: hidden;
-  border: 1px solid var(--stroke-default);
-  border-radius: var(--radius-md);
-}
-.contentPreview {
-  margin-top: 20px;
-}
-.contentPreview > summary {
-  padding: 12px 0;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.description {
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--text-secondary);
 }
 .readmeHeader {
-  background: var(--surface-panel);
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 8px;
+  margin: 0 calc(-1 * var(--readme-inset)) 20px;
+  padding: 5px 12px;
   border-bottom: 1px solid var(--stroke-divider);
+  border-radius: var(--repo-frame-radius) var(--repo-frame-radius) 0 0;
+  background: color-mix(in srgb, var(--surface-panel) 35%, var(--surface-card));
 }
 .readmeHeader h2 {
   display: flex;
@@ -271,60 +415,253 @@
   min-height: 32px;
   font-size: 14px;
   font-weight: 600;
+  color: var(--text-secondary);
 }
 .readmeHeader h2 svg {
-  width: 16px;
-  height: 16px;
+  width: 17px;
+  height: 17px;
 }
 .readmeActions {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   align-items: center;
   flex-wrap: wrap;
   margin-left: auto;
 }
+.readmeActions button {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
 .readmeBody {
   min-width: 0;
-  padding: 24px;
   overflow-wrap: anywhere;
 }
 .readmeBody > section {
   max-width: 80ch;
 }
-.readmeBody h1 {
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--stroke-divider);
-  font-size: 24px;
-  line-height: 1.3;
+.markdown {
+  max-width: 100%;
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
 }
-.readmeBody h2 {
-  font-size: 20px;
+.markdown > :first-child {
+  margin-top: 0;
+}
+.markdown :is(h1, h2, h3, h4, h5, h6) {
+  color: var(--text-primary);
+  font-weight: 650;
+  scroll-margin-top: 24px;
+}
+.markdown h1 {
+  margin: 32px 0 18px;
+  font-size: 32px;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
+.markdown h2 {
+  margin: 36px 0 14px;
+  font-size: 22px;
   line-height: 1.4;
+  letter-spacing: -0.015em;
+}
+.markdown h3 {
+  margin: 28px 0 12px;
+  font-size: 18px;
+  line-height: 1.5;
+}
+.markdown :is(h4, h5, h6) {
+  margin: 24px 0 10px;
+  font-size: 16px;
+}
+.markdown p {
+  margin: 14px 0;
+}
+.markdown strong {
+  font-weight: 650;
+}
+.markdown :is(ul, ol) {
+  margin: 14px 0;
+  padding-left: 24px;
+}
+.markdown ul {
+  list-style: disc;
+}
+.markdown ol {
+  list-style: decimal;
+}
+.markdown li {
+  margin: 5px 0;
+}
+.markdown li > :is(ul, ol) {
+  margin: 4px 0;
+}
+.markdown a {
+  color: var(--accent-commit);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent-commit) 40%, transparent);
+  text-underline-offset: 3px;
+}
+.markdown a:hover {
+  text-decoration-color: currentColor;
+}
+.markdown img {
+  max-width: 100%;
+  height: auto;
+  margin: 24px 0;
+  border-radius: var(--radius-md);
+}
+.markdown code {
+  font-size: 0.85em;
+}
+.markdown :not(pre) > code {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--surface-panel);
+}
+.markdown pre {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 22px 0;
+  padding: 18px 20px;
+  border-radius: var(--radius-md);
+  background: var(--surface-panel);
+  font-size: 14px;
+  line-height: 1.75;
+}
+.markdown pre code {
+  font-size: inherit;
+}
+.markdown table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  margin: 24px 0;
+  font-size: 14px;
+  line-height: 1.7;
+  border-collapse: collapse;
+}
+.markdown :is(th, td) {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--stroke-divider);
+  text-align: left;
+}
+.markdown th {
+  background: var(--surface-panel);
+  font-weight: 600;
+}
+.markdown blockquote {
+  margin: 22px 0;
+  padding-left: 18px;
+  border-left: 3px solid var(--stroke-default);
+  color: var(--text-secondary);
+}
+.markdown hr + h2 {
+  margin-top: 24px;
+}
+.mediaFallback {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  max-width: 100%;
+  vertical-align: middle;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.mediaFallback svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.markdown .mediaFallback strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.badgeLabel {
+  padding: 1px 7px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-sm);
+  line-height: 20px;
+}
+.markdown hr {
+  margin: 24px 0;
+  border-color: var(--stroke-divider);
 }
 .contents {
   display: grid;
-  gap: 4px;
-  padding: 12px;
-  margin: 0;
-  border-bottom: 1px solid var(--stroke-divider);
+  gap: 2px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+  background: var(--surface-panel);
+  padding: 10px;
+  margin-bottom: 24px;
+}
+.readmeEditor .readmeHeader {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   background: var(--surface-panel);
 }
+.readmeEditor .readmeActions button[type="submit"] {
+  color: var(--text-on-accent, #fff);
+  background: var(--accent-commit);
+}
+.sourceSheet {
+  position: relative;
+  min-width: 0;
+}
+.sourceSheet > span,
+.sourceSheet textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: max(18rem, calc(100dvh - 300px));
+  margin: 0;
+  padding: 12px;
+  border: 1px solid transparent;
+  font: 14px / 1.6 var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.sourceSheet > span {
+  visibility: hidden;
+  pointer-events: none;
+}
+.sourceSheet textarea {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  resize: none;
+  overflow: hidden;
+  border-color: var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+}
+.readmeEditor [role="alert"] {
+  color: var(--status-error);
+}
 .contents button {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.contents button:hover {
+  background: var(--hover-bg);
+}
+.contents > span {
+  padding: 8px;
   font-size: 13px;
   color: var(--text-secondary);
 }
-.contents svg {
-  width: 14px;
-  height: 14px;
-}
 .feedback {
-  padding: 24px 0;
-  font-size: 14px;
+  display: block;
+  padding: 16px 0;
+  font-size: 13px;
   color: var(--text-secondary);
 }
 .feedback h3 {
@@ -334,102 +671,84 @@
 .feedback p {
   margin: 8px 0;
 }
-.emptyState {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-  gap: 16px;
-  padding: 12px 0;
+.emptyReadme {
+  padding: 40px 0 64px;
 }
-.emptyIcon {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border: 1px solid var(--stroke-divider);
-  border-radius: var(--radius-md);
-  background: var(--surface-card);
+.emptyReadme h3 {
+  margin: 0 0 12px;
+  font-size: 26px;
+  line-height: 1.35;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.emptyReadme p {
+  max-width: 46ch;
+  margin: 6px 0;
+  font-size: 15px;
+  line-height: 1.8;
   color: var(--text-secondary);
 }
-.emptyIcon svg {
-  width: 20px;
-  height: 20px;
-}
-.emptyContent {
-  min-width: 0;
+.emptyReadme button {
+  margin-top: 18px;
+  padding: 8px 12px;
+  height: 36px;
+  border: 1px solid var(--stroke-default);
+  font-size: 14px;
+  color: var(--accent-commit);
 }
 .emptyContent h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 22px;
-}
-.emptyContent p {
-  max-width: 60ch;
-  margin: 8px 0 16px;
-  color: var(--text-secondary);
   font-size: 14px;
   line-height: 1.6;
-  overflow-wrap: anywhere;
+  font-weight: 500;
 }
-.root button:focus-visible,
-.root summary:focus-visible,
-.actions a:focus-visible {
+.emptyContent p {
+  margin: 8px 0 12px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+.root :is(button, a, textarea):focus-visible,
+.readmeHeader:focus-visible,
+.contents button:focus-visible {
   outline: 2px solid var(--ring);
-  outline-offset: 2px;
+  outline-offset: 3px;
 }
-@media (max-width: 960px) {
+@media (max-width: 760px) {
+  .page {
+    padding: 0 20px 16px;
+  }
   .informationLayout {
     grid-template-columns: minmax(0, 1fr);
-    gap: 24px;
+    gap: 40px;
+    padding-top: 20px;
   }
   .sidebar {
+    contain: none;
+    overflow: visible;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 28px;
+    padding: 0;
   }
-  .stateContent {
-    padding-top: 0;
-    border-top: 0;
+  .about {
+    grid-column: 1 / -1;
   }
-}
-@media (max-width: 800px) {
-  .page {
-    padding: 0 16px 24px;
-  }
-  .readmeBody {
-    padding: 16px;
+  .markdown h1 {
+    font-size: 28px;
   }
 }
-@media (max-width: 600px) {
+@media (max-width: 480px) {
   .sidebar {
     grid-template-columns: minmax(0, 1fr);
   }
-  .emptyState {
-    grid-template-columns: 1fr;
-    gap: 12px;
-    padding: 20px;
-  }
 }
-.tags {
+
+.root.embedded {
   display: flex;
-  align-items: center;
-  min-width: 0;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0;
+  overflow: visible;
 }
-.tag {
-  max-width: 100%;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 20px;
-  border-color: var(--stroke-divider);
-  background: var(--surface-panel);
-  color: var(--text-secondary);
+.embedded > .page {
+  padding: 0;
+  max-width: none;
+  flex: 1;
+  min-height: 0;
 }

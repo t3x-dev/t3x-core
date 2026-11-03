@@ -2,8 +2,24 @@
 
 import type { StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
 import { canonicalJson, type YValue } from '@t3x-dev/yops';
-import { Box, ChevronDown, FileText, MoreHorizontal, Plus, Trash2, X } from 'lucide-react';
-import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Box,
+  Braces,
+  Check,
+  ChevronDown,
+  FileText,
+  Hash,
+  Layers2,
+  List,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Shapes,
+  ToggleRight,
+  Trash2,
+  Type,
+} from 'lucide-react';
+import { type ReactNode, type RefObject, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { StructureTreeRow, visibleTreeRows } from '@/components/structure/StructureTree';
 import tree from '@/components/structure/StructureTree.module.css';
 import { Button } from '@/components/ui/button';
@@ -20,6 +36,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   addSchemaField,
   changeSchemaField,
@@ -36,6 +54,7 @@ import {
   type SchemaSourceMappings,
   transferSchemaMappings,
 } from '@/domain/schemas/schemaSourceMappings';
+import { schemaSourceRelations } from '@/domain/schemas/schemaSourceRelations';
 import type { SchemaSourceIdentity } from '@/hooks/schemas/useSchemaSourceIdentities';
 import styles from './SchemaDataEditor.module.css';
 import {
@@ -43,12 +62,36 @@ import {
   SchemaFieldName,
   SchemaFieldProperties,
   SchemaFieldValidation,
+  schemaFieldTypeLabels,
 } from './SchemaDefinitionStructure';
+import { SchemaDetailsPanel } from './SchemaDetailsPanel';
+import overlay from './SchemaEditorOverlay.module.css';
+import { SchemaEditorSelect } from './SchemaEditorSelect';
 import { SchemaFieldTree } from './SchemaFieldTree';
 import { SchemaSourceBadge } from './SchemaSourceBadge';
 import { type ParentLineMode, SchemaVisualEditor } from './SchemaVisualEditor';
 import type { SchemaSourceItem } from './SchemaVisualSources';
 import { type SchemaEditorNavigation, useSchemaNavigationGuard } from './useSchemaNavigationGuard';
+
+/** Field types are visual identities; editing and validation still use the definition. */
+function SchemaFieldTypeIcon({ row }: { row: SchemaFieldRow }) {
+  const type = row.kind === 'node' ? 'node' : String(row.definition.type ?? 'any');
+  const icons: Record<string, typeof Type> = {
+    string: Type,
+    boolean: ToggleRight,
+    number: Hash,
+    integer: Hash,
+    array: List,
+    object: Braces,
+  };
+  const Icon =
+    row.kind === 'node' ? (row.definition.repeated ? Layers2 : Box) : (icons[type] ?? FileText);
+  return (
+    <span className={styles.fieldTypeIcon} data-field-type={type}>
+      <Icon aria-hidden="true" />
+    </span>
+  );
+}
 
 function schemaEditorValueKey(definition: SchemaDefinition, mappings: SchemaSourceMappings) {
   const origins = mappings
@@ -68,6 +111,9 @@ export function SchemaDataEditor({
   navigationRef,
   focusSemanticPath,
   showSaveAction = true,
+  externalActions = false,
+  workbenchFooter = false,
+  onActionsAvailabilityChange,
   onSaveAvailabilityChange,
   view = 'data',
   layoutKey = 'schema',
@@ -99,6 +145,13 @@ export function SchemaDataEditor({
   navigationRef?: RefObject<SchemaEditorNavigation | null>;
   focusSemanticPath?: string;
   showSaveAction?: boolean;
+  externalActions?: boolean;
+  workbenchFooter?: boolean;
+  onActionsAvailabilityChange?: (availability: {
+    undo: boolean;
+    rules: boolean;
+    discard: boolean;
+  }) => void;
   onSaveAvailabilityChange?: (available: boolean) => void;
   onValidationChange?: (invalid: boolean) => void;
   view?: 'data' | 'visual';
@@ -131,6 +184,7 @@ export function SchemaDataEditor({
   onDirtyChange: (dirty: boolean) => void;
   onDiscard: () => void;
 }) {
+  const overlayId = useId();
   const [definition, setDefinition] = useState<SchemaDefinition>();
   const [dirty, setDirty] = useState(false);
   const [selected, setSelected] = useState<string>();
@@ -145,8 +199,11 @@ export function SchemaDataEditor({
   const [resetKey, setResetKey] = useState(0);
   const [intent, setIntent] = useState('Edit Schema fields.');
   const [intentOpen, setIntentOpen] = useState(false);
+  const intentInput = useRef<HTMLTextAreaElement>(null);
   const [addKind, setAddKind] = useState<'node' | 'slot'>();
   const [addParent, setAddParent] = useState('');
+  const addButton = useRef<HTMLButtonElement>(null);
+  const [addOpen, setAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sourceMappings, setSourceMappings] = useState<SchemaSourceMappings>([]);
   const [history, setHistory] = useState<
@@ -194,13 +251,23 @@ export function SchemaDataEditor({
   }, [dirty, validationError]);
 
   const rows = useMemo(() => (definition ? schemaFieldRows(definition) : []), [definition]);
+  const nodeCount = rows.filter((row) => row.kind === 'node').length;
+  const fieldCount = rows.length - nodeCount;
   const sourceRows = useMemo(
     () =>
       new Map((provenance ? schemaFieldRows(provenance.schema) : []).map((row) => [row.path, row])),
     [provenance?.schema]
   );
+  const sourceRelations = useMemo(
+    () =>
+      workbenchFooter
+        ? schemaSourceRelations(rows, sourceMappings, provenance, baseDefinition, wholeSchemaSource)
+        : undefined,
+    [workbenchFooter, rows, sourceMappings, provenance, baseDefinition, wholeSchemaSource]
+  );
   const renderSource = (row: SchemaFieldRow) => (
     <SchemaSourceBadge
+      variant={workbenchFooter ? 'label' : 'icon'}
       path={row.semanticPath}
       identities={sourceIdentities}
       provenance={schemaNodeProvenance(
@@ -409,6 +476,12 @@ export function SchemaDataEditor({
   useEffect(() => {
     onSaveAvailabilityChange?.(canSave);
   }, [canSave, onSaveAvailabilityChange]);
+  const canUndo = !busy && !!history.length && !validationError && !stale;
+  const canOpenRules = !busy && !validationError;
+  const canDiscard = !busy && (dirty || !!validationError);
+  useEffect(() => {
+    onActionsAvailabilityChange?.({ undo: canUndo, rules: canOpenRules, discard: canDiscard });
+  }, [canUndo, canOpenRules, canDiscard, onActionsAvailabilityChange]);
   const navigation = useSchemaNavigationGuard({
     dirty: dirty || Boolean(validationError),
     canSave,
@@ -417,21 +490,45 @@ export function SchemaDataEditor({
   });
   useEffect(() => {
     if (!navigationRef) return;
-    navigationRef.current = { requestNavigation: navigation.requestNavigation, save };
+    navigationRef.current = {
+      requestNavigation: navigation.requestNavigation,
+      save,
+      undo: () => {
+        if (canUndo) undo();
+      },
+      openRules: () => {
+        if (canOpenRules) setPanel('rules');
+      },
+      describeChanges: () => {
+        if (workbenchFooter) intentInput.current?.focus();
+        else setIntentOpen(true);
+      },
+      discard: () => {
+        if (canDiscard) discard();
+      },
+    };
     return () => {
       navigationRef.current = null;
     };
   });
 
+  const schemaUnavailable = workbenchFooter && !definition;
+  const schemaEmpty =
+    workbenchFooter && !!definition && !rows.length && view === 'data' && panel === 'properties';
   const emptyContent = !definition ? (
     <div className={styles.emptyState}>
+      {workbenchFooter ? (
+        <span className={styles.emptyIcon}>
+          <Shapes size={22} aria-hidden="true" />
+        </span>
+      ) : null}
       {previewError ? (
         <>
           <strong>Could not load Schema</strong>
           <p role="alert">{previewError}</p>
           {onRetry ? (
             <Button size="sm" variant="canvas-outline" onClick={onRetry}>
-              Retry Schema
+              Retry
             </Button>
           ) : null}
         </>
@@ -441,15 +538,15 @@ export function SchemaDataEditor({
         <output>{disabledReason}</output>
       ) : onCreateBlank ? (
         <>
-          <strong>No Schema applied to this Workspace</strong>
-          <p>Create a blank Schema, or reuse a definition from Sources.</p>
+          <strong>This workspace has no schema</strong>
+          <p>Create a schema, or reuse an existing schema from Schema sources.</p>
           <div className={styles.emptyActions}>
-            <Button size="sm" onClick={onCreateBlank}>
-              Create blank Schema
+            <Button size="sm" variant="commit" onClick={onCreateBlank}>
+              Create schema
             </Button>
             {onChooseSources ? (
               <Button size="sm" variant="canvas-outline" onClick={onChooseSources}>
-                Choose from Sources
+                Use an existing schema…
               </Button>
             ) : null}
           </div>
@@ -459,11 +556,29 @@ export function SchemaDataEditor({
           <p>Schema definition unavailable.</p>
           {onRetry ? (
             <Button size="sm" variant="canvas-outline" onClick={onRetry}>
-              Retry Schema
+              Retry
             </Button>
           ) : null}
         </>
       )}
+    </div>
+  ) : schemaEmpty ? (
+    <div className={styles.emptyState}>
+      <span className={styles.emptyIcon}>
+        <Shapes size={22} aria-hidden="true" />
+      </span>
+      <strong>No nodes yet</strong>
+      <p>Add a node, or reuse one from Schema sources.</p>
+      <div className={styles.emptyActions}>
+        <Button
+          size="sm"
+          variant="commit"
+          disabled={busy || !!disabledReason || !!validationError || stale}
+          onClick={() => add(null, 'node')}
+        >
+          Add node
+        </Button>
+      </div>
     </div>
   ) : undefined;
   return (
@@ -472,26 +587,42 @@ export function SchemaDataEditor({
       className={styles.editor}
       data-schema-editor
       data-view={view}
+      data-workbench-footer={workbenchFooter || undefined}
+      data-schema-unavailable={schemaUnavailable || undefined}
+      data-schema-empty={schemaEmpty || undefined}
     >
-      <header className={styles.toolbar}>
+      {schemaUnavailable && sourceManagement ? (
+        <div className={styles.emptyToolbar}>{sourceManagement}</div>
+      ) : null}
+      <header className={styles.toolbar} hidden={schemaUnavailable}>
         {view === 'data' ? (
-          <input
-            aria-label="Find a Schema field"
-            placeholder="Find a field…"
-            value={query}
-            disabled={busy || Boolean(validationError)}
-            onChange={(event) => setQuery(event.target.value)}
-          />
+          <label className={styles.search}>
+            {workbenchFooter ? <Search size={15} aria-hidden="true" /> : null}
+            <input
+              aria-label="Find a node or field"
+              placeholder="Find a node or field…"
+              value={query}
+              disabled={busy || Boolean(validationError)}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
         ) : null}
-        <span>{rows.length} fields</span>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={busy || !!validationError}
-          onClick={() => setPanel('rules')}
-        >
-          Relations & rules
-        </Button>
+        {!workbenchFooter ? (
+          <span>
+            {nodeCount} {nodeCount === 1 ? 'node' : 'nodes'} · {fieldCount}{' '}
+            {fieldCount === 1 ? 'field' : 'fields'}
+          </span>
+        ) : null}
+        {!externalActions ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!canOpenRules}
+            onClick={() => setPanel('rules')}
+          >
+            Relationships & rules
+          </Button>
+        ) : null}
         <span className={styles.toolbarSpacer} />
         {showSaveAction ? (
           <Button
@@ -500,62 +631,178 @@ export function SchemaDataEditor({
             disabled={busy || !dirty || !!validationError || stale || !!disabledReason}
             onClick={() => void save()}
           >
-            Save edits
+            Save draft
           </Button>
         ) : null}
-        <Button
-          variant="canvas-outline"
-          size="sm"
-          disabled={busy || !history.length || !!validationError || stale}
-          onClick={undo}
+        {!externalActions ? (
+          <Button variant="canvas-outline" size="sm" disabled={!canUndo} onClick={undo}>
+            Undo
+          </Button>
+        ) : null}
+        <Popover
+          open={addOpen}
+          onOpenChange={(open) => {
+            setAddOpen(open);
+            if (!open) setAddKind(undefined);
+          }}
         >
-          Undo
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+          <PopoverTrigger asChild>
             <Button
+              ref={addButton}
               variant="canvas-outline"
               size="sm"
               disabled={busy || !!disabledReason || !!validationError || stale}
             >
               <Plus size={14} aria-hidden="true" /> Add <ChevronDown size={14} aria-hidden="true" />
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => add(null, 'node')}>Root node</DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() => {
-                setAddParent(active?.kind === 'node' ? active.path : (active?.parentPath ?? ''));
-                setAddKind('node');
-              }}
-            >
-              Child node…
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() => {
-                setAddParent(active?.kind === 'node' ? active.path : (active?.parentPath ?? ''));
-                setAddKind('slot');
-              }}
-            >
-              Field…
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" aria-label="Editing actions">
-              <MoreHorizontal size={16} />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => setIntentOpen(true)}>
-              Describe changes…
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled={busy || (!dirty && !validationError)} onSelect={discard}>
-              Discard changes
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            sideOffset={8}
+            collisionPadding={12}
+            className={overlay.popover}
+            aria-label={
+              !addKind ? 'Add to schema' : addKind === 'slot' ? 'Add field' : 'Add child node'
+            }
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              addButton.current?.focus();
+            }}
+          >
+            {!addKind ? (
+              <div className="grid gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="justify-start"
+                  onClick={() => {
+                    add(null, 'node');
+                    setAddOpen(false);
+                  }}
+                >
+                  Top-level node
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="justify-start"
+                  onClick={() => {
+                    setAddParent(
+                      active?.kind === 'node' ? active.path : (active?.parentPath ?? '')
+                    );
+                    setAddKind('node');
+                  }}
+                >
+                  Child node…
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="justify-start"
+                  onClick={() => {
+                    setAddParent(
+                      active?.kind === 'node' ? active.path : (active?.parentPath ?? '')
+                    );
+                    setAddKind('slot');
+                  }}
+                >
+                  Field…
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <h3 className={overlay.heading}>
+                    {addKind === 'slot' ? 'Add field' : 'Add child node'}
+                  </h3>
+                  <p className={overlay.description}>
+                    Choose the node that will contain the new{' '}
+                    {addKind === 'slot' ? 'field' : 'node'}.
+                  </p>
+                </div>
+                <label className={overlay.field} htmlFor={`${overlayId}-parent`}>
+                  Parent node
+                  <SchemaEditorSelect
+                    autoFocus
+                    id={`${overlayId}-parent`}
+                    aria-label="Parent node"
+                    value={addParent}
+                    onChange={(event) => setAddParent(event.target.value)}
+                  >
+                    <option value="">Choose a node</option>
+                    {rows
+                      .filter((row) => row.kind === 'node')
+                      .map((row) => (
+                        <option
+                          key={row.path}
+                          value={row.path}
+                          disabled={
+                            addKind === 'node' &&
+                            (row.definition.repeated === true || row.definition.children === 'any')
+                          }
+                        >
+                          {row.semanticPath}
+                          {addKind === 'node' &&
+                          (row.definition.repeated === true || row.definition.children === 'any')
+                            ? ' — child nodes unavailable'
+                            : ''}
+                        </option>
+                      ))}
+                  </SchemaEditorSelect>
+                </label>
+                {!rows.some((row) => row.kind === 'node') ? (
+                  <p className="text-sm">Add a top-level node first. Fields belong to nodes.</p>
+                ) : null}
+                <div className={overlay.actions}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setAddKind(undefined);
+                      setAddOpen(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={!addParent || busy || !!validationError || stale}
+                    variant="commit"
+                    onClick={() => {
+                      const parent = rows.find((row) => row.path === addParent);
+                      if (parent && addKind) {
+                        add(parent, addKind);
+                        setAddKind(undefined);
+                        setAddOpen(false);
+                      }
+                    }}
+                  >
+                    Add {addKind === 'slot' ? 'field' : 'child node'}
+                  </Button>
+                </div>
+              </>
+            )}
+          </PopoverContent>
+        </Popover>
+        {!externalActions ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" aria-label="Editing actions">
+                <MoreHorizontal size={16} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {!workbenchFooter ? (
+                <DropdownMenuItem onSelect={() => setIntentOpen(true)}>
+                  Edit change description…
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuItem disabled={busy || (!dirty && !validationError)} onSelect={discard}>
+                Discard all unsaved changes
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
       </header>
       {error || validationError || (definition && previewError) || stale ? (
         <p role="alert" className={styles.error}>
@@ -564,18 +811,45 @@ export function SchemaDataEditor({
             : error || validationError || previewError}
         </p>
       ) : null}
-      <fieldset
-        className={styles.content}
-        data-details={!active && panel !== 'rules' ? 'closed' : 'open'}
-        disabled={pending || saving}
-      >
+      <fieldset className={styles.content} disabled={pending || saving}>
         <SchemaFieldValidation key={resetKey} onValidationChange={setFieldError}>
           <div className={styles.list} hidden={view !== 'data'}>
             <SchemaFieldTree
+              studio={workbenchFooter}
+              unavailable={schemaUnavailable}
+              footer={
+                workbenchFooter && definition ? (
+                  <label className={styles.changeDescription}>
+                    <span>Change description</span>
+                    <textarea
+                      ref={intentInput}
+                      aria-label="Schema change intent"
+                      rows={1}
+                      value={intent}
+                      disabled={busy || !!disabledReason}
+                      onChange={(event) => setIntent(event.target.value)}
+                    />
+                  </label>
+                ) : undefined
+              }
               emptyContent={emptyContent}
               rows={rows}
               visible={visible}
               selected={selected}
+              relations={sourceRelations}
+              sourceBase={baseDefinition}
+              onReveal={(row) => {
+                setQuery('');
+                setCollapsed((current) => {
+                  const next = { ...current };
+                  let parent = row.parentPath;
+                  while (parent) {
+                    next[parent] = false;
+                    parent = rows.find((item) => item.path === parent)?.parentPath ?? null;
+                  }
+                  return next;
+                });
+              }}
               disabled={busy || !!disabledReason || !!validationError || stale}
               projectId={projectId}
               sources={view === 'data' ? sources : undefined}
@@ -598,7 +872,9 @@ export function SchemaDataEditor({
                       setCollapsed((current) => ({ ...current, [row.path]: !current[row.path] }));
                   }}
                   icon={
-                    row.kind === 'node' ? (
+                    workbenchFooter ? (
+                      <SchemaFieldTypeIcon row={row} />
+                    ) : row.kind === 'node' ? (
                       <Box aria-hidden="true" />
                     ) : (
                       <FileText aria-hidden="true" />
@@ -607,32 +883,37 @@ export function SchemaDataEditor({
                   leading={
                     <>
                       {handle}
-                      {row.kind === 'node' || row.definition.type === 'object'
+                      {!workbenchFooter && (row.kind === 'node' || row.definition.type === 'object')
                         ? renderSource(row)
                         : null}
                     </>
                   }
                   iconTitle={row.kind}
                   label={
-                    <span
-                      className={styles.fieldName}
-                      onFocus={selectRow}
-                      onClick={(event) => event.stopPropagation()}
-                      onKeyDown={(event) => event.stopPropagation()}
-                      role="presentation"
-                    >
-                      <SchemaFieldName
-                        label={`Name ${row.semanticPath}`}
-                        name={row.name}
-                        names={rows
-                          .filter(
-                            (item) =>
-                              JSON.stringify(item.location.slice(0, -1)) ===
-                              JSON.stringify(row.location.slice(0, -1))
-                          )
-                          .map((item) => item.name)}
-                        onChange={(name) => update(row, name, row.definition)}
-                      />
+                    <span className={styles.fieldIdentity}>
+                      <span
+                        className={styles.fieldName}
+                        onFocus={selectRow}
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
+                        role="presentation"
+                      >
+                        <SchemaFieldName
+                          label={`Name ${row.semanticPath}`}
+                          name={row.name}
+                          names={rows
+                            .filter(
+                              (item) =>
+                                JSON.stringify(item.location.slice(0, -1)) ===
+                                JSON.stringify(row.location.slice(0, -1))
+                            )
+                            .map((item) => item.name)}
+                          onChange={(name) => update(row, name, row.definition)}
+                        />
+                      </span>
+                      {workbenchFooter && (row.kind === 'node' || row.definition.type === 'object')
+                        ? renderSource(row)
+                        : null}
                     </span>
                   }
                   preview={
@@ -647,12 +928,36 @@ export function SchemaDataEditor({
                       role="presentation"
                     >
                       <span className={styles.fieldSummary}>
-                        {row.kind === 'slot'
-                          ? String(row.definition.type || 'Any type')
-                          : row.definition.repeated
-                            ? 'Repeated node'
-                            : 'Node'}
-                        {row.required ? ' · Required' : ' · Optional'}
+                        <span>
+                          {row.kind === 'slot'
+                            ? workbenchFooter
+                              ? String(row.definition.type || 'Any type')
+                              : (schemaFieldTypeLabels[String(row.definition.type)] ??
+                                String(row.definition.type || 'Any type'))
+                            : row.definition.repeated
+                              ? 'Repeatable node'
+                              : 'Node'}
+                        </span>
+                        <span className={styles.requiredColumn}>
+                          {workbenchFooter ? (
+                            <>
+                              <span
+                                className={styles.requiredMark}
+                                data-required={row.required}
+                                aria-hidden="true"
+                              >
+                                {row.required ? <Check size={11} /> : null}
+                              </span>
+                              <span className="sr-only">
+                                {row.required ? 'Required' : 'Optional'}
+                              </span>
+                            </>
+                          ) : row.required ? (
+                            'Required'
+                          ) : (
+                            'Optional'
+                          )}
+                        </span>
                       </span>
                       <span className={styles.fieldControls}>
                         {row.kind === 'slot' ? (
@@ -676,20 +981,24 @@ export function SchemaDataEditor({
                               'object',
                               'null',
                             ].map((type) => (
-                              <option key={type}>{type}</option>
+                              <option key={type} value={type}>
+                                {schemaFieldTypeLabels[type] ?? type}
+                              </option>
                             ))}
                           </select>
                         ) : (
-                          <span>{row.definition.repeated ? 'Repeated node' : 'Node'}</span>
+                          <span>{row.definition.repeated ? 'Repeatable node' : 'Node'}</span>
                         )}
-                        <input
-                          type="checkbox"
-                          aria-label={`Required ${row.semanticPath}`}
-                          checked={row.required}
-                          onChange={(event) =>
-                            update(row, row.name, row.definition, event.target.checked)
-                          }
-                        />
+                        <span className={styles.requiredColumn}>
+                          <input
+                            type="checkbox"
+                            aria-label={`Required ${row.semanticPath}`}
+                            checked={row.required}
+                            onChange={(event) =>
+                              update(row, row.name, row.definition, event.target.checked)
+                            }
+                          />
+                        </span>
                       </span>
                     </span>
                   }
@@ -744,7 +1053,8 @@ export function SchemaDataEditor({
                             className="text-[var(--status-error)]"
                             onSelect={() => update(row, row.name, undefined)}
                           >
-                            <Trash2 size={14} /> Delete
+                            <Trash2 size={14} />{' '}
+                            {row.kind === 'node' ? 'Delete node' : 'Delete field'}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -779,45 +1089,43 @@ export function SchemaDataEditor({
               onSource={onComposeSources}
             />
           ) : null}
-          <aside
-            className={styles.properties}
-            aria-label="Schema properties"
-            hidden={!active && panel !== 'rules'}
+          <SchemaDetailsPanel
+            hidden={schemaUnavailable || schemaEmpty}
+            identity={workbenchFooter && panel === 'properties' ? active?.name : undefined}
+            icon={
+              workbenchFooter && panel === 'properties' && active ? (
+                <SchemaFieldTypeIcon row={active} />
+              ) : undefined
+            }
+            ariaLabel={panel === 'rules' ? 'Schema relations and rules' : 'Schema properties'}
+            title={
+              panel === 'rules'
+                ? 'Relationships & rules'
+                : active?.kind === 'node'
+                  ? 'Node settings'
+                  : active
+                    ? 'Field settings'
+                    : 'Details'
+            }
+            context={
+              panel === 'rules'
+                ? 'These settings apply to the entire schema.'
+                : (active?.semanticPath ?? 'No selection')
+            }
+            contentKey={panel === 'rules' ? 'rules' : (active?.path ?? 'empty')}
+            clearDisabled={busy || !!validationError}
+            onClear={
+              active || panel === 'rules'
+                ? () => {
+                    setSelected(undefined);
+                    setPanel('properties');
+                  }
+                : undefined
+            }
           >
-            <div className={styles.tabs}>
-              <button
-                type="button"
-                aria-pressed={panel === 'properties'}
-                disabled={busy || !!validationError}
-                onClick={() => setPanel('properties')}
-              >
-                Properties
-              </button>
-              <button
-                type="button"
-                aria-pressed={panel === 'rules'}
-                disabled={busy || !!validationError}
-                onClick={() => setPanel('rules')}
-              >
-                Relations & rules
-              </button>
-              <button
-                type="button"
-                className={styles.closeProperties}
-                aria-label="Close properties"
-                disabled={busy || !!validationError}
-                onClick={() => {
-                  setSelected(undefined);
-                  setPanel('properties');
-                }}
-              >
-                <X size={16} aria-hidden="true" />
-              </button>
-            </div>
             <div hidden={panel !== 'properties'}>
               {active ? (
-                <div key={active.path} className={styles.settings}>
-                  <h3>{active.semanticPath}</h3>
+                <div key={active.path}>
                   {view === 'visual' && definition ? (
                     <div className="mb-4 space-y-2">
                       <SchemaFieldName
@@ -855,7 +1163,9 @@ export function SchemaDataEditor({
                               'object',
                               'null',
                             ].map((type) => (
-                              <option key={type}>{type}</option>
+                              <option key={type} value={type}>
+                                {schemaFieldTypeLabels[type] ?? type}
+                              </option>
                             ))}
                           </select>
                         </label>
@@ -881,92 +1191,43 @@ export function SchemaDataEditor({
                   />
                 </div>
               ) : (
-                <p className={styles.feedback}>
-                  Select a field to edit its description, defaults and constraints.
+                <p className="text-xs text-[var(--text-secondary)]">
+                  Select a node or field to edit its settings.
                 </p>
               )}
             </div>
             <div hidden={panel !== 'rules'}>
-              <p className={styles.rulesScope}>Applies to the whole Schema.</p>
               {definition ? (
                 <SchemaDefinitionStructure
                   value={definition}
                   onChange={change}
                   onValidationChange={setRulesError}
                   showNodes={false}
+                  embedded
+                  progressive
                 />
               ) : null}
             </div>
-          </aside>
+          </SchemaDetailsPanel>
         </SchemaFieldValidation>
       </fieldset>
+      {workbenchFooter && !schemaUnavailable ? (
+        <footer className={styles.workbenchFooter}>
+          <span>
+            {nodeCount} {nodeCount === 1 ? 'node' : 'nodes'} · {fieldCount}{' '}
+            {fieldCount === 1 ? 'field' : 'fields'}
+          </span>
+        </footer>
+      ) : null}
       {notice ? (
         <output className="sr-only" aria-live="polite">
           {notice}
         </output>
       ) : null}
-      <Dialog
-        open={!!addKind}
-        onOpenChange={(open) => {
-          if (!open) setAddKind(undefined);
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{addKind === 'slot' ? 'Add field' : 'Add child node'}</DialogTitle>
-            <DialogDescription>
-              Choose the node that will contain the new {addKind === 'slot' ? 'field' : 'node'}.
-            </DialogDescription>
-          </DialogHeader>
-          <label className={styles.moveMenu}>
-            Parent node
-            <select
-              aria-label="Parent node"
-              value={addParent}
-              onChange={(event) => setAddParent(event.target.value)}
-            >
-              <option value="">Choose a node</option>
-              {rows
-                .filter((row) => row.kind === 'node')
-                .map((row) => (
-                  <option
-                    key={row.path}
-                    value={row.path}
-                    disabled={
-                      addKind === 'node' &&
-                      (row.definition.repeated === true || row.definition.children === 'any')
-                    }
-                  >
-                    {row.semanticPath}
-                    {addKind === 'node' &&
-                    (row.definition.repeated === true || row.definition.children === 'any')
-                      ? ' — child nodes unavailable'
-                      : ''}
-                  </option>
-                ))}
-            </select>
-          </label>
-          {!rows.some((row) => row.kind === 'node') ? (
-            <p className="text-sm">Add a root node first. Fields belong to nodes.</p>
-          ) : null}
-          <Button
-            disabled={!addParent || busy || !!validationError || stale}
-            onClick={() => {
-              const parent = rows.find((row) => row.path === addParent);
-              if (parent && addKind) {
-                add(parent, addKind);
-                setAddKind(undefined);
-              }
-            }}
-          >
-            Add {addKind === 'slot' ? 'field' : 'child node'}
-          </Button>
-        </DialogContent>
-      </Dialog>
       <Dialog open={intentOpen} onOpenChange={setIntentOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Describe Schema changes</DialogTitle>
+            <DialogTitle>Change description</DialogTitle>
             <DialogDescription>
               This description is saved with your edits when you save or continue to Review.
             </DialogDescription>
@@ -980,7 +1241,9 @@ export function SchemaDataEditor({
               onChange={(event) => setIntent(event.target.value)}
             />
           </label>
-          <Button onClick={() => setIntentOpen(false)}>Done</Button>
+          <Button variant="commit" onClick={() => setIntentOpen(false)}>
+            Done
+          </Button>
         </DialogContent>
       </Dialog>
       {navigation.dialog}
@@ -1003,13 +1266,14 @@ export function SchemaDataEditor({
               if (conflict) transfer(conflict.row, conflict.target, conflict.item, conflictName);
             }}
           >
-            <label className="flex flex-col gap-2">
+            <label className={overlay.field} htmlFor={`${overlayId}-name`}>
               New name
-              <input
+              <Input
+                id={`${overlayId}-name`}
                 aria-label="New name"
                 value={conflictName}
                 onChange={(event) => setConflictName(event.target.value)}
-                className="rounded border p-2"
+                aria-invalid={!!conflictError}
                 autoFocus
               />
             </label>
@@ -1022,7 +1286,9 @@ export function SchemaDataEditor({
               <Button type="button" variant="outline" onClick={() => setConflict(undefined)}>
                 Cancel
               </Button>
-              <Button type="submit">Rename and continue</Button>
+              <Button type="submit" variant="commit">
+                Rename and continue
+              </Button>
             </div>
           </form>
         </DialogContent>

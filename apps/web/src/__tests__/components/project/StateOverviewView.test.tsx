@@ -8,6 +8,14 @@ import type { ApiCommit } from '@/types/api';
 const overview = vi.hoisted(() => vi.fn());
 vi.mock('@/hooks/commits/useStateOverview', () => ({ useStateOverview: overview }));
 
+vi.mock('@/hooks/projects/useProjects', () => ({
+  useProjects: () => ({
+    projects: [{ repository_profile: { tags: ['Existing'] } }],
+    loading: false,
+    error: null,
+  }),
+}));
+
 function renderIntroduction(ui: Parameters<typeof render>[0]) {
   return render(ui);
 }
@@ -60,7 +68,7 @@ it('keeps author Markdown inert and prevents remote image requests', () => {
   expect(screen.queryByRole('link', { name: 'Blocked' })).toBeNull();
   expect(screen.getByRole('link', { name: 'Good' })).toHaveAttribute('rel', 'noopener noreferrer');
 });
-it('shows README immediately before the complementary State structure', () => {
+it('shows README immediately before the complementary State structure', async () => {
   render(<StateOverviewView {...props} />);
   expect(screen.getByText('Empty-key content')).toBeVisible();
   expect(screen.getByRole('heading', { name: 'Guide' })).toBeVisible();
@@ -72,7 +80,8 @@ it('shows README immediately before the complementary State structure', () => {
   expect(screen.queryByRole('button', { name: 'Expand rendered State' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Contents' }));
   fireEvent.click(screen.getByRole('button', { name: 'Guide' }));
-  expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalled();
+  await waitFor(() => expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalled());
+  expect(screen.getByRole('heading', { name: 'Guide' })).toHaveFocus();
 });
 it('shows a retryable failure without showing old author content', () => {
   const retry = vi.fn();
@@ -106,6 +115,14 @@ it('keeps historical State readable while its introduction loads or fails', () =
   expect(screen.queryByText('State unavailable')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Retry introduction' }));
   expect(retry).toHaveBeenCalledOnce();
+});
+
+it('keeps the version introduction in its loading state while resolving the commit', () => {
+  overview.mockReturnValue({ data: undefined, loading: false });
+  render(<StateOverviewView {...props} commitDigest={null} stateLoading />);
+  const readme = screen.getByRole('region', { name: 'Version introduction' });
+  expect(within(readme).getByText('Loading version introduction…')).toBeVisible();
+  expect(within(readme).queryByText('No README published for this revision.')).toBeNull();
 });
 
 it.each([
@@ -193,6 +210,23 @@ it('renders the empty repository header instead of hiding it', () => {
   expect(screen.getByRole('heading', { name: 'ew' })).toBeVisible();
 });
 
+it('groups unavailable badge runs and keeps ordinary adjacent images separate', () => {
+  const readme =
+    '![CI](https://img.shields.io/badge/ci-ok) ![Docs](https://badgen.net/badge/docs/ok)\n\n![One](one.png) ![Two](two.png)';
+  const { container } = render(
+    <StateOverviewView
+      {...props}
+      introductionSource="repository"
+      repositoryProfile={{ readme, tags: [] }}
+    />
+  );
+  expect(screen.getAllByText('Badges unavailable')).toHaveLength(1);
+  expect(screen.getByText('CI')).toBeVisible();
+  expect(screen.getByText('Docs')).toBeVisible();
+  expect(screen.getAllByText('Image unavailable')).toHaveLength(2);
+  expect(container.querySelector('img')).toBeNull();
+});
+
 it('shows current repository information across heads without borrowing version content or resources', () => {
   const repository = {
     readme:
@@ -208,10 +242,11 @@ it('shows current repository information across heads without borrowing version 
     />
   );
   expect(screen.getByRole('heading', { name: 'Current repository' })).toBeVisible();
-  expect(screen.getByText('#当前')).toBeVisible();
+  expect(screen.getByText('当前')).toBeVisible();
   expect(screen.getByText('Current description')).toBeVisible();
   expect(screen.queryByText('Author description')).toBeNull();
-  expect(screen.getByText('[Image unavailable: Missing]')).toBeVisible();
+  expect(screen.getByText('Missing')).toBeVisible();
+  expect(screen.getByText('Image unavailable')).toBeVisible();
   expect(container.querySelector('img, script')).toBeNull();
   expect(screen.queryByRole('link', { name: 'Bad' })).toBeNull();
   expect(screen.getByRole('link', { name: 'Good' })).toHaveAttribute('rel', 'noopener noreferrer');
@@ -287,7 +322,9 @@ it('offers authorized editing with no Commit and keeps failed input, cancellatio
     target: { value: '' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Save README' }));
-  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  await waitFor(() =>
+    expect(screen.queryByRole('textbox', { name: 'Repository README' })).toBeNull()
+  );
   expect(save).toHaveBeenLastCalledWith({ readme: '' });
   rerender(
     <StateOverviewView
@@ -296,7 +333,7 @@ it('offers authorized editing with no Commit and keeps failed input, cancellatio
     />
   );
   expect(screen.getByText('No README added yet.')).toBeVisible();
-  expect(screen.getByText('#Saved tag')).toBeVisible();
+  expect(screen.getByText('Saved tag')).toBeVisible();
 });
 
 it('saves only normalized tags and blocks duplicate submission while pending', async () => {
@@ -313,11 +350,13 @@ it('saves only normalized tags and blocks duplicate submission while pending', a
       {...props}
       introductionSource="repository"
       commitDigest={null}
+      repositoryNamespace="design-team"
       canEditRepository
       onSaveRepositoryProfile={save}
     />
   );
   fireEvent.click(screen.getByRole('button', { name: 'Add tags' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Existing' }));
   const input = screen.getByRole('textbox', { name: 'Tags', exact: true });
   for (const tag of ['中文', ' Dev ', '中文']) {
     fireEvent.change(input, { target: { value: tag } });
@@ -327,7 +366,7 @@ it('saves only normalized tags and blocks duplicate submission while pending', a
   fireEvent.click(screen.getByRole('button', { name: 'Save tags' }));
   expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled();
   fireEvent.submit(screen.getByRole('button', { name: 'Saving…' }).closest('form')!);
-  expect(save).toHaveBeenCalledExactlyOnceWith({ tags: ['中文', 'Dev', 'Unfinished'] });
+  expect(save).toHaveBeenCalledExactlyOnceWith({ tags: ['Existing', '中文', 'Dev', 'Unfinished'] });
   finish();
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 });
@@ -345,7 +384,7 @@ it('prefills only an empty README draft from current repository metadata and per
   };
   const { rerender } = renderIntroduction(<StateOverviewView {...repositoryProps} />);
   fireEvent.click(screen.getByRole('button', { name: 'Add README', exact: true }));
-  expect(screen.getByRole('dialog', { name: 'Add repository README' })).toBeVisible();
+  expect(screen.getByRole('form', { name: 'Edit repository README' })).toBeVisible();
   expect(screen.getByRole('textbox', { name: 'Repository README' })).toHaveValue(
     '# Catalog\n\nRepository description\n'
   );
@@ -356,7 +395,9 @@ it('prefills only an empty README draft from current repository metadata and per
   fireEvent.click(screen.getByRole('button', { name: 'Add README', exact: true }));
   expect(screen.getByRole('textbox', { name: 'Repository README' })).toHaveValue('# Renamed\n');
   fireEvent.click(screen.getByRole('button', { name: 'Save README', exact: true }));
-  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  await waitFor(() =>
+    expect(screen.queryByRole('textbox', { name: 'Repository README' })).toBeNull()
+  );
   expect(save).toHaveBeenCalledExactlyOnceWith({ readme: '# Renamed\n' });
 });
 
@@ -419,4 +460,50 @@ it('locates a committed path from the sidebar and retains the complete inspector
   expect(screen.getByRole('button', { name: 'Inspect document/title' })).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: /Open full view/ }));
   expect(inspect).toHaveBeenLastCalledWith();
+});
+
+it('keeps History as sidebar links and omits the separate content preview', () => {
+  const reader = vi.fn(() => <p>Legacy preview</p>);
+  render(
+    <StateOverviewView
+      {...props}
+      introductionSource="repository"
+      commit={{ ...commit, message: 'Actual version' }}
+      historyHref="/history?branch=main"
+      alternateHistoryHref="/canvas"
+      reader={reader}
+    />
+  );
+  const sidebar = screen.getByRole('complementary', { name: 'State information' });
+  fireEvent.click(within(sidebar).getByRole('button', { name: 'History' }));
+  expect(screen.getByRole('link', { name: 'Commit history' })).toHaveAttribute(
+    'href',
+    '/history?branch=main'
+  );
+  expect(screen.getByRole('link', { name: 'History canvas' })).toHaveAttribute('href', '/canvas');
+  expect(within(sidebar).getByRole('link', { name: 'Actual version' })).toHaveAttribute(
+    'href',
+    `/history?branch=main&commit=${encodeURIComponent(commit.hash)}`
+  );
+  expect(reader).not.toHaveBeenCalled();
+  expect(screen.queryByText('Content preview')).toBeNull();
+});
+
+it('only offers description editing for the current editable repository', () => {
+  const save = vi.fn();
+  const view = render(
+    <StateOverviewView
+      {...props}
+      introductionSource="repository"
+      canEditRepository
+      onSaveDescription={save}
+    />
+  );
+  expect(screen.getByRole('button', { name: 'Add repository description' })).toBeVisible();
+  view.rerender(<StateOverviewView {...props} canEditRepository onSaveDescription={save} />);
+  expect(screen.queryByRole('button', { name: /repository description/ })).toBeNull();
+  view.rerender(
+    <StateOverviewView {...props} introductionSource="repository" onSaveDescription={save} />
+  );
+  expect(screen.queryByRole('button', { name: /repository description/ })).toBeNull();
 });

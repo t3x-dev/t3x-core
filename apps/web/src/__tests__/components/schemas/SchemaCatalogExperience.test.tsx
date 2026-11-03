@@ -51,3 +51,21 @@ it('opens the editor from a historical Bindings URL', () => {
   expect(screen.queryByText('Workspace bindings')).not.toBeInTheDocument();
   expect(screen.queryByRole('navigation', { name: 'Project schemas' })).not.toBeInTheDocument();
 });
+
+it.each([
+  true,
+  false,
+])('redirects legacy Schema review without losing snapshot or branch (snapshot=%s)', (fixed) => {
+  mocks.query =
+    'schemaView=review&workspace=draft%2Fa&branch=feature%2Fa&reviewPane=yaml&schemaDiagnostics=1' +
+    (fixed ? '&reviewSnapshot=snapshot%3Aa%2Bb' : '');
+  render(<SchemaCatalogExperience projectId="p">{null}</SchemaCatalogExperience>);
+  const url = new URL(mocks.replace.mock.calls[0][0], 'http://local');
+  expect(url.searchParams.get('tab')).toBe('workspaces');
+  expect(url.searchParams.get('workspace')).toBe('draft/a');
+  expect(url.searchParams.get('branch')).toBe('feature/a');
+  expect(url.searchParams.get('reviewSnapshot')).toBe(fixed ? 'snapshot:a+b' : null);
+  expect(url.searchParams.get('reviewPane')).toBe('yaml');
+  expect(url.searchParams.get('schemaDiagnostics')).toBe('1');
+  expect(screen.queryByText('Project Studio')).not.toBeInTheDocument();
+});

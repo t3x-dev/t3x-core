@@ -226,4 +226,43 @@ describe('project visibility command route', () => {
     const response = await appFor(null, projectRoutes).request(`/v1/projects/${publicProjectId}`);
     expect(response.status).toBe(403);
   });
+
+  it('projects independent edit and delete capabilities into repository list rows', async () => {
+    for (const [userId, canDelete] of [
+      ['user_visibility_owner', true],
+      ['user_visibility_editor', false],
+    ] as const) {
+      const response = await appFor(userId, projectRoutes).request(
+        '/v1/projects?namespace=visibility-route'
+      );
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.data.projects).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ project_id: projectId, can_edit: true, can_delete: canDelete }),
+        ])
+      );
+    }
+    await mockDB.insert(projectGrants).values({
+      grantId: 'grant_visibility_readonly',
+      projectId: publicProjectId,
+      namespaceId,
+      principalKind: 'human',
+      principalId: 'user_visibility_guest',
+      role: 'viewer',
+      status: 'active',
+    });
+    const response = await appFor('user_visibility_guest', projectRoutes).request('/v1/projects');
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.data.projects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          project_id: publicProjectId,
+          can_edit: false,
+          can_delete: false,
+        }),
+      ])
+    );
+  });
 });

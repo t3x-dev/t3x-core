@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, CheckCircle2, Info, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Info, RefreshCw, RotateCcw, Search, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { AlertDialog } from '@/components/ui/alert-dialog';
@@ -20,7 +20,9 @@ import palette from '@/styles/management-palette.module.css';
 import type { Project } from '@/types/api';
 import { cn } from '@/utils/cn';
 import styles from './DeletedRepositoriesView.module.css';
+import { RepositoryMark, RepositoryVisibility } from './RepositoryIdentity';
 import management from './RepositoryManagement.module.css';
+import { RepositorySelect } from './RepositorySelect';
 
 export function DeletedRepositoriesView({
   namespace,
@@ -29,7 +31,23 @@ export function DeletedRepositoriesView({
   namespace: string;
   backHref: string;
 }) {
-  const list = useDeletedProjects(namespace);
+  const list = useDeletedProjects(namespace, true);
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState('deleted');
+  const [page, setPage] = useState(1);
+  const matching = list.projects.filter((project) =>
+    `${project.name} ${project.metadata?.description ?? ''}`
+      .toLowerCase()
+      .includes(query.trim().toLowerCase())
+  );
+  matching.sort((a, b) =>
+    sort === 'name'
+      ? a.name.localeCompare(b.name)
+      : Date.parse(b.deleted_at ?? '') - Date.parse(a.deleted_at ?? '')
+  );
+  const totalPages = Math.max(1, Math.ceil(matching.length / 4));
+  const currentPage = Math.min(page, totalPages);
+  const displayed = matching.slice((currentPage - 1) * 4, currentPage * 4);
   const [target, setTarget] = useState<{ project: Project; action: 'restore' | 'delete' } | null>(
     null
   );
@@ -102,16 +120,32 @@ export function DeletedRepositoriesView({
         </p>
       </div>
       <div className={styles.toolbar}>
-        <div>
-          <h2>Repositories</h2>
-          <output className={styles.listStatus} aria-live="polite">
-            {list.loading
-              ? 'Loading deleted repositories…'
-              : list.error
-                ? 'List unavailable'
-                : `${list.projects.length} on this page`}
-          </output>
-        </div>
+        <label className={styles.search} htmlFor="deleted-repository-search">
+          <Search aria-hidden="true" size={16} />
+          <Input
+            id="deleted-repository-search"
+            type="search"
+            aria-label="Search deleted repositories"
+            placeholder="Find a deleted repository…"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(1);
+            }}
+          />
+        </label>
+        <RepositorySelect
+          label="Sort deleted repositories"
+          value={sort}
+          onValueChange={(value) => {
+            setSort(value);
+            setPage(1);
+          }}
+          options={[
+            { value: 'deleted', label: 'Recently deleted' },
+            { value: 'name', label: 'Name A–Z' },
+          ]}
+        />
         <Button
           aria-label="Refresh deleted repositories"
           title="Refresh deleted repositories"
@@ -126,8 +160,21 @@ export function DeletedRepositoriesView({
           />
         </Button>
       </div>
+      <output className={styles.listStatus} aria-live="polite">
+        {list.loading
+          ? 'Loading deleted repositories…'
+          : list.error
+            ? 'List unavailable'
+            : `${matching.length} ${query.trim() ? 'matching ' : ''}repositories`}
+      </output>
       {notice && (
-        <div className={cn(management.notice, styles.notice)}>
+        <div
+          className={cn(
+            management.notice,
+            !notice.uncertain && management.successNotice,
+            styles.notice
+          )}
+        >
           {notice.uncertain ? (
             <Info aria-hidden="true" className="size-4" />
           ) : (
@@ -147,11 +194,6 @@ export function DeletedRepositoriesView({
         </div>
       )}
       <div className={styles.listFrame} aria-busy={list.loading}>
-        <div className={styles.columnHeadings} aria-hidden="true">
-          <span>Repository</span>
-          <span>Deleted</span>
-          <span>Actions</span>
-        </div>
         {list.loading && list.projects.length === 0 ? (
           <output className={cn('block', styles.loading)}>Loading deleted repositories...</output>
         ) : !list.error && list.projects.length === 0 ? (
@@ -164,29 +206,41 @@ export function DeletedRepositoriesView({
             <p>Repositories you delete will appear here while their data is kept.</p>
           </div>
         ) : list.projects.length > 0 ? (
-          <ul aria-label="Deleted repositories">
-            {list.projects.map((project) => (
+          <ul aria-label="Deleted repositories" className={styles.cards}>
+            {displayed.map((project) => (
               <li key={project.project_id} className={styles.repository}>
-                <div className={styles.repositoryCopy}>
-                  <h3>{project.name}</h3>
-                  <p className={styles.path}>
-                    {project.namespace ?? namespace}/{project.name}
-                  </p>
-                  <p className={styles.visibility}>Visibility: {project.visibility}</p>
+                <div className={styles.cardBody}>
+                  <RepositoryMark id={project.project_id} />
+                  <div className={styles.repositoryCopy}>
+                    <h3 title={`${project.namespace ?? namespace}/${project.name}`}>
+                      {project.name}
+                    </h3>
+                    {typeof project.metadata?.description === 'string' &&
+                      project.metadata.description.trim() && (
+                        <p className={styles.description}>{project.metadata.description}</p>
+                      )}
+                    <div className={styles.metadata}>
+                      <RepositoryVisibility value={project.visibility} />
+                      <p className={styles.deletedAt}>
+                        Deleted{' '}
+                        {project.deleted_at ? (
+                          <time
+                            dateTime={project.deleted_at}
+                            title={new Date(project.deleted_at).toLocaleString()}
+                          >
+                            {new Date(project.deleted_at).toLocaleDateString(undefined, {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                            })}
+                          </time>
+                        ) : (
+                          'at an unknown time'
+                        )}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <p className={styles.deletedAt}>
-                  <span className="sr-only">Deleted </span>
-                  <span className={styles.mobileLabel} aria-hidden="true">
-                    Deleted{' '}
-                  </span>
-                  {project.deleted_at ? (
-                    <time dateTime={project.deleted_at}>
-                      {new Date(project.deleted_at).toLocaleString()}
-                    </time>
-                  ) : (
-                    'at an unknown time'
-                  )}
-                </p>
                 <div className={styles.actions}>
                   {project.can_restore && (
                     <Button
@@ -221,24 +275,48 @@ export function DeletedRepositoriesView({
           </ul>
         ) : null}
       </div>
-      {(list.page > 1 || list.hasNext) && (
-        <nav aria-label="Deleted repositories pagination" className={styles.pagination}>
+      {!list.loading && !list.error && list.projects.length > 0 && matching.length === 0 && (
+        <div className={styles.emptyState}>
+          <Search aria-hidden="true" size={20} />
+          <h2>No repositories found</h2>
+          <p>Try another name or description.</p>
           <Button
-            disabled={list.loading || list.pending || list.page === 1}
-            variant="canvas-outline"
-            onClick={() => void list.previous()}
+            variant="outline"
+            onClick={() => {
+              setQuery('');
+              setPage(1);
+            }}
           >
-            Previous
+            Clear search
           </Button>
-          <span className="text-sm">Page {list.page}</span>
-          <Button
-            disabled={list.loading || list.pending || !list.hasNext || Boolean(list.error)}
-            variant="canvas-outline"
-            onClick={() => void list.next()}
-          >
-            Next
-          </Button>
-        </nav>
+        </div>
+      )}
+      {!list.error && (
+        <footer className={styles.pagination}>
+          <span>
+            {matching.length ? (currentPage - 1) * 4 + 1 : 0}–
+            {Math.min(currentPage * 4, matching.length)} of {matching.length} repositories
+          </span>
+          <nav aria-label="Deleted repositories pagination">
+            <Button
+              disabled={list.loading || list.pending || currentPage === 1}
+              variant="outline"
+              onClick={() => setPage(currentPage - 1)}
+            >
+              Previous
+            </Button>
+            <span>
+              Page {currentPage} of {totalPages}
+            </span>
+            <Button
+              disabled={list.loading || list.pending || currentPage >= totalPages}
+              variant="outline"
+              onClick={() => setPage(currentPage + 1)}
+            >
+              Next
+            </Button>
+          </nav>
+        </footer>
       )}
       <Dialog
         open={Boolean(target) && !deleteConfirmationOpen}
@@ -311,7 +389,7 @@ export function DeletedRepositoriesView({
                   if (target?.action === 'delete') setDeleteConfirmationOpen(true);
                   else void confirm();
                 }}
-                variant={target?.action === 'restore' ? 'default' : 'destructive'}
+                variant={target?.action === 'restore' ? 'outline' : 'destructive'}
               >
                 {list.pending
                   ? 'Working...'

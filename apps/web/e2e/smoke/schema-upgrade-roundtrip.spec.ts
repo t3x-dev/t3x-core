@@ -140,7 +140,7 @@ test('reviews a real published upgrade and retains the exact target Workspace th
     });
     expect(reviewed.ok(), await reviewed.text()).toBe(true);
     const initial = (await reviewed.json()).data;
-    const appliedResponse = await request.post(`${root}/schema-studio/apply`, {
+    const applied = await request.post(`${root}/schema-studio/apply`, {
       data: {
         candidateIds: [first.id],
         workspaceId: targetWorkspaceId,
@@ -148,8 +148,7 @@ test('reviews a real published upgrade and retains the exact target Workspace th
         reviewHash: initial.reviewHash,
       },
     });
-    expect(appliedResponse.ok(), await appliedResponse.text()).toBe(true);
-    const appliedBinding = (await appliedResponse.json()).data.binding;
+    expect(applied.ok(), await applied.text()).toBe(true);
     const upgradeCandidateResponse = await request.post(`${root}/schema-studio/candidates`, {
       data: { sourceProjectId: projectId, canonicalName, version: '2.0.0' },
     });
@@ -170,28 +169,18 @@ test('reviews a real published upgrade and retains the exact target Workspace th
       path: testInfo.outputPath('upgrade-active.png'),
       animations: 'disabled',
     });
-    await page.getByLabel('Target Workspace').selectOption(targetWorkspaceId);
-    await expect(page.getByLabel('Target Workspace')).toHaveValue(targetWorkspaceId);
-    await expect(page.getByRole('button', { name: 'Review Schema changes', exact: true })).toBeEnabled();
-    await page.getByRole('button', { name: 'Review Schema changes', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Review Schema changes' })).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Change summary' })).toContainText('target');
-    await expect(page.getByRole('region', { name: 'Schema review changes' })).toContainText(
-      'system_architecture'
-    );
-    await page.screenshot({
-      path: testInfo.outputPath('upgrade-review.png'),
-      animations: 'disabled',
-    });
-    await page.goBack({ waitUntil: 'networkidle' });
-    await expect(page.getByRole('region', { name: 'Schema Studio' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Review changes', exact: true })).toBeEnabled();
+    await page.getByRole('button', { name: 'Review changes', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Workspace Review' })).toBeVisible();
+    await expect(page).toHaveURL((url) => url.searchParams.get('workspace') === targetWorkspaceId && url.searchParams.get('branch') === 'target');
+    await expect(page.getByRole('region', { name: 'Schema review' })).toContainText('system_architecture');
+    await page.screenshot({ path: testInfo.outputPath('upgrade-review.png'), animations: 'disabled' });
+    await page.getByRole('link', { name: 'Edit in Compose', exact: true }).click();
     const current = await workspace(targetWorkspaceId);
-    expect(appliedBinding.version).toBe('1.0.0');
-    expect(current.schemaBindings[0]).toMatchObject({
-      canonicalName,
-      version: '2.0.0',
-    });
-    expect(current.schemaReview.verdict).toBe('needs_review');
+    // Review prepares the upgraded Draft but cannot advance committed history.
+    expect(current.schemaBindings[0]).toMatchObject({ mode: 'pinned', canonicalName, version: '2.0.0' });
+    expect(current.baseCommitHash).toBeNull();
+    expect(current.lastCommitHash ?? null).toBeNull();
     expect((await workspace(unrelatedWorkspaceId)).schemaBindings).toEqual([]);
     const candidates = (await (await request.get(`${root}/schema-studio/candidates`)).json()).data
       .items;
@@ -204,6 +193,8 @@ test('reviews a real published upgrade and retains the exact target Workspace th
     await expect(page.getByRole('region', { name: 'Workspace detail' })).toContainText(
       'Branch workspace: target'
     );
+    await page.getByRole('button', { name: 'Open Draft', exact: true }).click();
+    await page.getByRole('navigation', { name: 'Workspace tools' }).getByRole('button', { name: 'Structure', exact: true }).click();
     await expect(page.getByLabel('Workspace schema')).not.toHaveValue('');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({

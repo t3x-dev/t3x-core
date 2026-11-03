@@ -10,7 +10,8 @@ export type { WorkspaceSchemaEditing } from '@/infrastructure/workspaceSchemaEdi
 export function useWorkspaceSchemaEditingRequests(projectId: string, workspaceId: string) {
   return useMemo(
     () => ({
-      read: () => readWorkspaceSchemaEditing(projectId, workspaceId),
+      read: (selectedCandidateIds?: string[]) =>
+        readWorkspaceSchemaEditing(projectId, workspaceId, selectedCandidateIds),
       hasPendingEdit: async () => {
         const [saved, edit] = await Promise.all([
           getSharedApiClient().workspaces.get(projectId, workspaceId),

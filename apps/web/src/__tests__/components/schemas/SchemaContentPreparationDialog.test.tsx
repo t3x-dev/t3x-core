@@ -75,7 +75,7 @@ it('previews explicit mappings and invalidates approval as soon as the input cha
   await addMove();
   expect(screen.getByRole('button', { name: 'Save prepared Draft' })).toBeDisabled();
   fireEvent.click(screen.getByRole('checkbox', { name: /My changes explicitly handle/ }));
-  fireEvent.click(screen.getByRole('button', { name: 'Preview result' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Preview changes' }));
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Save prepared Draft' })).toBeEnabled()
   );
@@ -95,7 +95,7 @@ it('retries a lost response with the same request identity and saves through the
   render(<SchemaContentPreparationDialog {...props} />);
   await addMove();
   fireEvent.click(screen.getByRole('checkbox', { name: /My changes explicitly handle/ }));
-  fireEvent.click(screen.getByRole('button', { name: 'Preview result' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Preview changes' }));
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Save prepared Draft' })).toBeEnabled()
   );
@@ -153,7 +153,7 @@ it('uses the initial checked preview for unchanged content without a second conf
   expect(screen.getByRole('region', { name: 'Prepared Draft' })).toHaveTextContent(
     'Edited content'
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Preview result' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Preview changes' }));
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Save prepared Draft' })).toBeEnabled()
   );
@@ -186,7 +186,7 @@ it('uses typed inputs for object values and preserves numbers, booleans, empty t
     });
   }
   fireEvent.change(screen.getByLabelText('Value for change 1, item 1'), { target: { value: '0' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Preview result' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Preview changes' }));
   await waitFor(() =>
     expect(mocks.preview).toHaveBeenLastCalledWith(
       'p',
@@ -208,7 +208,7 @@ it('validates incomplete form values locally with a human-readable error', async
   render(<SchemaContentPreparationDialog {...props} />);
   await waitFor(() => expect(screen.getByRole('button', { name: '+ Add change' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: '+ Add change' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Preview result' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Preview changes' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Change 1: choose a content path.');
   expect(mocks.preview).toHaveBeenCalledTimes(1);
   expect(mocks.apply).not.toHaveBeenCalled();
@@ -224,7 +224,7 @@ it('discards a delayed preview when a form field changes and requires a fresh co
         finish = resolve;
       })
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Preview result' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Preview changes' }));
   act(() => window.dispatchEvent(new Event('focus')));
   fireEvent.change(screen.getByLabelText('Destination for change 1'), {
     target: { value: 'candidate/other' },
@@ -360,7 +360,7 @@ it.each([
     fireEvent.change(screen.getByLabelText('Value for item/title'), {
       target: { value: 'User title' },
     });
-  fireEvent.click(screen.getByRole('button', { name: 'Preview result' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Preview changes' }));
   await waitFor(() =>
     expect(mocks.preview).toHaveBeenLastCalledWith(
       'p',
@@ -462,19 +462,19 @@ it('creates a missing node without exposing its internal envelope, then resolves
   fireEvent.click(await screen.findByRole('button', { name: 'Add node item' }));
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(screen.queryByLabelText('Content path for change 1')).not.toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Continue to Review' })).toBeDisabled();
-  fireEvent.click(screen.getByRole('button', { name: 'Preview result' }));
+  expect(screen.getByRole('button', { name: 'Save and continue to review' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Preview changes' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Fill item/title' }));
   fireEvent.change(screen.getByLabelText('Value for item/title'), {
     target: { value: 'User title' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Preview result' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Preview changes' }));
   await waitFor(() =>
-    expect(screen.getByRole('button', { name: 'Continue to Review' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Save and continue to review' })).toBeEnabled()
   );
   expect(screen.getByRole('region', { name: 'Resolve item' })).toHaveTextContent('Resolved');
   expect(screen.getByRole('region', { name: 'Resolve item/title' })).toHaveTextContent('Resolved');
-  fireEvent.click(screen.getByRole('button', { name: 'Continue to Review' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save and continue to review' }));
   await waitFor(() =>
     expect(mocks.apply).toHaveBeenCalledWith(
       'p',

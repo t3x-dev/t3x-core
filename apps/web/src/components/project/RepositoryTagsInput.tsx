@@ -1,11 +1,12 @@
 'use client';
 
 import { RepositoryTagsSchema } from '@t3x-dev/api-client';
-import { X } from 'lucide-react';
 import { useId } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import styles from './StateOverviewView.module.css';
+import controls from './RepositoryControls.module.css';
+import { RepositoryTag } from './RepositoryIdentity';
+import { RepositoryTagPicker } from './RepositoryTagPicker';
 
 export type RepositoryTagsDraft = { tags: string[]; input: string };
 
@@ -13,10 +14,12 @@ export function RepositoryTagsInput({
   value,
   onChange,
   disabled = false,
+  suggestionsNamespace,
 }: {
   value: RepositoryTagsDraft;
   onChange: (value: RepositoryTagsDraft) => void;
   disabled?: boolean;
+  suggestionsNamespace?: string;
 }) {
   const id = useId();
   // Keep the unfinished input in the parent draft so Save includes it even
@@ -26,27 +29,33 @@ export function RepositoryTagsInput({
     if (parsed.success) onChange({ tags: parsed.data, input: '' });
   }
   return (
-    <div className="space-y-3">
-      <label className="block text-sm font-medium" htmlFor={id}>
-        Tags
-      </label>
+    <div className={controls.tagEditor}>
+      {suggestionsNamespace !== undefined ? (
+        <div className={controls.tagEditorHeading}>
+          <label htmlFor={id}>Tags</label>
+          <RepositoryTagPicker
+            namespace={suggestionsNamespace}
+            selected={value.tags}
+            onChange={(next) => onChange({ ...value, tags: next })}
+            disabled={disabled}
+          />
+        </div>
+      ) : (
+        <label className="block text-sm font-medium" htmlFor={id}>
+          Tags
+        </label>
+      )}
       {value.tags.length ? (
-        <fieldset className={styles.tags} aria-label="Selected tags">
+        <fieldset className={controls.selectedTags} aria-label="Selected tags">
           {value.tags.map((tag) => (
-            <span key={tag} className="gap-1.5">
-              {tag.startsWith('#') ? tag : `#${tag}`}
-              <button
-                type="button"
-                disabled={disabled}
-                aria-label={`Remove tag ${tag}`}
-                className="shrink-0 rounded-full p-1 hover:bg-[var(--hover-bg)] focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
-                onClick={() =>
-                  onChange({ ...value, tags: value.tags.filter((item) => item !== tag) })
-                }
-              >
-                <X aria-hidden="true" className="size-3" />
-              </button>
-            </span>
+            <RepositoryTag
+              key={tag}
+              name={tag}
+              disabled={disabled}
+              onRemove={() =>
+                onChange({ ...value, tags: value.tags.filter((item) => item !== tag) })
+              }
+            />
           ))}
         </fieldset>
       ) : null}

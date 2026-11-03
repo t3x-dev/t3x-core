@@ -1,6 +1,53 @@
+import { CheckCircle2 } from 'lucide-react';
 import type { useRepositoryName } from '@/hooks/projects/useRepositoryName';
+import styles from './NewRepositoryPage.module.css';
 
-export function RepositoryNameFeedback({ check }: { check: ReturnType<typeof useRepositoryName> }) {
+export function RepositoryNameFeedback({
+  check,
+  compact = false,
+}: {
+  check: ReturnType<typeof useRepositoryName>;
+  compact?: boolean;
+}) {
+  if (compact)
+    return (
+      <div aria-live="polite" className={styles.nameFeedback}>
+        {check.pending && <p>Checking name and availability…</p>}
+        {check.error && (
+          <p role="alert">
+            {check.error}{' '}
+            <button type="button" onClick={check.retry} className="underline">
+              Retry
+            </button>
+          </p>
+        )}
+        {check.result && (
+          <>
+            <div className={styles.nameResult}>
+              {check.result.canonical_path && (
+                <span>
+                  Your address: <code>{check.result.canonical_path}</code>
+                </span>
+              )}
+              {check.result.available ? (
+                <span className={styles.available}>
+                  <CheckCircle2 aria-hidden="true" size={13} />
+                  Name available
+                </span>
+              ) : (
+                <p role="alert">{check.result.message}</p>
+              )}
+            </div>
+            {check.result.changed && (
+              <p>
+                Final repository name: <code>{check.result.name || '(empty)'}</code>. Unsupported
+                characters are replaced with “-”.
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    );
   return (
     <div className="mt-1.5 text-xs text-[var(--text-secondary)]" aria-live="polite">
       {check.pending && <p>Checking name and availability…</p>}

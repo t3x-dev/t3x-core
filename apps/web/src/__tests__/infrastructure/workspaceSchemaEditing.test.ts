@@ -42,6 +42,15 @@ describe('Workspace Schema editing uses the existing candidate', () => {
       schemaEditCandidate: { candidateId: 'edit', revision: 2 },
     });
   });
+  it('checks the explicit Studio selection instead of silently using the current binding', async () => {
+    mocks.read.mockResolvedValue(null);
+    await readWorkspaceSchemaEditing('p', 'w', ['source:a+b']);
+    expect(mocks.preview).toHaveBeenCalledWith('p', {
+      workspaceId: 'w',
+      candidateIds: ['source:a+b'],
+    });
+    expect(mocks.list).not.toHaveBeenCalled();
+  });
   it('reads the effective binding after application rather than replaying the saved candidate', async () => {
     mocks.read.mockResolvedValue({
       ...edit,

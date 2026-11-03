@@ -166,7 +166,7 @@ test.describe('Open-source workbench visual smoke', () => {
           name: 'repository-directory',
           path: () => '/',
           ready: async (p) => {
-            await expect(p.getByRole('heading', { name: 't3x-dev' })).toBeVisible();
+            await expect(p.getByRole('heading', { name: /^Repositories/ })).toBeVisible();
           },
         },
         {
@@ -182,9 +182,7 @@ test.describe('Open-source workbench visual smoke', () => {
           path: () =>
             `/project/${projectId}?view=canvas&commit=${encodeHash(promptTargetHash)}`,
           ready: async (p) => {
-            await expect(
-              p.locator('aside').first().getByRole('heading', { name: 'Inspector', exact: true })
-            ).toBeVisible({ timeout: 15000 });
+            await expect(p.getByRole('heading', { name: 'Inspector', exact: true })).toBeVisible({ timeout: 15000 });
             await expect(p.getByRole('button', { name: 'Details', exact: true })).toHaveCount(0);
             await expect(p.getByText('Commit Audit', { exact: true })).toHaveCount(0);
           },

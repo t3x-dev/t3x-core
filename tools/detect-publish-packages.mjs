@@ -12,6 +12,7 @@ function parseArgs(argv) {
     base: 'HEAD^',
     changedFiles: null,
     head: 'HEAD',
+    packages: null,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -47,6 +48,28 @@ function readChangedFiles(options) {
     .split('\n')
     .map((file) => file.trim())
     .filter(Boolean);
+}
+
+export function selectRetryPackages({ packageSelection, releaseSurface }) {
+  const names = [...new Set(packageSelection.split(',').map((name) => name.trim()))];
+  if (names.some((name) => !name)) {
+    throw new Error('Select at least one active package; empty package names are not allowed.');
+  }
+  const packageNames = names.map((name) =>
+    name.startsWith('@t3x-dev/') ? name : `@t3x-dev/${name}`
+  );
+  for (const name of packageNames) {
+    const entry = releaseSurface.packages.find((candidate) => candidate.name === name);
+    if (!entry || entry.npm_publish !== true || entry.release_train !== 'active') {
+      throw new Error(`Cannot retry publishing inactive or unknown package: ${name}`);
+    }
+  }
+  return {
+    hasPublishPackages: true,
+    packageNames: [...new Set(packageNames)],
+    packageSlugs: [...new Set(packageNames.map((name) => name.replace(/^@t3x-dev\//, '')))],
+    publishesLocal: packageNames.includes('@t3x-dev/local'),
+  };
 }
 
 export function detectPublishPackages({
@@ -219,6 +242,10 @@ function main() {
   const rootUrl = new URL('..', import.meta.url);
   const rootDir = fileURLToPath(rootUrl);
   const releaseSurface = validateReleaseSurfaceOrThrow({ rootDir: rootUrl });
+  if (options.packages !== null) {
+    writeOutputs(selectRetryPackages({ packageSelection: options.packages, releaseSurface }));
+    return;
+  }
   const changedFiles = readChangedFiles(options);
   const result = detectPublishPackages({
     changedFiles,

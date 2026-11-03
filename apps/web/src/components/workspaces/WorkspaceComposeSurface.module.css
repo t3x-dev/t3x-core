@@ -271,28 +271,34 @@
 
 /* Compose owns its reference styling; shared State/History controls are untouched. */
 .composeBoard {
+  /* Keep the workbench horizontal; constrain saved widths to the available space. */
+  --draft-effective-width: var(--draft-width);
   display: grid;
   flex: 1;
   min-width: 0;
   min-height: 0;
   width: 100%;
-  grid-template-columns: minmax(0, 5fr) minmax(300px, 2fr);
-  grid-template-rows: auto minmax(0, 1fr);
-  overflow: hidden;
+  grid-template-columns: var(--draft-effective-width) minmax(320px, 1fr) var(--discussion-width);
+  grid-template-rows: max-content max-content minmax(0, 1fr);
+  overflow-x: auto;
+  overflow-y: hidden;
   color: var(--text-primary);
   background: var(--surface-panel);
 }
+.composeBoard[data-draft-collapsed] {
+  --draft-effective-width: 48px;
+}
 .composeMain {
-  grid-column: 1;
-  grid-row: 2;
+  composes: primary from "../project/RepositoryWorkbench.module.css";
+  grid-column: 2;
+  grid-row: 3;
   display: flex;
   min-width: 0;
   min-height: 0;
   flex-direction: column;
   overflow-y: auto;
   scrollbar-width: none;
-  border-right: 1px solid var(--stroke-default);
-  background: var(--compose-canvas);
+  margin: var(--repo-frame-top) var(--repo-frame-gap) var(--repo-frame-gap) 0;
 }
 .newActivity {
   display: flex;
@@ -771,8 +777,8 @@
   white-space: nowrap;
 }
 .discussionSidebar {
-  grid-column: 2;
-  grid-row: 1 / span 2;
+  grid-column: 3;
+  grid-row: 3;
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -1489,26 +1495,10 @@
   .sourcesToolbar {
     grid-template-columns: minmax(0, 1fr);
   }
-  .composeBoard {
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-  }
-  .composeMain {
-    flex: none;
-    overflow: visible;
-    border-right: 0;
-  }
   .panel {
     height: auto;
     flex: none;
     overflow: visible;
-  }
-  .discussionSidebar {
-    flex: none;
-    min-height: 0;
-    height: min(700px, 85dvh);
-    border-top: 1px solid var(--stroke-divider);
   }
   .baseBar,
   .sourcesSection,
@@ -1575,9 +1565,6 @@
   .schemaLabel {
     width: auto;
   }
-  .discussionSidebar {
-    height: min(760px, 90dvh);
-  }
 }
 @media (max-width: 420px) {
   .baseContext .baseBar {
@@ -1591,10 +1578,6 @@
 }
 
 /* Compose direction 1E: calm, dense timeline workbench. Scoped here so Review stays untouched. */
-.composeBoard {
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 456px);
-  background: var(--surface-app);
-}
 .composeIdentity {
   display: flex;
   min-width: 0;
@@ -1665,10 +1648,6 @@
 }
 .verifiedMeta {
   color: var(--status-success);
-}
-.composeMain {
-  border-right: 0;
-  background: var(--surface-panel);
 }
 .sourcesSection {
   display: block;
@@ -1958,9 +1937,6 @@
   opacity: 0.2;
 }
 @media (max-width: 1180px) {
-  .composeBoard {
-    grid-template-columns: minmax(0, 1fr) minmax(320px, 38vw);
-  }
   .sourcesSection {
     flex-wrap: wrap;
   }
@@ -2205,10 +2181,6 @@
 }
 
 /* Shared workbench surfaces. */
-.composeBoard {
-  grid-template-columns: minmax(0, 1fr) 440px;
-  background: var(--surface-panel);
-}
 .composeBoard .sourcesSection {
   padding: 0 32px 8px 24px;
 }
@@ -2280,10 +2252,9 @@
   color: var(--text-primary);
 }
 .composeBoard .discussionSidebar {
-  grid-row: 2;
-  margin: 0;
+  container: compose-inspector / inline-size;
+  margin: var(--repo-frame-top) 16px var(--repo-frame-gap) 0;
   border: 0;
-  border-left: 1px solid var(--stroke-divider);
   border-radius: 0;
   background: var(--surface-panel);
   box-shadow: none;
@@ -2349,17 +2320,8 @@
   flex: 1;
 }
 .changeDetailsPanel {
-  overflow: hidden;
-  border-top: 1px solid var(--stroke-divider);
+  overflow: visible;
   background: var(--surface-panel);
-}
-.composeBoard .discussionSidebar[data-panel="split"] {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows:
-    minmax(160px, var(--generated-panel-height, 260px)) 12px
-    minmax(240px, 1fr);
-  overflow: hidden;
 }
 .composeBoard .discussionSidebar[data-panel="changes"] .generatedChangesPanel {
   width: 100%;
@@ -2369,48 +2331,10 @@
   padding: 10px 16px;
   border-bottom: 1px solid var(--stroke-divider);
 }
-.composeBoard .discussionSidebar[data-panel="details"] {
-  align-self: start;
-  max-height: 100%;
-}
-.composeBoard .discussionSidebar[data-panel="details"] .discussionHeader {
-  min-height: 48px;
-  padding-block: 12px 0;
-  border-bottom: 0;
-}
 .composeBoard .changeDetailsPanel .discussionHeader {
   min-height: 48px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--stroke-divider);
-}
-.detailsResize {
-  position: relative;
-  z-index: 4;
-  height: 12px;
-  cursor: row-resize;
-  touch-action: none;
-  outline: none;
-}
-.detailsResize::after {
-  content: "";
-  position: absolute;
-  top: 5px;
-  right: 16px;
-  left: 16px;
-  height: 2px;
-  border-radius: 999px;
-  background: var(--stroke-divider);
-  transition: background 120ms ease;
-}
-.detailsResize:hover::after,
-.detailsResize:focus-visible::after,
-.composeBoard[data-details-resizing] .detailsResize::after {
-  background: var(--accent-commit);
-}
-.composeBoard[data-details-resizing],
-.composeBoard[data-details-resizing] * {
-  cursor: row-resize;
-  user-select: none;
 }
 .composeBoard .nodeHistoryScroll {
   padding: 0 20px 16px;
@@ -2518,55 +2442,16 @@
   font-size: 13px;
 }
 @media (max-width: 1180px) {
-  .composeBoard {
-    grid-template-columns: minmax(0, 1fr) 360px;
-  }
   .composeBoard .sourcesSection {
     padding-inline: 16px;
   }
 }
 @media (max-width: 1100px) {
-  .composeBoard {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(440px, 1fr) minmax(340px, 1fr);
-    overflow-y: auto;
-  }
-  .composeBoard .composeMain {
-    grid-column: 1;
-    grid-row: 2;
-    overflow-y: auto;
-  }
-  .composeBoard .discussionSidebar {
-    grid-column: 1;
-    grid-row: 3;
-    margin: 0;
-    border-left: 0;
-    border-top: 1px solid var(--stroke-divider);
-    min-height: 340px;
-    height: auto;
-  }
-  .composeBoard .discussionSidebar[data-panel="split"] {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .composeBoard .changeDetailsPanel {
-    min-height: 340px;
-  }
   .composeBoard .proposedHeading {
     flex-basis: 100%;
   }
 }
 
-.composeBoard {
-  width: 100%;
-  max-width: none;
-  margin: 0;
-}
-
-/* The page header is outside the board; its former first grid row stays empty. */
-.composeBoard {
-  grid-template-rows: max-content max-content minmax(0, 1fr);
-}
 .composeBoard .sourcesSection {
   grid-column: 1 / -1;
   grid-row: 2;
@@ -2640,51 +2525,10 @@
   flex-shrink: 0;
   white-space: nowrap;
 }
-.composeBoard .composeMain {
-  grid-column: 2;
-  grid-row: 3;
-}
-.composeBoard .discussionSidebar {
-  grid-column: 3;
-  grid-row: 3;
-}
-@media (max-width: 1100px) {
-  .composeBoard {
-    grid-template-rows: max-content max-content minmax(180px, 240px) minmax(240px, auto) minmax(
-        380px,
-        1fr
-      );
-  }
-  .composeBoard .composeMain {
-    grid-column: 1;
-    grid-row: 4;
-  }
-  .composeBoard .discussionSidebar {
-    grid-column: 1;
-    grid-row: 5;
-  }
-}
 .composeMain {
   position: relative;
 }
 
-@media (min-width: 1101px) {
-  .composeBoard {
-    --draft-effective-width: clamp(
-      180px,
-      var(--draft-width, 260px),
-      min(560px, calc(100% - 640px))
-    );
-    grid-template-columns: var(--draft-effective-width) minmax(0, 1fr) clamp(
-        320px,
-        var(--discussion-width, 440px),
-        calc(100% - var(--draft-effective-width) - 320px)
-      );
-  }
-  .composeBoard[data-draft-collapsed] {
-    --draft-effective-width: 48px;
-  }
-}
 .discussionResize {
   grid-column: 3;
   grid-row: 3;
@@ -2713,9 +2557,8 @@
   margin-block: 0 16px;
 }
 .draftResize::after {
-  top: 0;
+  top: 8px;
   bottom: 0;
-  background: var(--stroke-divider);
 }
 .discussionResize:hover::after,
 .discussionResize:focus-visible::after,
@@ -2726,11 +2569,6 @@
 .composeBoard[data-resizing] * {
   cursor: col-resize !important;
   user-select: none;
-}
-@media (max-width: 1100px) {
-  .discussionResize {
-    display: none;
-  }
 }
 
 .changeList {
@@ -2748,7 +2586,6 @@
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
-  border-right: 1px solid var(--stroke-divider);
   padding: 0;
 }
 .currentDraftSidebar > .currentDraft {
@@ -3121,30 +2958,6 @@ button.currentDraftRow:hover {
   color: var(--status-warning);
   line-height: 1.5;
 }
-@media (max-width: 1100px) {
-  .currentDraftSidebar {
-    grid-column: 1;
-    grid-row: 3;
-    border-right: 0;
-    border-bottom: 1px solid var(--stroke-divider);
-    padding-left: 12px;
-  }
-  .currentDraftSidebar > .currentDraft {
-    max-height: none;
-    flex: none;
-  }
-  .composeBoard[data-draft-collapsed] {
-    grid-template-rows: max-content max-content max-content minmax(240px, auto) minmax(380px, 1fr);
-  }
-  .currentDraftRail {
-    flex-direction: row;
-    justify-content: flex-start;
-    padding: 8px 12px;
-  }
-  .currentDraftRail > span {
-    writing-mode: horizontal-tb;
-  }
-}
 
 .sourcesHeading > h2 {
   flex: none;
@@ -3266,4 +3079,135 @@ button.currentDraftRow:hover {
   margin-bottom: 12px;
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+/* Conversation first. The inspector shares space only while it is open. */
+.composeBoard:not([data-inspector-open]) {
+  grid-template-columns: var(--draft-effective-width) minmax(0, 1fr);
+}
+.composeBoard [hidden] {
+  display: none;
+}
+.composeBoard .discussionSidebar[data-panel="details"] {
+  align-self: stretch;
+}
+.changeDetailsPanel {
+  flex: 1;
+}
+.changesBody {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+.workspaceToolTabs {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) 30px;
+}
+.chatPanel,
+.authoringAssistant {
+  background: var(--surface-card);
+}
+.discussionComposer {
+  width: min(calc(100% - 64px), 816px);
+  margin-inline: auto;
+}
+.chatPanel .discussionHeader h2 {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.discussionHeader .draftToggle,
+.turnView > button {
+  display: inline-flex;
+  width: auto;
+  height: auto;
+  min-height: 30px;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+}
+.discussionHeader .draftToggle {
+  border: 1px solid var(--stroke-default);
+}
+.discussionHeader .draftToggle[aria-expanded="true"] {
+  background: var(--surface-app);
+  color: var(--text-primary);
+}
+.draftToggle span {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+.draftToggle small {
+  color: var(--text-secondary);
+}
+.draftToggle:hover,
+.turnView > button:hover {
+  background: var(--surface-hover);
+}
+.discussionHeader .mobileChatsButton {
+  display: none;
+}
+.turnView {
+  padding: 12px 16px;
+}
+.turnView > button {
+  color: var(--text-secondary);
+  padding-inline: 0;
+}
+.turnView > button svg {
+  width: 14px;
+  height: 14px;
+}
+.turnView > h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-top: 8px;
+}
+.turnView > p {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-bottom: 14px;
+}
+@media (max-width: 840px) {
+  .discussionComposer {
+    width: calc(100% - 40px);
+  }
+  .composeMain,
+  .composeBoard .discussionSidebar {
+    margin: 4px 5px 7px;
+    border: 1px solid var(--stroke-default);
+    border-radius: var(--repo-frame-radius);
+  }
+  .composeBoard,
+  .composeBoard:not([data-inspector-open]) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .composeMain,
+  .composeBoard .discussionSidebar,
+  .currentDraftSidebar {
+    grid-column: 1;
+  }
+  .currentDraftSidebar,
+  .discussionResize {
+    display: none;
+  }
+  .composeBoard[data-mobile-chats] .currentDraftSidebar {
+    display: flex;
+    background: var(--surface-panel);
+  }
+  .composeBoard[data-mobile-chats] .composeMain,
+  .composeBoard[data-inspector-open] .composeMain {
+    display: none;
+  }
+  .discussionHeader .mobileChatsButton {
+    display: grid;
+    margin: 0;
+  }
+  .chatPanel .discussionHeader > svg {
+    display: none;
+  }
 }

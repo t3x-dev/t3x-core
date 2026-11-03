@@ -51,7 +51,7 @@ export function WorkspaceCommitHistoryPanel({
     <section className={styles.panel} aria-label="Committed changes">
       <header className={styles.header}>
         <button type="button" onClick={onReturn}>
-          <ArrowLeft size={14} /> Return to current Draft
+          <ArrowLeft size={14} /> Back to History
         </button>
         <span>Read-only · {shortHash(commit.hash)}</span>
       </header>

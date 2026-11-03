@@ -13,7 +13,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px 24px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
   border-bottom: 1px solid var(--stroke-divider);
 }
 .heading h1 {
@@ -34,10 +35,13 @@
 }
 .body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: var(--repo-main-with-inspector);
   flex: 1;
+  padding: var(--repo-frame-top) var(--repo-frame-gap) var(--repo-frame-gap);
+  background: var(--surface-panel);
 }
 .main {
+  composes: primary from "../project/RepositoryWorkbench.module.css";
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -131,16 +135,15 @@
 .sidebar {
   min-width: 0;
   padding: 16px;
-  border-left: 1px solid var(--stroke-divider);
-  background: var(--surface-panel);
 }
 .scope {
-  margin-bottom: 16px;
   font-size: 11px;
   line-height: 1.6;
   color: var(--text-secondary);
 }
 .sidebarContent {
+  display: grid;
+  gap: 12px;
   position: sticky;
   top: 16px;
 }
@@ -249,14 +252,9 @@
 }
 .codeFrame {
   display: flex;
-  height: 60vh;
-  min-height: 320px;
 }
 .preview {
-  padding: 16px 20px;
-  border: 1px solid var(--stroke-divider);
-  border-radius: var(--radius-md);
-  overflow: auto;
+  min-width: 0;
 }
 .preview h2 {
   font-size: 14px;
@@ -270,12 +268,8 @@
   border-bottom: 1px solid var(--stroke-divider);
 }
 @media (max-width: 1000px) {
-  .body {
-    grid-template-columns: minmax(0, 1fr) 270px;
-  }
   .toolbar,
-  .content,
-  .heading {
+  .content {
     padding-inline: 16px;
   }
   .views button {

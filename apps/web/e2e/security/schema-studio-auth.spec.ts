@@ -220,7 +220,7 @@ test('signed-in Studio preserves community releases while enforcing destination 
         .getByRole('complementary', { name: 'Available Schema sources' })
         .getByText('Community release definition')
     ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Review Schema changes' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Review changes', exact: true })).toBeEnabled();
     await page.screenshot({
       path: testInfo.outputPath('studio-community-release.png'),
       animations: 'disabled',

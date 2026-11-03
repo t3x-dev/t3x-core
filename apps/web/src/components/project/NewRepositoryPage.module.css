@@ -1,41 +1,45 @@
 .page {
   --field-internal-gap: 6px;
-  --field-gap: 20px;
+  --field-gap: 16px;
   width: 100%;
-  max-width: 800px;
+  max-width: 760px;
   min-width: 0;
   margin-inline: auto;
-  padding: 24px 32px 48px;
+  padding: 20px 32px 40px;
 }
 
-.page .requiredNote {
+.page .introduction > .requiredNote {
   margin-top: 4px;
   font-size: 12px;
 }
 
 .section {
   min-width: 0;
+  position: relative;
+  padding-left: 38px;
+  padding-bottom: 24px;
 }
 
 .section + .section {
-  margin-top: 28px;
+  margin-top: 0;
+  padding-bottom: 0;
 }
 
 .sectionHeading {
   min-width: 0;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .sectionHeading h2 {
-  font-size: 16px;
   font-weight: 600;
-  line-height: 1.5;
+  font-size: 16px;
+  line-height: 24px;
 }
 
 .sectionHeading p {
   margin-top: 4px;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
 }
 
@@ -48,10 +52,11 @@
 .configuration {
   border: 1px solid var(--stroke-default);
   border-radius: var(--radius-md);
+  padding-inline: 16px;
 }
 
 .configuration > div {
-  padding: 16px;
+  padding: 12px 0;
 }
 
 .configuration > div + div {
@@ -60,9 +65,9 @@
 
 .nameRow {
   display: grid;
-  grid-template-columns: minmax(140px, 180px) 12px minmax(0, 1fr);
   align-items: end;
-  gap: 12px;
+  grid-template-columns: 155px 12px minmax(0, 1fr);
+  gap: 10px;
 }
 
 .field {
@@ -74,9 +79,9 @@
 
 .field label,
 .optionCopy label {
-  font-size: 14px;
-  font-weight: 500;
   line-height: 1.5;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .optional {
@@ -87,16 +92,15 @@
 }
 
 .field input,
-.tagsField input,
-.selectControl select {
+.tagsField input {
   height: 36px;
   min-height: 36px;
   border: 1px solid var(--stroke-default);
   border-radius: var(--radius-md);
   background: var(--surface-card);
   color: var(--text-primary);
-  font-size: 14px;
   box-shadow: none;
+  font-size: 14px;
 }
 
 .field input {
@@ -124,57 +128,10 @@
   border-color: var(--status-error);
 }
 
-.selectControl {
-  position: relative;
-  min-width: 0;
-}
-
-.selectControl select {
-  width: 100%;
-  min-width: 0;
-  appearance: none;
-  padding: 6px 32px 6px 36px;
-  background: var(--management-control-bg);
-  cursor: pointer;
-}
-
-.selectControl select:hover:not(:disabled) {
-  background: var(--management-control-hover);
-}
-
-.selectControl select:focus-visible {
-  border-color: var(--accent-commit);
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-  box-shadow: none;
-}
-
-.selectControl select:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.selectIcon,
-.selectChevron {
-  position: absolute;
-  top: 50%;
-  color: var(--text-secondary);
-  pointer-events: none;
-  transform: translateY(-50%);
-}
-
-.selectIcon {
-  left: 12px;
-}
-
-.selectChevron {
-  right: 12px;
-}
-
 .pathSeparator {
   padding-bottom: 6px;
   color: var(--text-secondary);
-  font-size: 20px;
+  font-size: 24px;
   line-height: 24px;
 }
 
@@ -182,7 +139,7 @@
   min-height: 20px;
   margin-top: var(--field-internal-gap);
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
@@ -199,9 +156,13 @@
   justify-content: space-between;
   gap: 24px;
 }
-
-.visibilityRow .selectControl {
+.ownerSelect {
+  width: 100%;
+  background: var(--management-control-bg);
+}
+.visibilitySelect {
   flex: 0 0 140px;
+  background: var(--management-control-bg);
 }
 
 .optionCopy {
@@ -211,29 +172,39 @@
 .optionCopy p {
   margin-top: 4px;
   color: var(--text-secondary);
-  font-size: 13px;
   line-height: 1.5;
+  font-size: 12px;
 }
 
 .readmeOption {
   display: grid;
-  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 16px;
+  align-items: center;
 }
 
 .readmeOption label {
-  display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
-  font-weight: 500;
   line-height: 1.5;
+  font-size: 14px;
+  display: block;
+  font-weight: 600;
 }
 
 .readmeOption input {
-  width: 16px;
-  height: 16px;
   flex-shrink: 0;
   accent-color: var(--accent-commit);
+  grid-column: 2;
+  grid-row: 1 / 3;
+  appearance: none;
+  width: 34px;
+  height: 20px;
+  border: 1px solid var(--stroke-default);
+  border-radius: 12px;
+  background: var(--management-control-bg);
+  position: relative;
+  margin: 0;
 }
 
 .readmeOption input:focus-visible {
@@ -242,65 +213,155 @@
 }
 
 .readmeOption > p {
-  padding-left: 24px;
   color: var(--text-secondary);
-  font-size: 13px;
   line-height: 1.5;
+  grid-column: 1;
+  padding: 0;
+  font-size: 12px;
 }
 
 .readmeOption > p[role="alert"] {
   color: var(--status-error);
 }
 
-.tagsField > div {
-  display: grid;
-  gap: var(--field-internal-gap);
-}
-
-.tagsField > div > * {
-  margin-block: 0;
-}
-
 .tagsField :global([data-slot="button"]) {
   height: 36px;
-}
-
-.tagsField > div > p {
-  font-size: 13px;
-  line-height: 1.5;
 }
 
 .footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  margin-top: 24px;
+  margin-top: 20px;
+  margin-left: 38px;
+  gap: 16px;
 }
 
 .footer button {
-  min-width: 168px;
+  min-width: 150px;
+  font-size: 14px;
 }
 
 .progress {
   max-width: 420px;
   color: var(--text-secondary);
-  font-size: 13px;
   line-height: 1.5;
+  font-size: 12px;
 }
 
 .error {
   margin-top: 20px;
 }
 
+/* The rail groups one visible form; it is not a multi-step submission flow. */
+.backRow {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-left: 38px;
+  margin-bottom: 12px;
+}
+.backRow a {
+  min-height: 32px;
+  margin-bottom: 0;
+  font-size: 14px;
+}
+.introduction {
+  margin-left: 38px;
+}
+.page .introduction {
+  margin-bottom: 20px;
+}
+.page .introduction h1 {
+  font-size: 20px;
+  line-height: 1.4;
+}
+.page .introduction > p {
+  margin-top: 6px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.section::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 30px;
+  bottom: 0;
+  width: 2px;
+  background: var(--stroke-divider);
+}
+.stepNumber {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--surface-app);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.visibilityCard {
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+}
+.readmeOption input::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+}
+.readmeOption input:checked {
+  background: var(--text-primary);
+  border-color: var(--text-primary);
+}
+.readmeOption input:checked::after {
+  left: 16px;
+  background: var(--surface-panel);
+}
+.nameFeedback {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.nameResult {
+  display: flex;
+  align-items: center;
+  gap: 6px 10px;
+  flex-wrap: wrap;
+}
+.available {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--status-success-muted);
+  color: var(--status-success);
+}
 @media (max-width: 600px) {
+  .visibilitySelect {
+    flex-basis: auto;
+    width: 100%;
+  }
   .page {
     padding: 20px 20px 32px;
+    padding-inline: 16px;
   }
 
   .nameRow {
-    grid-template-columns: minmax(0, 1fr);
     gap: var(--field-gap);
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .pathSeparator {
@@ -313,18 +374,41 @@
     gap: var(--field-internal-gap);
   }
 
-  .visibilityRow .selectControl {
-    flex-basis: auto;
-    width: 100%;
-  }
-
   .footer {
-    align-items: stretch;
     flex-direction: column;
     gap: 16px;
+    align-items: flex-start;
   }
 
   .footer button {
-    width: 100%;
+    width: auto;
+    align-self: flex-end;
+  }
+  .backRow,
+  .introduction,
+  .footer {
+    margin-left: 28px;
+  }
+  .section {
+    padding-left: 28px;
+  }
+  .section::before {
+    left: 9px;
+    top: 26px;
+  }
+  .stepNumber {
+    top: 3px;
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+  }
+  .visibilityCard {
+    padding: 13px;
+  }
+  .configuration {
+    padding-inline: 13px;
+  }
+  .readmeOption {
+    gap: 4px 10px;
   }
 }

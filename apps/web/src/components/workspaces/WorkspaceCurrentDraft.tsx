@@ -4,7 +4,7 @@ import type { WorkspaceAuthoringView } from '@t3x-dev/api-client';
 import { ChevronRight, FileText, Folder } from 'lucide-react';
 import Link from 'next/link';
 import { type ReactNode, useMemo, useState } from 'react';
-import { SchemaDefinitionTree } from '@/components/schemas/SchemaDefinitionWorkbench';
+import { SchemaDefinitionTree } from '@/components/schemas/SchemaDefinitionTree';
 import { getProjectIdRepoPath } from '@/domain/project/repoPath';
 import { schemaFieldRows } from '@/domain/schemas/schemaFieldEditing';
 import { authoringSemanticPath } from '@/domain/workspaces/authoringReview';

@@ -45,8 +45,7 @@ test.describe('Canvas edge rhythm', () => {
     await canvas.waitForLoad();
     await canvas
       .getNodeByHash(featureCommitHash)
-      .first()
-      .locator(`[data-branch-highlight="${featureBranch}"]`)
+      .getByTitle(`Highlight ${featureBranch} branch`, { exact: true })
       .click();
 
     await expect

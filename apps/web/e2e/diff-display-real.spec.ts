@@ -79,11 +79,9 @@ test.describe('DiffDisplayView Real UI Test', () => {
     // Click first node
     await nodes.first().click();
 
-    const inspector = page.locator('aside').first();
-    await expect(inspector.getByRole('heading', { name: 'Inspector', exact: true })).toBeVisible({
-      timeout: 10000,
-    });
-    await expect(inspector.getByText('Status checks', { exact: true })).toBeVisible();
+    const inspector = page.getByRole('complementary');
+    await expect(inspector.getByRole('heading', { name: 'Inspector', exact: true })).toBeVisible();
+    await expect(inspector.getByRole('button', { name: 'View Diff Changes', exact: true })).toBeEnabled();
     await expect(page.getByRole('button', { name: 'Details', exact: true })).toHaveCount(0);
     await expect(page.getByText('V4 Architecture', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('dialog')).toHaveCount(0);

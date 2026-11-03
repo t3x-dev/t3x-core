@@ -86,7 +86,7 @@ test.describe('authenticated browser boundaries', () => {
 
     expect((await namespaceCreation).status()).toBe(201);
     await expect(page).toHaveURL(`/${aliceNamespace}`);
-    await expect(page.getByRole('heading', { name: aliceNamespace })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^Repositories/ })).toBeVisible();
     await expect(page.getByText('Namespace access denied')).toHaveCount(0);
   });
 
@@ -131,7 +131,9 @@ test.describe('authenticated browser boundaries', () => {
       expect(bobProject.status).toBe(201);
 
       await bobPage.goto(`/bob-${runId}`);
-      await expect(bobPage.getByRole('heading', { name: `bob-${runId}` })).toBeVisible();
+      await expect(
+        bobPage.getByRole('link', { name: `bob-${runId}`, exact: true })
+      ).toBeVisible();
       await expect(
         bobPage.locator('article').filter({ hasText: bobProjectName }).first()
       ).toBeVisible();

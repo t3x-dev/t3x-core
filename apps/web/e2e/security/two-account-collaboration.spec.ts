@@ -44,7 +44,7 @@ test.describe('two-account browser collaboration', () => {
       await pageA.getByRole('link', { name: 'New repository', exact: true }).first().click();
       await pageA.getByLabel('Repository name', { exact: true }).fill(repositoryName);
       await pageA.getByLabel('Description', { exact: true }).fill('Two-account browser qualification');
-      await pageA.getByRole('checkbox', { name: 'Initialize PRD starter' }).check();
+      await pageA.getByRole('switch', { name: 'Initialize PRD starter' }).check();
       const createRepository = pageA.waitForResponse(
         (response) =>
           response.url().endsWith('/api/v1/projects') && response.request().method() === 'POST'
@@ -367,7 +367,7 @@ async function registerAndOnboard(
   await page.getByLabel('Personal namespace').fill(account.namespace);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(page).toHaveURL(`/${account.namespace}`);
-  await expect(page.getByRole('heading', { name: account.namespace })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Repositories/ })).toBeVisible();
 }
 
 function escapeRegExp(value: string): string {

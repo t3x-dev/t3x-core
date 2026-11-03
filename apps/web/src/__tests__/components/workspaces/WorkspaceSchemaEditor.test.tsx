@@ -88,13 +88,13 @@ describe('Workspace Content and Schema editing boundaries', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Schema', exact: true }));
     const type = await screen.findByLabelText('Type rollout/allocation');
     fireEvent.change(type, { target: { value: 'string' } });
-    expect(screen.getByRole('button', { name: 'Save edits' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Content · Unsaved', exact: true }));
     expect(screen.getByLabelText('New value')).toHaveValue(35);
     fireEvent.click(screen.getByRole('button', { name: 'Cancel', exact: true }));
     fireEvent.click(screen.getByRole('button', { name: /Schema · Unsaved/ }));
     expect(screen.getByLabelText('Type rollout/allocation')).toHaveValue('string');
-    expect(screen.getByRole('button', { name: 'Save edits' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
     expect(publish).not.toHaveBeenCalled();
     expect(mocks.save).not.toHaveBeenCalled();
     expect(mocks.preparation).not.toHaveBeenCalled();
@@ -128,7 +128,7 @@ describe('Workspace Content and Schema editing boundaries', () => {
       mocks.read.mockResolvedValue(saved);
       return { candidate: saved.edit };
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await screen.findByText(/Saved Schema candidate · not applied/);
     expect(mocks.save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -165,7 +165,7 @@ describe('Workspace Content and Schema editing boundaries', () => {
       target: { value: 'string' },
     });
     mocks.read.mockResolvedValue({ ...baseSession(), workspace: { ...candidate, revision: 5 } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await screen.findByText(/Schema or content changed/);
     expect(screen.getByLabelText('Type rollout/allocation')).toHaveValue('string');
     expect(mocks.save).not.toHaveBeenCalled();
@@ -183,7 +183,7 @@ describe('Workspace Content and Schema editing boundaries', () => {
           complete = resolve;
         })
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     expect(screen.queryByRole('button', { name: 'Close', exact: true })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Content', exact: true })).toBeDisabled();
     await act(async () => complete(baseSession()));
@@ -198,7 +198,7 @@ describe('Workspace Content and Schema editing boundaries', () => {
     fireEvent.change(await screen.findByLabelText('Type rollout/allocation'), {
       target: { value: 'string' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await screen.findByText(
       'Schema candidate was saved. Refresh the Workspace to load its latest state.'
     );

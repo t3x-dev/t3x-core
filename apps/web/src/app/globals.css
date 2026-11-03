@@ -80,6 +80,19 @@ html[data-reduced-motion="true"] *::after {
      Multiple .dark blocks with hue conflict → unified hue 260, single block
    ============================================ */
 :root {
+  /* Stable object identity colors; independent of action and status colors. */
+  --identity-violet: #6941a5;
+  --identity-violet-muted: #f1eafb;
+  --identity-teal: #176b61;
+  --identity-teal-muted: #e4f3ee;
+  --identity-sky: #24668a;
+  --identity-sky-muted: #e8f2fa;
+  --identity-amber: #895b18;
+  --identity-amber-muted: #fbf1dc;
+  --identity-rose: #a13d61;
+  --identity-rose-muted: #f9eaf0;
+  --identity-slate: #52647b;
+  --identity-slate-muted: #eaf0f6;
   /* Typography — Geist Sans + Geist Mono */
   font-family:
     var(--font-geist-sans, "Geist"), -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
@@ -508,6 +521,18 @@ html[data-reduced-motion="true"] *::after {
 }
 
 .dark {
+  --identity-violet: #d1b4f7;
+  --identity-violet-muted: #342a46;
+  --identity-teal: #94d5c6;
+  --identity-teal-muted: #203c38;
+  --identity-sky: #a0d0ee;
+  --identity-sky-muted: #243948;
+  --identity-amber: #e7c283;
+  --identity-amber-muted: #403522;
+  --identity-rose: #edb0c6;
+  --identity-rose-muted: #432c37;
+  --identity-slate: #bbcddd;
+  --identity-slate-muted: #303b47;
   --color-text: #f0f4fa;
   --color-text-secondary: #b5becd;
   --color-text-muted: #8490a3;

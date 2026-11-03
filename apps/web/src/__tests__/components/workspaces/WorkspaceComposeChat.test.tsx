@@ -49,6 +49,57 @@ describe('WorkspaceComposeChat', () => {
     }
   });
 
+  it('opens the published action belonging to the chosen reply while keeping ordinary replies in Chat', () => {
+    const onOpenTurn = vi.fn();
+    const records = Object.fromEntries(
+      ['first', 'second'].map((id, index) => [
+        id,
+        {
+          activity: { turnId: id, phase: 'complete' as const, operations: [] },
+          publication: {
+            turnId: id,
+            kind: 'published' as const,
+            action: {
+              actionId: id,
+              sequence: index + 1,
+              beforeRevision: index,
+              afterRevision: index + 1,
+              actor: { kind: 'service' as const, id: 'assistant' },
+              channel: 'assistant' as const,
+              publishedAt: '2026-10-29T00:00:00Z',
+              operations: [{ set: { path: 'title', value: id } }],
+              reason: 'Rename checklist',
+            },
+            cards: [{ nodeId: 'checklist', path: 'title', before: 'Original', after: id }],
+          },
+        },
+      ])
+    );
+    render(
+      <WorkspaceComposeChat
+        variant="discussion"
+        onOpenTurn={onOpenTurn}
+        assistantRecords={records}
+        chat={chatState({
+          messages: ['first', 'discussion', 'second'].map((id) => ({
+            id,
+            author: 'Assistant',
+            role: 'assistant',
+            content: id,
+          })),
+        })}
+      />
+    );
+    const receipts = screen.getAllByRole('button', { name: /This reply/ });
+    expect(receipts).toHaveLength(2);
+    fireEvent.click(receipts[0]!);
+    expect(onOpenTurn).toHaveBeenCalledWith({
+      action: records.first!.publication.action,
+      cards: records.first!.publication.cards,
+    });
+    expect(screen.queryByText('YOps in this Action')).not.toBeInTheDocument();
+  });
+
   it('fills a starting prompt without sending or changing workspace data', () => {
     const setInput = vi.fn();
     const send = vi.fn();
@@ -85,14 +136,27 @@ describe('WorkspaceComposeChat', () => {
     }
   });
 
-  it('renders assistant markdown through the AI Elements response surface', async () => {
+  it.each([
+    'default',
+    'discussion',
+  ] as const)('preserves Markdown structure in the %s conversation', async (variant) => {
     render(
       <WorkspaceComposeChat
+        variant={variant}
         chat={chatState({
           messages: [
             {
               author: 'Assistant',
-              content: ['## Source draft', '', '- Keep the audit trail readable.'].join('\n'),
+              content: [
+                '## Source draft',
+                '',
+                '- Keep the audit trail readable.',
+                '- Edit the `title` field.',
+                '',
+                '```yaml',
+                'title: Example',
+                '```',
+              ].join('\n'),
               id: 'turn-assistant-1',
               role: 'assistant',
             },
@@ -103,6 +167,9 @@ describe('WorkspaceComposeChat', () => {
 
     expect(await screen.findByRole('heading', { name: 'Source draft' })).toBeInTheDocument();
     expect(screen.getByText('Keep the audit trail readable.')).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+    expect(screen.getByText('title', { selector: 'code' })).toBeInTheDocument();
+    expect(document.querySelector('pre')).toHaveTextContent('title: Example');
   });
 
   it('keeps streaming text in one assistant message and shows real stream metadata', async () => {
