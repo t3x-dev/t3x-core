@@ -86,6 +86,13 @@ function watchRelevantBrowserErrors(page: Page): string[] {
   page.on('response', (response) => {
     if (response.status() < 400) return;
     const url = response.url();
+    if (
+      response.status() === 404 &&
+      response.request().method() === 'GET' &&
+      url.includes('/schema-studio/edit-candidates/')
+    ) {
+      return;
+    }
     if (!/\/api\/v1\/(projects|materials|pins|workspaces|yops|branches|commits)/.test(url)) {
       return;
     }

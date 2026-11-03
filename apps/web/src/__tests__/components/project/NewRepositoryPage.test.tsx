@@ -53,6 +53,7 @@ it('shows General and Configuration with optional README and tags inputs but no 
   expect(screen.getByRole('region', { name: 'General' })).toBeInTheDocument();
   expect(screen.getByRole('region', { name: 'Configuration' })).toBeInTheDocument();
   expect(screen.getByRole('checkbox', { name: 'Initialize README' })).not.toBeChecked();
+  expect(screen.getByRole('checkbox', { name: 'Initialize PRD starter' })).not.toBeChecked();
   expect(screen.getByRole('textbox', { name: 'Tags', exact: true })).toBeInTheDocument();
   expect(container.querySelector('input[type="file"]')).toBeNull();
   expect(screen.queryByText(/Schema|\.gitignore|Add license/i)).not.toBeInTheDocument();
@@ -110,6 +111,7 @@ it('adds and removes hashtag chips and submits unfinished input with README init
   render(<NewRepositoryPage />);
   fireEvent.change(screen.getByLabelText('Repository name'), { target: { value: 'Final-Name' } });
   fireEvent.click(screen.getByRole('checkbox', { name: 'Initialize README' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Initialize PRD starter' }));
   const input = screen.getByRole('textbox', { name: 'Tags', exact: true });
   for (const tag of [' 中文 ', 'Dev', '中文', 'Remove me', '#Existing']) {
     fireEvent.change(input, { target: { value: tag } });
@@ -128,6 +130,7 @@ it('adds and removes hashtag chips and submits unfinished input with README init
     expect(mocks.create).toHaveBeenCalledWith(
       expect.objectContaining({
         initializeReadme: true,
+        starter: 'prd-v1',
         tags: ['中文', 'Dev', '#Existing', 'case'],
       })
     )

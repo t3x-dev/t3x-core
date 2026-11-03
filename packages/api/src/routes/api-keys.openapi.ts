@@ -9,11 +9,19 @@
 
 import { randomBytes } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { API_KEY_VALUE_PREFIX, type ApiKey, isTransitionWriteScope } from '@t3x-dev/core';
-import { createApiKey, findApiKeyById, listApiKeys, revokeApiKey } from '@t3x-dev/storage';
+import { API_KEY_VALUE_PREFIX, type ApiKey } from '@t3x-dev/core';
+import {
+  createApiKey,
+  findApiKeyById,
+  findNamespaceById,
+  listApiKeys,
+  revokeApiKey,
+} from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertNamespaceAccess } from '../lib/namespace-access';
 import { assertProjectAccess } from '../lib/project-access';
+import { getRequestPrincipal } from '../lib/request-principal';
 import { pinoLogger } from '../middleware/logger';
 import {
   ApiKeyCreatedResponse,
@@ -27,11 +35,10 @@ function toSafeApiKey({ key_hash, user_id, ...safe }: Record<string, unknown>) {
   return safe;
 }
 
-/** Extract userId from API key context (set by auth middleware). */
+/** Extract the owning user from the trusted Session/Credential principal. */
 // biome-ignore lint/suspicious/noExplicitAny: generic error handler
 function getUserId(c: any): string | null {
-  const apiKey = c.get('apiKey') as ApiKey | undefined;
-  return apiKey?.user_id ?? null;
+  return getRequestPrincipal(c)?.userId ?? null;
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: generic route context
@@ -103,23 +110,13 @@ apiKeysRoutes.openapi(createApiKeyRoute, async (c) => {
       const access = await assertProjectAccess(c, db, body.project_id);
       if (access instanceof Response) return access;
     }
-    if (
-      body.principal_kind !== 'human' &&
-      body.transition_scopes.some(isTransitionWriteScope) &&
-      body.project_id === undefined
-    ) {
-      return errorResponse(
-        c,
-        'INVALID_REQUEST',
-        'Agent and service Transition write credentials must be project-scoped'
-      );
-    }
-    if (body.principal_kind !== 'human' && body.project_id === undefined && userId === null) {
-      return errorResponse(
-        c,
-        'INVALID_REQUEST',
-        'Global agent and service credentials require an authenticated owning user'
-      );
+    if (body.namespace_id) {
+      const namespace = await findNamespaceById(db, body.namespace_id);
+      if (!namespace) {
+        return errorResponse(c, 'NOT_FOUND', `Namespace not found: ${body.namespace_id}`);
+      }
+      const denied = await assertNamespaceAccess(c, db, namespace, 'namespace:read');
+      if (denied) return denied;
     }
 
     // Generate a random key value
@@ -128,9 +125,13 @@ apiKeysRoutes.openapi(createApiKeyRoute, async (c) => {
     const apiKey = await createApiKey(db, {
       name: body.name,
       projectId: body.project_id,
+      namespaceId: body.namespace_id,
       userId: userId ?? undefined,
       principalKind: body.principal_kind,
+      credentialKind: body.credential_kind,
+      delegatorUserId: body.principal_kind === 'human' ? undefined : (userId ?? undefined),
       transitionScopes: body.transition_scopes,
+      expiresAt: body.expires_at ? new Date(body.expires_at) : undefined,
       keyValue: rawKey,
     });
 
@@ -143,8 +144,12 @@ apiKeysRoutes.openapi(createApiKeyRoute, async (c) => {
           key_prefix: apiKey.key_prefix,
           name: apiKey.name,
           project_id: apiKey.project_id,
+          namespace_id: apiKey.namespace_id,
           principal_kind: apiKey.principal_kind,
+          credential_kind: apiKey.credential_kind,
+          delegator_user_id: apiKey.delegator_user_id,
           transition_scopes: apiKey.transition_scopes,
+          expires_at: apiKey.expires_at,
           created_at: apiKey.created_at,
         },
       },
@@ -169,6 +174,7 @@ const listApiKeysRoute = createRoute({
   request: {
     query: z.object({
       project_id: z.string().optional(),
+      namespace_id: z.string().optional(),
     }),
   },
   responses: {
@@ -184,14 +190,18 @@ const listApiKeysRoute = createRoute({
 });
 
 apiKeysRoutes.openapi(listApiKeysRoute, async (c) => {
-  const { project_id } = c.req.valid('query');
+  const { project_id, namespace_id } = c.req.valid('query');
   const userId = getUserId(c);
 
   try {
     const denied = rejectNonHumanAdministrator(c);
     if (denied) return denied;
     const db = await getDB();
-    const keys = await listApiKeys(db, { projectId: project_id, userId: userId ?? undefined });
+    const keys = await listApiKeys(db, {
+      projectId: project_id,
+      namespaceId: namespace_id,
+      userId: userId ?? undefined,
+    });
 
     return c.json({
       success: true as const,
@@ -217,6 +227,9 @@ const revokeApiKeyRoute = createRoute({
     params: z.object({
       id: z.string().min(1),
     }),
+    query: z.object({
+      reason: z.enum(['manual', 'rotated', 'compromised']).optional().default('manual'),
+    }),
   },
   responses: {
     200: {
@@ -236,6 +249,7 @@ const revokeApiKeyRoute = createRoute({
 
 apiKeysRoutes.openapi(revokeApiKeyRoute, async (c) => {
   const { id } = c.req.valid('param');
+  const { reason } = c.req.valid('query');
   const userId = getUserId(c);
 
   try {
@@ -253,7 +267,7 @@ apiKeysRoutes.openapi(revokeApiKeyRoute, async (c) => {
       return errorResponse(c, 'API_KEY_NOT_FOUND', `API key not found: ${id}`);
     }
 
-    const revoked = await revokeApiKey(db, id);
+    const revoked = await revokeApiKey(db, id, reason);
     if (!revoked) {
       return errorResponse(c, 'DELETE_FAILED', 'Failed to revoke API key');
     }

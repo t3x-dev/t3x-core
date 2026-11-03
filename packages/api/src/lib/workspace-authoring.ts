@@ -27,6 +27,7 @@ import {
   findWorkspaceDraft,
   getTransitionProposalPreparation,
   getTransitionRefHead,
+  getTransitionViewForCommit,
   listTransitionProposalsForWorkspace,
   NotFoundError,
   transactWorkspaceAuthoring,
@@ -41,6 +42,7 @@ import {
 import {
   buildWorkspaceSchemaReview,
   captureWorkspaceSchema,
+  unboundWorkspaceSchema,
   workspaceSchemaReviewHasChanges,
 } from './workspace-schema-review';
 
@@ -186,6 +188,19 @@ export async function initializeWorkspaceAuthoring(
     if (head.head !== input.expectedRefHead)
       throw new DraftAuthoringConflictError('Ref head changed');
     const base = head.format === 'empty' ? createYOpsState({}) : head.state;
+    const view =
+      head.format === 'empty' || workspace.workspaceSchemaBase !== undefined
+        ? null
+        : await getTransitionViewForCommit(tx, {
+            projectId: input.projectId,
+            refName,
+            commitId: head.head,
+          });
+    const workspaceSchemaBase =
+      workspace.workspaceSchemaBase ??
+      (view?.mode === 'transition' && view.checks.validation.runs.length === 0
+        ? { refHead: head.head, snapshot: unboundWorkspaceSchema() }
+        : undefined);
     const operations = (workspace.yopsDraft as { operations?: unknown[] } | undefined)?.operations;
     const hasLegacyEdits = Boolean(
       operations?.length || draft.nodes?.length || draft.semantic_points?.length
@@ -221,7 +236,12 @@ export async function initializeWorkspaceAuthoring(
       initialization: { requestId: input.actionId, facts },
     };
     return {
-      workspace: { ...workspace, authoringLedger: ledger, authoringBasis: basis },
+      workspace: {
+        ...workspace,
+        authoringLedger: ledger,
+        authoringBasis: basis,
+        ...(workspaceSchemaBase === undefined ? {} : { workspaceSchemaBase }),
+      },
       value: { basis, ledger },
     };
   });

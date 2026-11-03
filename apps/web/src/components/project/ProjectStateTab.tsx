@@ -510,7 +510,7 @@ export function ProjectStateTab({
     branch: branchFocus,
     returnTo: currentStateReturnTo,
   });
-  const canvasHref = getProjectIdCanvasPath(projectId);
+  const canvasHref = `${getProjectIdCanvasPath(projectId)}&branch=${encodeURIComponent(branchFocus)}`;
   const historicalReturnHref = safeInternalReturnTo(searchParams.get('returnTo'), '');
   const schemaHref = `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ tab: 'schemas', branch: branchFocus }).toString()}`;
   const workspaceHref = getProjectIdWorkspacePath(projectId, { branch: branchFocus });
@@ -1086,6 +1086,7 @@ function StateCanvasView({
           focusedBranch={branch}
           focusedCommitHash={focusedCommitHash}
           projectName={projectName}
+          stateHref={`${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ branch, view: 'overview' })}`}
         />
       </div>
     </section>

@@ -140,7 +140,7 @@ test('reviews a real published upgrade and retains the exact target Workspace th
     });
     expect(reviewed.ok(), await reviewed.text()).toBe(true);
     const initial = (await reviewed.json()).data;
-    const applied = await request.post(`${root}/schema-studio/apply`, {
+    const appliedResponse = await request.post(`${root}/schema-studio/apply`, {
       data: {
         candidateIds: [first.id],
         workspaceId: targetWorkspaceId,
@@ -148,7 +148,8 @@ test('reviews a real published upgrade and retains the exact target Workspace th
         reviewHash: initial.reviewHash,
       },
     });
-    expect(applied.ok(), await applied.text()).toBe(true);
+    expect(appliedResponse.ok(), await appliedResponse.text()).toBe(true);
+    const appliedBinding = (await appliedResponse.json()).data.binding;
     const upgradeCandidateResponse = await request.post(`${root}/schema-studio/candidates`, {
       data: { sourceProjectId: projectId, canonicalName, version: '2.0.0' },
     });
@@ -173,16 +174,23 @@ test('reviews a real published upgrade and retains the exact target Workspace th
     await expect(page.getByLabel('Target Workspace')).toHaveValue(targetWorkspaceId);
     await expect(page.getByRole('button', { name: 'Review Schema changes', exact: true })).toBeEnabled();
     await page.getByRole('button', { name: 'Review Schema changes', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'Review Schema changes' });
-    await expect(dialog).toContainText('Branch workspace: target');
-    await expect(dialog).toContainText('system_architecture');
+    await expect(page.getByRole('heading', { name: 'Review Schema changes' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Change summary' })).toContainText('target');
+    await expect(page.getByRole('region', { name: 'Schema review changes' })).toContainText(
+      'system_architecture'
+    );
     await page.screenshot({
       path: testInfo.outputPath('upgrade-review.png'),
       animations: 'disabled',
     });
-    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await page.goBack({ waitUntil: 'networkidle' });
+    await expect(page.getByRole('region', { name: 'Schema Studio' })).toBeVisible();
     const current = await workspace(targetWorkspaceId);
-    expect(current.schemaBindings[0].studioSources[0].version).toBe('1.0.0');
+    expect(appliedBinding.version).toBe('1.0.0');
+    expect(current.schemaBindings[0]).toMatchObject({
+      canonicalName,
+      version: '2.0.0',
+    });
     expect(current.schemaReview.verdict).toBe('needs_review');
     expect((await workspace(unrelatedWorkspaceId)).schemaBindings).toEqual([]);
     const candidates = (await (await request.get(`${root}/schema-studio/candidates`)).json()).data

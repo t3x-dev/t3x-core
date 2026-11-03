@@ -43,7 +43,11 @@ test.describe('Canvas edge rhythm', () => {
     const canvas = new CanvasPage(page);
     await canvas.goto(projectId);
     await canvas.waitForLoad();
-    await canvas.clickNode(featureCommitHash);
+    await canvas
+      .getNodeByHash(featureCommitHash)
+      .first()
+      .locator(`[data-branch-highlight="${featureBranch}"]`)
+      .click();
 
     await expect
       .poll(() => page.locator('g[data-edge-rhythm="selected"][data-edge-path-tone="branch"]').count())

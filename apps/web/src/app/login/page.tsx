@@ -4,7 +4,7 @@
  * Login Page (Local Auth)
  *
  * Username + password login/register for self-hosted deployments.
- * On success, stores the API key in a cookie and redirects to the post-auth destination.
+ * On success, the BFF sets an HttpOnly Session cookie and this page stores only user presentation.
  */
 
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -34,27 +34,7 @@ function LoginForm() {
     try {
       const session = await authenticate({ mode, username, password, name });
 
-      // MCP callback: redirect token to local MCP server instead of storing cookie
-      const mcpCallback = searchParams.get('mcp_callback');
-      const state = searchParams.get('state');
-
-      if (mcpCallback && state) {
-        try {
-          const callbackTarget = new URL(mcpCallback);
-          if (callbackTarget.hostname !== '127.0.0.1' && callbackTarget.hostname !== 'localhost') {
-            setError('Invalid callback address: only localhost is allowed');
-            return;
-          }
-          callbackTarget.searchParams.set('token', session.api_key);
-          callbackTarget.searchParams.set('state', state);
-          window.location.href = callbackTarget.toString();
-        } catch {
-          setError('Invalid callback URL');
-        }
-        return;
-      }
-
-      // Normal flow: store session and redirect
+      // The Session credential is server-only; MCP/CLI use separately issued Bearer credentials.
       persistSession(session);
       const personalNamespace =
         mode === 'login' && callbackUrl === '/' ? await getCurrentPersonalNamespace() : null;

@@ -140,11 +140,16 @@ it('reports repository creation errors and permits a corrected retry', async () 
   );
 });
 
-it('sends README and normalized tags in the creation request, retaining them across setup retries', async () => {
+it('sends the starter, README and normalized tags in the creation request, retaining them across setup retries', async () => {
   mocks.conversation.mockRejectedValueOnce(new Error('Unavailable'));
   const { result } = renderHook(() => useRepositorySetup());
   await act(async () => {
-    await result.current.create({ ...input, initializeReadme: true, tags: ['中文', 'Dev'] });
+    await result.current.create({
+      ...input,
+      initializeReadme: true,
+      starter: 'prd-v1',
+      tags: ['中文', 'Dev'],
+    });
   });
   await act(async () => {
     await result.current.create(input);
@@ -153,7 +158,7 @@ it('sends README and normalized tags in the creation request, retaining them acr
     'Test',
     { description: 'Description' },
     'team',
-    undefined,
+    'prd-v1',
     { initialize_readme: true, tags: ['中文', 'Dev'] }
   );
   expect(mocks.update).not.toHaveBeenCalled();

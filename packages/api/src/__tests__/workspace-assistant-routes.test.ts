@@ -148,7 +148,7 @@ describe('Workspace Assistant streaming boundary', () => {
         userId: 'hosted-user',
         accountId: 'account-hosted',
         sessionId: 'session-hosted',
-        credential: { kind: 'session', id: 'session-hosted', projectId: null },
+        credential: { kind: 'session', id: 'session-hosted', projectId: null, namespaceId: null },
         scopes: ['transition:inspect'],
         ingress: 'http',
       } satisfies RequestPrincipal);

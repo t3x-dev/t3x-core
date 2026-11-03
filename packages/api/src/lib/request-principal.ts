@@ -1,9 +1,21 @@
 import type { RequestPrincipal } from '@t3x-dev/application';
-import type { ApiKey } from '@t3x-dev/core';
+import type { ApiKey, TransitionScope } from '@t3x-dev/core';
+import type { WebSession } from '@t3x-dev/storage';
 import type { Context } from 'hono';
 import type { AppEnv } from '../types';
 
 type ApiIngress = Extract<RequestPrincipal['ingress'], 'http' | 'websocket'>;
+
+export const WEB_SESSION_TOKEN_PREFIX = 't3xs_';
+export const WEB_SESSION_SCOPES = [
+  'transition:inspect',
+  'transition:propose',
+  'transition:verify',
+  'transition:decide:accept',
+  'transition:decide:reject',
+  'transition:commit:create',
+  'transition:ref:advance',
+] satisfies TransitionScope[];
 
 function freezePrincipal(principal: RequestPrincipal): RequestPrincipal {
   return Object.freeze({
@@ -33,8 +45,8 @@ export function requestPrincipalFromApiKey(apiKey: ApiKey, ingress: ApiIngress):
       id: directHuman ? `user:${humanUserId}` : `${apiKey.principal_kind}:api-key:${apiKey.id}`,
     },
     delegator:
-      apiKey.principal_kind !== 'human' && humanUserId !== null
-        ? { kind: 'human', id: `user:${humanUserId}` }
+      apiKey.principal_kind !== 'human' && apiKey.delegator_user_id
+        ? { kind: 'human', id: `user:${apiKey.delegator_user_id}` }
         : null,
     workspaceOwner:
       humanUserId !== null ? { kind: 'human', principal_id: humanUserId } : { ...subject },
@@ -42,11 +54,30 @@ export function requestPrincipalFromApiKey(apiKey: ApiKey, ingress: ApiIngress):
     accountId: null,
     sessionId: null,
     credential: {
-      kind: 'api_key',
+      kind: apiKey.credential_kind ?? 'api_key',
       id: apiKey.id,
       projectId: apiKey.project_id,
+      namespaceId: apiKey.namespace_id ?? null,
     },
     scopes: apiKey.transition_scopes,
+    ingress,
+  });
+}
+
+export function requestPrincipalFromSession(
+  session: WebSession,
+  ingress: ApiIngress
+): RequestPrincipal {
+  return freezePrincipal({
+    subject: { kind: 'human', principal_id: session.user_id },
+    actor: { kind: 'human', id: `user:${session.user_id}` },
+    delegator: null,
+    workspaceOwner: { kind: 'human', principal_id: session.user_id },
+    userId: session.user_id,
+    accountId: null,
+    sessionId: session.id,
+    credential: { kind: 'session', id: session.id, projectId: null, namespaceId: null },
+    scopes: WEB_SESSION_SCOPES,
     ingress,
   });
 }
@@ -60,7 +91,7 @@ export function runnerRequestPrincipal(): RequestPrincipal {
     userId: null,
     accountId: null,
     sessionId: null,
-    credential: { kind: 'runner_service', id: null, projectId: null },
+    credential: { kind: 'runner_service', id: null, projectId: null, namespaceId: null },
     scopes: [],
     ingress: 'runner',
   });
@@ -75,7 +106,7 @@ export function localDevelopmentRequestPrincipal(): RequestPrincipal {
     userId: null,
     accountId: null,
     sessionId: null,
-    credential: { kind: 'local_dev', id: null, projectId: null },
+    credential: { kind: 'local_dev', id: null, projectId: null, namespaceId: null },
     scopes: [],
     ingress: 'local',
   });
@@ -93,8 +124,13 @@ export function getRequestPrincipal(c: Context): RequestPrincipal | undefined {
           ...apiKey,
           user_id: apiKey.user_id ?? null,
           project_id: apiKey.project_id ?? null,
+          namespace_id: apiKey.namespace_id ?? null,
           principal_kind: apiKey.principal_kind ?? 'human',
+          credential_kind: apiKey.credential_kind ?? 'api_key',
+          delegator_user_id: apiKey.delegator_user_id ?? null,
           transition_scopes: apiKey.transition_scopes ?? [],
+          expires_at: apiKey.expires_at ?? null,
+          revocation_reason: apiKey.revocation_reason ?? null,
         },
         'http'
       )

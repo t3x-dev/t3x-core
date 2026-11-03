@@ -459,6 +459,18 @@ export {
   insertSegmentEmbedding,
   insertSegmentEmbeddingsBatch,
 } from './segmentEmbeddings';
+// Browser sessions
+export {
+  type CreateSessionInput,
+  createSession,
+  findActiveSessionByToken,
+  findSessionById,
+  listActiveSessions,
+  revokeSession,
+  type SessionAuthMethod,
+  touchSessionLastSeen,
+  type WebSession,
+} from './sessions';
 // Share Tokens
 export {
   type CreateShareTokenInput,
@@ -627,6 +639,10 @@ export {
   findUserByEmail,
   findUserById,
   findUserByUsername,
+  normalizeEmail,
+  normalizeUsername,
+  type UnlinkAccountResult,
+  unlinkAccount,
   updateUser,
 } from './users';
 // Workspace Validation Runs

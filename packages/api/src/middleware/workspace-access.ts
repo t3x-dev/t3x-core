@@ -1,8 +1,10 @@
 import { findWorkspaceDraftOwner, type WorkspaceOwner } from '@t3x-dev/storage';
 import type { Context, Next } from 'hono';
 import { isAuthenticationDisabled } from '../lib/auth-config';
+import { logAuthorizationDenial } from '../lib/authorization-denial-audit';
 import { getDB } from '../lib/db';
 import { createError } from '../lib/errors';
+import { projectActionForRequest } from '../lib/project-access';
 import { getRequestPrincipal } from '../lib/request-principal';
 
 /**
@@ -65,7 +67,15 @@ export async function workspaceAccessMiddleware(c: Context, next: Next) {
   const identity = await workspaceRouteIdentity(c);
   if (!identity) return next();
   const owner = workspaceOwnerFromContext(c);
-  if (!owner) return c.json(createError('FORBIDDEN', 'Access denied'), 403);
+  if (!owner) {
+    logAuthorizationDenial({
+      principal: getRequestPrincipal(c),
+      action: projectActionForRequest(c),
+      resource: { kind: 'workspace', id: identity.workspaceId, project_id: identity.projectId },
+      reason: 'missing_workspace_owner',
+    });
+    return c.json(createError('FORBIDDEN', 'Access denied'), 403);
+  }
   const storedOwner = await findWorkspaceDraftOwner(
     await getDB(),
     identity.projectId,
@@ -75,6 +85,12 @@ export async function workspaceAccessMiddleware(c: Context, next: Next) {
     storedOwner !== undefined &&
     (storedOwner === null || storedOwner.kind !== owner.kind || storedOwner.id !== owner.id)
   ) {
+    logAuthorizationDenial({
+      principal: getRequestPrincipal(c),
+      action: projectActionForRequest(c),
+      resource: { kind: 'workspace', id: identity.workspaceId, project_id: identity.projectId },
+      reason: 'workspace_owner_mismatch',
+    });
     return c.json(createError('NOT_FOUND', 'Workspace not found'), 404);
   }
   return next();

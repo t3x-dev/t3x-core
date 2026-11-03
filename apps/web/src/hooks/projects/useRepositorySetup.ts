@@ -1,3 +1,4 @@
+import type { CreateProjectInput } from '@t3x-dev/api-client';
 import { useRef, useState } from 'react';
 import { createConversation } from '@/commands/conversations';
 import { createProject } from '@/commands/projects';
@@ -15,6 +16,7 @@ export interface RepositorySetupInput {
   owner: string;
   visibility: 'private' | 'unlisted' | 'public';
   initializeReadme?: boolean;
+  starter?: CreateProjectInput['starter'];
   tags?: string[];
 }
 
@@ -42,7 +44,7 @@ export function useRepositorySetup() {
         config.name.trim(),
         { description: config.description.trim() },
         config.owner,
-        undefined,
+        config.starter,
         { initialize_readme: config.initializeReadme ?? false, tags: config.tags ?? [] }
       );
       setStarted(true);

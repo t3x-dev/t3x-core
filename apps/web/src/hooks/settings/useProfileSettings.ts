@@ -6,6 +6,7 @@ import {
   type ProfileSettings,
   revokeProfileSession,
   type UpdateProfileSettings,
+  unlinkAuthAccount,
   updateProfileSettings,
 } from '@/infrastructure/auth';
 
@@ -57,5 +58,17 @@ export function useProfileSettings(enabled = true) {
     );
   }, []);
 
-  return { data, loading, saving, error, retry: load, save, revoke };
+  const unlink = useCallback(async (id: string) => {
+    await unlinkAuthAccount(id);
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            linked_accounts: current.linked_accounts.filter((account) => account.id !== id),
+          }
+        : current
+    );
+  }, []);
+
+  return { data, loading, saving, error, retry: load, save, revoke, unlink };
 }

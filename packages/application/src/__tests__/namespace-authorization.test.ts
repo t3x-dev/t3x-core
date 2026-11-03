@@ -84,6 +84,24 @@ describe('stored project authority', () => {
     });
   });
 
+  it('treats suspended memberships and project grants as inactive', () => {
+    const suspendedMember = authorizationFixture('organization_owner');
+    if (!suspendedMember.namespace_membership) throw new Error('fixture requires membership');
+    suspendedMember.namespace_membership.status = 'suspended';
+    expect(evaluateProjectAction(suspendedMember, 'project:read')).toEqual({
+      allowed: false,
+      reason: 'inactive_membership',
+    });
+
+    const suspendedGrant = authorizationFixture('project_guest_editor');
+    if (!suspendedGrant.project_grant) throw new Error('fixture requires project grant');
+    suspendedGrant.project_grant.status = 'suspended';
+    expect(evaluateProjectAction(suspendedGrant, 'project:read')).toEqual({
+      allowed: false,
+      reason: 'inactive_project_grant',
+    });
+  });
+
   it('fails closed when a project grant has expired or has an invalid timestamp', () => {
     const expired = authorizationFixture('project_guest_editor');
     if (!expired.project_grant) throw new Error('fixture requires project grant');
@@ -123,6 +141,25 @@ describe('stored project authority', () => {
     expect(evaluateProjectAction(unscoped, 'project:read')).toEqual({
       allowed: false,
       reason: 'machine_principal_requires_project_scope',
+    });
+  });
+
+  it('allows a human credential within its namespace scope only', () => {
+    const scoped = authorizationFixture('organization_owner');
+    scoped.credential_scope = {
+      project_id: null,
+      namespace_id: scoped.project.namespace_id,
+      actions: ['project:read'],
+    };
+    expect(evaluateProjectAction(scoped, 'project:read')).toEqual({
+      allowed: true,
+      source: 'namespace_membership',
+    });
+
+    scoped.credential_scope.namespace_id = 'namespace_other';
+    expect(evaluateProjectAction(scoped, 'project:read')).toEqual({
+      allowed: false,
+      reason: 'credential_namespace_mismatch',
     });
   });
 });
@@ -191,6 +228,32 @@ describe('stored namespace authority', () => {
         'namespace:read'
       )
     ).toEqual({ allowed: false, reason: 'machine_principal_requires_namespace_scope' });
+  });
+
+  it('intersects human namespace authority with its Credential scope', () => {
+    const owner = authorizationFixture('organization_owner');
+    const facts = {
+      principal: owner.principal,
+      namespace: { namespace_id: owner.project.namespace_id },
+      namespace_membership: owner.namespace_membership,
+      credential_scope: { project_id: null, namespace_id: owner.project.namespace_id },
+    };
+
+    expect(evaluateNamespaceAction(facts, 'namespace:read')).toEqual({
+      allowed: true,
+      source: 'namespace_membership',
+    });
+    facts.credential_scope.namespace_id = 'namespace_other';
+    expect(evaluateNamespaceAction(facts, 'namespace:read')).toEqual({
+      allowed: false,
+      reason: 'credential_namespace_mismatch',
+    });
+    facts.credential_scope.namespace_id = null;
+    facts.credential_scope.project_id = 'project_team';
+    expect(evaluateNamespaceAction(facts, 'namespace:read')).toEqual({
+      allowed: false,
+      reason: 'credential_project_scope_denied',
+    });
   });
 });
 

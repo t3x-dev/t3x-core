@@ -931,6 +931,7 @@ function ComposeSurface({
         operations: selected.map((item) => item.operation),
         reason: stagedManualReason(selected),
       });
+      await controller.refreshFromServer();
       setStaged(remainingStagedItems(staged));
     } catch (cause) {
       setStructureError(
@@ -939,7 +940,7 @@ function ComposeSurface({
     } finally {
       setStructurePending(false);
     }
-  }, [activity, staged, publishedCurrent]);
+  }, [activity, controller, staged, publishedCurrent]);
   const stagingControls = useMemo(
     () => ({
       items: staged,

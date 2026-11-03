@@ -20,6 +20,6 @@ describe('local runtime network boundary', () => {
 
     expect(env.HOSTNAME).toBe(LOCAL_RUNTIME_HOST);
     expect(env.AUTH_DISABLED).toBe('true');
-    expect(env.NEXT_PUBLIC_API_URL).toBe(`http://${LOCAL_RUNTIME_HOST}:8000`);
+    expect(env.T3X_API_URL).toBe(`http://${LOCAL_RUNTIME_HOST}:8000`);
   });
 });

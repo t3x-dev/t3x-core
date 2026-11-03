@@ -9,17 +9,16 @@ describe('RequestPrincipal contract', () => {
   it('pins the closed credential and ingress values', () => {
     expect(REQUEST_PRINCIPAL_CREDENTIAL_KINDS).toEqual([
       'api_key',
+      'pat',
+      'mcp',
+      'agent',
+      'service',
       'session',
       'runner_service',
       'deployment',
       'local_dev',
     ]);
-    expect(REQUEST_PRINCIPAL_INGRESSES).toEqual([
-      'http',
-      'websocket',
-      'runner',
-      'local',
-    ]);
+    expect(REQUEST_PRINCIPAL_INGRESSES).toEqual(['http', 'websocket', 'runner', 'local']);
   });
 
   it('keeps authorization, audit, ownership and credential identity separate', () => {
@@ -31,7 +30,7 @@ describe('RequestPrincipal contract', () => {
       userId: 'user_a',
       accountId: null,
       sessionId: null,
-      credential: { kind: 'api_key', id: 'ak_service', projectId: 'proj_a' },
+      credential: { kind: 'api_key', id: 'ak_service', projectId: 'proj_a', namespaceId: null },
       scopes: ['transition:inspect'],
       ingress: 'http',
     };

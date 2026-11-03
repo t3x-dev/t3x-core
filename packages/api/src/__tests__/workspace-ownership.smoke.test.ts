@@ -22,6 +22,7 @@ vi.mock('../lib/db', () => ({
 import { createApp } from '../app';
 import { replayEventsSince } from '../lib/event-replay';
 import { commitRepositoryYOpsState } from '../lib/repository-state-transition';
+import { pinoLogger } from '../middleware/logger';
 
 const keyA = 't3xk_workspace_test_a_0123456789abcdef';
 const keyAMcp = 't3xk_workspace_test_a_mcp_0123456789ab';
@@ -156,6 +157,7 @@ describe('principal-private Workspace boundary', () => {
   });
 
   it('lets test-a Web and MCP credentials read one Draft but hides it from test-b', async () => {
+    const denial = vi.spyOn(pinoLogger, 'warn').mockImplementation(() => undefined);
     await expect(mcpApiClient().workspaces.get(projectId, 'workspace-a')).resolves.toMatchObject({
       workspace: { id: 'workspace-a', title: 'A private draft' },
     });
@@ -203,6 +205,17 @@ describe('principal-private Workspace boundary', () => {
         error: { code: 'NOT_FOUND', message: 'Workspace not found' },
       });
     }
+    expect(denial).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'authorization.denied',
+        entrypoint: 'http',
+        action: 'project:read',
+        resource: { kind: 'workspace', id: 'workspace-a', project_id: projectId },
+        reason: 'workspace_owner_mismatch',
+      }),
+      'authorization denied'
+    );
+    denial.mockRestore();
   });
 
   it('blocks test-b write, reconcile, Review and Commit before Draft metadata is read', async () => {

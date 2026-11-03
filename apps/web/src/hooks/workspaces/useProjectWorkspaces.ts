@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatUserFacingError } from '@/domain/format/errors';
-import { API_KEY } from '@/infrastructure/core';
-import { getSessionKey } from '@/infrastructure/session';
 import { fetchProjectWorkspaces } from '@/queries/workspaces';
 import type { WorkspaceCandidate } from '@/types/workspaces';
-import { API_BASE, resolveWebSocketBase } from '@/utils/apiBase';
+import { resolveWebSocketBase } from '@/utils/apiBase';
 
 const REALTIME_RECONNECT_DELAY = 5000;
 const MAX_SEEN_EVENT_IDS = 200;
@@ -113,10 +111,8 @@ export function useProjectWorkspaces(
     const connect = () => {
       if (disposed) return;
       const params = new URLSearchParams({ project_id: projectId });
-      const token = API_KEY || getSessionKey();
-      if (token) params.set('token', token);
       const wsBase = resolveWebSocketBase(
-        API_BASE,
+        '',
         typeof window === 'undefined' ? undefined : window.location
       );
       const nextSocket = new WebSocket(`${wsBase}/ws?${params.toString()}`);

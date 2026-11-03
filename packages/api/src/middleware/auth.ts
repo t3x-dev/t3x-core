@@ -14,7 +14,13 @@
  */
 
 import type { RequestPrincipal } from '@t3x-dev/application';
-import { type AnyDB, findApiKeyByValue, touchLastUsed } from '@t3x-dev/storage';
+import {
+  type AnyDB,
+  findActiveSessionByToken,
+  findApiKeyByValue,
+  touchLastUsed,
+  touchSessionLastSeen,
+} from '@t3x-dev/storage';
 import type { Context, Next } from 'hono';
 import { isAuthenticationDisabled } from '../lib/auth-config';
 import { getDB } from '../lib/db';
@@ -22,8 +28,10 @@ import { createError } from '../lib/errors';
 import {
   localDevelopmentRequestPrincipal,
   requestPrincipalFromApiKey,
+  requestPrincipalFromSession,
   runnerRequestPrincipal,
   setRequestPrincipal,
+  WEB_SESSION_TOKEN_PREFIX,
 } from '../lib/request-principal';
 import { isRunnerServiceRoute, runnerServiceAuthenticationError } from '../lib/runner-service-auth';
 import type { AppEnv } from '../types';
@@ -161,6 +169,22 @@ export async function authMiddleware(c: Context<AppEnv>, next: Next) {
 
   try {
     const db = await getDB();
+    if (keyValue.startsWith(WEB_SESSION_TOKEN_PREFIX)) {
+      const session = await findActiveSessionByToken(db, keyValue);
+      if (!session) {
+        return c.json(createError('UNAUTHORIZED', 'Invalid session'), 401);
+      }
+
+      const identityOverride = rejectIdentityOverride(c);
+      if (identityOverride) return identityOverride;
+
+      c.set('session', session);
+      c.set('userId', session.user_id);
+      setRequestPrincipal(c, requestPrincipalFromSession(session, 'http'));
+      touchSessionLastSeen(db, session.id).catch(() => {});
+      return next();
+    }
+
     const apiKey = await findApiKeyByValue(db, keyValue);
 
     if (!apiKey) {
@@ -200,6 +224,10 @@ export async function verifyBearerToken(
   token: string | null
 ): Promise<RequestPrincipal | null> {
   if (!token) return null;
+  if (token.startsWith(WEB_SESSION_TOKEN_PREFIX)) {
+    const session = await findActiveSessionByToken(db, token);
+    return session ? requestPrincipalFromSession(session, 'websocket') : null;
+  }
   const apiKey = await findApiKeyByValue(db, token);
   if (!apiKey) return null;
   return requestPrincipalFromApiKey(apiKey, 'websocket');

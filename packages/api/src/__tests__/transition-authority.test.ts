@@ -29,12 +29,17 @@ function key(overrides: Partial<ApiKey> = {}) {
       key_hash: 'hash',
       name: 'Agent',
       project_id: 'project_one',
+      namespace_id: null,
       user_id: null,
       principal_kind: 'agent',
+      credential_kind: 'agent',
+      delegator_user_id: null,
       transition_scopes: ['transition:propose'],
+      expires_at: null,
       created_at: '2026-07-31T00:00:00.000Z',
       last_used_at: null,
       revoked_at: null,
+      revocation_reason: null,
       ...overrides,
     },
     'http'
@@ -79,7 +84,13 @@ describe('Transition API authority', () => {
     });
     expect(
       deriveTrustedTransitionPrincipal(
-        key({ id: 'ak_delegated', principal_kind: 'service', user_id: 'user_one' })
+        key({
+          id: 'ak_delegated',
+          principal_kind: 'service',
+          credential_kind: 'service',
+          user_id: 'user_one',
+          delegator_user_id: 'user_one',
+        })
       ).actor
     ).toEqual({
       kind: 'service',

@@ -15,6 +15,21 @@ const allowedPolicies = new Set([
   'public',
   'runner-service',
 ]);
+const allowedProjectActions = new Set([
+  'project:read',
+  'project:edit',
+  'project:delete',
+  'project:restore',
+  'project:visibility:manage',
+  'project:guests:manage',
+  'project:transfer',
+]);
+const allowedNamespaceActions = new Set([
+  'namespace:members:read',
+  'namespace:members:manage',
+  'namespace:invitations:manage',
+  'namespace:ownership:transfer',
+]);
 const approvedPublicRoutes = new Set([
   'app.ts::GET /docs',
   'app.ts::GET /openapi.json',
@@ -100,6 +115,19 @@ for (const route of inventory.routes) {
   }
   if (route.policy === 'public' && !approvedPublicRoutes.has(key)) {
     errors.push(`unapproved public route classification: ${key}`);
+  }
+  if (route.policy === 'project' && !allowedProjectActions.has(route.action)) {
+    errors.push(`missing or invalid project action for ${key}`);
+  }
+  if (
+    route.action !== undefined &&
+    !allowedProjectActions.has(route.action) &&
+    !allowedNamespaceActions.has(route.action)
+  ) {
+    errors.push(`invalid action '${route.action}' for ${key}`);
+  }
+  if (route.path.startsWith('/v1/namespaces/{id}/') && !allowedNamespaceActions.has(route.action)) {
+    errors.push(`missing or invalid namespace action for ${key}`);
   }
   inventoryByKey.set(key, route);
 }

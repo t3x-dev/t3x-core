@@ -45,7 +45,7 @@ test.describe('Canvas grayscale readability', () => {
     await canvas.waitForLoad();
 
     await expect(page.getByTestId('node-kind-source').first()).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByTestId('node-kind-pending').first()).toBeVisible();
+    await expect(page.locator('[data-node-semantic-kind="pending"]').first()).toBeVisible();
     await expect(page.getByTestId('node-kind-committed').first()).toBeVisible();
     await expect(page.getByTestId('node-kind-leaf').first()).toBeVisible();
 

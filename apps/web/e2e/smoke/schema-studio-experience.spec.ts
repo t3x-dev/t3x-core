@@ -24,38 +24,36 @@ test('Studio combines exact sources, reviews apply, and returns to active diagno
     await page.getByLabel('Target Workspace').selectOption(workspaceId);
     await expect(page.getByRole('button', { name: 'Review Schema changes', exact: true })).toBeEnabled();
     await page.getByRole('button', { name: 'Manage sources', exact: true }).click();
-    // Legacy V1 requires are suggestions in open V2 composition, not mandatory locks.
-    await page.getByRole('checkbox', { name: 'Select Technology Stack 1.0.0' }).check();
-    await page.getByRole('checkbox', { name: 'Select System Architecture 1.0.0' }).check();
-    await expect(page.getByRole('checkbox', { name: 'Select System Architecture 1.0.0' })).toBeEnabled();
-    await page.getByRole('checkbox', { name: 'Select Technology Stack 1.0.0' }).uncheck();
-    await page.keyboard.press('Escape');
-    await page.screenshot({ path: testInfo.outputPath('studio-desktop.png'), animations: 'disabled' });
-    await page.getByRole('button', { name: 'Schema actions', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'View YAML', exact: true }).click();
-    await expect(page.getByRole('dialog', { name: 'Schema YAML' })).toContainText('system_architecture');
-    await page.getByRole('dialog', { name: 'Schema YAML' }).getByRole('button', { name: 'Close' }).click();
+    await page.getByRole('button', { name: 'Combine sources…', exact: true }).click();
+    const composition = page.getByRole('dialog', { name: 'Combine Schema sources' });
+    await composition
+      .getByRole('checkbox', { name: 'Combine System Architecture @ 1.0.0' })
+      .check();
+    await expect(
+      composition.getByRole('checkbox', { name: 'Combine PRD Core @ 1.1.0' })
+    ).toBeChecked();
+    await composition.getByRole('button', { name: 'Save combined candidate' }).click();
+    await expect(composition).toBeHidden();
     await page.getByRole('button', { name: 'Review Schema changes', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'Apply exact definition' });
-    await expect(dialog).toContainText('Release planning');
-    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
-    expect((await (await request.get(`${API_BASE}/projects/${projectId}/workspaces/${workspaceId}`)).json()).data.workspace.schemaBindings).toHaveLength(0);
-    await page.getByRole('button', { name: 'Review Schema changes', exact: true }).click();
-    await expect(dialog.getByRole('button', { name: 'Confirm & apply' })).toBeEnabled();
+    await expect(page.getByRole('heading', { name: 'Review Schema changes' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Change summary' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Schema review changes' })).toContainText('system_architecture');
+    expect((await (await request.get(`${API_BASE}/projects/${projectId}/workspaces/${workspaceId}`)).json()).data.workspace.schemaBindings).toHaveLength(1);
+    await expect(page.getByRole('button', { name: 'Approve and commit', exact: true })).toBeEnabled();
     await page.screenshot({ path: testInfo.outputPath('studio-review.png'), animations: 'disabled' });
-    await dialog.getByRole('button', { name: 'Confirm & apply' }).click();
-    await expect(page.getByRole('region', { name: 'Workspace detail' })).toBeVisible();
+    await page.getByRole('button', { name: 'Approve and commit', exact: true }).click();
+    await expect(page.getByText('This revision is committed. Open State to inspect or export it.')).toBeVisible();
     const applied = (await (await request.get(`${API_BASE}/projects/${projectId}/workspaces/${workspaceId}`)).json()).data.workspace;
     expect(applied.schemaBindings[0]).toMatchObject({ mode: 'draft_override', compositionRevision: 1 });
-    expect(applied.schemaBindings[0].studioSources).toHaveLength(2);
+    expect(applied.schemaBindings[0].studioSources).toBeUndefined();
     expect(applied.schemaReview.verdict).toBe('ready');
+    await page.goto(`/project/${projectId}?tab=workspaces&workspace=${workspaceId}`, { waitUntil: 'networkidle' });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: testInfo.outputPath('studio-mobile.png'), animations: 'disabled' });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     const workspaceBox = await page.getByRole('region', { name: 'Workspace detail' }).boundingBox();
     expect(workspaceBox!.x + workspaceBox!.width).toBeLessThanOrEqual(390);
     await page.setViewportSize({ width: 1480, height: 960 });
-    await page.goto(`/project/${projectId}?tab=workspaces&workspace=${workspaceId}`, { waitUntil: 'networkidle' });
     await expect(page.getByRole('region', { name: 'Workspace detail' })).toContainText('Release planning');
     await expect(page.getByLabel('Workspace schema')).not.toHaveValue('');
     await page.screenshot({ path: testInfo.outputPath('studio-active.png'), animations: 'disabled' });

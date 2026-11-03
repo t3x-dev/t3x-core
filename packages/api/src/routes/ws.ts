@@ -2,19 +2,18 @@
  * WebSocket Route — Real-time event stream for conversations and projects.
  *
  * Clients connect to one of:
- *   ws://host/ws?conversation_id=conv_xxx&token=t3xk_...
- *   ws://host/ws?project_id=proj_xxx&token=t3xk_...
- *   ws://host/ws?conversation_id=conv_xxx&project_id=proj_xxx&token=t3xk_...
+ *   ws://host/ws?conversation_id=conv_xxx
+ *   ws://host/ws?project_id=proj_xxx
+ *   ws://host/ws?conversation_id=conv_xxx&project_id=proj_xxx
  *
  * At least one of `conversation_id` / `project_id` must be provided. When both
  * are provided, the connection joins both rooms — `conv:<id>` and
  * `project:<id>` — so that events published to either room are delivered.
  *
  * Authentication:
- *   - Required by default: clients must supply `token=<api_key>` as a query
- *     parameter. The token is validated via `verifyBearerToken`, which looks
- *     up the hashed key in storage. Project subscriptions also enforce the
- *     same project scope and owner checks as HTTP routes.
+ *   - Browsers authenticate with the HttpOnly `t3x-session` cookie.
+ *   - Non-browser callers may continue supplying API/deployment credentials
+ *     as `token=<credential>`, but browser Sessions are forbidden in URLs.
  *   - Skipped only when `AUTH_DISABLED=true` (case-insensitive) in the env.
  *     Mirrors the case-insensitive gate used by `authMiddleware`.
  *
@@ -38,14 +37,17 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { isCredentialKind } from '@t3x-dev/core';
 import { findConversationById, touchLastUsed } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import type { UpgradeWebSocket } from 'hono/ws';
+import { logAuthorizationDenial } from '../lib/authorization-denial-audit';
 import { getDB } from '../lib/db';
 import { createError } from '../lib/errors';
 import type { RealtimeEvent } from '../lib/event-bus';
 import { replayEventsSince } from '../lib/event-replay';
 import { evaluateProjectAccess } from '../lib/project-access';
+import { WEB_SESSION_TOKEN_PREFIX } from '../lib/request-principal';
 import { canReceiveRealtimeEvent, type RoomConnection, roomManager } from '../lib/room-manager';
 import { type BearerTokenVerifier, verifyBearerToken } from '../middleware/auth';
 import { pinoLogger } from '../middleware/logger';
@@ -61,6 +63,41 @@ const RESERVED_IDENTITY_QUERY_FIELDS = [
   'principal',
 ] as const;
 
+function readSessionCookie(header: string | undefined): string | null {
+  if (!header) return null;
+  for (const part of header.split(';')) {
+    const [name, ...value] = part.trim().split('=');
+    if (name !== 't3x-session') continue;
+    try {
+      return decodeURIComponent(value.join('='));
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function sameOrigin(
+  requestUrl: string,
+  origin: string | undefined,
+  forwardedHost: string | undefined,
+  forwardedProto: string | undefined
+): boolean {
+  if (!origin) return false;
+  try {
+    const request = new URL(requestUrl);
+    const expectedHost = forwardedHost?.split(',')[0]?.trim() || request.host;
+    const forwardedProtocol = forwardedProto?.split(',')[0]?.trim();
+    const expectedProtocol = forwardedProtocol
+      ? `${forwardedProtocol.replace(/:$/, '')}:`
+      : request.protocol;
+    const source = new URL(origin);
+    return source.host === expectedHost && source.protocol === expectedProtocol;
+  } catch {
+    return false;
+  }
+}
+
 export function createWsRoute(
   upgradeWebSocket: UpgradeWebSocket,
   verifyToken: BearerTokenVerifier = verifyBearerToken
@@ -74,9 +111,12 @@ export function createWsRoute(
     // presence label. Authenticated connections replace this with the
     // verified principal below.
     let connectionUserId = c.req.query('user_id') ?? 'anonymous';
+    let sessionId: string | undefined;
     const authenticationDisabled = process.env.AUTH_DISABLED?.toLowerCase() === 'true';
     let workspaceOwner: RoomConnection['workspaceOwner'];
-    const token = c.req.query('token') ?? null;
+    const queryToken = c.req.query('token') ?? null;
+    const cookieToken = readSessionCookie(c.req.header('cookie'));
+    const token = cookieToken ?? queryToken;
     const lastEventIdRaw = c.req.query('last_event_id') ?? null;
     const lastEventId = lastEventIdRaw ? safeBigInt(lastEventIdRaw) : null;
 
@@ -91,6 +131,23 @@ export function createWsRoute(
     // Authenticate unless AUTH_DISABLED is explicitly set (case-insensitive).
     // Matches the gate used by authMiddleware.
     if (!authenticationDisabled) {
+      if (queryToken?.startsWith(WEB_SESSION_TOKEN_PREFIX)) {
+        return c.json(
+          createError('INVALID_REQUEST', 'Browser Session tokens are not allowed in URLs'),
+          400
+        );
+      }
+      if (
+        cookieToken &&
+        !sameOrigin(
+          c.req.url,
+          c.req.header('origin'),
+          c.req.header('x-forwarded-host'),
+          c.req.header('x-forwarded-proto')
+        )
+      ) {
+        return c.json(createError('FORBIDDEN', 'WebSocket origin denied'), 403);
+      }
       if (!token) {
         return c.json(createError('UNAUTHORIZED', 'Missing token'), 401);
       }
@@ -120,30 +177,48 @@ export function createWsRoute(
             );
           }
           if (projectId && conversation.projectId !== projectId) {
+            logAuthorizationDenial({
+              principal,
+              action: 'project:read',
+              resource: {
+                kind: 'project_resource',
+                id: conversationId,
+                project_id: projectId,
+              },
+              reason: 'conversation_project_mismatch',
+            });
             return c.json(createError('FORBIDDEN', 'Access denied'), 403);
           }
           authorizedProjectId = conversation.projectId;
         }
 
         if (authorizedProjectId) {
-          if (
-            principal.subject.kind !== 'human' &&
-            principal.credential.projectId !== null &&
-            principal.credential.projectId !== authorizedProjectId
-          ) {
-            return c.json(createError('FORBIDDEN', 'Access denied'), 403);
-          }
-          const decision = await evaluateProjectAccess(db, authorizedProjectId, {
-            userId: principal.userId,
-            projectId: principal.credential.projectId,
-            principalKind: principal.subject.kind,
-            keyId: principal.subject.principal_id,
-          });
+          const decision = await evaluateProjectAccess(
+            db,
+            authorizedProjectId,
+            {
+              userId: principal.userId,
+              projectId: principal.credential.projectId,
+              namespaceId: principal.credential.namespaceId,
+              principalKind: principal.subject.kind,
+              keyId: principal.subject.principal_id,
+            },
+            'project:read'
+          );
           if (!decision.allowed) {
+            if (decision.status === 403) {
+              logAuthorizationDenial({
+                principal,
+                action: 'project:read',
+                resource: { kind: 'project', id: authorizedProjectId },
+                reason: decision.reason,
+              });
+            }
             return c.json(createError(decision.code, decision.message), decision.status);
           }
         }
         connectionUserId = principal.actor.id;
+        sessionId = principal.sessionId ?? undefined;
         workspaceOwner = principal.workspaceOwner
           ? { kind: principal.workspaceOwner.kind, id: principal.workspaceOwner.principal_id }
           : undefined;
@@ -151,7 +226,7 @@ export function createWsRoute(
         // Short-lived credentials such as deployment JWTs have no key row.
         // Errors are swallowed so a DB hiccup during touch doesn't poison the
         // handshake.
-        if (principal.credential.kind === 'api_key' && principal.credential.id) {
+        if (isCredentialKind(principal.credential.kind) && principal.credential.id) {
           touchLastUsed(db, principal.credential.id).catch(() => {});
         }
       } catch (err) {
@@ -178,6 +253,7 @@ export function createWsRoute(
             id: connectionId,
             ws: ws as unknown as RoomConnection['ws'],
             userId: connectionUserId,
+            sessionId,
             workspaceOwner,
             authenticationDisabled,
             joinedAt: Date.now(),

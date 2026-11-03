@@ -423,12 +423,17 @@ describe('Workspace routes', () => {
       key_hash: 'test-hash',
       name: 'Workspace agent',
       project_id: 'proj_sources',
+      namespace_id: null,
       user_id: null,
       principal_kind: 'agent',
+      credential_kind: 'agent',
+      delegator_user_id: null,
       transition_scopes: ['transition:inspect', 'transition:propose'],
+      expires_at: null,
       created_at: '2026-08-05T00:00:00.000Z',
       last_used_at: null,
       revoked_at: null,
+      revocation_reason: null,
     });
 
     const listed = await agentApp.request('/v1/projects/proj_sources/workspaces');

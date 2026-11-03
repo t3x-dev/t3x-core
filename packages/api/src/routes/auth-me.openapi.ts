@@ -8,23 +8,27 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { type ApiKey, getAllModels, getCanonicalModelId, getModelInfo } from '@t3x-dev/core';
+import { getAllModels, getCanonicalModelId, getModelInfo } from '@t3x-dev/core';
 import {
   findAccountsByUser,
   findUserById,
   getGlobalSetting,
-  listApiKeys,
-  revokeApiKey,
+  listActiveSessions,
+  revokeSession,
   setGlobalSetting,
+  unlinkAccount,
   updateUser,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { createError, zodErrorHook } from '../lib/errors';
 import { hasOperatorAccess } from '../lib/operator-access';
+import { getRequestPrincipal } from '../lib/request-principal';
+import { roomManager } from '../lib/room-manager';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import { ExtractionStyleSchema } from '../schemas/contracts';
+import type { AppEnv } from '../types';
 
-export const authMeRoutes = new OpenAPIHono({
+export const authMeRoutes = new OpenAPIHono<AppEnv>({
   defaultHook: zodErrorHook,
 });
 
@@ -56,6 +60,7 @@ authMeRoutes.openapi(capabilitiesRoute, (c) => {
 // ============================================================
 
 const LinkedAccountSchema = z.object({
+  id: z.string(),
   provider: z.string(),
   provider_account_id: z.string(),
   created_at: z.string(),
@@ -128,11 +133,15 @@ const ProfileSettingsSchema = z.object({
   sessions: z.array(
     z.object({
       id: z.string(),
-      name: z.string(),
+      auth_method: z.string(),
+      user_agent: z.string().nullable(),
       current: z.boolean(),
-      last_active: z.string().nullable(),
+      created_at: z.string(),
+      last_seen_at: z.string(),
+      expires_at: z.string(),
     })
   ),
+  linked_accounts: z.array(LinkedAccountSchema),
 });
 
 const UpdateProfileSettingsSchema = z.object({
@@ -197,17 +206,15 @@ function validatePersonalModelPreferences(input: StoredPersonalModelPreferences)
 // Helpers
 // ============================================================
 
-/** Extract and validate userId from API key context. Returns userId or error response. */
+/** Extract the authenticated human user from the server-derived principal. */
 // biome-ignore lint/suspicious/noExplicitAny: generic error handler
 function getUserId(c: any): string | null {
-  const apiKey = c.get('apiKey') as ApiKey | undefined;
-  return apiKey?.user_id ?? null;
+  return getRequestPrincipal(c)?.userId ?? null;
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: generic Hono context
-function getCurrentApiKeyId(c: any): string | null {
-  const apiKey = c.get('apiKey') as ApiKey | undefined;
-  return apiKey?.id ?? null;
+function getCurrentSessionId(c: any): string | null {
+  return getRequestPrincipal(c)?.sessionId ?? null;
 }
 
 function normalizeDefaultProvider(value: string | null | undefined): string | null | undefined {
@@ -267,6 +274,7 @@ authMeRoutes.openapi(meRoute, async (c) => {
 
   const accountRows = await findAccountsByUser(db, userId);
   const linked_accounts = accountRows.map((a) => ({
+    id: a.id,
     provider: a.provider,
     provider_account_id: a.provider_account_id,
     created_at: a.created_at,
@@ -286,6 +294,47 @@ authMeRoutes.openapi(meRoute, async (c) => {
       linked_accounts,
     },
   });
+});
+
+const unlinkAccountRoute = createRoute({
+  method: 'delete',
+  path: '/v1/auth/me/accounts/{id}',
+  tags: ['Auth'],
+  summary: 'Unlink an OAuth account',
+  request: { params: z.object({ id: z.string().min(1) }) },
+  responses: {
+    200: {
+      description: 'Account unlinked',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(z.object({ unlinked: z.literal(true) })),
+        },
+      },
+    },
+    401: {
+      description: 'Not authenticated',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Account not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'The last sign-in method cannot be unlinked',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+authMeRoutes.openapi(unlinkAccountRoute, async (c) => {
+  const userId = getUserId(c);
+  if (!userId) return c.json(createError('UNAUTHORIZED', 'Not authenticated'), 401);
+  const result = await unlinkAccount(await getDB(), userId, c.req.valid('param').id);
+  if (result === 'not_found') return c.json(createError('NOT_FOUND', 'Account not found'), 404);
+  if (result === 'last_sign_in_method') {
+    return c.json(createError('CONFLICT', 'The last sign-in method cannot be unlinked'), 409);
+  }
+  return c.json({ success: true as const, data: { unlinked: true as const } }, 200);
 });
 
 // ============================================================
@@ -556,15 +605,17 @@ authMeRoutes.openapi(profileSettingsRoute, async (c) => {
   );
   const timezone =
     storedProfile?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
-  const currentApiKeyId = getCurrentApiKeyId(c);
-  const sessions = (await listApiKeys(db, { userId }))
-    .filter((key) => key.name.startsWith('session:'))
-    .map((key) => ({
-      id: key.id,
-      name: key.name,
-      current: key.id === currentApiKeyId,
-      last_active: key.last_used_at,
-    }));
+  const currentSessionId = getCurrentSessionId(c);
+  const sessions = (await listActiveSessions(db, userId)).map((session) => ({
+    id: session.id,
+    auth_method: session.auth_method,
+    user_agent: session.user_agent,
+    current: session.id === currentSessionId,
+    created_at: session.created_at,
+    last_seen_at: session.last_seen_at,
+    expires_at: session.expires_at,
+  }));
+  const linkedAccounts = await findAccountsByUser(db, userId);
   return c.json({
     success: true as const,
     data: {
@@ -573,6 +624,12 @@ authMeRoutes.openapi(profileSettingsRoute, async (c) => {
       avatar_url: user.avatar_url,
       timezone,
       sessions,
+      linked_accounts: linkedAccounts.map((account) => ({
+        id: account.id,
+        provider: account.provider,
+        provider_account_id: account.provider_account_id,
+        created_at: account.created_at,
+      })),
     },
   });
 });
@@ -616,15 +673,17 @@ authMeRoutes.openapi(updateProfileSettingsRoute, async (c) => {
   });
   if (!updated) return c.json(createError('UNAUTHORIZED', 'User not found'), 401);
   await setGlobalSetting(db, profileTimezoneKey(userId), { timezone: body.timezone });
-  const currentApiKeyId = getCurrentApiKeyId(c);
-  const sessions = (await listApiKeys(db, { userId }))
-    .filter((key) => key.name.startsWith('session:'))
-    .map((key) => ({
-      id: key.id,
-      name: key.name,
-      current: key.id === currentApiKeyId,
-      last_active: key.last_used_at,
-    }));
+  const currentSessionId = getCurrentSessionId(c);
+  const sessions = (await listActiveSessions(db, userId)).map((session) => ({
+    id: session.id,
+    auth_method: session.auth_method,
+    user_agent: session.user_agent,
+    current: session.id === currentSessionId,
+    created_at: session.created_at,
+    last_seen_at: session.last_seen_at,
+    expires_at: session.expires_at,
+  }));
+  const linkedAccounts = await findAccountsByUser(db, userId);
   return c.json({
     success: true as const,
     data: {
@@ -633,6 +692,12 @@ authMeRoutes.openapi(updateProfileSettingsRoute, async (c) => {
       avatar_url: updated.avatar_url,
       timezone: body.timezone,
       sessions,
+      linked_accounts: linkedAccounts.map((account) => ({
+        id: account.id,
+        provider: account.provider,
+        provider_account_id: account.provider_account_id,
+        created_at: account.created_at,
+      })),
     },
   });
 });
@@ -668,14 +733,12 @@ authMeRoutes.openapi(revokeProfileSessionRoute, async (c) => {
   const userId = getUserId(c);
   if (!userId) return c.json(createError('UNAUTHORIZED', 'Not authenticated'), 401);
   const sessionId = c.req.valid('param').id;
-  if (sessionId === getCurrentApiKeyId(c)) {
+  if (sessionId === getCurrentSessionId(c)) {
     return c.json(createError('INVALID_REQUEST', 'Use sign out to end the current session'), 400);
   }
   const db = await getDB();
-  const session = (await listApiKeys(db, { userId })).find(
-    (key) => key.id === sessionId && key.name.startsWith('session:')
-  );
+  const session = await revokeSession(db, sessionId, userId);
   if (!session) return c.json(createError('NOT_FOUND', 'Session not found'), 404);
-  await revokeApiKey(db, sessionId);
+  roomManager.disconnectSession(sessionId);
   return c.json({ success: true as const, data: { revoked: true as const } });
 });

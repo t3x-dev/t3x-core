@@ -46,6 +46,7 @@ export function NewRepositoryPage() {
   const nameCheck = useRepositoryName(owner, name);
   const [description, setDescription] = useState('');
   const [initializeReadme, setInitializeReadme] = useState(false);
+  const [initializePrdStarter, setInitializePrdStarter] = useState(false);
   const [tags, setTags] = useState<RepositoryTagsDraft>({ tags: [], input: '' });
   const parsedTags = RepositoryTagsSchema.safeParse([...tags.tags, tags.input]);
   const parsedReadme = RepositoryReadmeSchema.safeParse(
@@ -73,6 +74,7 @@ export function NewRepositoryPage() {
       owner,
       visibility,
       initializeReadme,
+      starter: initializePrdStarter ? 'prd-v1' : undefined,
       tags: parsedTags.success ? parsedTags.data : [],
     });
     if (result && returnTo) {
@@ -196,7 +198,7 @@ export function NewRepositoryPage() {
             <section className={styles.section} aria-labelledby="repository-configuration-heading">
               <div className={styles.sectionHeading}>
                 <h2 id="repository-configuration-heading">Configuration</h2>
-                <p>README and tags are optional. You can add or edit them later.</p>
+                <p>README, PRD starter, and tags are optional. You can add or edit them later.</p>
               </div>
               <div className={styles.configuration}>
                 <div className={styles.visibilityRow}>
@@ -243,6 +245,22 @@ export function NewRepositoryPage() {
                       {parsedReadme.error.issues[0]?.message}
                     </p>
                   ) : null}
+                </div>
+                <div className={styles.readmeOption}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={initializePrdStarter}
+                      disabled={locked}
+                      aria-describedby="repository-prd-starter-help"
+                      onChange={(event) => setInitializePrdStarter(event.target.checked)}
+                    />
+                    Initialize PRD starter
+                  </label>
+                  <p id="repository-prd-starter-help">
+                    Create an initial semantic PRD commit on main so branches can open pull
+                    requests.
+                  </p>
                 </div>
                 <div className={styles.tagsField}>
                   <RepositoryTagsInput value={tags} onChange={setTags} disabled={locked} />

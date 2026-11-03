@@ -58,16 +58,19 @@ vi.mock('@/components/canvas', () => ({
     focusedBranch,
     focusedCommitHash,
     projectName,
+    stateHref,
   }: {
     embedded?: boolean;
     focusedBranch?: string;
     focusedCommitHash?: string;
     projectName: string;
+    stateHref?: string;
   }) => (
     <div
       data-embedded={String(embedded)}
       data-focused-branch={focusedBranch}
       data-focused-commit={focusedCommitHash}
+      data-state-href={stateHref}
       data-testid="state-canvas-workspace"
     >
       {projectName}
@@ -845,7 +848,7 @@ describe('ProjectStateTab', () => {
     );
     expect(screen.getByRole('link', { name: 'History 2' })).toHaveAttribute(
       'href',
-      '/project/proj_test?view=canvas'
+      '/project/proj_test?view=canvas&branch=main'
     );
     expect(screen.getByRole('link', { name: 'Propose change' })).toHaveAttribute(
       'href',
@@ -935,6 +938,10 @@ describe('ProjectStateTab', () => {
     expect(screen.getByTestId('state-canvas-workspace')).toHaveAttribute(
       'data-focused-branch',
       'main'
+    );
+    expect(screen.getByTestId('state-canvas-workspace')).toHaveAttribute(
+      'data-state-href',
+      '/project/proj_test?branch=main&view=overview'
     );
     expect(screen.queryByText('main has no HEAD commit.')).not.toBeInTheDocument();
     expect(hookMocks.loadCommits).not.toHaveBeenCalled();
@@ -1806,7 +1813,7 @@ describe('ProjectStateTab', () => {
     );
     expect(screen.getByRole('link', { name: 'History 2' })).toHaveAttribute(
       'href',
-      '/project/proj_test?view=canvas'
+      '/project/proj_test?view=canvas&branch=feature%2Fprd-audience'
     );
   });
 
@@ -1847,7 +1854,7 @@ describe('ProjectStateTab', () => {
     );
     expect(screen.getByRole('link', { name: 'History 2' })).toHaveAttribute(
       'href',
-      '/project/proj_test?view=canvas'
+      '/project/proj_test?view=canvas&branch=feature%2Fprd-audience'
     );
   });
 });

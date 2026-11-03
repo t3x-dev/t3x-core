@@ -21,6 +21,7 @@ export interface RoomConnection {
   id: string;
   ws: WSContext;
   userId?: string;
+  sessionId?: string;
   workspaceOwner?: { kind: string; id: string };
   authenticationDisabled?: boolean;
   joinedAt: number;
@@ -171,6 +172,24 @@ class RoomManager {
    */
   getRoomSize(roomKey: string): number {
     return this.rooms.get(roomKey)?.size ?? 0;
+  }
+
+  /** Close and remove every live socket authenticated by a revoked Session. */
+  disconnectSession(sessionId: string): void {
+    const connections = new Map<string, RoomConnection>();
+    for (const room of this.rooms.values()) {
+      for (const conn of room.values()) {
+        if (conn.sessionId === sessionId) connections.set(conn.id, conn);
+      }
+    }
+    for (const conn of connections.values()) {
+      try {
+        conn.ws.close(1008, 'Session revoked');
+      } catch {
+        // Removal below still prevents further delivery if the socket is already dead.
+      }
+      for (const roomKey of [...this.rooms.keys()]) this.leave(roomKey, conn.id);
+    }
   }
 
   /**

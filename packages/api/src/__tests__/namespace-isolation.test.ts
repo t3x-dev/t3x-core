@@ -12,6 +12,7 @@ vi.mock('../lib/db', () => ({
 }));
 
 import { requestPrincipalFromApiKey } from '../lib/request-principal';
+import { pinoLogger } from '../middleware/logger';
 import { namespaceRoutes } from '../routes/namespaces.openapi';
 import { projectRoutes } from '../routes/projects.openapi';
 
@@ -125,6 +126,7 @@ describe('Namespace persistence and project isolation', () => {
 
   it('rejects access from another user', async () => {
     const app = createAppWithUser('user_namespace_other');
+    const denial = vi.spyOn(pinoLogger, 'warn').mockImplementation(() => undefined);
 
     expect((await app.request('/v1/namespaces/me')).status).toBe(404);
     expect((await app.request('/v1/projects?namespace=personal-space')).status).toBe(403);
@@ -134,6 +136,16 @@ describe('Namespace persistence and project isolation', () => {
       body: JSON.stringify({ name: 'Escaped project', namespace: 'personal-space' }),
     });
     expect(response.status).toBe(403);
+    expect(denial).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'authorization.denied',
+        entrypoint: 'http',
+        action: 'project:create',
+        reason: 'no_authority',
+      }),
+      'authorization denied'
+    );
+    denial.mockRestore();
   });
 
   it('returns the same persisted namespace on a local retry', async () => {

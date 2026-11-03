@@ -3,6 +3,7 @@ import {
   AcceptCollaborationInvitationRequestSchema,
   CollaborationInvitationSchema,
   CreateCollaborationInvitationResponseSchema,
+  CreateProjectInvitationRequestSchema,
   ListNamespaceAccountsResponseSchema,
   UpsertNamespaceMemberRequestSchema,
   UpsertProjectGuestRequestSchema,
@@ -112,6 +113,16 @@ describe('collaboration API contracts', () => {
         role: 'owner',
       }).success
     ).toBe(false);
+  });
+
+  it('accepts a registered username as a project invitation recipient', () => {
+    expect(
+      CreateProjectInvitationRequestSchema.parse({
+        recipient: { username: 'test-b3' },
+        role: 'editor',
+        expires_at: LATER,
+      })
+    ).toMatchObject({ recipient: { username: 'test-b3' } });
   });
 
   it('rejects inconsistent invitation lifecycle projections', () => {

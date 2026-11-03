@@ -5,7 +5,7 @@ import { Settings2 } from 'lucide-react';
 import Link from 'next/link';
 import { useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ReferenceIcon as Icon } from './DiscoverReference';
 import s from './SchemaStudioExperience.module.css';
 
@@ -100,6 +100,11 @@ export function SchemaSourceManager({
           <Link href={browseHref} className={s.navLink}>
             Browse source releases
           </Link>
+          <PopoverClose asChild>
+            <Button aria-label="Done managing sources" size="sm" variant="ghost">
+              Done
+            </Button>
+          </PopoverClose>
         </div>
         {combineReason ? (
           <p id={`${id}-combine-reason`} className={s.feedback}>

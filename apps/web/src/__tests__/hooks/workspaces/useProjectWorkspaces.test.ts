@@ -96,7 +96,8 @@ describe('useProjectWorkspaces', () => {
     const { unmount } = renderHook(() => useProjectWorkspaces('proj_1'));
 
     await waitFor(() => expect(fetchProjectWorkspaces).toHaveBeenCalledTimes(1));
-    expect(FakeWebSocket.instances[0]?.url).toBe('ws://localhost:8000/ws?project_id=proj_1');
+    expect(FakeWebSocket.instances[0]?.url).toBe('ws://localhost:3000/ws?project_id=proj_1');
+    expect(FakeWebSocket.instances[0]?.url).not.toContain('token=');
 
     FakeWebSocket.instances[0]?.onmessage?.({
       data: JSON.stringify({

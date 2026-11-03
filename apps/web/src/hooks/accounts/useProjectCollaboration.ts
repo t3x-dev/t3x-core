@@ -44,9 +44,11 @@ export function useProjectCollaboration(projectId: string) {
     guestsQuery.refetch();
   }
 
-  async function createInvitation(email: string, role: ProjectGrantRole) {
+  async function createInvitation(recipient: string, role: ProjectGrantRole) {
     const response = await client.createProjectInvitation(projectId, {
-      recipient: { user_id: null, email },
+      recipient: recipient.includes('@')
+        ? { user_id: null, email: recipient }
+        : { username: recipient },
       role,
       expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
     });

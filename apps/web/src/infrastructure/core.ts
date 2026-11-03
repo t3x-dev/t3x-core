@@ -2,30 +2,12 @@
  * API client core infrastructure - shared utilities
  */
 
-import { API_BASE as RESOLVED_API_BASE } from '@/utils/apiBase';
 import type { ApiCommitAnchors, ApiResponse } from './types';
 
-// Use standalone API if configured, otherwise fall back to embedded routes
-export const API_BASE = RESOLVED_API_BASE;
-export const API_V1 = `${API_BASE}/api/v1`;
+// Browser HTTP stays same-origin. The BFF owns the server-side API credential.
+export const API_BASE = '';
+export const API_V1 = '/api/v1';
 export const DEFAULT_TIMEOUT = 10000;
-
-// API key for authenticated requests (optional, for production use)
-export const API_KEY = process.env.NEXT_PUBLIC_T3X_API_KEY;
-
-/**
- * Get API key from session cookie (client-side only).
- * Reads the t3x-session cookie set by the login page.
- */
-async function getSessionApiKey(): Promise<string | null> {
-  if (typeof window === 'undefined') return null;
-  try {
-    const { getSessionKey } = await import('@/infrastructure/session');
-    return getSessionKey();
-  } catch {
-    return null;
-  }
-}
 
 // ============================================================================
 // JSON Parsing Helpers
@@ -134,20 +116,10 @@ export async function handleResponse<T>(response: Response): Promise<T> {
 // ============================================================================
 
 /**
- * Inject Authorization header: static env var → session cookie → none.
- * Exported so streaming functions (which bypass fetchWithTimeout) can reuse auth.
+ * Browser credentials are injected by the same-origin BFF, never by JavaScript.
+ * Kept for streaming callers that share this request setup.
  */
 export async function injectAuthHeaders(headers: Headers): Promise<Headers> {
-  if (!headers.has('Authorization')) {
-    if (API_KEY) {
-      headers.set('Authorization', `Bearer ${API_KEY}`);
-    } else {
-      const sessionKey = await getSessionApiKey();
-      if (sessionKey) {
-        headers.set('Authorization', `Bearer ${sessionKey}`);
-      }
-    }
-  }
   return headers;
 }
 

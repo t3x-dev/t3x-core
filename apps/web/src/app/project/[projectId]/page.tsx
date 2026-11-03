@@ -428,7 +428,7 @@ export function ProjectDetailPageContent({
         <CanvasWorkspace
           key={projectId}
           projectName={project.name}
-          stateHref={routeProjectId ? getProjectIdRepoPath(projectId) : getProjectRepoPath(project)}
+          stateHref={`${routeProjectId ? getProjectIdRepoPath(projectId) : getProjectRepoPath(project)}?${new URLSearchParams({ branch: searchParams.get('branch') ?? 'main', view: 'overview' })}`}
           initialViewport={initialViewport}
           onViewportChange={handleViewportChange}
         />

@@ -30,10 +30,11 @@ test('no-AI definition adoption, native repair, reviewed decision and exact Comm
     await page.getByLabel('Target Workspace').selectOption(workspaceId);
     await expect(page.getByRole('button', { name: 'Review Schema changes', exact: true })).toBeEnabled();
     await page.getByRole('button', { name: 'Review Schema changes', exact: true }).click();
-    const applyDialog = page.getByRole('dialog');
-    await expect(applyDialog).toBeVisible();
-    await applyDialog.getByRole('button', { name: /Confirm & apply|Adopt & return to Workspace/ }).click();
-    await expect(page.getByRole('region', { name: 'Workspace detail' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Review Schema changes' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Change summary' })).toBeVisible();
+    await page.getByRole('button', { name: 'Approve and commit', exact: true }).click();
+    await expect(page.getByText('This revision is committed. Open State to inspect or export it.')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'View State & export' })).toBeVisible();
     const applied = (await (await request.get(endpoint)).json()).data.workspace;
     expect(applied.schemaBindings[0].rootKey).toBe('candidate');
     expect(applied.schemaReview.verdict).toBe('ready');
@@ -46,48 +47,78 @@ test('no-AI definition adoption, native repair, reviewed decision and exact Comm
       { key: 'checklist', slots: { title: 'Daily dog care' }, children: [] },
       { key: 'items', slots: {}, children: [{ key: 'water', slots: { done: false, ...(withTask ? { task: 'Refresh the water bowl' } : {}) }, children: [] }] },
     ] }], relations: [] });
-    await page.getByRole('button', { name: 'Workspace tools', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Edit structured State', exact: true }).click();
+    await page.getByRole('button', { name: 'Advanced tools', exact: true }).press('Enter');
+    await page.getByRole('menuitem', { name: 'Edit Draft', exact: true }).press('Enter');
     const editor = page;
-    await expect(editor.getByRole('region', { name: 'Edit structured content' })).toBeVisible();
+    let dialog = editor.getByRole('dialog', { name: 'Edit Workspace Draft' });
+    await expect(dialog).toBeVisible();
     const addNode = async (parent: string, name: string) => {
-      await editor.getByLabel(`Show Child node in ${parent}`, { exact: true }).click();
-      await editor.getByRole('textbox', { name: `Child node in ${parent}`, exact: true }).fill(name);
-      await editor.getByRole('button', { name: `Add Child node in ${parent}`, exact: true }).click();
+      await dialog.getByRole('button', { name: `Add inside ${parent.split('/').at(-1)}`, exact: true }).click();
+      await dialog.getByLabel('New name').fill(name);
+      await dialog.getByLabel('What to add').selectOption('node');
+      await dialog.getByRole('button', { name: 'Apply', exact: true }).click();
     };
-    const addField = async (parent: string, name: string, value: string, type = 'string') => {
-      await editor.getByLabel(`Show Field in ${parent}`, { exact: true }).click();
-      await editor.getByRole('textbox', { name: `Field in ${parent}`, exact: true }).fill(name);
-      await editor.getByLabel(`Field in ${parent} type`, { exact: true }).selectOption(type);
-      await editor.getByRole('button', { name: `Add Field in ${parent}`, exact: true }).click();
-      if (type === 'string') await editor.getByRole('textbox', { name: `${parent}/${name}`, exact: true }).fill(value);
+    const addField = async (parent: string, name: string, value: string) => {
+      await dialog.getByRole('button', { name: `Add inside ${parent.split('/').at(-1)}`, exact: true }).click();
+      await dialog.getByLabel('New name').fill(name);
+      await dialog.getByLabel('What to add').selectOption('field');
+      await dialog.getByLabel('New value').fill(value);
+      await dialog.getByRole('button', { name: 'Apply', exact: true }).click();
     };
+    await addNode('root', 'candidate');
     await addNode('candidate', 'checklist');
     await addField('candidate/checklist', 'title', 'Daily dog care');
     await addNode('candidate', 'items');
     await addNode('candidate/items', 'water');
-    await addField('candidate/items/water', 'done', '', 'boolean');
+    await addField('candidate/items/water', 'done', 'false');
+    const saveDraftChanges = async () => {
+      await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+      const response = page.waitForResponse((candidate) => candidate.url().endsWith(`/workspaces/${workspaceId}/authoring/actions`) && candidate.request().method() === 'POST');
+      await page.getByRole('button', { name: /^Save selected as P/ }).click();
+      expect((await response).ok()).toBe(true);
+      await expect(page.getByRole('button', { name: /^Save selected as P/ })).toBeHidden();
+    };
     const browserReview = async () => {
-      const response = page.waitForResponse((response) => response.url().endsWith(`/workspaces/${workspaceId}/transition/review`) && response.request().method() === 'POST');
-      await editor.getByRole('button', { name: 'Review structured change', exact: true }).click();
+      const response = page.waitForResponse((response) => response.url().endsWith(`/workspaces/${workspaceId}/authoring/reviews`) && response.request().method() === 'POST');
+      await page.getByRole('tab', { name: 'Review', exact: true }).click();
+      const unsaved = page.getByRole('dialog', { name: 'Unsaved Content changes' });
+      if (await unsaved.isVisible()) {
+        await unsaved.getByRole('button', { name: 'Discard local changes and continue' }).click();
+      }
+      const prepare = page.getByRole('button', { name: 'Prepare review', exact: true });
+      if (await prepare.isVisible()) await prepare.click();
       const result = await response;
       expect(result.ok(), await result.text()).toBe(true);
-      await expect(editor.getByRole('link', { name: 'Open Review', exact: true })).toBeVisible();
-      return (await result.json()).data;
+      await expect(page).toHaveURL(/reviewSnapshot=/);
+      const data = (await result.json()).data;
+      const snapshotId = new URL(page.url()).searchParams.get('reviewSnapshot')!;
+      const snapshotResponse = await request.get(`${endpoint}/transition/review-snapshots/${snapshotId}`);
+      expect(snapshotResponse.ok(), await snapshotResponse.text()).toBe(true);
+      const snapshot = (await snapshotResponse.json()).data;
+      return {
+        ...data,
+        review_snapshot: { snapshotId, snapshotDigest: snapshot.snapshot_digest },
+      };
     };
+    await saveDraftChanges();
     const incomplete = await browserReview();
     await page.screenshot({ path: testInfo.outputPath('delivery-blocked.png'), animations: 'disabled' });
+    await expect(page.getByText('Schema validation failed', { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Commit with override', exact: true })).toBeVisible();
+    await page.getByRole('link', { name: 'Edit in Compose', exact: true }).click();
+    await expect(page).toHaveURL(/workspaceMode=compose/);
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('button', { name: 'Advanced tools', exact: true }).press('Enter');
+    await page.getByRole('menuitem', { name: 'Edit Draft', exact: true }).press('Enter');
+    dialog = editor.getByRole('dialog', { name: 'Edit Workspace Draft' });
     await addField('candidate/items/water', 'task', 'Refresh the water bowl');
-    // Editing invalidates the old review link; only a newly verified snapshot can be decided.
-    await expect(editor.getByRole('link', { name: 'Open Review', exact: true })).toHaveCount(0);
+    await saveDraftChanges();
     const repaired = await browserReview();
-    expect(repaired.precondition.effect_digest).not.toBe(incomplete.precondition.effect_digest);
-    await editor.getByRole('region', { name: 'Edit structured content' }).evaluate((element) => { element.scrollTop = 0; });
+    expect(repaired.view.precondition.effect_digest).not.toBe(incomplete.view.precondition.effect_digest);
     await page.screenshot({ path: testInfo.outputPath('delivery-editor.png'), animations: 'disabled' });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: testInfo.outputPath('delivery-editor-mobile.png'), animations: 'disabled' });
     await page.setViewportSize({ width: 1480, height: 960 });
-    await editor.getByRole('link', { name: 'Open Review', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Approve and commit', exact: true })).toBeEnabled();
     await page.screenshot({ path: testInfo.outputPath('delivery-review.png'), fullPage: true, animations: 'disabled' });
     const decisionResponse = page.waitForResponse((response) => response.url().endsWith(`/workspaces/${workspaceId}/transition/decide`) && response.request().method() === 'POST');
@@ -105,9 +136,7 @@ test('no-AI definition adoption, native repair, reviewed decision and exact Comm
     expect((await retained.json()).data.snapshot_digest).toBe(incomplete.review_snapshot.snapshotDigest);
 
     await page.goto(`${path}?tab=workspaces&workspace=${workspaceId}`);
-    await expect(page.getByLabel('Workspace schema').locator('option:checked')).toContainText(
-      't3x/care-checklist'
-    );
+    await expect(page.getByRole('region', { name: 'Workspace detail' })).toContainText('Daily care');
     await page.screenshot({ path: testInfo.outputPath('delivery-active.png'), animations: 'disabled' });
     const exported = await request.get(`${API_BASE}/commits/${encodeURIComponent(commitHash)}/export?project_id=${projectId}&format=json`);
     const repeatedExport = await request.get(`${API_BASE}/commits/${encodeURIComponent(commitHash)}/export?project_id=${projectId}&format=json`);

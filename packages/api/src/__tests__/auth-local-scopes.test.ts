@@ -1,14 +1,18 @@
+import type { RequestPrincipal } from '@t3x-dev/application';
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const storage = vi.hoisted(() => ({
-  createApiKey: vi.fn(),
   createLocalUser: vi.fn(),
+  createSession: vi.fn(),
   findUserByUsername: vi.fn(),
+  revokeSession: vi.fn(),
 }));
+const realtime = vi.hoisted(() => ({ disconnectSession: vi.fn() }));
 
 vi.mock('@t3x-dev/storage', () => storage);
 vi.mock('../lib/db', () => ({ getDB: vi.fn().mockResolvedValue({}) }));
+vi.mock('../lib/room-manager', () => ({ roomManager: realtime }));
 vi.mock('bcryptjs', () => ({
   default: {
     hash: vi.fn().mockResolvedValue('password-hash'),
@@ -32,29 +36,26 @@ vi.mock('../middleware/rate-limit', () => ({
 }));
 
 import { authLocalRoutes } from '../routes/auth-local.openapi';
+import type { AppEnv } from '../types';
 
-const EXPECTED_SESSION_SCOPES = [
-  'transition:inspect',
-  'transition:propose',
-  'transition:verify',
-  'transition:decide:accept',
-  'transition:decide:reject',
-  'transition:commit:create',
-  'transition:ref:advance',
-];
-
-function createTestApp() {
-  const app = new Hono();
+function createTestApp(principal?: RequestPrincipal) {
+  const app = new Hono<AppEnv>();
+  if (principal) {
+    app.use('*', async (c, next) => {
+      c.set('requestPrincipal', principal);
+      await next();
+    });
+  }
   app.route('/', authLocalRoutes);
   return app;
 }
 
-describe('local auth session scopes', () => {
+describe('local auth session lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('grants a registered Web session the ordinary Transition scopes', async () => {
+  it('creates a fixed-expiry browser session when registering', async () => {
     storage.findUserByUsername.mockResolvedValue(null);
     storage.createLocalUser.mockResolvedValue({
       id: 'user_a',
@@ -64,18 +65,26 @@ describe('local auth session scopes', () => {
 
     const response = await createTestApp().request('/v1/auth/register', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'user-agent': 'Test Browser A' },
       body: JSON.stringify({ username: 'test-a2', password: 'test-password-123' }),
     });
 
     expect(response.status).toBe(200);
-    expect(storage.createApiKey).toHaveBeenCalledWith(
+    const body = await response.json();
+    expect(body.data.api_key).toMatch(/^t3xs_/);
+    expect(storage.createSession).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ transitionScopes: EXPECTED_SESSION_SCOPES })
+      expect.objectContaining({
+        rawToken: body.data.api_key,
+        userId: 'user_a',
+        authMethod: 'local_password',
+        userAgent: 'Test Browser A',
+        expiresAt: expect.any(Date),
+      })
     );
   });
 
-  it('grants a login Web session the same ordinary Transition scopes', async () => {
+  it('creates a fixed-expiry browser session when logging in', async () => {
     storage.findUserByUsername.mockResolvedValue({
       id: 'user_b',
       name: 'Test B',
@@ -85,14 +94,47 @@ describe('local auth session scopes', () => {
 
     const response = await createTestApp().request('/v1/auth/login', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'user-agent': 'Test Browser B' },
       body: JSON.stringify({ username: 'test-b2', password: 'test-password-123' }),
     });
 
     expect(response.status).toBe(200);
-    expect(storage.createApiKey).toHaveBeenCalledWith(
+    const body = await response.json();
+    expect(body.data.api_key).toMatch(/^t3xs_/);
+    expect(storage.createSession).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ transitionScopes: EXPECTED_SESSION_SCOPES })
+      expect.objectContaining({
+        rawToken: body.data.api_key,
+        userId: 'user_b',
+        authMethod: 'local_password',
+        userAgent: 'Test Browser B',
+        expiresAt: expect.any(Date),
+      })
     );
+  });
+
+  it('revokes the authenticated browser session on logout', async () => {
+    storage.revokeSession.mockResolvedValue({ id: 'sess_browser' });
+    const principal: RequestPrincipal = {
+      subject: { kind: 'human', principal_id: 'user_a' },
+      actor: { kind: 'human', id: 'user:user_a' },
+      delegator: null,
+      workspaceOwner: { kind: 'human', principal_id: 'user_a' },
+      userId: 'user_a',
+      accountId: null,
+      sessionId: 'sess_browser',
+      credential: { kind: 'session', id: 'sess_browser', projectId: null, namespaceId: null },
+      scopes: [],
+      ingress: 'http',
+    };
+
+    const response = await createTestApp(principal).request('/v1/auth/logout', {
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true, data: { logged_out: true } });
+    expect(storage.revokeSession).toHaveBeenCalledWith(expect.anything(), 'sess_browser', 'user_a');
+    expect(realtime.disconnectSession).toHaveBeenCalledWith('sess_browser');
   });
 });

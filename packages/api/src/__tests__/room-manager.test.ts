@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { eventBus, type RealtimeEvent } from '../lib/event-bus';
 import { roomManager } from '../lib/room-manager';
 
@@ -10,6 +10,15 @@ function fakeWs() {
     close: () => {},
     readyState: 1,
   } as unknown as WebSocket;
+}
+
+function makeConnection(id: string) {
+  return {
+    id,
+    ws: { send: vi.fn(), close: vi.fn(), readyState: 1 } as never,
+    userId: id,
+    joinedAt: Date.now(),
+  };
 }
 
 describe('roomManager', () => {
@@ -142,5 +151,22 @@ describe('roomManager', () => {
     roomManager.leave('conv:conv_rm_c', 'c3');
 
     expect(roomManager.getRoomSize('conv:conv_rm_c')).toBe(0);
+  });
+
+  it('disconnects every socket authenticated by a revoked Session', () => {
+    const first = makeConnection('session-first');
+    const second = makeConnection('session-second');
+    first.sessionId = 'sess_revoked';
+    second.sessionId = 'sess_other';
+    roomManager.join('project:session-project', first);
+    roomManager.join('conv:session-conversation', first);
+    roomManager.join('project:session-project', second);
+
+    roomManager.disconnectSession('sess_revoked');
+
+    expect(first.ws.close).toHaveBeenCalledWith(1008, 'Session revoked');
+    expect(second.ws.close).not.toHaveBeenCalled();
+    expect(roomManager.getRoomSize('project:session-project')).toBe(1);
+    expect(roomManager.getRoomSize('conv:session-conversation')).toBe(0);
   });
 });

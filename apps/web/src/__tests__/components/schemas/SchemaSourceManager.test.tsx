@@ -58,6 +58,13 @@ it('lists reusable source materials without controls that switch the current def
   expect(props.onAdd).not.toHaveBeenCalled();
 });
 
+it('lets the user finish source management explicitly', () => {
+  const props = managerProps();
+  render(<SchemaSourceManager {...props} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Done managing sources' }));
+  expect(props.onOpenChange).toHaveBeenCalledExactlyOnceWith(false);
+});
+
 it('blocks only the referenced source from removal and shows the supplied reason', () => {
   const props = managerProps();
   const reason = 'This source is used by the current Schema edits.';

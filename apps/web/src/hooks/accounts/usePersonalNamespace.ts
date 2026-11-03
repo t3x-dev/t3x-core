@@ -5,8 +5,10 @@ import { getCurrentPersonalNamespace, type NamespaceProfile } from '@/infrastruc
 
 export function usePersonalNamespace(): NamespaceProfile | null {
   const [namespace, setNamespace] = useState<NamespaceProfile | null>(null);
+  const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
 
   useEffect(() => {
+    if (authDisabled) return;
     let active = true;
     getCurrentPersonalNamespace()
       .then((current) => {
@@ -16,7 +18,7 @@ export function usePersonalNamespace(): NamespaceProfile | null {
     return () => {
       active = false;
     };
-  }, []);
+  }, [authDisabled]);
 
   return namespace;
 }

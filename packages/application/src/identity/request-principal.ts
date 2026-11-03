@@ -1,20 +1,25 @@
-import type { TransitionScope } from '@t3x-dev/core';
+import type { CredentialKind, TransitionScope } from '@t3x-dev/core';
 import type { CanonicalPrincipalDto, PrincipalKind } from './namespace-authorization';
 
 export const REQUEST_PRINCIPAL_CREDENTIAL_KINDS = [
   'api_key',
+  'pat',
+  'mcp',
+  'agent',
+  'service',
   'session',
   'runner_service',
   'deployment',
   'local_dev',
-] as const;
+] as const satisfies readonly (
+  | CredentialKind
+  | 'session'
+  | 'runner_service'
+  | 'deployment'
+  | 'local_dev'
+)[];
 
-export const REQUEST_PRINCIPAL_INGRESSES = [
-  'http',
-  'websocket',
-  'runner',
-  'local',
-] as const;
+export const REQUEST_PRINCIPAL_INGRESSES = ['http', 'websocket', 'runner', 'local'] as const;
 
 export interface RequestPrincipal {
   readonly subject: CanonicalPrincipalDto;
@@ -28,6 +33,7 @@ export interface RequestPrincipal {
     kind: (typeof REQUEST_PRINCIPAL_CREDENTIAL_KINDS)[number];
     id: string | null;
     projectId: string | null;
+    namespaceId: string | null;
   }>;
   readonly scopes: readonly TransitionScope[];
   readonly ingress: (typeof REQUEST_PRINCIPAL_INGRESSES)[number];

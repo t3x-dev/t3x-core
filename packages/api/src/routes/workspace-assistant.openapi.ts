@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { AssistantSchemaSettingsInputSchema } from '@t3x-dev/api-client';
 import { type DraftYOp, DraftYOpSchema } from '@t3x-dev/application';
-import { type LLMProvider, WorkspaceSchemaYOpsError } from '@t3x-dev/core';
+import { isCredentialKind, type LLMProvider, WorkspaceSchemaYOpsError } from '@t3x-dev/core';
 import {
   ConflictError,
   findApiKeyById,
@@ -172,9 +172,17 @@ workspaceAssistantRoutes.post(
     }
     const authorize = async (capability: 'read' | 'propose') => {
       const initialCredential = transitionApiKey(c);
-      if (initialCredential?.credential.kind === 'api_key' && initialCredential.credential.id) {
+      if (
+        initialCredential &&
+        isCredentialKind(initialCredential.credential.kind) &&
+        initialCredential.credential.id
+      ) {
         const currentCredential = await findApiKeyById(db, initialCredential.credential.id);
-        if (!currentCredential || currentCredential.revoked_at)
+        if (
+          !currentCredential ||
+          currentCredential.revoked_at ||
+          (currentCredential.expires_at && Date.parse(currentCredential.expires_at) <= Date.now())
+        )
           throw new HTTPException(403, { message: 'Credential revoked' });
         requireTransitionAuthority({
           apiKey: requestPrincipalFromApiKey(currentCredential, 'http'),

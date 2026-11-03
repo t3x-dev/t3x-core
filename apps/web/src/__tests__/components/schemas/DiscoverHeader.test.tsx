@@ -13,7 +13,18 @@ vi.mock('@/infrastructure/namespaces', () => ({
 
 describe('DiscoverHeader navigation', () => {
   beforeEach(() => {
+    vi.unstubAllEnvs();
+    mocks.getCurrentPersonalNamespace.mockClear();
     mocks.getCurrentPersonalNamespace.mockResolvedValue({ slug: 'test-b2' });
+  });
+
+  it('does not probe the authenticated personal namespace when local auth is disabled', async () => {
+    vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'true');
+
+    render(<DiscoverHeader owner="t3x-dev" namespaceTab="repositories" />);
+
+    await waitFor(() => expect(mocks.getCurrentPersonalNamespace).not.toHaveBeenCalled());
+    expect(screen.getByRole('link', { name: 'T3X home' })).toHaveAttribute('href', '/t3x-dev');
   });
   it('preserves the current branch and Workspace on canonical repository tabs', () => {
     const settingsHref = '/orbit/release/settings?returnTo=%2Forbit%2Frelease%3Ftab%3Dworkspaces';

@@ -603,6 +603,9 @@ export interface Account {
 export const API_KEY_PRINCIPAL_KINDS = ['human', 'agent', 'service'] as const;
 export type ApiKeyPrincipalKind = (typeof API_KEY_PRINCIPAL_KINDS)[number];
 
+export const CREDENTIAL_KINDS = ['api_key', 'pat', 'mcp', 'agent', 'service'] as const;
+export type CredentialKind = (typeof CREDENTIAL_KINDS)[number];
+
 /** Closed application-level capabilities for the Transition control plane. */
 export const TRANSITION_SCOPES = [
   'transition:propose',
@@ -624,6 +627,10 @@ export const TRANSITION_WRITE_SCOPES = TRANSITION_SCOPES.filter(
 
 export function isApiKeyPrincipalKind(value: string): value is ApiKeyPrincipalKind {
   return (API_KEY_PRINCIPAL_KINDS as readonly string[]).includes(value);
+}
+
+export function isCredentialKind(value: string): value is CredentialKind {
+  return (CREDENTIAL_KINDS as readonly string[]).includes(value);
 }
 
 export function isTransitionScope(value: string): value is TransitionScope {
@@ -658,14 +665,26 @@ export interface ApiKey {
   /** Scope: if set, key is scoped to this project. null = global */
   project_id: string | null;
 
+  /** Optional human-only namespace scope. Mutually exclusive with project_id. */
+  namespace_id: string | null;
+
   /** Owner user ID. null = legacy key (AUTH_DISABLED era) */
   user_id: string | null;
 
   /** Trusted principal represented by this credential. */
   principal_kind: ApiKeyPrincipalKind;
 
+  /** Authenticator/purpose kind, independent from the represented principal. */
+  credential_kind: CredentialKind;
+
+  /** Human that delegated authority to a machine actor, when applicable. */
+  delegator_user_id: string | null;
+
   /** Explicit Transition capabilities. Existing and unspecified keys receive none. */
   transition_scopes: TransitionScope[];
+
+  /** Optional hard expiry, ISO8601. */
+  expires_at: string | null;
 
   /** When the key was created, ISO8601 */
   created_at: string;
@@ -675,6 +694,9 @@ export interface ApiKey {
 
   /** When the key was revoked (soft-delete), ISO8601 */
   revoked_at: string | null;
+
+  /** Stable server-selected reason for revocation. */
+  revocation_reason: string | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

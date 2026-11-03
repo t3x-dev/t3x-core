@@ -104,16 +104,23 @@ export async function createBranchWorkspace(db: AnyDB, input: CreateBranchWorksp
         input.projectId,
         head.commit.decision.digest
       );
-      const refName = graph?.membership.refName ?? audit?.refName;
+      const refName = audit?.refName ?? graph?.membership.refName;
       if (!refName)
         throw new DraftAuthoringConflictError(
           'The inherited Commit has no recoverable source authority.'
         );
-      const view = await getTransitionViewForCommit(tx, {
-        projectId: input.projectId,
-        refName,
-        commitId: head.head,
-      });
+      let view;
+      try {
+        view = await getTransitionViewForCommit(tx, {
+          projectId: input.projectId,
+          refName,
+          commitId: head.head,
+        });
+      } catch (error) {
+        throw new DraftAuthoringConflictError(
+          `The inherited Commit authorization for ${refName} could not be verified: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+      }
       if (view?.mode !== 'transition')
         throw new DraftAuthoringConflictError('The inherited Commit could not be verified.');
       const hashes = new Set<string>(
@@ -128,7 +135,8 @@ export async function createBranchWorkspace(db: AnyDB, input: CreateBranchWorksp
           input.projectId,
           refName,
           head.head,
-          schema
+          schema,
+          view
         );
         if (!recovered)
           throw new DraftAuthoringConflictError(

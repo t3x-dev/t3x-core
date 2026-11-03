@@ -134,13 +134,6 @@ export {
   resolveProjectLifecycleActor,
 } from './lib/project-lifecycle-policy';
 export {
-  getRequestPrincipal,
-  localDevelopmentRequestPrincipal,
-  requestPrincipalFromApiKey,
-  runnerRequestPrincipal,
-  setRequestPrincipal,
-} from './lib/request-principal';
-export {
   allowAllProjectVisibilityPolicy,
   PROJECT_VISIBILITY_POLICY_VERSION,
   type ProjectVisibilityMutation,
@@ -159,6 +152,16 @@ export {
   startRealtimeListener,
   stopRealtimeListener,
 } from './lib/realtime-listener';
+export {
+  getRequestPrincipal,
+  localDevelopmentRequestPrincipal,
+  requestPrincipalFromApiKey,
+  requestPrincipalFromSession,
+  runnerRequestPrincipal,
+  setRequestPrincipal,
+  WEB_SESSION_SCOPES,
+  WEB_SESSION_TOKEN_PREFIX,
+} from './lib/request-principal';
 export { startTimeoutChecker, stopTimeoutChecker } from './lib/timeout-checker';
 export type {
   TransitionControlPlaneOptions,

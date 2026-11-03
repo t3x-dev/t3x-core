@@ -5,8 +5,7 @@ import type { CanvasNodeData, NodeKind } from '../types/nodes';
 import type { CanvasState, CommitTone, DraftBranchMode } from './canvasStoreTypes';
 
 // API base URL - shared across store slices
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
-export const API_V1 = `${API_BASE}/api/v1`;
+export const API_V1 = '/api/v1';
 
 const connectionMatrix: Record<NodeKind, NodeKind[]> = {
   unit: ['unit'],

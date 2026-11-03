@@ -66,12 +66,17 @@ function key(scopes: ApiKey['transition_scopes']): ApiKey {
     key_hash: 'test-hash',
     name: 'Workspace extraction agent',
     project_id: 'proj_1',
+    namespace_id: null,
     user_id: 'user_1',
     principal_kind: 'agent',
+    credential_kind: 'agent',
+    delegator_user_id: 'user_1',
     transition_scopes: scopes,
+    expires_at: null,
     created_at: '2026-08-05T00:00:00.000Z',
     last_used_at: null,
     revoked_at: null,
+    revocation_reason: null,
   };
 }
 

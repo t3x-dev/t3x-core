@@ -22,16 +22,25 @@ vi.mock('../lib/db', () => ({
 
 // Mock @t3x-dev/storage — the auth middleware dynamically imports this
 vi.mock('@t3x-dev/storage', () => ({
+  findActiveSessionByToken: vi.fn(),
   findApiKeyByValue: vi.fn(),
+  touchSessionLastSeen: vi.fn(() => Promise.resolve()),
   touchLastUsed: vi.fn(() => Promise.resolve()),
 }));
 
-import { findApiKeyByValue, touchLastUsed } from '@t3x-dev/storage';
+import {
+  findActiveSessionByToken,
+  findApiKeyByValue,
+  touchLastUsed,
+  touchSessionLastSeen,
+} from '@t3x-dev/storage';
 import { authMiddleware } from '../middleware/auth';
 import type { AppEnv } from '../types';
 
 const mockFindApiKeyByValue = vi.mocked(findApiKeyByValue);
+const mockFindActiveSessionByToken = vi.mocked(findActiveSessionByToken);
 const mockTouchLastUsed = vi.mocked(touchLastUsed);
+const mockTouchSessionLastSeen = vi.mocked(touchSessionLastSeen);
 
 /**
  * Creates a test Hono app with the auth middleware applied.
@@ -45,11 +54,16 @@ function apiKey(overrides: Partial<ApiKey> = {}): ApiKey {
     name: 'Test Key',
     user_id: null,
     project_id: null,
+    namespace_id: null,
     principal_kind: 'human',
+    credential_kind: 'api_key',
+    delegator_user_id: null,
     transition_scopes: [],
+    expires_at: null,
     created_at: new Date().toISOString(),
     last_used_at: null,
     revoked_at: null,
+    revocation_reason: null,
     ...overrides,
   };
 }
@@ -300,6 +314,8 @@ describe('Auth Middleware', () => {
           user_id: 'user_a',
           project_id: 'proj_a',
           principal_kind: 'service',
+          credential_kind: 'service',
+          delegator_user_id: 'user_a',
           transition_scopes: ['transition:inspect'],
         })
       );
@@ -314,26 +330,29 @@ describe('Auth Middleware', () => {
         actor: { kind: 'service', id: 'service:api-key:ak_service' },
         delegator: { kind: 'human', id: 'user:user_a' },
         workspaceOwner: { kind: 'human', principal_id: 'user_a' },
-        credential: { kind: 'api_key', id: 'ak_service', projectId: 'proj_a' },
+        credential: { kind: 'service', id: 'ak_service', projectId: 'proj_a', namespaceId: null },
         scopes: ['transition:inspect'],
         ingress: 'http',
       });
     });
 
-    it.each(['Actor', 'Owner', 'Role', 'Namespace', 'Scopes']) (
-      'rejects the reserved X-T3X-%s identity override header',
-      async (header) => {
-        process.env.AUTH_DISABLED = 'false';
-        mockFindApiKeyByValue.mockResolvedValueOnce(apiKey());
+    it.each([
+      'Actor',
+      'Owner',
+      'Role',
+      'Namespace',
+      'Scopes',
+    ])('rejects the reserved X-T3X-%s identity override header', async (header) => {
+      process.env.AUTH_DISABLED = 'false';
+      mockFindApiKeyByValue.mockResolvedValueOnce(apiKey());
 
-        const response = await app.request('/api/v1/projects', {
-          headers: { Authorization: 'Bearer valid-key', [`X-T3X-${header}`]: 'forged' },
-        });
+      const response = await app.request('/api/v1/projects', {
+        headers: { Authorization: 'Bearer valid-key', [`X-T3X-${header}`]: 'forged' },
+      });
 
-        expect(response.status).toBe(400);
-        expect((await response.json()).error.code).toBe('INVALID_REQUEST');
-      }
-    );
+      expect(response.status).toBe(400);
+      expect((await response.json()).error.code).toBe('INVALID_REQUEST');
+    });
 
     it('passes through with valid API key', async () => {
       process.env.AUTH_DISABLED = 'false';
@@ -401,6 +420,38 @@ describe('Auth Middleware', () => {
         expect.anything(), // db instance
         'ak_touch123'
       );
+    });
+  });
+
+  describe('valid browser session', () => {
+    it('sets a human RequestPrincipal and touches only the session', async () => {
+      process.env.AUTH_DISABLED = 'false';
+      mockFindActiveSessionByToken.mockResolvedValueOnce({
+        id: 'sess_browser',
+        token_hash: 'hash',
+        user_id: 'user_a',
+        auth_method: 'local_password',
+        user_agent: 'Test Browser',
+        created_at: '2026-11-02T00:00:00.000Z',
+        last_seen_at: '2026-11-02T00:00:00.000Z',
+        expires_at: '2026-12-02T00:00:00.000Z',
+        revoked_at: null,
+      });
+
+      const response = await app.request('/api/v1/projects', {
+        headers: { Authorization: 'Bearer t3xs_browser_token' },
+      });
+
+      expect(response.status).toBe(200);
+      expect((await response.json()).principal).toMatchObject({
+        subject: { kind: 'human', principal_id: 'user_a' },
+        sessionId: 'sess_browser',
+        credential: { kind: 'session', id: 'sess_browser', projectId: null, namespaceId: null },
+        ingress: 'http',
+      });
+      expect(mockFindApiKeyByValue).not.toHaveBeenCalled();
+      expect(mockTouchSessionLastSeen).toHaveBeenCalledWith(expect.anything(), 'sess_browser');
+      expect(mockTouchLastUsed).not.toHaveBeenCalled();
     });
   });
 

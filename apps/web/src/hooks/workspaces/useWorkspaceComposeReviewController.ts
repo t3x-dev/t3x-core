@@ -146,6 +146,8 @@ export function useWorkspaceComposeReviewController({
     candidate.authoringLedger,
   ]);
   const candidateVersionRef = useRef(candidateVersion);
+  const candidateRevisionRef = useRef(candidate.revision);
+  candidateRevisionRef.current = candidate.revision;
   const materialUpload = useMaterialUpload();
   const pinsCrud = usePinsCrud();
   const { fetch: refreshPins } = pinsCrud;
@@ -179,14 +181,22 @@ export function useWorkspaceComposeReviewController({
       return;
     }
     if (versionChanged) {
+      const matchesPreparedRevision =
+        review.precondition?.workspace_revision !== undefined &&
+        candidate.revision === review.precondition.workspace_revision;
       // The legacy preparation path performs its own save; that acknowledgement
       // is not a concurrent edit. Managed authoring Review itself is read-only.
-      if (candidate.authoringLedger || busyAction !== 'review.prepare')
+      if (
+        !matchesPreparedRevision &&
+        (candidate.authoringLedger || busyAction !== 'review.prepare')
+      )
         reviewGenerationRef.current += 1;
-      setReview(EMPTY_REVIEW);
-      setDecisionReason('');
-      if (busyAction !== 'review.prepare' && review.transitionId)
-        setNotice('Draft changed; prepare a complete Review again.');
+      if (!matchesPreparedRevision) {
+        setReview(EMPTY_REVIEW);
+        setDecisionReason('');
+        if (busyAction !== 'review.prepare' && review.transitionId)
+          setNotice('Draft changed; prepare a complete Review again.');
+      }
     }
     setWorkingCandidate((current) =>
       candidate.revision === undefined || (current.revision ?? -1) <= candidate.revision
@@ -450,7 +460,13 @@ export function useWorkspaceComposeReviewController({
               reason: `Review ${authoringView.netDiff.length} authoring Workspace changes.`,
             }
           );
-          if (!isCurrent() || generation !== reviewGenerationRef.current) return false;
+          if (
+            !isCurrent() ||
+            (generation !== reviewGenerationRef.current &&
+              candidateRevisionRef.current !== reviewed.view.precondition.workspace_revision)
+          )
+            return false;
+          const reviewedGeneration = reviewGenerationRef.current;
           const latest = await getSharedApiClient().workspaces.getLatestReviewSnapshot(
             workingCandidate.projectId,
             workingCandidate.id,
@@ -458,7 +474,12 @@ export function useWorkspaceComposeReviewController({
               transition_id: reviewed.view.transition_id,
             }
           );
-          if (!isCurrent() || generation !== reviewGenerationRef.current) return false;
+          if (
+            !isCurrent() ||
+            (reviewedGeneration !== reviewGenerationRef.current &&
+              candidateRevisionRef.current !== reviewed.view.precondition.workspace_revision)
+          )
+            return false;
           if (!latest?.snapshot)
             throw new Error('The saved review snapshot is unavailable. Prepare Review again.');
           setReview({

@@ -120,13 +120,13 @@ describe('ProjectCollaborationPanel', () => {
     const collaboration = mockCollaboration();
     render(<ProjectCollaborationPanel projectId="proj_1" />);
 
-    fireEvent.change(screen.getByLabelText('Project invitee email'), {
-      target: { value: 'new@example.com' },
+    fireEvent.change(screen.getByLabelText('Project invitee username or email'), {
+      target: { value: 'test-b3' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
 
     await waitFor(() =>
-      expect(collaboration.createInvitation).toHaveBeenCalledWith('new@example.com', 'editor')
+      expect(collaboration.createInvitation).toHaveBeenCalledWith('test-b3', 'editor')
     );
     expect(
       await screen.findByText(`http://localhost:3000/invite#token=${TOKEN}`)

@@ -39,19 +39,28 @@ import {
 } from '@t3x-dev/storage';
 import type { Context } from 'hono';
 import { isAuthenticationDisabled } from './auth-config';
+import { logAuthorizationDenial } from './authorization-denial-audit';
 import { createError, type ErrorCode } from './errors';
 import { getRequestPrincipal } from './request-principal';
+import { resolveProjectRouteAction } from './route-action-policy';
 
 export interface ProjectAccessPrincipal {
   userId: string | null | undefined;
   projectId: string | null | undefined;
+  namespaceId?: string | null | undefined;
   principalKind: ApiKeyPrincipalKind | undefined;
   keyId?: string | null | undefined;
 }
 
 export type ProjectAccessDecision =
   | { allowed: true; project: NonNullable<Awaited<ReturnType<typeof findProjectById>>> }
-  | { allowed: false; status: 403 | 404; code: 'FORBIDDEN' | 'NOT_FOUND'; message: string };
+  | {
+      allowed: false;
+      status: 403 | 404;
+      code: 'FORBIDDEN' | 'NOT_FOUND';
+      message: string;
+      reason: string;
+    };
 
 function includesValue<T extends string>(values: readonly T[], value: string): value is T {
   return values.includes(value as T);
@@ -120,8 +129,14 @@ function trustedProjectAuthorityFacts(
     namespace_membership: membershipDto(stored.namespaceMembership),
     project_grant: projectGrantDto(stored.projectGrant),
     evaluated_at: new Date().toISOString(),
-    ...(credential.projectId
-      ? { credential_scope: { project_id: credential.projectId, actions: PROJECT_ACTIONS } }
+    ...(credential.projectId || credential.namespaceId
+      ? {
+          credential_scope: {
+            project_id: credential.projectId ?? null,
+            namespace_id: credential.namespaceId ?? null,
+            actions: PROJECT_ACTIONS,
+          },
+        }
       : {}),
   };
 }
@@ -143,16 +158,29 @@ async function evaluateProjectAccessFromFacts(
         status: 404,
         code: 'NOT_FOUND',
         message: `Project ${projectId} not found`,
+        reason: 'project_not_found',
       };
     }
     return options.allowLocalBypass
       ? { allowed: true, project }
-      : { allowed: false, status: 403, code: 'FORBIDDEN', message: 'Access denied' };
+      : {
+          allowed: false,
+          status: 403,
+          code: 'FORBIDDEN',
+          message: 'Access denied',
+          reason: 'missing_principal',
+        };
   }
 
   const trustedPrincipal = canonicalPrincipal(principal);
   if (!trustedPrincipal) {
-    return { allowed: false, status: 403, code: 'FORBIDDEN', message: 'Access denied' };
+    return {
+      allowed: false,
+      status: 403,
+      code: 'FORBIDDEN',
+      message: 'Access denied',
+      reason: 'invalid_principal',
+    };
   }
 
   const facts = await findProjectAuthorityFacts(db, {
@@ -166,6 +194,7 @@ async function evaluateProjectAccessFromFacts(
       status: 404,
       code: 'NOT_FOUND',
       message: `Project ${projectId} not found`,
+      reason: 'project_not_found',
     };
   }
 
@@ -176,6 +205,7 @@ async function evaluateProjectAccessFromFacts(
       status: 403,
       code: 'FORBIDDEN',
       message: 'Access denied',
+      reason: 'resource_boundary_missing',
     };
   }
 
@@ -186,6 +216,7 @@ async function evaluateProjectAccessFromFacts(
       status: 403,
       code: 'FORBIDDEN',
       message: 'Access denied',
+      reason: decision.reason,
     };
   }
 
@@ -227,6 +258,7 @@ export function getProjectAccessPrincipal(c: Context): ProjectAccessPrincipal | 
   return {
     userId: principal.userId,
     projectId: principal.credential.projectId,
+    namespaceId: principal.credential.namespaceId,
     principalKind: principal.subject.kind,
     keyId: principal.subject.principal_id,
   };
@@ -256,10 +288,13 @@ export async function listAuthorizedProjectActions(
 }
 
 /** Principal shape used by tenant-safe project list queries. */
-export function getProjectListAuthority(
-  c: Context
-):
-  | { principal_kind: 'human' | 'agent' | 'service'; principal_id: string; project_id?: string }
+export function getProjectListAuthority(c: Context):
+  | {
+      principal_kind: 'human' | 'agent' | 'service';
+      principal_id: string;
+      project_id?: string;
+      namespace_id?: string;
+    }
   | undefined {
   const principal = getProjectAccessPrincipal(c);
   if (!principal) return undefined;
@@ -269,20 +304,14 @@ export function getProjectListAuthority(
         principal_kind: canonical.kind,
         principal_id: canonical.principal_id,
         ...(principal.projectId ? { project_id: principal.projectId } : {}),
+        ...(principal.namespaceId ? { namespace_id: principal.namespaceId } : {}),
       }
     : undefined;
 }
 
-/** Resolve a coarse project action from trusted route metadata, not request JSON. */
+/** Resolve the exact project action from checked route metadata, never from request JSON. */
 export function projectActionForRequest(c: Context): ProjectAction {
-  const method = c.req.method.toUpperCase();
-  const path = c.req.path;
-  if (method === 'GET' || method === 'HEAD') return 'project:read';
-  if (/\/(?:api\/)?v1\/projects\/[^/]+\/restore$/.test(path)) return 'project:restore';
-  if (method === 'DELETE' && /\/(?:api\/)?v1\/projects\/[^/]+$/.test(path)) {
-    return 'project:delete';
-  }
-  return 'project:edit';
+  return resolveProjectRouteAction(c.req.method, c.req.path);
 }
 
 /**
@@ -307,6 +336,14 @@ export async function assertProjectAccess(
     }
   );
   if (!decision.allowed) {
+    if (decision.status === 403) {
+      logAuthorizationDenial({
+        principal: getRequestPrincipal(c),
+        action,
+        resource: { kind: 'project', id: projectId },
+        reason: decision.reason,
+      });
+    }
     return c.json(createError(decision.code, decision.message), decision.status);
   }
   return decision.project;
@@ -329,6 +366,13 @@ export async function assertResourceProjectAccess(
 
   if (!getProjectAccessPrincipal(c)) return null;
 
+  const action = projectActionForRequest(c);
+  logAuthorizationDenial({
+    principal: getRequestPrincipal(c),
+    action,
+    resource: { kind: 'project_resource', id: 'unbound' },
+    reason: 'project_scope_required',
+  });
   return c.json(createError('FORBIDDEN', 'A project-scoped resource is required'), 403);
 }
 
@@ -430,6 +474,15 @@ export async function assertProjectAccessIncludingDeleted(
     { allowLocalBypass: isAuthenticationDisabled() }
   );
   if (!decision.allowed) {
+    if (decision.status === 403) {
+      const action = projectActionForRequest(c);
+      logAuthorizationDenial({
+        principal: getRequestPrincipal(c),
+        action,
+        resource: { kind: 'project', id: projectId },
+        reason: decision.reason,
+      });
+    }
     return c.json(createError(decision.code, decision.message), decision.status);
   }
   return decision.project;
