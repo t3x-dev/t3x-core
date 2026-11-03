@@ -77,7 +77,7 @@ export function WorkspaceSchemaDiagnostics({
   }, [open, frozen, requests, revision, refresh, selectionKey]);
   return (
     <>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+      <Button className="w-full" variant="canvas-outline" size="sm" onClick={() => setOpen(true)}>
         Schema checks & impact
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>

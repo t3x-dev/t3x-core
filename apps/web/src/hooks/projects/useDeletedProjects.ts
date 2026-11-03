@@ -50,7 +50,7 @@ export function repositoryMutationError(cause: unknown): {
 }
 
 /** Keep deleted rows separate from the active repository cache. */
-export function useDeletedProjects(namespace: string) {
+export function useDeletedProjects(namespace: string, loadAll = false) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [offset, setOffset] = useState(0);
   const [hasNext, setHasNext] = useState(false);
@@ -66,6 +66,24 @@ export function useDeletedProjects(namespace: string) {
       setLoading(true);
       setError(null);
       try {
+        if (loadAll) {
+          const collected = new Map<string, Project>();
+          let next = 0;
+          for (;;) {
+            const data = await fetchDeletedProjects(PAGE_SIZE + 1, next, namespace);
+            if (id !== request.current) return;
+            const previousSize = collected.size;
+            for (const project of data.projects) collected.set(project.project_id, project);
+            if (data.projects.length < PAGE_SIZE + 1) break;
+            if (collected.size === previousSize)
+              throw new Error('Repository pagination did not advance. Please refresh.');
+            next += data.projects.length;
+          }
+          setProjects([...collected.values()]);
+          setHasNext(false);
+          setOffset(0);
+          return;
+        }
         // Read one extra row to avoid an empty trailing page.
         let data = await fetchDeletedProjects(PAGE_SIZE + 1, nextOffset, namespace);
         if (id !== request.current) return;
@@ -85,7 +103,7 @@ export function useDeletedProjects(namespace: string) {
         if (id === request.current) setLoading(false);
       }
     },
-    [namespace]
+    [namespace, loadAll]
   );
 
   useEffect(() => {

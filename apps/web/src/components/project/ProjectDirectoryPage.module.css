@@ -1,21 +1,100 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: 32px 32px 0;
+}
+.page:not(.deletedPage) {
+  max-width: 1200px;
+}
+.deletedPage {
+  max-width: 1060px;
+  padding-bottom: 24px;
+}
+.deletedSurface {
+  background: var(--surface-app);
+}
+.namespaceContext {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.titleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.titleRow h1 {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.titleRow h1 span {
+  margin-left: 8px;
+  color: var(--text-secondary);
+  font-size: 16px;
+  font-weight: 400;
+}
+.titleActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.deletedLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.deletedLink:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.viewTabs {
+  display: flex;
+  gap: 24px;
+  margin-top: 24px;
+  border-bottom: 1px solid var(--stroke-divider);
+}
+.viewTabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+.viewTabs button[aria-current] {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.viewTabs span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
 .toolbar {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-block: 16px;
-  border-block: 1px solid var(--stroke-divider);
+  flex-wrap: wrap;
+  padding-top: 18px;
 }
-
-.primaryLink {
-  color: var(--primary-foreground);
-}
-
 .search {
   position: relative;
   flex: 1 1 240px;
   min-width: 0;
 }
-
 .search > svg {
   position: absolute;
   top: 50%;
@@ -24,354 +103,330 @@
   pointer-events: none;
   transform: translateY(-50%);
 }
-
 .search input {
   width: 100%;
   height: 36px;
   padding: 6px 12px 6px 36px;
   border: 1px solid var(--stroke-default);
   border-radius: var(--radius-md);
-  outline: none;
-  background: var(--surface-card);
+  background: var(--surface-panel);
   color: var(--text-primary);
   font-size: 14px;
   box-shadow: none;
-  transition: border-color var(--transition-fast);
 }
-
 .search input::placeholder {
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
 }
-
-.search input:focus-visible {
-  border-color: var(--accent-commit);
-  outline: 2px solid var(--accent-commit);
+.search input:focus-visible,
+.viewTabs button:focus-visible {
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
-
-.section {
-  margin-top: 32px;
-}
-
-.sectionHeading {
+.results {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.resultLine {
+  display: flex;
   justify-content: space-between;
-  gap: 8px 20px;
-  margin-bottom: 16px;
-}
-
-.sectionHeading h2 {
-  display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.5;
-}
-
-.sectionHeading h2 svg,
-.sectionHeading > span {
+  gap: 12px;
+  padding: 24px 0 16px;
   color: var(--text-secondary);
-}
-
-.sectionHeading > span,
-.listScope {
   font-size: 12px;
-  line-height: 1.6;
 }
-
-.listScope {
-  margin: -4px 0 16px;
-  color: var(--text-secondary);
-}
-
-.recentGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.recentCard {
-  min-width: 0;
-  border: 1px solid var(--stroke-default);
-  border-radius: var(--radius-md);
-}
-
-.recentLink {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  height: 100%;
-  padding: 16px;
-  border-radius: inherit;
-  color: var(--text-secondary);
-}
-
-.recentLink:hover {
-  background: var(--hover-bg);
-}
-
-.recentLink h3 {
-  color: var(--accent-commit);
-  font-size: 14px;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-
-.repoMark {
-  display: grid;
-  flex: 0 0 40px;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  color: var(--text-secondary);
-}
-
-.rowMark {
-  flex-basis: 36px;
-  width: 36px;
-  height: 36px;
-}
-
-.rowContent {
-  min-width: 0;
-}
-
-.repositoryLink {
-  display: flex;
-  width: fit-content;
-  max-width: 100%;
-  align-items: baseline;
-  gap: 10px;
-  border-radius: var(--radius-sm);
-  color: var(--accent-commit);
-}
-
-.repositoryLink h3 {
-  min-width: 0;
-  font-size: 18px;
-  font-weight: 600;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-
-.repositoryLink:hover {
-  color: var(--accent-commit);
+.resultLine button {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
-
-.repositoryPath {
-  margin-top: 4px;
-  color: var(--text-tertiary);
-  font-size: 12px;
-  line-height: 1.6;
-  overflow-wrap: anywhere;
+.repositories {
+  border-top: 2px solid var(--stroke-divider);
+  padding-bottom: 20px;
 }
-
-.description {
-  max-width: 720px;
-  margin-top: 8px;
-  color: var(--text-primary);
-  font-size: 14px;
-  line-height: 1.65;
-  overflow-wrap: anywhere;
+.repositoryRow {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 16px;
+  padding: 32px 20px;
+  border-bottom: 2px solid var(--stroke-divider);
 }
-
+.repositoryRow:last-child {
+  border-bottom: 0;
+}
+.rowContent {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
 .rowHeading {
   display: flex;
+  align-items: center;
+  gap: 8px;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px 12px;
 }
-
-.visibility {
-  padding: 1px 8px;
-  border: 1px solid var(--stroke-default);
+.repositoryLink {
+  max-width: 100%;
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+}
+.repositoryLink h3 {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.repositoryLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.readOnly {
+  padding: 2px 7px;
+  border: 1px solid var(--stroke-divider);
   border-radius: var(--radius-full);
   color: var(--text-secondary);
   font-size: 12px;
-  line-height: 1.5;
-  text-transform: capitalize;
+  line-height: 18px;
 }
-
+.description {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.rowMeta,
 .metrics,
-.rowMeta {
+.metrics span {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 6px 16px;
+  flex-wrap: wrap;
+  gap: 6px 12px;
   color: var(--text-secondary);
   font-size: 12px;
-  line-height: 1.6;
+  line-height: 1.5;
 }
-
-.repositories {
-  border-top: 1px solid var(--stroke-divider);
-}
-
-.repositoryRow {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 12px;
-  padding: 24px 0;
-  border-bottom: 1px solid var(--stroke-divider);
-}
-
 .rowMeta {
-  margin-top: 12px;
-  gap: 6px 24px;
-  color: var(--text-tertiary);
+  gap: 8px 16px;
 }
-
-.actions {
+.rowTags {
   display: flex;
-  flex-shrink: 0;
-  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.metrics span {
   gap: 4px;
 }
-
+.metrics .commitMetric {
+  color: var(--accent-commit);
+}
+.menu {
+  min-width: 190px;
+}
+.menu :global([role="menuitem"]) {
+  gap: 8px;
+  padding: 9px 8px;
+  font-size: 14px;
+}
+.menu .dangerAction {
+  color: var(--status-error);
+}
+.menuNote {
+  padding: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.pagination {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  background: var(--surface-panel);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: auto;
+  padding: 17px 0 20px;
+  min-height: 70px;
+  border-top: 1px solid var(--stroke-divider);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.recent {
+  padding: 20px 0 16px;
+  border-bottom: 1px solid var(--stroke-divider);
+}
+.recent h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.recent h2 svg {
+  color: var(--text-secondary);
+}
+.recentLinks {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.recentLinks a {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+}
+.recentLinks a:hover {
+  background: var(--surface-app);
+  border-color: var(--stroke-default);
+}
+.recentLinks a:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.recentLinks a > span:nth-child(2) {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+.recentLinks strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+}
+.recentLinks a > span > span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.recentLinks a > svg {
+  flex: none;
+  color: var(--text-secondary);
+}
+.activeTags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.filterControl {
+  max-width: 190px;
+}
+.pagination nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
 .emptyState,
 .noResults {
   display: flex;
-  min-height: 280px;
+  min-height: 260px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  padding: 40px 24px;
+  padding: 32px 20px;
   text-align: center;
 }
-
 .emptyState h2,
 .noResults h3 {
-  margin-top: 4px;
   font-size: 16px;
   font-weight: 600;
 }
-
 .emptyState p,
 .noResults p {
   max-width: 440px;
   color: var(--text-secondary);
   font-size: 14px;
-  line-height: 1.7;
-  overflow-wrap: anywhere;
+  line-height: 1.65;
 }
-
-.noResults > svg {
-  color: var(--text-secondary);
-}
-
 .loading {
-  display: block;
   padding: 48px 0;
   color: var(--text-secondary);
   font-size: 14px;
 }
-
 .notice,
 .refreshError {
-  margin-top: 20px;
+  margin-top: 18px;
 }
-
 .refreshError {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
 }
-
-.expand {
-  display: flex;
-  width: 100%;
-  min-height: 44px;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 12px;
-  padding: 12px;
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-.expand:hover {
-  background: var(--hover-bg);
-  color: var(--text-primary);
-}
-
-.expand:focus-visible {
-  outline: 2px solid var(--accent-commit);
-  outline-offset: 2px;
-}
-
-.expand svg {
-  width: 16px;
-  height: 16px;
-}
-
-.deletedLink {
-  display: inline-flex;
-  min-height: 36px;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 8px;
-  padding: 8px;
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-.deletedLink:hover {
-  color: var(--text-primary);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-@media (max-width: 720px) {
-  .recentGrid {
-    grid-template-columns: minmax(0, 1fr);
+@media (max-width: 760px) {
+  .page {
+    padding: 24px 20px 0;
   }
-
-  .toolbar {
-    flex-wrap: wrap;
+  .deletedPage {
+    padding-bottom: 24px;
   }
-
+  .repositoryRow {
+    padding: 28px 12px;
+  }
   .search {
-    flex-basis: calc(100% - 44px);
+    flex-basis: calc(100% - 50px);
+    order: -2;
   }
-
-  .deletedLink {
-    margin-right: auto;
+  .toolbar > button[aria-label="Refresh repositories"] {
+    order: -1;
   }
-
-  .repositoryRow {
-    gap: 12px;
+  .toolbar .filterControl,
+  .toolbar .tagFilter {
+    flex: 1 1 140px;
+    max-width: none;
+  }
+  .recentLinks {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .recentLinks a {
+    flex: 0 0 220px;
   }
 }
-
 @media (max-width: 420px) {
+  .page {
+    padding-inline: 16px;
+  }
+  .titleActions {
+    justify-content: space-between;
+    width: 100%;
+    gap: 8px;
+  }
   .repositoryRow {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: 36px minmax(0, 1fr) 32px;
+    gap: 8px;
+    padding: 24px 8px;
   }
-
-  .repositoryRow > .repoMark {
-    display: none;
+  .viewTabs {
+    gap: 20px;
   }
-
+  .viewTabs button {
+    font-size: 14px;
+  }
   .refreshError {
     align-items: flex-start;
     flex-direction: column;
   }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .search input {
-    transition: none;
+  .pagination nav {
+    gap: 8px;
   }
 }

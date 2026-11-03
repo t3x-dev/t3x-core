@@ -104,7 +104,7 @@ export function StateCodeView({
   const modeLabel = mode === 'raw' ? 'Plain YAML' : mode.toUpperCase();
 
   const content = (
-    <div className={styles.card}>
+    <div className={`${styles.card} ${renderLayout ? styles.embeddedCard : ''}`}>
       <header className={styles.toolbar}>
         <div className={styles.titleGroup}>
           <h2>State source</h2>
@@ -270,7 +270,10 @@ export function StateCodeView({
     </div>
   );
   const details = (
-    <aside className={styles.side} aria-label="Source information">
+    <aside
+      className={`${styles.side} ${renderLayout ? styles.embeddedSide : ''}`}
+      aria-label="Source information"
+    >
       <section className={styles.panel}>
         <h3>Source</h3>
         <dl>

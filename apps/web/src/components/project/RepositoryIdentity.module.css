@@ -1,0 +1,97 @@
+.identity[data-tone="0"] {
+  --identity-fg: var(--identity-violet);
+  --identity-bg: var(--identity-violet-muted);
+}
+.identity[data-tone="1"] {
+  --identity-fg: var(--identity-teal);
+  --identity-bg: var(--identity-teal-muted);
+}
+.identity[data-tone="2"] {
+  --identity-fg: var(--identity-sky);
+  --identity-bg: var(--identity-sky-muted);
+}
+.identity[data-tone="3"] {
+  --identity-fg: var(--identity-amber);
+  --identity-bg: var(--identity-amber-muted);
+}
+.identity[data-tone="4"] {
+  --identity-fg: var(--identity-rose);
+  --identity-bg: var(--identity-rose-muted);
+}
+.identity[data-tone="5"] {
+  --identity-fg: var(--identity-slate);
+  --identity-bg: var(--identity-slate-muted);
+}
+.identity {
+  color: var(--identity-fg);
+  background: var(--identity-bg);
+}
+.mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--identity-fg) 12%, transparent);
+}
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  min-height: 26px;
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  vertical-align: middle;
+}
+.tag > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tag svg {
+  flex: none;
+}
+button.tag:hover,
+.tag[aria-pressed="true"] {
+  border-color: var(--identity-fg);
+}
+.tag[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 1px var(--identity-fg);
+}
+.tag > button {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin: -2px -3px -2px 0;
+  border-radius: 50%;
+}
+.tag > button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--identity-fg) 12%, transparent);
+}
+.tag:focus-visible,
+.tag > button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.tag:disabled,
+.tag > button:disabled {
+  opacity: 0.5;
+}
+.visibility {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  padding: 2px 7px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}

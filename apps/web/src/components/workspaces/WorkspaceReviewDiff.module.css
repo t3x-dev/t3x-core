@@ -20,9 +20,6 @@
   overflow: visible;
   padding: 0;
 }
-.reviewBody .mainColumn {
-  min-height: 420px;
-}
 .reference .reviewBody .inspector {
   max-height: none;
   overflow: visible;
@@ -641,8 +638,8 @@
   line-height: 20px;
 }
 .reference .treePane {
-  flex: 1;
-  overflow: hidden;
+  flex: none;
+  overflow: visible;
 }
 .referenceTree {
   border-collapse: separate;
@@ -885,6 +882,6 @@
   max-width: none;
 }
 .reference .reviewBody .mainColumn {
-  height: 64vh;
-  min-height: 420px;
+  height: auto;
+  min-height: 0;
 }

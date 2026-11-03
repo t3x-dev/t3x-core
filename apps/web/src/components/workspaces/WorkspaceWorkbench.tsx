@@ -46,7 +46,15 @@ interface WorkspaceWorkbenchProps {
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onViewCommitInState?: (commitHash: string, branch: string) => void;
   onWorkspacesRefresh?: (workspace?: WorkspaceCandidate) => Promise<void> | void;
-  onWorkspaceBranchChange?: (branch: string) => Promise<void> | void;
+  onWorkspaceBranchChange?: (
+    branch: string,
+    requestNavigation?: (navigate: () => void) => void
+  ) => Promise<void> | void;
+  onCreateWorkspaceBranch?: (
+    name: string,
+    fromBranch: string,
+    requestNavigation?: (navigate: () => void) => void
+  ) => Promise<void>;
 }
 
 export function WorkspaceWorkbench({
@@ -58,6 +66,7 @@ export function WorkspaceWorkbench({
   onViewCommitInState,
   onWorkspacesRefresh,
   onWorkspaceBranchChange,
+  onCreateWorkspaceBranch,
   projectId,
   selectedWorkspaceId,
   viewState = 'ready',
@@ -504,6 +513,7 @@ export function WorkspaceWorkbench({
             onApplyAfterRefresh={handleApplyAfterRefresh}
             onScenarioSelect={selectWorkspace}
             onWorkspaceBranchChange={onWorkspaceBranchChange}
+            onCreateWorkspaceBranch={onCreateWorkspaceBranch}
           />
         )}
       </div>
@@ -529,6 +539,7 @@ function WorkspaceDetail({
   onScenarioSelect,
   onWorkflowTabChange,
   onWorkspaceBranchChange,
+  onCreateWorkspaceBranch,
   onYOpsApplied,
   onYOpsCommitted,
   onYOpsScriptSave,
@@ -562,7 +573,15 @@ function WorkspaceDetail({
   ) => Promise<WorkspaceCandidate>;
   onScenarioSelect: (workspaceId: string) => void;
   onWorkflowTabChange: (tab: WorkspaceTabId) => void;
-  onWorkspaceBranchChange?: (branch: string) => Promise<void> | void;
+  onWorkspaceBranchChange?: (
+    branch: string,
+    requestNavigation?: (navigate: () => void) => void
+  ) => Promise<void> | void;
+  onCreateWorkspaceBranch?: (
+    name: string,
+    fromBranch: string,
+    requestNavigation?: (navigate: () => void) => void
+  ) => Promise<void>;
   onYOpsApplied: (remainingSchemaGapCount: number) => void;
   onYOpsCommitted: (commitHash: string, branch: string, workspace: WorkspaceCandidate) => void;
   onYOpsScriptSave: (workspace: WorkspaceCandidate) => Promise<void>;
@@ -593,6 +612,7 @@ function WorkspaceDetail({
           onPrepareDraft={onPrepareDraft}
           onScenarioSelect={onScenarioSelect}
           onWorkspaceBranchChange={onWorkspaceBranchChange}
+          onCreateWorkspaceBranch={onCreateWorkspaceBranch}
           onContinueFromCommit={onContinueFromCommit}
           onGenerateProposal={onGenerateProposal}
           onProposalAction={onProposalAction}

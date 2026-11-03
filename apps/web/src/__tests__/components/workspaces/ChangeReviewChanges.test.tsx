@@ -23,7 +23,7 @@ const groups = [
 ];
 
 describe('ChangeReviewChanges', () => {
-  it('keeps field changes in a keyboard-accessible scroll area', () => {
+  it('lets field changes grow with the Review page', () => {
     render(
       <ChangeReviewChanges
         groups={groups}
@@ -31,14 +31,13 @@ describe('ChangeReviewChanges', () => {
       />
     );
 
-    const scroller = screen.getByRole('region', { name: 'Field changes' });
-    expect(scroller).toHaveAttribute('tabindex', '0');
-    expect(scroller).toHaveClass('h-auto', 'max-h-[40rem]');
-    expect(screen.getByLabelText('Vertical scrollbar')).toBeInTheDocument();
-    expect(within(scroller).getByText('Knowledge assistant')).toBeInTheDocument();
+    const fields = screen.getByRole('region', { name: 'Field changes' });
+    expect(fields.closest('[data-slot="state-scroll-area"]')).toBeNull();
+    expect(screen.queryByLabelText('Vertical scrollbar')).not.toBeInTheDocument();
+    expect(within(fields).getByText('Knowledge assistant')).toBeInTheDocument();
   });
 
-  it('preserves the scroll area when switching to operations', () => {
+  it('keeps operations in the same page flow', () => {
     render(
       <ChangeReviewChanges
         groups={groups}
@@ -50,6 +49,7 @@ describe('ChangeReviewChanges', () => {
 
     const scroller = screen.getByRole('region', { name: 'Operations' });
     expect(within(scroller).getByText('SET candidate/title')).toBeInTheDocument();
+    expect(scroller.closest('[data-slot="state-scroll-area"]')).toBeNull();
     expect(screen.getByRole('tab', { name: /Operations/ })).toHaveAttribute(
       'aria-selected',
       'true'

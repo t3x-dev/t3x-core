@@ -5,16 +5,7 @@ import {
   RepositoryReadmeSchema,
   RepositoryTagsSchema,
 } from '@t3x-dev/api-client';
-import {
-  ArrowLeft,
-  ArrowRight,
-  ChevronDown,
-  Globe,
-  Link2,
-  Loader2,
-  LockKeyhole,
-  UserRound,
-} from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUpRight, Loader2, UserRound } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
@@ -29,8 +20,10 @@ import { useRepositorySetup } from '@/hooks/projects/useRepositorySetup';
 import palette from '@/styles/management-palette.module.css';
 import { cn } from '@/utils/cn';
 import styles from './NewRepositoryPage.module.css';
+import { visibilityOptions } from './RepositoryIdentity';
 import management from './RepositoryManagement.module.css';
 import { RepositoryNameFeedback } from './RepositoryNameFeedback';
+import { RepositorySelect } from './RepositorySelect';
 import { type RepositoryTagsDraft, RepositoryTagsInput } from './RepositoryTagsInput';
 
 export function NewRepositoryPage() {
@@ -56,8 +49,6 @@ export function NewRepositoryPage() {
   const ready =
     setup.started || (nameCheck.canSubmit && parsedTags.success && parsedReadme.success);
   const owners = Array.from(new Set([routeOwner, ...accounts.map((item) => item.namespace.slug)]));
-  const VisibilityIcon =
-    visibility === 'private' ? LockKeyhole : visibility === 'public' ? Globe : Link2;
   const visibilityDescription = {
     private: 'Only people with permission can access this repository.',
     unlisted: 'Anyone with the repository address can access it.',
@@ -96,11 +87,18 @@ export function NewRepositoryPage() {
       />
       <div className={management.content}>
         <main className={cn(management.scope, styles.page)}>
-          <Link href={returnTo ?? `/${routeOwner}`} className={management.backLink}>
-            <ArrowLeft aria-hidden="true" className="size-4" />{' '}
-            {returnTo ? 'Back to Explore' : 'Back to repositories'}
-          </Link>
-          <header className={management.heading}>
+          <div className={styles.backRow}>
+            <Link href={returnTo ?? `/${routeOwner}`} className={management.backLink}>
+              <ArrowLeft aria-hidden="true" className="size-4" />{' '}
+              {returnTo ? 'Back to Explore' : 'Back to repositories'}
+            </Link>
+            {!returnTo && (
+              <Link href="/explore?view=browse" className={management.backLink}>
+                Browse Schema sources <ArrowUpRight aria-hidden="true" size={14} />
+              </Link>
+            )}
+          </div>
+          <header className={cn(management.heading, styles.introduction)}>
             <h1>Create a new repository</h1>
             <p>Keep your structured state and its history together.</p>
             <p className={styles.requiredNote}>Required fields are marked *</p>
@@ -108,6 +106,9 @@ export function NewRepositoryPage() {
           <form onSubmit={submit} aria-busy={setup.pending}>
             <section className={styles.section} aria-labelledby="repository-general-heading">
               <div className={styles.sectionHeading}>
+                <span className={styles.stepNumber} aria-hidden="true">
+                  1
+                </span>
                 <h2 id="repository-general-heading">General</h2>
               </div>
               <div className={styles.sectionBody}>
@@ -117,26 +118,16 @@ export function NewRepositoryPage() {
                       <label htmlFor="repo-owner">
                         Owner <span aria-hidden="true">*</span>
                       </label>
-                      <div className={styles.selectControl}>
-                        <UserRound className={styles.selectIcon} size={16} aria-hidden="true" />
-                        <select
-                          id="repo-owner"
-                          aria-label="Owner"
-                          required
-                          disabled={locked}
-                          value={owner}
-                          onChange={(event) => setOwner(event.target.value)}
-                        >
-                          {owners.map((value) => (
-                            <option key={value}>{value}</option>
-                          ))}
-                        </select>
-                        <ChevronDown
-                          className={styles.selectChevron}
-                          size={14}
-                          aria-hidden="true"
-                        />
-                      </div>
+                      <RepositorySelect
+                        id="repo-owner"
+                        label="Owner"
+                        required
+                        disabled={locked}
+                        value={owner}
+                        onValueChange={setOwner}
+                        className={styles.ownerSelect}
+                        options={owners.map((value) => ({ value, label: value, icon: UserRound }))}
+                      />
                     </div>
                     <span className={styles.pathSeparator} aria-hidden="true">
                       /
@@ -171,7 +162,7 @@ export function NewRepositoryPage() {
                     </p>
                     <div id="repository-name-feedback">
                       {(name.length > 0 || nameCheck.error) && (
-                        <RepositoryNameFeedback check={nameCheck} />
+                        <RepositoryNameFeedback check={nameCheck} compact />
                       )}
                     </div>
                   </div>
@@ -195,10 +186,12 @@ export function NewRepositoryPage() {
             </section>
             <section className={styles.section} aria-labelledby="repository-configuration-heading">
               <div className={styles.sectionHeading}>
+                <span className={styles.stepNumber} aria-hidden="true">
+                  2
+                </span>
                 <h2 id="repository-configuration-heading">Configuration</h2>
-                <p>README and tags are optional. You can add or edit them later.</p>
               </div>
-              <div className={styles.configuration}>
+              <div className={styles.visibilityCard}>
                 <div className={styles.visibilityRow}>
                   <div className={styles.optionCopy}>
                     <label htmlFor="repo-visibility">
@@ -206,37 +199,37 @@ export function NewRepositoryPage() {
                     </label>
                     <p id="repository-visibility-help">{visibilityDescription}</p>
                   </div>
-                  <div className={styles.selectControl}>
-                    <VisibilityIcon className={styles.selectIcon} size={16} aria-hidden="true" />
-                    <select
-                      id="repo-visibility"
-                      aria-label="Visibility"
-                      aria-describedby="repository-visibility-help"
-                      disabled={locked}
-                      value={visibility}
-                      onChange={(event) => setVisibility(event.target.value as typeof visibility)}
-                    >
-                      <option value="private">Private</option>
-                      <option value="unlisted">Unlisted</option>
-                      <option value="public">Public</option>
-                    </select>
-                    <ChevronDown className={styles.selectChevron} size={14} aria-hidden="true" />
-                  </div>
+                  <RepositorySelect
+                    id="repo-visibility"
+                    label="Visibility"
+                    describedBy="repository-visibility-help"
+                    disabled={locked}
+                    value={visibility}
+                    onValueChange={(value) => setVisibility(value as typeof visibility)}
+                    className={styles.visibilitySelect}
+                    options={visibilityOptions}
+                  />
                 </div>
+              </div>
+              <div className={styles.configuration}>
                 <div className={styles.readmeOption}>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={initializeReadme}
-                      disabled={locked}
-                      aria-describedby="repository-readme-help"
-                      onChange={(event) => setInitializeReadme(event.target.checked)}
-                    />
-                    Initialize README
+                  <label htmlFor="repo-readme">
+                    Initialize README <span className={styles.optional}>Optional</span>
                   </label>
+                  <input
+                    id="repo-readme"
+                    role="switch"
+                    aria-checked={initializeReadme}
+                    aria-label="Initialize README"
+                    type="checkbox"
+                    checked={initializeReadme}
+                    disabled={locked}
+                    aria-describedby="repository-readme-help"
+                    onChange={(event) => setInitializeReadme(event.target.checked)}
+                  />
+
                   <p id="repository-readme-help">
-                    Start with your repository name and description. Leave unchecked to begin
-                    without a README.
+                    Start with your repository name and description. You can edit it later.
                   </p>
                   {!parsedReadme.success ? (
                     <p role="alert" className="text-sm text-[var(--status-error)]">
@@ -245,7 +238,12 @@ export function NewRepositoryPage() {
                   ) : null}
                 </div>
                 <div className={styles.tagsField}>
-                  <RepositoryTagsInput value={tags} onChange={setTags} disabled={locked} />
+                  <RepositoryTagsInput
+                    value={tags}
+                    onChange={setTags}
+                    disabled={locked}
+                    suggestionsNamespace={owner}
+                  />
                 </div>
               </div>
             </section>
@@ -262,9 +260,13 @@ export function NewRepositoryPage() {
                     : 'Creating your repository…'
                   : setup.started
                     ? 'Your repository is created. Retry to finish setup and open its Workspace.'
-                    : 'A Workspace will be prepared for your source material after creation.'}
+                    : 'Your new repository opens in Workspace.'}
               </output>
-              <Button type="submit" disabled={!ready || setup.pending}>
+              <Button
+                type="submit"
+                className={management.createAction}
+                disabled={!ready || setup.pending}
+              >
                 {setup.pending && (
                   <Loader2
                     aria-hidden="true"

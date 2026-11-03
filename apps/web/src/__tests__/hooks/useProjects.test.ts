@@ -33,6 +33,57 @@ afterEach(() => {
 });
 
 describe('useProjects.create', () => {
+  it('loads every backend page for directory search, while keeping default callers bounded', async () => {
+    const first = [
+      { project_id: 'one', name: 'First' },
+      { project_id: 'two', name: 'Second' },
+    ];
+    const last = { project_id: 'three', name: 'Older repository' };
+    vi.mocked(listProjects)
+      .mockResolvedValueOnce({ projects: first } as never)
+      .mockResolvedValueOnce({ projects: [last] } as never);
+    const { result } = renderHook(() => useProjects(2, 'alice', true));
+    await waitForHook();
+    expect(result.current.projects).toEqual([...first, last]);
+    expect(listProjects).toHaveBeenNthCalledWith(2, 2, 2, 'alice');
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('stops a superseded paginated request from replacing the refreshed list', async () => {
+    let resolveOldPage!: (value: Awaited<ReturnType<typeof listProjects>>) => void;
+    vi.mocked(listProjects)
+      .mockResolvedValueOnce({ projects: [{ project_id: 'old', name: 'Old' }] } as never)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveOldPage = resolve;
+          })
+      );
+    const { result } = renderHook(() => useProjects(1, 'alice', true));
+    await waitForHook();
+    vi.mocked(listProjects).mockResolvedValueOnce({ projects: [] } as never);
+    await act(async () => {
+      await result.current.refresh();
+    });
+    await act(async () => {
+      resolveOldPage({ projects: [{ project_id: 'stale', name: 'Stale' }] } as never);
+    });
+    expect(result.current.projects).toEqual([]);
+    expect(listProjects).toHaveBeenCalledTimes(3);
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('reports a non-advancing backend page instead of looping indefinitely', async () => {
+    vi.mocked(listProjects).mockResolvedValue({
+      projects: [{ project_id: 'same', name: 'Same' }],
+    } as never);
+    const { result } = renderHook(() => useProjects(1, 'alice', true));
+    await waitForHook();
+    expect(listProjects).toHaveBeenCalledTimes(2);
+    expect(result.current.error).toContain('pagination did not advance');
+    expect(result.current.loading).toBe(false);
+  });
+
   it('reloads the active list after a repository is restored', async () => {
     const { result } = renderHook(() => useProjects(50, 'alice'));
     await waitForHook();

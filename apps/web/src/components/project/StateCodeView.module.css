@@ -1,6 +1,6 @@
 .root {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: var(--repo-main-with-inspector);
   gap: 16px;
   width: 100%;
   max-width: var(--project-page-max-width, 1264px);
@@ -333,7 +333,6 @@
 }
 @media (max-width: 1100px) {
   .root {
-    grid-template-columns: minmax(0, 1fr) 260px;
     gap: 24px;
   }
 }
@@ -355,4 +354,45 @@
 .codeArea:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: -2px;
+}
+
+.embeddedCard {
+  border-radius: var(--repo-frame-radius);
+}
+.embeddedCard .toolbar {
+  background: color-mix(in srgb, var(--surface-panel) 35%, var(--surface-card));
+}
+
+.embeddedCard .codeArea {
+  min-height: 0;
+}
+.embeddedCard .noteRow {
+  display: none;
+}
+.embeddedSide {
+  position: sticky;
+  top: 0;
+}
+.embeddedSide .panel h3 {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+}
+.embeddedSide .panel {
+  border: 0;
+  border-radius: 0;
+  padding: 0 0 0 12px;
+}
+@media (max-width: 800px) {
+  .embeddedSide {
+    position: static;
+  }
+  .embeddedSide .panel {
+    border-left: 0;
+    border-top: 1px solid var(--stroke-divider);
+    padding: 24px 0 0;
+  }
 }

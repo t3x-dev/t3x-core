@@ -8,7 +8,7 @@
  * metadata and must not surface as switchable branches.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createBranch, listBranches } from '@/infrastructure/branches';
 import type { Branch } from '@/infrastructure/types';
 
@@ -30,51 +30,101 @@ export interface UseBranchesResult {
 }
 
 export function useBranches(projectId: string | null, enabled: boolean): UseBranchesResult {
-  const [branches, setBranches] = useState<string[]>([]);
-  const [branchHeads, setBranchHeads] = useState<Record<string, string | null>>({});
-  const [loading, setLoading] = useState(Boolean(enabled && projectId));
+  const scope = useMemo(
+    () => ({ active: true, read: 0, completedRead: 0, creates: new Map<string, object>() }),
+    [projectId, enabled]
+  );
+  const activeScope = useRef(scope);
+  activeScope.current = scope;
+  const [snapshot, setSnapshot] = useState<{
+    scope: typeof scope;
+    branches: string[];
+    branchHeads: Record<string, string | null>;
+    loading: boolean;
+  }>();
 
   const refresh = useCallback(async () => {
-    if (!projectId) return;
-    setLoading(true);
+    if (!projectId || !enabled || !scope.active || activeScope.current !== scope) return;
+    const request = ++scope.read;
+    const isCurrent = () => scope.active && activeScope.current === scope && request === scope.read;
+    setSnapshot((current) => ({
+      scope,
+      branches: current?.scope === scope ? current.branches : [],
+      branchHeads: current?.scope === scope ? current.branchHeads : {},
+      loading: true,
+    }));
     try {
-      const branchData = await listBranches(projectId).catch(() => ({ branches: [] }));
+      const branchData = await listBranches(projectId);
+      if (!isCurrent()) return;
       const registeredBranches = (branchData.branches ?? []) as Branch[];
-      const names: string[] = registeredBranches.map((branch) => branch.name);
-      setBranchHeads(
-        Object.fromEntries(
+      scope.completedRead = request;
+      setSnapshot({
+        scope,
+        branches: dedupSortedBranches(registeredBranches.map((branch) => branch.name)),
+        branchHeads: Object.fromEntries(
           registeredBranches.map((branch) => [branch.name, branch.head_commit_hash ?? null])
-        )
-      );
-
-      setBranches(dedupSortedBranches(names));
+        ),
+        loading: false,
+      });
     } catch {
-      setBranches([]);
-      setBranchHeads({});
-    } finally {
-      setLoading(false);
+      if (isCurrent()) setSnapshot({ scope, branches: [], branchHeads: {}, loading: false });
     }
-  }, [projectId]);
+  }, [projectId, enabled, scope]);
 
   useEffect(() => {
-    if (enabled && projectId) {
-      void refresh();
-    }
-  }, [enabled, projectId, refresh]);
+    scope.active = true;
+    void refresh();
+    return () => {
+      scope.active = false;
+      ++scope.read;
+    };
+  }, [refresh, scope]);
 
   const create = useCallback(
     async (name: string, parentBranch: string) => {
       if (!projectId) throw new Error('A project is required to create a branch.');
-      const branch = await createBranch(projectId, name, parentBranch);
-      setBranchHeads((previous) => ({
-        ...previous,
-        [branch.name]: branch.head_commit_hash ?? null,
-      }));
-      setBranches((prev) => (prev.includes(name) ? prev : dedupSortedBranches([...prev, name])));
-      return branch;
+      if (!enabled || !scope.active || activeScope.current !== scope)
+        throw new Error('Branch context changed. Reopen the branch controls.');
+      const request = {};
+      const readAtStart = scope.read;
+      scope.creates.set(name, request);
+      try {
+        const branch = await createBranch(projectId, name, parentBranch);
+        if (!scope.active || activeScope.current !== scope || scope.creates.get(name) !== request)
+          return branch;
+        // A list started before this acknowledgement may omit the new branch.
+        ++scope.read;
+        setSnapshot((current) => ({
+          scope,
+          branches: dedupSortedBranches([
+            ...(current?.scope === scope ? current.branches : []),
+            branch.name,
+          ]),
+          branchHeads: {
+            ...(current?.scope === scope ? current.branchHeads : {}),
+            [branch.name]:
+              scope.completedRead > readAtStart &&
+              current?.scope === scope &&
+              Object.hasOwn(current.branchHeads, branch.name)
+                ? current.branchHeads[branch.name]
+                : (branch.head_commit_hash ?? null),
+          },
+          loading: false,
+        }));
+        return branch;
+      } finally {
+        if (scope.creates.get(name) === request) scope.creates.delete(name);
+      }
     },
-    [projectId]
+    [projectId, enabled, scope]
   );
 
-  return { branchHeads, branches, loading, refresh, create };
+  const current = enabled && projectId && snapshot?.scope === scope ? snapshot : undefined;
+  return {
+    branchHeads: current?.branchHeads ?? {},
+    branches: current?.branches ?? [],
+    loading: Boolean(enabled && projectId && (current?.loading ?? true)),
+    refresh,
+    create,
+  };
 }

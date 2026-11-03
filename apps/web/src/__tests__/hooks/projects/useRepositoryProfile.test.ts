@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { useRepositoryProfile } from '@/hooks/projects/useRepositoryProfile';
+import {
+  useRepositoryDescription,
+  useRepositoryProfile,
+} from '@/hooks/projects/useRepositoryProfile';
 import { apiProjectToSummary, useProjectStore } from '@/store/projectStore';
 
 const update = vi.hoisted(() => vi.fn());
@@ -46,4 +49,40 @@ it('updates current display without replaying unrelated fields from out-of-order
     repositoryProfile: { readme: 'New', tags: ['New tag'] },
   });
   expect(update).toHaveBeenCalledWith('p', { repository_profile: { readme: 'New' } });
+});
+
+it('saves the description without rolling back other repository metadata', async () => {
+  let finish!: (value: unknown) => void;
+  update.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+  );
+  const { result } = renderHook(() => useRepositoryDescription('p'));
+  await act(async () => {
+    const save = result.current('Updated description');
+    useProjectStore
+      .getState()
+      .updateProject('p', { metadata: { description: 'Keep', homepage: 'latest' } });
+    finish({
+      name: 'Stale name',
+      metadata: { description: 'Updated description', homepage: 'stale' },
+    });
+    await save;
+  });
+  expect(update).toHaveBeenCalledWith('p', { metadata: { description: 'Updated description' } });
+  expect(useProjectStore.getState().details.p).toMatchObject({
+    name: 'Current',
+    description: 'Updated description',
+    metadata: { description: 'Updated description', homepage: 'latest' },
+    repositoryProfile: { readme: 'Original', tags: ['Old'] },
+  });
+});
+
+it('does not claim a saved description when the response omits it', async () => {
+  update.mockResolvedValue({ metadata: {} });
+  const { result } = renderHook(() => useRepositoryDescription('p'));
+  await expect(result.current('New')).rejects.toThrow('did not return');
+  expect(useProjectStore.getState().details.p.description).toBe('Keep');
 });

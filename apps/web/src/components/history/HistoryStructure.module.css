@@ -33,7 +33,7 @@
 }
 .surface {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 370px;
+  grid-template-columns: var(--repo-main-with-inspector);
   flex: 1;
   min-height: 0;
   min-width: 0;
@@ -525,9 +525,6 @@
   }
 }
 @media (max-width: 1120px) {
-  .surface {
-    grid-template-columns: minmax(0, 1fr) 320px;
-  }
   .frame {
     margin-inline: 16px;
   }

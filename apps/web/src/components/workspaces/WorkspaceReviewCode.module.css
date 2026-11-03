@@ -4,6 +4,19 @@
   background: var(--surface-panel);
   overflow: hidden;
 }
+.codeViewport {
+  min-width: 0;
+  overflow-x: auto;
+  background: var(--editor-bg);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 22px;
+  color: var(--text-primary);
+}
+.codeViewport:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
 .reviewCode > div {
   overflow: hidden;
   background: var(--surface-app);
@@ -66,7 +79,7 @@
   outline: 1px solid var(--accent-commit);
   outline-offset: -1px;
 }
-.reviewCode [data-slot="state-scroll-area"] {
+.reviewCode .codeViewport {
   border-radius: 16px 16px 0 0;
 }
 .counts {

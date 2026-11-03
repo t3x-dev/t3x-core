@@ -15,6 +15,24 @@ vi.mock('@/queries/projects', () => ({
 }));
 
 const routerPush = vi.fn();
+const selectNamespace = vi.fn();
+let namespaceAccounts: Array<{ namespace: { slug: string; namespace_id: string } }> = [];
+vi.mock('@/hooks/accounts/useNamespaceAccounts', () => ({
+  useNamespaceAccounts: () => ({
+    accounts: namespaceAccounts,
+    activeAccount: namespaceAccounts[0] ?? null,
+    selectNamespace,
+  }),
+}));
+
+function selectOption(label: string, option: string) {
+  fireEvent.keyDown(screen.getByRole('combobox', { name: label }), { key: 'Enter' });
+  fireEvent.keyDown(screen.getByRole('option', { name: option, exact: true }), { key: 'Enter' });
+}
+
+function openActions(name = 'prd-workflow') {
+  fireEvent.keyDown(screen.getByRole('button', { name: `Actions for ${name}` }), { key: 'Enter' });
+}
 const createProject = vi.fn();
 const refreshProjects = vi.fn();
 const removeProject = vi.fn();
@@ -63,6 +81,9 @@ const projects: Project[] = [
     namespace: 't3x-dev',
     canonical_path: '/t3x-dev/prd-workflow',
     created_at: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
+    visibility: 'private',
+    can_edit: true,
+    can_delete: true,
     turns_count: 4,
     conversations_count: 1,
     commits_count: 1,
@@ -78,6 +99,9 @@ const projects: Project[] = [
     namespace: 't3x-dev',
     canonical_path: '/t3x-dev/t3x-core',
     created_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+    visibility: 'private',
+    can_edit: true,
+    can_delete: true,
     turns_count: 12,
     conversations_count: 2,
     commits_count: 18,
@@ -98,6 +122,8 @@ describe('ProjectDirectoryPage', () => {
     currentPath = '/';
     currentQuery = '';
     routerPush.mockReset();
+    selectNamespace.mockReset();
+    namespaceAccounts = [];
     createProject.mockReset();
     refreshProjects.mockReset();
     removeProject.mockReset();
@@ -118,10 +144,10 @@ describe('ProjectDirectoryPage', () => {
   it('renders the organization-level repository directory as the app entrypoint', () => {
     render(<ProjectDirectoryPage />);
 
-    expect(screen.getByRole('heading', { name: 't3x-dev' })).toBeInTheDocument();
+    expect(screen.getAllByText('t3x-dev')).toHaveLength(2);
     expect(screen.queryByRole('heading', { name: 'Recently opened' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Pinned repositories' })).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Repositories' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /^Repositories/ })).toBeInTheDocument();
     expect(
       screen.queryByRole('link', { name: 'Projects', current: 'page' })
     ).not.toBeInTheDocument();
@@ -149,7 +175,10 @@ describe('ProjectDirectoryPage', () => {
       'href',
       '/t3x-dev/prd-workflow'
     );
-    expect(screen.getAllByText('/t3x-dev/prd-workflow').length).toBeGreaterThan(0);
+    expect(screen.getByTitle('/t3x-dev/prd-workflow')).toHaveAttribute(
+      'href',
+      '/t3x-dev/prd-workflow'
+    );
     expect(screen.queryByRole('link', { name: 'Chats' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Canvas' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open navigation' })).not.toBeInTheDocument();
@@ -181,9 +210,7 @@ describe('ProjectDirectoryPage', () => {
     }));
     render(<ProjectDirectoryPage ownerSlug="lqw905" />);
 
-    expect(screen.getByRole('heading', { name: 'lqw905' })).toBeInTheDocument();
-    expect(screen.getByText(/A home for your structured state/)).toBeInTheDocument();
-    expect(screen.getByText('Personal namespace')).toBeInTheDocument();
+    expect(screen.getAllByText('lqw905')).toHaveLength(2);
     expect(screen.queryByText('3 members')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
@@ -193,7 +220,10 @@ describe('ProjectDirectoryPage', () => {
       'href',
       '/lqw905/prd-workflow'
     );
-    expect(screen.getAllByText('/lqw905/prd-workflow').length).toBeGreaterThan(0);
+    expect(screen.getByTitle('/lqw905/prd-workflow')).toHaveAttribute(
+      'href',
+      '/lqw905/prd-workflow'
+    );
     for (const link of screen.getAllByRole('link', { name: /new repository/i })) {
       expect(link).toHaveAttribute('href', '/lqw905/new');
     }
@@ -217,7 +247,7 @@ describe('ProjectDirectoryPage', () => {
   it('filters project rows without leaving the directory', () => {
     render(<ProjectDirectoryPage />);
 
-    const search = screen.getByPlaceholderText('Find a repository...');
+    const search = screen.getByRole('searchbox', { name: 'Find a repository' });
     fireEvent.change(search, { target: { value: 'core' } });
 
     expect(screen.getAllByRole('link', { name: /t3x-core/i })).toHaveLength(1);
@@ -235,6 +265,122 @@ describe('ProjectDirectoryPage', () => {
     }
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(createProject).not.toHaveBeenCalled();
+  });
+
+  it('combines visibility and tag filters, searches all pages, and resets pagination', () => {
+    hookProjects = Array.from({ length: 22 }, (_, index) => ({
+      ...projects[0],
+      project_id: `repo-${index}`,
+      name: `repo-${index}`,
+      canonical_path: `/t3x-dev/repo-${index}`,
+      visibility: index === 21 ? 'public' : 'private',
+      repository_profile: { tags: index === 21 ? ['schema-kit'] : ['config'] },
+    }));
+    render(<ProjectDirectoryPage />);
+    expect(screen.getAllByRole('article')).toHaveLength(20);
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getAllByRole('article')).toHaveLength(2);
+    selectOption('Filter by visibility', 'Public');
+    fireEvent.click(screen.getByRole('button', { name: 'Filter by tags' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'schema-kit' }));
+    fireEvent.keyDown(screen.getByRole('searchbox', { name: 'Search tags' }), { key: 'Escape' });
+    expect(screen.getByRole('link', { name: 'repo-21' })).toBeInTheDocument();
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Find a repository' }), {
+      target: { value: 'schema-kit' },
+    });
+    expect(screen.getByRole('link', { name: 'repo-21' })).toBeInTheDocument();
+  });
+
+  it('searches and selects multiple exact tags using any-match filtering', () => {
+    hookProjects = projects.map((project, index) => ({
+      ...project,
+      repository_profile: { tags: index ? ['#中文'] : ['Dev', 'dev'] },
+    }));
+    render(<ProjectDirectoryPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Filter by tags' }));
+    const search = screen.getByRole('searchbox', { name: 'Search tags' });
+    fireEvent.change(search, { target: { value: 'DE' } });
+    expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Dev', exact: true }));
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+    fireEvent.change(search, { target: { value: '中文' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: '#中文', exact: true }));
+    expect(screen.getAllByRole('article')).toHaveLength(2);
+    expect(screen.getByText('Matches any selected tag.')).toBeInTheDocument();
+    fireEvent.change(search, { target: { value: 'missing' } });
+    expect(screen.getByText('No matching tags.')).toBeInTheDocument();
+    fireEvent.keyDown(search, { key: 'Escape' });
+    const active = within(screen.getByRole('group', { name: 'Active tag filters' }));
+    fireEvent.click(active.getByRole('button', { name: 'Remove tag Dev' }));
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+    expect(screen.getByRole('link', { name: 't3x-core' })).toBeInTheDocument();
+    fireEvent.click(active.getByRole('button', { name: 'Remove tag #中文' }));
+    expect(screen.getAllByRole('article')).toHaveLength(2);
+  });
+
+  it('paginates in fixed groups of 20 with the correct final page', () => {
+    hookProjects = Array.from({ length: 42 }, (_, index) => ({
+      ...projects[0],
+      project_id: `repo-${index}`,
+      name: `repo-${index}`,
+    }));
+    render(<ProjectDirectoryPage />);
+    expect(
+      screen.queryByRole('combobox', { name: 'Repositories per page' })
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByRole('article')).toHaveLength(20);
+    expect(screen.getByText('1–20 of 42 repositories')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 2 of 3')).toBeInTheDocument();
+    expect(screen.getAllByRole('article')).toHaveLength(20);
+    expect(screen.getByText('21–40 of 42 repositories')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getAllByRole('article')).toHaveLength(2);
+    expect(screen.getByText('41–42 of 42 repositories')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
+  });
+
+  it.each([
+    false,
+    undefined,
+  ])('hides mutation actions without confirmed capabilities (%s)', (permission) => {
+    hookProjects = [{ ...projects[0], can_edit: permission, can_delete: permission }];
+    render(<ProjectDirectoryPage />);
+    openActions();
+    expect(screen.getByRole('menuitem', { name: 'Open repository' })).toHaveAttribute(
+      'href',
+      '/t3x-dev/prd-workflow'
+    );
+    expect(screen.queryByRole('menuitem', { name: /Rename/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /Delete repository/ })).not.toBeInTheDocument();
+  });
+
+  it('allows editors to rename without offering deletion', () => {
+    hookProjects = [{ ...projects[0], can_delete: false }];
+    render(<ProjectDirectoryPage />);
+    openActions();
+    expect(screen.getByRole('menuitem', { name: /Rename/ })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /Delete repository/ })).not.toBeInTheDocument();
+  });
+
+  it('routes to an available namespace and synchronizes the selected account after navigation', () => {
+    namespaceAccounts = [
+      { namespace: { slug: 't3x-dev', namespace_id: 'team-id' } },
+      { namespace: { slug: 'alice', namespace_id: 'alice-id' } },
+    ];
+    const { rerender } = render(<ProjectDirectoryPage />);
+    selectOption('Namespace', 'alice');
+    expect(routerPush).toHaveBeenCalledWith('/alice');
+    rerender(<ProjectDirectoryPage ownerSlug="alice" />);
+    expect(selectNamespace).toHaveBeenCalledWith('alice-id');
+    expect(screen.getByRole('link', { name: 'New repository' })).toHaveAttribute(
+      'href',
+      '/alice/new'
+    );
   });
 
   it('renders a recoverable load failure without claiming the organization is empty', () => {
@@ -279,7 +425,8 @@ describe('ProjectDirectoryPage', () => {
 
     render(<ProjectDirectoryPage />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Rename repository prd-workflow' })[0]);
+    openActions();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename repository prd-workflow' }));
     fireEvent.change(screen.getByLabelText('Repository name'), {
       target: { value: 'Renamed PRD' },
     });
@@ -296,7 +443,8 @@ describe('ProjectDirectoryPage', () => {
 
     render(<ProjectDirectoryPage />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Delete repository prd-workflow' })[0]);
+    openActions();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete repository prd-workflow' }));
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => expect(removeProject).toHaveBeenCalledWith('proj_prd'));
@@ -311,15 +459,13 @@ describe('ProjectDirectoryPage', () => {
     currentPath = '/alice';
     render(<ProjectDirectoryPage ownerSlug="alice" />);
     const entry = screen.getByRole('link', { name: 'Deleted repositories' });
-    expect(entry.parentElement).toContainElement(
-      screen.getByRole('button', { name: 'Refresh repositories' })
-    );
+    expect(screen.getByRole('button', { name: 'Refresh repositories' })).toBeInTheDocument();
     expect(entry).toHaveAttribute('href', '/alice?view=deleted');
   });
 
   it('opens the URL-selected deleted view and preserves the active filter on return', async () => {
     const { rerender } = render(<ProjectDirectoryPage />);
-    fireEvent.change(screen.getByPlaceholderText('Find a repository...'), {
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Find a repository' }), {
       target: { value: 'core' },
     });
     currentQuery = 'view=deleted';
@@ -331,13 +477,14 @@ describe('ProjectDirectoryPage', () => {
     expect(screen.getByRole('link', { name: 'Back to repositories' })).toHaveAttribute('href', '/');
     currentQuery = '';
     rerender(<ProjectDirectoryPage />);
-    expect(screen.getByPlaceholderText('Find a repository...')).toHaveValue('core');
+    expect(screen.getByRole('searchbox', { name: 'Find a repository' })).toHaveValue('core');
   });
 
   it('keeps an unconfirmed delete in the dialog and asks for a refresh', async () => {
     removeProject.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     render(<ProjectDirectoryPage />);
-    fireEvent.click(screen.getAllByRole('button', { name: 'Delete repository prd-workflow' })[0]);
+    openActions();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete repository prd-workflow' }));
     expect(screen.getByRole('dialog')).toHaveTextContent('Its data and all names stay reserved');
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('could not be confirmed');

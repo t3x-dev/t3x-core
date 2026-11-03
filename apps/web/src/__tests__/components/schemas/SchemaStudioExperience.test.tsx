@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import type { StudioSchemaEditCandidate } from '@t3x-dev/api-client';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { dump, load } from 'js-yaml';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { SchemaStudioExperience } from '@/components/schemas/SchemaStudioExperience';
@@ -32,6 +32,9 @@ const mocks = vi.hoisted(() => ({
   query: 'candidate=provider',
   candidatesLoading: false,
   branches: [] as string[],
+  workspacesLoading: false,
+  workspacesError: null as string | null,
+  createBranch: vi.fn(),
   refresh: vi.fn(),
   push: vi.fn(),
   replace: vi.fn(),
@@ -124,7 +127,12 @@ vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
   }),
 }));
 vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
-  useProjectWorkspaces: () => ({ refresh: mocks.refresh, workspaces: mocks.workspaces }),
+  useProjectWorkspaces: () => ({
+    refresh: mocks.refresh,
+    workspaces: mocks.workspaces,
+    loading: mocks.workspacesLoading,
+    error: mocks.workspacesError,
+  }),
 }));
 vi.mock('@/hooks/shared/useBranches', () => ({
   useBranches: () => ({
@@ -132,7 +140,7 @@ vi.mock('@/hooks/shared/useBranches', () => ({
     branches: mocks.branches,
     loading: false,
     refresh: vi.fn(),
-    create: vi.fn(),
+    create: mocks.createBranch,
   }),
 }));
 vi.mock('@/queries/workspaces', () => ({
@@ -220,6 +228,9 @@ beforeEach(() => {
     },
   }));
   mocks.branches = [];
+  mocks.workspacesLoading = false;
+  mocks.workspacesError = null;
+  mocks.createBranch.mockReset();
   mocks.workspaces = [];
   mocks.data = {
     samples: [],
@@ -306,9 +317,9 @@ it('does not review another Workspace when the deep-linked target is missing', (
   expect(screen.getByRole('alert')).toHaveTextContent(
     'Workspace missing was not found in this project'
   );
-  expect(screen.getByRole('button', { name: /^(Review changes|Save and review)$/ })).toBeEnabled();
-  openSources();
-  expect(screen.getByRole('button', { name: 'Import schema…' })).toBeVisible();
+  expect(screen.getByRole('button', { name: /^(Review changes|Save and review)$/ })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: 'Manage sources' })).not.toBeInTheDocument();
+  expect(mocks.apply).not.toHaveBeenCalled();
 });
 it('protects an in-use source without treating checkbox selection as an applied draft', () => {
   render(<SchemaStudioExperience projectId="p" />);
@@ -411,9 +422,9 @@ it('clears restored sources when switching to an unbound Workspace', async () =>
   const { rerender } = render(<SchemaStudioExperience projectId="p" />);
   openSources();
   await expectBoundSnapshot();
-  fireEvent.change(screen.getByLabelText('Target Workspace'), {
-    target: { value: 'workspace_branch:feature' },
-  });
+  closeSources();
+  fireEvent.click(screen.getByRole('button', { name: /Switch branches\/tags/ }));
+  fireEvent.click(screen.getByRole('menuitemradio', { name: 'feature' }));
   mocks.query = new URL(mocks.push.mock.calls[0][0], 'http://local').search.slice(1);
   rerender(<SchemaStudioExperience projectId="p" />);
   await waitFor(() =>
@@ -596,11 +607,13 @@ it('selects the only draft workspace once instead of duplicating Main workspace'
     },
   ];
   render(<SchemaStudioExperience projectId="p" />);
-  openSources();
-  const select = screen.getByLabelText('Target Workspace');
-  expect(select.querySelectorAll('option')).toHaveLength(1);
-  expect(select).toHaveValue('workspace_branch:main');
-  expect(select).toHaveTextContent('Main workspace');
+  expect(screen.queryByLabelText('Target Workspace')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: /current branch main/ }));
+  expect(screen.getAllByRole('menuitemradio')).toHaveLength(1);
+  expect(screen.getByRole('menuitemradio', { name: /main/ })).toHaveAttribute(
+    'aria-checked',
+    'true'
+  );
 });
 
 it('starts a new branch editor from its inherited bound definition, not the original source schema', async () => {
@@ -748,7 +761,7 @@ it.each([
     workspace: { id: 'workspace_branch:main', revision: 3, changes: [] },
   };
   render(<SchemaStudioExperience projectId="p" />);
-  expect(screen.getByLabelText('Target Workspace')).toHaveValue('workspace_branch:main');
+  expect(screen.getByRole('button', { name: /current branch main/ })).toBeInTheDocument();
   await waitFor(() =>
     expect(
       screen.queryByRole('checkbox', { name: 'Select Shared foundation 1.0' })
@@ -941,8 +954,7 @@ it('saves a main branch workspace when none is persisted', async () => {
   mocks.branches = ['main'];
   mocks.refresh.mockResolvedValue(undefined);
   render(<SchemaStudioExperience projectId="p" />);
-  openSources();
-  expect(screen.getByLabelText('Target Workspace')).toHaveValue('workspace_branch:main');
+  expect(screen.getByRole('button', { name: /current branch main/ })).toBeInTheDocument();
   await waitFor(() => expect(mocks.saveDraft).toHaveBeenCalled());
   expect(mocks.saveDraft).toHaveBeenCalledWith(
     'p',
@@ -974,7 +986,7 @@ it('edits Schema fields in the default Data view and saves through the existing 
   render(<SchemaStudioExperience projectId="p" />);
   expect(screen.queryByRole('tablist', { name: 'Studio view' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByLabelText('Required checklist/title'));
-  expect(screen.getByLabelText('Target Workspace')).toBeEnabled();
+  expect(screen.getByRole('button', { name: /Switch branches\/tags/ })).toBeEnabled();
   expect(screen.getByRole('button', { name: /^(Review changes|Save and review)$/ })).toBeEnabled();
   openSources();
   expect(
@@ -1150,7 +1162,7 @@ it('uses the resolved branch target in all outbound Studio links and normalizes 
     { ...boundWorkspace(), id: 'feature-draft', title: 'Feature', targetBranch: 'feature' },
   ];
   render(<SchemaStudioExperience projectId="p" />);
-  expect(screen.getByLabelText('Target Workspace')).toHaveValue('feature-draft');
+  expect(screen.getByRole('button', { name: /current branch feature/ })).toBeVisible();
   expect(mocks.replace).toHaveBeenCalledWith(expect.stringContaining('workspace=feature-draft'), {
     scroll: false,
   });
@@ -1163,7 +1175,7 @@ it('uses the resolved branch target in all outbound Studio links and normalizes 
   closeSources();
 });
 
-it('discards only the unsaved editor before completing a requested Workspace switch', async () => {
+it('protects unsaved edits before switching branches', async () => {
   mocks.query = 'workspace=workspace_branch%3Amain&branch=main&candidate=provider';
   mocks.workspaces = [
     boundWorkspace(),
@@ -1175,9 +1187,8 @@ it('discards only the unsaved editor before completing a requested Workspace swi
   };
   render(<SchemaStudioExperience projectId="p" />);
   fireEvent.click(screen.getByLabelText('Required checklist/title'));
-  fireEvent.change(screen.getByLabelText('Target Workspace'), {
-    target: { value: 'feature-draft' },
-  });
+  fireEvent.click(screen.getByRole('button', { name: /Switch branches\/tags/ }));
+  fireEvent.click(screen.getByRole('menuitemradio', { name: 'feature' }));
   expect(screen.getByRole('dialog')).toHaveTextContent('Save schema draft before leaving?');
   expect(mocks.push).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Discard & continue' }));
@@ -2033,4 +2044,202 @@ it('prepares content against the saved YAML candidate before entering Review', a
     mocks.fullReview.mock.invocationCallOrder[0]
   );
   expect(mocks.apply).not.toHaveBeenCalled();
+});
+
+it('creates a branch from Schema and opens its workspace with stale editor selection cleared', async () => {
+  mocks.query = 'branch=main&workspace=workspace_branch%3Amain&candidate=provider&mode=edit';
+  mocks.workspaces = [boundWorkspace()];
+  mocks.createBranch.mockResolvedValue({ name: 'feature/new' });
+  render(<SchemaStudioExperience projectId="p" />);
+  fireEvent.click(screen.getByRole('button', { name: /Switch branches/ }));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Find or create branch' }), {
+    target: { value: 'feature/new' },
+  });
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Create branch feature/new from main' }));
+  await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+  expect(mocks.createBranch).toHaveBeenCalledWith('feature/new', 'main');
+  const url = new URL(mocks.push.mock.calls.at(-1)![0], 'http://local');
+  expect(url.pathname).toContain('schema');
+  expect(url.searchParams.get('branch')).toBe('feature/new');
+  expect(url.searchParams.get('workspace')).toBe('workspace_branch:feature%2Fnew');
+  expect(url.searchParams.has('candidate')).toBe(false);
+  expect(url.searchParams.has('mode')).toBe(false);
+});
+
+it('asks about unsaved Schema edits before sending a branch creation request', () => {
+  mocks.query = 'workspace=workspace_branch%3Amain&branch=main&candidate=provider';
+  mocks.workspaces = [boundWorkspace()];
+  mocks.data = {
+    ...(mocks.data as object),
+    schema: { yschema: '0.1', nodes: { checklist: { slots: { title: { type: 'string' } } } } },
+  };
+  render(<SchemaStudioExperience projectId="p" />);
+  fireEvent.click(screen.getByLabelText('Required checklist/title'));
+  fireEvent.click(screen.getByRole('button', { name: /Switch branches/ }));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Find or create branch' }), {
+    target: { value: 'feature/new' },
+  });
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Create branch feature/new from main' }));
+  expect(screen.getByRole('dialog')).toHaveTextContent('Save schema draft before leaving?');
+  expect(mocks.createBranch).not.toHaveBeenCalled();
+  expect(mocks.push).not.toHaveBeenCalled();
+});
+
+it('blocks a mismatched branch and Workspace without correcting the URL or editing either target', () => {
+  mocks.query = 'branch=feature&workspace=workspace_branch%3Amain';
+  mocks.branches = ['main', 'feature'];
+  mocks.workspaces = [boundWorkspace()];
+  render(<SchemaStudioExperience projectId="p" />);
+  expect(screen.getByRole('alert')).toHaveTextContent('belongs to main, not feature');
+  expect(mocks.replace).not.toHaveBeenCalled();
+  expect(mocks.saveDraft).not.toHaveBeenCalled();
+  expect(screen.queryByRole('textbox', { name: 'Name checklist' })).not.toBeInTheDocument();
+  expect(
+    mocks.previewInputs.every((input: unknown) => !(input as { workspaceId?: string }).workspaceId)
+  ).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: /Switch branches/ }));
+  fireEvent.click(screen.getByRole('menuitemradio', { name: /^main$/ }));
+  expect(mocks.push).toHaveBeenCalledWith(
+    '/team/project/schemas?branch=main&workspace=workspace_branch%3Amain&schemaView=studio',
+    { scroll: false }
+  );
+});
+
+it.each([
+  'switch',
+  'switch-back',
+  'unmount',
+] as const)('ignores a late branch creation completion after %s', async (navigation) => {
+  mocks.query = 'branch=main&workspace=workspace_branch%3Amain';
+  mocks.workspaces = [
+    boundWorkspace(),
+    { ...boundWorkspace(), id: 'feature-draft', targetBranch: 'feature' },
+  ];
+  let complete!: (branch: { name: string }) => void;
+  mocks.createBranch.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        complete = resolve;
+      })
+  );
+  const { rerender, unmount } = render(<SchemaStudioExperience projectId="p" />);
+  fireEvent.click(screen.getByRole('button', { name: /Switch branches/ }));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Find or create branch' }), {
+    target: { value: 'feature/new' },
+  });
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Create branch feature/new from main' }));
+  if (navigation === 'unmount') unmount();
+  else {
+    mocks.query = 'branch=feature&workspace=feature-draft';
+    rerender(<SchemaStudioExperience projectId="p" />);
+    if (navigation === 'switch-back') {
+      mocks.query = 'branch=main&workspace=workspace_branch%3Amain';
+      rerender(<SchemaStudioExperience projectId="p" />);
+    }
+  }
+  await act(async () => complete({ name: 'feature/new' }));
+  expect(mocks.push).not.toHaveBeenCalled();
+  expect(mocks.refresh).not.toHaveBeenCalled();
+});
+
+it('retains a legacy committed Workspace and offers continuation without recreating it on refresh', async () => {
+  mocks.query = 'branch=main';
+  mocks.branches = ['main'];
+  mocks.workspaces = [{ ...boundWorkspace(), status: 'committed' }];
+  const { rerender } = render(<SchemaStudioExperience projectId="p" />);
+  expect(screen.getByText(/This Workspace is committed/)).toBeVisible();
+  expect(screen.getByRole('link', { name: 'Open Workspace' })).toHaveAttribute(
+    'href',
+    '/project/p?branch=main&tab=workspaces'
+  );
+  expect(screen.queryByRole('textbox', { name: 'Name checklist' })).not.toBeInTheDocument();
+  mocks.workspaces = [...mocks.workspaces];
+  rerender(<SchemaStudioExperience projectId="p" />);
+  await act(async () => {});
+  expect(mocks.saveDraft).not.toHaveBeenCalled();
+  expect(mocks.refresh).not.toHaveBeenCalled();
+});
+
+it('waits for persisted Workspaces to load before creating missing targets', async () => {
+  mocks.query = 'branch=main';
+  mocks.branches = ['main'];
+  mocks.workspacesLoading = true;
+  const { rerender } = render(<SchemaStudioExperience projectId="p" />);
+  expect(mocks.saveDraft).not.toHaveBeenCalled();
+  mocks.workspacesLoading = false;
+  mocks.workspaces = [boundWorkspace()];
+  rerender(<SchemaStudioExperience projectId="p" />);
+  await act(async () => {});
+  expect(mocks.saveDraft).not.toHaveBeenCalled();
+});
+
+it.each([
+  { code: 'CONFLICT' },
+  new Error('Workspace service unavailable'),
+])('bounds failed starter creation and exposes an explicit retry', async (failure) => {
+  mocks.query = 'branch=main';
+  mocks.branches = ['main'];
+  mocks.saveDraft.mockRejectedValue(failure);
+  const { rerender } = render(<SchemaStudioExperience projectId="p" />);
+  await waitFor(() => expect(mocks.refresh).toHaveBeenCalledTimes(1));
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    failure instanceof Error ? failure.message : 'Workspace creation for main conflicted'
+  );
+  mocks.workspaces = [...mocks.workspaces];
+  rerender(<SchemaStudioExperience projectId="p" />);
+  await act(async () => {});
+  expect(mocks.saveDraft).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Retry workspace setup' }));
+  await waitFor(() => expect(mocks.saveDraft).toHaveBeenCalledTimes(2));
+});
+
+it('protects edits made while branch creation is pending before navigating to the created branch', async () => {
+  mocks.query = 'workspace=workspace_branch%3Amain&branch=main&candidate=provider';
+  mocks.workspaces = [boundWorkspace()];
+  mocks.data = {
+    ...(mocks.data as object),
+    schema: { yschema: '0.1', nodes: { checklist: { slots: { title: { type: 'string' } } } } },
+  };
+  let complete!: (branch: { name: string }) => void;
+  mocks.createBranch.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        complete = resolve;
+      })
+  );
+  render(<SchemaStudioExperience projectId="p" />);
+  fireEvent.click(screen.getByRole('button', { name: /Switch branches/ }));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Find or create branch' }), {
+    target: { value: 'feature/new' },
+  });
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Create branch feature/new from main' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Close branch switcher' }));
+  fireEvent.click(screen.getByLabelText('Required checklist/title'));
+  await act(async () => complete({ name: 'feature/new' }));
+  expect(screen.getByRole('dialog')).toHaveTextContent('Save schema draft before leaving?');
+  expect(mocks.push).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Discard & continue' }));
+  await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+});
+
+it('owns workspace setup attempts by project lifetime when returning while an old attempt is pending', async () => {
+  mocks.query = 'branch=main';
+  mocks.branches = ['main'];
+  let completeOld!: () => void;
+  mocks.saveDraft.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        completeOld = resolve;
+      })
+  );
+  const { rerender } = render(<SchemaStudioExperience projectId="p" />);
+  expect(mocks.saveDraft).toHaveBeenCalledTimes(1);
+  mocks.workspaces = [boundWorkspace()];
+  rerender(<SchemaStudioExperience projectId="other" />);
+  mocks.workspaces = [];
+  rerender(<SchemaStudioExperience projectId="p" />);
+  await waitFor(() => expect(mocks.saveDraft).toHaveBeenCalledTimes(2));
+  const refreshCount = mocks.refresh.mock.calls.length;
+  await act(async () => completeOld());
+  expect(mocks.refresh).toHaveBeenCalledTimes(refreshCount);
 });

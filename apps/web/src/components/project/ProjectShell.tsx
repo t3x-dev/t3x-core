@@ -7,6 +7,8 @@ import {
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 import { getProjectRepoPath } from '@/domain/project/repoPath';
 import type { YSchemaValidationSummary } from '@/domain/project/yschemaValidation';
+import workbench from './RepositoryWorkbench.module.css';
+import { repositoryWorkbenchTracks } from './repositoryWorkbenchLayout';
 
 export interface ProjectShellProject {
   id?: string;
@@ -76,7 +78,10 @@ export function ProjectShell({
   const actualOwner = project.namespace ?? ownerSlug;
   const newRepositoryHref = actualOwner ? `/${encodeURIComponent(actualOwner)}/new` : '/';
   return (
-    <div className="flex h-dvh min-h-[680px] flex-col overflow-hidden bg-[var(--surface-app)] text-[var(--text-primary)] [--text-base:14px] [--text-lg:16px] [--text-sm:13px] [--text-xs:12px]">
+    <div
+      className={`${workbench.shell} flex h-dvh min-h-[680px] flex-col overflow-hidden bg-[var(--surface-app)] text-[var(--text-primary)] [--text-base:14px] [--text-lg:16px] [--text-sm:13px] [--text-xs:12px]`}
+      style={repositoryWorkbenchTracks}
+    >
       <DiscoverHeader
         activeTab={activeTab === 'history' ? 'state' : activeTab}
         owner={actualOwner || undefined}

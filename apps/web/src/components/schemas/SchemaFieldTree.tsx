@@ -13,6 +13,7 @@ import {
 import type { StudioCandidate } from '@t3x-dev/api-client';
 import { GripVertical } from 'lucide-react';
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
+import workbench from '@/components/project/RepositoryWorkbench.module.css';
 import tree from '@/components/structure/StructureTree.module.css';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -219,7 +220,7 @@ export function SchemaFieldTree({
             ))}
           </aside>
         ) : null}
-        <div className={styles.fieldMain}>
+        <div className={studio ? `${styles.fieldMain} ${workbench.primary}` : styles.fieldMain}>
           <div ref={fieldScroll} className={styles.fieldScroll}>
             <div className={styles.columns} hidden={unavailable || !rows.length}>
               <span>Name</span>

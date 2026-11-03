@@ -1,26 +1,38 @@
 'use client';
 
-import type { RepositoryProfile, RepositoryProfilePatch } from '@t3x-dev/api-client';
+import {
+  initialRepositoryReadme,
+  type RepositoryProfile,
+  type RepositoryProfilePatch,
+} from '@t3x-dev/api-client';
 import {
   ArrowRight,
+  ArrowUpRight,
   BookOpen,
-  ChevronRight,
+  Braces,
   GitCommitHorizontal,
   Globe2,
   List,
   LockKeyhole,
+  Pencil,
+  ShieldCheck,
 } from 'lucide-react';
 import Link from 'next/link';
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { StateAuthorReadme } from '@/components/project/StateAuthorReadme';
 import { StateValueReader } from '@/components/project/StateValueReader';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { relativeTime, shortHash } from '@/domain/format/formatters';
 import { buildStatePointRows } from '@/domain/project/stateViewModel';
 import { useStateOverview } from '@/hooks/commits/useStateOverview';
 import type { ApiCommit } from '@/types/api';
+import { RepositoryDescriptionEditor } from './RepositoryDescriptionEditor';
+import { RepositoryTag } from './RepositoryIdentity';
 import { RepositoryProfileEditor } from './RepositoryProfileEditor';
+import { StateHistoryMenu } from './StateHistoryMenu';
 import styles from './StateOverviewView.module.css';
+import { StatePageFooter } from './StatePageFrame';
+import { StateReadmeEditor } from './StateReadmeEditor';
 import { StateStructureSummary } from './StateStructureSummary';
 
 const EMPTY_PROFILE: RepositoryProfile = { readme: '', tags: [] };
@@ -38,21 +50,26 @@ export function StateOverviewView({
   projectName,
   projectDescription,
   projectOwner = 't3x-dev',
+  repositoryNamespace,
   projectVisibility = 'private',
   schemaName,
   schemaHref,
   onViewStructure,
   validationLabel,
+  refName,
   reader,
   navigation,
   headerOnly = false,
   hideHeader = false,
+  embedded = false,
   historyHref,
+  alternateHistoryHref,
   workspaceHref,
   introductionSource = 'repository',
   repositoryProfile = EMPTY_PROFILE,
   canEditRepository = false,
   onSaveRepositoryProfile,
+  onSaveDescription,
   stateLoading = false,
   stateError,
 }: {
@@ -60,12 +77,15 @@ export function StateOverviewView({
   repositoryProfile?: RepositoryProfile;
   canEditRepository?: boolean;
   onSaveRepositoryProfile?: (patch: RepositoryProfilePatch) => Promise<void>;
+  onSaveDescription?: (description: string) => Promise<void>;
   stateLoading?: boolean;
   stateError?: string | null;
   navigation?: ReactNode;
   headerOnly?: boolean;
   hideHeader?: boolean;
+  embedded?: boolean;
   historyHref?: string;
+  alternateHistoryHref?: string;
   historyReturnTo?: string;
   workspaceHref?: string;
   commits?: ApiCommit[];
@@ -76,6 +96,7 @@ export function StateOverviewView({
   projectName: string;
   projectDescription?: string;
   projectOwner?: string;
+  repositoryNamespace?: string;
   projectVisibility?: string;
   schemaName?: string;
   schemaHref?: string;
@@ -85,35 +106,57 @@ export function StateOverviewView({
   onAuthorRevision?: (digest: string) => void;
   reader?: (expanded: boolean, expand: () => void) => ReactNode;
 }) {
-  const committedContent =
-    commit?.hash === commitDigest && commit.project_id === projectId ? commit.content : null;
+  const currentCommit =
+    commit?.hash === commitDigest && commit.project_id === projectId ? commit : null;
+  const committedContent = currentCommit?.content;
   const hasCommittedContent = Boolean(committedContent || reader);
   const { data, error, loading, retry } = useStateOverview(
     projectId,
     introductionSource === 'repository' && (headerOnly || hasCommittedContent) ? null : commitDigest
   );
   const [contentsOpen, setContentsOpen] = useState(false);
-  const [readmeHeadings, setReadmeHeadings] = useState<string[]>([]);
+  const [readmeHeadings, setReadmeHeadings] = useState<{ title: string; level: number }[]>([]);
+  const contentsId = useId();
   const readmeRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const readmeHeaderRef = useRef<HTMLElement>(null);
+  const [editing, setEditing] = useState(false);
+  useEffect(() => setEditing(false), [projectId, introductionSource]);
   useEffect(() => {
     setContentsOpen(false);
-  }, [commitDigest]);
+  }, [projectId, commitDigest]);
 
   const version = introductionSource === 'version';
+  const introductionLoading = stateLoading || loading;
+  const introductionError = stateError || error;
   const empty = !commitDigest;
   // Historical introductions belong to this revision; never borrow current repository metadata.
-  const author = version && !loading && !error ? data?.author?.document : undefined;
+  const author =
+    version && !introductionLoading && !introductionError ? data?.author?.document : undefined;
   const shownDescription = version ? author?.description?.trim() : projectDescription?.trim();
   const readme = version ? author?.readme : repositoryProfile.readme;
-  const descriptionInReadme = readme
-    ?.split(/\n\s*\n/)
-    .some((paragraph) => paragraph.trim() === shownDescription);
+  useEffect(() => {
+    if (contentsOpen)
+      setReadmeHeadings(
+        Array.from(readmeRef.current?.querySelectorAll('h1,h2,h3,h4,h5,h6') ?? [], (h) => ({
+          title: h.textContent?.trim() || 'Untitled section',
+          level: Number(h.tagName.slice(1)),
+        }))
+      );
+  }, [contentsOpen, readme]);
+  const hasReadme = Boolean(readme?.trim());
   const shownTags = version ? (author?.tags ?? []) : repositoryProfile.tags;
   const canEdit = !version && canEditRepository && onSaveRepositoryProfile;
+  const canEditDescription = !version && canEditRepository && onSaveDescription;
   const value = data?.render.model.value;
   const semantic =
     committedContent ?? (data?.reading?.kind === 'semantic-content' ? data.reading.value : null);
   const structureRows = useMemo(() => (semantic ? buildStatePointRows(semantic) : []), [semantic]);
+  const rootCount = structureRows.filter((row) => row.depth === 0).length;
+  const commitHref =
+    historyHref && currentCommit
+      ? `${historyHref}${historyHref.includes('?') ? '&' : '?'}commit=${encodeURIComponent(currentCommit.hash)}`
+      : undefined;
 
   const projectHeader = (
     <header className={styles.projectHeader}>
@@ -133,7 +176,11 @@ export function StateOverviewView({
 
   const failed = stateError || (!hasCommittedContent && (error || (!empty && !loading && !data)));
   return (
-    <div className={styles.root} data-testid="state-overview">
+    <div
+      ref={rootRef}
+      className={`${styles.root} ${embedded ? styles.embedded : ''}`}
+      data-testid="state-overview"
+    >
       <div className={styles.page}>
         {!hideHeader ? projectHeader : null}
         {navigation !== undefined ? (
@@ -141,7 +188,6 @@ export function StateOverviewView({
         ) : (
           <div className={styles.toolbar}>
             <div className={styles.actions}>
-              {historyHref ? <Link href={historyHref}>History</Link> : null}
               {workspaceHref ? (
                 <Link href={workspaceHref} className={styles.primary}>
                   Propose change
@@ -156,102 +202,144 @@ export function StateOverviewView({
               aria-label={version ? 'Version introduction' : 'Repository information'}
               className={styles.readmeContent}
             >
-              <header className={styles.readmeHeader}>
-                <h2>
-                  <BookOpen aria-hidden="true" />
-                  {version ? 'Version introduction' : 'README'}
-                </h2>
-                <div className={styles.readmeActions}>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    aria-expanded={contentsOpen}
-                    onClick={() => {
-                      if (!contentsOpen)
-                        setReadmeHeadings(
-                          Array.from(readmeRef.current?.querySelectorAll('h1, h2, h3') ?? []).map(
-                            (heading) => heading.textContent?.trim() || 'Untitled section'
-                          )
-                        );
-                      setContentsOpen(!contentsOpen);
-                    }}
-                  >
-                    <List aria-hidden="true" />
-                    Contents
-                  </Button>
-                  {canEdit ? (
-                    <RepositoryProfileEditor
-                      field="readme"
-                      profile={repositoryProfile}
-                      projectName={projectName}
-                      projectDescription={projectDescription}
-                      onSave={canEdit}
-                    />
+              {editing && canEdit ? (
+                <StateReadmeEditor
+                  key={projectId}
+                  initial={
+                    hasReadme
+                      ? repositoryProfile.readme
+                      : initialRepositoryReadme(projectName, projectDescription)
+                  }
+                  onSave={canEdit}
+                  onClose={() => {
+                    setEditing(false);
+                    requestAnimationFrame(() =>
+                      readmeHeaderRef.current?.focus({ preventScroll: true })
+                    );
+                  }}
+                />
+              ) : (
+                <>
+                  <header ref={readmeHeaderRef} tabIndex={-1} className={styles.readmeHeader}>
+                    <h2>
+                      <BookOpen aria-hidden="true" />
+                      {version ? 'Version introduction' : 'README'}
+                    </h2>
+                    <div className={styles.readmeActions}>
+                      {hasReadme ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          aria-expanded={contentsOpen}
+                          aria-controls={contentsOpen ? contentsId : undefined}
+                          onClick={() => setContentsOpen(!contentsOpen)}
+                        >
+                          <List aria-hidden="true" /> Contents
+                        </Button>
+                      ) : null}
+                      {canEdit && hasReadme ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setContentsOpen(false);
+                            setEditing(true);
+                          }}
+                        >
+                          <Pencil aria-hidden="true" /> Edit README
+                        </Button>
+                      ) : null}
+                    </div>
+                  </header>
+                  {contentsOpen && hasReadme ? (
+                    <nav id={contentsId} aria-label="README contents" className={styles.contents}>
+                      {readmeHeadings.map((heading, index) => (
+                        <button
+                          key={`${index}:${heading.title}`}
+                          style={{ paddingInlineStart: 8 + (heading.level - 1) * 12 }}
+                          type="button"
+                          onClick={() => {
+                            const target =
+                              readmeRef.current?.querySelectorAll<HTMLElement>('h1,h2,h3,h4,h5,h6')[
+                                index
+                              ];
+                            if (target) {
+                              target.tabIndex = -1;
+                              target.focus({ preventScroll: true });
+                              target.scrollIntoView({ block: 'start' });
+                            }
+                          }}
+                        >
+                          {heading.title}
+                        </button>
+                      ))}
+                      {!readmeHeadings.length && <span>No README headings</span>}
+                    </nav>
                   ) : null}
-                </div>
-              </header>
-              {contentsOpen ? (
-                <nav aria-label="README contents" className={styles.contents}>
-                  {readmeHeadings.map((heading, index) => (
-                    <button
-                      key={`${index}:${heading}`}
-                      type="button"
-                      onClick={() => {
-                        setContentsOpen(false);
-                        readmeRef.current
-                          ?.querySelectorAll('h1, h2, h3')
-                          [index]?.scrollIntoView({ block: 'start' });
-                      }}
-                    >
-                      {heading}
-                      <ChevronRight aria-hidden="true" />
-                    </button>
-                  ))}
-                  {!readmeHeadings.length ? <span>No README headings</span> : null}
-                </nav>
-              ) : null}
-              <div ref={readmeRef} className={styles.readmeBody}>
-                {version && (loading || error) ? (
-                  <>
-                    <p>
-                      {loading
-                        ? 'Loading version introduction…'
-                        : 'Version introduction unavailable.'}
-                    </p>
-                    {error && hasCommittedContent ? (
-                      <Button size="sm" variant="outline" onClick={retry}>
-                        Retry introduction
-                      </Button>
-                    ) : null}
-                  </>
-                ) : version ? (
-                  <StateAuthorReadme author={author} embedded />
-                ) : (
-                  <StateAuthorReadme
-                    author={{ readme: repositoryProfile.readme, resources: [] }}
-                    label="Repository README"
-                    emptyMessage="No README added yet."
-                    showUnavailableImages
-                    embedded
-                  />
-                )}
-              </div>
+                  <div ref={readmeRef} className={styles.readmeBody}>
+                    {version && (introductionLoading || introductionError) ? (
+                      <>
+                        <p>
+                          {introductionLoading
+                            ? 'Loading version introduction…'
+                            : 'Version introduction unavailable.'}
+                        </p>
+                        {error && hasCommittedContent ? (
+                          <Button size="sm" variant="outline" onClick={retry}>
+                            Retry introduction
+                          </Button>
+                        ) : null}
+                      </>
+                    ) : version ? (
+                      <StateAuthorReadme
+                        author={author}
+                        embedded
+                        markdownClassName={styles.markdown}
+                      />
+                    ) : hasReadme ? (
+                      <StateAuthorReadme
+                        author={{ readme: repositoryProfile.readme, resources: [] }}
+                        label="Repository README"
+                        emptyMessage="No README added yet."
+                        showUnavailableImages
+                        embedded
+                        markdownClassName={styles.markdown}
+                      />
+                    ) : (
+                      <div className={styles.emptyReadme}>
+                        <h3>
+                          {canEdit ? 'Introduce your repository' : 'No repository introduction'}
+                        </h3>
+                        <p>No README added yet.</p>
+                        {canEdit ? (
+                          <>
+                            <p>Describe its purpose, how to use it, and where to start.</p>
+                            <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+                              Add README
+                            </Button>
+                          </>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </section>
-            {reader && !empty && !stateLoading && !failed ? (
-              <details className={styles.contentPreview}>
-                <summary>Content preview</summary>
-                <div className={styles.specializedReader}>{reader(true, () => {})}</div>
-              </details>
-            ) : null}
           </div>
           <aside className={styles.sidebar} aria-label="State information">
             <section
               className={styles.about}
               aria-label={version ? 'About this version' : 'About this project'}
             >
-              <h2>About</h2>
-              {shownDescription && !descriptionInReadme ? (
+              {canEditDescription ? (
+                <RepositoryDescriptionEditor
+                  key={projectId}
+                  description={shownDescription ?? ''}
+                  onSave={canEditDescription}
+                />
+              ) : shownDescription ? (
                 <p className={styles.description}>{shownDescription}</p>
               ) : null}
               <fieldset
@@ -259,45 +347,25 @@ export function StateOverviewView({
                 aria-label={version ? 'Version tags' : 'Repository tags'}
               >
                 {shownTags.map((tag) => (
-                  <Badge key={tag} variant="outline" className={styles.tag}>
-                    {version || tag.startsWith('#') ? tag : `#${tag}`}
-                  </Badge>
+                  <RepositoryTag key={tag} name={tag} />
                 ))}
                 {canEdit ? (
                   <RepositoryProfileEditor
-                    field="tags"
+                    key={projectId}
+                    suggestionsNamespace={repositoryNamespace}
                     profile={repositoryProfile}
-                    projectName={projectName}
                     onSave={canEdit}
                   />
                 ) : null}
               </fieldset>
-              <dl className={styles.metadata}>
-                {schemaName && !empty ? (
-                  <div>
-                    <dt>Schema</dt>
-                    <dd>{schemaHref ? <Link href={schemaHref}>{schemaName}</Link> : schemaName}</dd>
-                  </div>
-                ) : null}
-                {validationLabel && !empty ? (
-                  <div>
-                    <dt>Validation</dt>
-                    <dd>{validationLabel}</dd>
-                  </div>
-                ) : null}
-              </dl>
             </section>
             <section aria-label="Committed State" className={styles.stateContent}>
               <header className={styles.contentHeading}>
                 <h2>Structure</h2>
-                {onViewStructure && !empty && !stateLoading && !failed ? (
-                  <button
-                    type="button"
-                    className={styles.sidebarLink}
-                    onClick={() => onViewStructure()}
-                  >
-                    Open full view <ArrowRight aria-hidden="true" />
-                  </button>
+                {rootCount > 0 && !stateLoading && !failed ? (
+                  <span className={styles.rootCount}>
+                    {rootCount} root {rootCount === 1 ? 'node' : 'nodes'}
+                  </span>
                 ) : null}
               </header>
               {stateLoading || (!hasCommittedContent && loading) ? (
@@ -314,9 +382,6 @@ export function StateOverviewView({
                 </div>
               ) : empty ? (
                 <div className={styles.emptyState}>
-                  <span className={styles.emptyIcon} aria-hidden="true">
-                    <GitCommitHorizontal />
-                  </span>
                   <div className={styles.emptyContent}>
                     <h3>No commits yet</h3>
                     <p>
@@ -346,9 +411,99 @@ export function StateOverviewView({
               ) : (
                 <p className={styles.sidebarHint}>Open the full view to inspect this State.</p>
               )}
+              {onViewStructure && !empty && !stateLoading && !failed ? (
+                <button
+                  type="button"
+                  className={styles.sidebarLink}
+                  onClick={() => onViewStructure()}
+                >
+                  Open full view <ArrowUpRight aria-hidden="true" />
+                </button>
+              ) : null}
+            </section>
+            <section
+              aria-label={version ? 'Viewed version' : 'Current version'}
+              className={styles.version}
+            >
+              <h2>{version ? 'Viewed version' : 'Current version'}</h2>
+              {stateLoading ? (
+                <p className={styles.sidebarHint}>Loading version…</p>
+              ) : failed ? (
+                <p className={styles.sidebarHint}>Version unavailable.</p>
+              ) : currentCommit ? (
+                <>
+                  {commitHref ? (
+                    <Link className={styles.commitMessage} href={commitHref}>
+                      {currentCommit.message || 'Committed state'}
+                    </Link>
+                  ) : (
+                    <p className={styles.commitMessage}>
+                      {currentCommit.message || 'Committed state'}
+                    </p>
+                  )}
+                  <div className={styles.commitMeta}>
+                    <span>
+                      {currentCommit.author?.name ||
+                        currentCommit.author?.id ||
+                        currentCommit.author?.type ||
+                        'Author not recorded'}
+                    </span>
+                    {currentCommit.committed_at &&
+                    Number.isFinite(Date.parse(currentCommit.committed_at)) ? (
+                      <time
+                        dateTime={currentCommit.committed_at}
+                        title={new Date(currentCommit.committed_at).toLocaleString()}
+                      >
+                        {relativeTime(currentCommit.committed_at)}
+                      </time>
+                    ) : null}
+                  </div>
+                  <p className={styles.commitHash}>
+                    <GitCommitHorizontal aria-hidden="true" />
+                    <code>{shortHash(currentCommit.hash)}</code>
+                  </p>
+                </>
+              ) : empty ? (
+                <p className={styles.sidebarHint}>No committed version yet.</p>
+              ) : null}
+              <dl className={styles.metadata}>
+                {schemaName && !empty && !stateLoading && !failed ? (
+                  <div>
+                    <dt>
+                      <Braces aria-hidden="true" />
+                      Schema
+                    </dt>
+                    <dd>{schemaHref ? <Link href={schemaHref}>{schemaName}</Link> : schemaName}</dd>
+                  </div>
+                ) : null}
+                {validationLabel && !empty && !stateLoading && !failed ? (
+                  <div>
+                    <dt>
+                      <ShieldCheck aria-hidden="true" />
+                      Validation
+                    </dt>
+                    <dd>{validationLabel}</dd>
+                  </div>
+                ) : null}
+              </dl>
+              {historyHref && !embedded ? (
+                <nav aria-label="History navigation" className={styles.historyLinks}>
+                  <StateHistoryMenu href={historyHref} canvasHref={alternateHistoryHref} />
+                </nav>
+              ) : null}
             </section>
           </aside>
         </div>
+        {!embedded ? (
+          <StatePageFooter
+            projectName={projectName}
+            branch={refName}
+            onBackToTop={() => {
+              rootRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+              readmeHeaderRef.current?.focus({ preventScroll: true });
+            }}
+          />
+        ) : null}
       </div>
     </div>
   );
