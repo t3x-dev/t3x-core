@@ -137,6 +137,9 @@ it('restores concrete migration edits after reload and does not rerun when savin
       }}
       fetchMergeReview={vi.fn().mockResolvedValue({
         draft_id: 'draft-3',
+        source_commit_id: 's',
+        target_commit_id: 't',
+        merge_base_commit_id: 'base',
         decision_revision: 8,
         decisions: {
           conflictResolutions: {},

@@ -857,6 +857,34 @@ describe('ProjectReviewsTab', () => {
     });
   });
 
+  it.each([
+    'loading',
+    'failed',
+    'mismatched',
+  ])('blocks a stored ready PR while comparison is %s', async (state) => {
+    pullRequestApi.fetchPullRequest.mockResolvedValue({
+      ...blockedPullRequestDetail,
+      status: 'ready',
+    });
+    if (state === 'loading') pullRequestApi.fetchMergeReview.mockReturnValue(new Promise(() => {}));
+    else if (state === 'failed')
+      pullRequestApi.fetchMergeReview.mockRejectedValue(new Error('Explicit migration required'));
+    else
+      pullRequestApi.fetchMergeReview.mockResolvedValue({
+        ...conflictReview,
+        target_commit_id: 'sha256:other',
+      });
+    render(<ProjectReviewsTab projectId="proj_real" initialPullRequestNumber={1} />);
+    await screen.findByRole('heading', { name: blockedPullRequest.title });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Merge PR' })).toBeDisabled());
+    if (state !== 'loading')
+      await screen.findAllByText(/Merge is blocked until the comparison is available/);
+    expect(screen.queryByText('Ready to merge')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Merge PR' }));
+    expect(pullRequestApi.mergePullRequest).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Rerun readiness' })).toBeEnabled();
+  });
+
   it('uses the actual merge comparison for Overview and exposes each check status', async () => {
     pullRequestApi.fetchPullRequest.mockResolvedValue({
       ...blockedPullRequestDetail,
