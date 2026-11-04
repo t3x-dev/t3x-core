@@ -47,6 +47,7 @@ export interface ChangeCheckFinding {
   code: string;
   message: string;
   count: number;
+  path?: string;
 }
 
 export interface ChangeCheckRow {
@@ -112,6 +113,7 @@ export function changeCheckRows(
             ? [...run.predicate.errors, ...run.predicate.gaps].map((finding) => ({
                 code: finding.code,
                 message: finding.message,
+                path: finding.path,
               }))
             : []
         )
@@ -121,15 +123,13 @@ export function changeCheckRows(
   if (checks.runner.observation === 'observed') {
     const generated = isGeneratedChange(view);
     const deletionAuthorization = checks.runner.runs.some((run) =>
-      run.predicate.findings.some((finding) =>
-        ['SOURCE_REPLACEMENT_NOT_ALLOWED', 'HUMAN_CONFIRMED_DELETION'].includes(finding.code)
-      )
+      run.predicate.findings.some((finding) => finding.code === 'HUMAN_CONFIRMED_DELETION')
     );
     const status = outcomeStatus(checks.runner.observation, checks.runner.outcomes, ['passed']);
     const errors = checks.runner.runs.flatMap((run) =>
       run.predicate.findings
         .filter((finding) => finding.severity === 'error')
-        .map((finding) => ({ code: finding.code, message: finding.message }))
+        .map((finding) => ({ code: finding.code, message: finding.message, path: finding.path }))
     );
     rows.push({
       id: 'runner',
@@ -198,9 +198,9 @@ function explainReason(
       )
         return {
           code: reason.code,
-          title: 'Existing content changes need authorization',
+          title: 'Trusted content replacement is blocked',
           detail:
-            'Return to Compose and Confirm the exact deletion on its content card, then prepare a new Review. New values and other changes still require their own checks.',
+            'Inspect the affected paths in Run details, then revise or undo the conflicting changes in Compose and prepare a new Review. Deletion confirmation only authorizes an exact deletion; it does not authorize replacement values.',
         };
       return {
         code: reason.code,
@@ -217,6 +217,24 @@ function explainReason(
       };
     case 'VALIDATION_FAILED':
     case 'VALIDATION_CONFLICT':
+      if (
+        view.checks.validation.runs.some(
+          (run) =>
+            run.predicate.outcome === 'failed' &&
+            [...run.predicate.errors, ...run.predicate.gaps].some(
+              (finding) => finding.code === 'REQUIRED_EVIDENCE_MISSING'
+            )
+        )
+      )
+        return {
+          code: reason.code,
+          title: 'Required source evidence is missing',
+          detail:
+            'Inspect the affected fields and evidence requirements in Run details. These fields need accepted source evidence; changing their values alone does not resolve this check. Prepare a new Review after resolving the evidence gaps.' +
+            (overrideAllowed
+              ? ' The branch also permits a commit with a recorded override reason.'
+              : ''),
+        };
       return {
         code: reason.code,
         title: 'Schema validation failed',
@@ -287,14 +305,20 @@ function validationSummary(view: TransitionGraphViewV1): string {
 }
 
 function groupFindings(
-  findings: ReadonlyArray<{ code: string; message: string }>
+  findings: ReadonlyArray<{ code: string; message: string; path?: string }>
 ): ChangeCheckFinding[] {
   const grouped = new Map<string, ChangeCheckFinding>();
   for (const finding of findings) {
-    const key = `${finding.code}\u0000${finding.message}`;
+    const key = `${finding.code}\u0000${finding.path ?? ''}\u0000${finding.message}`;
     const existing = grouped.get(key);
     if (existing) existing.count += 1;
-    else grouped.set(key, { code: finding.code, message: finding.message, count: 1 });
+    else
+      grouped.set(key, {
+        code: finding.code,
+        message: finding.message,
+        ...(finding.path ? { path: finding.path } : {}),
+        count: 1,
+      });
   }
   return [...grouped.values()];
 }
