@@ -52,7 +52,8 @@ function findings(value: unknown): CheckItem['findings'] {
 }
 function observedStatus(value: Record<string, unknown>): string {
   const outcomes = Array.isArray(value.outcomes) ? value.outcomes : [];
-  if (value.observation !== 'observed' || !outcomes.length) return 'not_observed';
+  if (value.observation !== 'observed') return 'not_observed';
+  if (!outcomes.length) return 'no_conclusion';
   if (outcomes.every((o) => o === 'passed' || o === 'verified')) return 'passed';
   if (outcomes.some((o) => ['failed', 'invalid', 'denied', 'error', 'false'].includes(String(o))))
     return 'failed';
@@ -84,10 +85,15 @@ export function checkItems(record: CheckRecord): CheckItem[] {
           status: notApplicable ? 'not_applicable' : observedStatus(check),
           summary: notApplicable
             ? 'Not applicable: no business content is being submitted. Required fields apply when content is added.'
-            : Array.isArray(check.outcomes)
+            : Array.isArray(check.outcomes) && check.outcomes.length > 0
               ? check.outcomes.join(', ')
               : 'No conclusion recorded.',
-          findings: runs.flatMap((run) => findings(object(run.predicate).gaps)),
+          findings: runs.flatMap((run) => {
+            const predicate = object(run.predicate);
+            return key === 'validation'
+              ? [...findings(predicate.errors), ...findings(predicate.gaps)]
+              : findings(predicate.findings);
+          }),
           evidence: check,
         };
       });
@@ -170,7 +176,9 @@ export function checkRecordView(record: CheckRecord) {
           : items.length &&
               items.every((i) => i.status === 'passed' || i.status === 'not_applicable')
             ? 'passed'
-            : 'not_observed';
+            : items.some((i) => i.status === 'not_observed')
+              ? 'not_observed'
+              : 'no_conclusion';
   return {
     title:
       record.kind === 'review'

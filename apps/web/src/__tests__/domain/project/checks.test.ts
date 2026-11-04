@@ -94,6 +94,73 @@ describe('Checks identity and navigation', () => {
     }
   });
 
+  it.each([
+    'unsupported',
+    undefined,
+  ])('keeps an observed but inconclusive result distinct from missing evidence: %j', (outcome) => {
+    const outcomes = outcome ? [outcome] : [];
+    const view = checkRecordView({
+      id: 'review:inconclusive',
+      kind: 'review',
+      created_at: '',
+      payload: {
+        snapshot: {
+          transition: {
+            checks: {
+              objectIntegrity: 'verified',
+              replay: { observation: 'observed', outcomes: ['verified'] },
+              validation: { observation: 'observed', outcomes, runs: [] },
+            },
+          },
+        },
+      },
+    });
+    expect(view.status).toBe('no_conclusion');
+    expect(view.items.find((item) => item.id === 'validation')).toMatchObject({
+      status: 'no_conclusion',
+      summary: outcome || 'No conclusion recorded.',
+    });
+  });
+
+  it('preserves validation errors, evidence gaps and runner findings in the recorded scope', () => {
+    const error = { code: 'INVALID_TYPE', path: 'service/port', message: 'Expected a number.' };
+    const gap = { code: 'EVIDENCE_MISSING', path: 'service/name', message: 'Missing evidence.' };
+    const finding = {
+      code: 'SOURCE_REPLACEMENT_NOT_ALLOWED',
+      path: 'service/port',
+      message: 'Replacement was not authorized.',
+    };
+    const view = checkRecordView({
+      id: 'review:failed',
+      kind: 'review',
+      created_at: '',
+      payload: {
+        content_validation: 'not_applicable',
+        snapshot: {
+          transition: {
+            checks: {
+              objectIntegrity: 'verified',
+              replay: { observation: 'observed', outcomes: ['verified'] },
+              validation: {
+                observation: 'observed',
+                outcomes: ['failed'],
+                runs: [{ predicate: { errors: [error], gaps: [gap] } }],
+              },
+              runner: {
+                observation: 'observed',
+                outcomes: ['failed'],
+                runs: [{ predicate: { findings: [finding] } }],
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(view.status).toBe('failed');
+    expect(view.items.find((item) => item.id === 'validation')?.findings).toEqual([error, gap]);
+    expect(view.items.find((item) => item.id === 'runner')?.findings).toEqual([finding]);
+  });
+
   it('does not turn missing observations or a provider-free PR result into verified success', () => {
     expect(
       checkRecordView({
