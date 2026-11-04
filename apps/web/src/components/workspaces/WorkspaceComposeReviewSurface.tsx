@@ -1259,7 +1259,7 @@ function ComposeSurface({
               title="Inspect Workspace Draft"
             >
               <PanelRightOpen aria-hidden="true" /> Draft
-              <span title="Changed Content objects">{contentChangeCount}</span>
+              <span title="Changed Content objects">{contentChangeCount} changed objects</span>
               {schemaSettings.record && schemaSettings.record.status !== 'cancelled' ? (
                 <small>Schema</small>
               ) : null}
@@ -1334,7 +1334,11 @@ function ComposeSurface({
             onPrefillApplied={controller.clearAssistantPrefill}
             proposalBlockedHint={staged.length ? UNGROUPED_MANUAL_HINT : undefined}
             sourcesControl={<WorkspaceSourcesMenu candidate={candidate} controller={controller} />}
-            contextLabel={activity.view ? `Draft r${activity.compositionRevision ?? 0}` : undefined}
+            contextLabel={
+              activity.view
+                ? `Content r${activity.compositionRevision ?? 0} · Workspace r${activity.view.workspaceRevision}`
+                : undefined
+            }
           />
         </section>
       </main>
@@ -1519,7 +1523,7 @@ function ComposeSurface({
               </button>
               <h3>This reply’s changes</h3>
               <p>
-                Draft r{turn.action.beforeRevision} → r{turn.action.afterRevision}
+                Content r{turn.action.beforeRevision} → r{turn.action.afterRevision}
               </p>
               <WorkspaceTurnChanges
                 action={turn.action}
@@ -1549,8 +1553,8 @@ function ComposeSurface({
               {activity.newActivity ? (
                 <output className={composeStyles.newActivity}>
                   <span>
-                    New activity · Draft r{activity.newActivity.compositionRevision}. Your inspected
-                    node remains open.
+                    New activity · Content r{activity.newActivity.compositionRevision}. Your
+                    inspected node remains open.
                   </span>
                   <button onClick={() => void activity.loadLatest()} type="button">
                     Load latest
@@ -2930,7 +2934,7 @@ function ReviewSurface({
       <WorkspaceReviewWorkbench
         title={
           <>
-            Draft{candidate.revision !== undefined ? ` r${candidate.revision}` : ''} →{' '}
+            Workspace draft{candidate.revision !== undefined ? ` r${candidate.revision}` : ''} →{' '}
             {candidate.targetBranch || 'main'}
           </>
         }
@@ -3555,7 +3559,7 @@ function WorkspaceReviewStructureView({
                   ) : (
                     'Workspace baseline (no base commit)'
                   )}{' '}
-                  compared with draft <code>r{candidate.revision ?? 1}</code>
+                  compared with Workspace draft <code>r{candidate.revision ?? 1}</code>
                 </p>
               </div>
               <div className={diffStyles.counts}>

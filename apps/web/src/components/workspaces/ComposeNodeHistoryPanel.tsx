@@ -521,7 +521,7 @@ function DraftStructure({
       ) : (
         <div className={styles.yaml}>
           <header>
-            <span>Current Draft r{revision ?? '—'}</span>
+            <span>Current Content r{revision ?? '—'}</span>
             <button type="button" aria-label="Copy YAML" onClick={() => void copyYaml()}>
               <Copy aria-hidden="true" />
             </button>
@@ -846,7 +846,7 @@ export function ComposeNodeHistoryPanel({
         key={`${path}:${selection.meta.actionId ?? 'draft'}`}
         title={title}
         path={path}
-        revisionLabel={`Draft r${activity.compositionRevision ?? '—'}`}
+        revisionLabel={`Content r${activity.compositionRevision ?? '—'}`}
         current={node.current}
         unknown={node.state === 'unknown'}
         comparison={comparison}

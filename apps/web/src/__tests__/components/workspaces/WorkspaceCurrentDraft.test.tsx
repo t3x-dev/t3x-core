@@ -49,7 +49,7 @@ describe('Workspace current Draft sidebar', () => {
     };
     render(<WorkspaceCurrentDraft candidate={candidate} current={current} revision={4} enabled />);
     const panel = screen.getByRole('region', { name: 'Current Draft' });
-    expect(within(panel).getByText('r4')).toBeVisible();
+    expect(within(panel).getByText('Content r4')).toBeVisible();
     expect(within(panel).getByText('Current title')).toBeVisible();
     expect(within(panel).getByText('false')).toBeVisible();
     expect(within(panel).getByText('0')).toBeVisible();

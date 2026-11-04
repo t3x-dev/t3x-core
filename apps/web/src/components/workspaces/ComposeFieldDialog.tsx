@@ -133,12 +133,15 @@ export function ComposeFieldDialog({
       >
         <header className={styles.header}>
           <p>
-            {title} · Draft r{activity.compositionRevision ?? '—'}
+            {title} · Content r{activity.compositionRevision ?? '—'} · Workspace r
+            {activity.view?.workspaceRevision ?? candidate?.revision ?? '—'}
           </p>
           <DialogTitle>{candidate ? 'Edit Workspace Draft' : 'Current structure'}</DialogTitle>
           <DialogDescription>
             Add, edit, or delete fields and items. More operations are available on each row.
-            Changes remain in the draft until reviewed and committed.
+            Content revisions track content edits; Workspace revisions identify the combined Content
+            and Schema draft reviewed for commit. Changes remain in the draft until reviewed and
+            committed.
           </DialogDescription>
         </header>
         {candidate ? (
@@ -193,7 +196,7 @@ export function ComposeFieldDialog({
               <section aria-label="Current Draft YAML" className={styles.yaml}>
                 <header className={styles.yamlHeading}>
                   <span>
-                    <FileCode2 aria-hidden="true" /> Current Draft r
+                    <FileCode2 aria-hidden="true" /> Current Content r
                     {activity.compositionRevision ?? '—'}
                   </span>
                   <div>

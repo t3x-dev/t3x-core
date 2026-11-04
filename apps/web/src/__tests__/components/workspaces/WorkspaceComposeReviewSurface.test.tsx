@@ -639,6 +639,17 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     } as unknown as ReturnType<typeof useComposeActivity>;
   }
 
+  it('labels object counts separately from content and Workspace revisions', () => {
+    enableComposeActivity();
+    activityMocks.value!.compositionRevision = 2;
+    activityMocks.value!.view!.workspaceRevision = 7;
+    renderCompose();
+    expect(screen.getByRole('button', { name: 'Open Draft' })).toHaveTextContent(
+      '0 changed objects'
+    );
+    expect(screen.getByText('Content r2 · Workspace r7')).toBeInTheDocument();
+  });
+
   it('switches independent chat histories and starts a new conversation blank', async () => {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     conversationMocks.value.data.conversations = [
