@@ -43,12 +43,13 @@ describe('recordEvent', () => {
 
   it('whitelist contains all expected event types', () => {
     expect(ALLOWED_EVENT_TYPES).toContain('commit.created');
+    expect(ALLOWED_EVENT_TYPES).toContain('branch.advanced');
     expect(ALLOWED_EVENT_TYPES).toContain('draft.changed');
     expect(ALLOWED_EVENT_TYPES).toContain('yops.applied');
     expect(ALLOWED_EVENT_TYPES).toContain('conversation.renamed');
     expect(ALLOWED_EVENT_TYPES).toContain('extraction.started');
     expect(ALLOWED_EVENT_TYPES).toContain('extraction.done');
-    expect(ALLOWED_EVENT_TYPES).toHaveLength(6);
+    expect(ALLOWED_EVENT_TYPES).toHaveLength(7);
   });
 
   it('accepts null conversationId for project-level events', async () => {

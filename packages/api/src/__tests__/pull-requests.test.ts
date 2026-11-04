@@ -3,6 +3,7 @@
 import { type ApiKey, createYOpsState, yvalueToTrees } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import {
+  bindTransitionPolicy,
   createMaterial,
   findBranchByName,
   getMergeDraft,
@@ -14,7 +15,7 @@ import {
 import { t3xPrdP0Fixtures } from '@t3x-dev/yschema';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { grantTestMachineProjectAccess, setupTestDB, testData } from './setup';
+import { grantTestScopedCredentialProjectAccess, setupTestDB, testData } from './setup';
 import { commitSemanticFixture } from './transition-fixture';
 
 type ApiResponse = any;
@@ -33,6 +34,7 @@ import {
   getRepositorySemanticCommit,
 } from '../lib/repository-state-transition';
 import { inspectTransition } from '../lib/transition-control-plane';
+import { INDEPENDENT_REVIEW_REF_POLICY } from '../lib/transition-control-plane/applicable-policy';
 import {
   decideWorkspaceTransition,
   reviewWorkspaceTransition,
@@ -45,7 +47,7 @@ describe('Pull request routes', () => {
   const app = new Hono();
   app.use('*', async (context, next) => {
     if (requestApiKey !== undefined) {
-      await grantTestMachineProjectAccess(mockDB, requestApiKey);
+      await grantTestScopedCredentialProjectAccess(mockDB, requestApiKey);
       context.set('apiKey', requestApiKey);
       if (requestApiKey.user_id !== null) context.set('userId', requestApiKey.user_id);
     }
@@ -69,7 +71,7 @@ describe('Pull request routes', () => {
     requestApiKey = undefined;
   });
 
-  function machineKey(projectId: string): ApiKey {
+  function machineKey(projectId: string, scopes: ApiKey['transition_scopes'] = []): ApiKey {
     return {
       id: 'ak_pr_machine',
       key_prefix: 't3xk_prm',
@@ -78,8 +80,24 @@ describe('Pull request routes', () => {
       project_id: projectId,
       user_id: null,
       principal_kind: 'agent',
-      transition_scopes: [],
+      transition_scopes: scopes,
       created_at: '2026-08-29T00:00:00.000Z',
+      last_used_at: null,
+      revoked_at: null,
+    };
+  }
+
+  function humanKey(projectId: string, userId: 'test-a' | 'test-b'): ApiKey {
+    return {
+      id: `ak_pr_${userId}`,
+      key_prefix: `t3xk_${userId}`,
+      key_hash: `pr-${userId}-hash`,
+      name: `Pull request ${userId}`,
+      project_id: projectId,
+      user_id: userId,
+      principal_kind: 'human',
+      transition_scopes: [],
+      created_at: '2026-10-30T00:00:00.000Z',
       last_used_at: null,
       revoked_at: null,
     };
@@ -222,7 +240,7 @@ describe('Pull request routes', () => {
   }
 
   async function createBranchFixture(options: { conflict?: boolean } = {}) {
-    const project = await insertProject(mockDB, testData.project({ name: 'PR route test' }));
+    const project = await insertProject(mockDB, testData.project());
     await insertBranch(mockDB, { projectId: project.projectId, name: 'main' });
     const target = await createRepositoryCommit({
       projectId: project.projectId,
@@ -949,6 +967,38 @@ describe('Pull request routes', () => {
     });
   });
 
+  it('authorizes machine PR creation and readiness with separate proposal and verification scopes', async () => {
+    const fixture = await createBranchFixture();
+    requestApiKey = machineKey(fixture.projectId);
+    const deniedCreate = await openPullRequest(fixture.projectId);
+    expect(deniedCreate.response.status).toBe(403);
+    expect(deniedCreate.data.error.code).toBe('TRANSITION_SCOPE_DENIED');
+
+    requestApiKey = machineKey(fixture.projectId, ['transition:propose']);
+    const opened = await openPullRequest(fixture.projectId);
+    expect(opened.response.status).toBe(201);
+    expect(opened.data.data).toMatchObject({
+      author_kind: 'agent',
+      status: 'open',
+    });
+
+    const rerun = () =>
+      app.request(
+        `/v1/projects/${fixture.projectId}/pull-requests/${opened.data.data.number}/checks/rerun`,
+        { method: 'POST' }
+      );
+    const deniedReadiness = await rerun();
+    expect(deniedReadiness.status).toBe(403);
+    expect(((await deniedReadiness.json()) as ApiResponse).error.code).toBe(
+      'TRANSITION_SCOPE_DENIED'
+    );
+
+    requestApiKey = machineKey(fixture.projectId, ['transition:verify']);
+    const verified = await rerun();
+    expect(verified.status).toBe(200);
+    expect(((await verified.json()) as ApiResponse).data).toMatchObject({ status: 'ready' });
+  });
+
   it('rejects unresolved conflicts without changing the target branch or merge draft', async () => {
     const fixture = await createBranchFixture({ conflict: true });
     const opened = await openPullRequest(fixture.projectId);
@@ -1089,6 +1139,97 @@ describe('Pull request routes', () => {
     expect(
       (await findBranchByName(mockDB, fixture.projectId, 'feature/pr-flow'))?.headCommitHash
     ).toBe(fixture.source.hash);
+  });
+
+  it('merges multiple source commits into a protected ref only after test-b reviews test-a, with structured audit', async () => {
+    const fixture = await createBranchFixture();
+    const secondSource = await createRepositoryCommit({
+      projectId: fixture.projectId,
+      branch: 'feature/pr-flow',
+      content: {
+        trees: [
+          { key: 'product', slots: { version: 1 }, children: [] },
+          { key: 'release', slots: { ready: true, audited: true }, children: [] },
+          { key: 'operations', slots: { owner: 'test-a' }, children: [] },
+        ],
+        relations: [],
+      },
+      message: 'second feature commit',
+    });
+    await bindTransitionPolicy(mockDB, {
+      projectId: fixture.projectId,
+      refName: 'main',
+      uri: INDEPENDENT_REVIEW_REF_POLICY.resource.uri,
+      policy: INDEPENDENT_REVIEW_REF_POLICY.policy,
+      actor: { kind: 'human', id: 'human:admin' },
+    });
+
+    requestApiKey = humanKey(fixture.projectId, 'test-a');
+    const opened = await openPullRequest(fixture.projectId);
+    expect(opened.response.status).toBe(201);
+    expect(opened.data.data).toMatchObject({
+      author_id: 'user:test-a',
+      author_kind: 'human',
+      source_commit_id: secondSource.hash,
+      status: 'ready',
+    });
+
+    const merge = () =>
+      app.request(
+        `/v1/projects/${fixture.projectId}/pull-requests/${opened.data.data.number}/merge`,
+        {
+          body: JSON.stringify({
+            expected_source_commit_id: secondSource.hash,
+            expected_target_commit_id: fixture.target.hash,
+            strategy: 'deterministic_merge',
+          }),
+          headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+        }
+      );
+
+    const selfApproval = await merge();
+    expect(selfApproval.status).toBe(409);
+    expect(((await selfApproval.json()) as ApiResponse).error.code).toBe('DECISION_NOT_PERMITTED');
+    expect((await findBranchByName(mockDB, fixture.projectId, 'main'))?.headCommitHash).toBe(
+      fixture.target.hash
+    );
+
+    requestApiKey = humanKey(fixture.projectId, 'test-b');
+    const approved = await merge();
+    const merged = (await approved.json()) as ApiResponse;
+    expect(approved.status).toBe(200);
+    expect(merged.data.status).toBe('merged');
+    expect(merged.data.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          actor_id: 'user:test-a',
+          type: 'created',
+          details: expect.objectContaining({
+            source_commit_id: secondSource.hash,
+            target_commit_id: fixture.target.hash,
+          }),
+        }),
+        expect.objectContaining({
+          actor_id: 'user:test-b',
+          type: 'merged',
+          details: expect.objectContaining({
+            proposal_actor: { kind: 'human', id: 'user:test-a' },
+            source_commit_id: secondSource.hash,
+            target_commit_id: fixture.target.hash,
+            merge_commit_id: merged.data.merge_commit_id,
+            outcome: 'merged',
+          }),
+        }),
+      ])
+    );
+    const mergeCommit = await getRepositorySemanticCommit(
+      mockDB,
+      merged.data.merge_commit_id,
+      fixture.projectId
+    );
+    expect(mergeCommit?.parents).toEqual([fixture.target.hash, secondSource.hash]);
+    expect(await listCommitHistory(mockDB, fixture.projectId)).toHaveLength(4);
   });
 
   it('serializes concurrent merge requests so exactly one merge commit is created', async () => {

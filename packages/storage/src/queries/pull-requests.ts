@@ -74,6 +74,8 @@ export interface CreatePullRequestInput {
   targetBaseCommitHash: string;
   status?: PullRequestStatus;
   authorId: string;
+  authorKind?: 'human' | 'agent' | 'service';
+  authorDelegatorId?: string;
   reviewOwnerId?: string;
   linkedWork?: string;
   diffSummary?: PullRequestDiffSummary;
@@ -107,6 +109,7 @@ export interface AddPullRequestActivityInput {
   actorId: string;
   type: PullRequestActivityType;
   message: string;
+  details?: Record<string, unknown>;
   createdAt?: Date;
 }
 
@@ -150,6 +153,8 @@ export async function createPullRequest(
         targetBaseCommitHash: input.targetBaseCommitHash,
         status: input.status ?? 'open',
         authorId: input.authorId,
+        authorKind: input.authorKind ?? 'human',
+        authorDelegatorId: input.authorDelegatorId ?? null,
         reviewOwnerId: input.reviewOwnerId ?? null,
         linkedWork: input.linkedWork ?? null,
         diffSummary: input.diffSummary ?? {
@@ -289,6 +294,7 @@ export async function addPullRequestActivity(
       actorId: input.actorId,
       type: input.type,
       message: input.message,
+      details: input.details ?? null,
       createdAt: input.createdAt ?? new Date(),
     })
     .returning();

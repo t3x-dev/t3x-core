@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { NextConfig } from 'next';
-import { ProxyAgent, setGlobalDispatcher } from 'undici';
+import { EnvHttpProxyAgent, setGlobalDispatcher } from 'undici';
 
 // Load .env from monorepo root so NEXT_PUBLIC_* vars are available in local dev
 const rootEnvPath = path.resolve(__dirname, '../../.env');
@@ -21,7 +21,10 @@ if (fs.existsSync(rootEnvPath)) {
 // Required in environments where google.com is not directly accessible.
 const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
 if (proxyUrl) {
-  setGlobalDispatcher(new ProxyAgent(proxyUrl));
+  const noProxy = [process.env.NO_PROXY || process.env.no_proxy, 'localhost', '127.0.0.1', '::1']
+    .filter(Boolean)
+    .join(',');
+  setGlobalDispatcher(new EnvHttpProxyAgent({ noProxy }));
   console.log(`[proxy] Global fetch proxy configured: ${proxyUrl}`);
 }
 
@@ -42,6 +45,10 @@ const nextConfig: NextConfig = {
   },
   // Hide the dev indicator floating ball (N button) in development
   devIndicators: false,
+  async rewrites() {
+    const apiOrigin = (process.env.T3X_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+    return [{ source: '/ws', destination: `${apiOrigin}/ws` }];
+  },
 };
 
 export default nextConfig;

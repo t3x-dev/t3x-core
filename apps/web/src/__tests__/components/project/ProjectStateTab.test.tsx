@@ -840,6 +840,32 @@ describe('ProjectStateTab', () => {
     expect(await screen.findByRole('link', { name: PARENT_COMMIT.message })).toBeInTheDocument();
   });
 
+  it('creates a branch from the explicitly focused historical commit', async () => {
+    navigationMocks.search = `commit=${encodeURIComponent(PARENT_COMMIT.hash)}`;
+    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
+    hookMocks.loadCommit.mockImplementation(async (hash: string) =>
+      hash === PARENT_COMMIT.hash ? PARENT_COMMIT : PRD_COMMIT
+    );
+    renderStateTab();
+    await screen.findByRole('link', { name: PARENT_COMMIT.message });
+    fireEvent.click(screen.getByRole('button', { name: /Switch branches\/tags/ }));
+    fireEvent.change(screen.getByPlaceholderText('Find or create branch'), {
+      target: { value: 'restore/historical-state' },
+    });
+    fireEvent.click(
+      screen.getByRole('menuitem', {
+        name: /Create branch restore\/historical-state from main/,
+      })
+    );
+    await waitFor(() =>
+      expect(hookMocks.createBranch).toHaveBeenCalledWith(
+        'restore/historical-state',
+        'main',
+        PARENT_COMMIT.hash
+      )
+    );
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     navigationMocks.pathname = '/t3x-dev/test-project';

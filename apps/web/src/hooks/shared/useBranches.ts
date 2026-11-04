@@ -26,7 +26,7 @@ export interface UseBranchesResult {
   branches: string[];
   loading: boolean;
   refresh: () => Promise<void>;
-  create: (name: string, parentBranch: string) => Promise<Branch>;
+  create: (name: string, parentBranch: string, headCommitHash?: string) => Promise<Branch>;
 }
 
 export function useBranches(projectId: string | null, enabled: boolean): UseBranchesResult {
@@ -81,7 +81,7 @@ export function useBranches(projectId: string | null, enabled: boolean): UseBran
   }, [refresh, scope]);
 
   const create = useCallback(
-    async (name: string, parentBranch: string) => {
+    async (name: string, parentBranch: string, headCommitHash?: string) => {
       if (!projectId) throw new Error('A project is required to create a branch.');
       if (!enabled || !scope.active || activeScope.current !== scope)
         throw new Error('Branch context changed. Reopen the branch controls.');
@@ -89,7 +89,14 @@ export function useBranches(projectId: string | null, enabled: boolean): UseBran
       const readAtStart = scope.read;
       scope.creates.set(name, request);
       try {
-        const branch = await createBranch(projectId, name, parentBranch);
+        const branch = await createBranch(
+          projectId,
+          name,
+          parentBranch,
+          undefined,
+          false,
+          headCommitHash
+        );
         if (!scope.active || activeScope.current !== scope || scope.creates.get(name) !== request)
           return branch;
         // A list started before this acknowledgement may omit the new branch.

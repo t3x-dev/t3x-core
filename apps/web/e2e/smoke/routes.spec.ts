@@ -61,7 +61,7 @@ test('legacy Chat landing redirects to the repository directory', async ({ page 
   await page.goto('/chat', { waitUntil: 'domcontentloaded' });
 
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('heading', { name: 't3x-dev' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Repositories/ })).toBeVisible();
 });
 
 test('project canvas route renders without console errors', async ({ page }) => {

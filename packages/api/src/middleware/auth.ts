@@ -13,30 +13,35 @@
  * @see packages/api/src/lib/errors.ts for error codes
  */
 
-import type { ApiKeyPrincipalKind, TransitionScope } from '@t3x-dev/core';
-import { type AnyDB, findApiKeyByValue, touchLastUsed } from '@t3x-dev/storage';
+import type { RequestPrincipal } from '@t3x-dev/application';
+import {
+  type AnyDB,
+  findActiveSessionByToken,
+  findApiKeyByValue,
+  touchLastUsed,
+  touchSessionLastSeen,
+} from '@t3x-dev/storage';
 import type { Context, Next } from 'hono';
 import { isAuthenticationDisabled } from '../lib/auth-config';
 import { getDB } from '../lib/db';
 import { createError } from '../lib/errors';
+import {
+  localDevelopmentRequestPrincipal,
+  requestPrincipalFromApiKey,
+  requestPrincipalFromSession,
+  runnerRequestPrincipal,
+  setRequestPrincipal,
+  WEB_SESSION_TOKEN_PREFIX,
+} from '../lib/request-principal';
 import { isRunnerServiceRoute, runnerServiceAuthenticationError } from '../lib/runner-service-auth';
+import type { AppEnv } from '../types';
 import { pinoLogger } from './logger';
-
-/** Normalized authority returned by raw-token entry points such as WebSocket. */
-export interface BearerTokenPrincipal {
-  userId: string | null;
-  projectId: string | null;
-  /** Null for short-lived or otherwise non-persisted credentials. */
-  keyId: string | null;
-  principalKind: ApiKeyPrincipalKind;
-  transitionScopes: readonly TransitionScope[];
-}
 
 /** Extension point for deployments that accept more than persisted API keys. */
 export type BearerTokenVerifier = (
   db: AnyDB,
   token: string | null
-) => Promise<BearerTokenPrincipal | null>;
+) => Promise<RequestPrincipal | null>;
 
 /** Paths that never require authentication */
 const PUBLIC_PATHS = [
@@ -60,6 +65,26 @@ const PUBLIC_PREFIXES = ['/api/v1/auth/callback', '/api/v1/auth/register', '/api
  * GET /api/v1/share/entity/:type/:id (has sub-path).
  */
 const SHARE_RESOLVE_PATTERN = /^\/api\/v1\/share\/[^/]+$/;
+const RESERVED_IDENTITY_HEADERS = [
+  'X-T3X-Actor',
+  'X-T3X-Owner',
+  'X-T3X-Delegator',
+  'X-T3X-Principal',
+  'X-T3X-Role',
+  'X-T3X-Namespace',
+  'X-T3X-Scopes',
+] as const;
+
+function reservedIdentityHeader(c: Context): string | undefined {
+  return RESERVED_IDENTITY_HEADERS.find((header) => c.req.header(header) !== undefined);
+}
+
+function rejectIdentityOverride(c: Context): Response | null {
+  const header = reservedIdentityHeader(c);
+  return header
+    ? c.json(createError('INVALID_REQUEST', `${header} is server-controlled`), 400)
+    : null;
+}
 
 function isPublicPath(path: string, method?: string): boolean {
   if (PUBLIC_PATHS.includes(path)) return true;
@@ -83,13 +108,16 @@ function isPublicPath(path: string, method?: string): boolean {
  * Auth is ENABLED by default.
  * Only disabled when AUTH_DISABLED is explicitly set to 'true'.
  */
-export async function authMiddleware(c: Context, next: Next) {
+export async function authMiddleware(c: Context<AppEnv>, next: Next) {
   // Runner callbacks and lookups use a narrowly scoped service identity. Check
   // this before AUTH_DISABLED so machine routes never become anonymous as a
   // side effect of local-development settings.
   if (isRunnerServiceRoute(c.req.path, c.req.method)) {
     const authenticationError = runnerServiceAuthenticationError(c);
     if (authenticationError) return authenticationError;
+    const identityOverride = rejectIdentityOverride(c);
+    if (identityOverride) return identityOverride;
+    setRequestPrincipal(c, runnerRequestPrincipal());
     return next();
   }
 
@@ -97,6 +125,9 @@ export async function authMiddleware(c: Context, next: Next) {
   // Production builds require an additional explicit opt-in so a stray
   // AUTH_DISABLED=true cannot silently expose a deployed API.
   if (isAuthenticationDisabled()) {
+    const identityOverride = rejectIdentityOverride(c);
+    if (identityOverride) return identityOverride;
+    setRequestPrincipal(c, localDevelopmentRequestPrincipal());
     return next();
   }
   if (
@@ -138,14 +169,34 @@ export async function authMiddleware(c: Context, next: Next) {
 
   try {
     const db = await getDB();
+    if (keyValue.startsWith(WEB_SESSION_TOKEN_PREFIX)) {
+      const session = await findActiveSessionByToken(db, keyValue);
+      if (!session) {
+        return c.json(createError('UNAUTHORIZED', 'Invalid session'), 401);
+      }
+
+      const identityOverride = rejectIdentityOverride(c);
+      if (identityOverride) return identityOverride;
+
+      c.set('session', session);
+      c.set('userId', session.user_id);
+      setRequestPrincipal(c, requestPrincipalFromSession(session, 'http'));
+      touchSessionLastSeen(db, session.id).catch(() => {});
+      return next();
+    }
+
     const apiKey = await findApiKeyByValue(db, keyValue);
 
     if (!apiKey) {
       return c.json(createError('UNAUTHORIZED', 'Invalid API key'), 401);
     }
 
+    const identityOverride = rejectIdentityOverride(c);
+    if (identityOverride) return identityOverride;
+
     // Store API key info in context for downstream use
     c.set('apiKey', apiKey);
+    setRequestPrincipal(c, requestPrincipalFromApiKey(apiKey, 'http'));
     if (apiKey.user_id) {
       c.set('userId', apiKey.user_id);
     }
@@ -171,15 +222,13 @@ export async function authMiddleware(c: Context, next: Next) {
 export async function verifyBearerToken(
   db: AnyDB,
   token: string | null
-): Promise<BearerTokenPrincipal | null> {
+): Promise<RequestPrincipal | null> {
   if (!token) return null;
+  if (token.startsWith(WEB_SESSION_TOKEN_PREFIX)) {
+    const session = await findActiveSessionByToken(db, token);
+    return session ? requestPrincipalFromSession(session, 'websocket') : null;
+  }
   const apiKey = await findApiKeyByValue(db, token);
   if (!apiKey) return null;
-  return {
-    userId: apiKey.user_id,
-    projectId: apiKey.project_id,
-    keyId: apiKey.id,
-    principalKind: apiKey.principal_kind,
-    transitionScopes: apiKey.transition_scopes,
-  };
+  return requestPrincipalFromApiKey(apiKey, 'websocket');
 }

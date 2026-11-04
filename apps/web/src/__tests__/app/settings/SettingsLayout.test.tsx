@@ -33,7 +33,6 @@ vi.mock('next/link', () => ({
 vi.mock('@/hooks/shared/useSession', () => ({
   useSession: () => ({
     clear: vi.fn(),
-    getKey: vi.fn(() => null),
   }),
 }));
 

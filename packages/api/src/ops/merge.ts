@@ -92,6 +92,11 @@ export interface MergeExecuteInput extends MergePrepareInput {
   /** Server-internal authority derived from authenticated request context. */
   writeAuthority: {
     actor: { kind: 'human' | 'agent' | 'service'; id: string };
+    proposalActor?: {
+      kind: 'human' | 'agent' | 'service';
+      id: string;
+      delegator?: { kind: 'human'; id: string };
+    };
     policyBinding?: TransitionPolicyBinding;
   };
 }
@@ -133,6 +138,9 @@ export const mergeExecuteOp: Operation<MergeExecuteInput, MergeExecuteOutput> = 
         targetDigest: input.target_hash,
         decisions: input.decisions,
         actor: input.writeAuthority.actor,
+        ...(input.writeAuthority.proposalActor === undefined
+          ? {}
+          : { proposalActor: input.writeAuthority.proposalActor }),
         policyBindingSource: 'server-selected',
         ...(input.writeAuthority.policyBinding === undefined
           ? {}

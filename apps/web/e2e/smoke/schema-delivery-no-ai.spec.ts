@@ -27,7 +27,6 @@ test('no-AI definition adoption, native repair, reviewed decision and exact Comm
     await page.getByLabel('Destination project', { exact: true }).selectOption(projectId);
     await page.getByRole('button', { name: 'Add & open Studio', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Schema Studio', exact: true })).toBeVisible();
-    await page.getByLabel('Target Workspace').selectOption(workspaceId);
     await expect(page.getByRole('button', { name: 'Review changes', exact: true })).toBeEnabled();
     await page.getByRole('button', { name: 'Review changes', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Workspace Review', exact: true })).toBeVisible();
@@ -69,6 +68,12 @@ test('no-AI definition adoption, native repair, reviewed decision and exact Comm
     await save();
     const browserReview = async () => {
       await page.getByRole('tab', { name: 'Review', exact: true }).click();
+      const unsavedDialog = page.getByRole('dialog', { name: 'Unsaved Content changes' });
+      if (await unsavedDialog.isVisible()) {
+        await unsavedDialog
+          .getByRole('button', { name: 'Discard local changes and continue' })
+          .click();
+      }
       const response = page.waitForResponse(response => response.url().endsWith(`/workspaces/${workspaceId}/authoring/reviews`) && response.request().method() === 'POST');
       await page.getByRole('button', { name: 'Prepare review', exact: true }).click();
       const result = await response;
@@ -116,6 +121,7 @@ test('no-AI definition adoption, native repair, reviewed decision and exact Comm
 
     await page.goto(`${path}?tab=workspaces&workspace=${workspaceId}`);
     await page.getByRole('tab', { name: 'Compose', exact: true }).click();
+    await page.getByRole('button', { name: 'Open Draft', exact: true }).click();
     await page.getByRole('navigation', { name: 'Workspace tools' }).getByRole('button', { name: 'Structure', exact: true }).click();
     await expect(page.getByLabel('Workspace schema').locator('option:checked')).toContainText(
       applied.schemaBindings[0].schemaName

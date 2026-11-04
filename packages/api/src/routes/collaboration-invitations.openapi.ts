@@ -22,6 +22,7 @@ import {
   findCollaborationInvitationViewByTokenHash,
   findNamespaceById,
   findUserById,
+  findUserByUsername,
   type StoredCollaborationInvitationDto,
   type StoredCollaborationPrincipalDto,
 } from '@t3x-dev/storage';
@@ -250,13 +251,19 @@ collaborationInvitationRoutes.openapi(createProjectInvitationRoute, async (c) =>
   try {
     const input = c.req.valid('json');
     assertInvitationExpiry({ expires_at: input.expires_at, evaluated_at: evaluatedAt });
+    const recipient =
+      'username' in input.recipient ? await findUserByUsername(db, input.recipient.username) : null;
+    if ('username' in input.recipient && !recipient) {
+      throw new InvitationRouteError('NOT_FOUND', 'Invitation recipient not found');
+    }
     const issued = issueCollaborationInvitationToken();
     const invitation = safeInvitation({
       invitationId: `inv_${randomUUID().replaceAll('-', '')}`,
       target: { kind: 'project', namespace_id: project.namespaceId, project_id: id },
       recipient: {
-        user_id: input.recipient.user_id,
-        email: input.recipient.email?.trim().toLowerCase() ?? null,
+        user_id: recipient?.id ?? ('user_id' in input.recipient ? input.recipient.user_id : null),
+        email:
+          'email' in input.recipient ? (input.recipient.email?.trim().toLowerCase() ?? null) : null,
       },
       role: input.role,
       actor,

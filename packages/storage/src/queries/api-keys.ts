@@ -16,12 +16,13 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
   type ApiKey,
   type ApiKeyPrincipalKind,
+  type CredentialKind,
   isApiKeyPrincipalKind,
+  isCredentialKind,
   isTransitionScope,
-  isTransitionWriteScope,
   type TransitionScope,
 } from '@t3x-dev/core';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, gt, isNull, or } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { projects } from '../schema';
 import { type ApiKeyRecord, apiKeys, projectGrants } from '../schema-trees';
@@ -42,12 +43,20 @@ export interface CreateApiKeyInput {
   name: string;
   /** Project scope (undefined = user-level key) */
   projectId?: string;
+  /** Namespace scope for a human Credential. Mutually exclusive with projectId. */
+  namespaceId?: string;
   /** Owner user ID (undefined = legacy key in AUTH_DISABLED mode) */
   userId?: string;
   /** Trusted principal represented by the credential. Defaults to human. */
   principalKind?: ApiKeyPrincipalKind;
+  /** Authenticator/purpose kind. Defaults from principalKind for compatibility. */
+  credentialKind?: CredentialKind;
+  /** Human delegator proven by the server-side caller context. */
+  delegatorUserId?: string;
   /** Explicit Transition capabilities. Defaults to none. */
   transitionScopes?: readonly TransitionScope[];
+  /** Optional hard expiry. */
+  expiresAt?: Date;
   /** The raw key value (e.g. "t3xk_...") — caller generates this */
   keyValue: string;
 }
@@ -101,19 +110,25 @@ export async function createApiKey(db: AnyDB, input: CreateApiKeyInput): Promise
     throw new TypeError(`Unknown API key principal kind: ${principalKind}`);
   }
   const transitionScopes = [...new Set(input.transitionScopes ?? [])].sort();
+  const credentialKind =
+    input.credentialKind ?? (principalKind === 'human' ? 'api_key' : principalKind);
+  if (!isCredentialKind(credentialKind)) {
+    throw new TypeError(`Unknown Credential kind: ${credentialKind}`);
+  }
   if (!transitionScopes.every(isTransitionScope)) {
     throw new TypeError('API key contains an unknown Transition scope');
   }
-  if (
-    principalKind !== 'human' &&
-    transitionScopes.some(isTransitionWriteScope) &&
-    input.projectId === undefined
-  ) {
-    throw new TypeError('Agent and service Transition write credentials must be project-scoped');
+  if (input.projectId !== undefined && input.namespaceId !== undefined) {
+    throw new TypeError('Credential must have exactly one resource scope');
   }
-  if (principalKind !== 'human' && input.projectId === undefined && input.userId === undefined) {
-    throw new TypeError('Global agent and service credentials require an owning user');
+  if (principalKind !== 'human' && input.projectId === undefined) {
+    throw new TypeError('Agent and service credentials must be project-scoped');
   }
+  if (input.expiresAt && input.expiresAt <= now) {
+    throw new TypeError('Credential expiry must be in the future');
+  }
+  const delegatorUserId =
+    principalKind === 'human' ? null : (input.delegatorUserId ?? input.userId ?? null);
 
   return db.transaction(async (tx) => {
     const [row] = await tx
@@ -124,12 +139,17 @@ export async function createApiKey(db: AnyDB, input: CreateApiKeyInput): Promise
         keyHash,
         name: input.name,
         projectId: input.projectId ?? null,
+        namespaceId: input.namespaceId ?? null,
         userId: input.userId ?? null,
         principalKind,
+        credentialKind,
+        delegatorUserId,
         transitionScopes,
         createdAt: now,
         lastUsedAt: null,
+        expiresAt: input.expiresAt ?? null,
         revokedAt: null,
+        revocationReason: null,
       })
       .returning();
 
@@ -165,11 +185,21 @@ export async function createApiKey(db: AnyDB, input: CreateApiKeyInput): Promise
  *
  * @returns The matching ApiKey, or null if no active key with that name exists
  */
-export async function findActiveApiKeyByName(db: AnyDB, name: string): Promise<ApiKey | null> {
+export async function findActiveApiKeyByName(
+  db: AnyDB,
+  name: string,
+  now = new Date()
+): Promise<ApiKey | null> {
   const [row] = await db
     .select()
     .from(apiKeys)
-    .where(and(eq(apiKeys.name, name), isNull(apiKeys.revokedAt)))
+    .where(
+      and(
+        eq(apiKeys.name, name),
+        isNull(apiKeys.revokedAt),
+        or(isNull(apiKeys.expiresAt), gt(apiKeys.expiresAt, now))
+      )
+    )
     .limit(1);
 
   return row ? rowToApiKey(row) : null;
@@ -181,13 +211,23 @@ export async function findActiveApiKeyByName(db: AnyDB, name: string): Promise<A
  * Hashes the provided value and looks up by key_hash.
  * Returns null if no match or if the key has been revoked.
  */
-export async function findApiKeyByValue(db: AnyDB, keyValue: string): Promise<ApiKey | null> {
+export async function findApiKeyByValue(
+  db: AnyDB,
+  keyValue: string,
+  now = new Date()
+): Promise<ApiKey | null> {
   const keyHash = hashKeyValue(keyValue);
 
   const [row] = await db
     .select()
     .from(apiKeys)
-    .where(and(eq(apiKeys.keyHash, keyHash), isNull(apiKeys.revokedAt)))
+    .where(
+      and(
+        eq(apiKeys.keyHash, keyHash),
+        isNull(apiKeys.revokedAt),
+        or(isNull(apiKeys.expiresAt), gt(apiKeys.expiresAt, now))
+      )
+    )
     .limit(1);
 
   return row ? rowToApiKey(row) : null;
@@ -212,12 +252,16 @@ export async function findApiKeyById(db: AnyDB, id: string): Promise<ApiKey | nu
  */
 export async function listApiKeys(
   db: AnyDB,
-  options: { projectId?: string; userId?: string } = {}
+  options: { projectId?: string; namespaceId?: string; userId?: string } = {}
 ): Promise<ApiKey[]> {
   const conditions = [isNull(apiKeys.revokedAt)];
 
   if (options.projectId) {
     conditions.push(eq(apiKeys.projectId, options.projectId));
+  }
+
+  if (options.namespaceId) {
+    conditions.push(eq(apiKeys.namespaceId, options.namespaceId));
   }
 
   if (options.userId) {
@@ -240,12 +284,23 @@ export async function listApiKeys(
  *
  * @returns The revoked ApiKey, or null if not found
  */
-export async function revokeApiKey(db: AnyDB, id: string): Promise<ApiKey | null> {
+export async function revokeApiKey(
+  db: AnyDB,
+  id: string,
+  revocationReason?: string
+): Promise<ApiKey | null> {
   const now = new Date();
   return db.transaction(async (tx) => {
+    const [existing] = await tx.select().from(apiKeys).where(eq(apiKeys.id, id)).limit(1);
+    if (!existing) return null;
+    if (existing.revokedAt) return rowToApiKey(existing);
+
     const [updated] = await tx
       .update(apiKeys)
-      .set({ revokedAt: now })
+      .set({
+        revokedAt: now,
+        revocationReason: revocationReason?.trim() || null,
+      })
       .where(eq(apiKeys.id, id))
       .returning();
 
@@ -291,11 +346,16 @@ function rowToApiKey(row: ApiKeyRecord): ApiKey {
     key_hash: row.keyHash,
     name: row.name,
     project_id: row.projectId ?? null,
+    namespace_id: row.namespaceId ?? null,
     user_id: row.userId ?? null,
     principal_kind: isApiKeyPrincipalKind(row.principalKind) ? row.principalKind : 'human',
+    credential_kind: isCredentialKind(row.credentialKind) ? row.credentialKind : 'api_key',
+    delegator_user_id: row.delegatorUserId ?? null,
     transition_scopes: parseStoredTransitionScopes(row.transitionScopes),
+    expires_at: row.expiresAt?.toISOString() ?? null,
     created_at: row.createdAt.toISOString(),
     last_used_at: row.lastUsedAt?.toISOString() ?? null,
     revoked_at: row.revokedAt?.toISOString() ?? null,
+    revocation_reason: row.revocationReason ?? null,
   };
 }

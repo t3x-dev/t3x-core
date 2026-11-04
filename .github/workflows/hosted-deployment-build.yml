@@ -63,7 +63,7 @@ jobs:
         run: >-
           docker build
           -f apps/web/Dockerfile
-          --build-arg NEXT_PUBLIC_API_URL=https://api.example.invalid
+          --build-arg T3X_API_URL=http://t3x-api:8000
           --build-arg NEXT_PUBLIC_AUTH_DISABLED=false
           -t t3x-webui:${{ github.sha }}
           .

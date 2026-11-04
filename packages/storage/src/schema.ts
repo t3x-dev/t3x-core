@@ -467,6 +467,8 @@ export const pullRequests = pgTable(
     mergeCommitHash: text('merge_commit_hash'),
     status: text('status').notNull().default('open'),
     authorId: text('author_id').notNull(),
+    authorKind: text('author_kind').notNull().default('human'),
+    authorDelegatorId: text('author_delegator_id'),
     reviewOwnerId: text('review_owner_id'),
     linkedWork: text('linked_work'),
     diffSummary: jsonb('diff_summary')
@@ -496,6 +498,10 @@ export const pullRequests = pgTable(
     check(
       'pull_requests_merged_commit_required',
       sql`${table.status} <> 'merged' OR ${table.mergeCommitHash} IS NOT NULL`
+    ),
+    check(
+      'pull_requests_author_kind_valid',
+      sql`${table.authorKind} IN ('human', 'agent', 'service')`
     ),
   ]
 );
@@ -535,6 +541,7 @@ export const pullRequestActivity = pgTable(
     actorId: text('actor_id').notNull(),
     type: text('type').notNull(),
     message: text('message').notNull(),
+    details: jsonb('details').$type<Record<string, unknown>>(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   },
   (table) => [index('idx_pull_request_activity_pr').on(table.pullRequestId, table.createdAt)]

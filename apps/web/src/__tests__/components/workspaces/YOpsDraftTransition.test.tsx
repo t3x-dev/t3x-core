@@ -81,7 +81,7 @@ describe('YOpsDraftTab Transition write path', () => {
       validate,
     });
 
-    const workspaceUrl = 'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_legacy';
+    const workspaceUrl = '/api/v1/projects/proj_1/workspaces/workspace_legacy';
     const reviewUrl = `${workspaceUrl}/transition/review`;
     const legacyCommitUrl = `${workspaceUrl}/commit`;
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {

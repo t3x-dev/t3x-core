@@ -11,7 +11,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { Account, User } from '@t3x-dev/core';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type AccountRecord, accounts, type UserRecord, users } from '../schema-trees';
 
@@ -22,6 +22,7 @@ import { type AccountRecord, accounts, type UserRecord, users } from '../schema-
 const USER_ID_PREFIX = 'user_';
 const ACCT_ID_PREFIX = 'acct_';
 const ID_RANDOM_LENGTH = 12;
+const IDENTITY_LOCK_NAMESPACE = 0x4944;
 
 // ============================================================
 // Types
@@ -65,6 +66,22 @@ function generateAccountId(): string {
   return `${ACCT_ID_PREFIX}${randomUUID().replace(/-/g, '').slice(0, ID_RANDOM_LENGTH)}`;
 }
 
+export function normalizeUsername(username: string): string {
+  return username.trim().normalize('NFKC').toLocaleLowerCase('en-US');
+}
+
+export function normalizeEmail(email: string): string {
+  return email.trim().normalize('NFKC').toLocaleLowerCase('en-US');
+}
+
+async function acquireIdentityLocks(db: AnyDB, keys: string[]): Promise<void> {
+  for (const key of [...new Set(keys)].sort()) {
+    await db.execute(
+      sql`SELECT pg_advisory_xact_lock(${IDENTITY_LOCK_NAMESPACE}::int, hashtext(${key})::int)`
+    );
+  }
+}
+
 // ============================================================
 // Query Functions
 // ============================================================
@@ -87,7 +104,7 @@ export async function createUser(
     .insert(users)
     .values({
       id,
-      email: input.email ?? null,
+      email: input.email ? normalizeEmail(input.email) : null,
       emailVerified: input.email_verified ?? false,
       name: input.name ?? null,
       avatarUrl: input.avatar_url ?? null,
@@ -140,7 +157,11 @@ export async function findAccountByProvider(
  * Find a user by email.
  */
 export async function findUserByEmail(db: AnyDB, email: string): Promise<User | null> {
-  const [row] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  const [row] = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, normalizeEmail(email)))
+    .limit(1);
 
   return row ? rowToUser(row) : null;
 }
@@ -176,6 +197,22 @@ export async function findAccountsByUser(db: AnyDB, userId: string): Promise<Acc
  * Step 3: No match: create new user + create account record
  */
 export async function findOrCreateUser(db: AnyDB, input: CreateUserInput): Promise<User> {
+  const providerKey = `provider:${input.provider}:${input.provider_id}`;
+  const normalizedEmail = input.email ? normalizeEmail(input.email) : null;
+
+  return db.transaction(async (tx) => {
+    await acquireIdentityLocks(tx, [
+      providerKey,
+      ...(normalizedEmail && input.email_verified ? [`email:${normalizedEmail}`] : []),
+    ]);
+    return findOrCreateUserLocked(tx, {
+      ...input,
+      email: normalizedEmail,
+    });
+  });
+}
+
+async function findOrCreateUserLocked(db: AnyDB, input: CreateUserInput): Promise<User> {
   // Step 1: Look up by provider account
   const existingAccount = await findAccountByProvider(db, input.provider, input.provider_id);
 
@@ -197,7 +234,14 @@ export async function findOrCreateUser(db: AnyDB, input: CreateUserInput): Promi
       emailVerified: boolean;
     }> = {};
     if (input.name !== undefined && input.name !== user.name) updates.name = input.name;
-    if (input.email !== undefined && input.email !== user.email) updates.email = input.email;
+    if (
+      input.email_verified &&
+      input.email !== undefined &&
+      input.email !== user.email &&
+      !user.email_verified
+    ) {
+      updates.email = input.email;
+    }
     if (input.avatar_url !== undefined && input.avatar_url !== user.avatar_url)
       updates.avatarUrl = input.avatar_url;
     // Upgrade email_verified to true if provider confirms (never downgrade)
@@ -252,7 +296,7 @@ export async function findOrCreateUser(db: AnyDB, input: CreateUserInput): Promi
 
   // Step 3: Create new user + account
   const newUser = await createUser(db, {
-    email: input.email,
+    email: input.email_verified ? input.email : null,
     email_verified: input.email_verified,
     name: input.name,
     avatar_url: input.avatar_url,
@@ -327,7 +371,11 @@ export async function updateUser(
  * can verify the password. Returns null if no user with that username.
  */
 export async function findUserByUsername(db: AnyDB, username: string): Promise<UserRecord | null> {
-  const [row] = await db.select().from(users).where(eq(users.username, username)).limit(1);
+  const [row] = await db
+    .select()
+    .from(users)
+    .where(eq(users.username, normalizeUsername(username)))
+    .limit(1);
 
   return row ?? null;
 }
@@ -345,13 +393,38 @@ export async function createLocalUser(db: AnyDB, input: CreateLocalUserInput): P
     .insert(users)
     .values({
       id,
-      username: input.username,
+      username: normalizeUsername(input.username),
       passwordHash: input.passwordHash,
-      name: input.name ?? input.username,
+      name: input.name ?? normalizeUsername(input.username),
     })
     .returning();
 
   return rowToUser(row);
+}
+
+export type UnlinkAccountResult = 'unlinked' | 'not_found' | 'last_sign_in_method';
+
+export async function unlinkAccount(
+  db: AnyDB,
+  userId: string,
+  accountId: string
+): Promise<UnlinkAccountResult> {
+  return db.transaction(async (tx) => {
+    await acquireIdentityLocks(tx, [`user:${userId}`]);
+    const [user] = await tx
+      .select({ passwordHash: users.passwordHash })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    const linked = await tx
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(eq(accounts.userId, userId));
+    if (!linked.some((account) => account.id === accountId)) return 'not_found';
+    if (!user?.passwordHash && linked.length === 1) return 'last_sign_in_method';
+    await tx.delete(accounts).where(and(eq(accounts.id, accountId), eq(accounts.userId, userId)));
+    return 'unlinked';
+  });
 }
 
 // ============================================================

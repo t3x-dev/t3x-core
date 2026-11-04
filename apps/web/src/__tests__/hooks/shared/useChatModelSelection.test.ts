@@ -71,12 +71,10 @@ beforeEach(() => {
   vi.mocked(useSession).mockReturnValue({
     getUser: vi.fn(),
     setUser: vi.fn(),
-    getKey: vi.fn(() => null),
-    setKey: vi.fn(),
     clear: vi.fn(),
   });
   vi.mocked(useAuthMe).mockReturnValue({
-    loadAuthMe: vi.fn(),
+    loadAuthMe: vi.fn().mockRejectedValue(new Error('No authenticated preference')),
     saveAuthMe: vi.fn(),
   });
 });
@@ -192,13 +190,6 @@ describe('useChatModelSelection', () => {
       defaultModel: 'claude-sonnet-4-20250514',
       availabilityError: null,
       loadModels: vi.fn(),
-    });
-    vi.mocked(useSession).mockReturnValue({
-      getUser: vi.fn(),
-      setUser: vi.fn(),
-      getKey: vi.fn(() => 'session-key'),
-      setKey: vi.fn(),
-      clear: vi.fn(),
     });
     vi.mocked(useAuthMe).mockReturnValue({
       loadAuthMe: vi.fn().mockResolvedValue({

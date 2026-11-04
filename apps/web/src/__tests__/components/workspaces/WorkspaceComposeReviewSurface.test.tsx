@@ -1450,6 +1450,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     };
     const cards = [{ nodeId: 'allocation', path: 'rollout/allocation', before: 20, after: 25 }];
     const publish = vi.fn().mockResolvedValue({ kind: 'published' });
+    const refreshFromServer = vi.fn().mockResolvedValue(undefined);
     activityMocks.value = {
       enabled: true,
       loading: false,
@@ -1502,6 +1503,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
             isBusy: false,
             materialSources: [],
             notice: null,
+            refreshFromServer,
           } as unknown as WorkspaceComposeReviewController
         }
         mode="compose"
@@ -1592,6 +1594,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         })
       )
     );
+    expect(refreshFromServer).toHaveBeenCalledOnce();
     expect(
       screen.getByRole('checkbox', { name: 'Include Regions in the next P' })
     ).not.toBeChecked();
@@ -1672,6 +1675,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
             isBusy: false,
             materialSources: [],
             notice: null,
+            refreshFromServer: vi.fn().mockResolvedValue(undefined),
           } as unknown as WorkspaceComposeReviewController
         }
         mode="compose"

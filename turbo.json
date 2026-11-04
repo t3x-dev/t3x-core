@@ -4,7 +4,7 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "src/specData.ts"],
-      "env": ["NEXT_PUBLIC_API_URL", "NEXT_PUBLIC_AUTH_DISABLED"],
+      "env": ["T3X_API_URL", "NEXT_PUBLIC_AUTH_DISABLED"],
       "cache": true
     },
     "typecheck": {
@@ -26,7 +26,7 @@
       "dependsOn": ["^build"],
       "cache": false,
       "persistent": true,
-      "env": ["AUTH_DISABLED", "NEXT_PUBLIC_API_URL", "NEXT_PUBLIC_AUTH_DISABLED"],
+      "env": ["AUTH_DISABLED", "T3X_API_URL", "NEXT_PUBLIC_AUTH_DISABLED"],
       "passThroughEnv": [
         "HTTPS_PROXY",
         "HTTP_PROXY",

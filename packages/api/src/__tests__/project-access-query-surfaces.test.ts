@@ -47,13 +47,18 @@ function createProjectAgentApp(projectId: string) {
     key_hash: 'hash_project_agent',
     user_id: null,
     project_id: projectId,
+    namespace_id: null,
     principal_kind: 'agent',
+    credential_kind: 'agent',
+    delegator_user_id: null,
     transition_scopes: ['transition:inspect'],
     key_prefix: 't3xk_agent',
     name: 'project agent',
     created_at: '2026-08-31T00:00:00.000Z',
     last_used_at: null,
+    expires_at: null,
     revoked_at: null,
+    revocation_reason: null,
   };
   app.use('*', async (c, next) => {
     await grantTestMachineProjectAccess(mockDB, apiKey);

@@ -1,8 +1,10 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: route fixtures use narrow provider doubles */
 
+import type { ApiKey } from '@t3x-dev/core';
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInferenceRuntime, createInferenceRuntimeMiddleware } from '../lib/inference';
+import { requestPrincipalFromApiKey } from '../lib/request-principal';
 import { gateRoutes } from '../routes/gate.openapi';
 
 const mocks = vi.hoisted(() => ({
@@ -51,7 +53,19 @@ function app(runtime: ReturnType<typeof createInferenceRuntime>) {
   const result = new Hono();
   result.use('*', createInferenceRuntimeMiddleware(runtime));
   result.use('*', async (c, next) => {
-    c.set('userId', 'user_1');
+    c.set(
+      'requestPrincipal',
+      requestPrincipalFromApiKey(
+        {
+          id: 'ak_gate',
+          user_id: 'user_1',
+          project_id: null,
+          principal_kind: 'human',
+          transition_scopes: [],
+        } as ApiKey,
+        'http'
+      )
+    );
     c.set('requestId', 'request_gate_1');
     await next();
   });

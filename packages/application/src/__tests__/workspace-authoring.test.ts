@@ -94,17 +94,25 @@ function fixtureThroughA3(): DraftActionLedger {
 }
 
 describe('workspace draft save inventory', () => {
-  it('lists current blob-merge paths as legacy and names the ledger command', () => {
+  it('classifies every current writer as migrated, an explicit legacy adapter, or prohibited', () => {
     expect(legacyWorkspaceDraftSavePaths().map((path) => path.id)).toEqual(
+      expect.arrayContaining(['patch-workspace', 'workspace-source-transition'])
+    );
+    expect(WORKSPACE_DRAFT_SAVE_PATHS).toEqual(
       expect.arrayContaining([
-        'patch-workspace',
-        'upsert-workspace-draft',
-        'workspace-source-transition',
+        expect.objectContaining({ id: 'publish-draft-action', status: 'migrated' }),
+        expect.objectContaining({ id: 'cli-workspace-edit', status: 'migrated' }),
+        expect.objectContaining({ id: 'mcp-t3x-edit-draft', status: 'migrated' }),
+        expect.objectContaining({ id: 'workspace-schema-action', status: 'migrated' }),
+        expect.objectContaining({ id: 'upsert-workspace-draft', status: 'prohibited' }),
+        expect.objectContaining({ id: 'runner-workspace-write', status: 'prohibited' }),
       ])
     );
-    expect(WORKSPACE_DRAFT_SAVE_PATHS.some((path) => path.id === 'publish-draft-action')).toBe(
-      true
-    );
+    expect(
+      WORKSPACE_DRAFT_SAVE_PATHS.every((path) =>
+        ['migrated', 'legacy_adapter', 'prohibited'].includes(path.status)
+      )
+    ).toBe(true);
   });
 });
 

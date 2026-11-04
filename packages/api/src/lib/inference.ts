@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import type { ApiKey } from '@t3x-dev/core';
 import type { Context, MiddlewareHandler } from 'hono';
 import type {
   GenerationModelActor,
@@ -8,6 +7,7 @@ import type {
   GenerationModelScope,
 } from './model-runtime-contract';
 import { GENERATION_MODEL_INGRESS_CHANNELS } from './model-runtime-contract';
+import { getRequestPrincipal } from './request-principal';
 
 /**
  * Provider-neutral inference execution contracts.
@@ -290,21 +290,12 @@ export class InferenceExecutionError extends Error {
 
 /** Resolve the authenticated actor from trusted middleware context only. */
 export function resolveInferenceActor(context: Context): InferenceActor {
-  const hostedUserId = context.get('userId');
-  if (typeof hostedUserId === 'string' && hostedUserId.length > 0) {
-    return { kind: 'user', id: hostedUserId };
+  const principal = getRequestPrincipal(context);
+  if (principal?.subject.kind === 'human') {
+    return { kind: 'user', id: principal.subject.principal_id };
   }
-
-  const apiKey = context.get('apiKey') as ApiKey | undefined;
-  if (apiKey?.principal_kind === 'human' && apiKey.user_id) {
-    return { kind: 'user', id: apiKey.user_id };
-  }
-  if (apiKey?.principal_kind === 'agent' || apiKey?.principal_kind === 'service') {
-    return {
-      kind: apiKey.principal_kind,
-      id: `${apiKey.principal_kind}:api-key:${apiKey.id}`,
-    };
-  }
+  if (principal?.actor.kind === 'human') return { kind: 'user', id: principal.actor.id };
+  if (principal) return { kind: principal.actor.kind, id: principal.actor.id };
   return { kind: 'anonymous', id: null };
 }
 

@@ -8,7 +8,7 @@
  * - PATCH /v1/auth/me  — Update profile (name, avatar_url)
  */
 
-import { type AnyDB, createAccount, createApiKey, createUser } from '@t3x-dev/storage';
+import { type AnyDB, createAccount, createSession, createUser } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB } from './setup';
@@ -69,29 +69,32 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
+import { roomManager } from '../lib/room-manager';
 // Import routes after mocking
 import { authMeRoutes } from '../routes/auth-me.openapi';
 
 describe('Auth Me Routes', () => {
   let cleanup: () => Promise<void>;
   let testUserId: string;
+  let githubAccountId: string;
 
-  // App with fake auth middleware that injects apiKey context
-  function createAppWithAuth(userId: string | null, apiKeyId = 'ak_test') {
+  // App with fake auth middleware that injects the server-derived Session principal.
+  function createAppWithAuth(userId: string | null, sessionId = 'sess_test') {
     const app = new Hono();
     app.use('*', async (c, next) => {
       if (userId) {
         // biome-ignore lint/suspicious/noExplicitAny: test mock access
-        (c as any).set('apiKey', {
-          user_id: userId,
-          id: apiKeyId,
-          key_prefix: 'test',
-          key_hash: '',
-          name: 'test',
-          project_id: null,
-          created_at: '',
-          last_used_at: null,
-          revoked_at: null,
+        (c as any).set('requestPrincipal', {
+          subject: { kind: 'human', principal_id: userId },
+          actor: { kind: 'human', id: `user:${userId}` },
+          delegator: null,
+          workspaceOwner: { kind: 'human', principal_id: userId },
+          userId,
+          accountId: null,
+          sessionId,
+          credential: { kind: 'session', id: sessionId, projectId: null, namespaceId: null },
+          scopes: [],
+          ingress: 'http',
         });
       }
       await next();
@@ -118,11 +121,12 @@ describe('Auth Me Routes', () => {
     testUserId = user.id;
 
     // Link a GitHub account
-    await createAccount(mockDB, {
+    const githubAccount = await createAccount(mockDB, {
       user_id: testUserId,
       provider: 'github',
       provider_account_id: '12345',
     });
+    githubAccountId = githubAccount.id;
 
     // Link a Google account
     await createAccount(mockDB, {
@@ -382,10 +386,12 @@ describe('Auth Me Routes', () => {
 
   describe('profile settings', () => {
     it('persists personal details and returns real session credentials', async () => {
-      const currentSession = await createApiKey(mockDB, {
-        name: `session:${testUserId}`,
+      const currentSession = await createSession(mockDB, {
+        rawToken: `t3xs-profile-current-${Date.now()}`,
         userId: testUserId,
-        keyValue: `t3x-profile-current-${Date.now()}`,
+        authMethod: 'local_password',
+        userAgent: 'Profile Browser',
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       });
       const app = createAppWithAuth(testUserId, currentSession.id);
 
@@ -399,7 +405,12 @@ describe('Auth Me Routes', () => {
       expect(patchJson.data.name).toBe('Jordan Diaz');
       expect(patchJson.data.timezone).toBe('America/Los_Angeles');
       expect(patchJson.data.sessions).toContainEqual(
-        expect.objectContaining({ id: currentSession.id, current: true })
+        expect.objectContaining({
+          id: currentSession.id,
+          auth_method: 'local_password',
+          user_agent: 'Profile Browser',
+          current: true,
+        })
       );
 
       const getRes = await app.request('/v1/auth/me/profile-settings');
@@ -408,22 +419,75 @@ describe('Auth Me Routes', () => {
     });
 
     it('revokes another owned session', async () => {
-      const otherSession = await createApiKey(mockDB, {
-        name: `session:${testUserId}`,
+      const disconnect = vi.spyOn(roomManager, 'disconnectSession');
+      const otherSession = await createSession(mockDB, {
+        rawToken: `t3xs-profile-other-${Date.now()}`,
         userId: testUserId,
-        keyValue: `t3x-profile-other-${Date.now()}`,
+        authMethod: 'local_password',
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       });
       const app = createAppWithAuth(testUserId);
       const res = await app.request(`/v1/auth/me/profile-settings/sessions/${otherSession.id}`, {
         method: 'DELETE',
       });
       expect(res.status).toBe(200);
+      expect(disconnect).toHaveBeenCalledWith(otherSession.id);
+      disconnect.mockRestore();
 
       const getRes = await app.request('/v1/auth/me/profile-settings');
       const getJson: ApiResponse = await getRes.json();
       expect(
         getJson.data.sessions.some((session: ApiResponse) => session.id === otherSession.id)
       ).toBe(false);
+    });
+
+    it('does not revoke a session owned by another user', async () => {
+      const otherUser = await createUser(mockDB, { name: 'Other profile user' });
+      const otherSession = await createSession(mockDB, {
+        rawToken: `t3xs-profile-outsider-${Date.now()}`,
+        userId: otherUser.id,
+        authMethod: 'local_password',
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      });
+
+      const res = await createAppWithAuth(testUserId).request(
+        `/v1/auth/me/profile-settings/sessions/${otherSession.id}`,
+        { method: 'DELETE' }
+      );
+
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('DELETE /v1/auth/me/accounts/{id}', () => {
+    it('unlinks one provider while another sign-in method remains', async () => {
+      const response = await createAppWithAuth(testUserId).request(
+        `/v1/auth/me/accounts/${githubAccountId}`,
+        { method: 'DELETE' }
+      );
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ success: true, data: { unlinked: true } });
+    });
+
+    it('refuses to unlink the last sign-in method', async () => {
+      const user = await createUser(mockDB, {
+        email: 'last-provider@example.com',
+        email_verified: true,
+      });
+      const account = await createAccount(mockDB, {
+        user_id: user.id,
+        provider: 'github',
+        provider_account_id: 'last-provider',
+      });
+
+      const response = await createAppWithAuth(user.id).request(
+        `/v1/auth/me/accounts/${account.id}`,
+        { method: 'DELETE' }
+      );
+
+      expect(response.status).toBe(409);
+      expect((await response.json()).error.code).toBe('CONFLICT');
     });
   });
 });

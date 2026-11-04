@@ -60,6 +60,10 @@ describe('collaboration invitation commands', () => {
         emailVerified: true,
       },
       {
+        id: 'user_invitation_route_username_recipient',
+        username: 'test-b3',
+      },
+      {
         id: 'user_invitation_route_outsider',
         email: 'outsider@example.com',
         emailVerified: true,
@@ -158,6 +162,35 @@ describe('collaboration invitation commands', () => {
     expect(await mismatch.json()).toMatchObject({
       error: { details: { reason: 'INVITATION_RECIPIENT_MISMATCH' } },
     });
+  });
+
+  it('resolves a project invitation username to the stable user id', async () => {
+    const owner = appFor('user_invitation_route_owner');
+    const created = await owner.request(`/v1/projects/${projectId}/invitations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipient: { username: 'TEST-B3' },
+        role: 'editor',
+        expires_at: '2099-01-01T00:00:00.000Z',
+      }),
+    });
+
+    expect(created.status, await created.clone().text()).toBe(201);
+    const payload = await created.json();
+    expect(payload.data.invitation.recipient).toEqual({
+      user_id: 'user_invitation_route_username_recipient',
+      email: null,
+    });
+    const accepted = await appFor('user_invitation_route_username_recipient').request(
+      '/v1/invitations/accept',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: payload.data.delivery.token }),
+      }
+    );
+    expect(accepted.status, await accepted.clone().text()).toBe(200);
   });
 
   it('revokes an exact invitation idempotently and denies outsiders', async () => {

@@ -90,7 +90,8 @@ function watchRelevantBrowserErrors(page: Page, projectId: string, workspaceId: 
     if (
       response.status() === 404 &&
       response.request().method() === 'GET' &&
-      url === `${API_BASE}/projects/${projectId}/schema-studio/edit-candidates/${encodeURIComponent(workspaceId)}`
+      new URL(url).pathname ===
+        `/api/v1/projects/${projectId}/schema-studio/edit-candidates/${encodeURIComponent(workspaceId)}`
     ) return;
     if (!/\/api\/v1\/(projects|materials|pins|workspaces|yops|branches|commits)/.test(url)) {
       return;
@@ -208,7 +209,10 @@ test('complex workspace: multiple sources flow through authoring and a safe revi
     expect(authoringPayload.data.current.trees).toEqual(COMPLEX_TREE);
 
     await page.reload();
-    await expect(page.getByText('Branch head precondition', { exact: true }).first()).toBeVisible();
+    await page.getByRole('button', { name: 'Open Draft', exact: true }).click();
+    await expect(
+      page.getByText('Branch head precondition', { exact: true }).filter({ visible: true }).first()
+    ).toBeVisible();
     await page.getByRole('tab', { name: 'Review', exact: true }).click();
     await expect(page.getByRole('tab', { name: 'Review', exact: true })).toHaveAttribute('aria-selected', 'true');
     await page.getByRole('button', { name: 'Prepare review', exact: true }).click();

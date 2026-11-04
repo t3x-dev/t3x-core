@@ -29,6 +29,7 @@ import {
 import {
   diffYSchemas,
   normalizeYSchemaObject,
+  type ProvenanceIndex,
   sha256CompositionValue,
   type YSchema,
 } from '@t3x-dev/yschema';
@@ -130,6 +131,7 @@ interface CommittedSchema {
   schema: YSchema;
   rootKey: string;
   sources: Record<string, unknown>[];
+  contentSources: unknown[];
 }
 
 /** Read only exact Commit evidence. Neither a live Draft nor the latest Studio candidate is an input. */
@@ -160,6 +162,9 @@ async function committedSchema(
   const receipt = await findTransitionCommitReceipt(db, projectId, digest);
   const prepared = receipt
     ? await resolveTransitionProposalGraph(db, projectId, receipt.transitionId)
+    : null;
+  const preparation = prepared?.preparation
+    ? (JSON.parse(prepared.preparation.canonicalJson) as Record<string, unknown>)
     : null;
   if (
     prepared &&
@@ -209,7 +214,17 @@ async function committedSchema(
     if (!sources.length && Array.isArray(stored.manifestJson.sources))
       sources = stored.manifestJson.sources as Record<string, unknown>[];
   }
-  return { schema, rootKey: schemaRootKeyFromBinding(binding), sources };
+  const contentSources =
+    preparation?.schema === 't3x.application/workspace-authoring-preparation/v1' &&
+    Array.isArray(preparation.sourceBundle)
+      ? structuredClone(preparation.sourceBundle)
+      : [];
+  return {
+    schema,
+    rootKey: schemaRootKeyFromBinding(binding),
+    sources,
+    contentSources,
+  };
 }
 
 export async function hasRepositorySchemaChanges(
@@ -279,6 +294,16 @@ export async function prepareRepositorySchemaMerge(input: {
   ]
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([, value]) => value);
+  const contentSources = [
+    ...new Map(
+      [...(source?.contentSources ?? []), ...(target?.contentSources ?? [])].map((item) => [
+        canonicalizeProtocolValue(item as ProtocolValue),
+        item,
+      ])
+    ).entries(),
+  ]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([, value]) => value);
   const rootKey = [...roots][0]!;
   const compositionHash = await sha256CompositionValue({
     profile: 'repository-schema-merge/v1',
@@ -299,6 +324,7 @@ export async function prepareRepositorySchemaMerge(input: {
     schemaHash,
     rootKey,
     sources,
+    contentSources,
     compositionId,
     compositionHash,
     resource: createYSchemaResourceDescriptor(
@@ -318,13 +344,14 @@ export const MERGE_SCHEMA_ACTOR = Object.freeze({
 export function validateRepositoryMergedSchema(
   state: State,
   contract: RepositoryMergedSchema,
-  run: { id: string; recordedAt: CanonicalTimestamp }
+  run: { id: string; recordedAt: CanonicalTimestamp },
+  provenanceByPath: ProvenanceIndex = {}
 ) {
   const content = schemaContentFromDocument(
     state.value as Record<string, unknown>,
     contract.rootKey
   );
-  const context = { rootKey: contract.rootKey, relations: content.relations };
+  const context = { rootKey: contract.rootKey, relations: content.relations, provenanceByPath };
   return runRepositorySemanticYSchemaStatementProvider({
     state,
     schema: contract.definition,

@@ -73,6 +73,7 @@ import { SourceArtifactRoleEditor } from '@/components/workspaces/SourceArtifact
 import { SourceTransitionTab } from '@/components/workspaces/SourceTransitionTab';
 import { WorkspaceContentEditor } from '@/components/workspaces/WorkspaceContentEditor';
 import { WorkspaceNotice } from '@/components/workspaces/WorkspaceNotice';
+import { WorkspaceReconciliationResolver } from '@/components/workspaces/WorkspaceReconciliationResolver';
 import type { WorkspaceYOpsFlowView } from '@/components/workspaces/YOpsDraftTab';
 import { getSchemaRegistryPreview } from '@/data/schemaReleases';
 import {
@@ -426,21 +427,89 @@ export function WorkspaceComposeReviewSurface({
           {syncRequired ? (
             <WorkspaceNotice
               label="Workspace synchronization"
-              title="The branch has new commits"
+              title={
+                activity.reconciliationPreview?.conflicts.length
+                  ? 'Branch changes overlap with your Draft'
+                  : 'The branch has new commits'
+              }
               actions={
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={activity.reconciling}
-                  onClick={() => void activity.reconcile()}
-                >
-                  {activity.reconciling ? 'Syncing…' : 'Sync latest branch'}
-                </Button>
+                activity.reconciliationPreview ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={activity.reconciliationDeciding}
+                      onClick={() => void activity.decideReconciliation('cancel')}
+                    >
+                      Not now
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={activity.reconciliationDeciding}
+                      onClick={() => void activity.decideReconciliation('discard')}
+                    >
+                      Discard my edits
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={
+                        activity.reconciliationDeciding ||
+                        activity.reconciliationPreview.conflicts.length > 0
+                      }
+                      onClick={() => void activity.decideReconciliation('adopt')}
+                    >
+                      Keep my edits and sync
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={activity.reconciling}
+                    onClick={() => void activity.prepareReconciliation()}
+                  >
+                    {activity.reconciling ? 'Preparing…' : 'Preview branch changes'}
+                  </Button>
+                )
               }
             >
-              <p>
-                Sync this Workspace to continue editing. Saved edits and history will be preserved.
-              </p>
+              {activity.reconciliationPreview ? (
+                <>
+                  <p>
+                    Base {activity.reconciliationPreview.baseHead?.slice(0, 14) ?? 'empty'} → branch{' '}
+                    {activity.reconciliationPreview.currentRefHead?.slice(0, 14) ?? 'empty'}. The
+                    preview is bound to Workspace revision{' '}
+                    {activity.reconciliationPreview.workspaceRevision}.
+                  </p>
+                  {activity.reconciliationPreview.conflicts.length ? (
+                    <div>
+                      <p>
+                        Structured resolution is required before your edits can be adopted. You can
+                        keep the Draft for resolution or discard it explicitly.
+                      </p>
+                      <WorkspaceReconciliationResolver
+                        key={activity.reconciliationPreview.preparationDigest}
+                        preparation={activity.reconciliationPreview}
+                        disabled={activity.reconciliationDeciding}
+                        onResolve={(resolutions) =>
+                          void activity.decideReconciliation('resolve', resolutions)
+                        }
+                      />
+                    </div>
+                  ) : (
+                    <p>
+                      No overlapping changes were found. Review the choice, then keep your edits or
+                      discard them.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p>
+                  Preview Base, your Draft and the latest branch before choosing. Nothing is changed
+                  automatically.
+                </p>
+              )}
               {activity.reconciliationError ? (
                 <p role="alert">{activity.reconciliationError}</p>
               ) : null}
@@ -910,6 +979,7 @@ function ComposeSurface({
         operations: selected.map((item) => item.operation),
         reason: stagedManualReason(selected),
       });
+      await controller.refreshFromServer();
       setStaged(remainingStagedItems(staged));
     } catch (cause) {
       setStructureError(
@@ -918,7 +988,7 @@ function ComposeSurface({
     } finally {
       setStructurePending(false);
     }
-  }, [activity, staged, publishedCurrent]);
+  }, [activity, controller, staged, publishedCurrent]);
   const stagingControls = useMemo(
     () => ({
       items: staged,

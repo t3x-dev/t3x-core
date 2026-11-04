@@ -149,12 +149,15 @@ export {
   findAutoDraftsByConversation,
   findDraftById,
   findWorkspaceDraft,
+  findWorkspaceDraftForOwner,
+  findWorkspaceDraftOwner,
   forkDraft,
   insertAutoDraft,
   insertDraft,
   type ListDraftOptions,
   listDraftsByProject,
   listWorkspaceDrafts,
+  listWorkspaceDraftsForOwner,
   NotFoundError,
   promoteDraft,
   renewWorkspaceAuthoring,
@@ -167,6 +170,7 @@ export {
   updateDraftPreview,
   upsertWorkspaceDraft,
   type WorkspaceDraftInput,
+  type WorkspaceOwner,
 } from './drafts';
 // Extraction Feedback (Anchoring L4)
 export {
@@ -455,6 +459,18 @@ export {
   insertSegmentEmbedding,
   insertSegmentEmbeddingsBatch,
 } from './segmentEmbeddings';
+// Browser sessions
+export {
+  type CreateSessionInput,
+  createSession,
+  findActiveSessionByToken,
+  findSessionById,
+  listActiveSessions,
+  revokeSession,
+  type SessionAuthMethod,
+  touchSessionLastSeen,
+  type WebSession,
+} from './sessions';
 // Share Tokens
 export {
   type CreateShareTokenInput,
@@ -623,6 +639,10 @@ export {
   findUserByEmail,
   findUserById,
   findUserByUsername,
+  normalizeEmail,
+  normalizeUsername,
+  type UnlinkAccountResult,
+  unlinkAccount,
   updateUser,
 } from './users';
 // Workspace Validation Runs

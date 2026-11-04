@@ -24,6 +24,7 @@ import { errorResponse } from '../lib/errors';
 import {
   assertNamespaceAccess,
   authorizedNamespaceActionsFromFacts,
+  getNamespaceCredentialScope,
   getNamespacePrincipal,
   listAuthorizedNamespaceActions,
 } from '../lib/namespace-access';
@@ -103,11 +104,17 @@ collaborationReadRoutes.openapi(listAccountsRoute, async (c) => {
     kind: principal.kind,
     principalId: principal.principal_id,
   });
+  const credentialScope = getNamespaceCredentialScope(c);
+  const visibleAccounts = credentialScope?.project_id
+    ? []
+    : credentialScope?.namespace_id
+      ? accounts.filter(({ namespace }) => namespace.namespaceId === credentialScope.namespace_id)
+      : accounts;
   return c.json({
     success: true as const,
     data: {
       version: COLLABORATION_CONTRACT_VERSION,
-      namespaces: accounts.map(({ namespace, membership, principal: profile }) => ({
+      namespaces: visibleAccounts.map(({ namespace, membership, principal: profile }) => ({
         namespace: {
           namespace_id: namespace.namespaceId,
           slug: namespace.slug,
@@ -118,7 +125,8 @@ collaborationReadRoutes.openapi(listAccountsRoute, async (c) => {
         authorized_actions: authorizedNamespaceActionsFromFacts(
           principal,
           namespace.namespaceId,
-          membership
+          membership,
+          credentialScope
         ),
       })),
     },

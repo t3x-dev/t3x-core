@@ -2,10 +2,10 @@
  * Health & Status API
  */
 
-import { API_BASE, API_V1, fetchWithTimeout, handleResponse } from './core';
+import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
 export async function checkHealth(): Promise<{ status: string; version: string; uptime: number }> {
-  const res = await fetchWithTimeout(`${API_BASE}/health`, undefined, 5000);
+  const res = await fetchWithTimeout('/api/health', undefined, 5000);
   return handleResponse(res);
 }
 

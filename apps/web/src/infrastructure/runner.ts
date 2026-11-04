@@ -3,7 +3,6 @@
  */
 
 import {
-  API_BASE,
   API_V1,
   ApiError,
   buildQueryString,
@@ -13,7 +12,7 @@ import {
 } from './core';
 import type { ApiResponse } from './types';
 
-const RUNNER_API = `${API_BASE}/api/runner`;
+const RUNNER_API = '/api/runner';
 
 // ============================================================================
 // Runner Types

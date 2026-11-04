@@ -16,6 +16,7 @@ import {
 } from '@/domain/workspaces/schemaBindings';
 import { useProjectMaterials } from '@/hooks/materials/useProjectMaterials';
 import { useBranches } from '@/hooks/shared/useBranches';
+import { useSession } from '@/hooks/shared/useSession';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import type { SourceBundleItem, WorkspaceCandidate } from '@/types/workspaces';
 
@@ -76,6 +77,8 @@ function ProjectWorkspacesContent({ projectId, schemaBindings }: ProjectWorkspac
   }, [navigationScope]);
   const projectMaterials = useProjectMaterials(projectId);
   const projectWorkspaces = useProjectWorkspaces(projectId);
+  const { getUser } = useSession();
+  const sessionUserId = getUser()?.id ?? null;
   const branch = searchParams.get('branch')?.trim() || null;
   const {
     branchHeads,
@@ -91,9 +94,10 @@ function ProjectWorkspacesContent({ projectId, schemaBindings }: ProjectWorkspac
         projectId,
         projectMaterials.materials,
         branch ?? 'main',
-        branchHead
+        branchHead,
+        sessionUserId
       ),
-    [branch, branchHead, projectId, projectMaterials.materials]
+    [branch, branchHead, projectId, projectMaterials.materials, sessionUserId]
   );
   const workspaceCandidates = useMemo(
     () => mergePersistedWorkspaceCandidates(starterCandidate, projectWorkspaces.workspaces),

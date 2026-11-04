@@ -27,6 +27,7 @@ import {
   findWorkspaceDraft,
   getTransitionProposalPreparation,
   getTransitionRefHead,
+  getTransitionViewForCommit,
   listTransitionProposalsForWorkspace,
   NotFoundError,
   transactWorkspaceAuthoring,
@@ -41,6 +42,7 @@ import {
 import {
   buildWorkspaceSchemaReview,
   captureWorkspaceSchema,
+  unboundWorkspaceSchema,
   workspaceSchemaReviewHasChanges,
 } from './workspace-schema-review';
 
@@ -68,6 +70,44 @@ async function requireWorkspace(db: AnyDB, projectId: string, workspaceId: strin
   const draft = await findWorkspaceDraft(db, projectId, workspaceId);
   if (!draft?.workspace_state) throw new NotFoundError(workspaceId);
   return draft;
+}
+
+/**
+ * Shared freshness gate for every supported Workspace write surface.
+ * Identity is authorized by the HTTP boundary; this function binds the typed
+ * command to the exact persisted Workspace, composition and target ref.
+ */
+export async function assertWorkspaceAuthoringCommandBasis(
+  db: AnyDB,
+  input: {
+    projectId: string;
+    workspaceId: string;
+    expectedWorkspaceRevision: number;
+    expectedRevision: number;
+    expectedRefHead: string | null;
+  }
+) {
+  const draft = await requireWorkspace(db, input.projectId, input.workspaceId);
+  const current = workspaceAuthoringState(draft.workspace_state!);
+  if (draft.revision !== input.expectedWorkspaceRevision)
+    throw new ConflictError(draft.id, input.expectedWorkspaceRevision);
+  if (current.ledger.compositionRevision !== input.expectedRevision)
+    throw new DraftAuthoringConflictError(
+      `Expected revision ${input.expectedRevision}, current is ${current.ledger.compositionRevision}`
+    );
+  const head = await getTransitionRefHead(db, {
+    projectId: input.projectId,
+    refName: current.basis.refName,
+  });
+  if (
+    current.basis.refHead !== input.expectedRefHead ||
+    head.head !== input.expectedRefHead ||
+    draft.target_branch !== current.basis.refName
+  )
+    throw new DraftAuthoringConflictError(
+      'Pinned ref head changed; explicit reconciliation is required'
+    );
+  return { draft, ...current };
 }
 
 /** Repair an unbound authoring Workspace without changing its immutable history. */
@@ -148,6 +188,19 @@ export async function initializeWorkspaceAuthoring(
     if (head.head !== input.expectedRefHead)
       throw new DraftAuthoringConflictError('Ref head changed');
     const base = head.format === 'empty' ? createYOpsState({}) : head.state;
+    const view =
+      head.format === 'empty' || workspace.workspaceSchemaBase !== undefined
+        ? null
+        : await getTransitionViewForCommit(tx, {
+            projectId: input.projectId,
+            refName,
+            commitId: head.head,
+          });
+    const workspaceSchemaBase =
+      workspace.workspaceSchemaBase ??
+      (view?.mode === 'transition' && view.checks.validation.runs.length === 0
+        ? { refHead: head.head, snapshot: unboundWorkspaceSchema() }
+        : undefined);
     const operations = (workspace.yopsDraft as { operations?: unknown[] } | undefined)?.operations;
     const hasLegacyEdits = Boolean(
       operations?.length || draft.nodes?.length || draft.semantic_points?.length
@@ -183,7 +236,12 @@ export async function initializeWorkspaceAuthoring(
       initialization: { requestId: input.actionId, facts },
     };
     return {
-      workspace: { ...workspace, authoringLedger: ledger, authoringBasis: basis },
+      workspace: {
+        ...workspace,
+        authoringLedger: ledger,
+        authoringBasis: basis,
+        ...(workspaceSchemaBase === undefined ? {} : { workspaceSchemaBase }),
+      },
       value: { basis, ledger },
     };
   });
@@ -519,6 +577,9 @@ export function buildAuthoringPreparation(workspace: Record<string, unknown>) {
       ? { reconciliations: workspace.authoringReconciliations }
       : {}),
     schemaBindings: workspace.schemaBindings ?? [],
+    sourceBundle: Array.isArray(workspace.sourceBundle)
+      ? structuredClone(workspace.sourceBundle)
+      : [],
     deletionAuthorizations: deletionAuthorizations(workspace),
     workspaceSchemaBase: workspace.workspaceSchemaBase ?? null,
     ...(schemaCards.length ? { schemaCards } : {}),

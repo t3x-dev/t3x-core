@@ -20,7 +20,7 @@ interface LocalAuthInput {
 }
 
 export function useLocalAuth() {
-  const { setKey, setUser } = useSession();
+  const { setUser } = useSession();
 
   const authenticate = useCallback(async (input: LocalAuthInput): Promise<AuthSessionResponse> => {
     if (input.mode === 'login') {
@@ -37,14 +37,13 @@ export function useLocalAuth() {
 
   const persistSession = useCallback(
     (session: AuthSessionResponse) => {
-      setKey(session.api_key);
       setUser({
         id: session.id,
         name: session.name ?? null,
         username: session.username ?? null,
       });
     },
-    [setKey, setUser]
+    [setUser]
   );
 
   const getErrorMessage = useCallback((error: unknown) => {

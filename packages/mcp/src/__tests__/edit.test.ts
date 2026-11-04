@@ -2,7 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockApiClient = vi.hoisted(() => ({
   proposeTransition: vi.fn(),
-  workspaces: { authoring: { initialize: vi.fn(), publish: vi.fn() } },
+  workspaces: {
+    authoring: {
+      initialize: vi.fn(),
+      publish: vi.fn(),
+      publishSchema: vi.fn(),
+      prepareReconciliation: vi.fn(),
+      decideReconciliation: vi.fn(),
+    },
+  },
 }));
 vi.mock('@t3x-dev/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@t3x-dev/api-client')>()),
@@ -115,5 +123,101 @@ describe('immutable Draft commands', () => {
       expected_ref_head: null,
       legacy_document: { name: 'Existing' },
     });
+  });
+  it('applies one exact Schema action through the same Workspace authoring API', async () => {
+    const settings = {
+      action: 'add_slot',
+      nodePath: 'product',
+      name: 'advantage',
+      definition: { type: 'string' },
+      intent: 'Add the requested advantage field',
+    };
+    mockApiClient.workspaces.authoring.publishSchema.mockResolvedValue({ status: 'applied' });
+    const result = await editHandler({
+      ...request,
+      mode: 'schema',
+      operations: undefined,
+      schema_settings: settings,
+    });
+    expect(result.isError).toBeUndefined();
+    expect(mockApiClient.workspaces.authoring.publishSchema).toHaveBeenCalledWith('proj_1', 'ws', {
+      request_id: 'op_1',
+      expected_revision: 3,
+      expected_workspace_revision: 5,
+      expected_ref_head: null,
+      settings,
+    });
+  });
+  it('previews and explicitly discards through the shared reconciliation capability', async () => {
+    const head = `sha256:${'b'.repeat(64)}`;
+    const preparationDigest = `sha256:${'a'.repeat(64)}`;
+    mockApiClient.workspaces.authoring.prepareReconciliation.mockResolvedValue({
+      preparationDigest,
+    });
+    expect(
+      (
+        await editHandler({
+          ...request,
+          mode: 'sync_preview',
+          expected_ref_head: head,
+          operations: undefined,
+        })
+      ).isError
+    ).toBeUndefined();
+    expect(mockApiClient.workspaces.authoring.prepareReconciliation).toHaveBeenCalledWith(
+      'proj_1',
+      'ws',
+      { expected_workspace_revision: 5, expected_ref_head: head }
+    );
+    mockApiClient.workspaces.authoring.decideReconciliation.mockResolvedValue({
+      kind: 'discarded',
+    });
+    expect(
+      (
+        await editHandler({
+          ...request,
+          mode: 'sync_discard',
+          expected_ref_head: head,
+          operations: undefined,
+          preparation_digest: preparationDigest,
+        })
+      ).isError
+    ).toBeUndefined();
+    expect(mockApiClient.workspaces.authoring.decideReconciliation).toHaveBeenCalledWith(
+      'proj_1',
+      'ws',
+      {
+        request_id: 'op_1',
+        expected_workspace_revision: 5,
+        expected_ref_head: head,
+        preparation_digest: preparationDigest,
+        action: 'discard',
+      }
+    );
+    const conflictId = `sha256:${'c'.repeat(64)}`;
+    expect(
+      (
+        await editHandler({
+          ...request,
+          mode: 'sync_resolve',
+          expected_ref_head: head,
+          operations: undefined,
+          preparation_digest: preparationDigest,
+          resolutions: [{ conflict_id: conflictId, choice: 'theirs' }],
+        })
+      ).isError
+    ).toBeUndefined();
+    expect(mockApiClient.workspaces.authoring.decideReconciliation).toHaveBeenLastCalledWith(
+      'proj_1',
+      'ws',
+      {
+        request_id: 'op_1',
+        expected_workspace_revision: 5,
+        expected_ref_head: head,
+        preparation_digest: preparationDigest,
+        action: 'resolve',
+        resolutions: [{ conflict_id: conflictId, choice: 'theirs' }],
+      }
+    );
   });
 });

@@ -47,7 +47,7 @@ export function ProjectCollaborationPanel({ projectId }: { projectId: string }) 
     createInvitation: createInvitationCommand,
     revokeInvitation: revokeInvitationCommand,
   } = useProjectCollaboration(projectId);
-  const [inviteEmail, setInviteEmail] = useState('');
+  const [invitee, setInvitee] = useState('');
   const [inviteRole, setInviteRole] = useState<ProjectGrantRole>('editor');
   const [invitationUrl, setInvitationUrl] = useState<string | null>(null);
   const [busyGuestId, setBusyGuestId] = useState<string | null>(null);
@@ -84,12 +84,12 @@ export function ProjectCollaborationPanel({ projectId }: { projectId: string }) 
 
   async function createInvitation(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!inviteEmail.trim()) return;
+    if (!invitee.trim()) return;
     setIsInviting(true);
     setInvitationUrl(null);
     try {
-      const response = await createInvitationCommand(inviteEmail.trim(), inviteRole);
-      setInviteEmail('');
+      const response = await createInvitationCommand(invitee.trim(), inviteRole);
+      setInvitee('');
       setInvitationUrl(
         response.delivery.mode === 'manual'
           ? buildInvitationUrl(window.location.origin, response.delivery.token)
@@ -219,11 +219,10 @@ export function ProjectCollaborationPanel({ projectId }: { projectId: string }) 
                 onSubmit={(event) => void createInvitation(event)}
               >
                 <Input
-                  type="email"
-                  aria-label="Project invitee email"
-                  placeholder="guest@example.com"
-                  value={inviteEmail}
-                  onChange={(event) => setInviteEmail(event.target.value)}
+                  aria-label="Project invitee username or email"
+                  placeholder="username or guest@example.com"
+                  value={invitee}
+                  onChange={(event) => setInvitee(event.target.value)}
                   required
                 />
                 <Select
@@ -241,7 +240,7 @@ export function ProjectCollaborationPanel({ projectId }: { projectId: string }) 
                     ))}
                   </SelectContent>
                 </Select>
-                <Button type="submit" disabled={isInviting || !inviteEmail.trim()}>
+                <Button type="submit" disabled={isInviting || !invitee.trim()}>
                   {isInviting && <Loader2 className="h-4 w-4 animate-spin" />}
                   Invite
                 </Button>

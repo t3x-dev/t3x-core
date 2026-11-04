@@ -314,9 +314,18 @@ export const CreateNamespaceInvitationRequestSchema = CreateInvitationRequestBas
   role: NamespaceMemberRoleSchema,
 }).strict();
 
-export const CreateProjectInvitationRequestSchema = CreateInvitationRequestBaseSchema.extend({
-  role: ProjectGrantRoleSchema,
-}).strict();
+const ProjectInvitationRecipientInputSchema = z.union([
+  CollaborationInvitationRecipientSchema,
+  z.object({ username: z.string().trim().min(2).max(32) }).strict(),
+]);
+
+export const CreateProjectInvitationRequestSchema = z
+  .object({
+    recipient: ProjectInvitationRecipientInputSchema,
+    expires_at: InstantSchema,
+    role: ProjectGrantRoleSchema,
+  })
+  .strict();
 
 export const CollaborationInvitationTokenSchema = z.string().regex(/^t3xi_v1_[A-Za-z0-9_-]{43}$/);
 

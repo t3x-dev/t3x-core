@@ -48,10 +48,16 @@ function relativeTime(value: string | null): string {
 }
 
 function sessionPresentation(session: ProfileSession, index: number) {
-  if (session.current) return { title: 'Current browser', detail: 'Active session', Icon: Laptop };
+  if (session.current) {
+    return {
+      title: 'Current browser',
+      detail: session.user_agent ?? 'Active session',
+      Icon: Laptop,
+    };
+  }
   return {
-    title: 'Signed-in browser',
-    detail: 'Session credential',
+    title: session.user_agent ?? 'Signed-in browser',
+    detail: session.auth_method === 'local_password' ? 'Password sign-in' : session.auth_method,
     Icon: index % 2 === 0 ? Smartphone : Monitor,
   };
 }
@@ -60,7 +66,9 @@ export function ProfileSettingsPanel() {
   const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
   const localWorkspaceName = useSettingsStore((state) => state.localWorkspaceName);
   const setLocalWorkspaceName = useSettingsStore((state) => state.setLocalWorkspaceName);
-  const { data, loading, saving, error, retry, save, revoke } = useProfileSettings(!authDisabled);
+  const { data, loading, saving, error, retry, save, revoke, unlink } = useProfileSettings(
+    !authDisabled
+  );
   const [draft, setDraft] = useState<ProfileSettings | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -74,11 +82,15 @@ export function ProfileSettingsPanel() {
         sessions: [
           {
             id: 'local-current-session',
-            name: 'Local browser',
+            auth_method: 'local',
+            user_agent: 'Local browser',
             current: true,
-            last_active: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+            last_seen_at: new Date().toISOString(),
+            expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
           },
         ],
+        linked_accounts: [],
       });
       return;
     }
@@ -124,6 +136,15 @@ export function ProfileSettingsPanel() {
       toast.success('Session signed out');
     } catch (cause) {
       toast.error(formatUserFacingError(cause, 'Failed to sign out session.'));
+    }
+  }
+
+  async function unlinkAccount(id: string, provider: string) {
+    try {
+      await unlink(id);
+      toast.success(`${provider} account unlinked`);
+    } catch (cause) {
+      toast.error(formatUserFacingError(cause, 'Failed to unlink account.'));
     }
   }
 
@@ -243,6 +264,27 @@ export function ProfileSettingsPanel() {
               </div>
             </section>
 
+            {draft.linked_accounts.length ? (
+              <section className={styles.accountsCard}>
+                <h2>Connected accounts</h2>
+                {draft.linked_accounts.map((account) => (
+                  <div className={styles.accountRow} key={account.id}>
+                    <div>
+                      <strong>{account.provider}</strong>
+                      <span>{account.provider_account_id}</span>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label={`Unlink ${account.provider} account`}
+                      onClick={() => void unlinkAccount(account.id, account.provider)}
+                    >
+                      Unlink
+                    </button>
+                  </div>
+                ))}
+              </section>
+            ) : null}
+
             <section className={styles.sessionsCard}>
               <h2>Sessions</h2>
               <div className={styles.sessionHeader}>
@@ -272,7 +314,7 @@ export function ProfileSettingsPanel() {
                           </span>
                         ) : null}
                       </div>
-                      <span className={styles.activity}>{relativeTime(session.last_active)}</span>
+                      <span className={styles.activity}>{relativeTime(session.last_seen_at)}</span>
                       {session.current ? (
                         <span />
                       ) : (

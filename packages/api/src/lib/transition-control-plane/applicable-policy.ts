@@ -1,6 +1,11 @@
 import { createHash } from 'node:crypto';
 import { WorkspaceFullSchemaReviewSchema } from '@t3x-dev/api-client';
 import {
+  REPOSITORY_MERGE_REPLAY_ACTOR,
+  REPOSITORY_MERGE_REPLAY_TOOL,
+  REPOSITORY_STATE_REPLAY_ACTOR,
+} from '@t3x-dev/application';
+import {
   type AcceptancePolicy,
   createAcceptancePolicyResource,
   PROPOSAL_GENERATION_PREPARATION_SCHEMA,
@@ -142,8 +147,19 @@ export const INDEPENDENT_REVIEW_REF_POLICY = Object.freeze(
       checks: {
         ...structuredClone(UNPROTECTED_REF_POLICY.policy.checks),
         replay: {
-          issuers: { mode: 'one_of', values: [TRANSITION_REPLAY_ACTOR, WORKSPACE_REPLAY_ACTOR] },
-          tools: { mode: 'one_of', values: [WORKSPACE_REPLAY_TOOL, TRANSITION_REPLAY_TOOL] },
+          issuers: {
+            mode: 'one_of',
+            values: [
+              REPOSITORY_MERGE_REPLAY_ACTOR,
+              REPOSITORY_STATE_REPLAY_ACTOR,
+              TRANSITION_REPLAY_ACTOR,
+              WORKSPACE_REPLAY_ACTOR,
+            ],
+          },
+          tools: {
+            mode: 'one_of',
+            values: [WORKSPACE_REPLAY_TOOL, REPOSITORY_MERGE_REPLAY_TOOL, TRANSITION_REPLAY_TOOL],
+          },
           environments: { mode: 'one_of', values: [{ mode: 'unspecified' }] },
         },
       },

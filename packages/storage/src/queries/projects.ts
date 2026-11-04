@@ -71,6 +71,7 @@ export interface ListProjectsOptions {
     principal_kind: 'human' | 'agent' | 'service';
     principal_id: string;
     project_id?: string;
+    namespace_id?: string;
   };
 }
 
@@ -185,6 +186,7 @@ export async function findProjects(
     ? sql<boolean>`(
         ${(deleted || options.required_action) && options.authority.principal_kind !== 'human' && !options.authority.project_id ? sql`FALSE` : sql`TRUE`}
         AND ${options.authority.project_id ? eq(projects.projectId, options.authority.project_id) : sql`TRUE`}
+        AND ${options.authority.namespace_id ? eq(projects.namespaceId, options.authority.namespace_id) : sql`TRUE`}
         AND ${
           deleted || options.required_action
             ? sql`NOT EXISTS (

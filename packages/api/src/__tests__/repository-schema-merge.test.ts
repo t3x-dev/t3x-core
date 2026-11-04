@@ -1,6 +1,14 @@
+import {
+  createRepositorySemanticState,
+  createYSchemaResourceDescriptor,
+  yvalueToTrees,
+} from '@t3x-dev/core';
 import { normalizeYSchemaObject } from '@t3x-dev/yschema';
 import { describe, expect, it } from 'vitest';
-import { mergeSchemaDefinitions } from '../lib/repository-schema-merge';
+import {
+  mergeSchemaDefinitions,
+  validateRepositoryMergedSchema,
+} from '../lib/repository-schema-merge';
 
 const base = normalizeYSchemaObject({
   yschema: '0.1',
@@ -20,6 +28,31 @@ const withSlots = (slots: Record<string, unknown>) =>
   });
 
 describe('deterministic Schema three-way merge', () => {
+  it('accepts verified provenance when validating a merged Schema', () => {
+    const definition = withSlots({
+      title: { type: 'string', provenanceRequired: true },
+    });
+    const state = createRepositorySemanticState({
+      trees: yvalueToTrees({ candidate: { requirements: { title: 'Study' } } }),
+      relations: [],
+    });
+    const resource = createYSchemaResourceDescriptor('t3x://schemas/merge-test/r1', definition);
+    const contract = {
+      definition,
+      rootKey: 'candidate',
+      resource,
+      schemaHash: resource.digest,
+    } as never;
+    const run = { id: 'merge-test', recordedAt: '2026-01-01T00:00:00.000Z' } as never;
+
+    expect(validateRepositoryMergedSchema(state, contract, run).predicate.outcome).toBe('failed');
+    expect(
+      validateRepositoryMergedSchema(state, contract, run, {
+        'requirements/title': [{ origin: 'user_evidence', sourceId: 't3x://materials/source-1' }],
+      }).predicate.outcome
+    ).toBe('passed');
+  });
+
   it('keeps independent owner and advantage definitions without changing its inputs', () => {
     const source = withSlots({ owner: { type: 'string' } });
     const target = withSlots({ advantage: { type: 'string' } });

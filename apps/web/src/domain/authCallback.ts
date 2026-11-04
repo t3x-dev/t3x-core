@@ -16,3 +16,20 @@ export function safeAuthCallbackUrl(candidate: string | null | undefined, fallba
     return fallback;
   }
 }
+
+/**
+ * New local accounts do not own a namespace yet, so their first default
+ * destination is namespace onboarding instead of the shared home route.
+ * Explicit callbacks (for example an invitation) keep their original target.
+ */
+export function postAuthDestination(
+  mode: 'login' | 'register',
+  callbackUrl: string,
+  personalNamespaceSlug?: string | null
+): string {
+  if (callbackUrl !== '/') return callbackUrl;
+  if (mode === 'login' && personalNamespaceSlug) {
+    return `/${encodeURIComponent(personalNamespaceSlug)}`;
+  }
+  return '/onboarding/namespace';
+}

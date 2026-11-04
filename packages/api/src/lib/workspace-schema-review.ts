@@ -6,7 +6,7 @@ import {
   WorkspaceSchemaDefinitionSnapshotSchema,
 } from '@t3x-dev/api-client';
 import { currentComposition, parseDraftActionLedger } from '@t3x-dev/application';
-import { describeTransitionObject } from '@t3x-dev/core';
+import { describeTransitionObject, type TransitionViewV1 } from '@t3x-dev/core';
 import {
   type AnyDB,
   DraftAuthoringConflictError,
@@ -47,9 +47,12 @@ export async function recoverCommittedSchema(
   projectId: string,
   refName: string,
   refHead: string,
-  draft: WorkspaceSchemaDefinitionSnapshot
+  draft: WorkspaceSchemaDefinitionSnapshot,
+  verifiedView?: TransitionViewV1 | null
 ): Promise<WorkspaceSchemaDefinitionSnapshot | null> {
-  const view = await getTransitionViewForCommit(db, { projectId, refName, commitId: refHead });
+  const view =
+    verifiedView ??
+    (await getTransitionViewForCommit(db, { projectId, refName, commitId: refHead }));
   if (view?.mode !== 'transition') return null;
   // A content-free Schema commit has a frozen definition, not instance-validation evidence.
   const receipt = await findTransitionCommitReceipt(db, projectId, refHead);

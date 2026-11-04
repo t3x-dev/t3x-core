@@ -2,6 +2,7 @@ import type { ApiKey } from '@t3x-dev/core';
 import type { Context } from 'hono';
 import { describe, expect, it } from 'vitest';
 import { hasOperatorAccess } from '../lib/operator-access';
+import { requestPrincipalFromApiKey } from '../lib/request-principal';
 
 function contextFor(apiKey?: Partial<ApiKey>): Context {
   const complete = apiKey
@@ -14,7 +15,10 @@ function contextFor(apiKey?: Partial<ApiKey>): Context {
         ...apiKey,
       } as ApiKey)
     : undefined;
-  return { get: () => complete } as unknown as Context;
+  const principal = complete ? requestPrincipalFromApiKey(complete, 'http') : undefined;
+  return {
+    get: (key: string) => (key === 'requestPrincipal' ? principal : undefined),
+  } as unknown as Context;
 }
 
 describe('operator access', () => {

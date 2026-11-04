@@ -13,6 +13,8 @@ import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 export interface CreateBranchInput {
   projectId: string;
   name: string;
+  /** Exact CommitV2 digest for a historical branch point. Omit to inherit the parent head. */
+  headCommitHash?: string;
   parentBranch?: string;
   description?: string;
 }
@@ -45,9 +47,10 @@ export async function insertBranch(db: AnyDB, input: CreateBranchInput): Promise
 
     const isCurrent = Number(countResult?.count ?? 0) === 0 ? 1 : 0;
 
-    // If parent branch specified, get its head commit
-    let headCommitHash: string | null = null;
-    if (input.parentBranch) {
+    // An explicit historical branch point wins over the parent's mutable head.
+    // Application/API callers verify that the Commit belongs to this project.
+    let headCommitHash: string | null = input.headCommitHash ?? null;
+    if (input.headCommitHash === undefined && input.parentBranch) {
       const parent = await findBranchByName(tx as AnyDB, input.projectId, input.parentBranch);
       headCommitHash = parent?.headCommitHash ?? null;
     }

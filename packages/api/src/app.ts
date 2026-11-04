@@ -54,6 +54,7 @@ import {
 } from './middleware/rate-limit';
 import { requestIdMiddleware } from './middleware/request-id';
 import { responseCachePolicyMiddleware } from './middleware/response-cache-policy';
+import { workspaceAccessMiddleware } from './middleware/workspace-access';
 import {
   apiKeysRoutes,
   authLocalRoutes,
@@ -245,6 +246,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
 
   // Project-level access control: gate all /v1/projects/:projectId/* sub-routes
   api.use('/v1/projects/:projectId/*', projectAccessMiddleware);
+  api.use('/v1/projects/:projectId/*', workspaceAccessMiddleware);
 
   // Mount routes
   api.route('/', statusRoutes);

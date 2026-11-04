@@ -568,12 +568,14 @@ export {
   type ContextSource,
   // Conversation Context
   type ConversationContext,
+  CREDENTIAL_KINDS,
   // Draft (Workbench)
   type CreateDraftInput,
   type CreateLeafHistoryInput,
   type CreateLeafInput,
   type CreateMaterialInput,
   type CreatePinInput,
+  type CredentialKind,
   DEPLOY_TYPES,
   type DeployType,
   type Draft,
@@ -583,6 +585,7 @@ export {
   // ID Prefixes
   ID_PREFIXES,
   isApiKeyPrincipalKind,
+  isCredentialKind,
   isDeployLeaf,
   isGenerationLeaf,
   isTransitionScope,
