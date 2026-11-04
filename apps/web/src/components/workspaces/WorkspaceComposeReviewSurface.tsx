@@ -88,6 +88,7 @@ import {
   type StructuredDiffChange,
   type StructuredDiffKind,
 } from '@/domain/diff/structuredStateDiff';
+import { shortHash } from '@/domain/format/formatters';
 import { checksHref, checksReturnTo } from '@/domain/project/checks';
 import {
   buildCanonicalStateYaml,
@@ -3538,8 +3539,17 @@ function WorkspaceReviewStructureView({
               <div className={diffStyles.diffHeading}>
                 <h1>Structure diff</h1>
                 <p>
-                  Base <code>{candidate.baseCommitHash?.slice(0, 7) || 'State'}</code> compared with
-                  draft <code>r{candidate.revision ?? 1}</code>
+                  {candidate.baseCommitHash ? (
+                    <>
+                      Base commit{' '}
+                      <code title={candidate.baseCommitHash}>
+                        {shortHash(candidate.baseCommitHash)}
+                      </code>
+                    </>
+                  ) : (
+                    'Workspace baseline (no base commit)'
+                  )}{' '}
+                  compared with draft <code>r{candidate.revision ?? 1}</code>
                 </p>
               </div>
               <div className={diffStyles.counts}>

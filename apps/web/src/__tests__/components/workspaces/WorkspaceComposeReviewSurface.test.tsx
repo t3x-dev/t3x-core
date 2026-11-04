@@ -2258,6 +2258,39 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(snapshotMocks.list).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['sha256:abcdef0123456789', 'Base commit abcdef0'],
+    [null, 'Workspace baseline (no base commit)'],
+  ])('identifies the comparison baseline %s without confusing the hash prefix or an imported base', (baseCommitHash, label) => {
+    const candidate = { ...getWorkspacePreviewCandidates('proj_1')[0], baseCommitHash };
+    const controller = {
+      candidate,
+      scenarios: { options: [] },
+      materialSources: [],
+      review: {
+        deterministicValidation: {
+          ok: true,
+          baselineTrees: [],
+          previewTrees: [{ key: 'prd', slots: { title: 'New draft' }, children: [] }],
+        },
+        content: null,
+        reviewSnapshot: null,
+        view: null,
+      },
+    } as unknown as WorkspaceComposeReviewController;
+    render(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="review"
+        onModeChange={vi.fn()}
+      />
+    );
+    expect(screen.getByLabelText('Workspace review structure')).toHaveTextContent(label!);
+    if (baseCommitHash) expect(screen.getByTitle(baseCommitHash)).toHaveTextContent('abcdef0');
+    expect(screen.queryByText('Base sha256:')).not.toBeInTheDocument();
+  });
+
   it('normalizes a stale validation review pane to Changes', () => {
     enableComposeActivity();
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
