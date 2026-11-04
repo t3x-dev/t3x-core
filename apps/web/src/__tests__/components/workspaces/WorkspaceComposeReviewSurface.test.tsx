@@ -2038,6 +2038,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       view: null,
       newActivity: {
         workspaceRevision: 13,
+        basis: { refName: 'main', refHead: null, baseDigest: 'empty' },
         compositionRevision: 1,
         base: { title: 'Old' },
         current: { title: 'New' },
@@ -2130,6 +2131,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         base: {},
         current,
         workspaceRevision: 7,
+        basis: { refName: 'main', refHead: 'sha256:123456789abcdef', baseDigest: 'base' },
         compositionRevision: 4,
         selected: {
           before,
@@ -2201,6 +2203,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
     const structure = await screen.findByLabelText('Workspace review structure');
+    expect(within(structure).getByTitle('sha256:123456789abcdef')).toHaveTextContent('1234567');
     expect(within(structure).queryByText(/低于30度/)).not.toBeInTheDocument();
     expect(screen.queryByText(/1 modified/)).not.toBeInTheDocument();
     expect(within(structure).getAllByText('气温').length).toBeGreaterThan(0);
