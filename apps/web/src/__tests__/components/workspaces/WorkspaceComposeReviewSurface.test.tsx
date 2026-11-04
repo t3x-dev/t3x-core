@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import type { AssistantSchemaSettingsView } from '@t3x-dev/api-client';
+import type { AssistantSchemaSettingsView, StudioSchemaEditCandidate } from '@t3x-dev/api-client';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CommitChangeInspection } from '@/components/workspaces/WorkspaceCommitChangeDetails';
@@ -174,8 +174,13 @@ const schemaEditingMocks = vi.hoisted(() => ({ hasPendingEdit: vi.fn(), read: vi
 vi.mock('@/hooks/workspaces/useWorkspaceSchemaEditingRequests', () => ({
   useWorkspaceSchemaEditingRequests: () => schemaEditingMocks,
 }));
+const savedSchemaMock = vi.hoisted(() => ({ candidate: null as StudioSchemaEditCandidate | null }));
 vi.mock('@/hooks/schemas/useStudioSchemaEditCandidate', () => ({
-  useStudioSchemaEditCandidate: () => ({ candidate: null, loading: false, error: undefined }),
+  useStudioSchemaEditCandidate: () => ({
+    candidate: savedSchemaMock.candidate,
+    loading: false,
+    error: undefined,
+  }),
 }));
 const schemaDiscussion = vi.fn();
 vi.mock('@/hooks/workspaces/useWorkspaceYOps', () => ({
@@ -277,6 +282,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     localStorage.clear();
     useProjectStore.setState({ projects: [], details: {} });
     schemaCardMocks.record = null;
+    savedSchemaMock.candidate = null;
     schemaEditingMocks.hasPendingEdit.mockReset().mockResolvedValue(false);
     schemaEditingMocks.read.mockReset().mockRejectedValue(new Error('Candidate must be loaded'));
     localStorage.removeItem('t3x-workspace-draft-width');
@@ -2531,7 +2537,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     ).toBeInTheDocument();
   });
 
-  it('disables both subjects when the inherited branch State has no changes', () => {
+  it('disables both subjects when the inherited branch State has no changes', async () => {
     const candidate = {
       ...getProjectWorkspaceStarterCandidate('proj_1'),
       targetBranch: 'dev4',
@@ -2642,7 +2648,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     } as unknown as WorkspaceComposeReviewController;
 
     const onModeChange = vi.fn();
-    render(
+    const { rerender } = render(
       <WorkspaceComposeReviewSurface
         candidate={candidate}
         controller={controller}
@@ -2668,6 +2674,32 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.queryByText(/天气为晴天/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: 'Compose' }));
     expect(onModeChange).toHaveBeenCalledWith('compose');
+
+    savedSchemaMock.candidate = { candidateId: 'edit-1', revision: 2 } as StudioSchemaEditCandidate;
+    schemaEditingMocks.read.mockResolvedValue({
+      workspace: { revision: candidate.revision },
+      edit: savedSchemaMock.candidate,
+      unapplied: true,
+      preview: {
+        schema: { nodes: { aaa: { description: 'Saved description' } } },
+        workspace: {
+          changes: [{ kind: 'ADD', path: 'nodes.aaa.description', summary: 'Saved description' }],
+        },
+      },
+    });
+    rerender(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="review"
+        onModeChange={onModeChange}
+      />
+    );
+    expect(within(review).getByRole('button', { name: 'Schema', exact: true })).toBeEnabled();
+    expect(await screen.findByText('nodes.aaa.description')).toBeVisible();
+    expect(screen.getByText(/Saved Schema candidate r2/)).toBeVisible();
+    expect(controller.prepareReview).not.toHaveBeenCalled();
+    expect(schemaEditingMocks.hasPendingEdit).not.toHaveBeenCalled();
   });
 });
 

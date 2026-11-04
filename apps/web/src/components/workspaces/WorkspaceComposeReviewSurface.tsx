@@ -168,6 +168,7 @@ import { WorkspaceCommitGraph } from './WorkspaceCommitGraph';
 import { WorkspaceCommitHistoryPanel } from './WorkspaceCommitHistoryPanel';
 import composeStyles from './WorkspaceComposeSurface.module.css';
 import { WorkspaceCurrentDraft } from './WorkspaceCurrentDraft';
+import { WorkspacePendingSchemaReview } from './WorkspacePendingSchemaReview';
 import checksStyles from './WorkspaceReviewChecks.module.css';
 import { WorkspaceReviewCodeView } from './WorkspaceReviewCodeView';
 import diffStyles from './WorkspaceReviewDiff.module.css';
@@ -2835,6 +2836,7 @@ function ReviewSurface({
   } else if (!schemaReview) {
     subjectChanges.content = structureModel.rows.some((row) => row.diff?.exact);
   }
+  subjectChanges.schema ||= hasSavedSchema;
   const [subject, setSubject] = useWorkspaceReviewSubject(
     candidate.projectId,
     candidate.id,
@@ -3025,7 +3027,16 @@ function ReviewSurface({
             {scenarioComparison?.comparisonOnlyCount ?? 0} comparison-only paths.
           </p>
         ) : null}
-        {subject === 'schema' ? (
+        {subject === 'schema' && hasSavedSchema && savedSchema.candidate ? (
+          <WorkspacePendingSchemaReview
+            projectId={candidate.projectId}
+            workspaceId={candidate.id}
+            revision={controller.candidate.revision}
+            candidate={savedSchema.candidate}
+            branch={candidate.targetBranch}
+            pane={pane}
+          />
+        ) : subject === 'schema' ? (
           <WorkspaceReviewSchemaView
             pane={pane}
             branch={candidate.targetBranch}
