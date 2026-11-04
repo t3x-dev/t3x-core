@@ -885,6 +885,41 @@ describe('ProjectReviewsTab', () => {
     expect(screen.getByRole('button', { name: 'Rerun readiness' })).toBeEnabled();
   });
 
+  it('keeps the ready badge in sync when saved conflict decisions are reset and restored', async () => {
+    pullRequestApi.fetchPullRequest.mockResolvedValue({
+      ...blockedPullRequestDetail,
+      status: 'ready',
+    });
+    pullRequestApi.fetchMergeReview.mockResolvedValue({
+      ...conflictReview,
+      decisions: {
+        conflictResolutions: { 'candidate/product': 'source', 'candidate/requirements': 'source' },
+        keepFromSource: ['candidate/extra'],
+        keepFromTarget: [],
+        keepRelationsFromSource: true,
+        keepRelationsFromTarget: true,
+      },
+    });
+    pullRequestApi.saveMergeDecision.mockResolvedValue(1);
+    render(<ProjectReviewsTab projectId="proj_real" initialPullRequestNumber={1} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Merge PR' })).toBeEnabled());
+    const header = within(
+      screen.getByRole('heading', { name: blockedPullRequest.title }).closest('header')!
+    );
+    expect(header.getByText('Ready to merge')).toBeVisible();
+    fireEvent.click(screen.getByRole('tab', { name: 'Changes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reset', exact: true }));
+    expect(screen.getByRole('button', { name: 'Merge PR' })).toBeDisabled();
+    expect(header.queryByText('Ready to merge')).not.toBeInTheDocument();
+    expect(header.getByText('Needs decision')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Keep main', exact: true }));
+    expect(header.getByText('Checks running')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Merge PR' })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Merge PR' })).toBeEnabled());
+    expect(header.getByText('Ready to merge')).toBeVisible();
+    expect(pullRequestApi.mergePullRequest).not.toHaveBeenCalled();
+  });
+
   it('uses the actual merge comparison for Overview and exposes each check status', async () => {
     pullRequestApi.fetchPullRequest.mockResolvedValue({
       ...blockedPullRequestDetail,
@@ -961,6 +996,11 @@ describe('ProjectReviewsTab', () => {
     expect(screen.getByText('Saving decisions…')).toBeVisible();
     fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     expect(await screen.findByText('Save failed')).toBeVisible();
+    const header = within(
+      screen.getByRole('heading', { name: blockedPullRequest.title }).closest('header')!
+    );
+    expect(header.getByText('Needs decision')).toBeVisible();
+    expect(header.queryByText('Ready to merge')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Merge PR' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Review save error' }));
     expect(screen.getByRole('radio', { name: 'Keep main for problem' })).toBeChecked();
@@ -968,6 +1008,7 @@ describe('ProjectReviewsTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry saving' }));
     expect(await screen.findByText('Decisions saved')).toBeVisible();
     expect(pullRequestApi.saveMergeDecision).toHaveBeenCalledTimes(2);
+    expect(header.getByText('Ready to merge')).toBeVisible();
     expect(pullRequestApi.fetchMergeReview).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: 'Merge PR' })).toBeEnabled();
   });

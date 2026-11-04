@@ -2238,8 +2238,21 @@ function PullRequestDetailView({
   const busy = closing || merging || rerunning || detailLoading || saveState === 'saving';
   const ready =
     !comparisonBlocker &&
+    saveState !== 'saving' &&
+    saveState !== 'error' &&
     (conflictProgress?.unresolved ?? 0) === 0 &&
     (pullRequest.status === 'ready' || conflictResolved);
+  const readinessStatus = terminal
+    ? pullRequest.status
+    : reviewState.loading
+      ? 'checking'
+      : comparisonBlocker || (conflictProgress?.unresolved ?? 0) > 0 || saveState === 'error'
+        ? 'blocked'
+        : saveState === 'saving'
+          ? 'checking'
+          : ready
+            ? 'ready'
+            : pullRequest.status;
   const checks = pullRequest.checks ?? [];
   const passedChecks = checks.filter((check) => check.status === 'passed').length;
   const progress = projectId && !reviewState.review ? null : conflictProgress;
@@ -2274,16 +2287,7 @@ function PullRequestDetailView({
         </button>
         <div className={detailStyles.titleRow}>
           <h1>{pullRequest.title}</h1>
-          <ListReadinessBadge
-            pullRequest={
-              comparisonBlocker
-                ? {
-                    ...pullRequest,
-                    status: reviewState.loading ? 'checking' : 'blocked',
-                  }
-                : pullRequest
-            }
-          />
+          <ListReadinessBadge pullRequest={{ ...pullRequest, status: readinessStatus }} />
         </div>
         <div className={detailStyles.refs} aria-label="Merge direction">
           <span>
@@ -2491,7 +2495,7 @@ function PullRequestDetailView({
             <button
               aria-label="Merge PR"
               className={detailStyles.mergeButton}
-              disabled={!ready || busy || saveState === 'error'}
+              disabled={!ready || busy}
               onClick={onMerge}
               type="button"
             >
