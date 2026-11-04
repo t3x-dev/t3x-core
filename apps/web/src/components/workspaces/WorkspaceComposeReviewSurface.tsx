@@ -4245,10 +4245,15 @@ export function buildWorkspaceReviewStructureRows(
   rows: StatePointRow[],
   diffChanges: StructuredDiffChange[]
 ): WorkspaceReviewStructureRow[] {
-  const normalizedChanges = diffChanges.map((change) => ({
-    ...change,
-    path: normalizeWorkspaceReviewStructurePath(change.path),
-  }));
+  const normalizedChanges: WorkspaceReviewDiffChange[] = [];
+  const addChange = (change: StructuredDiffChange) => {
+    normalizedChanges.push({
+      ...change,
+      path: normalizeWorkspaceReviewStructurePath(change.structurePath ?? change.path),
+    });
+    change.children?.forEach(addChange);
+  };
+  diffChanges.forEach(addChange);
   const baseRows = rows.map((row) => ({
     ...row,
     parentPath: parentWorkspaceReviewPath(row.path),
@@ -4318,9 +4323,7 @@ function annotateWorkspaceReviewRowsWithDiff(
   }
 
   return rows.map((row) => {
-    const exactChange = row.diff
-      ? null
-      : (exactChangeByPath.get(row.path) ?? findArrayAppendDiffForWorkspaceRow(row, diffChanges));
+    const exactChange = row.diff ? null : exactChangeByPath.get(row.path);
     if (exactChange) return { ...row, diff: workspaceReviewDiffMeta(exactChange, true) };
     if (row.diff) return row;
 
@@ -4399,17 +4402,6 @@ function aggregateWorkspaceReviewDiffKind(
   const kinds = new Set(changes.map((change) => change.kind));
   if (kinds.size === 1) return changes[0]?.kind ?? 'modified';
   return 'modified';
-}
-
-function findArrayAppendDiffForWorkspaceRow(
-  row: WorkspaceReviewStructureRow,
-  changes: WorkspaceReviewDiffChange[]
-): WorkspaceReviewDiffChange | undefined {
-  return changes.find((change) => {
-    if (change.kind !== 'added' || !change.path.endsWith('/-')) return false;
-    const parentPath = change.path.slice(0, -2);
-    return row.parentPath === parentPath && row.value === change.afterValue;
-  });
 }
 
 function filterWorkspaceReviewStructureRows(

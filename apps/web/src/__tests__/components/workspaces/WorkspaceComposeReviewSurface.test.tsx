@@ -365,6 +365,84 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(rows.find((row) => row.path === 'candidate/existing/0')?.diff).toBeUndefined();
   });
 
+  it.each([
+    {
+      before: ['old'],
+      after: ['new'],
+      path: '0',
+      kind: 'modified',
+      beforeValue: 'old',
+      afterValue: 'new',
+    },
+    {
+      before: [],
+      after: [{ name: 'new' }],
+      path: '0/name',
+      kind: 'added',
+      beforeValue: '—',
+      afterValue: 'new',
+    },
+    {
+      before: ['same'],
+      after: ['same', 'same'],
+      path: '1',
+      kind: 'added',
+      beforeValue: 'No value recorded',
+      afterValue: 'same',
+    },
+    {
+      before: [{ name: 'old', keep: 'same' }],
+      after: [{ name: 'new', keep: 'same' }],
+      path: '0/name',
+      kind: 'modified',
+      beforeValue: 'old',
+      afterValue: 'new',
+    },
+    {
+      before: ['old', 'removed'],
+      after: ['new'],
+      path: '1',
+      kind: 'removed',
+      beforeValue: 'removed',
+      afterValue: 'No value recorded',
+    },
+    {
+      before: ['old'],
+      after: [{ name: 'new' }],
+      path: '0/name',
+      kind: 'added',
+      beforeValue: 'No value recorded',
+      afterValue: 'new',
+    },
+  ])('maps array descendants by path: $before -> $after', ({
+    before,
+    after,
+    path,
+    kind,
+    beforeValue,
+    afterValue,
+  }) => {
+    const content = (inputs: unknown[]) => ({
+      trees: [{ key: 'candidate', slots: { inputs }, children: [] }],
+      relations: [],
+    });
+    const baseline = content(before);
+    const head = content(after);
+    const rows = buildWorkspaceReviewStructureRows(
+      buildStatePointRows(head),
+      buildStructuredStateDiff({ baseline, head })
+    );
+    expect(rows.find((row) => row.path === `candidate/inputs/${path}`)?.diff).toMatchObject({
+      kind,
+      beforeValue,
+      afterValue,
+      exact: true,
+    });
+    if (before[0] === 'same')
+      expect(rows.find((row) => row.path === 'candidate/inputs/0')?.diff).toBeUndefined();
+    expect(rows.find((row) => row.path === 'candidate/inputs/0/keep')?.diff).toBeUndefined();
+  });
+
   it('opens Review without checking or applying a saved Schema candidate', () => {
     enableComposeActivity();
     schemaEditingMocks.hasPendingEdit.mockResolvedValue(true);
