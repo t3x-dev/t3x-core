@@ -5,11 +5,16 @@ import type { AssistantSchemaSettingsView, StudioSchemaEditCandidate } from '@t3
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CommitChangeInspection } from '@/components/workspaces/WorkspaceCommitChangeDetails';
-import { WorkspaceComposeReviewSurface } from '@/components/workspaces/WorkspaceComposeReviewSurface';
+import {
+  buildWorkspaceReviewStructureRows,
+  WorkspaceComposeReviewSurface,
+} from '@/components/workspaces/WorkspaceComposeReviewSurface';
 import {
   getProjectWorkspaceStarterCandidate,
   getWorkspacePreviewCandidates,
 } from '@/data/workspaceCandidates';
+import { buildStructuredStateDiff } from '@/domain/diff/structuredStateDiff';
+import { buildStatePointRows } from '@/domain/project/stateViewModel';
 import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import { useProjectStore } from '@/store/projectStore';
@@ -327,6 +332,38 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       splitter: screen.getByRole('separator', { name: 'Resize conversation panel' }),
     };
   }
+
+  it('marks every descendant of an added array as added without changing an unchanged sibling', () => {
+    const baseline = {
+      trees: [{ key: 'candidate', slots: { existing: ['same'] }, children: [] }],
+      relations: [],
+    };
+    const head = {
+      trees: [
+        {
+          key: 'candidate',
+          slots: { existing: ['same'], inputs: ['new', { nested: ['deep'] }] },
+          children: [],
+        },
+      ],
+      relations: [],
+    };
+    const rows = buildWorkspaceReviewStructureRows(
+      buildStatePointRows(head),
+      buildStructuredStateDiff({ baseline, head })
+    );
+    const descendants = rows.filter((row) => row.path.startsWith('candidate/inputs/'));
+    expect(descendants.length).toBeGreaterThan(2);
+    for (const row of descendants) {
+      expect(row.diff).toMatchObject({
+        kind: 'added',
+        exact: true,
+        beforeValue: '—',
+        afterValue: row.value,
+      });
+    }
+    expect(rows.find((row) => row.path === 'candidate/existing/0')?.diff).toBeUndefined();
+  });
 
   it('opens Review without checking or applying a saved Schema candidate', () => {
     enableComposeActivity();

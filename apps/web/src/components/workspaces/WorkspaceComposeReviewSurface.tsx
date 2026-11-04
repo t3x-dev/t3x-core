@@ -4324,6 +4324,19 @@ function annotateWorkspaceReviewRowsWithDiff(
     if (exactChange) return { ...row, diff: workspaceReviewDiffMeta(exactChange, true) };
     if (row.diff) return row;
 
+    const addedParent = diffChanges.find(
+      (change) => change.kind === 'added' && row.path.startsWith(`${change.path}/`)
+    );
+    if (addedParent)
+      return {
+        ...row,
+        diff: {
+          ...workspaceReviewDiffMeta(addedParent, true),
+          beforeValue: '—',
+          afterValue: row.value,
+        },
+      };
+
     const childChanges = diffChanges.filter((change) => change.path.startsWith(`${row.path}/`));
     if (childChanges.length === 0) return row;
     return { ...row, diff: aggregateWorkspaceReviewDiffMeta(childChanges) };
