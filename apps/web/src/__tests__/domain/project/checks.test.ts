@@ -36,6 +36,64 @@ describe('Checks identity and navigation', () => {
   ])('rejects an unsafe return target %s', (value) => {
     expect(checksReturnTo(value, 'p', '/owner/repo/checks')).toBeNull();
   });
+  it.each([
+    [
+      'not_applicable',
+      { observation: 'not_observed', outcomes: [], runs: [] },
+      'not_applicable',
+      'passed',
+    ],
+    [
+      undefined,
+      { observation: 'not_observed', outcomes: [], runs: [] },
+      'not_observed',
+      'not_observed',
+    ],
+    [
+      'not_applicable',
+      { observation: 'observed', outcomes: ['failed'], runs: [{ predicate: {} }] },
+      'failed',
+      'failed',
+    ],
+    [
+      'not_applicable',
+      { observation: 'observed', outcomes: ['failed'], runs: [] },
+      'failed',
+      'failed',
+    ],
+    [
+      'not_applicable',
+      { observation: 'observed', outcomes: ['passed'], runs: [{ predicate: {} }] },
+      'passed',
+      'passed',
+    ],
+  ])('preserves applicability %s without hiding observed evidence %j', (applicability, validation, expected, overall) => {
+    const view = checkRecordView({
+      id: 'review:s',
+      kind: 'review',
+      created_at: '',
+      payload: {
+        content_validation: applicability,
+        snapshot: {
+          transition: {
+            checks: {
+              objectIntegrity: 'verified',
+              replay: { observation: 'observed', outcomes: ['verified'] },
+              validation,
+            },
+          },
+        },
+      },
+    });
+    const item = view.items.find((item) => item.id === 'validation')!;
+    expect(item.status).toBe(expected);
+    expect(view.status).toBe(overall);
+    if (expected === 'not_applicable') {
+      expect(item.title).toBe('Content validation');
+      expect(item.summary).toContain('no business content');
+    }
+  });
+
   it('does not turn missing observations or a provider-free PR result into verified success', () => {
     expect(
       checkRecordView({

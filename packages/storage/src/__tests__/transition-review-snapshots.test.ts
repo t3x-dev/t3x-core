@@ -6,8 +6,10 @@ import {
 } from '@t3x-dev/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
+import { listProjectCheckRecords } from '../queries/project-check-records';
 import {
   createTransitionProposalMembership,
+  digestTransitionPreparationCanonicalJson,
   digestTransitionRequestCanonicalJson,
 } from '../queries/transition-memberships';
 import {
@@ -62,7 +64,7 @@ function transitionGraph(suffix: string) {
   return { base, result, effect, proposal };
 }
 
-async function transitionMembership(projectId: string, suffix: string) {
+async function transitionMembership(projectId: string, suffix: string, preparation?: object) {
   const graph = transitionGraph(suffix);
   const requestCanonicalJson = JSON.stringify({
     kind: 'structured_yops',
@@ -74,6 +76,12 @@ async function transitionMembership(projectId: string, suffix: string) {
     workspaceRevision: 1,
     refName: 'main',
     refHead: null,
+    ...(preparation
+      ? {
+          preparationCanonicalJson: JSON.stringify(preparation),
+          preparationDigest: digestTransitionPreparationCanonicalJson(JSON.stringify(preparation)),
+        }
+      : {}),
     requestKind: 'structured_yops',
     requestCanonicalJson,
     requestDigest: digestTransitionRequestCanonicalJson(requestCanonicalJson),
@@ -179,6 +187,38 @@ beforeAll(async () => {
 afterAll(async () => cleanup());
 
 describe('Transition review snapshots', () => {
+  it.each([
+    undefined,
+    { schemaReview: { contentValidation: 'not_applicable' } },
+  ])('reads applicability from the exact frozen preparation %j', async (preparation) => {
+    const created = await transitionMembership(
+      'proj_review_snapshots',
+      preparation ? 'applicable' : 'legacy',
+      preparation
+    );
+    const artifacts = snapshot({
+      projectId: 'proj_review_snapshots',
+      workspaceId: created.membership.workspaceId,
+      transitionId: created.membership.transitionId,
+      suffix: preparation ? 'c' : 'd',
+    });
+    await saveTransitionReviewSnapshot(db, {
+      projectId: 'proj_review_snapshots',
+      workspaceId: created.membership.workspaceId,
+      transitionId: created.membership.transitionId,
+      snapshot: artifacts.reviewSnapshot,
+      changeProjection: artifacts.changeProjection,
+    });
+    const input = {
+      projectId: 'proj_review_snapshots',
+      id: `review:${artifacts.reviewSnapshot.snapshotId}`,
+      limit: 1,
+    };
+    const [record] = await listProjectCheckRecords(db, input);
+    expect(record.payload.content_validation).toBe(preparation ? 'not_applicable' : null);
+    expect(await listProjectCheckRecords(db, { ...input, projectId: 'other' })).toEqual([]);
+  });
+
   it('stores immutable review snapshots idempotently', async () => {
     const created = await transitionMembership('proj_review_snapshots', 'a');
     const artifacts = snapshot({

@@ -67,16 +67,26 @@ export function checkItems(record: CheckRecord): CheckItem[] {
       .map((key) => {
         const check = object(checks[key]);
         const runs = entries(check.runs);
+        const notApplicable =
+          key === 'validation' &&
+          p.content_validation === 'not_applicable' &&
+          runs.length === 0 &&
+          check.observation !== 'observed' &&
+          (!Array.isArray(check.outcomes) || check.outcomes.length === 0);
         return {
           id: key,
           title:
-            { replay: 'Deterministic replay', validation: 'Schema validation', runner: 'Runner' }[
-              key
-            ] ?? key,
-          status: observedStatus(check),
-          summary: Array.isArray(check.outcomes)
-            ? check.outcomes.join(', ')
-            : 'No conclusion recorded.',
+            {
+              replay: 'Deterministic replay',
+              validation: notApplicable ? 'Content validation' : 'Schema validation',
+              runner: 'Runner',
+            }[key] ?? key,
+          status: notApplicable ? 'not_applicable' : observedStatus(check),
+          summary: notApplicable
+            ? 'Not applicable: no business content is being submitted. Required fields apply when content is added.'
+            : Array.isArray(check.outcomes)
+              ? check.outcomes.join(', ')
+              : 'No conclusion recorded.',
           findings: runs.flatMap((run) => findings(object(run.predicate).gaps)),
           evidence: check,
         };
@@ -157,7 +167,8 @@ export function checkRecordView(record: CheckRecord) {
         ? textValue(p.status)
         : items.some((i) => i.status === 'failed')
           ? 'failed'
-          : items.length && items.every((i) => i.status === 'passed')
+          : items.length &&
+              items.every((i) => i.status === 'passed' || i.status === 'not_applicable')
             ? 'passed'
             : 'not_observed';
   return {
