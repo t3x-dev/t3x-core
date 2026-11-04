@@ -1964,7 +1964,9 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       'Current draft — no review snapshot prepared. Prepare review to freeze this revision.'
     );
     expect(within(screen.getByLabelText('YAML code view')).getByRole('heading')).toHaveTextContent(
-      `workspace-draft-r${candidate.revision ?? 1}-state.yaml`
+      candidate.revision === undefined
+        ? 'workspace-draft-state.yaml'
+        : `workspace-draft-r${candidate.revision}-state.yaml`
     );
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     controller.review.reviewSnapshot = {
@@ -2330,6 +2332,46 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.getByLabelText('Workspace review structure')).toHaveTextContent(label!);
     if (baseCommitHash) expect(screen.getByTitle(baseCommitHash)).toHaveTextContent('abcdef0');
     expect(screen.queryByText('Base sha256:')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    undefined,
+    0,
+    7,
+  ])('does not invent a revision for a draft YAML preview: %s', (revision) => {
+    const candidate = { ...getWorkspacePreviewCandidates('proj_1')[0], revision };
+    const controller = {
+      candidate,
+      scenarios: { options: [] },
+      materialSources: [],
+      review: {
+        content: null,
+        reviewSnapshot: null,
+        view: null,
+        deterministicValidation: {
+          ok: true,
+          baselineTrees: [],
+          previewTrees: [{ key: 'prd', slots: { title: 'Draft' }, children: [] }],
+        },
+      },
+    } as unknown as WorkspaceComposeReviewController;
+    render(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="review"
+        onModeChange={vi.fn()}
+      />
+    );
+    expect(screen.getByLabelText('Workspace review structure')).toHaveTextContent(
+      revision === undefined ? 'Workspace draft revision unknown' : `Workspace draft r${revision}`
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'YAML' }));
+    expect(within(screen.getByLabelText('YAML code view')).getByRole('heading')).toHaveTextContent(
+      revision === undefined
+        ? 'workspace-draft-state.yaml'
+        : `workspace-draft-r${revision}-state.yaml`
+    );
   });
 
   it('normalizes a stale validation review pane to Changes', () => {

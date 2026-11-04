@@ -3307,7 +3307,7 @@ function ResultYamlPane({
   validationReady,
 }: {
   model: WorkspaceReviewStructureModel;
-  revision: number;
+  revision?: number;
   hasSnapshot: boolean;
   changeCounts: { added: number; modified: number; removed: number };
   branch: string;
@@ -3346,7 +3346,7 @@ function ResultYamlPane({
     <WorkspaceReviewCodeView
       changeCounts={changeCounts}
       branch={branch}
-      rootKey={`workspace-draft-r${revision}`}
+      rootKey={revision === undefined ? 'workspace-draft' : `workspace-draft-r${revision}`}
       validationReady={validationReady}
       yamlText={yamlText}
       review={{ lines, selectedPath: selectedRow?.path, onSelectPath: selectPath, statusLabel }}
@@ -3561,7 +3561,12 @@ function WorkspaceReviewStructureView({
                   ) : (
                     'Workspace baseline (no base commit)'
                   )}{' '}
-                  compared with Workspace draft <code>r{candidate.revision ?? 1}</code>
+                  compared with Workspace draft{' '}
+                  <code>
+                    {candidate.revision === undefined
+                      ? 'revision unknown'
+                      : `r${candidate.revision}`}
+                  </code>
                 </p>
               </div>
               <div className={diffStyles.counts}>
@@ -3587,7 +3592,7 @@ function WorkspaceReviewStructureView({
               changeCounts={changeCounts}
               branch={candidate.targetBranch}
               model={yamlModel}
-              revision={candidate.revision ?? 1}
+              revision={candidate.revision}
               hasSnapshot={Boolean(controller.review.reviewSnapshot)}
               onSelectRow={onSelectRow}
               preparing={preparing}
