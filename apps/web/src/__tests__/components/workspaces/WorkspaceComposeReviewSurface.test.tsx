@@ -1940,6 +1940,14 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.queryByRole('button', { name: 'Validation' })).not.toBeInTheDocument();
     expect(document.querySelector('.workspace-rendered-review-theme')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Continue to decision' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'YAML' }));
+    expect(screen.getByLabelText('YAML code view')).toHaveTextContent(
+      'Current draft — no review snapshot prepared. Prepare review to freeze this revision.'
+    );
+    expect(within(screen.getByLabelText('YAML code view')).getByRole('heading')).toHaveTextContent(
+      `workspace-draft-r${candidate.revision ?? 1}-state.yaml`
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     controller.review.reviewSnapshot = {
       projectId: 'proj_1',
       workspaceId: candidate.id,
@@ -1991,6 +1999,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(within(screen.getByRole('table')).getByTitle('prd/summary/outcome')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'YAML' }));
     const code = screen.getByLabelText('YAML code view');
+    expect(code).toHaveTextContent('Current draft — matches prepared review snapshot');
     fireEvent.click(
       within(code)
         .getAllByRole('button', {
@@ -2005,9 +2014,16 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     ).toHaveTextContent('prd.requirements.canary.title');
     expect(screen.getAllByRole('region', { name: 'Review readiness' })).toHaveLength(1);
     expect(screen.queryByRole('button', { name: 'Continue to decision' })).not.toBeInTheDocument();
+    navigationMocks.searchParams = new URLSearchParams('workspaceMode=review&reviewPane=yaml');
     activityMocks.value = {
       view: null,
-      newActivity: { workspaceRevision: 13 },
+      newActivity: {
+        workspaceRevision: 13,
+        compositionRevision: 1,
+        base: { title: 'Old' },
+        current: { title: 'New' },
+        netDiff: [],
+      },
     } as ReturnType<typeof useComposeActivity>;
     controller.review.reviewSnapshot = {
       ...controller.review.reviewSnapshot,
@@ -2025,6 +2041,9 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(
       screen.getByText('The branch or Draft changed. Prepare review again.')
     ).toBeInTheDocument();
+    expect(screen.getByLabelText('YAML code view')).toHaveTextContent(
+      'Current draft — previous review snapshot is outdated. Prepare review again.'
+    );
     expect(prepareReview).not.toHaveBeenCalled();
     expect(decide).not.toHaveBeenCalled();
     prepareReview.mockImplementationOnce(async (onPrepared) => {

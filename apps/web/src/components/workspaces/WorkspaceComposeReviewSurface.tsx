@@ -3290,6 +3290,8 @@ function WorkspaceSourceTools({ controller }: { controller: WorkspaceComposeRevi
 
 function ResultYamlPane({
   model,
+  revision,
+  hasSnapshot,
   changeCounts,
   branch,
   selectedRow,
@@ -3299,6 +3301,8 @@ function ResultYamlPane({
   validationReady,
 }: {
   model: WorkspaceReviewStructureModel;
+  revision: number;
+  hasSnapshot: boolean;
   changeCounts: { added: number; modified: number; removed: number };
   branch: string;
   selectedRow: WorkspaceReviewStructureRow | null;
@@ -3327,14 +3331,16 @@ function ResultYamlPane({
     : !model.hasReplayContent
       ? 'Draft preview — base not verified'
       : snapshotCurrent
-        ? 'Current review snapshot'
-        : 'Snapshot not current';
+        ? 'Current draft — matches prepared review snapshot'
+        : hasSnapshot
+          ? 'Current draft — previous review snapshot is outdated. Prepare review again.'
+          : 'Current draft — no review snapshot prepared. Prepare review to freeze this revision.';
 
   return (
     <WorkspaceReviewCodeView
       changeCounts={changeCounts}
       branch={branch}
-      rootKey={model.rootKey}
+      rootKey={`workspace-draft-r${revision}`}
       validationReady={validationReady}
       yamlText={yamlText}
       review={{ lines, selectedPath: selectedRow?.path, onSelectPath: selectPath, statusLabel }}
@@ -3575,6 +3581,8 @@ function WorkspaceReviewStructureView({
               changeCounts={changeCounts}
               branch={candidate.targetBranch}
               model={yamlModel}
+              revision={candidate.revision ?? 1}
+              hasSnapshot={Boolean(controller.review.reviewSnapshot)}
               onSelectRow={onSelectRow}
               preparing={preparing}
               selectedRow={selectedRow}
