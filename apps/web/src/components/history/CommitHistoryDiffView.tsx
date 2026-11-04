@@ -109,7 +109,9 @@ function YamlPane({
       <div className={styles.codeScroller}>
         {lines.map((line, index) => {
           const path = paths[index] ?? null;
-          const change = changes.find((candidate) => lineMatches(path, candidate.path));
+          const change = changes.find((candidate) =>
+            lineMatches(path, candidate.structurePath ?? candidate.path)
+          );
           const changed =
             change &&
             ((side === 'before' && change.kind !== 'added') ||
@@ -153,11 +155,6 @@ export function CommitHistoryDiffView({
   const [selectedId, setSelectedId] = useState<string | null>(changes[0]?.id ?? null);
   const [step, setStep] = useState<number | null>(changes.length ? 1 : null);
   const [playing, setPlaying] = useState(changes.length > 1);
-  const selectedIndex = Math.max(
-    0,
-    changes.findIndex((change) => change.id === selectedId)
-  );
-  const selected = changes[selectedIndex] ?? null;
   const visibleCount = step ?? changes.length;
   const parentDigest = parentCommit ? shortHash(parentCommit.hash) : 'empty';
   const commitDigest = shortHash(commit.hash);
@@ -166,10 +163,33 @@ export function CommitHistoryDiffView({
     () => buildWorkspaceReviewStructureRows(rows, changes),
     [changes, rows]
   );
+  const selectedRow = structureRows.find((row) => `structure:${row.id}` === selectedId);
+  const changeIndexFor = (id: string | null) => {
+    const row = structureRows.find((item) => `structure:${item.id}` === id);
+    return Math.max(
+      0,
+      changes.findIndex((change) => {
+        if (change.id === id) return true;
+        if (!row) return false;
+        const path = change.structurePath ?? change.path;
+        return (
+          row.path === path || row.path.startsWith(`${path}/`) || path.startsWith(`${row.path}/`)
+        );
+      })
+    );
+  };
+  const selectedIndex = changeIndexFor(selectedId);
+  const selectedChange = changes[selectedIndex];
+  const selected = selectedRow?.diff?.exact
+    ? { ...selectedRow.diff, path: selectedRow.path }
+    : selectedChange
+      ? { ...selectedChange, path: selectedChange.structurePath ?? selectedChange.path }
+      : null;
 
   useEffect(() => {
-    if (!changes.some((change) => change.id === selectedId)) setSelectedId(changes[0]?.id ?? null);
-  }, [changes, selectedId]);
+    if (!selectedRow?.diff && !changes.some((change) => change.id === selectedId))
+      setSelectedId(changes[0]?.id ?? null);
+  }, [changes, selectedId, selectedRow]);
 
   useEffect(() => {
     if (!playing) return;
@@ -190,6 +210,12 @@ export function CommitHistoryDiffView({
     setPlaying(false);
     setStep(clamped);
     if (clamped > 0) setSelectedId(changes[clamped - 1]?.id ?? null);
+  };
+
+  const selectChange = (id: string) => {
+    setStep(changeIndexFor(id) + 1);
+    setPlaying(false);
+    setSelectedId(id);
   };
 
   const copyPath = async () => {
@@ -318,10 +344,7 @@ export function CommitHistoryDiffView({
                   type="button"
                   aria-label="Previous change"
                   disabled={!changes.length || selectedIndex === 0}
-                  onClick={() => {
-                    setPlaying(false);
-                    setSelectedId(changes[selectedIndex - 1]?.id ?? null);
-                  }}
+                  onClick={() => moveTo(selectedIndex)}
                 >
                   <ChevronLeft />
                 </button>
@@ -442,8 +465,8 @@ export function CommitHistoryDiffView({
                 content={baseline}
                 side="before"
                 changes={changes}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
+                selectedId={selectedChange?.id ?? null}
+                onSelect={selectChange}
               />
               <YamlPane
                 label="Commit"
@@ -451,22 +474,22 @@ export function CommitHistoryDiffView({
                 content={commit.content}
                 side="after"
                 changes={changes}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
+                selectedId={selectedChange?.id ?? null}
+                onSelect={selectChange}
               />
             </div>
           ) : (
             <div className={styles.structureMode}>
               <WorkspaceReviewStructureTree
-                activeRowId={structureRows.find((row) => row.path === selected?.path)?.id ?? null}
+                activeRowId={
+                  selectedRow?.id ??
+                  structureRows.find((row) => row.path === selected?.path)?.id ??
+                  null
+                }
                 modifiedLabel={absoluteDate(commit.committed_at)}
                 onSelectRow={(rowId) => {
-                  const path = structureRows.find((row) => row.id === rowId)?.path;
-                  if (!path) return;
-                  const change =
-                    changes.find((candidate) => candidate.path === path) ??
-                    changes.find((candidate) => candidate.path.startsWith(`${path}/`));
-                  if (change) setSelectedId(change.id);
+                  if (structureRows.find((row) => row.id === rowId)?.diff)
+                    selectChange(`structure:${rowId}`);
                 }}
                 rows={structureRows}
               />
