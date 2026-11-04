@@ -51,6 +51,20 @@ const SELECTED_COMMIT: ApiCommit = {
 };
 
 describe('CommitHistoryDiffView', () => {
+  it('uses the same missing-message fallback for the heading and reason', () => {
+    render(
+      <CommitHistoryDiffView
+        commit={{ ...SELECTED_COMMIT, message: '   ' }}
+        parentCommit={PARENT_COMMIT}
+        onBack={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('heading', { name: 'No commit message' })).toBeInTheDocument();
+    expect(screen.getByText('Commit message:').parentElement).toHaveTextContent(
+      'Commit message: No commit message'
+    );
+  });
+
   it('renders the source-matched YAML review with real commit data and selected values', () => {
     const onBack = vi.fn();
     render(

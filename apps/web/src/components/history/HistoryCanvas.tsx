@@ -122,7 +122,7 @@ function CommitCardNode({ data }: NodeProps<CommitFlowNode>) {
       />
       {compact && !selected ? (
         <button
-          aria-label={`Inspect ${commit.message || shortHash(commit.hash)}`}
+          aria-label={`Inspect ${commit.message?.trim() || shortHash(commit.hash)}`}
           className={styles.compactNode}
           onClick={() => onSelect(commit.hash)}
           style={laneStyle}
@@ -134,7 +134,7 @@ function CommitCardNode({ data }: NodeProps<CommitFlowNode>) {
         </button>
       ) : (
         <button
-          aria-label={`Inspect ${commit.message || shortHash(commit.hash)}`}
+          aria-label={`Inspect ${commit.message?.trim() || shortHash(commit.hash)}`}
           className={`${styles.node} ${styles.flowNode} ${lane.root ? styles.nodeRoot : ''} ${selected ? styles.selectedNode : ''}`}
           onClick={() => onSelect(commit.hash)}
           style={laneStyle}

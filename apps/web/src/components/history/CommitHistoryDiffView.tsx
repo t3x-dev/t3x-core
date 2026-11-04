@@ -319,7 +319,7 @@ export function CommitHistoryDiffView({
                 <MessageSquareText /> Why
               </h3>
               <p className={styles.reason}>
-                <strong>Commit message:</strong> {commit.message || 'No commit message recorded.'}
+                <strong>Commit message:</strong> {commitTitle(commit.message)}
               </p>
               <em>No field-level rationale recorded.</em>
             </div>
