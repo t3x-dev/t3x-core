@@ -1259,7 +1259,9 @@ function ComposeSurface({
               title="Inspect Workspace Draft"
             >
               <PanelRightOpen aria-hidden="true" /> Draft
-              <span title="Changed Content objects">{contentChangeCount} changed objects</span>
+              <span title={activity.view ? 'Changed Content objects' : 'Draft operations'}>
+                {contentChangeCount} {activity.view ? 'changed objects' : 'operations'}
+              </span>
               {schemaSettings.record && schemaSettings.record.status !== 'cancelled' ? (
                 <small>Schema</small>
               ) : null}
@@ -1336,7 +1338,7 @@ function ComposeSurface({
             sourcesControl={<WorkspaceSourcesMenu candidate={candidate} controller={controller} />}
             contextLabel={
               activity.view
-                ? `Content r${activity.compositionRevision ?? 0} · Workspace r${activity.view.workspaceRevision}`
+                ? `Content r${activity.compositionRevision ?? '—'} · Workspace r${activity.view.workspaceRevision}`
                 : undefined
             }
           />

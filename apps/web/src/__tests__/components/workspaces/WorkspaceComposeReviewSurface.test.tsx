@@ -639,6 +639,14 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     } as unknown as ReturnType<typeof useComposeActivity>;
   }
 
+  it('identifies the fallback count as operations before the content projection is available', () => {
+    enableComposeActivity();
+    activityMocks.value!.view = null;
+    renderCompose();
+    expect(screen.getByRole('button', { name: 'Open Draft' })).toHaveTextContent('0 operations');
+    expect(screen.queryByTitle('Changed Content objects')).not.toBeInTheDocument();
+  });
+
   it('labels object counts separately from content and Workspace revisions', () => {
     enableComposeActivity();
     activityMocks.value!.compositionRevision = 2;
