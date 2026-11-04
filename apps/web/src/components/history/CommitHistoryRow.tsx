@@ -8,7 +8,7 @@
  */
 
 import { ChevronRight, GitBranch } from 'lucide-react';
-import { formatDate, relativeTime, shortHash } from '@/domain/format/formatters';
+import { commitTitle, formatDate, relativeTime, shortHash } from '@/domain/format/formatters';
 import { cn } from '@/utils/cn';
 import styles from './HistoryList.module.css';
 
@@ -92,7 +92,7 @@ export function CommitHistoryRow({
       </span>
 
       <span className={styles.commit}>
-        <span className={styles.message}>{message || 'Untitled commit'}</span>
+        <span className={styles.message}>{commitTitle(message)}</span>
         <span className={styles.meta}>
           <span className={styles.hash}>{shortHash(hash)}</span>
           <span className={styles.author}>

@@ -87,6 +87,36 @@ describe('CommitV2 read routes', () => {
     expect(foreign.status).toBe(404);
   });
 
+  it('uses the same Proposal description in State, lists and history when intent is unspecified', async () => {
+    const project = await insertProject(mockDB, testData.project({ name: 'Rationale title' }));
+    await ensureMainBranch(mockDB, project.projectId);
+    const result = await commitRepositoryYOpsState({
+      db: mockDB,
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: null,
+      target: createRepositoryYOpsStateFromSemanticContent({
+        trees: [{ key: 'root', slots: {}, children: [] }],
+        relations: [],
+      }),
+      actor: ACTOR,
+      rationale: 'Explain the reviewed change',
+    });
+    const detail = await app.request(
+      `/v1/commits/${encodeURIComponent(result.commitDigest)}?project_id=${project.projectId}`
+    );
+    expect((await detail.json()).data.commit.message).toBe('Explain the reviewed change');
+    for (const path of [
+      `/v1/projects/${project.projectId}/commits?branch=main`,
+      `/v1/projects/${project.projectId}/commits`,
+    ]) {
+      const response = await app.request(path);
+      expect(response.status).toBe(200);
+      const { data } = await response.json();
+      expect(data.commits[0].message).toBe('Explain the reviewed change');
+    }
+  });
+
   it('returns only CommitV2 history projections', async () => {
     const response = await app.request(`/v1/projects/${projectId}/commit-history`);
     expect(response.status).toBe(200);

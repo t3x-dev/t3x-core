@@ -22,7 +22,7 @@ import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from 'rea
 import { StateAuthorReadme } from '@/components/project/StateAuthorReadme';
 import { StateValueReader } from '@/components/project/StateValueReader';
 import { Button } from '@/components/ui/button';
-import { relativeTime, shortHash } from '@/domain/format/formatters';
+import { commitTitle, relativeTime, shortHash } from '@/domain/format/formatters';
 import { buildStatePointRows } from '@/domain/project/stateViewModel';
 import { useStateOverview } from '@/hooks/commits/useStateOverview';
 import type { ApiCommit } from '@/types/api';
@@ -434,12 +434,10 @@ export function StateOverviewView({
                 <>
                   {commitHref ? (
                     <Link className={styles.commitMessage} href={commitHref}>
-                      {currentCommit.message || 'Committed state'}
+                      {commitTitle(currentCommit.message)}
                     </Link>
                   ) : (
-                    <p className={styles.commitMessage}>
-                      {currentCommit.message || 'Committed state'}
-                    </p>
+                    <p className={styles.commitMessage}>{commitTitle(currentCommit.message)}</p>
                   )}
                   <div className={styles.commitMeta}>
                     <span>

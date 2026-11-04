@@ -37,7 +37,7 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { formatDate, shortHash } from '@/domain/format/formatters';
+import { commitTitle, formatDate, shortHash } from '@/domain/format/formatters';
 import { buildHistoryCanvasSvg, downloadTextFile } from '@/domain/history/historyCanvasExport';
 import {
   HISTORY_LANE_LAYOUT,
@@ -110,7 +110,7 @@ function CommitCardNode({ data }: NodeProps<CommitFlowNode>) {
   const compact = useStore((state) => state.transform[2] < COMPACT_ZOOM);
   const { lane, selected, diffStats, onSelect } = data;
   const commit = lane.commit;
-  const label = commit.message || 'Untitled commit';
+  const label = commitTitle(commit.message);
   const laneStyle = { '--lane-color': lane.color } as CSSProperties;
   return (
     <>
@@ -360,7 +360,7 @@ function HistoryCanvasInner({
         })),
         nodes: layout.nodes.map((node) => ({
           hash: node.hash,
-          message: node.commit.message || 'Untitled commit',
+          message: commitTitle(node.commit.message),
           branch: node.branch,
           left: node.x,
           top: node.y,
@@ -594,9 +594,7 @@ function HistoryCanvasInner({
                     )}
                   </span>
                   <div>
-                    <h3 className={styles.inspectHeading}>
-                      {selectedCommit.message || 'Untitled commit'}
-                    </h3>
+                    <h3 className={styles.inspectHeading}>{commitTitle(selectedCommit.message)}</h3>
                     <div className={styles.hashGroup}>
                       <span className={styles.inspectHash}>
                         <span className={styles.hash}>{shortHash(selectedCommit.hash)}</span>

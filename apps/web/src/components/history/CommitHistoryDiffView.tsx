@@ -27,7 +27,7 @@ import {
 } from '@/components/workspaces/WorkspaceComposeReviewSurface';
 import { stateYamlLinePaths } from '@/domain/diff/stateYamlReview';
 import { buildStructuredStateDiff } from '@/domain/diff/structuredStateDiff';
-import { shortHash } from '@/domain/format/formatters';
+import { commitTitle, shortHash } from '@/domain/format/formatters';
 import { getProjectIdRepoPath } from '@/domain/project/repoPath';
 import { buildCanonicalStateYaml, buildStatePointRows } from '@/domain/project/stateViewModel';
 import type { ApiCommit } from '@/types/api';
@@ -237,7 +237,7 @@ export function CommitHistoryDiffView({
             <ChevronRight aria-hidden="true" />
             <code>{commitDigest}</code>
           </nav>
-          <h1>{commit.message || 'No commit message'}</h1>
+          <h1>{commitTitle(commit.message)}</h1>
           <div className={styles.metadata}>
             <span>
               <GitCommitHorizontal /> <code>{commitDigest}</code>

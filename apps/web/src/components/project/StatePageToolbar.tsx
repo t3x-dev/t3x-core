@@ -2,7 +2,7 @@
 
 import { Eye, GitCommit, Pencil, TableProperties } from 'lucide-react';
 import Link from 'next/link';
-import { relativeTime, shortHash } from '@/domain/format/formatters';
+import { commitTitle, relativeTime, shortHash } from '@/domain/format/formatters';
 import type { ApiCommit } from '@/types/api';
 import type { ProjectSnapshotView } from './ProjectStateTab';
 import { StateBranchControls } from './StateBranchControls';
@@ -95,7 +95,7 @@ export function StatePageToolbar({
           <div className={inspectionStyles.commitSummary}>
             <GitCommit aria-hidden="true" />
             <Link href={`${historyHref}&commit=${encodeURIComponent(headCommit.hash)}`}>
-              {headCommit.message || 'Committed state'}
+              {commitTitle(headCommit.message)}
             </Link>
             <span>
               {headCommit.author?.name ||
