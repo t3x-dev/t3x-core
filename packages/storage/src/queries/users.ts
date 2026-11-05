@@ -11,7 +11,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { Account, User } from '@t3x-dev/core';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, ilike, ne, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type AccountRecord, accounts, type UserRecord, users } from '../schema-trees';
 
@@ -50,6 +50,13 @@ export interface CreateLocalUserInput {
   passwordHash: string;
   /** Display name (optional, defaults to username) */
   name?: string;
+}
+
+export interface UserSearchProfile {
+  id: string;
+  username: string;
+  name: string | null;
+  avatarUrl: string | null;
 }
 
 // ============================================================
@@ -173,6 +180,33 @@ export async function findUserById(db: AnyDB, id: string): Promise<User | null> 
   const [row] = await db.select().from(users).where(eq(users.id, id)).limit(1);
 
   return row ? rowToUser(row) : null;
+}
+
+/** Search safe public identity fields for the collaborator picker. */
+export async function searchUserProfiles(
+  db: AnyDB,
+  query: string,
+  options: { excludeUserId?: string; limit?: number } = {}
+): Promise<UserSearchProfile[]> {
+  const normalized = normalizeUsername(query);
+  if (normalized.length < 2) return [];
+  const escaped = normalized.replace(/[%_\\]/g, '\\$&');
+  const match = or(ilike(users.username, `%${escaped}%`), ilike(users.name, `%${escaped}%`));
+  const where = options.excludeUserId ? and(match, ne(users.id, options.excludeUserId)) : match;
+
+  const rows = await db
+    .select({
+      id: users.id,
+      username: users.username,
+      name: users.name,
+      avatarUrl: users.avatarUrl,
+    })
+    .from(users)
+    .where(where)
+    .orderBy(asc(users.username), asc(users.id))
+    .limit(Math.min(Math.max(options.limit ?? 8, 1), 20));
+
+  return rows.flatMap((row) => (row.username ? [{ ...row, username: row.username }] : []));
 }
 
 /**

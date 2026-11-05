@@ -37,6 +37,10 @@ import {
   ListProjectGuestsResponseSchema,
   type ListProjectInvitationsResponse,
   ListProjectInvitationsResponseSchema,
+  type ListReceivedCollaborationInvitationsResponse,
+  ListReceivedCollaborationInvitationsResponseSchema,
+  type SearchCollaborationUsersResponse,
+  SearchCollaborationUsersResponseSchema,
   type TransferNamespaceOwnershipRequest,
   type TransferProjectRequest,
   type UpsertNamespaceMemberRequest,
@@ -579,6 +583,33 @@ export class T3xClient {
     );
   }
 
+  async searchCollaborationUsers(
+    query: string,
+    options?: T3xRequestOptions
+  ): Promise<SearchCollaborationUsersResponse> {
+    return this.request<SearchCollaborationUsersResponse>(
+      'GET',
+      '/v1/users/search',
+      undefined,
+      { q: query },
+      options,
+      SearchCollaborationUsersResponseSchema
+    );
+  }
+
+  async listReceivedCollaborationInvitations(
+    options?: T3xRequestOptions
+  ): Promise<ListReceivedCollaborationInvitationsResponse> {
+    return this.request<ListReceivedCollaborationInvitationsResponse>(
+      'GET',
+      '/v1/invitations',
+      undefined,
+      undefined,
+      options,
+      ListReceivedCollaborationInvitationsResponseSchema
+    );
+  }
+
   async revokeCollaborationInvitation(
     invitationId: string,
     options?: T3xRequestOptions
@@ -604,6 +635,34 @@ export class T3xClient {
       undefined,
       options,
       AcceptCollaborationInvitationResponseSchema
+    );
+  }
+
+  async acceptCollaborationInvitationById(
+    invitationId: string,
+    options?: T3xRequestOptions
+  ): Promise<AcceptCollaborationInvitationResponse> {
+    return this.request<AcceptCollaborationInvitationResponse>(
+      'POST',
+      `/v1/invitations/${encodeURIComponent(invitationId)}/accept`,
+      undefined,
+      undefined,
+      options,
+      AcceptCollaborationInvitationResponseSchema
+    );
+  }
+
+  async declineCollaborationInvitation(
+    invitationId: string,
+    options?: T3xRequestOptions
+  ): Promise<CollaborationMutationResult> {
+    return this.request<CollaborationMutationResult>(
+      'POST',
+      `/v1/invitations/${encodeURIComponent(invitationId)}/decline`,
+      undefined,
+      undefined,
+      options,
+      CollaborationMutationResultSchema
     );
   }
 

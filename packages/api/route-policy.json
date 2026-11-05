@@ -288,6 +288,34 @@
       "rationale": "Invitation acceptance requires an authenticated principal bound to the one-time invitation token."
     },
     {
+      "source": "collaboration-invitations.openapi.ts",
+      "method": "POST",
+      "path": "/v1/invitations/{id}/accept",
+      "policy": "authenticated",
+      "rationale": "Inbox invitation acceptance requires the authenticated principal to match the stored recipient."
+    },
+    {
+      "source": "collaboration-invitations.openapi.ts",
+      "method": "POST",
+      "path": "/v1/invitations/{id}/decline",
+      "policy": "authenticated",
+      "rationale": "Inbox invitation decline requires the authenticated principal to match the stored recipient."
+    },
+    {
+      "source": "collaboration-reads.openapi.ts",
+      "method": "GET",
+      "path": "/v1/users/search",
+      "policy": "authenticated",
+      "rationale": "Returns only safe public identity fields to an authenticated user selecting a collaborator."
+    },
+    {
+      "source": "collaboration-reads.openapi.ts",
+      "method": "GET",
+      "path": "/v1/invitations",
+      "policy": "authenticated",
+      "rationale": "Returns only pending invitations addressed to the authenticated user."
+    },
+    {
       "source": "collaboration-reads.openapi.ts",
       "method": "GET",
       "path": "/v1/namespaces",

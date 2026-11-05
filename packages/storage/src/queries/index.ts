@@ -87,10 +87,12 @@ export {
   listNamespaceMemberViews,
   listProjectGrantViews,
   listProjectInvitationViews,
+  listReceivedInvitationViews,
   type StoredNamespaceAccountFacts,
   type StoredNamespaceMemberView,
   type StoredPrincipalProfile,
   type StoredProjectGrantView,
+  type StoredReceivedInvitationView,
 } from './collaboration-reads';
 // Comparisons (saved A/B comparison snapshots)
 export {
@@ -641,7 +643,9 @@ export {
   findUserByUsername,
   normalizeEmail,
   normalizeUsername,
+  searchUserProfiles,
   type UnlinkAccountResult,
+  type UserSearchProfile,
   unlinkAccount,
   updateUser,
 } from './users';

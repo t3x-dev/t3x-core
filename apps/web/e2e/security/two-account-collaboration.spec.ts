@@ -128,26 +128,29 @@ test.describe('two-account browser collaboration', () => {
       await pageA.getByRole('link', { name: 'Settings', exact: true }).click();
       await pageA.getByRole('link', { name: 'Access', exact: true }).click();
       const projectAccess = pageA.getByRole('region', { name: 'Project access' });
-      await projectAccess.getByLabel('Project invitee username or email').fill(accountB.username);
+      await projectAccess.getByRole('button', { name: 'Add people' }).click();
+      const addPeople = pageA.getByRole('dialog', { name: 'Add people to this project' });
+      await addPeople.getByLabel('Search users').fill(accountB.username.slice(0, -2));
+      await addPeople.getByRole('button', { name: new RegExp(accountB.username) }).click();
       const createInvitation = pageA.waitForResponse(
         (response) =>
           /\/api\/v1\/projects\/[^/]+\/invitations$/.test(new URL(response.url()).pathname) &&
           response.request().method() === 'POST'
       );
-      await projectAccess.getByRole('button', { name: 'Invite', exact: true }).click();
+      await addPeople.getByRole('button', { name: `Add @${accountB.username}` }).click();
       expect((await createInvitation).status()).toBe(201);
-      const invitationCode = projectAccess.locator('code').filter({ hasText: '/invite#' });
-      await expect(invitationCode).toBeVisible();
-      const invitationUrl = (await invitationCode.textContent())?.trim();
-      expect(invitationUrl).toMatch(/\/invite#token=/);
       await pageA.screenshot({
         path: testInfo.outputPath('02-account-a-invited-account-b.png'),
         fullPage: true,
         animations: 'disabled',
       });
 
-      await pageB.goto(invitationUrl as string);
-      await expect(pageB.getByRole('heading', { name: 'Invitation accepted' })).toBeVisible();
+      await pageB.goto('/invitations');
+      await expect(pageB.getByText(`${accountA.namespace}/${repositoryName}`)).toBeVisible();
+      await pageB.getByRole('button', { name: 'Accept invitation' }).click();
+      await expect(
+        pageB.getByRole('main').getByText('Invitation accepted', { exact: true })
+      ).toBeVisible();
       await pageB.getByRole('link', { name: 'Open project', exact: true }).click();
       await expect(pageB.getByRole('link', { name: 'State', exact: true })).toHaveAttribute(
         'aria-current',

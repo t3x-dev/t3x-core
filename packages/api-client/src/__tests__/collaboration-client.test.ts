@@ -131,6 +131,61 @@ describe('T3xClient collaboration methods', () => {
     expect(fetchFn).not.toHaveBeenCalledWith(expect.stringContaining(TOKEN), expect.anything());
   });
 
+  it('supports collaborator search and the authenticated invitation inbox', async () => {
+    const searchFetch = mockFetch(
+      success({
+        users: [
+          {
+            user_id: 'user_b',
+            username: 'test-b3',
+            display_name: 'Test B3',
+            avatar_url: null,
+          },
+        ],
+      })
+    );
+    const searchClient = new T3xClient({ baseUrl: 'https://api.example.test', fetch: searchFetch });
+    await searchClient.searchCollaborationUsers('test');
+    expect(searchFetch).toHaveBeenCalledWith(
+      'https://api.example.test/v1/users/search?q=test',
+      expect.objectContaining({ method: 'GET' })
+    );
+
+    const inboxFetch = mockFetch(success({ invitations: [] }));
+    const inboxClient = new T3xClient({ baseUrl: 'https://api.example.test', fetch: inboxFetch });
+    await inboxClient.listReceivedCollaborationInvitations();
+    expect(inboxFetch).toHaveBeenCalledWith(
+      'https://api.example.test/v1/invitations',
+      expect.objectContaining({ method: 'GET' })
+    );
+  });
+
+  it('accepts and declines inbox invitations by id', async () => {
+    const acceptFetch = mockFetch(
+      success({
+        authority: { kind: 'namespace_membership', membership: member },
+        mutation: mutation('invitation.accept'),
+      })
+    );
+    const acceptClient = new T3xClient({ baseUrl: 'https://api.example.test', fetch: acceptFetch });
+    await acceptClient.acceptCollaborationInvitationById('inv/123');
+    expect(acceptFetch).toHaveBeenCalledWith(
+      'https://api.example.test/v1/invitations/inv%2F123/accept',
+      expect.objectContaining({ method: 'POST' })
+    );
+
+    const declineFetch = mockFetch(success(mutation('invitation.revoke')));
+    const declineClient = new T3xClient({
+      baseUrl: 'https://api.example.test',
+      fetch: declineFetch,
+    });
+    await declineClient.declineCollaborationInvitation('inv/123');
+    expect(declineFetch).toHaveBeenCalledWith(
+      'https://api.example.test/v1/invitations/inv%2F123/decline',
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
+
   it('validates one-time invitation delivery responses', async () => {
     const fetchFn = mockFetch(
       success({

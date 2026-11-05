@@ -1,6 +1,6 @@
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, gt, isNull, or } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type Namespace, namespaces } from '../schema';
+import { type Namespace, namespaces, projects } from '../schema';
 import {
   collaborationInvitations,
   type NamespaceMembershipRecord,
@@ -37,6 +37,12 @@ export interface StoredNamespaceMemberView {
 export interface StoredProjectGrantView {
   grant: ProjectGrantRecord;
   principal: StoredPrincipalProfile;
+}
+
+export interface StoredReceivedInvitationView {
+  invitation: StoredCollaborationInvitationDto;
+  namespace: { slug: string; displayName: string };
+  project: { name: string } | null;
 }
 
 function principalProfile(
@@ -204,6 +210,43 @@ export async function listProjectInvitationViews(
     .where(eq(collaborationInvitations.projectId, projectId))
     .orderBy(asc(collaborationInvitations.createdAt), asc(collaborationInvitations.invitationId));
   return rows.map(invitationDto);
+}
+
+/** List unexpired pending invitations addressed to one authenticated user. */
+export async function listReceivedInvitationViews(
+  db: AnyDB,
+  input: { userId: string; verifiedEmail?: string | null; evaluatedAt?: Date }
+): Promise<StoredReceivedInvitationView[]> {
+  const recipient = input.verifiedEmail
+    ? or(
+        eq(collaborationInvitations.recipientUserId, input.userId),
+        eq(collaborationInvitations.recipientEmail, input.verifiedEmail.trim().toLowerCase())
+      )
+    : eq(collaborationInvitations.recipientUserId, input.userId);
+  const rows = await db
+    .select({
+      invitation: collaborationInvitations,
+      namespaceSlug: namespaces.slug,
+      namespaceDisplayName: namespaces.displayName,
+      projectName: projects.name,
+    })
+    .from(collaborationInvitations)
+    .innerJoin(namespaces, eq(namespaces.namespaceId, collaborationInvitations.namespaceId))
+    .leftJoin(projects, eq(projects.projectId, collaborationInvitations.projectId))
+    .where(
+      and(
+        recipient,
+        eq(collaborationInvitations.status, 'pending'),
+        gt(collaborationInvitations.expiresAt, input.evaluatedAt ?? new Date())
+      )
+    )
+    .orderBy(asc(collaborationInvitations.createdAt), asc(collaborationInvitations.invitationId));
+
+  return rows.map((row) => ({
+    invitation: invitationDto(row.invitation),
+    namespace: { slug: row.namespaceSlug, displayName: row.namespaceDisplayName },
+    project: row.projectName ? { name: row.projectName } : null,
+  }));
 }
 
 /** Resolve one safe invitation by id before authorization; no token hash is returned. */

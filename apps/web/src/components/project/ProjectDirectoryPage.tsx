@@ -154,12 +154,14 @@ function ProjectRow({
   project,
   selectedTags,
   onTag,
+  showAccess,
 }: {
   onDelete: (project: ProjectSummary) => void;
   onRename: (project: ProjectSummary) => void;
   project: ProjectSummary;
   selectedTags: string[];
   onTag: (tag: string) => void;
+  showAccess: boolean;
 }) {
   return (
     <article className={styles.repositoryRow}>
@@ -191,6 +193,16 @@ function ProjectRow({
           </div>
         )}
         <div className={styles.rowMeta}>
+          {showAccess && project.namespace && <span>Owner: {project.namespace}</span>}
+          {showAccess && (
+            <span>
+              {project.canDelete === true
+                ? 'Admin access'
+                : project.canEdit === true
+                  ? 'Editor access'
+                  : 'Read access'}
+            </span>
+          )}
           <ProjectMetrics project={project} />
           <span>Created {project.updatedAt}</span>
         </div>
@@ -251,15 +263,28 @@ function EmptyDirectory({ newRepositoryPath }: { newRepositoryPath: string }) {
   );
 }
 
-export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { ownerSlug?: string }) {
+export function ProjectDirectoryPage({
+  ownerSlug = DEFAULT_OWNER_SLUG,
+  scope = 'namespace',
+}: {
+  ownerSlug?: string;
+  scope?: 'namespace' | 'accessible';
+}) {
   return (
     <Suspense fallback={null}>
-      <ProjectDirectoryContent key={ownerSlug} ownerSlug={ownerSlug} />
+      <ProjectDirectoryContent key={`${scope}:${ownerSlug}`} ownerSlug={ownerSlug} scope={scope} />
     </Suspense>
   );
 }
 
-function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
+function ProjectDirectoryContent({
+  ownerSlug,
+  scope,
+}: {
+  ownerSlug: string;
+  scope: 'namespace' | 'accessible';
+}) {
+  const accessible = scope === 'accessible';
   const pathname = usePathname();
   const router = useRouter();
   const { accounts, activeAccount, selectNamespace } = useNamespaceAccounts();
@@ -269,14 +294,15 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
   );
   useEffect(() => {
     if (
+      !accessible &&
       currentAccount &&
       currentAccount.namespace.namespace_id !== activeAccount?.namespace.namespace_id
     ) {
       selectNamespace(currentAccount.namespace.namespace_id);
     }
-  }, [currentAccount, activeAccount?.namespace.namespace_id, selectNamespace]);
+  }, [accessible, currentAccount, activeAccount?.namespace.namespace_id, selectNamespace]);
   const searchParams = useSearchParams();
-  const deletedView = searchParams.get('view') === 'deleted';
+  const deletedView = !accessible && searchParams.get('view') === 'deleted';
   const pageRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (pageRef.current) pageRef.current.scrollTop = 0;
@@ -296,7 +322,7 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
     refresh: refreshProjects,
     remove: removeProject,
     rename: renameProject,
-  } = useProjects(100, ownerSlug, true);
+  } = useProjects(100, accessible ? undefined : ownerSlug, true);
   const [query, setQuery] = useState('');
   const [directoryView, setDirectoryView] = useState<'all' | 'recent'>('all');
   const [visibility, setVisibility] = useState('all');
@@ -319,7 +345,13 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
   const [notice, setNotice] = useState<{ message: string; deleted?: boolean } | null>(null);
   const [recentProjectIds] = useState(() => readRecentProjectIds());
   const isPersonalNamespace = ownerSlug !== DEFAULT_OWNER_SLUG;
-  const newRepositoryPath = `/${ownerSlug}/new`;
+  const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
+  const newRepositoryOwner = accessible
+    ? (activeAccount?.namespace.slug ?? (authDisabled ? DEFAULT_OWNER_SLUG : null))
+    : ownerSlug;
+  const newRepositoryPath = newRepositoryOwner
+    ? `/${newRepositoryOwner}/new`
+    : '/onboarding/namespace';
 
   const projectSummaries = useMemo(() => projects.map(apiProjectToSummary), [projects]);
 
@@ -416,7 +448,7 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
     const filtered = source.filter(
       (project) =>
         (!normalized ||
-          `${project.name} ${project.description} ${(project.repositoryProfile?.tags ?? []).join(' ')}`
+          `${project.namespace ?? ''} ${project.name} ${project.description} ${(project.repositoryProfile?.tags ?? []).join(' ')}`
             .toLowerCase()
             .includes(normalized)) &&
         (visibility === 'all' || project.visibility === visibility) &&
@@ -449,10 +481,15 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
   return (
     <div className={cn(palette.scope, management.shell)}>
       <DiscoverHeader
-        owner={ownerSlug}
-        namespaceTab="repositories"
-        settingsHref={`/settings/provider-credentials?owner=${encodeURIComponent(ownerSlug)}`}
-        contextLabel={isPersonalNamespace ? 'Personal' : 'Organization'}
+        owner={accessible ? undefined : ownerSlug}
+        namespaceTab={accessible ? undefined : 'repositories'}
+        repositoriesNavigation={accessible}
+        settingsHref={
+          accessible
+            ? undefined
+            : `/settings/provider-credentials?owner=${encodeURIComponent(ownerSlug)}`
+        }
+        contextLabel={accessible ? undefined : isPersonalNamespace ? 'Personal' : 'Organization'}
       />
 
       <div className={cn(management.content, deletedView && styles.deletedSurface)} ref={pageRef}>
@@ -468,33 +505,41 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
             <DeletedRepositoriesView namespace={ownerSlug} backHref={activeHref} />
           ) : (
             <>
-              <div className={styles.namespaceContext}>
-                <span>Namespace</span>
-                {namespaceOptions.length > 1 ? (
-                  <RepositorySelect
-                    label="Namespace"
-                    value={ownerSlug}
-                    onValueChange={(value) => router.push(`/${encodeURIComponent(value)}`)}
-                    options={namespaceOptions.map((slug) => ({ value: slug, label: slug }))}
-                  />
-                ) : (
-                  <span>{ownerSlug}</span>
-                )}
-              </div>
+              {accessible ? (
+                <div className={styles.namespaceContext}>
+                  Repositories you own or can collaborate on
+                </div>
+              ) : (
+                <div className={styles.namespaceContext}>
+                  <span>Namespace</span>
+                  {namespaceOptions.length > 1 ? (
+                    <RepositorySelect
+                      label="Namespace"
+                      value={ownerSlug}
+                      onValueChange={(value) => router.push(`/${encodeURIComponent(value)}`)}
+                      options={namespaceOptions.map((slug) => ({ value: slug, label: slug }))}
+                    />
+                  ) : (
+                    <span>{ownerSlug}</span>
+                  )}
+                </div>
+              )}
               <div className={styles.titleRow}>
                 <h1>
-                  Repositories{' '}
+                  {accessible ? 'Your repositories' : 'Repositories'}{' '}
                   <span>{loading && !hasLoadedProjects ? '…' : projectSummaries.length}</span>
                 </h1>
                 <div className={styles.titleActions}>
-                  <Link
-                    href={deletedHref}
-                    scroll={false}
-                    className={cn(styles.deletedLink, focusRing)}
-                  >
-                    <Trash2 aria-hidden="true" size={15} />
-                    Deleted repositories
-                  </Link>
+                  {!accessible && (
+                    <Link
+                      href={deletedHref}
+                      scroll={false}
+                      className={cn(styles.deletedLink, focusRing)}
+                    >
+                      <Trash2 aria-hidden="true" size={15} />
+                      Deleted repositories
+                    </Link>
+                  )}
                   <Button asChild className={management.createAction}>
                     <Link href={newRepositoryPath}>
                       <Plus aria-hidden="true" size={16} />
@@ -684,6 +729,7 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
                           onRename={openRenameDialog}
                           selectedTags={selectedTags}
                           onTag={changeTag}
+                          showAccess={accessible}
                         />
                       ))
                     ) : (
