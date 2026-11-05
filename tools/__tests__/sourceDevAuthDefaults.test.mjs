@@ -34,7 +34,7 @@ test('applySourceDevDefaults adds the local API URL for webui when unset', () =>
   });
 });
 
-test('applySourceDevDefaults preserves explicit webui API URL values', () => {
+test('applySourceDevDefaults keeps WebUI auth aligned with explicit server auth', () => {
   const env = {
     AUTH_DISABLED: 'false',
     T3X_API_URL: 'https://api.example.com',
@@ -45,7 +45,7 @@ test('applySourceDevDefaults preserves explicit webui API URL values', () => {
 
   assert.deepEqual(result, {
     ...env,
-    NEXT_PUBLIC_AUTH_DISABLED: 'true',
+    NEXT_PUBLIC_AUTH_DISABLED: 'false',
   });
   assert.notStrictEqual(result, env);
 });
