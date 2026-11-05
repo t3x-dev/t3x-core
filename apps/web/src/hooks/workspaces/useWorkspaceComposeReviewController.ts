@@ -29,7 +29,6 @@ import type {
 } from '@/infrastructure/workspaces';
 import { decideWorkspaceTransition, reviewWorkspaceTransition } from '@/queries/workspaces';
 import { usePinsStore } from '@/store/pinsStore';
-import { useProjectWorkspaceSchemaBindingsStore } from '@/store/projectWorkspaceSchemaBindingsStore';
 import type { Material } from '@/types/api';
 import type {
   SourceBundleItem,
@@ -660,13 +659,7 @@ export function useWorkspaceComposeReviewController({
         return workingCandidate;
       }
       const next = rebindWorkspaceCandidate(workingCandidate, binding, new Date().toISOString());
-      const saved = await persistCandidate(next, 'schema.bind');
-      useProjectWorkspaceSchemaBindingsStore.getState().bindSchema({
-        binding: saved.schemaBindings[0] ?? binding,
-        projectId: saved.projectId,
-        workspaceId: saved.id,
-      });
-      return saved;
+      return persistCandidate(next, 'schema.bind');
     },
     [persistCandidate, workingCandidate]
   );

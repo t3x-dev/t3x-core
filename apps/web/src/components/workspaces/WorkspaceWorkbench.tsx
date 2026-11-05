@@ -371,11 +371,13 @@ export function WorkspaceWorkbench({
 
   const handleWorkspaceDraftCommand = async (
     workspace: WorkspaceCandidate,
-    _command: WorkspaceDraftCommandName
+    command: WorkspaceDraftCommandName
   ): Promise<WorkspaceCandidate> => {
     updateSelectedFlow({ error: undefined, validationGapCount: undefined }, workspace.id);
     try {
-      return await persistWorkspaceDraft(workspace);
+      const saved = await persistWorkspaceDraft(workspace);
+      if (command === 'schema.bind') void onWorkspacesRefresh?.();
+      return saved;
     } catch (err) {
       if (isWorkspaceRevisionConflict(err)) {
         const remote = await loadRemoteWorkspace(workspace);

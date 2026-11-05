@@ -10,10 +10,6 @@ import {
   repairLeakedWorkspacePreviewCandidate,
 } from '@/data/workspaceCandidates';
 import { selectWorkspaceForBranch } from '@/domain/workspaces/navigation';
-import {
-  applyProjectWorkspaceSchemaBindings,
-  type ProjectWorkspaceSchemaBindings,
-} from '@/domain/workspaces/schemaBindings';
 import { useProjectMaterials } from '@/hooks/materials/useProjectMaterials';
 import { useBranches } from '@/hooks/shared/useBranches';
 import { useSession } from '@/hooks/shared/useSession';
@@ -22,10 +18,9 @@ import type { SourceBundleItem, WorkspaceCandidate } from '@/types/workspaces';
 
 interface ProjectWorkspacesTabProps {
   projectId: string;
-  schemaBindings?: ProjectWorkspaceSchemaBindings;
 }
 
-export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorkspacesTabProps) {
+export function ProjectWorkspacesTab({ projectId }: ProjectWorkspacesTabProps) {
   const params = useSearchParams();
   if (params.get('reviewPane') === 'checks')
     return <WorkspaceChecksRedirect projectId={projectId} />;
@@ -47,10 +42,10 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
       />
     );
   }
-  return <ProjectWorkspacesContent projectId={projectId} schemaBindings={schemaBindings} />;
+  return <ProjectWorkspacesContent projectId={projectId} />;
 }
 
-function ProjectWorkspacesContent({ projectId, schemaBindings }: ProjectWorkspacesTabProps) {
+function ProjectWorkspacesContent({ projectId }: ProjectWorkspacesTabProps) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -99,16 +94,9 @@ function ProjectWorkspacesContent({ projectId, schemaBindings }: ProjectWorkspac
       ),
     [branch, branchHead, projectId, projectMaterials.materials, sessionUserId]
   );
-  const workspaceCandidates = useMemo(
+  const candidates = useMemo(
     () => mergePersistedWorkspaceCandidates(starterCandidate, projectWorkspaces.workspaces),
     [projectWorkspaces.workspaces, starterCandidate]
-  );
-  const candidates = useMemo(
-    () =>
-      schemaBindings
-        ? applyProjectWorkspaceSchemaBindings(workspaceCandidates, schemaBindings)
-        : workspaceCandidates,
-    [workspaceCandidates, schemaBindings]
   );
   const requestedWorkspaceId = searchParams.get('workspace')?.trim() || null;
   const branchWorkspace = branch ? selectWorkspaceForBranch(candidates, branch, branchHead) : null;
