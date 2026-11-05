@@ -1039,6 +1039,7 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
         requestId: body.request_id,
         decisionDigest: body.decision_digest,
         expectedHead: body.expected_head,
+        synchronizeWorkspaces: true,
         ...(workspaceProjection === undefined ? {} : { workspaceProjection }),
       });
       return c.json(

@@ -27,7 +27,6 @@ import { materializeTransitionProposal } from './transition-control-plane/materi
 import {
   buildAuthoringEffect,
   buildAuthoringPreparation,
-  ensureWorkspaceAuthoringSchema,
   workspaceAuthoringState,
 } from './workspace-authoring';
 import {
@@ -67,16 +66,10 @@ export async function prepareWorkspaceAuthoringReview(input: {
   expectedRefHead: string | null;
   reason?: string;
 }) {
-  const expectedWorkspaceRevision =
-    (await ensureWorkspaceAuthoringSchema(input.db, {
-      projectId: input.projectId,
-      workspaceId: input.workspaceId,
-      expectedRevision: input.expectedWorkspaceRevision,
-    })) ?? input.expectedWorkspaceRevision;
   const context = await resolveWorkspaceTransitionContext(input.db, {
     projectId: input.projectId,
     workspaceId: input.workspaceId,
-    expectedRevision: expectedWorkspaceRevision,
+    expectedRevision: input.expectedWorkspaceRevision,
   });
   const { ledger, basis } = workspaceAuthoringState(context.workspace);
   if (
@@ -127,7 +120,7 @@ export async function prepareWorkspaceAuthoringReview(input: {
         requester: input.actor,
         workspaceId: input.workspaceId,
         expectedRevision: input.expectedRevision,
-        expectedWorkspaceRevision,
+        expectedWorkspaceRevision: input.expectedWorkspaceRevision,
         expectedRefHead: input.expectedRefHead,
         reason: input.reason,
       })

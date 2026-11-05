@@ -126,7 +126,7 @@ describe('durable Draft authoring commands', () => {
       snapshot: { status: 'unbound', schemaHash: null, definition: null, bindings: [] },
     });
   });
-  it('repairs missing Schema with revision protection and leaves immutable history intact', async () => {
+  it('keeps an unbound Workspace unbound instead of guessing a default Schema', async () => {
     const init = await initialize('unbound', true);
     const input = { projectId, workspaceId: 'unbound', expectedRevision: init.draft.revision };
     const unbound = await readWorkspaceAuthoring(setup.db, input);
@@ -137,25 +137,61 @@ describe('durable Draft authoring commands', () => {
       bindings: [],
     });
     expect(await findWorkspaceDraft(setup.db, projectId, 'unbound')).toEqual(init.draft);
-    await expect(
-      ensureWorkspaceAuthoringSchema(setup.db, { ...input, expectedRevision: 0 })
-    ).rejects.toThrow();
     const revision = await ensureWorkspaceAuthoringSchema(setup.db, input);
     const saved = (await findWorkspaceDraft(setup.db, projectId, 'unbound'))!;
-    expect(revision).toBe(init.draft.revision + 1);
+    expect(revision).toBe(init.draft.revision);
     expect(saved.workspace_state?.authoringLedger).toEqual(
       init.draft.workspace_state?.authoringLedger
     );
     expect(saved.workspace_state?.authoringBasis).toEqual(
       init.draft.workspace_state?.authoringBasis
     );
-    expect(saved.workspace_state?.schemaBindings).toEqual([
-      expect.objectContaining({ canonicalName: 't3x/prd', version: 'v2' }),
-    ]);
+    expect(saved.workspace_state?.schemaBindings).toEqual([]);
     await ensureWorkspaceAuthoringSchema(setup.db, { ...input, expectedRevision: revision });
     expect((await findWorkspaceDraft(setup.db, projectId, 'unbound'))?.revision).toBe(revision);
   });
-  it('repairs an unbound Schema while preparing the first Review', async () => {
+  it('records the authored root key instead of deriving it from the Schema name', async () => {
+    const workspaceId = 'dynamic-root';
+    const init = await initialize(workspaceId);
+    const edited = await publishWorkspaceAuthoringAction(setup.db, {
+      projectId,
+      workspaceId,
+      actionId: 'edit-dynamic-root',
+      actor,
+      channel: 'manual',
+      expectedRevision: 0,
+      expectedWorkspaceRevision: init.draft.revision,
+      expectedRefHead: null,
+      operations: [{ set: { path: 'checklist', value: { title: 'Dynamic root' } } }],
+    });
+
+    const prepared = await prepareWorkspaceAuthoringReview({
+      db: setup.db,
+      projectId,
+      workspaceId,
+      requestId: 'review-before-root-repair',
+      actor,
+      expectedRevision: 1,
+      expectedWorkspaceRevision: edited.draft.revision,
+      expectedRefHead: null,
+    }).catch(() => null);
+    if (prepared) expect(prepared.view.precondition.workspaceRevision).toBe(edited.draft.revision);
+    expect((await findWorkspaceDraft(setup.db, projectId, workspaceId))?.revision).toBe(
+      edited.draft.revision
+    );
+
+    const revision = await ensureWorkspaceAuthoringSchema(setup.db, {
+      projectId,
+      workspaceId,
+      expectedRevision: edited.draft.revision,
+    });
+
+    expect(revision).toBe(edited.draft.revision + 1);
+    expect(
+      (await findWorkspaceDraft(setup.db, projectId, workspaceId))?.workspace_state?.schemaBindings
+    ).toEqual([expect.objectContaining({ canonicalName: 't3x/prd', rootKey: 'checklist' })]);
+  });
+  it('requires an explicit Schema binding before the first Review', async () => {
     const workspaceId = 'unbound-review';
     const init = await initialize(workspaceId, true);
     const saved = await publishWorkspaceAuthoringAction(setup.db, {
@@ -170,21 +206,21 @@ describe('durable Draft authoring commands', () => {
       operations: [{ set: { path: 'prd', value: { audience: 'operators' } } }],
     });
 
-    const reviewed = await prepareWorkspaceAuthoringReview({
-      db: setup.db,
-      projectId,
-      workspaceId,
-      requestId: 'review-unbound',
-      actor,
-      expectedRevision: 1,
-      expectedWorkspaceRevision: saved.draft.revision,
-      expectedRefHead: null,
-    });
-
-    expect(reviewed.view.precondition.workspaceRevision).toBe(saved.draft.revision + 1);
+    await expect(
+      prepareWorkspaceAuthoringReview({
+        db: setup.db,
+        projectId,
+        workspaceId,
+        requestId: 'review-unbound',
+        actor,
+        expectedRevision: 1,
+        expectedWorkspaceRevision: saved.draft.revision,
+        expectedRefHead: null,
+      })
+    ).rejects.toThrow('A resolved Workspace schema is required for Review');
     expect(
       (await findWorkspaceDraft(setup.db, projectId, workspaceId))?.workspace_state?.schemaBindings
-    ).toEqual([expect.objectContaining({ canonicalName: 't3x/prd', version: 'v2' })]);
+    ).toEqual([]);
   });
   it('persists a new root object after earlier actions added fields to an existing object', async () => {
     const workspaceId = 'append-root-after-edit';

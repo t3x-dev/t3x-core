@@ -135,7 +135,10 @@ export async function getRepositoryConversationEvidence(
     limit: 10_000,
     offset: 0,
   });
-  return turns.map((turn) => ({
+  const pendingStartedAt = conversation.commitTrackingStartedAt;
+  const pendingTurns =
+    pendingStartedAt === null ? [] : turns.filter((turn) => turn.createdAt >= pendingStartedAt);
+  return pendingTurns.map((turn) => ({
     resource: {
       uri: `t3x://projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(conversationId)}/turns/${encodeURIComponent(turn.turnHash)}`,
       mediaType: 'text/plain;charset=utf-8',

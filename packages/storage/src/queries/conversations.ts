@@ -215,12 +215,7 @@ export async function renameConversation(
     .where(eq(conversations.conversationId, conversationId));
 }
 
-/**
- * Mark a conversation as committed exactly once.
- *
- * Returns the updated conversation when this call wins the guard, or null
- * when the conversation is missing or was already committed by another writer.
- */
+/** Record the latest commit and close the current pending turn window. */
 export async function markConversationCommitted(
   db: AnyDB,
   conversationId: string,
@@ -229,18 +224,14 @@ export async function markConversationCommitted(
 ): Promise<Conversation | null> {
   const [updated] = await db
     .update(conversations)
-    .set({ committedAs: commitHash, committedAt })
-    .where(and(eq(conversations.conversationId, conversationId), isNull(conversations.committedAs)))
+    .set({ committedAs: commitHash, committedAt, commitTrackingStartedAt: null })
+    .where(eq(conversations.conversationId, conversationId))
     .returning();
 
   return updated ?? null;
 }
 
-/**
- * Mark every still-open source conversation participating in a project commit.
- * Already committed rows are intentionally left unchanged, making this safe for
- * workspaces that reuse historical sources.
- */
+/** Record the latest project commit and close each source's pending turn window. */
 export async function markProjectConversationsCommitted(
   db: AnyDB,
   projectId: string,
@@ -253,13 +244,9 @@ export async function markProjectConversationsCommitted(
 
   const updated = await db
     .update(conversations)
-    .set({ committedAs: commitHash, committedAt })
+    .set({ committedAs: commitHash, committedAt, commitTrackingStartedAt: null })
     .where(
-      and(
-        eq(conversations.projectId, projectId),
-        inArray(conversations.conversationId, uniqueIds),
-        isNull(conversations.committedAs)
-      )
+      and(eq(conversations.projectId, projectId), inArray(conversations.conversationId, uniqueIds))
     )
     .returning({ conversationId: conversations.conversationId });
 

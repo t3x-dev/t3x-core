@@ -152,7 +152,8 @@ export interface WorkspaceReconciliationValue {
 export interface WorkspaceReconciliationConflict {
   id: string;
   path: string;
-  kind: 'value' | 'type' | 'collection' | 'delete_modify';
+  scope: 'content' | 'schema';
+  kind: 'value' | 'type' | 'collection' | 'delete_modify' | 'schema';
   base: WorkspaceReconciliationValue;
   ours: WorkspaceReconciliationValue;
   theirs: WorkspaceReconciliationValue;
@@ -168,6 +169,10 @@ export interface WorkspaceReconciliationPreparation {
   ours: TransitionProtocolValue;
   theirs: TransitionProtocolValue;
   merged: TransitionProtocolValue;
+  schemaBase: import('./schema-studio').WorkspaceSchemaDefinitionSnapshot;
+  schemaOurs: import('./schema-studio').WorkspaceSchemaDefinitionSnapshot;
+  schemaTheirs: import('./schema-studio').WorkspaceSchemaDefinitionSnapshot;
+  schemaMerged: import('./schema-studio').WorkspaceSchemaDefinitionSnapshot;
   conflicts: WorkspaceReconciliationConflict[];
 }
 export type WorkspaceReconciliationResolution =

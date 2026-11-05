@@ -1,6 +1,4 @@
-/**
- * Commit source conversation lock tests.
- */
+/** Commit source conversation continuation tests. */
 
 import type { AnyDB } from '@t3x-dev/storage';
 import {
@@ -27,7 +25,7 @@ import { commitRoutes } from '../routes/commits.openapi';
 import { conversationRoutes } from '../routes/conversations.openapi';
 import { turnRoutes } from '../routes/turns.openapi';
 
-describe('Commit source conversation lock', () => {
+describe('Commit source conversation continuation', () => {
   let cleanup: () => Promise<void>;
   let projectId: string;
   const app = new Hono();
@@ -52,7 +50,7 @@ describe('Commit source conversation lock', () => {
     await cleanup();
   });
 
-  async function postCommit(sourceConversationId: string): Promise<Response> {
+  async function postCommit(sourceConversationId: string, destination = 'Dali'): Promise<Response> {
     const observed = await getTransitionRefHead(mockDB, { projectId, refName: 'main' });
     return app.request('/v1/commits', {
       method: 'POST',
@@ -60,7 +58,7 @@ describe('Commit source conversation lock', () => {
       body: JSON.stringify({
         project_id: projectId,
         content: {
-          trees: [{ key: 'trip', slots: { destination: 'Dali' }, children: [] }],
+          trees: [{ key: 'trip', slots: { destination }, children: [] }],
           relations: [],
         },
         branch: 'main',
@@ -71,7 +69,7 @@ describe('Commit source conversation lock', () => {
     });
   }
 
-  it('marks the source conversation committed and rejects a second commit from it', async () => {
+  it('records each commit while the same conversation remains reusable', async () => {
     const conversation = await insertConversation(mockDB, {
       projectId,
       title: 'Trip chat',
@@ -89,13 +87,30 @@ describe('Commit source conversation lock', () => {
     expect(conversationBody.data.committed_as).toBe(commitHash);
     expect(conversationBody.data.committed_at).toEqual(expect.any(String));
 
-    const second = await postCommit(conversation.conversationId);
-    expect(second.status).toBe(409);
+    const turn = await app.request('/v1/turns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project_id: projectId,
+        conversation_id: conversation.conversationId,
+        role: 'user',
+        content: 'Change the destination to Lijiang.',
+      }),
+    });
+    expect(turn.status).toBe(201);
+
+    const second = await postCommit(conversation.conversationId, 'Lijiang');
     const secondBody: ApiResponse = await second.json();
-    expect(secondBody.error.code).toBe('ALREADY_COMMITTED');
+    expect(second.status, JSON.stringify(secondBody)).toBe(200);
+    expect(secondBody.data.commit.digest).not.toBe(commitHash);
+
+    const refreshed = await app.request(`/v1/conversations/${conversation.conversationId}`);
+    const refreshedBody: ApiResponse = await refreshed.json();
+    expect(refreshedBody.data.committed_as).toBe(secondBody.data.commit.digest);
+    expect(refreshedBody.data.has_pending_changes).toBe(false);
   });
 
-  it('rejects new turns after the conversation has been committed', async () => {
+  it('starts a new pending turn window after the conversation has been committed', async () => {
     const conversation = await insertConversation(mockDB, {
       projectId,
       title: 'Locked chat',
@@ -112,13 +127,15 @@ describe('Commit source conversation lock', () => {
         project_id: projectId,
         conversation_id: conversation.conversationId,
         role: 'user',
-        content: 'This should not be accepted after commit.',
+        content: 'Continue working after commit.',
       }),
     });
 
-    expect(turn.status).toBe(409);
-    const turnBody: ApiResponse = await turn.json();
-    expect(turnBody.error.code).toBe('ALREADY_COMMITTED');
+    expect(turn.status).toBe(201);
+    const getConversation = await app.request(`/v1/conversations/${conversation.conversationId}`);
+    const conversationBody: ApiResponse = await getConversation.json();
+    expect(conversationBody.data.committed_as).toBe(commitBody.data.commit.digest);
+    expect(conversationBody.data.has_pending_changes).toBe(true);
   });
 
   it('requires source conversation parent_commit_hash to match the CommitV2 ref head', async () => {

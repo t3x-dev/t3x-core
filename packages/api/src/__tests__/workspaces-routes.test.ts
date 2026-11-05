@@ -1,5 +1,6 @@
 import { type ApiKey, describeTransitionObject } from '@t3x-dev/core';
 import { ConflictError, TransitionHeadConflictError } from '@t3x-dev/storage';
+import { sha256CompositionValue, t3xPromptP0Fixtures } from '@t3x-dev/yschema';
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -675,6 +676,39 @@ describe('Workspace routes', () => {
     expect(getBody.data.workspace.revision).toBe(1);
   });
 
+  it('rejects a pinned Schema whose definition hash does not match', async () => {
+    const path = '/v1/projects/proj_sources/workspaces/workspace_prd_handoff';
+    const binding = {
+      canonicalName: 't3x/prompt',
+      version: 'v1',
+      mode: 'pinned',
+      schemaHash: `sha256:${'1'.repeat(64)}`,
+    };
+    const rejected = await app.request(path, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspace: { schemaBindings: [binding] } }),
+    });
+    expect(rejected.status).toBe(409);
+    expect(storageMock.upsertWorkspaceDraft).not.toHaveBeenCalled();
+
+    const saved = await app.request(path, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspace: {
+          schemaBindings: [
+            {
+              ...binding,
+              schemaHash: await sha256CompositionValue(t3xPromptP0Fixtures.normalizedYSchema),
+            },
+          ],
+        },
+      }),
+    });
+    expect(saved.status).toBe(200);
+  });
+
   it('saves reviewed workspace draft state for later recovery', async () => {
     const res = await app.request('/v1/projects/proj_sources/workspaces/workspace_prd_handoff', {
       method: 'PATCH',
@@ -1081,6 +1115,7 @@ describe('Workspace routes', () => {
       expect.objectContaining({
         outcome: 'accepted',
         precondition: mockPrecondition,
+        synchronizeWorkspaces: true,
         yopsLogIds: ['yl_workspace'],
       })
     );

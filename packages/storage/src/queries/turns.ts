@@ -56,8 +56,7 @@ export async function insertTurn(db: AnyDB, input: CreateTurnInput): Promise<Tur
         and(
           eq(conversations.projectId, input.projectId),
           eq(conversations.conversationId, input.conversationId),
-          isNull(conversations.commitTrackingStartedAt),
-          isNull(conversations.committedAs)
+          isNull(conversations.commitTrackingStartedAt)
         )
       );
 

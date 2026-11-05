@@ -9,6 +9,7 @@ import {
   insertSourceTextRevision,
   insertTurn,
   insertYOpsLogEntry,
+  markConversationCommitted,
 } from '@t3x-dev/storage';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -107,6 +108,40 @@ describe('source evidence routes', () => {
   });
 
   afterAll(async () => cleanup());
+
+  it('seals only turns created since the previous conversation commit', async () => {
+    const project = await insertProject(mockDB, { name: 'Conversation windows' });
+    const conversation = await insertConversation(mockDB, {
+      projectId: project.projectId,
+      title: 'Reusable source',
+    });
+    await insertTurn(mockDB, {
+      projectId: project.projectId,
+      conversationId: conversation.conversationId,
+      role: 'user',
+      content: 'First draft.',
+    });
+
+    await markConversationCommitted(
+      mockDB,
+      conversation.conversationId,
+      `sha256:${'a'.repeat(64)}`
+    );
+    await insertTurn(mockDB, {
+      projectId: project.projectId,
+      conversationId: conversation.conversationId,
+      role: 'user',
+      content: 'Second draft.',
+    });
+
+    const evidence = await getRepositoryConversationEvidence(
+      mockDB,
+      project.projectId,
+      conversation.conversationId
+    );
+    expect(evidence).toHaveLength(1);
+    expect(evidence[0]?.locator.value).toEqual({ quote: 'Second draft.' });
+  });
 
   it('returns CommitV2 evidence and marks a paginated turn view partial', async () => {
     const project = await insertProject(mockDB, { name: 'Source API' });

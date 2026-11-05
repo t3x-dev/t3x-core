@@ -243,9 +243,8 @@ export const conversations = pgTable(
     parentCommitHash: text('parent_commit_hash'),
     committedAs: text('committed_as'),
     committedAt: timestamp('committed_at', { withTimezone: true }),
-    // NULL identifies legacy rows whose commit linkage cannot be proven.
-    // New conversations set this to createdAt so Pending is never inferred
-    // from the mere absence of a historical committed_as value.
+    // A commit clears this watermark; the next turn reopens a pending window.
+    // NULL also identifies legacy rows whose pending state cannot be proven.
     commitTrackingStartedAt: timestamp('commit_tracking_started_at', { withTimezone: true }),
     positionX: real('position_x'),
     positionY: real('position_y'),

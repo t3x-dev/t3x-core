@@ -76,6 +76,14 @@ export async function recoverCommittedSchema(
   const resources = view.checks.validation.runs.map((run) => run.predicate.schemaResource);
   const hashes = new Set(resources.map((resource) => resource.digest));
   if (hashes.size !== 1) return null;
+  const [committedHash] = hashes;
+  if (
+    draft.status === 'bound' &&
+    draft.schemaHash === committedHash &&
+    draft.definition &&
+    (await sha256CompositionValue(normalizeYSchemaObject(draft.definition))) === committedHash
+  )
+    return WorkspaceSchemaDefinitionSnapshotSchema.parse(draft);
   for (const resource of resources) {
     if (!resource.uri.startsWith('t3x://schemas/')) continue;
     const path = resource.uri.slice('t3x://schemas/'.length);

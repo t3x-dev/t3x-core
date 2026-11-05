@@ -446,21 +446,21 @@ export function WorkspaceComposeReviewSurface({
                     <Button
                       size="sm"
                       variant="outline"
+                      className="border-[var(--status-error)]/30 text-[var(--status-error)] hover:bg-[var(--status-error-muted)] hover:text-[var(--status-error)]"
                       disabled={activity.reconciliationDeciding}
                       onClick={() => void activity.decideReconciliation('discard')}
                     >
                       Discard my edits
                     </Button>
-                    <Button
-                      size="sm"
-                      disabled={
-                        activity.reconciliationDeciding ||
-                        activity.reconciliationPreview.conflicts.length > 0
-                      }
-                      onClick={() => void activity.decideReconciliation('adopt')}
-                    >
-                      Keep my edits and sync
-                    </Button>
+                    {activity.reconciliationPreview.conflicts.length === 0 ? (
+                      <Button
+                        size="sm"
+                        disabled={activity.reconciliationDeciding}
+                        onClick={() => void activity.decideReconciliation('adopt')}
+                      >
+                        Keep my edits and sync
+                      </Button>
+                    ) : null}
                   </div>
                 ) : (
                   <Button
@@ -475,35 +475,41 @@ export function WorkspaceComposeReviewSurface({
               }
             >
               {activity.reconciliationPreview ? (
-                <>
-                  <p>
-                    Base {activity.reconciliationPreview.baseHead?.slice(0, 14) ?? 'empty'} → branch{' '}
-                    {activity.reconciliationPreview.currentRefHead?.slice(0, 14) ?? 'empty'}. The
-                    preview is bound to Workspace revision{' '}
-                    {activity.reconciliationPreview.workspaceRevision}.
-                  </p>
-                  {activity.reconciliationPreview.conflicts.length ? (
-                    <div>
-                      <p>
-                        Structured resolution is required before your edits can be adopted. You can
-                        keep the Draft for resolution or discard it explicitly.
-                      </p>
-                      <WorkspaceReconciliationResolver
-                        key={activity.reconciliationPreview.preparationDigest}
-                        preparation={activity.reconciliationPreview}
-                        disabled={activity.reconciliationDeciding}
-                        onResolve={(resolutions) =>
-                          void activity.decideReconciliation('resolve', resolutions)
-                        }
-                      />
-                    </div>
-                  ) : (
-                    <p>
-                      No overlapping changes were found. Review the choice, then keep your edits or
-                      discard them.
+                activity.reconciliationPreview.conflicts.length ? (
+                  <div className="space-y-3 pt-1">
+                    <p className="max-w-3xl">
+                      Another collaborator updated this branch while you were editing. Compare the
+                      three versions below and choose the result you want to keep.
                     </p>
-                  )}
-                </>
+                    <div className="flex flex-wrap gap-2 text-[11px] text-[var(--text-tertiary)]">
+                      <span className="rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-1">
+                        Base {activity.reconciliationPreview.baseHead?.slice(0, 12) ?? 'empty'}
+                      </span>
+                      <span className="rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-1">
+                        Latest{' '}
+                        {activity.reconciliationPreview.currentRefHead?.slice(0, 12) ?? 'empty'}
+                      </span>
+                      <span className="rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-1">
+                        Draft revision {activity.reconciliationPreview.workspaceRevision}
+                      </span>
+                    </div>
+                    <WorkspaceReconciliationResolver
+                      key={activity.reconciliationPreview.preparationDigest}
+                      preparation={activity.reconciliationPreview}
+                      disabled={activity.reconciliationDeciding}
+                      onResolve={(resolutions) =>
+                        void activity.decideReconciliation('resolve', resolutions)
+                      }
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <p>No overlapping changes were found.</p>
+                    <p className="text-xs">
+                      Your Draft can be safely replayed on the latest branch version.
+                    </p>
+                  </div>
+                )
               ) : (
                 <p>
                   Preview Base, your Draft and the latest branch before choosing. Nothing is changed

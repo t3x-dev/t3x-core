@@ -831,22 +831,30 @@ function assertReconciledWorkspace(
   next: Record<string, unknown>
 ) {
   const before = (previous.authoringReconciliations ?? []) as unknown[];
-  const after = next.authoringReconciliations as Array<{ ledger: unknown; basis: unknown }>;
+  const after = next.authoringReconciliations as Array<{
+    ledger: unknown;
+    basis: unknown;
+    schemaBindings: unknown;
+    workspaceSchemaBase: unknown;
+  }>;
   const changed = new Set([
     'authoringLedger',
     'authoringBasis',
     'authoringReconciliations',
     'baseCommitHash',
+    'schemaBindings',
+    'workspaceSchemaBase',
   ]);
   const retained = (value: Record<string, unknown>) =>
     Object.fromEntries(Object.entries(value).filter(([key]) => !changed.has(key)));
   if (
-    !previous.authoringLedger ||
     !Array.isArray(after) ||
     after.length !== before.length + 1 ||
     !isDeepStrictEqual(before, after.slice(0, -1)) ||
     !isDeepStrictEqual(after.at(-1)?.ledger, previous.authoringLedger) ||
     !isDeepStrictEqual(after.at(-1)?.basis, previous.authoringBasis) ||
+    !isDeepStrictEqual(after.at(-1)?.schemaBindings, previous.schemaBindings) ||
+    !isDeepStrictEqual(after.at(-1)?.workspaceSchemaBase, previous.workspaceSchemaBase) ||
     !isDeepStrictEqual(retained(previous), retained(next))
   )
     throw new DraftAuthoringConflictError('Reconciliation must preserve the previous Workspace');
