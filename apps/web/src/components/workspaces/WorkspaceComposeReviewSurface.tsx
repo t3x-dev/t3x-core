@@ -1,4 +1,8 @@
-import type { SchemaPreparationTarget } from '@t3x-dev/api-client';
+import {
+  type PublishWorkspaceAuthoringInput,
+  type SchemaPreparationTarget,
+  T3xApiError,
+} from '@t3x-dev/api-client';
 import type { SemanticContent } from '@t3x-dev/core';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -112,7 +116,6 @@ import {
   MANUAL_STAGING_EVENT_ID,
   type ManualStagingControls,
   previewStagedCurrent,
-  remainingStagedItems,
   type StagedManualCard,
   selectedStagedItems,
   stageDraftOps,
@@ -129,12 +132,14 @@ import {
 } from '@/domain/workspaces/schemaBindings';
 import { useAssistantSchemaSettings } from '@/hooks/schemas/useAssistantSchemaSettings';
 import { useProjectYSchemaVersions } from '@/hooks/schemas/useProjectYSchemaVersions';
-import { useSchemaReviewFlow } from '@/hooks/schemas/useSchemaReviewFlow';
 import { useStudioSchemaEditCandidate } from '@/hooks/schemas/useStudioSchemaEditCandidate';
 import { useViewPreference } from '@/hooks/shared/useViewPreference';
 import { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import { useWorkspaceAuthoringBootstrap } from '@/hooks/workspaces/useWorkspaceAuthoringBootstrap';
-import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
+import {
+  REVIEW_DRAFT_CHANGED,
+  type WorkspaceComposeReviewController,
+} from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import { useWorkspaceConversations } from '@/hooks/workspaces/useWorkspaceConversations';
 import { useWorkspaceSchemaEditingRequests } from '@/hooks/workspaces/useWorkspaceSchemaEditingRequests';
 import { validateWorkspaceCandidateYOps } from '@/hooks/workspaces/useWorkspaceYOps';
@@ -568,6 +573,7 @@ export function WorkspaceComposeReviewSurface({
             />
           ) : (
             <ComposeSurface
+              key={`${candidate.projectId}:${candidate.id}`}
               activity={activity}
               authoringBootstrap={authoringBootstrap}
               controlsRef={composeControls}
@@ -584,10 +590,12 @@ export function WorkspaceComposeReviewSurface({
 function WorkspaceSchemaSelect({
   candidate,
   controller,
+  unbound,
   requestNavigation,
 }: {
   candidate: WorkspaceCandidate;
   controller: WorkspaceComposeReviewController;
+  unbound?: boolean;
   requestNavigation?: (navigate: () => void) => void;
 }) {
   const published = useProjectYSchemaVersions(candidate.projectId);
@@ -602,9 +610,11 @@ function WorkspaceSchemaSelect({
       candidate.schemaBindings[0]
     );
   }, [candidate.projectId, candidate.schemaBindings, published.versions]);
-  const selectedId = candidate.schemaBindings[0]
-    ? workspaceSchemaChoiceId(candidate.schemaBindings[0])
-    : DEFAULT_WORKSPACE_SCHEMA_CHOICE_ID;
+  const selectedId = unbound
+    ? ''
+    : candidate.schemaBindings[0]
+      ? workspaceSchemaChoiceId(candidate.schemaBindings[0])
+      : DEFAULT_WORKSPACE_SCHEMA_CHOICE_ID;
 
   return (
     <select
@@ -622,6 +632,11 @@ function WorkspaceSchemaSelect({
       }}
       value={selectedId}
     >
+      {unbound ? (
+        <option value="" disabled>
+          Choose a Schema
+        </option>
+      ) : null}
       {choices.map((choice) => (
         <option key={choice.id} value={choice.id}>
           {choice.label}
@@ -926,6 +941,12 @@ function ComposeSurface({
   const [schemaConversationId, setSchemaConversationId] = useState<string>();
   const [structureError, setStructureError] = useState<string | null>(null);
   const [staged, setStaged] = useState<StagedManualCard[]>([]);
+  const saveAttempt = useRef<{
+    input: PublishWorkspaceAuthoringInput;
+    cardIds: Set<string>;
+  } | null>(null);
+  const savingContent = useRef(false);
+  const [saveRefreshError, setSaveRefreshError] = useState(false);
   const contentNavigation = useWorkspaceContentNavigation(staged.length > 0, () => setStaged([]));
   const publishedCurrent = activity.view?.current;
   const workingCurrent = useMemo(() => {
@@ -965,40 +986,83 @@ function ComposeSurface({
     );
   }, []);
   const saveSelectedAsP = useCallback(async () => {
+    if (savingContent.current || activity.awaitingPublishRefresh || saveRefreshError) return;
     const selected = selectedStagedItems(staged);
-    if (!selected.length) {
+    if (!saveAttempt.current && !selected.length) {
       setStructureError('Select at least one ungrouped change to save as a P.');
       return;
     }
+    savingContent.current = true;
     setStructurePending(true);
     setStructureError(null);
     try {
-      assertStagedEditsCurrent(publishedCurrent, selected);
-      await activity.publish({
-        request_id: nextAuthoringRequestId(),
-        operations: selected.map((item) => item.operation),
-        reason: stagedManualReason(selected),
-      });
-      await controller.refreshFromServer();
-      setStaged(remainingStagedItems(staged));
+      if (!saveAttempt.current) {
+        const view = activity.view;
+        if (!view) throw new Error('Draft activity is not ready.');
+        assertStagedEditsCurrent(publishedCurrent, selected);
+        saveAttempt.current = {
+          cardIds: new Set(selected.map((item) => item.id)),
+          input: {
+            request_id: nextAuthoringRequestId(),
+            expected_workspace_revision: view.workspaceRevision,
+            expected_revision: view.compositionRevision,
+            expected_ref_head: view.basis.refHead,
+            operations: selected.map((item) => item.operation),
+            reason: stagedManualReason(selected),
+          },
+        };
+      }
+      const { input, cardIds } = saveAttempt.current;
+      const outcome = await activity.publish(input);
+      saveAttempt.current = null;
+      setStaged((current) => current.filter((item) => !cardIds.has(item.id)));
+      try {
+        await controller.refreshFromServer(outcome.workspaceRevision);
+      } catch {
+        setSaveRefreshError(true);
+      }
     } catch (cause) {
+      if (
+        cause instanceof T3xApiError &&
+        cause.status >= 400 &&
+        cause.status < 500 &&
+        cause.status !== 408
+      ) {
+        saveAttempt.current = null;
+      }
       setStructureError(
-        cause instanceof Error ? cause.message : 'Could not save the selected cards as a P.'
+        saveAttempt.current
+          ? 'Save is not yet confirmed. Retry the original save before saving other changes.'
+          : cause instanceof Error
+            ? cause.message
+            : 'Could not save the selected cards as a P.'
       );
     } finally {
+      savingContent.current = false;
       setStructurePending(false);
     }
-  }, [activity, controller, staged, publishedCurrent]);
+  }, [activity, controller, staged, publishedCurrent, saveRefreshError]);
   const stagingControls = useMemo(
     () => ({
       items: staged,
       current: publishedCurrent,
       pending: structurePending,
       error: structureError,
+      retryOriginal: Boolean(saveAttempt.current),
+      blocked: activity.awaitingPublishRefresh || saveRefreshError,
       onToggle: toggleStaged,
       onSaveSelected: () => void saveSelectedAsP(),
     }),
-    [staged, publishedCurrent, structurePending, structureError, toggleStaged, saveSelectedAsP]
+    [
+      activity.awaitingPublishRefresh,
+      staged,
+      publishedCurrent,
+      structurePending,
+      structureError,
+      saveRefreshError,
+      toggleStaged,
+      saveSelectedAsP,
+    ]
   );
   const openStructure = (view: 'structure' | 'yaml' | 'schema') => {
     setStructureError(null);
@@ -1471,6 +1535,7 @@ function ComposeSurface({
                 <WorkspaceSchemaSelect
                   candidate={candidate}
                   controller={controller}
+                  unbound={activity.view?.currentSchema?.status === 'unbound'}
                   requestNavigation={contentNavigation.requestNavigation}
                 />
               }
@@ -1621,6 +1686,27 @@ function ComposeSurface({
               />
               {schemaSettings.error && !schemaSettings.record ? (
                 <p role="alert">{schemaSettings.error}</p>
+              ) : null}
+              {saveRefreshError || (activity.awaitingPublishRefresh && activity.error) ? (
+                <div role="alert">
+                  Changes saved, but the Draft could not refresh.{' '}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void Promise.all([
+                        activity.loadLatest(),
+                        controller.refreshFromServer(activity.savedWorkspaceRevision),
+                      ]).then(
+                        () => setSaveRefreshError(false),
+                        () => setSaveRefreshError(true)
+                      )
+                    }
+                  >
+                    Retry refresh
+                  </button>
+                </div>
+              ) : activity.notice ? (
+                <output>{activity.notice}</output>
               ) : null}
               {activity.newActivity ? (
                 <output className={composeStyles.newActivity}>
@@ -2742,7 +2828,8 @@ function ReviewSurface({
   pane: ReviewPane;
   setPane: (pane: ReviewPane) => void;
 }) {
-  const authoring = activity.newActivity ?? activity.view;
+  const authoring = activity.view;
+  const newerDraft = Boolean(activity.newActivity || authoring?.synchronization?.required);
   const schemaReview =
     !authoring ||
     controller.review.reviewSnapshot?.review.precondition.workspaceRevision ===
@@ -2771,7 +2858,6 @@ function ReviewSurface({
     controller.candidate.projectId,
     controller.candidate.id
   );
-  const schemaFlow = useSchemaReviewFlow(controller.candidate.projectId);
   const savedSchema = useStudioSchemaEditCandidate(
     controller.candidate.projectId,
     controller.candidate.id,
@@ -2785,13 +2871,22 @@ function ReviewSurface({
   const [preparationError, setPreparationError] = useState<string>();
   const [preparingSchema, setPreparingSchema] = useState(false);
   const preparationBusy = useRef(false);
-  const preparationAttempt = useRef<{ key: string; requestId: string } | null>(null);
   const [schemaPreparation, setSchemaPreparation] = useState<{
     revision: number;
+    compositionRevision: number;
+    refHead: string | null;
     target: SchemaPreparationTarget;
   }>();
   const prepareReview = async () => {
     if (preparationBusy.current || controller.isBusy) return;
+    if (newerDraft) {
+      setPreparationError(REVIEW_DRAFT_CHANGED);
+      return;
+    }
+    if (!authoring || activity.awaitingPublishRefresh) {
+      setPreparationError('Load the saved Draft before preparing Review.');
+      return;
+    }
     preparationBusy.current = true;
     setPreparingSchema(true);
     setPreparationError(undefined);
@@ -2799,13 +2894,21 @@ function ReviewSurface({
     try {
       if (controller.candidate.revision !== undefined && (await schemaRequests.hasPendingEdit())) {
         if (!reviewMounted.current) return;
-        await schemaFlow.ensureAuthoring(workspaceId);
-        if (!reviewMounted.current) return;
         const latest = await schemaRequests.read();
         if (!reviewMounted.current) return;
         if (latest.unapplied && latest.edit) {
           const workspace = latest.preview.workspace;
-          if (!workspace) throw new Error('The target Workspace is unavailable.');
+          if (workspace?.revision !== authoring.workspaceRevision)
+            throw new Error(REVIEW_DRAFT_CHANGED);
+          if (
+            !hasSavedSchema ||
+            latest.edit.candidateId !== savedSchema.candidate?.candidateId ||
+            latest.edit.revision !== savedSchema.candidate?.revision
+          ) {
+            throw new Error(
+              'The saved Schema candidate changed. Load the latest Draft and Schema.'
+            );
+          }
           const target: SchemaPreparationTarget = {
             kind: 'studio',
             candidateIds: latest.candidateIds,
@@ -2815,34 +2918,18 @@ function ReviewSurface({
               revision: latest.edit.revision,
             },
           };
-          const input = {
+          setSchemaPreparation({
             target,
-            ifRevision: workspace.revision,
-            commands: [],
-            confirmedChanges: [],
-          };
-          const checked = await schemaFlow.previewContent(workspaceId, input);
-          if (!reviewMounted.current) return;
-          if (!checked.canPrepare) {
-            setSchemaPreparation({ revision: workspace.revision, target });
-            return;
-          }
-          const key = JSON.stringify([workspaceId, input, checked.previewHash]);
-          if (preparationAttempt.current?.key !== key) {
-            preparationAttempt.current = { key, requestId: crypto.randomUUID() };
-          }
-          await schemaFlow.prepareContent(workspaceId, {
-            ...input,
-            previewHash: checked.previewHash,
-            requestId: preparationAttempt.current.requestId,
+            revision: authoring.workspaceRevision,
+            compositionRevision: authoring.compositionRevision,
+            refHead: authoring.basis.refHead,
           });
-          if (!reviewMounted.current) return;
-          await controller.refreshFromServer();
-          if (!reviewMounted.current) return;
-          await activity.loadLatest();
-          if (!reviewMounted.current) return;
+          return;
         }
+        throw new Error('The saved Schema candidate changed. Load the latest Draft and Schema.');
       }
+      if (hasSavedSchema)
+        throw new Error('The saved Schema candidate changed. Load the latest Draft and Schema.');
       if (!reviewMounted.current) return;
       await controller.prepareReview((snapshot) => {
         if (!reviewMounted.current) return;
@@ -2854,7 +2941,7 @@ function ReviewSurface({
           }),
           { scroll: false }
         );
-      });
+      }, authoring);
     } catch (cause) {
       if (reviewMounted.current)
         setPreparationError(cause instanceof Error ? cause.message : 'Could not prepare Review.');
@@ -2928,6 +3015,8 @@ function ReviewSurface({
     !preparing &&
     !preparingSchema &&
     !hasSavedSchema &&
+    !newerDraft &&
+    !activity.awaitingPublishRefresh &&
     (!authoring ||
       (!authoring.synchronization?.required &&
         controller.review.reviewSnapshot?.review?.precondition.workspaceRevision ===
@@ -3014,6 +3103,38 @@ function ReviewSurface({
           showEmptyWorkbench
             ? 'Content and Schema changes relative to the draft base.'
             : 'Review the saved Draft. Prepare review to freeze this revision and run checks.'
+        }
+        notice={
+          newerDraft || preparationError || controller.error || activity.awaitingPublishRefresh ? (
+            <div>
+              {newerDraft ? <p>{REVIEW_DRAFT_CHANGED}</p> : null}
+              {activity.awaitingPublishRefresh ? (
+                <p>Changes saved. Refresh the Draft before preparing Review.</p>
+              ) : null}
+              {activity.enabled ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={activity.loading || preparing || preparingSchema}
+                  onClick={() =>
+                    void Promise.all([activity.loadLatest(), savedSchema.refresh()]).then(
+                      () => {
+                        controller.clearPreparationError?.();
+                        setPreparationError(undefined);
+                      },
+                      () => setPreparationError('The Draft could not refresh. Retry loading it.')
+                    )
+                  }
+                >
+                  Load latest Draft
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" onClick={() => onModeChange('compose')}>
+                  Open Compose to load the Draft
+                </Button>
+              )}
+            </div>
+          ) : null
         }
         pane={showEmptyWorkbench ? 'changes' : pane}
         viewsDisabled={showEmptyWorkbench}
@@ -3166,20 +3287,19 @@ function ReviewSurface({
           projectId={candidate.projectId}
           workspaceId={candidate.id}
           revision={schemaPreparation.revision}
+          inspectedDraft={schemaPreparation}
           target={schemaPreparation.target}
           open
-          continueToReview
           onOpenChange={(open) => {
             if (!open) setSchemaPreparation(undefined);
           }}
           onPrepared={async () => {
             if (!reviewMounted.current) return;
-            await controller.refreshFromServer();
-            if (!reviewMounted.current) return;
-            await activity.loadLatest();
-            if (!reviewMounted.current) return;
             setSchemaPreparation(undefined);
-            await prepareReview();
+            await Promise.all([controller.refreshFromServer(), activity.loadLatest()]).catch(() => {
+              if (reviewMounted.current)
+                setPreparationError('Schema was applied. Load the latest Draft before Review.');
+            });
           }}
         />
       ) : null}

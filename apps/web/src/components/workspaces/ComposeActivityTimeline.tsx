@@ -238,14 +238,14 @@ export function ComposeActivityTimeline({
         </section>
       </div>
     );
-  if (activity.loading)
+  if (activity.loading && !(activity.awaitingPublishRefresh && activity.view))
     return (
       <>
         <SchemaTimeline event={schemaEvent} />
         <p className={styles.message}>Loading change activity…</p>
       </>
     );
-  if (activity.error)
+  if (activity.error && !(activity.awaitingPublishRefresh && activity.view))
     return (
       <>
         <SchemaTimeline event={schemaEvent} />
@@ -408,15 +408,20 @@ export function ComposeActivityTimeline({
               </div>
               <div className={styles.stagingActions}>
                 <button
-                  disabled={Boolean(staging?.pending) || selectedCount === 0}
+                  disabled={
+                    Boolean(staging?.pending || staging?.blocked) ||
+                    (selectedCount === 0 && !staging?.retryOriginal)
+                  }
                   onClick={() => staging?.onSaveSelected()}
                   type="button"
                 >
                   {staging?.pending
                     ? 'Saving…'
-                    : selectedCount
-                      ? `Save selected as P (${selectedCount})`
-                      : 'Save selected as P'}
+                    : staging?.retryOriginal
+                      ? 'Retry original save'
+                      : selectedCount
+                        ? `Save selected as P (${selectedCount})`
+                        : 'Save selected as P'}
                 </button>
                 {staging?.error ? <p role="alert">{staging.error}</p> : null}
               </div>

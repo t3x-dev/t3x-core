@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+
+import type { WorkspaceAuthoringView } from '@t3x-dev/api-client';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
@@ -223,6 +225,50 @@ it('does not prepare an unchanged Draft even when invoked outside the disabled b
   expect(result.current.error).toContain('No changes to commit');
   expect(mocks.prepare).not.toHaveBeenCalled();
   expect(mocks.legacy).not.toHaveBeenCalled();
+});
+
+it.each([
+  { workspaceRevision: 3 },
+  { compositionRevision: 3 },
+  { synchronization: { currentRefHead: 'new-head', required: true } },
+])('stops Prepare when the fresh Draft differs from the inspected subject (%j)', async (change) => {
+  const inspected = {
+    workspaceRevision: 2,
+    compositionRevision: 2,
+    basis: { refName: 'main', refHead: null, baseDigest: 'base' },
+    base: {},
+    current: document,
+    netDiff: [],
+  } as unknown as WorkspaceAuthoringView;
+  mocks.read.mockResolvedValueOnce({ ...inspected, ...change });
+  const workspace = candidate();
+  const { result } = renderHook(() =>
+    useWorkspaceComposeReviewController({ candidate: workspace })
+  );
+  await act(async () => {
+    expect(await result.current.prepareReview(undefined, inspected)).toBe(false);
+  });
+  expect(result.current.error).toContain('Load the latest Draft');
+  expect(mocks.prepare).not.toHaveBeenCalled();
+});
+
+it('requires an explicit Schema binding before preparing the inspected Draft', async () => {
+  const inspected = {
+    workspaceRevision: 2,
+    compositionRevision: 2,
+    basis: { refName: 'main', refHead: null, baseDigest: 'base' },
+    currentSchema: { status: 'unbound' },
+  } as WorkspaceAuthoringView;
+  mocks.read.mockResolvedValueOnce(inspected);
+  const workspace = candidate();
+  const { result } = renderHook(() =>
+    useWorkspaceComposeReviewController({ candidate: workspace })
+  );
+  await act(async () => {
+    expect(await result.current.prepareReview(undefined, inspected)).toBe(false);
+  });
+  expect(result.current.error).toContain('Choose and save a Schema');
+  expect(mocks.prepare).not.toHaveBeenCalled();
 });
 it('prepares the complete ordinary YAML Draft through managed Review, never a legacy fallback', async () => {
   mocks.read.mockResolvedValueOnce({

@@ -70,6 +70,18 @@ beforeEach(() => {
   mocks.preview.mockImplementation(async (_p, _w, input) => preview(input.commands.length > 0));
   mocks.apply.mockResolvedValue({ outcome: 'prepared' });
 });
+it('does not allow Schema adoption against a different inspected branch head', async () => {
+  mocks.preview.mockResolvedValue({ ...preview(true), refHead: hash });
+  render(
+    <SchemaContentPreparationDialog
+      {...props}
+      inspectedDraft={{ compositionRevision: 2, refHead: null }}
+    />
+  );
+  expect(await screen.findByRole('alert')).toHaveTextContent('The Draft or branch changed');
+  expect(screen.getByRole('button', { name: 'Save prepared Draft' })).toBeDisabled();
+  expect(mocks.apply).not.toHaveBeenCalled();
+});
 it('previews explicit mappings and invalidates approval as soon as the input changes', async () => {
   render(<SchemaContentPreparationDialog {...props} />);
   await addMove();

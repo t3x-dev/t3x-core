@@ -29,6 +29,8 @@ export interface ManualStagingControls {
   items: StagedManualCard[];
   current?: TransitionProtocolValue;
   pending?: boolean;
+  blocked?: boolean;
+  retryOriginal?: boolean;
   error?: string | null;
   onToggle: (id: string) => void;
   onSaveSelected: () => void;

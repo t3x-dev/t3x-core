@@ -185,6 +185,7 @@ vi.mock('@/hooks/schemas/useStudioSchemaEditCandidate', () => ({
     candidate: savedSchemaMock.candidate,
     loading: false,
     error: undefined,
+    refresh: vi.fn(),
   }),
 }));
 const schemaDiscussion = vi.fn();
@@ -1449,8 +1450,14 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       operations: [],
     };
     const cards = [{ nodeId: 'allocation', path: 'rollout/allocation', before: 20, after: 25 }];
-    const publish = vi.fn().mockResolvedValue({ kind: 'published' });
-    const refreshFromServer = vi.fn().mockResolvedValue(undefined);
+    const publish = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Connection lost'))
+      .mockResolvedValue({ kind: 'published' });
+    const refreshFromServer = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Workspace read failed'))
+      .mockResolvedValue(undefined);
     activityMocks.value = {
       enabled: true,
       loading: false,
@@ -1587,20 +1594,29 @@ describe('WorkspaceComposeReviewSurface composer', () => {
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Include Regions in the next P' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save selected as P (1)' }));
-    await waitFor(() =>
-      expect(publish).toHaveBeenCalledWith(
-        expect.objectContaining({
-          operations: [{ set: { path: 'rollout/allocation', value: 30 } }],
-        })
-      )
+    const retryOriginal = await screen.findByRole('button', { name: 'Retry original save' });
+    expect(publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operations: [{ set: { path: 'rollout/allocation', value: 30 } }],
+      })
     );
+    expect(refreshFromServer).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Include Allocation in the next P' }));
+    fireEvent.click(retryOriginal);
+    expect(await screen.findByText(/Changes saved, but the Draft could not refresh/)).toBeVisible();
     expect(refreshFromServer).toHaveBeenCalledOnce();
+    expect(publish.mock.calls).toEqual([publish.mock.calls[0], publish.mock.calls[0]]);
     expect(
       screen.getByRole('checkbox', { name: 'Include Regions in the next P' })
     ).not.toBeChecked();
     expect(
       screen.queryByRole('checkbox', { name: 'Include Allocation in the next P' })
     ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry refresh' }));
+    await waitFor(() =>
+      expect(screen.queryByText(/Changes saved, but the Draft could not refresh/)).toBeNull()
+    );
+    expect(publish).toHaveBeenCalledTimes(2);
   });
 
   it('stages object slot edits as one object row and publishes the selected field operations as P', async () => {
@@ -2040,16 +2056,20 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.getAllByRole('region', { name: 'Review readiness' })).toHaveLength(1);
     expect(screen.queryByRole('button', { name: 'Continue to decision' })).not.toBeInTheDocument();
     navigationMocks.searchParams = new URLSearchParams('workspaceMode=review&reviewPane=yaml');
+    const newer = {
+      workspaceRevision: 13,
+      basis: { refName: 'main', refHead: null, baseDigest: 'empty' },
+      compositionRevision: 1,
+      base: { title: 'Old' },
+      current: { title: 'New' },
+      netDiff: [],
+    };
+    const loadLatest = vi.fn().mockResolvedValue(newer);
     activityMocks.value = {
-      view: null,
-      newActivity: {
-        workspaceRevision: 13,
-        basis: { refName: 'main', refHead: null, baseDigest: 'empty' },
-        compositionRevision: 1,
-        base: { title: 'Old' },
-        current: { title: 'New' },
-        netDiff: [],
-      },
+      enabled: true,
+      view: { ...newer, workspaceRevision: 12, current: { title: 'Inspected' } },
+      newActivity: newer,
+      loadLatest,
     } as ReturnType<typeof useComposeActivity>;
     controller.review.reviewSnapshot = {
       ...controller.review.reviewSnapshot,
@@ -2072,6 +2092,22 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
     expect(prepareReview).not.toHaveBeenCalled();
     expect(decide).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare review' }));
+    expect(prepareReview).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('YAML code view')).toHaveTextContent('Inspected');
+    fireEvent.click(screen.getByRole('button', { name: 'Load latest Draft' }));
+    expect(loadLatest).toHaveBeenCalledOnce();
+    activityMocks.value = { ...activityMocks.value, view: newer, newActivity: null } as ReturnType<
+      typeof useComposeActivity
+    >;
+    rerender(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="review"
+        onModeChange={onModeChange}
+      />
+    );
     prepareReview.mockImplementationOnce(async (onPrepared) => {
       onPrepared({
         projectId: candidate.projectId,
@@ -2082,10 +2118,13 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       return true;
     });
     fireEvent.click(screen.getByRole('button', { name: 'Prepare review' }));
-    expect(navigationMocks.replace).toHaveBeenCalledWith(
-      `/project/proj_1?tab=workspaces&workspace=${encodeURIComponent(candidate.id)}&workspaceMode=review&branch=feature%2Freview&reviewSnapshot=rvs_new&reviewPane=yaml`,
-      { scroll: false }
+    await waitFor(() =>
+      expect(navigationMocks.replace).toHaveBeenCalledWith(
+        `/project/proj_1?tab=workspaces&workspace=${encodeURIComponent(candidate.id)}&workspaceMode=review&branch=feature%2Freview&reviewSnapshot=rvs_new&reviewPane=yaml`,
+        { scroll: false }
+      )
     );
+    expect(prepareReview).toHaveBeenCalledWith(expect.any(Function), newer);
     expect(decide).not.toHaveBeenCalled();
     unmount();
     navigationMocks.replace.mockClear();

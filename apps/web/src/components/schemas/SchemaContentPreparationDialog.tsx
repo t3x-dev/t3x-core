@@ -46,11 +46,27 @@ const summaryClass =
   'flex cursor-pointer list-none select-none items-center gap-2 font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] [&::-webkit-details-marker]:hidden';
 const chevronClass = 'size-3.5 shrink-0 transition-transform group-open:rotate-90';
 
+function assertInspectedDraft(
+  preview: SchemaPreparationPreview,
+  inspected: { compositionRevision: number; refHead: string | null } | undefined,
+  revision: number
+) {
+  if (
+    inspected &&
+    (preview.workspaceRevision !== revision ||
+      preview.compositionRevision !== inspected.compositionRevision ||
+      preview.refHead !== inspected.refHead)
+  ) {
+    throw new Error('The Draft or branch changed. Reopen the latest Draft before applying Schema.');
+  }
+}
+
 /** Shared Studio/Workspace preparation surface. A preview belongs to one exact form and revision. */
 export function SchemaContentPreparationDialog({
   projectId,
   workspaceId,
   revision,
+  inspectedDraft,
   target,
   open,
   onOpenChange,
@@ -61,6 +77,7 @@ export function SchemaContentPreparationDialog({
   projectId: string;
   workspaceId: string;
   revision: number;
+  inspectedDraft?: { compositionRevision: number; refHead: string | null };
   target: SchemaPreparationTarget;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -113,6 +130,10 @@ export function SchemaContentPreparationDialog({
         commands: [],
         confirmedChanges: [],
       })
+      .then((data) => {
+        assertInspectedDraft(data, inspectedDraft, ifRevision);
+        return data;
+      })
       .then(
         (data) => {
           if (epoch.current === token) {
@@ -135,7 +156,7 @@ export function SchemaContentPreparationDialog({
     return () => {
       ++epoch.current;
     };
-  }, [scope, open, preparation.preview]);
+  }, [scope, open, preparation.preview, inspectedDraft]);
 
   useEffect(() => {
     if (!open) return;
@@ -173,6 +194,7 @@ export function SchemaContentPreparationDialog({
       });
       const data = await preparation.preview(input);
       if (epoch.current !== token) return;
+      assertInspectedDraft(data, inspectedDraft, revision);
       setContext(data);
       setStale(false);
       setReview({ data, input, requestId: `schema-preparation:${crypto.randomUUID()}` });
