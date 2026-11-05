@@ -16,6 +16,21 @@ The architecture and business documents distinguish normative contracts from
 descriptive implementation maps. They define the target for changes; adoption
 does not certify that existing code already conforms.
 
+### Repository contracts relevant to WebUI
+
+Use the references below when a task touches the corresponding system behavior.
+Routine WebUI work needs only the relevant frontend contracts and repository
+guidance. The rest of the root `docs/` directory is optional background for
+WebUI work unless a task explicitly touches its subject.
+
+| When changing | Read for |
+| --- | --- |
+| Review, decisions, or commits | [Transition Application Convergence](../../docs/architecture/transition-application-convergence.md) for immutable review evidence and the authoritative mutation path |
+| Workspace ownership, saving, or conflict recovery | [Reliable Workspace Gate 1](../../docs/architecture/reliable-workspace-gate-1.md#frozen-behavior) for private drafts, guarded writes, and reconciliation |
+| Roles, collaboration, or request identity | [Namespace Authority](../../docs/architecture/namespace-authority-v1.md) for roles and project grants, and [Request Principal](../../docs/architecture/request-principal-migration-baseline.md) when changing how WebUI forwards authenticated requests |
+| Committed State export | [Exact Committed State Export](../../docs/architecture/state-export.md) for version identity and complete export |
+| Repository names, addresses, or redirects | [Repository Addresses](../../docs/repository-addresses.md) for canonical names, stable identity, and historical addresses |
+
 ## Development
 
 Run these in separate terminals from the repository root:
