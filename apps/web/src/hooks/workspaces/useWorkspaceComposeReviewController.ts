@@ -30,7 +30,6 @@ import type {
 } from '@/infrastructure/workspaces';
 import { decideWorkspaceTransition, reviewWorkspaceTransition } from '@/queries/workspaces';
 import { usePinsStore } from '@/store/pinsStore';
-import { useProjectWorkspaceSchemaBindingsStore } from '@/store/projectWorkspaceSchemaBindingsStore';
 import type { Material } from '@/types/api';
 import type {
   SourceBundleItem,
@@ -230,7 +229,7 @@ export function useWorkspaceComposeReviewController({
     async (nextCandidate: WorkspaceCandidate, command: WorkspaceDraftCommand) => {
       assertActive();
       const isCurrent = captureScope();
-      setWorkingCandidate(nextCandidate);
+      if (command !== 'schema.bind' || !onDraftCommand) setWorkingCandidate(nextCandidate);
       if (command !== 'review.prepare') {
         reviewGenerationRef.current += 1;
         setReview(EMPTY_REVIEW);
@@ -424,7 +423,10 @@ export function useWorkspaceComposeReviewController({
   const prepareReview = useCallback(
     async (
       onPrepared?: (snapshot: ReviewSnapshotV1) => void,
-      inspected?: WorkspaceAuthoringView
+      inspected?: Pick<
+        WorkspaceAuthoringView,
+        'workspaceRevision' | 'compositionRevision' | 'basis' | 'currentSchema'
+      >
     ) => {
       const isCurrent = captureScope();
       if (!isCurrent() || busyActionRef.current) return false;
@@ -450,17 +452,20 @@ export function useWorkspaceComposeReviewController({
           if (inspected) setLocalError(REVIEW_DRAFT_CHANGED);
           return false;
         }
+        const expectedRevision = inspected?.workspaceRevision ?? workingCandidate.revision;
         if (
-          inspected &&
-          (!authoringView ||
-            authoringView.workspaceRevision !== inspected.workspaceRevision ||
-            authoringView.compositionRevision !== inspected.compositionRevision ||
-            authoringView.basis.refName !== inspected.basis.refName ||
-            authoringView.basis.refHead !== inspected.basis.refHead ||
-            authoringView.basis.baseDigest !== inspected.basis.baseDigest ||
-            authoringView.currentSchema?.schemaHash !== inspected.currentSchema?.schemaHash ||
-            authoringView.currentSchema?.status !== inspected.currentSchema?.status ||
-            authoringView.synchronization?.required)
+          authoringView?.synchronization?.required ||
+          (authoringView &&
+            expectedRevision !== undefined &&
+            authoringView.workspaceRevision !== expectedRevision) ||
+          (inspected &&
+            (!authoringView ||
+              authoringView.compositionRevision !== inspected.compositionRevision ||
+              authoringView.basis.refName !== inspected.basis.refName ||
+              authoringView.basis.refHead !== inspected.basis.refHead ||
+              authoringView.basis.baseDigest !== inspected.basis.baseDigest ||
+              authoringView.currentSchema?.schemaHash !== inspected.currentSchema?.schemaHash ||
+              authoringView.currentSchema?.status !== inspected.currentSchema?.status))
         ) {
           throw new Error(REVIEW_DRAFT_CHANGED);
         }
@@ -698,19 +703,25 @@ export function useWorkspaceComposeReviewController({
 
   const bindSchema = useCallback(
     async (binding: WorkspaceSchemaBinding) => {
+      const isCurrent = captureScope();
+      if (!isCurrent() || busyActionRef.current) return;
       if (workspaceSchemaBindingsEqual(workingCandidate.schemaBindings[0], binding)) {
         return workingCandidate;
       }
       const next = rebindWorkspaceCandidate(workingCandidate, binding, new Date().toISOString());
-      const saved = await persistCandidate(next, 'schema.bind');
-      useProjectWorkspaceSchemaBindingsStore.getState().bindSchema({
-        binding: saved.schemaBindings[0] ?? binding,
-        projectId: saved.projectId,
-        workspaceId: saved.id,
-      });
-      return saved;
+      setBusyAction('schema.bind');
+      setLocalError(null);
+      try {
+        return await persistCandidate(next, 'schema.bind');
+      } catch (error) {
+        if (isCurrent()) {
+          setLocalError(formatUserFacingError(error, 'Could not change the Workspace Schema.'));
+        }
+      } finally {
+        if (isCurrent()) setBusyAction(null);
+      }
     },
-    [persistCandidate, workingCandidate]
+    [captureScope, persistCandidate, setBusyAction, workingCandidate]
   );
 
   const viewCommit = useCallback(() => {

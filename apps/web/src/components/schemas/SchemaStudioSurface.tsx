@@ -30,7 +30,7 @@ export function SchemaStudioSurface({
   data,
   onEditDefinition,
   onPublish,
-  canPublish = false,
+  publishBlocker,
   onReview,
   onSave,
   canSave = false,
@@ -61,7 +61,7 @@ export function SchemaStudioSurface({
   data?: StudioPreview;
   onEditDefinition?: () => void;
   onPublish?: () => void;
-  canPublish?: boolean;
+  publishBlocker?: string;
   onReview?: () => void;
   onSave?: () => void;
   canSave?: boolean;
@@ -177,9 +177,16 @@ export function SchemaStudioSurface({
                     Edit YAML…{editorInvalid ? ' (fix field errors first)' : ''}
                   </DropdownMenuItem>
                   {onPublish ? (
-                    <DropdownMenuItem onSelect={onPublish} disabled={!canPublish}>
-                      Publish to public catalog…
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuItem onSelect={onPublish} disabled={!!publishBlocker}>
+                        Publish to public catalog…
+                      </DropdownMenuItem>
+                      {publishBlocker ? (
+                        <p className="px-2 py-1 text-xs text-[var(--text-secondary)]">
+                          {publishBlocker}
+                        </p>
+                      ) : null}
+                    </>
                   ) : null}
                   {onInspect ? (
                     <DropdownMenuItem

@@ -1,9 +1,11 @@
 'use client';
 
 import type { AddStudioCandidate, SchemaCatalogItem, StudioCandidate } from '@t3x-dev/api-client';
+import Link from 'next/link';
 import { useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { schemaSourceReleaseHref } from '@/domain/schemas/schemaProvenance';
 import { useSchemaCatalog } from '@/hooks/schemas/useSchemaCatalog';
 import s from './SchemaSourceManager.module.css';
 
@@ -130,6 +132,20 @@ export function SchemaSourceImport({
                   <p className={s.meta}>{item.identity.description}</p>
                 ) : null}
                 {added ? <p className={s.meta}>Already in sources</p> : null}
+                <Link
+                  className="text-xs underline"
+                  href={schemaSourceReleaseHref({
+                    projectId: item.identity.ownerProjectId,
+                    canonicalName: item.identity.canonicalName,
+                    version: item.release.version,
+                    hash: item.release.hash,
+                    artifactVersionId: item.release.artifactVersionId,
+                  })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  View definition (new tab)
+                </Link>
                 <details className={s.meta}>
                   <summary>Source hash</summary>
                   <code>{item.release.hash}</code>

@@ -2878,7 +2878,15 @@ function ReviewSurface({
   setPane: (pane: ReviewPane) => void;
 }) {
   const authoring = activity.view;
-  const newerDraft = Boolean(activity.newActivity || authoring?.synchronization?.required);
+  const newerRevision =
+    activity.newActivity && activity.newActivity.workspaceRevision !== authoring?.workspaceRevision
+      ? activity.newActivity.workspaceRevision
+      : authoring && (controller.candidate.revision ?? -1) > authoring.workspaceRevision
+        ? controller.candidate.revision
+        : undefined;
+  const newerDraft =
+    newerRevision !== undefined ||
+    Boolean(activity.newActivity || authoring?.synchronization?.required);
   const schemaReview =
     !authoring ||
     controller.review.reviewSnapshot?.review.precondition.workspaceRevision ===
@@ -2912,11 +2920,13 @@ function ReviewSurface({
     controller.candidate.id,
     controller.candidate.revision
   );
-  const hasSavedSchema = hasUnappliedSchemaEdit(
-    savedSchema.candidate,
-    controller.candidate,
-    authoring?.currentSchema?.schemaHash
-  );
+  const hasSavedSchema =
+    !newerDraft &&
+    hasUnappliedSchemaEdit(
+      savedSchema.candidate,
+      controller.candidate,
+      authoring?.currentSchema?.schemaHash
+    );
   const [preparationError, setPreparationError] = useState<string>();
   const [preparingSchema, setPreparingSchema] = useState(false);
   const preparationBusy = useRef(false);
@@ -2927,21 +2937,21 @@ function ReviewSurface({
     target: SchemaPreparationTarget;
   }>();
   const prepareReview = async () => {
-    if (preparationBusy.current || controller.isBusy) return;
+    if (preparationBusy.current || controller.isBusy || savedSchema.loading || savedSchema.error)
+      return;
     if (newerDraft) {
       setPreparationError(REVIEW_DRAFT_CHANGED);
       return;
     }
-    if (!authoring || activity.awaitingPublishRefresh) {
+    if (!authoring || activity.loading || activity.awaitingPublishRefresh) {
       setPreparationError('Load the saved Draft before preparing Review.');
       return;
     }
     preparationBusy.current = true;
     setPreparingSchema(true);
     setPreparationError(undefined);
-    const workspaceId = controller.candidate.id;
     try {
-      if (controller.candidate.revision !== undefined && (await schemaRequests.hasPendingEdit())) {
+      if (await schemaRequests.hasPendingEdit()) {
         if (!reviewMounted.current) return;
         const latest = await schemaRequests.read();
         if (!reviewMounted.current) return;
@@ -3144,6 +3154,14 @@ function ReviewSurface({
         )}
       </div>
     ) : null;
+  const inspectedSchema = (
+    <WorkspaceReviewSchemaView
+      pane={pane}
+      branch={candidate.targetBranch}
+      review={schemaReview}
+      current={authoring?.currentSchema}
+    />
+  );
   return (
     <>
       <WorkspaceReviewWorkbench
@@ -3166,7 +3184,13 @@ function ReviewSurface({
           draftUnavailable ||
           activity.awaitingPublishRefresh ? (
             <div>
-              {newerDraft ? <p>{REVIEW_DRAFT_CHANGED}</p> : null}
+              {newerDraft ? (
+                <p>
+                  {newerRevision === undefined
+                    ? REVIEW_DRAFT_CHANGED
+                    : `Workspace r${newerRevision} is available. The inspected Draft is unchanged.`}
+                </p>
+              ) : null}
               {activity.awaitingPublishRefresh ? (
                 <p>Changes saved. Refresh the Draft before preparing Review.</p>
               ) : null}
@@ -3205,6 +3229,7 @@ function ReviewSurface({
         onPaneChange={setPane}
         subject={subject}
         subjectChanges={subjectChanges}
+        loading={!authoring && activity.loading}
         onSubjectChange={setSubject}
         contentStatus={
           subject === 'schema' && hasSavedSchema ? undefined : draftLoading ? (
@@ -3274,7 +3299,13 @@ function ReviewSurface({
                 snapshotCurrent={snapshotCurrent}
                 hasChanges={hasSavedSchema ? true : authoring?.hasChanges}
                 preparingSchema={preparingSchema || Boolean(schemaPreparation)}
-                schemaLoading={savedSchema.loading}
+                schemaLoading={Boolean(
+                  savedSchema.loading ||
+                    savedSchema.error ||
+                    activity.loading ||
+                    (activity.enabled && !authoring) ||
+                    newerDraft
+                )}
                 hasSavedSchema={hasSavedSchema}
                 draftUnavailable={Boolean(draftLoading || draftUnavailable)}
                 preparationError={
@@ -3334,18 +3365,14 @@ function ReviewSurface({
           <WorkspacePendingSchemaReview
             projectId={candidate.projectId}
             workspaceId={candidate.id}
-            revision={controller.candidate.revision}
+            revision={candidate.revision}
             candidate={savedSchema.candidate}
             branch={candidate.targetBranch}
             pane={pane}
+            inspectedSchema={authoring?.currentSchema ? inspectedSchema : undefined}
           />
         ) : subject === 'schema' ? (
-          <WorkspaceReviewSchemaView
-            pane={pane}
-            branch={candidate.targetBranch}
-            review={schemaReview}
-            current={authoring?.currentSchema}
-          />
+          inspectedSchema
         ) : pane === 'rendered' ? (
           <WorkspaceRenderedReview
             candidate={candidate}
@@ -3406,11 +3433,11 @@ function ReviewSurface({
           }}
           onPrepared={async () => {
             if (!reviewMounted.current) return;
-            setSchemaPreparation(undefined);
-            await Promise.all([controller.refreshFromServer(), activity.loadLatest()]).catch(() => {
-              if (reviewMounted.current)
-                setPreparationError('Schema was applied. Load the latest Draft before Review.');
-            });
+            const savedDraft = await activity.loadLatest();
+            if (!reviewMounted.current) return;
+            if (!savedDraft) throw new Error('The saved Draft could not be loaded.');
+            await controller.refreshFromServer(savedDraft.workspaceRevision);
+            if (reviewMounted.current) setSchemaPreparation(undefined);
           }}
         />
       ) : null}

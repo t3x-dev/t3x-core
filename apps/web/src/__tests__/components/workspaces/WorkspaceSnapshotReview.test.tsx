@@ -307,6 +307,26 @@ it('keeps the complete frozen Schema and content visible without loading a newer
   expect(screen.getByText('ADD nodes.advantage')).toBeInTheDocument();
 });
 
+it('shows loading instead of a confirmed empty Review before the snapshot arrives', () => {
+  vi.mocked(useWorkspaceReviewSnapshot).mockReturnValue({
+    decide: vi.fn(),
+    load: vi.fn(),
+    overrideReason: '',
+    setOverrideReason: vi.fn(),
+    state: { data: null, deciding: false, loading: true, error: null },
+  });
+  render(
+    <WorkspaceSnapshotReview
+      projectId="proj_1"
+      workspaceId="workspace_prd_handoff"
+      snapshotId="rvs_1"
+    />
+  );
+  expect(screen.getByText('Loading change review…')).toBeVisible();
+  expect(screen.queryByText('No Content or Schema changes available to review.')).toBeNull();
+  expect(screen.getByRole('complementary', { name: 'Review checks and actions' })).toBeVisible();
+});
+
 it('keeps recovery explicit on a stale decision and disables actions during refresh', () => {
   const data = snapshotResponse();
   vi.mocked(useWorkspaceReviewSnapshot).mockReturnValue({

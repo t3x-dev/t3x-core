@@ -11,7 +11,6 @@ import { SchemaCatalogExperience } from '@/components/schemas/SchemaCatalogExper
 import { formatUserFacingError } from '@/domain/format/errors';
 import { mergePublishedSchemaVersions } from '@/domain/schemas/publishedSchemaVersions';
 import {
-  type ProjectWorkspaceSchemaBindings,
   rebindWorkspaceCandidate,
   schemaReleaseToWorkspaceBinding,
 } from '@/domain/workspaces/schemaBindings';
@@ -19,13 +18,11 @@ import { useProjectYSchemaVersions } from '@/hooks/schemas/useProjectYSchemaVers
 import { useYSchemaIdentityManagement } from '@/hooks/schemas/useYSchemaIdentityManagement';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
-import { useProjectWorkspaceSchemaBindingsStore } from '@/store/projectWorkspaceSchemaBindingsStore';
 import type { SchemaReleasePreview } from '@/types/schemas';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
 interface ProjectSchemasTabProps {
   projectId: string;
-  schemaBindings?: ProjectWorkspaceSchemaBindings;
   tab?: 'schemas' | 'discover' | 'browse';
 }
 
@@ -41,7 +38,7 @@ export function ProjectSchemasTab(props: ProjectSchemasTabProps) {
     </SchemaCatalogExperience>
   );
 }
-function ProjectSchemaStudio({ projectId, schemaBindings }: ProjectSchemasTabProps) {
+function ProjectSchemaStudio({ projectId }: ProjectSchemasTabProps) {
   const searchParams = useSearchParams();
   const publishedVersions = useProjectYSchemaVersions(projectId);
   const identityManagement = useYSchemaIdentityManagement(projectId, publishedVersions.refresh);
@@ -56,7 +53,6 @@ function ProjectSchemaStudio({ projectId, schemaBindings }: ProjectSchemasTabPro
   );
   const projectWorkspaces = useProjectWorkspaces(projectId);
   const { saveDraft } = useWorkspaceFlow();
-  const bindSchema = useProjectWorkspaceSchemaBindingsStore((state) => state.bindSchema);
   const [pending, setPending] = useState<SchemaBindingActionKind | null>(null);
   const [feedback, setFeedback] = useState<BindingFeedback>();
   const requestedWorkspaceId = searchParams?.get('workspace') ?? null;
@@ -66,9 +62,7 @@ function ProjectSchemaStudio({ projectId, schemaBindings }: ProjectSchemasTabPro
       resolveWorkspaceTarget(projectWorkspaces.workspaces, requestedWorkspaceId, requestedBranch),
     [projectWorkspaces.workspaces, requestedBranch, requestedWorkspaceId]
   );
-  const workspaceBinding = workspaceTarget
-    ? (schemaBindings?.byWorkspaceId[workspaceTarget.id] ?? workspaceTarget.schemaBindings[0])
-    : undefined;
+  const workspaceBinding = workspaceTarget?.schemaBindings[0];
 
   const applyReleaseToWorkspace = useCallback(
     async (release: SchemaReleasePreview) => {
@@ -80,14 +74,9 @@ function ProjectSchemaStudio({ projectId, schemaBindings }: ProjectSchemasTabPro
         new Date().toISOString()
       );
       await saveDraft(staleWorkspace);
-      bindSchema({
-        binding,
-        projectId,
-        workspaceId: workspaceTarget.id,
-      });
       await projectWorkspaces.refresh();
     },
-    [bindSchema, projectId, projectWorkspaces.refresh, saveDraft, workspaceTarget]
+    [projectWorkspaces.refresh, saveDraft, workspaceTarget]
   );
 
   const handleApplyToWorkspace = useCallback(

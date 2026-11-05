@@ -14,14 +14,6 @@ export function hasUnappliedSchemaEdit(
   );
 }
 
-export interface ProjectWorkspaceSchemaBindings {
-  byWorkspaceId: Record<string, WorkspaceSchemaBinding>;
-}
-
-export const EMPTY_PROJECT_WORKSPACE_SCHEMA_BINDINGS: ProjectWorkspaceSchemaBindings = {
-  byWorkspaceId: {},
-};
-
 export const DEFAULT_WORKSPACE_SCHEMA_BINDING: WorkspaceSchemaBinding = {
   canonicalName: 't3x/prd',
   schemaName: 'PRD Schema',
@@ -110,19 +102,6 @@ export function isSchemaReleaseBindable(release: SchemaReleasePreview): boolean 
   return release.status !== 'draft' && release.runtimeAvailable;
 }
 
-export function mergeProjectWorkspaceSchemaBindings(
-  persisted: ProjectWorkspaceSchemaBindings,
-  live: ProjectWorkspaceSchemaBindings | undefined
-): ProjectWorkspaceSchemaBindings {
-  if (!live) return persisted;
-  return {
-    byWorkspaceId: {
-      ...persisted.byWorkspaceId,
-      ...live.byWorkspaceId,
-    },
-  };
-}
-
 export function workspaceSchemaBindingsEqual(
   left: WorkspaceSchemaBinding | undefined,
   right: WorkspaceSchemaBinding | undefined
@@ -167,24 +146,6 @@ export function rebindWorkspaceCandidate(
       operations: [],
     },
   };
-}
-
-export function applyProjectWorkspaceSchemaBindings(
-  candidates: WorkspaceCandidate[],
-  bindings: ProjectWorkspaceSchemaBindings
-): WorkspaceCandidate[] {
-  if (Object.keys(bindings.byWorkspaceId).length === 0) {
-    return candidates;
-  }
-
-  return candidates.map((candidate) => {
-    const workspaceBinding = bindings.byWorkspaceId[candidate.id];
-    if (workspaceBinding) {
-      return rebindWorkspaceCandidate(candidate, workspaceBinding);
-    }
-
-    return candidate;
-  });
 }
 
 function replaceCurrentWorkspaceBinding(

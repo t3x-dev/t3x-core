@@ -2097,6 +2097,9 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
     expect(prepareReview).not.toHaveBeenCalled();
     expect(decide).not.toHaveBeenCalled();
+    expect(screen.getByText(/Workspace r13 is available/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Workspace draft r12/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Prepare review' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Prepare review' }));
     expect(prepareReview).not.toHaveBeenCalled();
     expect(screen.getByLabelText('YAML code view')).toHaveTextContent('Inspected');
@@ -2995,7 +2998,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
 
     savedSchemaMock.candidate = { candidateId: 'edit-1', revision: 2 } as StudioSchemaEditCandidate;
     schemaEditingMocks.read.mockResolvedValue({
-      workspace: { revision: candidate.revision },
+      workspace: { revision: 1 },
       edit: savedSchemaMock.candidate,
       unapplied: true,
       preview: {

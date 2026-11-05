@@ -73,13 +73,17 @@ vi.mock('@/hooks/schemas/useSchemaReviewStatus', () => ({
 }));
 vi.mock('@/hooks/schemas/useSchemaReviewFlow', () => ({
   useSchemaReviewFlow: () => ({
-    readEdit: async () => mocks.schemaEditCandidate,
     ensureAuthoring: mocks.ensureAuthoring,
     preview: mocks.livePreview,
-    previewContent: mocks.contentPreview,
-    prepareContent: mocks.prepareContent,
     review: mocks.fullReview,
   }),
+}));
+vi.mock('@/infrastructure/schemaStudio', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/infrastructure/schemaStudio')>()),
+  previewSchemaContentPreparation: (_project: string, workspace: string, input: unknown) =>
+    mocks.contentPreview(workspace, input),
+  applySchemaContentPreparation: (_project: string, workspace: string, input: unknown) =>
+    mocks.prepareContent(workspace, input),
 }));
 vi.mock('@/components/workspaces/WorkspaceYOpsEditor', () => ({
   WorkspaceYOpsEditor: ({
@@ -199,7 +203,21 @@ beforeEach(() => {
   mocks.reviewStatus = { latest: null, loading: false };
   mocks.ensureAuthoring.mockReset().mockResolvedValue(undefined);
   mocks.livePreview.mockReset().mockImplementation(async () => mocks.data);
-  mocks.contentPreview.mockReset().mockResolvedValue({ canPrepare: true, previewHash: 'checked' });
+  mocks.contentPreview.mockReset().mockResolvedValue({
+    canPrepare: true,
+    ready: true,
+    valid: true,
+    previewHash: 'checked',
+    schemaHash: 'definition-hash',
+    schema: { nodes: {} },
+    workspaceRevision: 3,
+    compositionRevision: 1,
+    before: {},
+    after: {},
+    operations: [],
+    issues: [],
+    impact: { items: [] },
+  });
   mocks.prepareContent.mockReset().mockResolvedValue({ outcome: 'prepared' });
   mocks.fullReview
     .mockReset()
@@ -768,7 +786,7 @@ it.each([
     ).not.toBeInTheDocument()
   );
   fireEvent.click(screen.getByRole('button', { name: /^(Review changes|Save and review)$/ }));
-  await waitFor(() => expect(mocks.fullReview).toHaveBeenCalledWith('workspace_branch:main'));
+  await waitFor(() => expect(mocks.fullReview).toHaveBeenCalledWith('workspace_branch:main', 3));
   expect(mocks.livePreview).toHaveBeenCalledWith({
     candidateIds: ['provider'],
     workspaceId: 'workspace_branch:main',
@@ -842,7 +860,7 @@ it('opens detailed checks in Workspace Review without applying the Schema', () =
   expect(mocks.prepareContent).not.toHaveBeenCalled();
 });
 
-it('prepares an empty first binding and opens full Review without adoption', async () => {
+it('asks for explicit adoption even when no Content changes are needed', async () => {
   mocks.query = 'workspace=workspace_branch%3Amain&candidate=provider';
   mocks.workspaces = [
     {
@@ -879,6 +897,10 @@ it('prepares an empty first binding and opens full Review without adoption', asy
     expect(screen.getByRole('button', { name: /^(Review changes|Save and review)$/ })).toBeEnabled()
   );
   fireEvent.click(screen.getByRole('button', { name: /^(Review changes|Save and review)$/ }));
+  const save = await screen.findByRole('button', { name: 'Save prepared Draft' });
+  await waitFor(() => expect(save).toBeEnabled());
+  expect(mocks.prepareContent).not.toHaveBeenCalled();
+  fireEvent.click(save);
   await waitFor(() =>
     expect(mocks.prepareContent).toHaveBeenCalledWith(
       'workspace_branch:main',
@@ -890,10 +912,10 @@ it('prepares an empty first binding and opens full Review without adoption', asy
     )
   );
   expect(mocks.apply).not.toHaveBeenCalled();
-  expect(screen.queryByRole('dialog', { name: 'Apply exact definition' })).not.toBeInTheDocument();
   await waitFor(() =>
-    expect(mocks.push).toHaveBeenCalledWith(expect.stringContaining('reviewSnapshot=exact-review'))
+    expect(mocks.push).toHaveBeenCalledWith(expect.stringContaining('workspaceMode=review'))
   );
+  expect(mocks.fullReview).not.toHaveBeenCalled();
 });
 
 it('opens public publication from the checked saved candidate without applying or navigating the Workspace', async () => {
@@ -1432,18 +1454,18 @@ it('prepares a changed source contract even when its field diff is empty', async
   const review = screen.getByRole('button', { name: 'Review changes', exact: true });
   expect(review).toBeEnabled();
   fireEvent.click(review);
-  await waitFor(() => expect(mocks.push).toHaveBeenCalled());
-  expect(mocks.prepareContent).toHaveBeenCalledWith(
-    workspace.id,
-    expect.objectContaining({
-      target: expect.objectContaining({
-        schemaEditCandidate: { candidateId: 'new-source', revision: 1 },
-      }),
-    })
+  await waitFor(() =>
+    expect(mocks.contentPreview).toHaveBeenCalledWith(
+      workspace.id,
+      expect.objectContaining({
+        target: expect.objectContaining({
+          schemaEditCandidate: { candidateId: 'new-source', revision: 1 },
+        }),
+      })
+    )
   );
-  expect(mocks.prepareContent.mock.invocationCallOrder[0]).toBeLessThan(
-    mocks.fullReview.mock.invocationCallOrder[0]
-  );
+  expect(mocks.prepareContent).not.toHaveBeenCalled();
+  expect(mocks.fullReview).not.toHaveBeenCalled();
 });
 
 it('starts blank explicitly and saves the empty definition before Schema Review', async () => {
@@ -1484,8 +1506,8 @@ it('starts blank explicitly and saves the empty definition before Schema Review'
       baseSchemaHash: 'definition-hash',
     })
   );
-  expect(mocks.contentPreview).toHaveBeenCalled();
-  expect(mocks.prepareContent).toHaveBeenCalled();
+  expect(mocks.prepareContent).not.toHaveBeenCalled();
+  expect(mocks.fullReview).not.toHaveBeenCalled();
 });
 
 it('keeps rejected Review status visible while hiding Schema Review navigation', () => {
@@ -2021,7 +2043,7 @@ it('sends blocked YAML candidates to Review diagnostics without applying them', 
   expect(mocks.apply).not.toHaveBeenCalled();
 });
 
-it('prepares content against the saved YAML candidate before entering Review', async () => {
+it('previews adoption against the exact saved YAML candidate before changing the Draft', async () => {
   setupYamlDraft();
   mocks.livePreview.mockResolvedValue({
     ...mocks.data,
@@ -2029,20 +2051,19 @@ it('prepares content against the saved YAML candidate before entering Review', a
   });
   openYaml();
   fireEvent.click(screen.getByRole('button', { name: 'Save and review' }));
-  await waitFor(() => expect(mocks.fullReview).toHaveBeenCalled());
-  expect(mocks.prepareContent).toHaveBeenCalledWith(
-    'workspace_branch:main',
-    expect.objectContaining({
-      target: expect.objectContaining({
-        schemaEditCandidate: { candidateId: 'schema-edit', revision: 1 },
-      }),
-      ifRevision: 4,
-      previewHash: 'checked',
-    })
+  await waitFor(() =>
+    expect(mocks.contentPreview).toHaveBeenCalledWith(
+      'workspace_branch:main',
+      expect.objectContaining({
+        target: expect.objectContaining({
+          schemaEditCandidate: { candidateId: 'schema-edit', revision: 1 },
+        }),
+        ifRevision: 4,
+      })
+    )
   );
-  expect(mocks.prepareContent.mock.invocationCallOrder[0]).toBeLessThan(
-    mocks.fullReview.mock.invocationCallOrder[0]
-  );
+  expect(mocks.prepareContent).not.toHaveBeenCalled();
+  expect(mocks.fullReview).not.toHaveBeenCalled();
   expect(mocks.apply).not.toHaveBeenCalled();
 });
 

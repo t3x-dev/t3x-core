@@ -10,6 +10,7 @@ import {
   readStudioSchemaEditCandidate,
   saveStudioSchemaEditCandidate,
 } from '@/infrastructure/schemaStudio';
+import { notifySchemaCandidateUpdated } from '@/utils/schemaCandidateEvents';
 
 export function useStudioSchemaEditCandidate(
   projectId: string,
@@ -156,6 +157,7 @@ export function useStudioSchemaEditCandidate(
         if (!isCurrent()) throw new Error('The Schema editing context changed. Reopen the Draft.');
         if (saveAttempt.current === attempt) saveAttempt.current = undefined;
         setResult({ key, candidate: saved.candidate });
+        notifySchemaCandidateUpdated(projectId, workspaceId);
         return saved;
       };
       const promise = run().finally(() => {

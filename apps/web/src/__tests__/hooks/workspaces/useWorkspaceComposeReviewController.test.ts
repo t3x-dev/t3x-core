@@ -132,6 +132,24 @@ it('does not continue preparing Review after the controller unmounts', async () 
   expect(mocks.prepare).not.toHaveBeenCalled();
 });
 
+it('refuses to prepare a newer Draft than the revision the user inspected', async () => {
+  const workspace = candidate();
+  const { result } = renderHook(() =>
+    useWorkspaceComposeReviewController({ candidate: workspace })
+  );
+  await act(async () => {
+    expect(
+      await result.current.prepareReview(undefined, {
+        workspaceRevision: 1,
+        compositionRevision: 1,
+        basis: { refName: 'main', refHead: null, baseDigest: 'empty' },
+      })
+    ).toBe(false);
+  });
+  expect(result.current.error).toMatch(/Draft or branch changed/);
+  expect(mocks.prepare).not.toHaveBeenCalled();
+});
+
 it('locks Review synchronously so two calls in one render issue one command', async () => {
   const old = deferred<unknown>();
   mocks.read.mockReturnValueOnce(old.promise);
@@ -216,8 +234,13 @@ it('a decision from a previous Workspace cannot navigate or replace the current 
   expect(result.current.candidate).toEqual(next);
 });
 it('does not prepare an unchanged Draft even when invoked outside the disabled button', async () => {
-  mocks.read.mockResolvedValueOnce({ hasChanges: false, base: document, current: document });
   const workspace = candidate();
+  mocks.read.mockResolvedValueOnce({
+    workspaceRevision: workspace.revision,
+    hasChanges: false,
+    base: document,
+    current: document,
+  });
   const { result } = renderHook(() =>
     useWorkspaceComposeReviewController({ candidate: workspace })
   );

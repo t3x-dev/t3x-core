@@ -2,7 +2,7 @@
 
 import type { StudioSchemaEditCandidate } from '@t3x-dev/api-client';
 import { dump } from 'js-yaml';
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { SchemaDefinitionTree } from '@/components/schemas/SchemaDefinitionTree';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,6 +21,7 @@ export function WorkspacePendingSchemaReview({
   candidate,
   branch,
   pane,
+  inspectedSchema,
 }: {
   projectId: string;
   workspaceId: string;
@@ -28,6 +29,7 @@ export function WorkspacePendingSchemaReview({
   candidate: StudioSchemaEditCandidate;
   branch: string;
   pane: WorkspaceReviewPane;
+  inspectedSchema?: ReactNode;
 }) {
   const requests = useWorkspaceSchemaEditingRequests(projectId, workspaceId);
   const [attempt, setAttempt] = useState(0);
@@ -80,11 +82,14 @@ export function WorkspacePendingSchemaReview({
   const preview = current?.data?.preview;
   return (
     <section aria-label="Saved Schema review" className="space-y-4">
-      <p className="text-sm text-[var(--text-secondary)]">
-        Saved Schema candidate r{candidate.revision} · awaiting preparation. Changes compare the
-        currently applied Workspace Schema with this candidate. Prepare review to adapt Content and
-        freeze the complete snapshot.
-      </p>
+      {!preview && inspectedSchema}
+      {preview || !inspectedSchema ? (
+        <p className="text-sm text-[var(--text-secondary)]">
+          Saved Schema candidate r{candidate.revision} · awaiting preparation. Changes compare the
+          currently applied Workspace Schema with this candidate. Prepare review to adapt Content
+          and freeze the complete snapshot.
+        </p>
+      ) : null}
       {current?.error ? (
         <div>
           <p role="alert">{current.error}</p>

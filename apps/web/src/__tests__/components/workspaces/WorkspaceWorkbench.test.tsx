@@ -276,6 +276,42 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     expect(mocks.saveDraft).not.toHaveBeenCalled();
   });
 
+  it('keeps the acknowledged Schema switch while refreshing the same Workspace', async () => {
+    const original: WorkspaceCandidate = {
+      ...workspace('workspace_main', 'Main workspace'),
+      schemaBindings: [
+        { canonicalName: 'example/a', schemaName: 'A', version: '1', mode: 'pinned' },
+      ],
+    };
+    const refresh = vi.fn();
+    const showWorkspace = (candidate: WorkspaceCandidate) => (
+      <WorkspaceWorkbench
+        candidates={[candidate]}
+        onWorkspacesRefresh={refresh}
+        projectId="proj_1"
+      />
+    );
+    const { rerender } = render(showWorkspace(original));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Draft' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Structure', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Schema', exact: true }));
+    const binding = () => screen.getByRole('combobox', { name: 'Workspace schema' });
+    expect(binding()).toHaveValue('example/a@1');
+
+    fireEvent.change(binding(), { target: { value: 'default' } });
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    expect(mocks.saveDraft).toHaveBeenCalledTimes(1);
+    const saved = (await mocks.saveDraft.mock.results[0].value).workspace as WorkspaceCandidate;
+    expect(saved.id).toBe(original.id);
+    expect(binding()).toHaveValue('default');
+
+    rerender(showWorkspace({ ...original }));
+    expect(binding()).toHaveValue('default');
+
+    rerender(showWorkspace(saved));
+    expect(binding()).toHaveValue('default');
+  });
+
   it('exposes only the current Compose and Review workflow surfaces', () => {
     render(
       <WorkspaceWorkbench
@@ -477,7 +513,7 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
   it('returns an empty workspace to Compose before preparing a review', () => {
     render(
       <WorkspaceWorkbench
-        candidates={[workspace('workspace_main', 'Main workspace')]}
+        candidates={[{ ...workspace('workspace_main', 'Main workspace'), revision: undefined }]}
         projectId="proj_1"
       />
     );

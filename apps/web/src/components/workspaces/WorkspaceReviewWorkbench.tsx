@@ -67,6 +67,7 @@ export function WorkspaceReviewWorkbench({
   pane,
   onPaneChange,
   viewsDisabled = false,
+  loading = false,
   subject,
   onSubjectChange,
   subjectChanges,
@@ -82,6 +83,7 @@ export function WorkspaceReviewWorkbench({
   notice?: ReactNode;
   pane: WorkspaceReviewPane;
   viewsDisabled?: boolean;
+  loading?: boolean;
   onPaneChange: (pane: WorkspaceReviewPane) => void;
   subject: WorkspaceReviewSubject;
   onSubjectChange: (subject: WorkspaceReviewSubject) => void;
@@ -102,9 +104,9 @@ export function WorkspaceReviewWorkbench({
                   type="button"
                   key={item}
                   aria-pressed={subject === item && subjectChanges[item]}
-                  disabled={!subjectChanges[item]}
+                  disabled={loading || !subjectChanges[item]}
                   title={
-                    !subjectChanges[item]
+                    !loading && !subjectChanges[item]
                       ? `No ${item === 'content' ? 'Content' : 'Schema'} changes available to review`
                       : undefined
                   }
@@ -119,7 +121,7 @@ export function WorkspaceReviewWorkbench({
                 <button
                   type="button"
                   key={id}
-                  disabled={viewsDisabled}
+                  disabled={viewsDisabled || loading}
                   aria-label={label}
                   aria-current={pane === id ? 'page' : undefined}
                   onClick={() => onPaneChange(id)}
@@ -143,13 +145,15 @@ export function WorkspaceReviewWorkbench({
             </header>
             {notice}
             {contentStatus ??
-              (subjectChanges.content || subjectChanges.schema
-                ? children
-                : (emptyState ?? (
-                    <p className={styles.empty}>
-                      No Content or Schema changes available to review.
-                    </p>
-                  )))}
+              (loading ? (
+                <output className={styles.empty}>Loading change review…</output>
+              ) : subjectChanges.content || subjectChanges.schema ? (
+                children
+              ) : (
+                (emptyState ?? (
+                  <p className={styles.empty}>No Content or Schema changes available to review.</p>
+                ))
+              ))}
           </div>
           {details ? (
             <details className={styles.details}>

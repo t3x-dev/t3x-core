@@ -103,6 +103,7 @@ export function SchemaContentPreparationDialog({
     requestId: string;
   }>();
   const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string>();
 
   useEffect(() => {
@@ -113,6 +114,7 @@ export function SchemaContentPreparationDialog({
     setConfirmedChanges([]);
     setContext(undefined);
     setReview(undefined);
+    setSaved(false);
     setError(undefined);
     if (!open) return;
     setBusy(true);
@@ -161,7 +163,7 @@ export function SchemaContentPreparationDialog({
   useEffect(() => {
     if (!open) return;
     const invalidate = () => {
-      if (saving.current) return;
+      if (saving.current || saved) return;
       ++epoch.current;
       setReview(undefined);
       setStale(true);
@@ -170,7 +172,7 @@ export function SchemaContentPreparationDialog({
     };
     window.addEventListener('focus', invalidate);
     return () => window.removeEventListener('focus', invalidate);
-  }, [open]);
+  }, [open, saved]);
 
   function changeCommands(value: PreparationChange[]) {
     ++epoch.current;
@@ -205,20 +207,27 @@ export function SchemaContentPreparationDialog({
     }
   }
   async function prepare() {
-    if (!review?.data.canPrepare || busy) return;
+    if (busy || saving.current || (!saved && !review?.data.canPrepare)) return;
     const token = ++epoch.current;
     saving.current = true;
     setBusy(true);
     setError(undefined);
     try {
-      await preparation.prepare({
-        ...review.input,
-        previewHash: review.data.previewHash,
-        requestId: review.requestId,
-      });
+      if (!saved && review) {
+        await preparation.prepare({
+          ...review.input,
+          previewHash: review.data.previewHash,
+          requestId: review.requestId,
+        });
+      }
       if (epoch.current !== token) return;
-      await onPrepared();
-      if (epoch.current === token) onOpenChange(false);
+      setSaved(true);
+      try {
+        await onPrepared();
+        if (epoch.current === token) onOpenChange(false);
+      } catch {
+        if (epoch.current === token) setError('Draft saved. Refresh to see the updated Draft.');
+      }
     } catch (cause) {
       if (epoch.current === token) {
         setError(cause instanceof Error ? cause.message : 'Preparation failed.');
@@ -653,15 +662,19 @@ export function SchemaContentPreparationDialog({
         <Button variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>
           {embedded ? 'Back to editing' : 'Cancel'}
         </Button>
-        <Button variant="outline" disabled={busy} onClick={() => void preview()}>
+        <Button variant="outline" disabled={busy || saved} onClick={() => void preview()}>
           Preview changes
         </Button>
         <Button
-          disabled={busy || !review?.data.canPrepare}
+          disabled={busy || (!saved && !review?.data.canPrepare)}
           onClick={() => void prepare()}
           variant="commit"
         >
-          {continueToReview ? 'Save and continue to review' : 'Save prepared Draft'}
+          {saved
+            ? 'Refresh Draft'
+            : continueToReview
+              ? 'Save and continue to review'
+              : 'Save prepared Draft'}
         </Button>
       </div>
     </PreparationShell>

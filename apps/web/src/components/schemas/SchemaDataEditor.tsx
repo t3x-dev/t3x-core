@@ -804,11 +804,11 @@ export function SchemaDataEditor({
           </DropdownMenu>
         ) : null}
       </header>
-      {error || validationError || (definition && previewError) || stale ? (
+      {error || (definition && previewError) || stale ? (
         <p role="alert" className={styles.error}>
           {stale
             ? 'The saved candidate changed elsewhere. Your edits are preserved. Discard them to reload the current candidate before saving.'
-            : error || validationError || previewError}
+            : error || previewError}
         </p>
       ) : null}
       <fieldset className={styles.content} disabled={pending || saving}>

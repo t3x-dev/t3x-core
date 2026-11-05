@@ -42,6 +42,22 @@ describe('mergeWorkspaceOverride', () => {
     expect(mergeWorkspaceOverride(server, override).revision).toBe(8);
   });
 
+  it('takes the refreshed binding and operations from the newer revision of the same Workspace', () => {
+    const override = workspace(5, []);
+    override.schemaBindings = [{ schemaName: 'A', version: '1', mode: 'pinned' }];
+    const server = workspace(6, [{ id: 'op_1', path: 'candidate/product/title' }]);
+    server.schemaBindings = [{ schemaName: 'B', version: '1', mode: 'draft_override' }];
+
+    expect(mergeWorkspaceOverride(server, override)).toMatchObject({
+      revision: 6,
+      schemaBindings: server.schemaBindings,
+      yopsDraft: server.yopsDraft,
+    });
+    expect(
+      mergeWorkspaceOverride({ ...server, schemaBindings: [] }, override).schemaBindings
+    ).toEqual([]);
+  });
+
   it('keeps local yops when the override revision is newer', () => {
     const server = workspace(4, []);
     const override = workspace(6, [{ id: 'op_local', path: 'candidate/product/problem' }]);
