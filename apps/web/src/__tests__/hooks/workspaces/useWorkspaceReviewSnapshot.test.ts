@@ -347,11 +347,18 @@ it('opens the latest result of the pinned Transition while retaining its frozen 
   expect(decideWorkspaceTransition).not.toHaveBeenCalled();
 });
 
-it('keeps the fixed Review and blocks decisions if latest returns another Transition', async () => {
+it.each([
+  'transition',
+  'subject',
+])('keeps the fixed Review when latest changes its %s', async (difference) => {
   const fixed = snapshotEnvelope('reviewing');
   const other = snapshotEnvelope('committed');
-  other.transition_id = 'trn_other';
-  other.snapshot.transitionId = 'trn_other';
+  if (difference === 'transition') {
+    other.transition_id = 'trn_other';
+    other.snapshot.transitionId = 'trn_other';
+  } else {
+    other.snapshot.objects.result.digest = `sha256:${'f'.repeat(64)}`;
+  }
   vi.mocked(fetchWorkspaceTransitionReviewSnapshot).mockResolvedValue(fixed);
   vi.mocked(fetchLatestWorkspaceTransitionReviewSnapshot).mockResolvedValue(other);
   const { result } = renderHook(() =>
@@ -360,7 +367,7 @@ it('keeps the fixed Review and blocks decisions if latest returns another Transi
   await waitFor(() => expect(result.current.state.loading).toBe(false));
   expect(result.current.state.data?.snapshot_id).toBe(fixed.snapshot_id);
   expect(result.current.state.latestUnavailable).toBe(true);
-  expect(result.current.state.error).toContain('different Review');
+  expect(result.current.state.error).toMatch(/different review/i);
   await act(async () => {
     await result.current.decide('rejected');
   });

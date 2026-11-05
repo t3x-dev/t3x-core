@@ -550,6 +550,7 @@ export function ComposeNodeHistoryPanel({
   onDiscuss,
   onOpenStructure,
   onSubmit,
+  onEditingChange,
   workingCurrent,
 }: {
   activity: ReturnType<typeof useComposeActivity>;
@@ -558,12 +559,17 @@ export function ComposeNodeHistoryPanel({
   onDiscuss: () => void;
   onOpenStructure: (view: 'structure' | 'yaml') => void;
   onSubmit?: (operations: DraftYOp[], reason: string) => Promise<boolean>;
+  onEditingChange?: (editing: boolean) => void;
   /** Pending local operations participate in editing, but never replace published history. */
   workingCurrent?: TransitionProtocolValue;
 }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  useEffect(() => {
+    onEditingChange?.(editing);
+    return () => onEditingChange?.(false);
+  }, [editing, onEditingChange]);
   const nodeId = selection?.operation.id;
   const selectedPath = selection?.operation.path;
   const isStaged = selection?.meta.eventId === MANUAL_STAGING_EVENT_ID;

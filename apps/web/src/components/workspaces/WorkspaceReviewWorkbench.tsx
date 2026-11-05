@@ -71,6 +71,7 @@ export function WorkspaceReviewWorkbench({
   onSubjectChange,
   subjectChanges,
   emptyState,
+  contentStatus,
   sidebar,
   children,
 }: {
@@ -86,6 +87,7 @@ export function WorkspaceReviewWorkbench({
   onSubjectChange: (subject: WorkspaceReviewSubject) => void;
   subjectChanges: WorkspaceReviewSubjectChanges;
   emptyState?: ReactNode;
+  contentStatus?: ReactNode;
   sidebar: ReactNode;
   children: ReactNode;
 }) {
@@ -140,11 +142,14 @@ export function WorkspaceReviewWorkbench({
               <div className={styles.actions}>{actions}</div>
             </header>
             {notice}
-            {subjectChanges.content || subjectChanges.schema
-              ? children
-              : (emptyState ?? (
-                  <p className={styles.empty}>No Content or Schema changes available to review.</p>
-                ))}
+            {contentStatus ??
+              (subjectChanges.content || subjectChanges.schema
+                ? children
+                : (emptyState ?? (
+                    <p className={styles.empty}>
+                      No Content or Schema changes available to review.
+                    </p>
+                  )))}
           </div>
           {details ? (
             <details className={styles.details}>

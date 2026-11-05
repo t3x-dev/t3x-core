@@ -12,7 +12,6 @@ import { workspaceCommitBlocker } from '@/domain/workspaces/changeDecision';
 import { fieldChangeCount, fieldChangeGroups } from '@/domain/workspaces/changeFields';
 import { workspaceReviewHref } from '@/domain/workspaces/reviewNavigation';
 import { useViewPreference } from '@/hooks/shared/useViewPreference';
-import { useReviewedFieldChanges } from '@/hooks/workspaces/useReviewedFieldChanges';
 import { useWorkspaceReviewSnapshot } from '@/hooks/workspaces/useWorkspaceReviewSnapshot';
 import { ChangeDecisionPanel } from './ChangeDecisionPanel';
 import { ChangeReviewChanges } from './ChangeReviewChanges';
@@ -65,14 +64,10 @@ export function WorkspaceSnapshotReview({
     );
   }
   const [subject, setSubject] = useWorkspaceReviewSubject(projectId, workspaceId, subjectChanges);
-  const liveFieldGroups = useReviewedFieldChanges(
-    projectId,
-    workspaceId,
-    view && !schemaReview ? snapshot?.review.precondition.workspaceRevision : undefined
-  );
-  const fieldGroups = schemaReview
-    ? fieldChangeGroups(schemaReview.baseContent, schemaReview.draftContent)
-    : liveFieldGroups;
+  const fieldGroups =
+    schemaReview?.baseContent !== undefined && schemaReview.draftContent !== undefined
+      ? fieldChangeGroups(schemaReview.baseContent, schemaReview.draftContent)
+      : null;
   const commit = snapshot?.objects?.commit?.digest;
   const branch = snapshot?.review.precondition.refName;
   const activeSnapshotId = snapshot?.snapshotId ?? snapshotId;
@@ -212,6 +207,15 @@ export function WorkspaceSnapshotReview({
         subject={subject}
         subjectChanges={subjectChanges}
         onSubjectChange={setSubject}
+        contentStatus={
+          !view ? (
+            state.loading ? (
+              <output>Loading change review…</output>
+            ) : (
+              <p>The fixed Review is unavailable.</p>
+            )
+          ) : undefined
+        }
         notice={recoveryNotice}
         actions={
           <>
@@ -241,6 +245,7 @@ export function WorkspaceSnapshotReview({
         }
         sidebar={
           <>
+            {!view && state.loading ? <output>Loading checks and decision status…</output> : null}
             {decisionPanel}
             <WorkspaceSchemaDiagnostics
               key={activeSnapshotId}
@@ -322,6 +327,7 @@ export function WorkspaceSnapshotReview({
               result={schemaReview?.draftContent}
               branch={branch ?? 'main'}
               subject="Content"
+              versionLabel={activeSnapshotId}
               frozen
             />
           ) : (
@@ -331,8 +337,6 @@ export function WorkspaceSnapshotReview({
               operationsAsDetails
             />
           )
-        ) : state.loading ? (
-          <output className="text-sm">Loading change review</output>
         ) : null}
       </WorkspaceReviewWorkbench>
     </main>

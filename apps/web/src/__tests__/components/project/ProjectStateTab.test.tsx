@@ -225,7 +225,7 @@ const PRD_COMMIT: ApiCommit = {
     ],
     relations: [],
   },
-  hash: 'sha256:cb5813f30e0e6a525000000000000000000000000000000000000000000000000',
+  hash: `sha256:cb5813f30e0e6a525${'0'.repeat(47)}`,
   message: 'PRD audience handoff committed',
   parents: ['sha256:base-prd'],
   project_id: 'proj_test',
@@ -1605,6 +1605,9 @@ describe('ProjectStateTab', () => {
     expect(codeScrollArea).toHaveAttribute('data-scroll-axes', 'both');
     expect(codeView.querySelector('code')).toBeInTheDocument();
     expect(within(codeView).getByText('problem:').parentElement).toHaveClass('whitespace-pre');
+    expect(within(codeView).getByRole('heading', { name: 'State tree projection' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Export', exact: true }));
+    expect(screen.getByRole('dialog', { name: 'Export State' })).toHaveTextContent(PRD_COMMIT.hash);
   });
 
   it('opens Canvas as a separate State mode without leaving the repository route', async () => {

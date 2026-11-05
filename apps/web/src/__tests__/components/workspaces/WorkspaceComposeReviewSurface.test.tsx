@@ -20,9 +20,6 @@ import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWor
 import { useProjectStore } from '@/store/projectStore';
 import type { ApiCommit } from '@/types/api';
 
-vi.mock('@/components/workspaces/WorkspaceContentEditor', () => ({
-  WorkspaceContentEditor: () => <div>Edit structured content</div>,
-}));
 vi.mock('@/components/workspaces/OutputTargetsTab', () => ({
   OutputTargetsTab: () => <div>Committed State delivery</div>,
 }));
@@ -1602,7 +1599,15 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
     expect(refreshFromServer).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Include Allocation in the next P' }));
-    fireEvent.click(retryOriginal);
+    expect(retryOriginal).toBeEnabled();
+    fireEvent.click(screen.getByRole('tab', { name: 'Review', exact: true }));
+    const guard = screen.getByRole('dialog', { name: 'Unsaved Content changes' });
+    fireEvent.click(
+      within(guard).getByRole('button', { name: 'Retry original save and continue' })
+    );
+    expect(await within(guard).findByText(/Local changes remain/)).toBeVisible();
+    fireEvent.click(within(guard).getByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByRole('tab', { name: 'Compose' })).toHaveAttribute('aria-selected', 'true');
     expect(await screen.findByText(/Changes saved, but the Draft could not refresh/)).toBeVisible();
     expect(refreshFromServer).toHaveBeenCalledOnce();
     expect(publish.mock.calls).toEqual([publish.mock.calls[0], publish.mock.calls[0]]);
@@ -2148,7 +2153,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       domain: 't3x.dev/semantic-content',
       version: 1,
       content: {
-        relations: [],
+        relations: [{ from: 'prd/temperature', to: 'prd', type: 'precedes' }],
         trees: [
           {
             key: 'prd',
@@ -2253,6 +2258,14 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.queryByText(/1 modified/)).not.toBeInTheDocument();
     expect(within(structure).getAllByText('气温').length).toBeGreaterThan(0);
     expect(within(structure).getAllByText('低于20度').length).toBeGreaterThan(0);
+    expect(screen.getByText('Base and Draft relations')).toBeInTheDocument();
+    fireEvent.click(
+      within(screen.getByRole('navigation', { name: 'Review views' })).getByRole('button', {
+        name: 'YAML',
+      })
+    );
+    fireEvent.click(screen.getByText('Complete Content YAML · Workspace r7'));
+    expect(screen.getByLabelText('Draft Content YAML')).toHaveTextContent('precedes');
     expect(prepareReview).not.toHaveBeenCalled();
   });
 
@@ -2502,7 +2515,6 @@ describe('WorkspaceComposeReviewSurface composer', () => {
   });
 
   it.each([
-    'edit',
     'source',
     'delivery',
   ] as const)('moves the legacy %s link out of Review and preserves its Workspace and branch', (tool) => {
@@ -2544,6 +2556,38 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(back.searchParams.get('reviewPane')).toBeNull();
     expect(back.searchParams.get('workspace')).toBe('ws:main');
     expect(onModeChange).toHaveBeenCalledWith(tool === 'delivery' ? 'review' : 'compose');
+  });
+
+  it.each([
+    'reviewPane',
+    'workspaceTool',
+  ])('opens the canonical editor from a legacy %s=edit URL', async (parameter) => {
+    enableComposeActivity();
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    navigationMocks.searchParams = new URLSearchParams(
+      `workspace=ws%3Amain&branch=feature&workspaceMode=review&${parameter}=edit`
+    );
+    render(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={
+          {
+            candidate,
+            isBusy: false,
+            materialSources: [],
+            scenarios: { options: [], selectedId: candidate.id },
+          } as unknown as WorkspaceComposeReviewController
+        }
+        mode="review"
+        onModeChange={vi.fn()}
+      />
+    );
+    expect(await screen.findByRole('dialog', { name: 'Edit Workspace Draft' })).toBeVisible();
+    const target = new URL(navigationMocks.replace.mock.calls.at(-1)?.[0], 'http://localhost');
+    expect(target.searchParams.get('workspaceMode')).toBe('compose');
+    expect(target.searchParams.get('workspace')).toBe('ws:main');
+    expect(target.searchParams.get('branch')).toBe('feature');
+    expect(target.searchParams.get(parameter)).toBeNull();
   });
 
   it('returns from Delivery to the exact review snapshot, rejecting external return targets', () => {

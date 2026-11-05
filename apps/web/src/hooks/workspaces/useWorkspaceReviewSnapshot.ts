@@ -113,6 +113,8 @@ export function useWorkspaceReviewSnapshot(
         );
         if (!isCurrent()) return;
         assertSnapshotScope(pinned, projectId, workspaceId, pinned.transition_id);
+        if (pinned.snapshot.snapshotId !== snapshotId)
+          throw new Error('The response belongs to a different Review snapshot.');
         fixed = pinned;
         pendingDecision.current ??= readDecisionRecovery(
           projectId,
@@ -126,6 +128,7 @@ export function useWorkspaceReviewSnapshot(
         );
         if (!isCurrent()) return;
         assertSnapshotScope(latest, projectId, workspaceId, fixed.transition_id);
+        assertSameReviewedSubject(fixed.snapshot, latest.snapshot);
         if (isFinalSnapshot(latest)) {
           const wasRecovering = pendingDecision.current !== null;
           pendingDecision.current = null;
@@ -135,7 +138,7 @@ export function useWorkspaceReviewSnapshot(
         setStored({
           scope,
           value: {
-            data: { ...latest, schema_review: latest.schema_review ?? fixed.schema_review },
+            data: { ...latest, schema_review: fixed.schema_review ?? latest.schema_review },
             deciding: false,
             error: pendingDecision.current ? recoveryMessage : null,
             loading: false,
@@ -146,10 +149,10 @@ export function useWorkspaceReviewSnapshot(
         });
       } catch (error) {
         if (!isCurrent()) return;
-        setStored({
+        setStored((current) => ({
           scope,
           value: {
-            data: fixed,
+            data: fixed ?? (current.scope === scope ? current.value.data : null),
             deciding: false,
             error: error instanceof Error ? error.message : 'Unable to load the change review.',
             loading: false,
@@ -158,7 +161,7 @@ export function useWorkspaceReviewSnapshot(
               ? { recovery: recoverySummary(pendingDecision.current) }
               : {}),
           },
-        });
+        }));
       } finally {
         if (isCurrent()) reading.current = false;
       }
@@ -247,12 +250,13 @@ export function useWorkspaceReviewSnapshot(
       deciding.current = true;
       setStored({ scope, value: { ...state, deciding: true, error: null } });
       const finish = (latest: WorkspaceTransitionReviewSnapshotResponse) => {
+        assertSameReviewedSubject(snapshot, latest.snapshot);
         pendingDecision.current = null;
         writeDecisionRecovery(projectId, workspaceId, request.transitionId, null);
         setStored({
           scope,
           value: {
-            data: { ...latest, schema_review: latest.schema_review ?? data.schema_review },
+            data: { ...latest, schema_review: data.schema_review ?? latest.schema_review },
             deciding: false,
             error: null,
             loading: false,
@@ -378,6 +382,16 @@ function isFinalSnapshot(data: WorkspaceTransitionReviewSnapshotResponse) {
       view.decision.observation === 'supplied' &&
       view.decision.outcome === 'rejected')
   );
+}
+
+function assertSameReviewedSubject(pinned: ReviewSnapshotV1, latest: ReviewSnapshotV1) {
+  if (
+    latest.review.digest !== pinned.review.digest ||
+    latest.objects.base.digest !== pinned.objects.base.digest ||
+    latest.objects.result.digest !== pinned.objects.result.digest
+  ) {
+    throw new Error('The latest result has different review facts. The fixed Review is unchanged.');
+  }
 }
 
 function announceCommit(projectId: string, data: WorkspaceTransitionReviewSnapshotResponse) {

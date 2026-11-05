@@ -14,6 +14,7 @@ import {
   isStateStructureRowExpanded,
   type StateFieldTreeRow,
 } from '@/domain/project/stateFieldTable';
+import { authoringSemanticContent } from '@/domain/workspaces/authoringReview';
 import {
   formatDraftValue,
   isSemanticEnvelope,
@@ -30,12 +31,14 @@ export function WorkspaceReviewYaml({
   subject,
   branch,
   frozen = false,
+  versionLabel,
 }: {
   base: unknown;
   result: unknown;
   subject: 'Content' | 'Schema';
   branch: string;
   frozen?: boolean;
+  versionLabel?: string;
 }) {
   return (
     <div className={styles.yamlPair}>
@@ -53,10 +56,19 @@ export function WorkspaceReviewYaml({
             <div className={styles.codeFrame}>
               <WorkspaceReviewCodeView
                 branch={branch}
-                rootKey={label.toLowerCase().replaceAll(' ', '-')}
+                documentLabel={`${label} YAML`}
+                rootKey={[label.toLowerCase().replaceAll(' ', '-'), versionLabel]
+                  .filter(Boolean)
+                  .join('-')}
                 validationReady={false}
                 statusLabel={frozen ? 'Fixed snapshot' : 'Draft preview'}
-                yamlText={dump(value, { noRefs: true, sortKeys: true })}
+                yamlText={dump(
+                  subject === 'Content' ? (authoringSemanticContent(value) ?? value) : value,
+                  {
+                    noRefs: true,
+                    sortKeys: true,
+                  }
+                )}
               />
             </div>
           )}

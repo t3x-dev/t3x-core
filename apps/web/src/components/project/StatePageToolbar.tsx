@@ -2,6 +2,7 @@
 
 import { Eye, GitCommit, Pencil, TableProperties } from 'lucide-react';
 import Link from 'next/link';
+import { StateExportButton } from '@/components/shared/StateExportButton';
 import { commitTitle, relativeTime, shortHash } from '@/domain/format/formatters';
 import type { ApiCommit } from '@/types/api';
 import type { ProjectSnapshotView } from './ProjectStateTab';
@@ -84,6 +85,13 @@ export function StatePageToolbar({
             ) : null}
           </div>
           <div className={overviewStyles.actions}>
+            {headCommit ? (
+              <StateExportButton
+                key={headCommit.hash}
+                projectId={headCommit.project_id}
+                commitDigest={headCommit.hash}
+              />
+            ) : null}
             <StateHistoryMenu href={historyHref} canvasHref={canvasHref} />
             <Link href={workspaceHref} className={overviewStyles.primary}>
               <Pencil />
