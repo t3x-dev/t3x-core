@@ -176,7 +176,7 @@ describe('changeCheckRows', () => {
 });
 
 describe('changeDecisionBlockers', () => {
-  it('explains deletion authorization instead of claiming its source evidence is missing', () => {
+  it('does not treat trusted value replacement as deletion authorization', () => {
     const current = view({
       accept: {
         disposition: 'denied',
@@ -206,11 +206,46 @@ describe('changeDecisionBlockers', () => {
         },
       },
     };
-    expect(changeDecisionBlockers(changed)[0].title).toBe(
-      'Existing content changes need authorization'
+    expect(changeDecisionBlockers(changed)[0].title).toBe('Trusted content replacement is blocked');
+    expect(changeDecisionBlockers(changed)[0].detail).toContain(
+      'does not authorize replacement values'
+    );
+    expect(changeCheckRows(changed).find((row) => row.id === 'runner')?.findings[0].path).toBe(
+      'candidate/phone'
     );
     expect(changeCheckRows(changed).find((row) => row.id === 'runner')?.label).toBe(
-      'AI checks & deletion authorization'
+      'AI source support'
+    );
+  });
+  it.each([
+    false,
+    true,
+  ])('explains missing accepted evidence with override allowed=%s', (allowed) => {
+    const current = view({
+      accept: {
+        disposition: 'denied',
+        reasons: [{ code: 'VALIDATION_FAILED', message: 'failed' }],
+      },
+      override: { disposition: allowed ? 'allowed' : 'denied', reasons: [] },
+    });
+    current.checks.validation.runs = [
+      {
+        predicate: {
+          outcome: 'failed',
+          errors: [],
+          gaps: [
+            { code: 'REQUIRED_EVIDENCE_MISSING', path: 'task/title', message: 'Evidence missing' },
+            { code: 'REQUIRED_EVIDENCE_MISSING', path: 'task/owner', message: 'Evidence missing' },
+          ],
+        },
+      },
+    ] as never;
+    const blocker = changeDecisionBlockers(current)[0];
+    expect(blocker.title).toBe('Required source evidence is missing');
+    expect(blocker.detail).toContain('accepted source evidence');
+    expect(blocker.detail.includes('override reason')).toBe(allowed);
+    expect(changeCheckRows(current).find((row) => row.id === 'validation')?.findings).toHaveLength(
+      2
     );
   });
   it('merges accept and override reasons into one plain-language list', () => {

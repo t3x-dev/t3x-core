@@ -644,7 +644,7 @@ async function withSemanticCommitFields(
   entry: CommitHistoryEntry
 ) {
   const semanticCommit = await getRepositorySemanticCommitIfSupported(db, entry.id, projectId);
-  const graph = semanticCommit
+  const graph = semanticCommit?.intent
     ? null
     : await getVerifiedTransitionCommitGraph(db, projectId, entry.id);
   return {

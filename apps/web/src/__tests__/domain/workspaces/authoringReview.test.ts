@@ -41,6 +41,43 @@ const cards = [
 ];
 
 describe('authoringReview', () => {
+  it.each([
+    'sha256:current-base',
+    null,
+  ])('uses the same authoring basis for the content and its identity: %s', (refHead) => {
+    const candidate = {
+      ...getProjectWorkspaceStarterCandidate('proj_1'),
+      baseCommitHash: 'sha256:old-base',
+      targetBranch: 'old-branch',
+      revision: 2,
+    };
+    const projection = buildAuthoringReviewProjection(
+      candidate,
+      {
+        schema: 't3x.application/workspace-authoring-view/v1',
+        projectionVersion: 1,
+        workspaceRevision: 9,
+        compositionRevision: 3,
+        basis: { refName: 'current-branch', refHead, baseDigest: 'current-state' },
+        actions: [],
+        selected: null,
+        node: null,
+        nextBeforeSequence: null,
+        base: { title: 'Current base' },
+        current: { title: 'Current draft' },
+        netDiff: [],
+      },
+      { content: null, deterministicValidation: null }
+    );
+    expect(projection?.candidate).toMatchObject({
+      baseCommitHash: refHead,
+      targetBranch: 'current-branch',
+      revision: 9,
+    });
+    expect(projection?.review.deterministicValidation?.baselineTrees).toHaveLength(1);
+    expect(candidate.baseCommitHash).toBe('sha256:old-base');
+  });
+
   it('projects ordinary YAML documents without rewriting their authoring paths', () => {
     const raw = { prd: { experiments: { owner: 'Alice', hypothesis: 'Keep this evidence' } } };
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');

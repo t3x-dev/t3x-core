@@ -2200,7 +2200,7 @@ function PullRequestDetailView({
   const [copied, setCopied] = useState(false);
   const tabsId = useId();
   // Keep one review session across tabs so pending decision saves are not discarded.
-  const reviewKey = `${pullRequest.number}:${pullRequest.mergeDraftId ?? 'none'}:${pullRequest.updatedAtIso ?? ''}`;
+  const reviewKey = `${pullRequest.number}:${pullRequest.mergeDraftId ?? 'none'}:${pullRequest.sourceCommitId}:${pullRequest.targetBaseCommitId}:${pullRequest.updatedAtIso ?? ''}`;
   const [loadedReview, setLoadedReview] = useState<(MergeReviewLoadState & { key: string }) | null>(
     null
   );
@@ -2230,10 +2230,34 @@ function PullRequestDetailView({
         };
   const saveState = savedDecision?.key === reviewKey ? savedDecision.state : 'idle';
   const terminal = ['merged', 'closed'].includes(pullRequest.status);
+  const comparisonBlocker =
+    projectId && !terminal
+      ? reviewState.error
+        ? 'Merge is blocked until the comparison is available. Retry comparison in Changes or rerun readiness.'
+        : reviewState.loading
+          ? 'Loading the reviewed comparison before merging…'
+          : !reviewState.review
+            ? 'Prepare a merge comparison by rerunning readiness.'
+            : null
+      : null;
   const busy = closing || merging || rerunning || detailLoading || saveState === 'saving';
   const ready =
+    !comparisonBlocker &&
+    saveState !== 'saving' &&
+    saveState !== 'error' &&
     (conflictProgress?.unresolved ?? 0) === 0 &&
     (pullRequest.status === 'ready' || conflictResolved);
+  const readinessStatus = terminal
+    ? pullRequest.status
+    : reviewState.loading
+      ? 'checking'
+      : comparisonBlocker || (conflictProgress?.unresolved ?? 0) > 0 || saveState === 'error'
+        ? 'blocked'
+        : saveState === 'saving'
+          ? 'checking'
+          : ready
+            ? 'ready'
+            : pullRequest.status;
   const checks = pullRequest.checks ?? [];
   const passedChecks = checks.filter((check) => check.status === 'passed').length;
   const progress = projectId && !reviewState.review ? null : conflictProgress;
@@ -2241,21 +2265,23 @@ function PullRequestDetailView({
     ? pullRequest.status === 'merged'
       ? `Merged into ${pullRequest.targetBranch}.`
       : 'Closed without merging.'
-    : conflictResolved
-      ? saveState === 'saving'
-        ? 'All conflicts decided. Saving decisions…'
-        : saveState === 'error'
-          ? 'Decisions could not be saved. Retry before merging.'
-          : 'All conflicts decided. Merge is ready.'
-      : progress && progress.unresolved > 0
-        ? `${progress.unresolved} of ${progress.total} conflicts still need a decision.`
-        : pullRequest.status === 'blocked'
-          ? 'Review the blocked checks and unresolved changes.'
-          : ready
-            ? `${passedChecks} of ${checks.length} checks passed. Ready to merge.`
-            : pullRequest.status === 'checking'
-              ? 'Checks are running.'
-              : 'Run checks to confirm merge readiness.';
+    : comparisonBlocker
+      ? comparisonBlocker
+      : conflictResolved
+        ? saveState === 'saving'
+          ? 'All conflicts decided. Saving decisions…'
+          : saveState === 'error'
+            ? 'Decisions could not be saved. Retry before merging.'
+            : 'All conflicts decided. Merge is ready.'
+        : progress && progress.unresolved > 0
+          ? `${progress.unresolved} of ${progress.total} conflicts still need a decision.`
+          : pullRequest.status === 'blocked'
+            ? 'Review the blocked checks and unresolved changes.'
+            : ready
+              ? `${passedChecks} of ${checks.length} checks passed. Ready to merge.`
+              : pullRequest.status === 'checking'
+                ? 'Checks are running.'
+                : 'Run checks to confirm merge readiness.';
   const error = closeError ?? readinessError ?? detailError ?? mergeError ?? resolutionError;
 
   return (
@@ -2266,7 +2292,7 @@ function PullRequestDetailView({
         </button>
         <div className={detailStyles.titleRow}>
           <h1>{pullRequest.title}</h1>
-          <ListReadinessBadge pullRequest={pullRequest} />
+          <ListReadinessBadge pullRequest={{ ...pullRequest, status: readinessStatus }} />
         </div>
         <div className={detailStyles.refs} aria-label="Merge direction">
           <span>
@@ -2388,6 +2414,11 @@ function PullRequestDetailView({
                       </Link>
                     </p>
                   ) : null}
+                  <p className="mb-4 text-sm">
+                    Recorded checks for {shortHash(pullRequest.sourceCommitId)} →{' '}
+                    {shortHash(pullRequest.targetBaseCommitId)}. Rerun readiness to check the
+                    current branch heads.
+                  </p>
                   <ChecksPanel checks={checks} />
                 </>
               ) : null
@@ -2473,7 +2504,7 @@ function PullRequestDetailView({
             <button
               aria-label="Merge PR"
               className={detailStyles.mergeButton}
-              disabled={!ready || busy || saveState === 'error'}
+              disabled={!ready || busy}
               onClick={onMerge}
               type="button"
             >
@@ -2561,7 +2592,7 @@ function OverviewPanel({
       </div>
       <aside className={detailStyles.overviewAside}>
         <div className={detailStyles.sectionHeading}>
-          <h2>Checks</h2>
+          <h2>Recorded checks</h2>
           <span>
             {passed} of {checks.length} passed
           </span>

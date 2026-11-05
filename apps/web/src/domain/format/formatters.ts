@@ -15,6 +15,11 @@ export function commitHashLabel(hash: string): string {
   return `hash:${shortHash(hash)}`;
 }
 
+/** A conversation title is source context, never a substitute for a committed description. */
+export function commitTitle(message: string | null | undefined): string {
+  return message?.trim() || 'No commit message';
+}
+
 /** Human-friendly relative time string from an ISO-8601 timestamp. */
 export function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();

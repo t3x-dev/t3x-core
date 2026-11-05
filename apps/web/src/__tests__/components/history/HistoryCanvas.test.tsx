@@ -27,6 +27,23 @@ const feature = commit('sha256:feature', 'Canary rollout', [root.hash], 'feature
 const merge = commit('sha256:merge', 'Merge PR #24', [main.hash, feature.hash]);
 
 describe('HistoryCanvas', () => {
+  it('identifies a commit with a whitespace-only message by its hash', () => {
+    const unnamed = commit('sha256:abcdef123', '   ', []);
+    render(
+      <HistoryCanvas
+        branches={[]}
+        commits={[{ commit: unnamed }]}
+        selectedBranch="all"
+        onBack={vi.fn()}
+        onBranchChange={vi.fn()}
+        onListView={vi.fn()}
+        onViewDiff={vi.fn()}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect abcdef1' }));
+    expect(screen.getByRole('heading', { name: 'No commit message' })).toBeInTheDocument();
+  });
+
   it('lets the whole canvas branch pill change the selected branch', () => {
     const onBranchChange = vi.fn();
     render(

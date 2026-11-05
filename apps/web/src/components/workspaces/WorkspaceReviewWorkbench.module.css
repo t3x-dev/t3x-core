@@ -101,6 +101,10 @@
   color: var(--text-primary);
   box-shadow: var(--fx-shadow-sm);
 }
+.views button:disabled {
+  color: var(--text-tertiary);
+  cursor: default;
+}
 .views svg {
   width: 16px;
   height: 16px;

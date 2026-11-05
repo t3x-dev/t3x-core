@@ -163,7 +163,7 @@ export function WorkspaceAssistantActivity({
           {action ? (
             <div className={styles.step}>
               <Check aria-hidden="true" />
-              <span>Published to Draft r{action.afterRevision}</span>
+              <span>Published to Content r{action.afterRevision}</span>
             </div>
           ) : null}
           {!running && activity.operations.length === 0 ? (
@@ -217,7 +217,7 @@ export function WorkspaceTurnReceipt({
             : 'Draft update'}
         </strong>
         <small>
-          {paths[0] ? changeLabel(paths[0].path, paths[0].after) : 'Draft'} · Draft r
+          {paths[0] ? changeLabel(paths[0].path, paths[0].after) : 'Draft'} · Content r
           {changes.action.beforeRevision} → r{changes.action.afterRevision}
         </small>
       </span>

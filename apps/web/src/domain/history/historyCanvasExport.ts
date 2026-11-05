@@ -1,4 +1,4 @@
-import { shortHash } from '@/domain/format/formatters';
+import { commitTitle, shortHash } from '@/domain/format/formatters';
 
 function escapeXml(value: string): string {
   return value
@@ -55,7 +55,7 @@ export function buildHistoryCanvasSvg(input: {
     .join('');
   const nodes = input.nodes
     .map((node) => {
-      const title = escapeXml(node.message || 'Untitled commit');
+      const title = escapeXml(commitTitle(node.message));
       const meta = escapeXml(`${shortHash(node.hash)} · ${node.branch || 'main'}`);
       return `<g>
   <rect x="${node.left}" y="${node.top}" width="${node.width}" height="${node.height}" rx="12" fill="#ffffff" stroke="#e2e8f0" />

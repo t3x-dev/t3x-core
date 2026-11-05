@@ -69,6 +69,7 @@ export function ComposeAuthoringAssistant({
   contextLabel,
   onSchemaCandidateChange,
   onConversationChange,
+  draftPreparation,
   beforeComposer,
   onOpenTurn,
   schemaReceipt,
@@ -76,6 +77,13 @@ export function ComposeAuthoringAssistant({
   projectId: string;
   onSchemaCandidateChange?: (conversationId?: string) => void;
   onConversationChange?: (conversationId: string) => void;
+  draftPreparation?: {
+    start: () => void;
+    busy: boolean;
+    error?: string | null;
+    importing: boolean;
+    cancel: () => void;
+  };
   beforeComposer?: ReactNode;
   schemaReceipt?: SchemaReceipt;
   onOpenTurn?: (changes: PublishedTurnChanges) => void;
@@ -294,7 +302,13 @@ export function ComposeAuthoringAssistant({
     }
     return records;
   }, [chat.messages, activityActions, activityCards]);
+  const [firstMessage, setFirstMessage] = useState<{
+    text: string;
+    images: AttachedImage[];
+    files: File[];
+  } | null>(null);
   const sendDisabled =
+    Boolean(firstMessage || draftPreparation?.busy || draftPreparation?.importing) ||
     chat.isLoading ||
     model.loading ||
     !model.isSelectionReady ||
@@ -329,20 +343,40 @@ export function ComposeAuthoringAssistant({
     });
   };
 
+  const dispatchMessage = useCallback(
+    (text: string, images: AttachedImage[], files: File[]) => {
+      chat.sendMessage(
+        text || (images.length ? 'Attached image' : 'Attached file'),
+        images.length || files.length
+          ? { ...(images.length ? { images } : {}), ...(files.length ? { files } : {}) }
+          : undefined
+      );
+      for (const image of images) URL.revokeObjectURL(image.preview);
+      setAttachedImages([]);
+      setAttachedFiles([]);
+    },
+    [chat.sendMessage]
+  );
+
+  useEffect(() => {
+    if (draftPreparation?.error) setFirstMessage(null);
+  }, [draftPreparation?.error]);
+
+  useEffect(() => {
+    if (draftPreparation || !firstMessage) return;
+    setFirstMessage(null);
+    dispatchMessage(firstMessage.text, firstMessage.images, firstMessage.files);
+  }, [draftPreparation, firstMessage, dispatchMessage]);
+
   const sendComposer = () => {
     if (chat.isStreaming || sendDisabled) return;
     const text = chat.input.trim();
-    const images = attachedImages;
-    const files = attachedFiles;
-    chat.sendMessage(
-      text || (images.length ? 'Attached image' : 'Attached file'),
-      images.length || files.length
-        ? { ...(images.length ? { images } : {}), ...(files.length ? { files } : {}) }
-        : undefined
-    );
-    for (const image of images) URL.revokeObjectURL(image.preview);
-    setAttachedImages([]);
-    setAttachedFiles([]);
+    if (draftPreparation) {
+      setFirstMessage({ text, images: attachedImages, files: attachedFiles });
+      draftPreparation.start();
+      return;
+    }
+    dispatchMessage(text, attachedImages, attachedFiles);
   };
 
   return (
@@ -392,8 +426,39 @@ export function ComposeAuthoringAssistant({
           onRetry={model.refresh}
         />
       ) : null}
+      {draftPreparation?.importing ? (
+        <div className={styles.activityBootstrap}>
+          <p>Import the existing draft to continue editing with its current changes.</p>
+          <div>
+            <button type="button" disabled={draftPreparation.busy} onClick={draftPreparation.start}>
+              Import draft and continue
+            </button>
+            <button
+              type="button"
+              disabled={draftPreparation.busy}
+              onClick={() => {
+                setFirstMessage(null);
+                draftPreparation.cancel();
+              }}
+            >
+              Cancel import
+            </button>
+          </div>
+        </div>
+      ) : firstMessage && !draftPreparation?.error ? (
+        <output className={styles.authoringAssistantHint}>Preparing your draft…</output>
+      ) : null}
+      {draftPreparation?.error ? (
+        <p role="alert" className={styles.authoringAssistantNotice}>
+          {draftPreparation.error}
+        </p>
+      ) : null}
       {beforeComposer}
-      <fieldset className={styles.discussionComposer} aria-label="Message composer">
+      <fieldset
+        className={styles.discussionComposer}
+        aria-label="Message composer"
+        disabled={Boolean(firstMessage)}
+      >
         {contextLabel ? (
           <div className={styles.chatContext}>
             <Layers aria-hidden="true" /> <span title={contextLabel}>{contextLabel}</span>
@@ -410,7 +475,11 @@ export function ComposeAuthoringAssistant({
             sendComposer();
           }}
           onPaste={handlePaste}
-          placeholder="Reply, or ask the assistant to change this node…"
+          placeholder={
+            messages.length
+              ? 'Reply, or ask the assistant to change this node…'
+              : 'Describe what you’d like to change…'
+          }
           rows={3}
           value={chat.input}
         />

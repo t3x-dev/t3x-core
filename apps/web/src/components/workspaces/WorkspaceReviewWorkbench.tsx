@@ -66,6 +66,7 @@ export function WorkspaceReviewWorkbench({
   notice,
   pane,
   onPaneChange,
+  viewsDisabled = false,
   subject,
   onSubjectChange,
   subjectChanges,
@@ -79,6 +80,7 @@ export function WorkspaceReviewWorkbench({
   details?: ReactNode;
   notice?: ReactNode;
   pane: WorkspaceReviewPane;
+  viewsDisabled?: boolean;
   onPaneChange: (pane: WorkspaceReviewPane) => void;
   subject: WorkspaceReviewSubject;
   onSubjectChange: (subject: WorkspaceReviewSubject) => void;
@@ -115,6 +117,7 @@ export function WorkspaceReviewWorkbench({
                 <button
                   type="button"
                   key={id}
+                  disabled={viewsDisabled}
                   aria-label={label}
                   aria-current={pane === id ? 'page' : undefined}
                   onClick={() => onPaneChange(id)}

@@ -6,6 +6,25 @@ import { describe, expect, it, vi } from 'vitest';
 import { CommitHistoryRow } from '@/components/history/CommitHistoryRow';
 
 describe('CommitHistoryRow', () => {
+  it.each([
+    null,
+    '',
+    '   ',
+  ])('uses an explicit missing description while retaining the commit identity %j', (message) => {
+    render(
+      <CommitHistoryRow
+        author={{ type: 'human' }}
+        committedAt="2026-01-01"
+        hash="sha256:abcdef123"
+        message={message}
+        parentCount={0}
+        onOpen={vi.fn()}
+      />
+    );
+    expect(screen.getByText('No commit message')).toBeInTheDocument();
+    expect(screen.getByText('abcdef1')).toBeInTheDocument();
+  });
+
   it('opens a normal commit inside History', () => {
     const onOpen = vi.fn();
     render(
