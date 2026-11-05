@@ -155,7 +155,15 @@ export function RecipeForm({
     [isEdit, name, description, triggerEvent, steps, enabled, onSubmit]
   );
 
-  const isValid = name.trim() !== '' && triggerEvent !== '' && steps.length > 0;
+  const isValid =
+    name.trim() !== '' &&
+    triggerEvent !== '' &&
+    steps.length > 0 &&
+    steps.every(
+      (step) =>
+        step.action !== 'send_webhook' ||
+        (typeof step.config.url === 'string' && /^https?:\/\//i.test(step.config.url))
+    );
 
   const triggerOption =
     TRIGGER_EVENTS.find((event) => event.value === triggerEvent) ?? TRIGGER_EVENTS[0];
@@ -250,6 +258,29 @@ export function RecipeForm({
               </SelectContent>
             </Select>
           </div>
+
+          {primaryStep.action === 'send_webhook' && (
+            <div className={styles.field}>
+              <Label htmlFor="recipe-webhook-url">Webhook URL</Label>
+              <Input
+                id="recipe-webhook-url"
+                type="url"
+                value={typeof primaryStep.config.url === 'string' ? primaryStep.config.url : ''}
+                onChange={(event) =>
+                  setSteps((previous) =>
+                    previous.map((step, index) =>
+                      index === 0
+                        ? { ...step, config: { ...step.config, url: event.target.value } }
+                        : step
+                    )
+                  )
+                }
+                placeholder="https://example.com/webhook"
+                required
+                disabled={loading}
+              />
+            </div>
+          )}
 
           <div className={styles.field}>
             <Label htmlFor="recipe-target-project">Target project</Label>

@@ -99,6 +99,10 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-6">
+      <p className="text-sm text-[var(--text-secondary)]">
+        Automatic commits and Leaf creation are currently unavailable. These settings are saved but
+        do not start either action.
+      </p>
       {/* Saving indicator */}
       {saving && <p className="text-xs text-[var(--text-tertiary)]">Saving...</p>}
 
@@ -107,7 +111,7 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
         <label htmlFor="autopilot-enabled" className="flex flex-col gap-1">
           <span className="text-sm font-medium text-[var(--text-primary)]">Enable Autopilot</span>
           <span className="text-xs text-[var(--text-tertiary)]">
-            Automatically commit knowledge when thresholds are met
+            Save the preference for automatic commits
           </span>
         </label>
         <Switch

@@ -25,10 +25,26 @@ import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 // Schemas
 // ============================================================
 
-const RecipeStepSchema = z.object({
-  action: z.enum(['send_webhook', 'run_eval', 'export_report']),
-  config: z.record(z.string(), z.unknown()),
-});
+const RecipeStepSchema = z
+  .object({
+    action: z.enum(['send_webhook', 'run_eval', 'export_report']),
+    config: z.record(z.string(), z.unknown()),
+  })
+  .superRefine((step, context) => {
+    if (step.action !== 'send_webhook') return;
+    const url = step.config.url;
+    if (
+      typeof url !== 'string' ||
+      !URL.canParse(url) ||
+      !['http:', 'https:'].includes(new URL(url).protocol)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['config', 'url'],
+        message: 'A valid HTTP(S) webhook URL is required',
+      });
+    }
+  });
 
 const RecipeTriggerSchema = z.object({
   event: z
