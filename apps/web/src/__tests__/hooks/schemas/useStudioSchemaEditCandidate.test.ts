@@ -47,6 +47,20 @@ it('does not overwrite a saved candidate with a read started before the save', a
   expect(result.current.candidate?.revision).toBe(3);
 });
 
+it('refreshes a second editor of the same Workspace after a manual save', async () => {
+  mocks.read.mockResolvedValue({ candidateId: 'edit', revision: 1 });
+  const { result } = renderHook(() => ({
+    writer: useStudioSchemaEditCandidate('project', 'workspace', 7),
+    reader: useStudioSchemaEditCandidate('project', 'workspace', 7),
+  }));
+  await waitFor(() => expect(result.current.reader.candidate?.revision).toBe(1));
+  const candidate = { candidateId: 'edit', revision: 2 };
+  mocks.read.mockResolvedValue(candidate);
+  mocks.save.mockResolvedValue({ candidate, workspaceRevision: 8 });
+  await act(async () => result.current.writer.save(saveInput));
+  expect(result.current.reader.candidate).toEqual(candidate);
+});
+
 it('coalesces a double save and prevents another write while it is pending', async () => {
   mocks.read.mockResolvedValue(null);
   const save = deferred<unknown>();

@@ -30,6 +30,7 @@ import {
   type SchemaSourceMappings,
 } from '@/domain/schemas/schemaSourceMappings';
 import { schemaWorkflowStatus } from '@/domain/schemas/schemaWorkflowStatus';
+import { studioPublicationBlocker } from '@/domain/schemas/studioPublication';
 import {
   listStudioDraftWorkspaces,
   listStudioWorkspacesForBranches,
@@ -257,7 +258,14 @@ export function SchemaStudioExperience({
     candidateId: string;
     revision: number;
   }>();
-  const yamlSavedRef = useRef<{ candidateId: string; revision: number } | undefined>(undefined);
+  const yamlSavedRef = useRef<
+    | {
+        candidateId: string;
+        revision: number;
+        workspaceRevision: number;
+      }
+    | undefined
+  >(undefined);
   const [yamlInitial, setYamlInitial] = useState<Record<string, unknown>>();
   const [publishReview, setPublishReview] = useState<StudioPreview>();
   const [preparation, setPreparation] = useState<{
@@ -759,7 +767,7 @@ export function SchemaStudioExperience({
   const activeReviewScope = useRef(reviewScope);
   activeReviewScope.current = reviewScope;
 
-  async function openReview(savedEdit?: { candidateId: string; revision: number }) {
+  async function openReview(savedEdit?: NonNullable<typeof yamlSavedRef.current>) {
     if (applying || (!savedEdit && (editorInvalid || !canReview))) return;
     if (!persistedTarget) return inspectDefinition();
     setApplying(true);
@@ -767,15 +775,19 @@ export function SchemaStudioExperience({
     const targetId = persistedTarget.id;
     const isCurrent = () => mounted.current && activeReviewScope.current === reviewScope;
     try {
-      let edit = savedEdit ?? savedCandidateRef;
+      const edit = savedEdit
+        ? { candidateId: savedEdit.candidateId, revision: savedEdit.revision }
+        : savedCandidateRef;
+      const expectedRevision = savedEdit?.workspaceRevision ?? persistedTarget.revision;
       if (!savedEdit && dataDirty) {
         if (!(await navigationRef.current?.save?.())) return;
-        const saved = await reviewFlow.readEdit(targetId);
-        if (!saved) throw new Error('Saved Schema changes are unavailable. Retry saving.');
-        edit = { candidateId: saved.candidateId, revision: saved.revision };
+        await workspaces.refresh();
+        if (!isCurrent()) return;
+        router.push(schemaReviewHref(projectId, targetId, undefined, persistedTarget.targetBranch));
+        return;
       }
       if (!isCurrent()) return;
-      await reviewFlow.ensureAuthoring(targetId);
+      await reviewFlow.ensureAuthoring(targetId, expectedRevision);
       if (!isCurrent()) return;
       const fresh = await reviewFlow.preview({
         workspaceId: targetId,
@@ -789,6 +801,9 @@ export function SchemaStudioExperience({
         return;
       }
       if (!fresh.workspace) throw new Error('The target Workspace is unavailable.');
+      if (persistedTarget.authoringLedger && fresh.workspace.revision !== expectedRevision) {
+        throw new Error('The Draft changed. Refresh before preparing review.');
+      }
       const freshWorkflow = schemaWorkflowStatus({
         draft: draftView?.workspaceRevision === fresh.workspace.revision ? draftView : undefined,
         preview: fresh,
@@ -801,28 +816,12 @@ export function SchemaStudioExperience({
           reviewHash: fresh.reviewHash,
           ...(edit ? { schemaEditCandidate: edit } : {}),
         };
-        const input = {
-          target,
-          ifRevision: fresh.workspace.revision,
-          commands: [],
-          confirmedChanges: [],
-        };
-        const checked = await reviewFlow.previewContent(targetId, input);
-        if (!isCurrent()) return;
-        if (!checked.canPrepare) {
-          if (savedEdit) setDefinitionOpen(false);
-          setPreparation({ workspaceId: targetId, revision: fresh.workspace.revision, target });
-          return;
-        }
-        // Schema-only changes need no separate adoption or migration confirmation.
-        await reviewFlow.prepareContent(targetId, {
-          ...input,
-          previewHash: checked.previewHash,
-          requestId: crypto.randomUUID(),
-        });
+        if (savedEdit) setDefinitionOpen(false);
+        setPreparation({ workspaceId: targetId, revision: fresh.workspace.revision, target });
+        return;
       }
       if (!isCurrent()) return;
-      const href = await reviewFlow.review(targetId);
+      const href = await reviewFlow.review(targetId, fresh.workspace.revision);
       if (isCurrent()) {
         if (savedEdit) setDefinitionOpen(false);
         router.push(href);
@@ -876,7 +875,11 @@ export function SchemaStudioExperience({
       revision: saved.candidate.revision,
     });
     await workspaces.refresh();
-    return { candidateId: saved.candidate.candidateId, revision: saved.candidate.revision };
+    return {
+      candidateId: saved.candidate.candidateId,
+      revision: saved.candidate.revision,
+      workspaceRevision: saved.workspaceRevision,
+    };
   }
 
   function changeDefinitionOpen(open: boolean) {
@@ -902,6 +905,17 @@ export function SchemaStudioExperience({
     latest: reviewStatus.latest,
     hasDefinition: Boolean(selection.length || currentBinding || creatingBlank || activeCandidate),
   });
+  const publishBlocker =
+    editorUnavailable ||
+    definitionOpen ||
+    applying ||
+    preview.loading ||
+    schemaEdit.pending ||
+    schemaEdit.loading
+      ? 'Finish the current Schema action before publishing.'
+      : dataDirty || editorInvalid
+        ? 'Fix field errors and save the Schema changes before publishing.'
+        : studioPublicationBlocker(data);
   const canReview =
     !!data &&
     !editorUnavailable &&
@@ -1000,7 +1014,7 @@ export function SchemaStudioExperience({
         schemaReviewHref(
           projectId,
           persistedTarget.id,
-          reviewStatus.latest?.snapshot_id,
+          !dataDirty && workflow.matchesReview ? reviewStatus.latest?.snapshot_id : undefined,
           target?.targetBranch
         )
       );
@@ -1448,19 +1462,7 @@ export function SchemaStudioExperience({
         onPublish={() => {
           if (data) setPublishReview(data);
         }}
-        canPublish={Boolean(
-          !editorUnavailable &&
-            data?.workspace &&
-            !data.workspace.canBind &&
-            savedCandidateRef &&
-            data.impact?.canPublish &&
-            data.report.valid &&
-            data.adoption.allowed &&
-            !dataDirty &&
-            !editorInvalid &&
-            !applying &&
-            !preview.loading
-        )}
+        publishBlocker={publishBlocker}
         onRules={() => navigationRef.current?.openRules?.()}
         canOpenRules={!editorUnavailable && editorActions.rules && !definitionOpen && !applying}
         onUndo={() => navigationRef.current?.undo?.()}
@@ -1584,15 +1586,22 @@ export function SchemaStudioExperience({
           revision={preparation.revision}
           target={preparation.target}
           open
-          continueToReview
           embedded
           onOpenChange={(open) => {
             if (!open) setPreparation(undefined);
           }}
           onPrepared={async () => {
-            const href = await reviewFlow.review(preparation.workspaceId);
             await workspaces.refresh();
-            if (mounted.current && activeReviewScope.current === reviewScope) router.push(href);
+            if (mounted.current && activeReviewScope.current === reviewScope) {
+              router.push(
+                schemaReviewHref(
+                  projectId,
+                  preparation.workspaceId,
+                  undefined,
+                  target?.targetBranch
+                )
+              );
+            }
           }}
         />
       ) : null}
@@ -1603,7 +1612,7 @@ export function SchemaStudioExperience({
           workspaceId={workspaceId}
           candidateIds={[...selection]}
           preview={publishReview}
-          currentReviewHash={data?.reviewHash}
+          currentReviewHash={publishBlocker ? undefined : data?.reviewHash}
           onOpenChange={(open) => {
             if (!open) setPublishReview(undefined);
           }}

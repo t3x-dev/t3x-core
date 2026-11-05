@@ -286,7 +286,11 @@ export function WorkspaceComposeReviewSurface({
     controller.ensureSaved
   );
   // Compose publication and Review must observe the same current Draft projection.
-  const activity = useComposeActivity(controller.candidate, authoringBootstrap.active);
+  const activity = useComposeActivity(
+    controller.candidate,
+    authoringBootstrap.active,
+    mode === 'review'
+  );
   const syncRequired = (activity.newActivity ?? activity.view)?.synchronization?.required;
 
   const writeWorkspaceSurfaceUrl = useCallback(
@@ -2742,7 +2746,16 @@ function ReviewSurface({
   pane: ReviewPane;
   setPane: (pane: ReviewPane) => void;
 }) {
-  const authoring = activity.newActivity ?? activity.view;
+  const authoring = activity.view;
+  const newerRevision =
+    activity.newActivity && activity.newActivity.workspaceRevision !== authoring?.workspaceRevision
+      ? activity.newActivity.workspaceRevision
+      : authoring && (controller.candidate.revision ?? -1) > authoring.workspaceRevision
+        ? controller.candidate.revision
+        : undefined;
+  const reviewNeedsRefresh =
+    newerRevision !== undefined ||
+    Boolean((activity.newActivity ?? authoring)?.synchronization?.required);
   const schemaReview =
     !authoring ||
     controller.review.reviewSnapshot?.review.precondition.workspaceRevision ===
@@ -2785,27 +2798,43 @@ function ReviewSurface({
   const [preparationError, setPreparationError] = useState<string>();
   const [preparingSchema, setPreparingSchema] = useState(false);
   const preparationBusy = useRef(false);
-  const preparationAttempt = useRef<{ key: string; requestId: string } | null>(null);
   const [schemaPreparation, setSchemaPreparation] = useState<{
     revision: number;
     target: SchemaPreparationTarget;
   }>();
   const prepareReview = async () => {
-    if (preparationBusy.current || controller.isBusy) return;
+    if (
+      preparationBusy.current ||
+      controller.isBusy ||
+      savedSchema.loading ||
+      savedSchema.error ||
+      activity.loading ||
+      (activity.enabled && !authoring) ||
+      reviewNeedsRefresh
+    )
+      return;
     preparationBusy.current = true;
     setPreparingSchema(true);
     setPreparationError(undefined);
     const workspaceId = controller.candidate.id;
     try {
-      if (controller.candidate.revision !== undefined && (await schemaRequests.hasPendingEdit())) {
+      const expectedRevision = authoring?.workspaceRevision ?? controller.candidate.revision;
+      if (expectedRevision !== undefined && (await schemaRequests.hasPendingEdit())) {
         if (!reviewMounted.current) return;
-        await schemaFlow.ensureAuthoring(workspaceId);
+        await schemaFlow.ensureAuthoring(workspaceId, expectedRevision);
         if (!reviewMounted.current) return;
         const latest = await schemaRequests.read();
         if (!reviewMounted.current) return;
         if (latest.unapplied && latest.edit) {
           const workspace = latest.preview.workspace;
-          if (!workspace) throw new Error('The target Workspace is unavailable.');
+          if (
+            !workspace ||
+            (authoring && workspace.revision !== expectedRevision) ||
+            latest.edit.candidateId !== savedSchema.candidate?.candidateId ||
+            latest.edit.revision !== savedSchema.candidate?.revision
+          ) {
+            throw new Error('The Draft or saved Schema changed. Refresh before preparing review.');
+          }
           const target: SchemaPreparationTarget = {
             kind: 'studio',
             candidateIds: latest.candidateIds,
@@ -2815,35 +2844,14 @@ function ReviewSurface({
               revision: latest.edit.revision,
             },
           };
-          const input = {
-            target,
-            ifRevision: workspace.revision,
-            commands: [],
-            confirmedChanges: [],
-          };
-          const checked = await schemaFlow.previewContent(workspaceId, input);
-          if (!reviewMounted.current) return;
-          if (!checked.canPrepare) {
-            setSchemaPreparation({ revision: workspace.revision, target });
-            return;
-          }
-          const key = JSON.stringify([workspaceId, input, checked.previewHash]);
-          if (preparationAttempt.current?.key !== key) {
-            preparationAttempt.current = { key, requestId: crypto.randomUUID() };
-          }
-          await schemaFlow.prepareContent(workspaceId, {
-            ...input,
-            previewHash: checked.previewHash,
-            requestId: preparationAttempt.current.requestId,
-          });
-          if (!reviewMounted.current) return;
-          await controller.refreshFromServer();
-          if (!reviewMounted.current) return;
-          await activity.loadLatest();
-          if (!reviewMounted.current) return;
+          setSchemaPreparation({ revision: workspace.revision, target });
+          return;
         }
       }
       if (!reviewMounted.current) return;
+      if (hasSavedSchema) {
+        throw new Error('The saved Schema changed. Refresh before preparing review.');
+      }
       await controller.prepareReview((snapshot) => {
         if (!reviewMounted.current) return;
         router.replace(
@@ -2854,7 +2862,7 @@ function ReviewSurface({
           }),
           { scroll: false }
         );
-      });
+      }, authoring ?? undefined);
     } catch (cause) {
       if (reviewMounted.current)
         setPreparationError(cause instanceof Error ? cause.message : 'Could not prepare Review.');
@@ -2927,6 +2935,7 @@ function ReviewSurface({
     Boolean(controller.review.reviewSnapshot) &&
     !preparing &&
     !preparingSchema &&
+    !reviewNeedsRefresh &&
     !hasSavedSchema &&
     (!authoring ||
       (!authoring.synchronization?.required &&
@@ -3020,7 +3029,42 @@ function ReviewSurface({
         onPaneChange={setPane}
         subject={subject}
         subjectChanges={subjectChanges}
+        loading={!authoring && activity.loading}
         onSubjectChange={setSubject}
+        notice={
+          reviewNeedsRefresh ? (
+            <div>
+              <output>
+                {newerRevision !== undefined
+                  ? `Workspace r${newerRevision} is available. The inspected Draft is unchanged.`
+                  : 'The branch changed. Synchronize the Draft in Compose before preparing review.'}
+              </output>
+              {newerRevision !== undefined ? (
+                <Button
+                  size="sm"
+                  variant="canvas-outline"
+                  disabled={preparingSchema}
+                  onClick={async () => {
+                    setPreparingSchema(true);
+                    setPreparationError(undefined);
+                    try {
+                      await controller.refreshFromServer();
+                      await activity.loadLatest();
+                    } catch (cause) {
+                      setPreparationError(
+                        cause instanceof Error ? cause.message : 'Could not load the latest Draft.'
+                      );
+                    } finally {
+                      if (reviewMounted.current) setPreparingSchema(false);
+                    }
+                  }}
+                >
+                  Load latest Draft
+                </Button>
+              ) : null}
+            </div>
+          ) : undefined
+        }
         emptyState={
           showEmptyWorkbench ? (
             <table
@@ -3077,7 +3121,13 @@ function ReviewSurface({
                 snapshotCurrent={snapshotCurrent}
                 hasChanges={hasSavedSchema ? true : authoring?.hasChanges}
                 preparingSchema={preparingSchema || Boolean(schemaPreparation)}
-                schemaLoading={savedSchema.loading}
+                schemaLoading={Boolean(
+                  savedSchema.loading ||
+                    savedSchema.error ||
+                    activity.loading ||
+                    (activity.enabled && !authoring) ||
+                    reviewNeedsRefresh
+                )}
                 hasSavedSchema={hasSavedSchema}
                 preparationError={
                   preparationError ?? savedSchema.error ?? controller.error ?? undefined
@@ -3108,7 +3158,7 @@ function ReviewSurface({
           <WorkspacePendingSchemaReview
             projectId={candidate.projectId}
             workspaceId={candidate.id}
-            revision={controller.candidate.revision}
+            revision={candidate.revision}
             candidate={savedSchema.candidate}
             branch={candidate.targetBranch}
             pane={pane}
@@ -3168,7 +3218,6 @@ function ReviewSurface({
           revision={schemaPreparation.revision}
           target={schemaPreparation.target}
           open
-          continueToReview
           onOpenChange={(open) => {
             if (!open) setSchemaPreparation(undefined);
           }}
@@ -3179,7 +3228,6 @@ function ReviewSurface({
             await activity.loadLatest();
             if (!reviewMounted.current) return;
             setSchemaPreparation(undefined);
-            await prepareReview();
           }}
         />
       ) : null}

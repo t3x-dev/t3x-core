@@ -131,9 +131,12 @@ it('validates metadata and ignores a response after the dialog is unmounted', as
       })
   );
   const { unmount } = render(<StudioPublishDialog {...props} />);
+  expect(screen.getByText('Schema candidate r2 · Workspace r3')).toBeVisible();
   fireEvent.change(screen.getByLabelText('Version'), { target: { value: 'not-semver' } });
   fireEvent.click(screen.getByRole('button', { name: 'Publish publicly' }));
-  expect(screen.getByRole('alert')).toBeInTheDocument();
+  expect(screen.getByLabelText('Version')).toHaveAccessibleDescription(
+    'Enter a version such as 1.0.0 or 1.0.0-beta.1.'
+  );
   expect(mocks.publish).not.toHaveBeenCalled();
   fireEvent.change(screen.getByLabelText('Version'), { target: { value: '1.0.0' } });
   fireEvent.click(screen.getByRole('button', { name: 'Publish publicly' }));

@@ -3,12 +3,7 @@
 import type { ReviewSnapshotV1, WorkspaceAuthoringView } from '@t3x-dev/api-client';
 import { useEffect, useMemo } from 'react';
 import { schemaReviewHref } from '@/domain/schemas/schemaNavigation';
-import {
-  applySchemaContentPreparation,
-  previewSchemaContentPreparation,
-  previewStudioSelection,
-  readStudioSchemaEditCandidate,
-} from '@/infrastructure/schemaStudio';
+import { previewStudioSelection } from '@/infrastructure/schemaStudio';
 import {
   ensureSchemaAuthoring,
   prepareSchemaWorkspaceReview,
@@ -46,19 +41,11 @@ export function useSchemaReviewFlow(projectId: string) {
 
   return useMemo(
     () => ({
-      readEdit: (workspaceId: string) => readStudioSchemaEditCandidate(projectId, workspaceId),
-      ensureAuthoring: (workspaceId: string) => ensureSchemaAuthoring(projectId, workspaceId),
+      ensureAuthoring: (workspaceId: string, expectedWorkspaceRevision?: number) =>
+        ensureSchemaAuthoring(projectId, workspaceId, expectedWorkspaceRevision),
       preview: (input: Parameters<typeof previewStudioSelection>[1]) =>
         previewStudioSelection(projectId, input),
-      previewContent: (
-        workspaceId: string,
-        input: Parameters<typeof previewSchemaContentPreparation>[2]
-      ) => previewSchemaContentPreparation(projectId, workspaceId, input),
-      prepareContent: (
-        workspaceId: string,
-        input: Parameters<typeof applySchemaContentPreparation>[2]
-      ) => applySchemaContentPreparation(projectId, workspaceId, input),
-      review: (workspaceId: string) => {
+      review: (workspaceId: string, expectedWorkspaceRevision?: number) => {
         const pending = scope.pending.get(workspaceId);
         if (pending) return pending;
         const generation = scope.generation;
@@ -69,6 +56,12 @@ export function useSchemaReviewFlow(projectId: string) {
         const run = async () => {
           const draft = await readSchemaWorkspaceReviewDraft(projectId, workspaceId);
           assertCurrent();
+          if (
+            expectedWorkspaceRevision !== undefined &&
+            draft.workspaceRevision !== expectedWorkspaceRevision
+          ) {
+            throw new Error('The Draft changed. Refresh before preparing review.');
+          }
           if (draft.hasChanges === false)
             throw new Error('No changes to commit. Schema and content match the Base.');
           if (draft.synchronization?.required)

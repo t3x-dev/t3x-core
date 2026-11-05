@@ -2,10 +2,16 @@ import { T3xApiError, type WorkspaceAuthoringCapability } from '@t3x-dev/api-cli
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { getSharedApiClient } from './sharedApiClient';
 
-export async function ensureSchemaAuthoring(projectId: string, workspaceId: string) {
+export async function ensureSchemaAuthoring(
+  projectId: string,
+  workspaceId: string,
+  expectedWorkspaceRevision?: number
+) {
   const api = getSharedApiClient().workspaces;
   const saved = await api.get(projectId, workspaceId);
   const workspace = saved.workspace as unknown as WorkspaceCandidate;
+  if (expectedWorkspaceRevision !== undefined && workspace.revision !== expectedWorkspaceRevision)
+    throw new Error('The Draft changed. Refresh before preparing review.');
   if (!workspace.authoringLedger) {
     if (workspace.revision === undefined) throw new Error('Workspace revision is unavailable.');
     await api.authoring.initialize(projectId, workspaceId, {

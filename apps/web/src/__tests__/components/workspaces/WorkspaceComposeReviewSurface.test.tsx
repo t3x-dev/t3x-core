@@ -2040,8 +2040,16 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.getAllByRole('region', { name: 'Review readiness' })).toHaveLength(1);
     expect(screen.queryByRole('button', { name: 'Continue to decision' })).not.toBeInTheDocument();
     navigationMocks.searchParams = new URLSearchParams('workspaceMode=review&reviewPane=yaml');
+    const inspected = {
+      workspaceRevision: 12,
+      basis: { refName: 'main', refHead: null, baseDigest: 'empty' },
+      compositionRevision: 1,
+      base: { title: 'Old' },
+      current: { title: 'Inspected' },
+      netDiff: [],
+    };
     activityMocks.value = {
-      view: null,
+      view: inspected,
       newActivity: {
         workspaceRevision: 13,
         basis: { refName: 'main', refHead: null, baseDigest: 'empty' },
@@ -2072,6 +2080,21 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
     expect(prepareReview).not.toHaveBeenCalled();
     expect(decide).not.toHaveBeenCalled();
+    expect(screen.getByText(/Workspace r13 is available/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Workspace draft r12/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Prepare review' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Load latest Draft' })).toBeEnabled();
+    // Model the explicitly loaded projection that the next preparation should use.
+    activityMocks.value.view = activityMocks.value.newActivity;
+    activityMocks.value.newActivity = null;
+    rerender(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="review"
+        onModeChange={onModeChange}
+      />
+    );
     prepareReview.mockImplementationOnce(async (onPrepared) => {
       onPrepared({
         projectId: candidate.projectId,
@@ -2082,9 +2105,11 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       return true;
     });
     fireEvent.click(screen.getByRole('button', { name: 'Prepare review' }));
-    expect(navigationMocks.replace).toHaveBeenCalledWith(
-      `/project/proj_1?tab=workspaces&workspace=${encodeURIComponent(candidate.id)}&workspaceMode=review&branch=feature%2Freview&reviewSnapshot=rvs_new&reviewPane=yaml`,
-      { scroll: false }
+    await waitFor(() =>
+      expect(navigationMocks.replace).toHaveBeenCalledWith(
+        `/project/proj_1?tab=workspaces&workspace=${encodeURIComponent(candidate.id)}&workspaceMode=review&branch=feature%2Freview&reviewSnapshot=rvs_new&reviewPane=yaml`,
+        { scroll: false }
+      )
     );
     expect(decide).not.toHaveBeenCalled();
     unmount();
@@ -2912,7 +2937,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
 
     savedSchemaMock.candidate = { candidateId: 'edit-1', revision: 2 } as StudioSchemaEditCandidate;
     schemaEditingMocks.read.mockResolvedValue({
-      workspace: { revision: candidate.revision },
+      workspace: { revision: 1 },
       edit: savedSchemaMock.candidate,
       unapplied: true,
       preview: {

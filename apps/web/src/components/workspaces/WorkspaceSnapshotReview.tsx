@@ -211,6 +211,8 @@ export function WorkspaceSnapshotReview({
         }}
         subject={subject}
         subjectChanges={subjectChanges}
+        loading={state.loading && !view}
+        emptyState={!view && !state.loading ? <p>Review data is unavailable.</p> : undefined}
         onSubjectChange={setSubject}
         notice={recoveryNotice}
         actions={
@@ -331,8 +333,6 @@ export function WorkspaceSnapshotReview({
               operationsAsDetails
             />
           )
-        ) : state.loading ? (
-          <output className="text-sm">Loading change review</output>
         ) : null}
       </WorkspaceReviewWorkbench>
     </main>

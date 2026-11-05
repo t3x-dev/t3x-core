@@ -225,7 +225,7 @@ export function useWorkspaceComposeReviewController({
     async (nextCandidate: WorkspaceCandidate, command: WorkspaceDraftCommand) => {
       assertActive();
       const isCurrent = captureScope();
-      setWorkingCandidate(nextCandidate);
+      if (command !== 'schema.bind' || !onDraftCommand) setWorkingCandidate(nextCandidate);
       if (command !== 'review.prepare') {
         reviewGenerationRef.current += 1;
         setReview(EMPTY_REVIEW);
@@ -417,7 +417,13 @@ export function useWorkspaceComposeReviewController({
   );
 
   const prepareReview = useCallback(
-    async (onPrepared?: (snapshot: ReviewSnapshotV1) => void) => {
+    async (
+      onPrepared?: (snapshot: ReviewSnapshotV1) => void,
+      inspected?: Pick<
+        WorkspaceAuthoringView,
+        'workspaceRevision' | 'compositionRevision' | 'basis'
+      >
+    ) => {
       const isCurrent = captureScope();
       if (!isCurrent() || busyActionRef.current) return false;
       const generation = reviewGenerationRef.current + 1;
@@ -438,6 +444,23 @@ export function useWorkspaceComposeReviewController({
           authoringView = null;
         }
         if (!isCurrent() || generation !== reviewGenerationRef.current) return false;
+        const expectedRevision = inspected?.workspaceRevision ?? workingCandidate.revision;
+        if (
+          authoringView?.synchronization?.required ||
+          (authoringView &&
+            expectedRevision !== undefined &&
+            authoringView.workspaceRevision !== expectedRevision) ||
+          (inspected &&
+            (!authoringView ||
+              authoringView.compositionRevision !== inspected.compositionRevision ||
+              authoringView.basis.refName !== inspected.basis.refName ||
+              authoringView.basis.refHead !== inspected.basis.refHead ||
+              authoringView.basis.baseDigest !== inspected.basis.baseDigest))
+        ) {
+          throw new Error(
+            'The Draft or branch changed. Load the latest Draft before preparing review.'
+          );
+        }
         if (authoringView?.hasChanges === false) {
           throw new Error(EMPTY_WORKSPACE_REVIEW);
         }
@@ -655,13 +678,25 @@ export function useWorkspaceComposeReviewController({
 
   const bindSchema = useCallback(
     async (binding: WorkspaceSchemaBinding) => {
+      const isCurrent = captureScope();
+      if (!isCurrent() || busyActionRef.current) return;
       if (workspaceSchemaBindingsEqual(workingCandidate.schemaBindings[0], binding)) {
         return workingCandidate;
       }
       const next = rebindWorkspaceCandidate(workingCandidate, binding, new Date().toISOString());
-      return persistCandidate(next, 'schema.bind');
+      setBusyAction('schema.bind');
+      setLocalError(null);
+      try {
+        return await persistCandidate(next, 'schema.bind');
+      } catch (error) {
+        if (isCurrent()) {
+          setLocalError(formatUserFacingError(error, 'Could not change the Workspace Schema.'));
+        }
+      } finally {
+        if (isCurrent()) setBusyAction(null);
+      }
     },
-    [persistCandidate, workingCandidate]
+    [captureScope, persistCandidate, setBusyAction, workingCandidate]
   );
 
   const viewCommit = useCallback(() => {

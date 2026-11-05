@@ -381,7 +381,7 @@ export function WorkspaceWorkbench({
     } catch (err) {
       if (isWorkspaceRevisionConflict(err)) {
         const remote = await loadRemoteWorkspace(workspace);
-        if (remote?.revision !== undefined) {
+        if (remote?.revision !== undefined && command !== 'schema.bind') {
           try {
             return await persistWorkspaceDraft({
               ...workspace,

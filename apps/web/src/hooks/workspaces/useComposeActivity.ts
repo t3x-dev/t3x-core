@@ -34,7 +34,11 @@ function reconciliationFailure(cause: unknown, fallback: string): string {
 }
 
 /** Compose-owned adapter over the immutable Draft authoring command and projection APIs. */
-export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverride = false) {
+export function useComposeActivity(
+  candidate: WorkspaceCandidate,
+  enabledOverride = false,
+  retainInspected = false
+) {
   const enabled = Boolean(candidate.authoringLedger) || enabledOverride;
   const scopeKey = JSON.stringify([candidate.projectId, candidate.id, enabled]);
   const scope = useMemo(
@@ -179,13 +183,14 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
       setLoading(false);
       return;
     }
+    if (retainInspected && viewRef.current) return;
     void load().catch(() => {
       /* load owns the current error state. */
     });
     return () => {
       ++scope.read;
     };
-  }, [enabled, candidate.revision, retry, load, scope]);
+  }, [enabled, candidate.revision, retry, load, scope, retainInspected]);
 
   useEffect(() => {
     if (!enabled) return;

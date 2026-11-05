@@ -117,6 +117,22 @@ it('retries a lost response with the same request identity and saves through the
     },
   ]);
 });
+it('retries only the refresh after the prepared Draft was saved', async () => {
+  mocks.preview.mockResolvedValue(preview(true));
+  mocks.prepared
+    .mockRejectedValueOnce(new Error('Refresh unavailable'))
+    .mockResolvedValueOnce(undefined);
+  render(<SchemaContentPreparationDialog {...props} />);
+  const save = screen.getByRole('button', { name: 'Save prepared Draft' });
+  await waitFor(() => expect(save).toBeEnabled());
+  fireEvent.click(save);
+  expect(
+    await screen.findByText('Draft saved. Refresh to see the updated Draft.')
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh Draft' }));
+  await waitFor(() => expect(mocks.close).toHaveBeenCalledWith(false));
+  expect(mocks.apply).toHaveBeenCalledTimes(1);
+});
 it('discards delayed responses from another Workspace revision and invalidates approval on focus', async () => {
   let finishOld!: (value: unknown) => void;
   mocks.preview.mockImplementationOnce(

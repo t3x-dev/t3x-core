@@ -136,6 +136,11 @@ it('imports the exact catalog release into sources inside the same dialog', asyn
   render(<SchemaSourceManager {...props} selection={['tasks']} />);
   fireEvent.click(screen.getByRole('button', { name: 'Import schema…' }));
   expect(screen.getAllByRole('dialog')).toHaveLength(1);
+  const definition = screen.getByRole('link', { name: 'View definition (new tab)' });
+  const query = new URL(definition.getAttribute('href')!, 'http://localhost').searchParams;
+  expect(query.get('catalogVersion')).toBe('2.0.0');
+  expect(query.get('catalogHash')).toBe('sha256:pinned');
+  expect(query.get('sourceProjectId')).toBe('publisher');
   fireEvent.click(screen.getByRole('radio', { name: 'Import Notes @ 2.0.0' }));
   expect(props.onImport).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Import source' }));

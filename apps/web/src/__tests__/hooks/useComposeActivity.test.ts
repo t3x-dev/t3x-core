@@ -75,6 +75,30 @@ it('only the latest activity refresh can finish loading or update the projection
   unmount();
 });
 
+it('holds the inspected Review revision until the user loads the newer Draft', async () => {
+  read.mockReset();
+  const initial = {
+    actions: [],
+    selected: null,
+    nextBeforeSequence: null,
+    workspaceRevision: 1,
+  };
+  read.mockResolvedValue(initial);
+  const workspace = { id: 'ws', projectId: 'p', revision: 1 } as WorkspaceCandidate;
+  const { result, rerender } = renderHook(
+    ({ candidate }) => useComposeActivity(candidate, true, true),
+    { initialProps: { candidate: workspace } }
+  );
+  await waitFor(() => expect(result.current.view).toEqual(initial));
+  const latest = { ...initial, workspaceRevision: 2 };
+  read.mockResolvedValue(latest);
+  rerender({ candidate: { ...workspace, revision: 2 } });
+  expect(read).toHaveBeenCalledTimes(1);
+  expect(result.current.view).toEqual(initial);
+  await act(async () => result.current.loadLatest());
+  expect(result.current.view).toEqual(latest);
+});
+
 it('invalidates node pagination when a different node is selected', async () => {
   read.mockReset();
   const view = { actions: [], selected: null, nextBeforeSequence: null, workspaceRevision: 1 };
