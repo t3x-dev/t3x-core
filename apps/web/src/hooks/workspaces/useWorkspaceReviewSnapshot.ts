@@ -121,6 +121,11 @@ export function useWorkspaceReviewSnapshot(
           workspaceId,
           fixed.transition_id
         );
+        setStored((current) =>
+          current.scope === scope && !current.value.data
+            ? { scope, value: { ...current.value, data: pinned } }
+            : current
+        );
         const latest = await fetchLatestWorkspaceTransitionReviewSnapshot(
           projectId,
           workspaceId,
@@ -152,7 +157,7 @@ export function useWorkspaceReviewSnapshot(
         setStored((current) => ({
           scope,
           value: {
-            data: fixed ?? (current.scope === scope ? current.value.data : null),
+            data: (current.scope === scope ? current.value.data : null) ?? fixed,
             deciding: false,
             error: error instanceof Error ? error.message : 'Unable to load the change review.',
             loading: false,

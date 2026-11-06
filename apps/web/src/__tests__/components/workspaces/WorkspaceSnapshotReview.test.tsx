@@ -444,11 +444,12 @@ it('restores the same Workspace view preference in a snapshot and respects an ex
     'aria-current',
     'page'
   );
+  const replacePane = vi.spyOn(window.history, 'replaceState');
   fireEvent.click(screen.getByRole('button', { name: 'Preview', exact: true }));
   expect(localStorage.getItem(key)).toBe('rendered');
-  expect(replace).toHaveBeenLastCalledWith(expect.stringContaining('reviewPane=rendered'), {
-    scroll: false,
-  });
+  const [, , url] = replacePane.mock.lastCall!;
+  expect((url as URL).searchParams.get('reviewPane')).toBe('rendered');
+  replacePane.mockRestore();
   rendered.unmount();
   route.query = '';
   render(ui);

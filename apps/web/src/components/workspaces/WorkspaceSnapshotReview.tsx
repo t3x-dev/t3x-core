@@ -195,14 +195,9 @@ export function WorkspaceSnapshotReview({
         pane={pane}
         onPaneChange={(next) => {
           rememberPane(next);
-          router.replace(
-            workspaceReviewHref(projectId, workspaceId, {
-              branch,
-              pane: next,
-              snapshotId: activeSnapshotId,
-            }),
-            { scroll: false }
-          );
+          const url = new URL(window.location.href);
+          url.searchParams.set('reviewPane', next);
+          window.history.replaceState(null, '', url);
         }}
         subject={subject}
         subjectChanges={subjectChanges}

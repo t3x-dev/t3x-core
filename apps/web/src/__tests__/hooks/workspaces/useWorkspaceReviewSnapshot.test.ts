@@ -317,7 +317,7 @@ it('requires an override reason and preserves the recorded rejection without a c
   }
 });
 
-it('opens the latest result of the pinned Transition while retaining its frozen Schema content', async () => {
+it('shows frozen content while the decision loads and retains the confirmed result on refresh failure', async () => {
   const fixed = snapshotEnvelope('reviewing');
   const schema = {
     schema: 't3x.application/workspace-schema-review/v1',
@@ -327,24 +327,44 @@ it('opens the latest result of the pinned Transition while retaining its frozen 
     ...fixed,
     schema_review: schema,
   });
-  vi.mocked(fetchLatestWorkspaceTransitionReviewSnapshot).mockResolvedValue(
-    snapshotEnvelope('committed')
+  let resolveLatest!: (value: WorkspaceTransitionReviewSnapshotEnvelope) => void;
+  vi.mocked(fetchLatestWorkspaceTransitionReviewSnapshot).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveLatest = resolve;
+      })
   );
   const { result } = renderHook(() =>
     useWorkspaceReviewSnapshot('proj_1', 'workspace_prd_handoff', fixed.snapshot_id)
   );
-  await waitFor(() => expect(result.current.state.loading).toBe(false));
+  await waitFor(() => expect(result.current.state.data?.schema_review).toEqual(schema));
+  expect(result.current.state.loading).toBe(true);
+  expect(result.current.state.data?.snapshot_id).toBe(fixed.snapshot_id);
   expect(fetchLatestWorkspaceTransitionReviewSnapshot).toHaveBeenCalledWith(
     'proj_1',
     'workspace_prd_handoff',
     fixed.transition_id
   );
+  await act(async () => {
+    await result.current.decide('rejected');
+    resolveLatest(snapshotEnvelope('committed'));
+  });
+  expect(result.current.state.loading).toBe(false);
   expect(result.current.state.data?.change_projection.status).toBe('committed');
   expect(result.current.state.data?.schema_review).toEqual(schema);
   await act(async () => {
     await result.current.decide('accepted');
   });
   expect(decideWorkspaceTransition).not.toHaveBeenCalled();
+  vi.mocked(fetchLatestWorkspaceTransitionReviewSnapshot).mockRejectedValueOnce(
+    new Error('Offline')
+  );
+  await act(async () => {
+    await result.current.load();
+  });
+  expect(result.current.state.latestUnavailable).toBe(true);
+  expect(result.current.state.data?.change_projection.status).toBe('committed');
+  expect(result.current.state.data?.schema_review).toEqual(schema);
 });
 
 it.each([
