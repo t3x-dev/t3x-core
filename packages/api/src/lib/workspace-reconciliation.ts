@@ -16,22 +16,20 @@ import {
   type AnyDB,
   ConflictError,
   DraftAuthoringConflictError,
-  findTransitionCommitReceipt,
   findWorkspaceDraft,
   getTransitionCommit,
   getTransitionRefHead,
   getTransitionViewForCommit,
-  getVerifiedTransitionCommitGraph,
   listWorkspaceDrafts,
   NotFoundError,
-  resolveTransitionProposalGraph,
   transactWorkspaceReconciliation,
 } from '@t3x-dev/storage';
 import { canonicalizeProtocolValue } from '@t3x-dev/transition';
-import { normalizeYSchemaObject, sha256CompositionValue, validateTree } from '@t3x-dev/yschema';
+import { normalizeYSchemaObject, validateTree } from '@t3x-dev/yschema';
 import { schemaContentFromDocument } from './schema-evolution-impact';
 import {
   buildAuthoringEffect,
+  synchronizeUninitializedWorkspace,
   type WorkspaceAuthoringBasis,
   workspaceAuthoringState,
 } from './workspace-authoring';
@@ -39,9 +37,7 @@ import { workspaceProvenance } from './workspace-provenance';
 import { isSchemaOnlyWorkspaceReview, workspaceDocumentRootKey } from './workspace-schema-content';
 import {
   captureWorkspaceSchema,
-  frozenWorkspaceSchemaReview,
-  hasSchemaReviewEvidence,
-  recoverCommittedSchema,
+  committedWorkspaceSchemaAtHead,
   unboundWorkspaceSchema,
 } from './workspace-schema-review';
 import { schemaRootKeyFromBinding } from './yschema-registry';
@@ -162,65 +158,6 @@ export function reconcileWorkspaceSchemas(input: {
   };
 }
 
-async function committedSchemaAtHead(
-  db: AnyDB,
-  projectId: string,
-  refName: string,
-  refHead: string | null,
-  fallback: WorkspaceSchemaDefinitionSnapshot
-): Promise<WorkspaceSchemaDefinitionSnapshot> {
-  if (refHead === null) return unboundWorkspaceSchema();
-  const committed = await getVerifiedTransitionCommitGraph(db, projectId, refHead);
-  if (!committed) throw new DraftAuthoringConflictError('The latest branch Commit is unavailable.');
-  const receipt = await findTransitionCommitReceipt(db, projectId, refHead);
-  const graph = receipt
-    ? await resolveTransitionProposalGraph(db, projectId, receipt.transitionId)
-    : null;
-  if (
-    graph &&
-    (graph.membership.proposalDigest !== describeTransitionObject(committed.proposal).digest ||
-      graph.membership.effectDigest !== describeTransitionObject(committed.effect).digest)
-  )
-    throw new DraftAuthoringConflictError(
-      'The committed Schema preparation does not match the branch Commit.'
-    );
-  const view = await getTransitionViewForCommit(db, { projectId, refName, commitId: refHead });
-  if (view?.mode !== 'transition')
-    throw new DraftAuthoringConflictError('The latest branch Commit could not be verified.');
-  const hashes = new Set(
-    view.checks.validation.runs.map((run) => run.predicate.schemaResource.digest)
-  );
-  const hasSchemaEvidence = hashes.size > 0;
-  const review = graph ? frozenWorkspaceSchemaReview(graph) : null;
-  const snapshot =
-    review?.draft ??
-    (await recoverCommittedSchema(db, projectId, refName, refHead, fallback, view)) ??
-    (hashes.size === 0 ? fallback : unboundWorkspaceSchema());
-  if (snapshot.status !== 'bound') {
-    if (hashes.size)
-      throw new DraftAuthoringConflictError(
-        'The branch Commit has Schema evidence but no recoverable Schema binding.'
-      );
-    return WorkspaceSchemaDefinitionSnapshotSchema.parse(snapshot);
-  }
-  const schema = snapshot.definition ? normalizeYSchemaObject(snapshot.definition) : null;
-  const schemaOnlyEvidence =
-    review &&
-    isSchemaOnlyWorkspaceReview(review) &&
-    (await hasSchemaReviewEvidence(committed.proposal, review));
-  if (
-    !schema ||
-    (await sha256CompositionValue(schema)) !== snapshot.schemaHash ||
-    (hasSchemaEvidence &&
-      !schemaOnlyEvidence &&
-      (hashes.size !== 1 || !hashes.has(snapshot.schemaHash as `sha256:${string}`)))
-  )
-    throw new DraftAuthoringConflictError(
-      'The exact Schema bound to the branch Commit failed verification.'
-    );
-  return WorkspaceSchemaDefinitionSnapshotSchema.parse(snapshot);
-}
-
 async function workspaceSchemaBase(
   db: AnyDB,
   projectId: string,
@@ -234,7 +171,7 @@ async function workspaceSchemaBase(
     | undefined;
   if (stored?.refHead === refHead && stored.snapshot !== undefined)
     return WorkspaceSchemaDefinitionSnapshotSchema.parse(stored.snapshot);
-  return committedSchemaAtHead(db, projectId, refName, refHead, fallback);
+  return committedWorkspaceSchemaAtHead(db, projectId, refName, refHead, fallback);
 }
 
 function pointerValue(
@@ -510,7 +447,13 @@ async function prepareFromDraft(
       draft.workspace_state,
       schemaOurs
     ),
-    committedSchemaAtHead(db, input.projectId, current.basis.refName, head.head, schemaOurs),
+    committedWorkspaceSchemaAtHead(
+      db,
+      input.projectId,
+      current.basis.refName,
+      head.head,
+      schemaOurs
+    ),
   ]);
   return preparationFromDocuments({
     workspaceRevision: draft.revision,
@@ -834,93 +777,6 @@ export async function reconcileWorkspaceAuthoring(
       value: { kind: 'reconciled' as const },
     };
   });
-}
-
-async function synchronizeUninitializedWorkspace(
-  db: AnyDB,
-  input: {
-    projectId: string;
-    workspaceId: string;
-    requestId: string;
-    actor: DraftActionActor;
-    refName: string;
-    refHead: string;
-    expectedWorkspaceRevision: number;
-  }
-) {
-  const facts = canonicalizeProtocolValue(JSON.parse(JSON.stringify(input)));
-  return transactWorkspaceReconciliation<{ kind: 'pending' | 'reconciled' }>(
-    db,
-    input,
-    async (tx, draft) => {
-      const workspace = draft.workspace_state;
-      if (!workspace) throw new NotFoundError(input.workspaceId);
-      if (draft.revision !== input.expectedWorkspaceRevision)
-        throw new ConflictError(draft.id, input.expectedWorkspaceRevision);
-      if (draft.target_branch !== input.refName)
-        throw new DraftAuthoringConflictError('Target ref changed');
-      const operations = (workspace.yopsDraft as { operations?: unknown[] } | undefined)
-        ?.operations;
-      if (
-        operations?.length ||
-        draft.nodes?.length ||
-        draft.semantic_points?.length ||
-        workspace.schemaEditCandidate ||
-        workspace.schemaPending
-      )
-        return { workspace: null, value: { kind: 'pending' as const } };
-      const head = await getTransitionRefHead(tx, {
-        projectId: input.projectId,
-        refName: input.refName,
-      });
-      if (head.head !== input.refHead)
-        throw new DraftAuthoringConflictError('Branch changed again; refresh before syncing');
-      const document = head.state.value as DraftDocument;
-      const previousSchema = await captureWorkspaceSchema(tx, input.projectId, workspace);
-      const schema = await committedSchemaAtHead(
-        tx,
-        input.projectId,
-        input.refName,
-        input.refHead,
-        previousSchema
-      );
-      const ledger = createDraftActionLedger(document);
-      const basis: WorkspaceAuthoringBasis = {
-        schema: 't3x.application/workspace-authoring-basis/v1',
-        refName: input.refName,
-        refHead: input.refHead,
-        baseDigest: describeTransitionObject(createYOpsState(document)).digest,
-        initialization: { requestId: input.requestId, facts },
-      };
-      const reconciledAt = new Date().toISOString();
-      return {
-        workspace: {
-          ...workspace,
-          authoringLedger: ledger,
-          authoringBasis: basis,
-          baseCommitHash: input.refHead,
-          schemaBindings: structuredClone(schema.bindings),
-          workspaceSchemaBase: { refHead: input.refHead, snapshot: structuredClone(schema) },
-          authoringReconciliations: [
-            ...((workspace.authoringReconciliations ?? []) as unknown[]),
-            {
-              requestId: input.requestId,
-              facts,
-              reconciledAt,
-              actor: input.actor,
-              workspaceRevision: draft.revision,
-              basis: workspace.authoringBasis,
-              ledger: workspace.authoringLedger,
-              schemaBindings: workspace.schemaBindings,
-              workspaceSchemaBase: workspace.workspaceSchemaBase,
-              nextRefHead: input.refHead,
-            },
-          ],
-        },
-        value: { kind: 'reconciled' as const },
-      };
-    }
-  );
 }
 
 /** Called inside each Commit transaction after advancing its target ref. Dirty Drafts remain explicit. */
