@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
+  ChevronRight,
   CircleDashed,
   RefreshCw,
   XCircle,
@@ -149,32 +150,11 @@ export function ProjectChecksPage({
         />
       ) : current.records.length ? (
         <>
-          <section className={styles.list} aria-label="Run records">
-            {current.records.map((record) => {
-              const view = checkRecordView(record);
-              return (
-                <Link
-                  className={styles.row}
-                  key={record.id}
-                  href={checksHref(projectId, {
-                    recordId: record.id,
-                    returnTo: `${pathname}${query ? `?${query}` : ''}`,
-                  })}
-                >
-                  <Status status={view.status} />
-                  <div className={styles.rowMain}>
-                    <strong>{view.title}</strong>
-                    <span>{view.target}</span>
-                  </div>
-                  <div className={styles.rowMeta}>
-                    <span>{CHECK_KIND_LABELS[record.kind]}</span>
-                    <time dateTime={record.created_at}>{formatDate(record.created_at)}</time>
-                  </div>
-                  <ArrowRight size={16} />
-                </Link>
-              );
-            })}
-          </section>
+          <RunRecords
+            records={current.records}
+            projectId={projectId}
+            returnTo={`${pathname}${query ? `?${query}` : ''}`}
+          />
           <nav className={styles.pagination} aria-label="Run pagination">
             {params.has('cursor') ? (
               <Button variant="outline" size="sm" onClick={() => filter('cursor', '')}>
@@ -219,6 +199,120 @@ export function ProjectChecksPage({
         </div>
       )}
     </div>
+  );
+}
+
+function RunRecords({
+  records,
+  projectId,
+  returnTo,
+}: {
+  records: CheckRecord[];
+  projectId: string;
+  returnTo: string;
+}) {
+  const groups = new Map<string, { heading?: string; records: CheckRecord[] }>();
+  for (const record of records) {
+    const workspace = textValue(record.payload.workspace_id);
+    const snapshot = object(record.payload.snapshot);
+    const precondition = object(object(snapshot.review).precondition);
+    const revision = precondition.workspaceRevision;
+    if (record.kind === 'review' && workspace && Number.isSafeInteger(revision)) {
+      const key = JSON.stringify([workspace, revision]);
+      const branch = textValue(precondition.refName);
+      const heading = `${workspace === `workspace_branch:${branch}` ? branch : workspace} · r${revision}`;
+      const group = groups.get(key);
+      if (group) group.records.push(record);
+      else groups.set(key, { heading, records: [record] });
+    } else {
+      groups.set(record.id, { records: [record] });
+    }
+  }
+
+  return (
+    <section className={styles.list} aria-label="Run records">
+      {Array.from(groups, ([key, group]) => {
+        const showTransition =
+          new Set(group.records.map((record) => record.payload.transition_id)).size > 1;
+        const rows = group.records.map((record) => {
+          const view = checkRecordView(record);
+          const snapshot = object(record.payload.snapshot);
+          const decision = textValue(object(object(snapshot.transition).decision).outcome);
+          const snapshotId = view.snapshot || record.id.replace(/^review:/, '');
+          const transition = textValue(record.payload.transition_id);
+          return (
+            <Link
+              className={styles.row}
+              key={record.id}
+              href={checksHref(projectId, { recordId: record.id, returnTo })}
+            >
+              <Status status={view.status} />
+              <div className={styles.rowMain}>
+                {group.heading ? (
+                  <>
+                    <strong title={snapshotId}>
+                      Snapshot {snapshotId.replace(/^rvs_/, '').slice(0, 8)}
+                    </strong>
+                    <span>
+                      {view.commit
+                        ? 'Committed'
+                        : decision
+                          ? `Decision: ${decision}`
+                          : 'No decision recorded'}
+                    </span>
+                    {showTransition && transition ? (
+                      <span title={transition}>
+                        Transition {transition.replace(/^trn_/, '').slice(0, 8)}
+                      </span>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    <strong>{view.title}</strong>
+                    <span>{view.target}</span>
+                  </>
+                )}
+              </div>
+              <div className={styles.rowMeta}>
+                {!group.heading ? <span>{CHECK_KIND_LABELS[record.kind]}</span> : null}
+                <time dateTime={record.created_at}>
+                  {formatDate(
+                    record.created_at,
+                    group.heading
+                      ? {
+                          year: 'numeric',
+                          month: 'numeric',
+                          day: 'numeric',
+                          hour: 'numeric',
+                          minute: '2-digit',
+                          second: '2-digit',
+                          fractionalSecondDigits: 3,
+                        }
+                      : undefined
+                  )}
+                </time>
+              </div>
+              <ArrowRight size={16} />
+            </Link>
+          );
+        });
+        return group.heading ? (
+          <details key={key} className={styles.runGroup} open>
+            <summary>
+              <ChevronRight size={15} aria-hidden="true" />
+              <strong>{group.heading}</strong>
+              <span>
+                {group.records.length} {group.records.length === 1 ? 'snapshot' : 'snapshots'} on
+                this page
+              </span>
+            </summary>
+            {rows}
+          </details>
+        ) : (
+          rows
+        );
+      })}
+    </section>
   );
 }
 
@@ -438,8 +532,8 @@ function Status({ status }: { status: string }) {
     </span>
   );
 }
-function formatDate(value: string) {
+function formatDate(value: string, options?: Intl.DateTimeFormatOptions) {
   return Number.isFinite(Date.parse(value))
-    ? new Date(value).toLocaleString()
+    ? new Date(value).toLocaleString(undefined, options)
     : 'Time not recorded';
 }
