@@ -954,7 +954,7 @@ export function SchemaStudioExperience({
       ? (recoveryError ?? 'Finish the current Schema action before publishing.')
       : dataDirty || editorInvalid
         ? 'Fix field errors and save the Schema changes before publishing.'
-        : studioPublicationBlocker(data);
+        : studioPublicationBlocker(data, selection);
   const canReview =
     !!data &&
     !editorUnavailable &&

@@ -92,6 +92,11 @@ it('disables stale or blocked previews without attempting a write', () => {
     />
   );
   fireEvent.submit(screen.getByRole('button', { name: 'Publish publicly' }).closest('form')!);
+  rerender(<StudioPublishDialog {...props} candidateIds={[]} />);
+  const publish = screen.getByRole('button', { name: 'Publish publicly' });
+  expect(publish).toBeDisabled();
+  expect(screen.getByRole('alert')).toHaveTextContent('requires at least one Schema source');
+  fireEvent.submit(publish.closest('form')!);
   expect(mocks.publish).not.toHaveBeenCalled();
 });
 it('discloses public retention and submits the selected reuse license explicitly', async () => {
@@ -111,11 +116,15 @@ it('discloses public retention and submits the selected reuse license explicitly
 it('keeps metadata after conflicts and retries only when the user asks', async () => {
   mocks.publish.mockRejectedValueOnce(new Error('Immutable version conflict'));
   render(<StudioPublishDialog {...props} />);
+  fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Weekly plan' } });
+  fireEvent.change(screen.getByLabelText('Release notes'), { target: { value: 'First release' } });
   fireEvent.click(screen.getByRole('button', { name: 'Publish publicly' }));
   await waitFor(() =>
     expect(screen.getByRole('alert')).toHaveTextContent('Immutable version conflict')
   );
   expect(screen.getByLabelText('Version')).toHaveValue('1.0.0');
+  expect(screen.getByLabelText('Display name')).toHaveValue('Weekly plan');
+  expect(screen.getByLabelText('Release notes')).toHaveValue('First release');
   expect(mocks.publish).toHaveBeenCalledTimes(1);
   fireEvent.change(screen.getByLabelText('Version'), { target: { value: '1.1.0' } });
   mocks.publish.mockResolvedValue({ ...receipt, source: { ...receipt.source, version: '1.1.0' } });

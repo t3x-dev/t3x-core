@@ -58,7 +58,7 @@ export function StudioPublishDialog({
   const blocker =
     preview.reviewHash !== currentReviewHash
       ? 'This preview is stale. Check the current candidate again before publishing.'
-      : studioPublicationBlocker(preview);
+      : studioPublicationBlocker(preview, candidateIds);
   const parsed = StudioPublishInputSchema.safeParse({
     visibility: 'community',
     candidateIds,
