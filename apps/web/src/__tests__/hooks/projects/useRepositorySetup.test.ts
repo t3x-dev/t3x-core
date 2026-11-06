@@ -73,6 +73,21 @@ it('creates an empty Workspace and conversation without AI defaults, material or
     workspace_id: 'workspace_branch:main:human:user_test_a',
   });
 });
+it('binds the built-in PRD Schema when the repository uses the PRD starter', async () => {
+  const { result } = renderHook(() => useRepositorySetup());
+  await act(async () => {
+    await result.current.create({ ...input, starter: 'prd-v1' });
+  });
+  expect(mocks.save.mock.calls[0]![2].schemaBindings).toEqual([
+    {
+      rootKey: 'prd',
+      canonicalName: 't3x/prd',
+      schemaName: 'PRD Schema',
+      version: 'v2',
+      mode: 'pinned',
+    },
+  ]);
+});
 it('resumes after a conversation failure without creating another repository or uploading again', async () => {
   mocks.conversation.mockRejectedValueOnce(new Error('Unavailable'));
   const { result } = renderHook(() => useRepositorySetup());
